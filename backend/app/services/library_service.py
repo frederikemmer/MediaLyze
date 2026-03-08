@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import Settings
 from backend.app.models.entities import AudioStream, Library, MediaFile, MediaFormat, ScanStatus, SubtitleStream, VideoStream
 from backend.app.schemas.library import LibraryCreate, LibraryDetail, LibrarySummary, LibraryUpdate
+from backend.app.services.languages import merge_language_counts
 from backend.app.utils.pathing import ensure_relative_to_root
+from backend.app.services.video_queries import primary_video_streams_subquery
 
 
 DEFAULT_SCAN_CONFIG = {
@@ -120,26 +122,35 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
     for key, value in _library_aggregate_map(db).get(library.id, {}).items():
         setattr(summary, key, value)
 
+    primary_video_streams = primary_video_streams_subquery("library_primary_video_streams")
+
     video_codec_distribution = db.execute(
-        select(VideoStream.codec, func.count(VideoStream.id))
-        .join(MediaFile, MediaFile.id == VideoStream.media_file_id)
+        select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
         .where(MediaFile.library_id == library_id)
-        .group_by(VideoStream.codec)
-        .order_by(func.count(VideoStream.id).desc())
+        .group_by(primary_video_streams.c.codec)
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     resolution_distribution = db.execute(
-        select(VideoStream.width, VideoStream.height, func.count(VideoStream.id))
-        .join(MediaFile, MediaFile.id == VideoStream.media_file_id)
+        select(
+            primary_video_streams.c.width,
+            primary_video_streams.c.height,
+            func.count(primary_video_streams.c.id),
+        )
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
         .where(MediaFile.library_id == library_id)
-        .group_by(VideoStream.width, VideoStream.height)
-        .order_by(func.count(VideoStream.id).desc())
+        .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     hdr_distribution = db.execute(
-        select(func.coalesce(VideoStream.hdr_type, "SDR"), func.count(VideoStream.id))
-        .join(MediaFile, MediaFile.id == VideoStream.media_file_id)
+        select(
+            func.coalesce(primary_video_streams.c.hdr_type, "SDR"),
+            func.count(primary_video_streams.c.id),
+        )
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
         .where(MediaFile.library_id == library_id)
-        .group_by(func.coalesce(VideoStream.hdr_type, "SDR"))
-        .order_by(func.count(VideoStream.id).desc())
+        .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     audio_language_distribution = db.execute(
         select(AudioStream.language, func.count(AudioStream.id))
@@ -149,13 +160,16 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
         .order_by(func.count(AudioStream.id).desc())
     ).all()
     subtitle_counts: dict[str, int] = defaultdict(int)
-    for language, count in db.execute(
-        select(SubtitleStream.language, func.count(SubtitleStream.id))
-        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
-        .where(MediaFile.library_id == library_id)
-        .group_by(SubtitleStream.language)
+    for language, count in merge_language_counts(
+        db.execute(
+            select(SubtitleStream.language, func.count(SubtitleStream.id))
+            .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+            .where(MediaFile.library_id == library_id)
+            .group_by(SubtitleStream.language)
+        ).all(),
+        fallback="und",
     ):
-        subtitle_counts[language or "und"] += count
+        subtitle_counts[language] += count
 
     return LibraryDetail(
         **summary.model_dump(),
@@ -166,8 +180,8 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
         ],
         hdr_distribution=[{"label": key or "SDR", "value": value} for key, value in hdr_distribution],
         audio_language_distribution=[
-            {"label": key or "und", "value": value}
-            for key, value in audio_language_distribution
+            {"label": key, "value": value}
+            for key, value in merge_language_counts(audio_language_distribution, fallback="und")
         ],
         subtitle_language_distribution=[
             {"label": key, "value": value}

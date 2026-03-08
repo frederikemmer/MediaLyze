@@ -13,6 +13,8 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.schemas.media import DashboardResponse, DistributionItem
+from backend.app.services.languages import merge_language_counts
+from backend.app.services.video_queries import primary_video_streams_subquery
 
 
 def _distribution(rows: list[tuple[str | None, int]], fallback: str = "unknown") -> list[DistributionItem]:
@@ -30,6 +32,7 @@ def _resolution_label(width: int | None, height: int | None) -> str:
 
 
 def build_dashboard(db: Session) -> DashboardResponse:
+    primary_video_streams = primary_video_streams_subquery()
     totals = {
         "libraries": db.scalar(select(func.count(Library.id))) or 0,
         "files": db.scalar(select(func.count(MediaFile.id))) or 0,
@@ -38,19 +41,26 @@ def build_dashboard(db: Session) -> DashboardResponse:
     }
 
     video_codec_rows = db.execute(
-        select(VideoStream.codec, func.count(VideoStream.id))
-        .group_by(VideoStream.codec)
-        .order_by(func.count(VideoStream.id).desc())
+        select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
+        .group_by(primary_video_streams.c.codec)
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     resolution_rows = db.execute(
-        select(VideoStream.width, VideoStream.height, func.count(VideoStream.id))
-        .group_by(VideoStream.width, VideoStream.height)
-        .order_by(func.count(VideoStream.id).desc())
+        select(
+            primary_video_streams.c.width,
+            primary_video_streams.c.height,
+            func.count(primary_video_streams.c.id),
+        )
+        .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     hdr_rows = db.execute(
-        select(func.coalesce(VideoStream.hdr_type, "SDR"), func.count(VideoStream.id))
-        .group_by(func.coalesce(VideoStream.hdr_type, "SDR"))
-        .order_by(func.count(VideoStream.id).desc())
+        select(
+            func.coalesce(primary_video_streams.c.hdr_type, "SDR"),
+            func.count(primary_video_streams.c.id),
+        )
+        .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
+        .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
     audio_codec_rows = db.execute(
         select(AudioStream.codec, func.count(AudioStream.id))
@@ -75,10 +85,12 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ],
         hdr_distribution=_distribution(hdr_rows, fallback="SDR"),
         audio_codec_distribution=_distribution(audio_codec_rows),
-        audio_language_distribution=_distribution(audio_language_rows, fallback="und"),
+        audio_language_distribution=[
+            DistributionItem(label=label, value=value)
+            for label, value in merge_language_counts(audio_language_rows, fallback="und")
+        ],
         subtitle_distribution=[
             DistributionItem(label="internal", value=internal_subtitles),
             DistributionItem(label="external", value=external_subtitles),
         ],
     )
-

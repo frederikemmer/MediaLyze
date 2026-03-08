@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import MediaFile
 from backend.app.schemas.media import MediaFileDetail, MediaFileTableRow
+from backend.app.services.languages import normalize_language_code
 
 
 def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
@@ -30,10 +31,10 @@ def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
         hdr_type=primary_video.hdr_type if primary_video else None,
-        audio_languages=sorted({stream.language or "und" for stream in media_file.audio_streams}),
+        audio_languages=sorted({normalize_language_code(stream.language) or "und" for stream in media_file.audio_streams}),
         subtitle_languages=sorted(
-            {stream.language or "und" for stream in media_file.subtitle_streams}
-            | {subtitle.language or "und" for subtitle in media_file.external_subtitles}
+            {normalize_language_code(stream.language) or "und" for stream in media_file.subtitle_streams}
+            | {normalize_language_code(subtitle.language) or "und" for subtitle in media_file.external_subtitles}
         ),
     )
 
@@ -79,4 +80,3 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
         external_subtitles=media_file.external_subtitles,
         raw_ffprobe_json=media_file.raw_ffprobe_json,
     )
-

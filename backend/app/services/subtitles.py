@@ -1,22 +1,6 @@
 from pathlib import Path
 
-
-LANGUAGE_HINTS = {
-    "de",
-    "deu",
-    "ger",
-    "en",
-    "eng",
-    "fr",
-    "fre",
-    "spa",
-    "es",
-    "it",
-    "ita",
-    "jpn",
-    "ja",
-    "und",
-}
+from backend.app.services.languages import normalize_language_hint
 
 
 def detect_external_subtitles(video_path: Path, allowed_extensions: tuple[str, ...]) -> list[dict[str, str | None]]:
@@ -38,7 +22,11 @@ def detect_external_subtitles(video_path: Path, allowed_extensions: tuple[str, .
 
         middle = entry.name[len(stem) : -len(entry.suffix)]
         tokens = [token.lower() for token in middle.split(".") if token]
-        language = next((token for token in tokens if token in LANGUAGE_HINTS), None)
+        language = None
+        for token in tokens:
+            language = normalize_language_hint(token)
+            if language:
+                break
 
         detected.append(
             {
@@ -49,4 +37,3 @@ def detect_external_subtitles(video_path: Path, allowed_extensions: tuple[str, .
         )
 
     return detected
-

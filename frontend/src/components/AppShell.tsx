@@ -1,11 +1,41 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { House, Settings } from "lucide-react";
 
+import { api, type LibrarySummary } from "../lib/api";
 import { useScanJobs } from "../lib/scan-jobs";
 
 export function AppShell() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { activeJobs } = useScanJobs();
+  const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLibraries() {
+      try {
+        const items = await api.libraries();
+        if (!cancelled) {
+          setLibraries(items);
+        }
+      } catch {
+        // Keep the last known library navigation state on transient errors.
+      }
+    }
+
+    void loadLibraries();
+    const timer = window.setInterval(() => {
+      void loadLibraries();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [location.pathname]);
 
   return (
     <div className="layout media-app-shell">
@@ -15,30 +45,42 @@ export function AppShell() {
           <div>
             <h1>{t("app.title")}</h1>
           </div>
-          <nav className="tabs has-pill media-nav" aria-label="Primary">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) => `tab-button ${isActive ? "active" : ""}`.trim()}
-            >
-              {t("nav.dashboard")}
-            </NavLink>
-            <NavLink
-              to="/libraries"
-              className={({ isActive }) => `tab-button ${isActive ? "active" : ""}`.trim()}
-            >
-              {t("nav.libraries")}
-            </NavLink>
+          <nav className="media-nav-panel" aria-label="Primary">
+            <div className="media-nav-icons">
+              <NavLink
+                to="/"
+                end
+                aria-label="Home"
+                className={({ isActive }) => `icon-nav-button ${isActive ? "active" : ""}`.trim()}
+              >
+                <House aria-hidden="true" className="nav-icon" />
+              </NavLink>
+              <NavLink
+                to="/libraries"
+                end
+                aria-label="Settings"
+                className={({ isActive }) => `icon-nav-button ${isActive ? "active" : ""}`.trim()}
+              >
+                <Settings aria-hidden="true" className="nav-icon" />
+              </NavLink>
+            </div>
+            <div className="media-nav-libraries">
+              {libraries.map((library) => (
+                <NavLink
+                  key={library.id}
+                  to={`/libraries/${library.id}`}
+                  className={({ isActive }) => `library-nav-link ${isActive ? "active" : ""}`.trim()}
+                >
+                  {library.name}
+                </NavLink>
+              ))}
+            </div>
           </nav>
         </div>
         {activeJobs.length > 0 ? (
           <div className="scan-banner">
             <div className="scan-banner-copy">
               <strong>Scan running in background</strong>
-              <span>
-                {activeJobs.length} active job{activeJobs.length > 1 ? "s" : ""}. Reloading or
-                navigating away in the UI does not stop them.
-              </span>
             </div>
             <div className="scan-banner-list">
               {activeJobs.map((job) => (

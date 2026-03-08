@@ -15,6 +15,7 @@ CONFIG_PATH="${CONFIG_PATH:-$ROOT_DIR/config}"
 MEDIA_ROOT="${MEDIA_ROOT:-$ROOT_DIR/media}"
 APP_PORT="${APP_PORT:-8080}"
 VITE_PORT="${VITE_PORT:-5173}"
+TZ="${TZ:-UTC}"
 VENV_DIR="$ROOT_DIR/.venv"
 PYTHON_BIN="$VENV_DIR/bin/python"
 PIP_BIN="$VENV_DIR/bin/pip"
@@ -55,6 +56,7 @@ trap cleanup EXIT INT TERM
 export CONFIG_PATH
 export MEDIA_ROOT
 export APP_PORT
+export TZ
 
 "$PYTHON_BIN" -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port "$APP_PORT" &
 BACKEND_PID=$!
@@ -69,6 +71,7 @@ printf 'Backend:  http://127.0.0.1:%s\n' "$APP_PORT"
 printf 'Frontend: http://127.0.0.1:%s\n' "$VITE_PORT"
 printf 'CONFIG_PATH=%s\n' "$CONFIG_PATH"
 printf 'MEDIA_ROOT=%s\n' "$MEDIA_ROOT"
+printf 'TZ=%s\n' "$TZ"
 
 while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
   sleep 1
