@@ -398,7 +398,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(243, 239, 232, 0.96);
+  background: #f6f1ea;
 }
 
 .media-data-table tbody tr:last-child td {
@@ -413,12 +413,12 @@
   position: sticky;
   left: 0;
   z-index: 1;
-  background: inherit;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .media-data-table thead .is-sticky {
   z-index: 3;
-  background: rgba(243, 239, 232, 0.98);
+  background: #f6f1ea;
 }
 
 .column-sort {
