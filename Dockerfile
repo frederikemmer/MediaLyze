@@ -1,4 +1,4 @@
-ARG APP_VERSION=0.1.0
+ARG APP_VERSION=0.0.1
 
 FROM node:24-bookworm-slim AS frontend-build
 WORKDIR /app/frontend
@@ -8,7 +8,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim-bookworm AS runtime
-ARG APP_VERSION=0.1.0
+ARG APP_VERSION=0.0.1
 
 LABEL name="MediaLyze"
 LABEL org.opencontainers.image.source="https://github.com/frederikemmer/MediaLyze"
