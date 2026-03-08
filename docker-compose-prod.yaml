@@ -1,0 +1,14 @@
+services:
+  medialyze:
+    image: ghcr.io/frederikemmer/medialyze:latest
+    container_name: medialyze
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    env_file:
+      - .env
+    environment:
+      APP_PORT: ${APP_PORT:-8080}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${CONFIG_HOST_DIR:-./config}:/config
+      - ${MEDIA_HOST_DIR:-./media}:/media:ro
