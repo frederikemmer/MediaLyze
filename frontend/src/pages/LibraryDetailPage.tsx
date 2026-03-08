@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -8,21 +9,244 @@ import { api, type LibraryDetail, type MediaFileRow, type ScanJob } from "../lib
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { useScanJobs } from "../lib/scan-jobs";
 
+type FileColumnKey =
+  | "file"
+  | "size"
+  | "video_codec"
+  | "resolution"
+  | "hdr_type"
+  | "duration"
+  | "audio_languages"
+  | "subtitle_languages"
+  | "scan_status"
+  | "mtime"
+  | "last_seen_at"
+  | "last_analyzed_at"
+  | "quality_score";
+
+type SortDirection = "asc" | "desc";
+
+type FileColumnDefinition = {
+  key: FileColumnKey;
+  label: string;
+  sticky?: boolean;
+  hideable?: boolean;
+  sortValue: (file: MediaFileRow) => number | string;
+  render: (file: MediaFileRow) => ReactNode;
+};
+
+const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
+  "file",
+  "size",
+  "video_codec",
+  "resolution",
+  "duration",
+  "audio_languages",
+  "subtitle_languages",
+  "quality_score",
+];
+
+function joinValues(values: string[]): string {
+  return values.length > 0 ? values.join(", ") : "n/a";
+}
+
+function resolutionSortValue(resolution: string | null): number {
+  if (!resolution) {
+    return -1;
+  }
+  const match = /^(\d+)x(\d+)$/i.exec(resolution);
+  if (!match) {
+    return -1;
+  }
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width * height;
+}
+
+function timeSortValue(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function scoreMeterLabel(score: number): string {
+  if (score <= 3) {
+    return "low";
+  }
+  if (score <= 6) {
+    return "medium";
+  }
+  return "high";
+}
+
+const FILE_COLUMNS: FileColumnDefinition[] = [
+  {
+    key: "file",
+    label: "File",
+    sticky: true,
+    hideable: false,
+    sortValue: (file) => file.relative_path.toLowerCase(),
+    render: (file) => (
+      <div className="media-file-cell">
+        <Link to={`/files/${file.id}`} className="file-link">
+          {file.filename}
+        </Link>
+        <small>{file.relative_path}</small>
+      </div>
+    ),
+  },
+  {
+    key: "size",
+    label: "Size",
+    sortValue: (file) => file.size_bytes,
+    render: (file) => formatBytes(file.size_bytes),
+  },
+  {
+    key: "video_codec",
+    label: "Codec",
+    sortValue: (file) => (file.video_codec ?? "").toLowerCase(),
+    render: (file) => file.video_codec ?? "n/a",
+  },
+  {
+    key: "resolution",
+    label: "Resolution",
+    sortValue: (file) => resolutionSortValue(file.resolution),
+    render: (file) => file.resolution ?? "n/a",
+  },
+  {
+    key: "hdr_type",
+    label: "HDR",
+    sortValue: (file) => (file.hdr_type ?? "").toLowerCase(),
+    render: (file) => file.hdr_type ?? "SDR",
+  },
+  {
+    key: "duration",
+    label: "Duration",
+    sortValue: (file) => file.duration ?? 0,
+    render: (file) => formatDuration(file.duration),
+  },
+  {
+    key: "audio_languages",
+    label: "Audio",
+    sortValue: (file) => joinValues(file.audio_languages).toLowerCase(),
+    render: (file) => joinValues(file.audio_languages),
+  },
+  {
+    key: "subtitle_languages",
+    label: "Subtitles",
+    sortValue: (file) => joinValues(file.subtitle_languages).toLowerCase(),
+    render: (file) => joinValues(file.subtitle_languages),
+  },
+  {
+    key: "scan_status",
+    label: "Status",
+    sortValue: (file) => file.scan_status.toLowerCase(),
+    render: (file) => file.scan_status,
+  },
+  {
+    key: "mtime",
+    label: "Modified",
+    sortValue: (file) => file.mtime,
+    render: (file) => formatDate(new Date(file.mtime * 1000).toISOString()),
+  },
+  {
+    key: "last_seen_at",
+    label: "Last seen",
+    sortValue: (file) => timeSortValue(file.last_seen_at),
+    render: (file) => formatDate(file.last_seen_at),
+  },
+  {
+    key: "last_analyzed_at",
+    label: "Last analyzed",
+    sortValue: (file) => timeSortValue(file.last_analyzed_at),
+    render: (file) => formatDate(file.last_analyzed_at),
+  },
+  {
+    key: "quality_score",
+    label: "Score",
+    sortValue: (file) => file.quality_score,
+    render: (file) => (
+      <div className="score-cell">
+        <strong>{file.quality_score}/10</strong>
+        <div className="score-meter" aria-hidden="true">
+          <span
+            className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+            style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+          />
+        </div>
+      </div>
+    ),
+  },
+];
+
 export function LibraryDetailPage() {
   const { libraryId = "" } = useParams();
   const [library, setLibrary] = useState<LibraryDetail | null>(null);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [scanState, setScanState] = useState<string | null>(null);
-  const [settingsState, setSettingsState] = useState<string | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanJob[]>([]);
-  const [settingsForm, setSettingsForm] = useState({
-    scan_mode: "manual",
-    interval_minutes: 60,
-    debounce_seconds: 15,
-  });
-  const { activeJobs, hasActiveJobs, refresh } = useScanJobs();
+  const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [sortKey, setSortKey] = useState<FileColumnKey>("file");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const { activeJobs, hasActiveJobs } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
+  const activeColumns = FILE_COLUMNS.filter((column) => visibleColumns.includes(column.key));
+  const sortedFiles = [...files].sort((left, right) => {
+    const column = FILE_COLUMNS.find((entry) => entry.key === sortKey);
+    if (!column) {
+      return 0;
+    }
+    const leftValue = column.sortValue(left);
+    const rightValue = column.sortValue(right);
+
+    let comparison = 0;
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+      comparison = leftValue - rightValue;
+    } else {
+      comparison = String(leftValue).localeCompare(String(rightValue), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+
+    if (comparison === 0) {
+      comparison = left.relative_path.localeCompare(right.relative_path, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+
+    return sortDirection === "asc" ? comparison : comparison * -1;
+  });
+
+  function toggleColumn(columnKey: FileColumnKey) {
+    const column = FILE_COLUMNS.find((entry) => entry.key === columnKey);
+    if (!column || column.hideable === false) {
+      return;
+    }
+    setVisibleColumns((current) => {
+      if (current.includes(columnKey)) {
+        if (sortKey === columnKey) {
+          setSortKey("file");
+          setSortDirection("asc");
+        }
+        return current.filter((entry) => entry !== columnKey);
+      }
+      const next = [...current, columnKey];
+      return FILE_COLUMNS.filter((entry) => next.includes(entry.key)).map((entry) => entry.key);
+    });
+  }
+
+  function updateSort(nextKey: FileColumnKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDirection(nextKey === "quality_score" ? "desc" : "asc");
+  }
 
   function loadPage() {
     Promise.all([api.library(libraryId), api.libraryFiles(libraryId), api.libraryScanJobs(libraryId)])
@@ -30,11 +254,6 @@ export function LibraryDetailPage() {
         setLibrary(libraryPayload);
         setFiles(filesPayload);
         setScanHistory(scanJobsPayload);
-        setSettingsForm({
-          scan_mode: libraryPayload.scan_mode,
-          interval_minutes: Number(libraryPayload.scan_config.interval_minutes ?? 60),
-          debounce_seconds: Number(libraryPayload.scan_config.debounce_seconds ?? 15),
-        });
         setError(null);
       })
       .catch((reason: Error) => setError(reason.message));
@@ -52,71 +271,33 @@ export function LibraryDetailPage() {
     return () => window.clearInterval(timer);
   }, [hasActiveJobs, libraryId]);
 
-  async function triggerScan(scanType: string) {
-    try {
-      const job = await api.scanLibrary(libraryId, scanType);
-      setScanState(`Scan job #${job.id} queued as ${job.job_type}. Refresh after completion.`);
-      await refresh();
-      loadPage();
-    } catch (reason) {
-      setScanState((reason as Error).message);
-    }
-  }
-
-  async function saveSettings(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      await api.updateLibrarySettings(libraryId, {
-        scan_mode: settingsForm.scan_mode,
-        scan_config:
-          settingsForm.scan_mode === "scheduled"
-            ? { interval_minutes: settingsForm.interval_minutes }
-            : settingsForm.scan_mode === "watch"
-              ? { debounce_seconds: settingsForm.debounce_seconds }
-              : {},
-      });
-      setSettingsState("Settings saved.");
-      loadPage();
-    } catch (reason) {
-      setSettingsState((reason as Error).message);
-    }
-  }
-
   return (
     <>
       <section className="panel stack">
-        <div className="detail-back">
-          <Link to="/libraries" className="badge">
-            Back to libraries
-          </Link>
-          <div className="toolbar">
-            <button type="button" className="secondary small" onClick={() => triggerScan("incremental")}>
-              Incremental scan
-            </button>
-            <button type="button" className="small" onClick={() => triggerScan("full")}>
-              Full scan
-            </button>
-          </div>
-        </div>
-        {scanState ? <div className="notice">{scanState}</div> : null}
         {activeJob ? (
           <div className="notice">
             <div className="distribution-copy">
-              <strong>{activeJob.phase_label}</strong>
-              <span>
-                {activeJob.files_total > 0
-                  ? `${activeJob.files_scanned}/${activeJob.files_total} files`
-                  : "Preparing scan"}
-              </span>
+              <strong>Scan in progress</strong>
+              <span>{activeJob.files_total > 0 ? `${activeJob.files_scanned}/${activeJob.files_total} files` : null}</span>
             </div>
             <div className="progress">
               <span style={{ width: `${activeJob.progress_percent}%` }} />
             </div>
           </div>
         ) : null}
-        <p className="eyebrow">Library analysis</p>
-        <h2>{library?.name ?? "Loading library…"}</h2>
-        <p className="subtitle">{library?.path}</p>
+        <div className="panel-title-row">
+          <h2>{library?.name ?? "Loading library…"}</h2>
+          {library?.path ? (
+            <span
+              className="tooltip-trigger"
+              tabIndex={0}
+              aria-label="Library path"
+              data-tooltip={library.path}
+            >
+              ?
+            </span>
+          ) : null}
+        </div>
         <div className="card-grid grid">
           <StatCard label="Files" value={String(library?.file_count ?? 0)} />
           <StatCard label="Storage" value={formatBytes(library?.total_size_bytes ?? 0)} tone="teal" />
@@ -130,103 +311,115 @@ export function LibraryDetailPage() {
       </section>
 
       <div className="media-grid">
-        <AsyncPanel title="Scan settings" loading={!library && !error} error={error}>
-          <form className="form-grid" onSubmit={saveSettings}>
-            <div className="field">
-              <label htmlFor="scan-mode">Mode</label>
-              <select
-                id="scan-mode"
-                value={settingsForm.scan_mode}
-                onChange={(event) =>
-                  setSettingsForm((current) => ({ ...current, scan_mode: event.target.value }))
-                }
-              >
-                <option value="manual">manual</option>
-                <option value="scheduled">scheduled</option>
-                <option value="watch">watch</option>
-              </select>
-            </div>
-            {settingsForm.scan_mode === "scheduled" ? (
-              <div className="field">
-                <label htmlFor="interval-minutes">Interval in minutes</label>
-                <input
-                  id="interval-minutes"
-                  type="number"
-                  min={5}
-                  value={settingsForm.interval_minutes}
-                  onChange={(event) =>
-                    setSettingsForm((current) => ({
-                      ...current,
-                      interval_minutes: Number(event.target.value),
-                    }))
-                  }
-                />
-              </div>
-            ) : null}
-            {settingsForm.scan_mode === "watch" ? (
-              <div className="field">
-                <label htmlFor="debounce-seconds">Debounce in seconds</label>
-                <input
-                  id="debounce-seconds"
-                  type="number"
-                  min={3}
-                  value={settingsForm.debounce_seconds}
-                  onChange={(event) =>
-                    setSettingsForm((current) => ({
-                      ...current,
-                      debounce_seconds: Number(event.target.value),
-                    }))
-                  }
-                />
-              </div>
-            ) : null}
-            <div className="notice">
-              <strong>Behavior</strong>
-              <p className="subtitle settings-copy">
-                `manual` only scans on demand. `scheduled` queues periodic incremental scans.
-                `watch` listens for file changes and debounces automatic incremental scans.
-              </p>
-            </div>
-            {settingsState ? <div className="alert success">{settingsState}</div> : null}
-            <button type="submit">Save settings</button>
-          </form>
+        <AsyncPanel
+          title="Video codecs"
+          loading={!library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={library?.video_codec_distribution ?? []}
+            maxVisibleRows={5}
+            scrollable
+          />
         </AsyncPanel>
-        <AsyncPanel title="Video codecs" loading={!library && !error} error={error}>
-          <DistributionList items={library?.video_codec_distribution ?? []} />
+        <AsyncPanel
+          title="Resolutions"
+          loading={!library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={library?.resolution_distribution ?? []}
+            maxVisibleRows={5}
+            scrollable
+          />
         </AsyncPanel>
-        <AsyncPanel title="Resolutions" loading={!library && !error} error={error}>
-          <DistributionList items={library?.resolution_distribution ?? []} />
+        <AsyncPanel
+          title="HDR coverage"
+          loading={!library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={library?.hdr_distribution ?? []}
+            maxVisibleRows={5}
+            scrollable
+          />
         </AsyncPanel>
-        <AsyncPanel title="HDR coverage" loading={!library && !error} error={error}>
-          <DistributionList items={library?.hdr_distribution ?? []} />
-        </AsyncPanel>
-        <AsyncPanel title="Audio languages" loading={!library && !error} error={error}>
-          <DistributionList items={library?.audio_language_distribution ?? []} />
+        <AsyncPanel
+          title="Audio languages"
+          loading={!library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={library?.audio_language_distribution ?? []}
+            maxVisibleRows={5}
+            scrollable
+          />
         </AsyncPanel>
       </div>
 
       <AsyncPanel title="Analyzed files" subtitle={`${files.length} indexed entries`} error={error}>
-        <div className="media-table">
-          <div className="media-table-head">
-            <span>File</span>
-            <span>Codec</span>
-            <span>Resolution</span>
-            <span>Duration</span>
-            <span>Score</span>
+        <div className="data-table-tools">
+          <div className="data-table-state">
+            <span className="badge">Sort: {FILE_COLUMNS.find((column) => column.key === sortKey)?.label ?? "File"}</span>
+            <span className="badge">{sortDirection}</span>
           </div>
-          {files.map((file) => (
-            <Link className="media-table-row" key={file.id} to={`/files/${file.id}`}>
-              <span>
-                <strong>{file.filename}</strong>
-                <small>{file.relative_path}</small>
-              </span>
-              <span>{file.video_codec ?? "n/a"}</span>
-              <span>{file.resolution ?? "n/a"}</span>
-              <span>{formatDuration(file.duration)}</span>
-              <span>{file.quality_score}/10</span>
-            </Link>
-          ))}
+          <div className="column-picker" aria-label="Visible metadata columns">
+            {FILE_COLUMNS.map((column) => {
+              const isVisible = visibleColumns.includes(column.key);
+              return (
+                <button
+                  key={column.key}
+                  type="button"
+                  className={`column-toggle${isVisible ? " is-active" : ""}`}
+                  onClick={() => toggleColumn(column.key)}
+                  disabled={column.hideable === false}
+                >
+                  {column.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+        {sortedFiles.length === 0 ? (
+          <div className="notice">No analyzed files yet.</div>
+        ) : (
+          <div className="data-table-shell">
+            <table className="media-data-table">
+              <thead>
+                <tr>
+                  {activeColumns.map((column) => {
+                    const isActiveSort = sortKey === column.key;
+                    return (
+                      <th key={column.key} className={column.sticky ? "is-sticky" : undefined} scope="col">
+                        <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
+                          <span>{column.label}</span>
+                          <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`}>
+                            {isActiveSort ? sortDirection : "off"}
+                          </span>
+                        </button>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedFiles.map((file) => (
+                  <tr key={file.id}>
+                    {activeColumns.map((column) => (
+                      <td key={column.key} className={column.sticky ? "is-sticky" : undefined}>
+                        {column.render(file)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </AsyncPanel>
 
       <AsyncPanel title="Recent scan jobs" subtitle="Latest queue and run history" error={error}>
@@ -241,7 +434,7 @@ export function LibraryDetailPage() {
               </div>
               <div className="stack">
                 <span>
-                  {job.files_total > 0 ? `${job.files_scanned}/${job.files_total}` : "discovering"}
+                  {job.files_total > 0 ? `${job.files_scanned}/${job.files_total}` : null}
                 </span>
                 <div className="progress">
                   <span style={{ width: `${job.progress_percent}%` }} />

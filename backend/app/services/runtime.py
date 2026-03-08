@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from pathlib import Path
 from threading import Lock, Timer
 
@@ -13,6 +12,7 @@ from watchdog.observers import Observer
 from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode
+from backend.app.utils.time import utc_now
 from backend.app.services.scanner import execute_scan_job, queue_scan_job
 
 
@@ -217,7 +217,7 @@ class ScanRuntimeManager:
             for job in active_jobs:
                 if job.library_id in seen_libraries:
                     job.status = JobStatus.failed
-                    job.finished_at = datetime.utcnow()
+                    job.finished_at = utc_now()
                     job.errors += 1
                     continue
                 seen_libraries.add(job.library_id)

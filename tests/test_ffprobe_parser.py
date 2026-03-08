@@ -49,6 +49,37 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
     assert normalized.media_format.duration == 5423.21
     assert normalized.video_streams[0].hdr_type == "HDR10"
     assert normalized.video_streams[0].frame_rate == 24000 / 1001
-    assert normalized.audio_streams[0].language == "eng"
+    assert normalized.audio_streams[0].language == "en"
+    assert normalized.subtitle_streams[0].language == "de"
     assert normalized.subtitle_streams[0].subtitle_type == "text"
 
+
+def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+                "disposition": {"attached_pic": 0},
+            },
+            {
+                "index": 1,
+                "codec_type": "video",
+                "codec_name": "mjpeg",
+                "width": 600,
+                "height": 900,
+                "avg_frame_rate": "0/0",
+                "disposition": {"attached_pic": 1},
+            },
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert len(normalized.video_streams) == 1
+    assert normalized.video_streams[0].codec == "h264"

@@ -62,7 +62,7 @@ Both scripts create `.venv` if needed, install backend/frontend dependencies whe
 - FastAPI on `http://127.0.0.1:8080`
 - Vite on `http://127.0.0.1:5173`
 
-If a project-level `.env` file exists, both scripts load variables from it first. Explicitly exported environment variables still win, and missing values fall back to the built-in defaults.
+If a project-level `.env` file exists, both scripts load variables from it first. Explicitly exported environment variables still win, and missing values fall back to the built-in defaults, including `TZ`.
 
 ## Environment
 
@@ -71,6 +71,7 @@ Relevant variables:
 - `CONFIG_PATH`: writable config/data directory, default `/config`
 - `MEDIA_ROOT`: media mount root, default `/media`
 - `APP_PORT`: HTTP port, default `8080`
+- `TZ`: optional process/container timezone like `Europe/Berlin`, default `UTC`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 
 `MEDIA_ROOT` must be mounted read-only in production.

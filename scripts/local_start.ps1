@@ -46,6 +46,7 @@ $ConfigPath = if ($env:CONFIG_PATH) { $env:CONFIG_PATH } else { Join-Path $RootD
 $MediaRoot = if ($env:MEDIA_ROOT) { $env:MEDIA_ROOT } else { Join-Path $RootDir "media" }
 $AppPort = if ($env:APP_PORT) { $env:APP_PORT } else { "8080" }
 $VitePort = if ($env:VITE_PORT) { $env:VITE_PORT } else { "5173" }
+$TimeZone = if ($env:TZ) { $env:TZ } else { "UTC" }
 $VenvDir = Join-Path $RootDir ".venv"
 $PythonExe = Join-Path $VenvDir "Scripts\python.exe"
 $BackendStamp = Join-Path $VenvDir ".backend-deps.stamp"
@@ -79,6 +80,7 @@ if ($NeedsFrontendInstall) {
 $env:CONFIG_PATH = $ConfigPath
 $env:MEDIA_ROOT = $MediaRoot
 $env:APP_PORT = $AppPort
+$env:TZ = $TimeZone
 
 $BackendProcess = Start-Process -FilePath $PythonExe -ArgumentList @("-m", "uvicorn", "backend.app.main:app", "--reload", "--host", "127.0.0.1", "--port", $AppPort) -PassThru
 $FrontendProcess = Start-Process -FilePath "npm" -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1", "--port", $VitePort) -WorkingDirectory (Join-Path $RootDir "frontend") -PassThru
@@ -87,6 +89,7 @@ Write-Host "Backend:  http://127.0.0.1:$AppPort"
 Write-Host "Frontend: http://127.0.0.1:$VitePort"
 Write-Host "CONFIG_PATH=$ConfigPath"
 Write-Host "MEDIA_ROOT=$MediaRoot"
+Write-Host "TZ=$TimeZone"
 Write-Host ".env loaded: $(Test-Path (Join-Path $RootDir '.env'))"
 Write-Host "Press Ctrl+C to stop both processes."
 

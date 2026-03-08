@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from pathlib import Path
 import traceback
 
@@ -25,6 +24,7 @@ from backend.app.models.entities import (
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
 from backend.app.services.quality import calculate_quality_score
 from backend.app.services.subtitles import detect_external_subtitles
+from backend.app.utils.time import utc_now
 
 
 def _library_root(library: Library) -> Path:
@@ -132,7 +132,7 @@ def execute_scan_job(job_id: int, settings: Settings) -> None:
         job = db.get(ScanJob, job_id)
         if job:
             job.status = JobStatus.failed
-            job.finished_at = datetime.utcnow()
+            job.finished_at = utc_now()
             job.errors += 1
             db.commit()
     finally:
@@ -144,7 +144,7 @@ def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
     if not job:
         raise ValueError(f"Scan job {job_id} not found")
     job.status = JobStatus.running
-    job.started_at = datetime.utcnow()
+    job.started_at = utc_now()
     db.commit()
     db.refresh(job)
     return run_scan(db, settings, job.library_id, job.job_type, job)
@@ -166,7 +166,7 @@ def run_scan(
         library_id=library_id,
         status=JobStatus.running,
         job_type=scan_type,
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
     if existing_job is None:
         db.add(job)
@@ -196,7 +196,7 @@ def run_scan(
                 extension=file_path.suffix.lower().lstrip("."),
                 size_bytes=stat.st_size,
                 mtime=stat.st_mtime,
-                last_seen_at=datetime.utcnow(),
+                last_seen_at=utc_now(),
                 scan_status=ScanStatus.pending,
             )
             db.add(media_file)
@@ -208,7 +208,7 @@ def run_scan(
             media_file.extension = file_path.suffix.lower().lstrip(".")
             media_file.size_bytes = stat.st_size
             media_file.mtime = stat.st_mtime
-            media_file.last_seen_at = datetime.utcnow()
+            media_file.last_seen_at = utc_now()
             if changed or scan_type == "full":
                 media_file.scan_status = ScanStatus.pending
                 to_analyze.append((media_file, file_path))
@@ -241,7 +241,7 @@ def run_scan(
                 media_file.raw_ffprobe_json = payload
                 _replace_analysis(media_file, normalized, subtitles)
                 media_file.quality_score = calculate_quality_score(normalized)
-                media_file.last_analyzed_at = datetime.utcnow()
+                media_file.last_analyzed_at = utc_now()
                 media_file.scan_status = ScanStatus.ready
             else:
                 media_file.scan_status = ScanStatus.failed
@@ -255,9 +255,9 @@ def run_scan(
         if batch_counter:
             db.commit()
 
-    library.last_scan_at = datetime.utcnow()
+    library.last_scan_at = utc_now()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
-    job.finished_at = datetime.utcnow()
+    job.finished_at = utc_now()
     db.commit()
     db.refresh(job)
     return job

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from backend.app.services.languages import normalize_language_code
+
 
 def _safe_int(value: Any) -> int | None:
     if value in (None, "", "N/A"):
@@ -65,6 +67,11 @@ def _subtitle_type(codec_name: str | None) -> str | None:
     if codec_name in image_codecs:
         return "image"
     return None
+
+
+def _is_attached_picture(stream: dict[str, Any]) -> bool:
+    disposition = stream.get("disposition") or {}
+    return bool(disposition.get("attached_pic"))
 
 
 @dataclass(slots=True)
@@ -156,6 +163,8 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
     for stream in streams:
         codec_type = stream.get("codec_type")
         if codec_type == "video":
+            if _is_attached_picture(stream):
+                continue
             normalized.video_streams.append(
                 NormalizedVideoStream(
                     stream_index=int(stream.get("index", 0)),
@@ -183,7 +192,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     channel_layout=stream.get("channel_layout"),
                     sample_rate=_safe_int(stream.get("sample_rate")),
                     bit_rate=_safe_int(stream.get("bit_rate")),
-                    language=tags.get("language"),
+                    language=normalize_language_code(tags.get("language")),
                     default_flag=bool(disposition.get("default")),
                     forced_flag=bool(disposition.get("forced")),
                 )
@@ -196,7 +205,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                 NormalizedSubtitleStream(
                     stream_index=int(stream.get("index", 0)),
                     codec=codec_name,
-                    language=tags.get("language"),
+                    language=normalize_language_code(tags.get("language")),
                     default_flag=bool(disposition.get("default")),
                     forced_flag=bool(disposition.get("forced")),
                     subtitle_type=_subtitle_type(codec_name),
@@ -204,4 +213,3 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
             )
 
     return normalized
-
