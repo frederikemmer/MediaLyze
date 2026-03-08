@@ -5,6 +5,16 @@ on:
       - main
     paths:
       - 'Dockerfile'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'alembic/**'
+      - 'pyproject.toml'
+      - 'README.md'
+      - 'LICENSE'
+      - 'CONTRIBUTING.md'
+      - '.github/workflows/build-docker.yaml'
+  workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
   contents: read
