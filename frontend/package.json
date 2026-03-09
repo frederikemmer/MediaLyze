@@ -11,6 +11,7 @@
   "dependencies": {
     "i18next": "^25.0.1",
     "lucide-react": "^0.577.0",
+    "motion": "^12.35.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^15.5.0",

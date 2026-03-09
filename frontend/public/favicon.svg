@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <mask id="bodyCut">
+      <rect width="32" height="32" fill="black" />
+      <path
+        d="
+          M8.8 8.5
+          H17.1
+          C19.7 8.5 21.4 10.2 21.4 12.8
+          V19.2
+          C21.4 21.8 19.7 23.5 17.1 23.5
+          H8.8
+          C6.2 23.5 4.5 21.8 4.5 19.2
+          V12.8
+          C4.5 10.2 6.2 8.5 8.8 8.5
+          Z
+        "
+        fill="white"
+      />
+      <polyline
+        points="4.5,23.1 10.6,13.4 14.9,17.8 21,9"
+        fill="none"
+        stroke="black"
+        stroke-width="2.1"
+        stroke-linejoin="round"
+      />
+    </mask>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#e6e2db" />
+  <rect width="32" height="32" fill="#2b2d33" mask="url(#bodyCut)" />
+  <path
+    d="
+      M23 11.2
+      L25.2 9.9
+      C26.7 9.0 27.6 9.6 27.6 11.1
+      V20.9
+      C27.6 22.4 26.7 23.0 25.2 22.1
+      L23 20.8
+      C22.4 20.4 22 19.8 22 19.1
+      V12.9
+      C22 12.2 22.4 11.6 23 11.2
+      Z
+    "
+    fill="#2b2d33"
+  />
+</svg>

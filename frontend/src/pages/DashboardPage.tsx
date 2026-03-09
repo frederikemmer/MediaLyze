@@ -12,7 +12,7 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { activeJobs, hasActiveJobs } = useScanJobs();
+  const { hasActiveJobs } = useScanJobs();
 
   useEffect(() => {
     let cancelled = false;
@@ -50,32 +50,27 @@ export function DashboardPage() {
   return (
     <>
       <section className="panel stack">
-        {activeJobs.length > 0 ? (
-          <div className="notice">
-            Live updates are active while scans run. Dashboard metrics refresh automatically.
-          </div>
-        ) : null}
         <div className="card-grid grid">
-          <StatCard label="Libraries" value={String(dashboard?.totals.libraries ?? 0)} />
-          <StatCard label="Files" value={String(dashboard?.totals.files ?? 0)} tone="teal" />
+          <StatCard label={t("dashboard.libraries")} value={String(dashboard?.totals.libraries ?? 0)} />
+          <StatCard label={t("dashboard.files")} value={String(dashboard?.totals.files ?? 0)} tone="teal" />
           <StatCard
-            label="Storage"
+            label={t("dashboard.storage")}
             value={formatBytes(dashboard?.totals.storage_bytes ?? 0)}
             tone="blue"
           />
           <StatCard
-            label="Duration"
+            label={t("dashboard.duration")}
             value={formatDuration(dashboard?.totals.duration_seconds ?? 0)}
           />
         </div>
       </section>
 
       <div className="media-grid">
-        <AsyncPanel title="Video codecs" loading={!dashboard && !error} error={error}>
+        <AsyncPanel title={t("dashboard.videoCodecs")} loading={!dashboard && !error} error={error}>
           <DistributionList items={dashboard?.video_codec_distribution ?? []} />
         </AsyncPanel>
         <AsyncPanel
-          title="Resolutions"
+          title={t("dashboard.resolutions")}
           loading={!dashboard && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
@@ -86,10 +81,10 @@ export function DashboardPage() {
             scrollable
           />
         </AsyncPanel>
-        <AsyncPanel title="HDR coverage" loading={!dashboard && !error} error={error}>
+        <AsyncPanel title={t("dashboard.hdrCoverage")} loading={!dashboard && !error} error={error}>
           <DistributionList items={dashboard?.hdr_distribution ?? []} />
         </AsyncPanel>
-        <AsyncPanel title="Subtitle sources" loading={!dashboard && !error} error={error}>
+        <AsyncPanel title={t("dashboard.subtitleSources")} loading={!dashboard && !error} error={error}>
           <DistributionList items={dashboard?.subtitle_distribution ?? []} />
         </AsyncPanel>
       </div>

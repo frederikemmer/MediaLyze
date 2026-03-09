@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+import os
 from pathlib import Path
 import traceback
 
@@ -27,16 +29,37 @@ from backend.app.services.subtitles import detect_external_subtitles
 from backend.app.utils.time import utc_now
 
 
+class ScanCanceled(Exception):
+    pass
+
+
 def _library_root(library: Library) -> Path:
     return Path(library.path)
 
 
-def _iter_media_files(root: Path, allowed_extensions: tuple[str, ...]) -> list[Path]:
+def _iter_media_files(
+    root: Path,
+    allowed_extensions: tuple[str, ...],
+    *,
+    should_cancel: Callable[[], bool] | None = None,
+) -> list[Path]:
     suffixes = {extension.lower() for extension in allowed_extensions}
     files: list[Path] = []
-    for entry in sorted(root.rglob("*")):
-        if entry.is_file() and entry.suffix.lower() in suffixes:
-            files.append(entry)
+    for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        if should_cancel and should_cancel():
+            raise ScanCanceled()
+
+        dirnames[:] = sorted(
+            [dirname for dirname in dirnames if not Path(current_root, dirname).is_symlink()],
+            key=str.lower,
+        )
+
+        for filename in sorted(filenames, key=str.lower):
+            file_path = Path(current_root, filename)
+            if file_path.is_symlink():
+                continue
+            if file_path.suffix.lower() in suffixes:
+                files.append(file_path)
     return files
 
 
@@ -128,6 +151,12 @@ def execute_scan_job(job_id: int, settings: Settings) -> None:
     db = SessionLocal()
     try:
         _run_scan_job(db, settings, job_id)
+    except ScanCanceled:
+        job = db.get(ScanJob, job_id)
+        if job:
+            job.status = JobStatus.canceled
+            job.finished_at = utc_now()
+            db.commit()
     except Exception:
         job = db.get(ScanJob, job_id)
         if job:
@@ -143,6 +172,10 @@ def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
     job = db.get(ScanJob, job_id)
     if not job:
         raise ValueError(f"Scan job {job_id} not found")
+    if job.status == JobStatus.canceled:
+        job.finished_at = job.finished_at or utc_now()
+        db.commit()
+        return job
     job.status = JobStatus.running
     job.started_at = utc_now()
     db.commit()
@@ -173,20 +206,33 @@ def run_scan(
         db.commit()
         db.refresh(job)
 
+    def _should_cancel() -> bool:
+        db.refresh(job)
+        return job.status == JobStatus.canceled
+
     existing_by_path = {
         media_file.relative_path: media_file
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
 
-    discovered = _iter_media_files(root, settings.allowed_media_extensions)
+    discovered = _iter_media_files(root, settings.allowed_media_extensions, should_cancel=_should_cancel)
     seen_relative_paths: set[str] = set()
     to_analyze: list[tuple[MediaFile, Path]] = []
+    discovery_counter = 0
 
     for file_path in discovered:
         relative_path = file_path.relative_to(root).as_posix()
         seen_relative_paths.add(relative_path)
+        discovery_counter += 1
         stat = file_path.stat()
         media_file = existing_by_path.get(relative_path)
+
+        if discovery_counter >= settings.scan_discovery_batch_size:
+            job.files_total = len(seen_relative_paths)
+            db.commit()
+            discovery_counter = 0
+            if _should_cancel():
+                raise ScanCanceled()
 
         if media_file is None:
             media_file = MediaFile(
@@ -223,6 +269,8 @@ def run_scan(
 
     job.files_total = len(discovered)
     db.commit()
+    if _should_cancel():
+        raise ScanCanceled()
 
     def _safe_analyze(pair: tuple[MediaFile, Path]) -> tuple[MediaFile, dict | None, list[dict[str, str | None]], str | None]:
         media_file, path = pair
@@ -234,27 +282,52 @@ def run_scan(
 
     with ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count) as executor:
         batch_counter = 0
-        for media_file, payload, subtitles, error in executor.map(_safe_analyze, to_analyze):
-            if error is None and payload is not None:
-                media_file.scan_status = ScanStatus.analyzing
-                normalized = normalize_ffprobe_payload(payload)
-                media_file.raw_ffprobe_json = payload
-                _replace_analysis(media_file, normalized, subtitles)
-                media_file.quality_score = calculate_quality_score(normalized)
-                media_file.last_analyzed_at = utc_now()
-                media_file.scan_status = ScanStatus.ready
-            else:
-                media_file.scan_status = ScanStatus.failed
-                job.errors += 1
-            job.files_scanned += 1
-            batch_counter += 1
-            if batch_counter >= settings.scan_commit_batch_size:
-                db.commit()
-                batch_counter = 0
+        next_index = 0
+        pending: dict[Future, tuple[MediaFile, Path]] = {}
+        max_in_flight = max(1, settings.ffprobe_worker_count * 2)
+
+        while next_index < len(to_analyze) and len(pending) < max_in_flight:
+            pair = to_analyze[next_index]
+            pending[executor.submit(_safe_analyze, pair)] = pair
+            next_index += 1
+
+        while pending:
+            if _should_cancel():
+                for future in pending:
+                    future.cancel()
+                raise ScanCanceled()
+
+            done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+            for future in done:
+                pending.pop(future)
+                media_file, payload, subtitles, error = future.result()
+                if error is None and payload is not None:
+                    media_file.scan_status = ScanStatus.analyzing
+                    normalized = normalize_ffprobe_payload(payload)
+                    media_file.raw_ffprobe_json = payload
+                    _replace_analysis(media_file, normalized, subtitles)
+                    media_file.quality_score = calculate_quality_score(normalized)
+                    media_file.last_analyzed_at = utc_now()
+                    media_file.scan_status = ScanStatus.ready
+                else:
+                    media_file.scan_status = ScanStatus.failed
+                    job.errors += 1
+                job.files_scanned += 1
+                batch_counter += 1
+                if batch_counter >= settings.scan_commit_batch_size:
+                    db.commit()
+                    batch_counter = 0
+
+                if next_index < len(to_analyze):
+                    pair = to_analyze[next_index]
+                    pending[executor.submit(_safe_analyze, pair)] = pair
+                    next_index += 1
 
         if batch_counter:
             db.commit()
 
+    if _should_cancel():
+        raise ScanCanceled()
     library.last_scan_at = utc_now()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()

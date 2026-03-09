@@ -6,13 +6,19 @@ from backend.app.core.config import Settings
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.library import LibraryCreate, LibraryDetail, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileTableRow
-from backend.app.schemas.scan import ScanJobRead, ScanRequest
+from backend.app.schemas.scan import ScanCancelResponse, ScanJobRead, ScanRequest
+from backend.app.models.entities import ScanJob
 from backend.app.services.browse import browse_media_root
-from backend.app.services.library_service import create_library, get_library_detail, list_libraries, update_library_settings
+from backend.app.services.library_service import (
+    create_library,
+    delete_library,
+    get_library_detail,
+    list_libraries,
+    update_library_settings,
+)
 from backend.app.services.media_service import get_media_file_detail, list_library_files
 from backend.app.services.runtime import ScanRuntimeManager
 from backend.app.services.scan_jobs import list_active_scan_jobs, list_library_scan_jobs, serialize_scan_job
-from backend.app.services.scanner import queue_scan_job
 from backend.app.services.stats import build_dashboard
 
 router = APIRouter()
@@ -42,6 +48,14 @@ def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
 @router.get("/scan-jobs/active", response_model=list[ScanJobRead])
 def active_scan_jobs(db: Session = Depends(get_db_session)) -> list[ScanJobRead]:
     return list_active_scan_jobs(db)
+
+
+@router.post("/scan-jobs/active/cancel", response_model=ScanCancelResponse)
+def cancel_active_scan_jobs(
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> ScanCancelResponse:
+    canceled_ids = runtime.cancel_active_jobs()
+    return ScanCancelResponse(canceled_jobs=len(canceled_ids))
 
 
 @router.get("/libraries", response_model=list[LibrarySummary])
@@ -104,6 +118,22 @@ def library_update(
     raise HTTPException(status_code=500, detail="Failed to load updated library")
 
 
+@router.delete("/libraries/{library_id}", status_code=204)
+def library_delete(
+    library_id: int,
+    db: Session = Depends(get_db_session),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> None:
+    if get_library_detail(db, library_id) is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+
+    runtime.cancel_library_jobs(library_id)
+    deleted = delete_library(db, library_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Library not found")
+    runtime.sync_library(library_id, library=None)
+
+
 @router.get("/libraries/{library_id}/files", response_model=list[MediaFileTableRow])
 def library_files(library_id: int, db: Session = Depends(get_db_session)) -> list[MediaFileTableRow]:
     return list_library_files(db, library_id)
@@ -119,8 +149,10 @@ def library_scan(
     if get_library_detail(db, library_id) is None:
         raise HTTPException(status_code=404, detail="Library not found")
 
-    job, created = queue_scan_job(db, library_id, payload.scan_type)
-    runtime.submit_scan_job(job.id)
+    job_id, _created = runtime.request_scan(library_id, payload.scan_type)
+    job = db.get(ScanJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=500, detail="Failed to load scan job")
     return serialize_scan_job(job)
 
 

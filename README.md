@@ -70,9 +70,11 @@ Relevant variables:
 
 - `CONFIG_PATH`: writable config/data directory, default `/config`
 - `MEDIA_ROOT`: media mount root, default `/media`
-- `APP_PORT`: HTTP port, default `8080`
+- `HOST_PORT`: HTTP port exposed on the host, default `8080`
+- `APP_PORT`: internal app port, default `8080`; normally no change needed
 - `TZ`: optional process/container timezone like `Europe/Berlin`, default `UTC`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
+- `SCAN_RUNTIME_WORKER_COUNT`: maximum number of libraries scanned in parallel, default `4`
 
 `MEDIA_ROOT` must be mounted read-only in production.
 
@@ -84,6 +86,9 @@ docker compose up --build
 ```
 
 Open `http://localhost:8080`.
+
+If you want a different external port, set `HOST_PORT`, for example `HOST_PORT=8090`.
+The container still listens internally on `8080`, so the effective mapping becomes `8090:8080`.
 
 ### SMB / NAS shares
 

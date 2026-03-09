@@ -1,0 +1,127 @@
+{
+  "app": {
+    "title": "MediaLyze",
+    "subtitle": "Technische Analyse großer Videobibliotheken, normalisiert in eine lokal filterbare Datenbank."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "libraries": "Einstellungen",
+    "homeAria": "Startseite",
+    "settingsAria": "Einstellungen"
+  },
+  "scanBanner": {
+    "running": "Scan läuft...",
+    "libraryFallback": "Bibliothek #{{id}}",
+    "stopAria": "Aktive Scans stoppen"
+  },
+  "dashboard": {
+    "liveUpdates": "Live-Aktualisierungen sind aktiv, während Scans laufen. Die Dashboard-Metriken werden automatisch aktualisiert.",
+    "libraries": "Bibliotheken",
+    "files": "Dateien",
+    "storage": "Speicher",
+    "duration": "Dauer",
+    "videoCodecs": "Video-Codecs",
+    "resolutions": "Auflösungen",
+    "hdrCoverage": "HDR-Abdeckung",
+    "subtitleSources": "Untertitelquellen"
+  },
+  "libraries": {
+    "configured": "Konfigurierte Bibliotheken",
+    "addFirstLibrary": "Erste Bibliothek anlegen",
+    "createTitle": "Bibliothek anlegen",
+    "createSubtitle": "Die Pfadauswahl ist auf Verzeichnisse unterhalb von MEDIA_ROOT begrenzt.",
+    "createButton": "Bibliothek anlegen",
+    "creating": "Wird angelegt…",
+    "name": "Name",
+    "namePlaceholder": "Filmarchiv",
+    "type": "Bibliothekstyp",
+    "scanMode": "Scan-Modus",
+    "intervalMinutes": "Intervall in Minuten",
+    "debounceSeconds": "Debounce in Sekunden",
+    "scanNow": "Manueller Scan",
+    "deleteAria": "Bibliothek {{name}} löschen",
+    "lastScan": "Letzter Scan",
+    "files": "Dateien",
+    "active": "Aktiv",
+    "appSettings": "App-Einstellungen",
+    "language": "Sprache der Oberfläche",
+    "languageHint": "Wirkt sofort und wird im Browser gespeichert."
+  },
+  "libraryTypes": {
+    "movies": "Filme",
+    "series": "Serien",
+    "mixed": "Gemischt",
+    "other": "Andere"
+  },
+  "scanModes": {
+    "manual": "Manuell",
+    "scheduled": "Geplant",
+    "watch": "Überwacht"
+  },
+  "sort": {
+    "prefix": "Sortierung",
+    "asc": "Aufsteigend",
+    "desc": "Absteigend"
+  },
+  "libraryDetail": {
+    "scanInProgress": "Scan läuft",
+    "loading": "Bibliothek wird geladen…",
+    "libraryPathAria": "Bibliothekspfad",
+    "files": "Dateien",
+    "storage": "Speicher",
+    "duration": "Dauer",
+    "lastScan": "Letzter Scan",
+    "videoCodecs": "Video-Codecs",
+    "resolutions": "Auflösungen",
+    "hdrCoverage": "HDR-Abdeckung",
+    "audioLanguages": "Audio-Sprachen",
+    "analyzedFiles": "Analysierte Dateien",
+    "indexedEntries": "{{count}} indizierte Einträge",
+    "indexedEntriesFiltered": "{{shown}} von {{total}} indizierten Einträgen",
+    "searchLabel": "Dateien und Metadaten durchsuchen",
+    "searchPlaceholder": "Dateien und Metadaten suchen",
+    "noAnalyzedFiles": "Noch keine analysierten Dateien.",
+    "recentScanJobs": "Letzte Scan-Jobs",
+    "recentScanJobsSubtitle": "Neueste Queue- und Laufhistorie",
+    "jobLabel": "Job #{{id}}"
+  },
+  "fileTable": {
+    "file": "Datei",
+    "size": "Größe",
+    "codec": "Codec",
+    "resolution": "Auflösung",
+    "hdr": "HDR",
+    "duration": "Dauer",
+    "audio": "Audio",
+    "subtitles": "Untertitel",
+    "modified": "Geändert",
+    "lastAnalyzed": "Zuletzt analysiert",
+    "score": "Score",
+    "na": "k. A.",
+    "sdr": "SDR"
+  },
+  "fileDetail": {
+    "backToLibrary": "Zur Bibliothek",
+    "eyebrow": "Mediendatei-Details",
+    "loading": "Datei wird geladen…",
+    "unknownCodec": "Unbekannter Codec",
+    "unknownResolution": "Unbekannte Auflösung",
+    "relativePath": "Relativer Pfad",
+    "size": "Größe",
+    "duration": "Dauer",
+    "quality": "Qualität",
+    "format": "Format",
+    "videoStreams": "Video-Streams",
+    "audioStreams": "Audio-Streams",
+    "subtitles": "Untertitel",
+    "rawJson": "Rohes ffprobe-JSON"
+  },
+  "pathBrowser": {
+    "selected": "Ausgewählt",
+    "up": "Hoch"
+  },
+  "language": {
+    "en": "English",
+    "de": "Deutsch"
+  }
+}
