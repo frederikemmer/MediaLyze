@@ -24,3 +24,8 @@ class ScanJobRead(BaseModel):
     finished_at: datetime | None
     progress_percent: float = 0.0
     phase_label: str = "queued"
+    phase_detail: str | None = None
+
+
+class ScanCancelResponse(BaseModel):
+    canceled_jobs: int

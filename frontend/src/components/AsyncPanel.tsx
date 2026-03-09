@@ -6,6 +6,7 @@ type AsyncPanelProps = {
   loading?: boolean;
   error?: string | null;
   bodyClassName?: string;
+  titleAddon?: ReactNode;
   headerAddon?: ReactNode;
   children: ReactNode;
 };
@@ -16,6 +17,7 @@ export function AsyncPanel({
   loading,
   error,
   bodyClassName,
+  titleAddon,
   headerAddon,
   children,
 }: AsyncPanelProps) {
@@ -25,10 +27,11 @@ export function AsyncPanel({
         <div>
           <div className="panel-title-row">
             <h2>{title}</h2>
-            {headerAddon}
+            {titleAddon}
           </div>
           {subtitle ? <p className="subtitle">{subtitle}</p> : null}
         </div>
+        {headerAddon}
       </div>
       <div className={`async-panel-body ${bodyClassName ?? ""}`.trim()}>
         {loading ? <div className="notice">Loading…</div> : null}

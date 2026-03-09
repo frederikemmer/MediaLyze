@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
@@ -18,9 +19,7 @@ type FileColumnKey =
   | "duration"
   | "audio_languages"
   | "subtitle_languages"
-  | "scan_status"
   | "mtime"
-  | "last_seen_at"
   | "last_analyzed_at"
   | "quality_score";
 
@@ -28,7 +27,7 @@ type SortDirection = "asc" | "desc";
 
 type FileColumnDefinition = {
   key: FileColumnKey;
-  label: string;
+  labelKey: string;
   sticky?: boolean;
   hideable?: boolean;
   sortValue: (file: MediaFileRow) => number | string;
@@ -48,6 +47,14 @@ const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
 
 function joinValues(values: string[]): string {
   return values.length > 0 ? values.join(", ") : "n/a";
+}
+
+function compactValues(values: string[], limit = 4): string {
+  if (values.length === 0) {
+    return "n/a";
+  }
+  const visible = values.slice(0, limit);
+  return values.length > limit ? `${visible.join(",")},...` : visible.join(",");
 }
 
 function resolutionSortValue(resolution: string | null): number {
@@ -81,107 +88,135 @@ function scoreMeterLabel(score: number): string {
   return "high";
 }
 
-const FILE_COLUMNS: FileColumnDefinition[] = [
-  {
-    key: "file",
-    label: "File",
-    sticky: true,
-    hideable: false,
-    sortValue: (file) => file.relative_path.toLowerCase(),
-    render: (file) => (
-      <div className="media-file-cell">
-        <Link to={`/files/${file.id}`} className="file-link">
-          {file.filename}
-        </Link>
-        <small>{file.relative_path}</small>
-      </div>
-    ),
-  },
-  {
-    key: "size",
-    label: "Size",
-    sortValue: (file) => file.size_bytes,
-    render: (file) => formatBytes(file.size_bytes),
-  },
-  {
-    key: "video_codec",
-    label: "Codec",
-    sortValue: (file) => (file.video_codec ?? "").toLowerCase(),
-    render: (file) => file.video_codec ?? "n/a",
-  },
-  {
-    key: "resolution",
-    label: "Resolution",
-    sortValue: (file) => resolutionSortValue(file.resolution),
-    render: (file) => file.resolution ?? "n/a",
-  },
-  {
-    key: "hdr_type",
-    label: "HDR",
-    sortValue: (file) => (file.hdr_type ?? "").toLowerCase(),
-    render: (file) => file.hdr_type ?? "SDR",
-  },
-  {
-    key: "duration",
-    label: "Duration",
-    sortValue: (file) => file.duration ?? 0,
-    render: (file) => formatDuration(file.duration),
-  },
-  {
-    key: "audio_languages",
-    label: "Audio",
-    sortValue: (file) => joinValues(file.audio_languages).toLowerCase(),
-    render: (file) => joinValues(file.audio_languages),
-  },
-  {
-    key: "subtitle_languages",
-    label: "Subtitles",
-    sortValue: (file) => joinValues(file.subtitle_languages).toLowerCase(),
-    render: (file) => joinValues(file.subtitle_languages),
-  },
-  {
-    key: "scan_status",
-    label: "Status",
-    sortValue: (file) => file.scan_status.toLowerCase(),
-    render: (file) => file.scan_status,
-  },
-  {
-    key: "mtime",
-    label: "Modified",
-    sortValue: (file) => file.mtime,
-    render: (file) => formatDate(new Date(file.mtime * 1000).toISOString()),
-  },
-  {
-    key: "last_seen_at",
-    label: "Last seen",
-    sortValue: (file) => timeSortValue(file.last_seen_at),
-    render: (file) => formatDate(file.last_seen_at),
-  },
-  {
-    key: "last_analyzed_at",
-    label: "Last analyzed",
-    sortValue: (file) => timeSortValue(file.last_analyzed_at),
-    render: (file) => formatDate(file.last_analyzed_at),
-  },
-  {
-    key: "quality_score",
-    label: "Score",
-    sortValue: (file) => file.quality_score,
-    render: (file) => (
-      <div className="score-cell">
-        <strong>{file.quality_score}/10</strong>
-        <div className="score-meter" aria-hidden="true">
-          <span
-            className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
-            style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
-          />
+function normalizeSearchValue(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function fuzzyIncludes(haystack: string, needle: string): boolean {
+  let index = 0;
+  for (const character of haystack) {
+    if (character === needle[index]) {
+      index += 1;
+      if (index === needle.length) {
+        return true;
+      }
+    }
+  }
+  return needle.length === 0;
+}
+
+function fuzzyScore(text: string, query: string): number {
+  if (!query) {
+    return 0;
+  }
+
+  if (text.includes(query)) {
+    return 200 - Math.max(0, text.indexOf(query));
+  }
+
+  if (fuzzyIncludes(text.replaceAll(" ", ""), query.replaceAll(" ", ""))) {
+    return 120 - Math.max(0, text.length - query.length);
+  }
+
+  return 0;
+}
+
+function buildFileColumns(t: (key: string, options?: Record<string, unknown>) => string): FileColumnDefinition[] {
+  return [
+    {
+      key: "file",
+      labelKey: "fileTable.file",
+      sticky: true,
+      hideable: false,
+      sortValue: (file) => file.relative_path.toLowerCase(),
+      render: (file) => (
+        <div className="media-file-cell">
+          <Link to={`/files/${file.id}`} className="file-link">
+            {file.filename}
+          </Link>
         </div>
-      </div>
-    ),
-  },
-];
+      ),
+    },
+    {
+      key: "size",
+      labelKey: "fileTable.size",
+      sortValue: (file) => file.size_bytes,
+      render: (file) => formatBytes(file.size_bytes),
+    },
+    {
+      key: "video_codec",
+      labelKey: "fileTable.codec",
+      sortValue: (file) => (file.video_codec ?? "").toLowerCase(),
+      render: (file) => file.video_codec ?? t("fileTable.na"),
+    },
+    {
+      key: "resolution",
+      labelKey: "fileTable.resolution",
+      sortValue: (file) => resolutionSortValue(file.resolution),
+      render: (file) => file.resolution ?? t("fileTable.na"),
+    },
+    {
+      key: "hdr_type",
+      labelKey: "fileTable.hdr",
+      sortValue: (file) => (file.hdr_type ?? "").toLowerCase(),
+      render: (file) => file.hdr_type ?? t("fileTable.sdr"),
+    },
+    {
+      key: "duration",
+      labelKey: "fileTable.duration",
+      sortValue: (file) => file.duration ?? 0,
+      render: (file) => formatDuration(file.duration),
+    },
+    {
+      key: "audio_languages",
+      labelKey: "fileTable.audio",
+      sortValue: (file) => joinValues(file.audio_languages).toLowerCase(),
+      render: (file) => compactValues(file.audio_languages),
+    },
+    {
+      key: "subtitle_languages",
+      labelKey: "fileTable.subtitles",
+      sortValue: (file) => joinValues(file.subtitle_languages).toLowerCase(),
+      render: (file) => compactValues(file.subtitle_languages),
+    },
+    {
+      key: "mtime",
+      labelKey: "fileTable.modified",
+      sortValue: (file) => file.mtime,
+      render: (file) => formatDate(new Date(file.mtime * 1000).toISOString()),
+    },
+    {
+      key: "last_analyzed_at",
+      labelKey: "fileTable.lastAnalyzed",
+      sortValue: (file) => timeSortValue(file.last_analyzed_at),
+      render: (file) => formatDate(file.last_analyzed_at),
+    },
+    {
+      key: "quality_score",
+      labelKey: "fileTable.score",
+      sortValue: (file) => file.quality_score,
+      render: (file) => (
+        <div className="score-cell">
+          <strong>{file.quality_score}/10</strong>
+          <div className="score-meter" aria-hidden="true">
+            <span
+              className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+              style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+            />
+          </div>
+        </div>
+      ),
+    },
+  ];
+}
 
 export function LibraryDetailPage() {
+  const { t } = useTranslation();
   const { libraryId = "" } = useParams();
   const [library, setLibrary] = useState<LibraryDetail | null>(null);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
@@ -190,11 +225,44 @@ export function LibraryDetailPage() {
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [searchQuery, setSearchQuery] = useState("");
   const { activeJobs, hasActiveJobs } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
-  const activeColumns = FILE_COLUMNS.filter((column) => visibleColumns.includes(column.key));
-  const sortedFiles = [...files].sort((left, right) => {
-    const column = FILE_COLUMNS.find((entry) => entry.key === sortKey);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const fileColumns = buildFileColumns(t);
+  const activeColumns = fileColumns.filter((column) => visibleColumns.includes(column.key));
+  const filteredFiles = (() => {
+    const query = normalizeSearchValue(deferredSearchQuery);
+    if (!query) {
+      return files;
+    }
+
+    return files
+      .map((file) => {
+        const searchFields = [
+          file.filename,
+          file.relative_path,
+          file.video_codec ?? "",
+          file.resolution ?? "",
+          file.hdr_type ?? "",
+          file.scan_status,
+          file.extension,
+          file.audio_languages.join(" "),
+          file.subtitle_languages.join(" "),
+        ];
+        const score = searchFields.reduce((best, field) => {
+          const normalizedField = normalizeSearchValue(field);
+          return Math.max(best, fuzzyScore(normalizedField, query));
+        }, 0);
+
+        return { file, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score || left.file.relative_path.localeCompare(right.file.relative_path))
+      .map((entry) => entry.file);
+  })();
+  const sortedFiles = [...filteredFiles].sort((left, right) => {
+    const column = fileColumns.find((entry) => entry.key === sortKey);
     if (!column) {
       return 0;
     }
@@ -222,7 +290,7 @@ export function LibraryDetailPage() {
   });
 
   function toggleColumn(columnKey: FileColumnKey) {
-    const column = FILE_COLUMNS.find((entry) => entry.key === columnKey);
+    const column = fileColumns.find((entry) => entry.key === columnKey);
     if (!column || column.hideable === false) {
       return;
     }
@@ -235,7 +303,7 @@ export function LibraryDetailPage() {
         return current.filter((entry) => entry !== columnKey);
       }
       const next = [...current, columnKey];
-      return FILE_COLUMNS.filter((entry) => next.includes(entry.key)).map((entry) => entry.key);
+      return fileColumns.filter((entry) => next.includes(entry.key)).map((entry) => entry.key);
     });
   }
 
@@ -277,8 +345,8 @@ export function LibraryDetailPage() {
         {activeJob ? (
           <div className="notice">
             <div className="distribution-copy">
-              <strong>Scan in progress</strong>
-              <span>{activeJob.files_total > 0 ? `${activeJob.files_scanned}/${activeJob.files_total} files` : null}</span>
+              <strong>{t("libraryDetail.scanInProgress")}</strong>
+              <span>{activeJob.phase_detail ?? activeJob.phase_label}</span>
             </div>
             <div className="progress">
               <span style={{ width: `${activeJob.progress_percent}%` }} />
@@ -286,12 +354,12 @@ export function LibraryDetailPage() {
           </div>
         ) : null}
         <div className="panel-title-row">
-          <h2>{library?.name ?? "Loading library…"}</h2>
+          <h2>{library?.name ?? t("libraryDetail.loading")}</h2>
           {library?.path ? (
             <span
               className="tooltip-trigger"
               tabIndex={0}
-              aria-label="Library path"
+              aria-label={t("libraryDetail.libraryPathAria")}
               data-tooltip={library.path}
             >
               ?
@@ -299,20 +367,20 @@ export function LibraryDetailPage() {
           ) : null}
         </div>
         <div className="card-grid grid">
-          <StatCard label="Files" value={String(library?.file_count ?? 0)} />
-          <StatCard label="Storage" value={formatBytes(library?.total_size_bytes ?? 0)} tone="teal" />
+          <StatCard label={t("libraryDetail.files")} value={String(library?.file_count ?? 0)} />
+          <StatCard label={t("libraryDetail.storage")} value={formatBytes(library?.total_size_bytes ?? 0)} tone="teal" />
           <StatCard
-            label="Duration"
+            label={t("libraryDetail.duration")}
             value={formatDuration(library?.total_duration_seconds ?? 0)}
             tone="blue"
           />
-          <StatCard label="Last scan" value={formatDate(library?.last_scan_at ?? null)} />
+          <StatCard label={t("libraryDetail.lastScan")} value={formatDate(library?.last_scan_at ?? null)} />
         </div>
       </section>
 
       <div className="media-grid">
         <AsyncPanel
-          title="Video codecs"
+          title={t("libraryDetail.videoCodecs")}
           loading={!library && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
@@ -324,7 +392,7 @@ export function LibraryDetailPage() {
           />
         </AsyncPanel>
         <AsyncPanel
-          title="Resolutions"
+          title={t("libraryDetail.resolutions")}
           loading={!library && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
@@ -336,7 +404,7 @@ export function LibraryDetailPage() {
           />
         </AsyncPanel>
         <AsyncPanel
-          title="HDR coverage"
+          title={t("libraryDetail.hdrCoverage")}
           loading={!library && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
@@ -348,7 +416,7 @@ export function LibraryDetailPage() {
           />
         </AsyncPanel>
         <AsyncPanel
-          title="Audio languages"
+          title={t("libraryDetail.audioLanguages")}
           loading={!library && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
@@ -361,14 +429,37 @@ export function LibraryDetailPage() {
         </AsyncPanel>
       </div>
 
-      <AsyncPanel title="Analyzed files" subtitle={`${files.length} indexed entries`} error={error}>
-        <div className="data-table-tools">
-          <div className="data-table-state">
-            <span className="badge">Sort: {FILE_COLUMNS.find((column) => column.key === sortKey)?.label ?? "File"}</span>
-            <span className="badge">{sortDirection}</span>
+      <AsyncPanel
+        title={t("libraryDetail.analyzedFiles")}
+        subtitle={
+          deferredSearchQuery.trim()
+            ? t("libraryDetail.indexedEntriesFiltered", { shown: sortedFiles.length, total: files.length })
+            : t("libraryDetail.indexedEntries", { count: files.length })
+        }
+        error={error}
+        headerAddon={
+          <div className="data-table-search">
+            <label className="sr-only" htmlFor="library-file-search">
+              {t("libraryDetail.searchLabel")}
+            </label>
+            <input
+              id="library-file-search"
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t("libraryDetail.searchPlaceholder")}
+              autoComplete="off"
+            />
           </div>
+        }
+      >
+        <div className="data-table-tools">
           <div className="column-picker" aria-label="Visible metadata columns">
-            {FILE_COLUMNS.map((column) => {
+            <span className="badge">
+              {t("sort.prefix")}: {t(fileColumns.find((column) => column.key === sortKey)?.labelKey ?? "fileTable.file")}
+            </span>
+            <span className="badge">{t(`sort.${sortDirection}`)}</span>
+            {fileColumns.map((column) => {
               const isVisible = visibleColumns.includes(column.key);
               return (
                 <button
@@ -378,14 +469,14 @@ export function LibraryDetailPage() {
                   onClick={() => toggleColumn(column.key)}
                   disabled={column.hideable === false}
                 >
-                  {column.label}
+                  {t(column.labelKey)}
                 </button>
               );
             })}
           </div>
         </div>
         {sortedFiles.length === 0 ? (
-          <div className="notice">No analyzed files yet.</div>
+          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
         ) : (
           <div className="data-table-shell">
             <table className="media-data-table">
@@ -396,9 +487,9 @@ export function LibraryDetailPage() {
                     return (
                       <th key={column.key} className={column.sticky ? "is-sticky" : undefined} scope="col">
                         <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
-                          <span>{column.label}</span>
+                          <span>{t(column.labelKey)}</span>
                           <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`}>
-                            {isActiveSort ? sortDirection : "off"}
+                            {isActiveSort ? t(`sort.${sortDirection}`) : ""}
                           </span>
                         </button>
                       </th>
@@ -422,20 +513,17 @@ export function LibraryDetailPage() {
         )}
       </AsyncPanel>
 
-      <AsyncPanel title="Recent scan jobs" subtitle="Latest queue and run history" error={error}>
+      <AsyncPanel title={t("libraryDetail.recentScanJobs")} subtitle={t("libraryDetail.recentScanJobsSubtitle")} error={error}>
         <div className="listing">
           {scanHistory.map((job) => (
             <div className="media-card compact-row-card" key={job.id}>
               <div className="stack">
-                <strong>Job #{job.id}</strong>
-                <span className="media-meta">
-                  {job.job_type} · {job.phase_label}
-                </span>
+                <strong>{t("libraryDetail.jobLabel", { id: job.id })}</strong>
+                <span className="media-meta">{job.job_type} · {job.phase_label}</span>
+                {job.phase_detail ? <span className="media-meta">{job.phase_detail}</span> : null}
               </div>
               <div className="stack">
-                <span>
-                  {job.files_total > 0 ? `${job.files_scanned}/${job.files_total}` : null}
-                </span>
+                <span>{job.files_total > 0 ? `${job.files_scanned}/${job.files_total}` : job.phase_label}</span>
                 <div className="progress">
                   <span style={{ width: `${job.progress_percent}%` }} />
                 </div>

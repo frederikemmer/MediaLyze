@@ -95,6 +95,11 @@ export type ScanJob = {
   finished_at: string | null;
   progress_percent: number;
   phase_label: string;
+  phase_detail: string | null;
+};
+
+export type ScanCancelResponse = {
+  canceled_jobs: number;
 };
 
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? "/api";
@@ -112,6 +117,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const payload = await response.json().catch(() => null);
     const detail = payload?.detail ?? response.statusText;
     throw new Error(detail);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return response.json() as Promise<T>;
@@ -148,9 +157,17 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  deleteLibrary: (libraryId: string | number) =>
+    request<void>(`/libraries/${libraryId}`, {
+      method: "DELETE",
+    }),
   scanLibrary: (libraryId: string | number, scanType: string) =>
     request<ScanJob>(`/libraries/${libraryId}/scan`, {
       method: "POST",
       body: JSON.stringify({ scan_type: scanType }),
+    }),
+  cancelActiveScanJobs: () =>
+    request<ScanCancelResponse>("/scan-jobs/active/cancel", {
+      method: "POST",
     }),
 };

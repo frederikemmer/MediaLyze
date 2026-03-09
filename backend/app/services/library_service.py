@@ -75,6 +75,15 @@ def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate
     return library
 
 
+def delete_library(db: Session, library_id: int) -> bool:
+    library = db.get(Library, library_id)
+    if library is None:
+        return False
+    db.delete(library)
+    db.commit()
+    return True
+
+
 def _library_aggregate_map(db: Session) -> dict[int, dict[str, int | float]]:
     rows = db.execute(
         select(

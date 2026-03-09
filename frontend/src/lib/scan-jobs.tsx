@@ -6,6 +6,7 @@ type ScanJobsContextValue = {
   activeJobs: ScanJob[];
   hasActiveJobs: boolean;
   refresh: () => Promise<void>;
+  stopAll: () => Promise<void>;
 };
 
 const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
@@ -19,6 +20,15 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
       setActiveJobs(jobs);
     } catch {
       // Keep the last known active jobs on transient polling errors.
+    }
+  }
+
+  async function stopAll() {
+    try {
+      await api.cancelActiveScanJobs();
+      setActiveJobs([]);
+    } catch {
+      // Keep the last known state on transient errors.
     }
   }
 
@@ -52,6 +62,7 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
       activeJobs,
       hasActiveJobs: activeJobs.length > 0,
       refresh,
+      stopAll,
     }),
     [activeJobs],
   );

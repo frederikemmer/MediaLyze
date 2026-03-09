@@ -29,7 +29,10 @@ class ScanRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="medialyze-runtime")
+        self.executor = ThreadPoolExecutor(
+            max_workers=max(1, settings.scan_runtime_worker_count),
+            thread_name_prefix="medialyze-runtime",
+        )
         self.lock = Lock()
         self.watch_observers: dict[int, tuple[str, Observer]] = {}
         self.debounce_timers: dict[int, Timer] = {}
@@ -43,6 +46,7 @@ class ScanRuntimeManager:
                 return
             self.scheduler.start()
             self.started = True
+        self._recover_orphaned_jobs()
         self.sync_all_libraries()
         self._resume_active_jobs()
 
@@ -106,15 +110,29 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
-    def request_scan(self, library_id: int, scan_type: str = "incremental") -> None:
-        db = SessionLocal()
-        try:
-            job, created = queue_scan_job(db, library_id, scan_type)
-        finally:
-            db.close()
+    def request_scan(self, library_id: int, scan_type: str = "incremental") -> tuple[int, bool]:
+        created = False
+        should_submit = False
+        job_id: int | None = None
 
-        if created:
-            self.submit_scan_job(job.id)
+        with self.lock:
+            db = SessionLocal()
+            try:
+                job, created = queue_scan_job(db, library_id, scan_type)
+                job_id = job.id
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                    self.active_library_ids.add(library_id)
+                    self.submitted_job_ids.add(job.id)
+                    should_submit = True
+            finally:
+                db.close()
+
+        if should_submit and job_id is not None:
+            self.executor.submit(self._run_job, job_id, library_id)
+
+        if job_id is None:
+            raise ValueError(f"Failed to request scan for library {library_id}")
+        return job_id, created
 
     def submit_scan_job(self, job_id: int) -> None:
         db = SessionLocal()
@@ -142,6 +160,53 @@ class ScanRuntimeManager:
                 self.submitted_job_ids.discard(job_id)
                 self.active_library_ids.discard(library_id)
             self._submit_next_active_job(library_id)
+
+    def cancel_active_jobs(self) -> list[int]:
+        db = SessionLocal()
+        try:
+            jobs = db.scalars(
+                select(ScanJob)
+                .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
+                .order_by(ScanJob.id.asc())
+            ).all()
+
+            canceled_ids: list[int] = []
+            for job in jobs:
+                job.status = JobStatus.canceled
+                job.finished_at = utc_now()
+                canceled_ids.append(job.id)
+
+            if canceled_ids:
+                db.commit()
+        finally:
+            db.close()
+
+        return canceled_ids
+
+    def cancel_library_jobs(self, library_id: int) -> list[int]:
+        db = SessionLocal()
+        try:
+            jobs = db.scalars(
+                select(ScanJob)
+                .where(
+                    ScanJob.library_id == library_id,
+                    ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
+                )
+                .order_by(ScanJob.id.asc())
+            ).all()
+
+            canceled_ids: list[int] = []
+            for job in jobs:
+                job.status = JobStatus.canceled
+                job.finished_at = utc_now()
+                canceled_ids.append(job.id)
+
+            if canceled_ids:
+                db.commit()
+        finally:
+            db.close()
+
+        return canceled_ids
 
     def handle_watch_event(self, library_id: int, event: FileSystemEvent) -> None:
         if event.is_directory:
@@ -229,6 +294,37 @@ class ScanRuntimeManager:
 
         for job_id in chosen_job_ids:
             self.submit_scan_job(job_id)
+
+    def _recover_orphaned_jobs(self) -> None:
+        db = SessionLocal()
+        try:
+            running_jobs = db.scalars(
+                select(ScanJob)
+                .where(ScanJob.status == JobStatus.running)
+                .order_by(ScanJob.id.asc())
+            ).all()
+
+            if not running_jobs:
+                return
+
+            seen_libraries: set[int] = set()
+            for job in running_jobs:
+                if job.library_id in seen_libraries:
+                    job.status = JobStatus.failed
+                    job.finished_at = utc_now()
+                    job.errors += 1
+                    continue
+
+                seen_libraries.add(job.library_id)
+                job.status = JobStatus.queued
+                job.started_at = None
+                job.finished_at = None
+                job.files_total = 0
+                job.files_scanned = 0
+
+            db.commit()
+        finally:
+            db.close()
 
     def _submit_next_active_job(self, library_id: int) -> None:
         db = SessionLocal()

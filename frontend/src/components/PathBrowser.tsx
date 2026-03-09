@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api, type BrowseResponse } from "../lib/api";
 
@@ -7,10 +8,17 @@ type PathBrowserProps = {
   onChange: (value: string) => void;
 };
 
+function isRootPath(path: string | null | undefined): boolean {
+  return !path || path === ".";
+}
+
 export function PathBrowser({ value, onChange }: PathBrowserProps) {
+  const { t } = useTranslation();
   const [browser, setBrowser] = useState<BrowseResponse | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(value || ".");
   const [error, setError] = useState<string | null>(null);
+  const selectedPathLabel = isRootPath(value) ? null : value;
+  const currentPathLabel = isRootPath(browser?.current_path) ? null : (browser?.current_path ?? currentPath);
 
   useEffect(() => {
     setCurrentPath(value || ".");
@@ -39,20 +47,20 @@ export function PathBrowser({ value, onChange }: PathBrowserProps) {
   return (
     <div className="stack">
       <div className="meta-row">
-        <span className="meta-label">Selected</span>
-        <div className="badge">{value || "."}</div>
+        <span className="meta-label">{t("pathBrowser.selected")}</span>
+        <div className="badge">{selectedPathLabel ?? ""}</div>
       </div>
       {error ? <div className="alert">{error}</div> : null}
       <div className="path-browser">
         <div className="toolbar">
-          <strong>{browser?.current_path ?? currentPath}</strong>
+          <strong>{currentPathLabel ?? ""}</strong>
           {browser?.parent_path ? (
             <button
               type="button"
               className="secondary small"
               onClick={() => setCurrentPath(browser.parent_path ?? ".")}
             >
-              Up
+              {t("pathBrowser.up")}
             </button>
           ) : null}
         </div>
@@ -76,4 +84,3 @@ export function PathBrowser({ value, onChange }: PathBrowserProps) {
     </div>
   );
 }
-

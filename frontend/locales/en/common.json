@@ -5,21 +5,123 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "libraries": "Libraries"
+    "libraries": "Settings",
+    "homeAria": "Home",
+    "settingsAria": "Settings"
+  },
+  "scanBanner": {
+    "running": "Scan running...",
+    "libraryFallback": "Library #{{id}}",
+    "stopAria": "Stop active scans"
   },
   "dashboard": {
-    "eyebrow": "System overview",
-    "title": "Library telemetry",
-    "subtitle": "Codec, resolution, HDR and subtitle coverage across all indexed libraries."
+    "liveUpdates": "Live updates are active while scans run. Dashboard metrics refresh automatically.",
+    "libraries": "Libraries",
+    "files": "Files",
+    "storage": "Storage",
+    "duration": "Duration",
+    "videoCodecs": "Video codecs",
+    "resolutions": "Resolutions",
+    "hdrCoverage": "HDR coverage",
+    "subtitleSources": "Subtitle sources"
   },
   "libraries": {
-    "eyebrow": "Filesystem libraries",
-    "title": "Media roots",
-    "subtitle": "Each library maps to a directory below MEDIA_ROOT and can be scanned incrementally or fully."
+    "configured": "Configured libraries",
+    "addFirstLibrary": "Add first library",
+    "createTitle": "Create library",
+    "createSubtitle": "Path selection is restricted to directories below MEDIA_ROOT.",
+    "createButton": "Create library",
+    "creating": "Creating…",
+    "name": "Name",
+    "namePlaceholder": "Movies archive",
+    "type": "Library type",
+    "scanMode": "Scan mode",
+    "intervalMinutes": "Interval in minutes",
+    "debounceSeconds": "Debounce in seconds",
+    "scanNow": "Manual scan",
+    "deleteAria": "Delete library {{name}}",
+    "lastScan": "Last scan",
+    "files": "Files",
+    "active": "Active",
+    "appSettings": "App settings",
+    "language": "Interface language",
+    "languageHint": "Applies immediately and is stored in the browser."
   },
-  "detail": {
-    "eyebrow": "Library analysis",
-    "files": "Files"
+  "libraryTypes": {
+    "movies": "Movies",
+    "series": "Series",
+    "mixed": "Mixed",
+    "other": "Other"
+  },
+  "scanModes": {
+    "manual": "Manual",
+    "scheduled": "Scheduled",
+    "watch": "Watch"
+  },
+  "sort": {
+    "prefix": "Sort",
+    "asc": "Ascending",
+    "desc": "Descending"
+  },
+  "libraryDetail": {
+    "scanInProgress": "Scan in progress",
+    "loading": "Loading library…",
+    "libraryPathAria": "Library path",
+    "files": "Files",
+    "storage": "Storage",
+    "duration": "Duration",
+    "lastScan": "Last scan",
+    "videoCodecs": "Video codecs",
+    "resolutions": "Resolutions",
+    "hdrCoverage": "HDR coverage",
+    "audioLanguages": "Audio languages",
+    "analyzedFiles": "Analyzed files",
+    "indexedEntries": "{{count}} indexed entries",
+    "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
+    "searchLabel": "Search files and metadata",
+    "searchPlaceholder": "search files and metadata",
+    "noAnalyzedFiles": "No analyzed files yet.",
+    "recentScanJobs": "Recent scan jobs",
+    "recentScanJobsSubtitle": "Latest queue and run history",
+    "jobLabel": "Job #{{id}}"
+  },
+  "fileTable": {
+    "file": "File",
+    "size": "Size",
+    "codec": "Codec",
+    "resolution": "Resolution",
+    "hdr": "HDR",
+    "duration": "Duration",
+    "audio": "Audio",
+    "subtitles": "Subtitles",
+    "modified": "Modified",
+    "lastAnalyzed": "Last analyzed",
+    "score": "Score",
+    "na": "n/a",
+    "sdr": "SDR"
+  },
+  "fileDetail": {
+    "backToLibrary": "Back to library",
+    "eyebrow": "Media file detail",
+    "loading": "Loading file…",
+    "unknownCodec": "Unknown codec",
+    "unknownResolution": "Unknown resolution",
+    "relativePath": "Relative path",
+    "size": "Size",
+    "duration": "Duration",
+    "quality": "Quality",
+    "format": "Format",
+    "videoStreams": "Video streams",
+    "audioStreams": "Audio streams",
+    "subtitles": "Subtitles",
+    "rawJson": "Raw ffprobe JSON"
+  },
+  "pathBrowser": {
+    "selected": "Selected",
+    "up": "Up"
+  },
+  "language": {
+    "en": "English",
+    "de": "German"
   }
 }
-

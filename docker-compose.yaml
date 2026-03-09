@@ -8,11 +8,10 @@ services:
       args:
         APP_VERSION: ${APP_VERSION:-dev}
     ports:
-      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+      - "${HOST_PORT:-8080}:8080"
     env_file:
       - .env
     environment:
-      APP_PORT: ${APP_PORT:-8080}
       CONFIG_PATH: /config
       MEDIA_ROOT: /media
       TZ: ${TZ:-UTC}
