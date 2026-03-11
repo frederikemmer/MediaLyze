@@ -6,6 +6,11 @@ import { DistributionList } from "../components/DistributionList";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
+import {
+  getDashboardStatisticPanelItems,
+  getLibraryStatisticsSettings,
+  getVisibleDashboardStatisticPanels,
+} from "../lib/library-statistics-settings";
 import { useScanJobs } from "../lib/scan-jobs";
 
 export function DashboardPage() {
@@ -14,6 +19,8 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
+  const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
+  const visibleDashboardPanels = getVisibleDashboardStatisticPanels(statisticsSettings);
 
   useEffect(() => {
     if (dashboardLoaded) {
@@ -50,41 +57,32 @@ export function DashboardPage() {
       </section>
 
       <div className="media-grid">
-        <AsyncPanel title={t("dashboard.videoCodecs")} loading={!dashboard && !error} error={error}>
-          <DistributionList
-            items={(dashboard?.video_codec_distribution ?? []).map((item) => ({
-              ...item,
-              label: formatCodecLabel(item.label, "video"),
-            }))}
-          />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("dashboard.resolutions")}
-          loading={!dashboard && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList
-            items={dashboard?.resolution_distribution ?? []}
-            maxVisibleRows={5}
-            scrollable
-          />
-        </AsyncPanel>
-        <AsyncPanel title={t("dashboard.hdrCoverage")} loading={!dashboard && !error} error={error}>
-          <DistributionList items={dashboard?.hdr_distribution ?? []} />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("dashboard.audioLanguages")}
-          loading={!dashboard && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList
-            items={dashboard?.audio_language_distribution ?? []}
-            maxVisibleRows={5}
-            scrollable
-          />
-        </AsyncPanel>
+        {visibleDashboardPanels.length > 0 ? (
+          visibleDashboardPanels.map((panel) => {
+            const items = getDashboardStatisticPanelItems(dashboard, panel);
+            const dashboardFormatKind = panel.dashboardFormatKind;
+            const formattedItems = dashboardFormatKind
+              ? items.map((item) => ({
+                  ...item,
+                  label: formatCodecLabel(item.label, dashboardFormatKind),
+                }))
+              : items;
+
+            return (
+              <AsyncPanel
+                key={panel.id}
+                title={t(panel.dashboardTitleKey ?? panel.nameKey)}
+                loading={!dashboard && !error}
+                error={error}
+                bodyClassName="async-panel-body-scroll"
+              >
+                <DistributionList items={formattedItems} maxVisibleRows={5} scrollable />
+              </AsyncPanel>
+            );
+          })
+        ) : (
+          <div className="notice">{t("libraryStatistics.noDashboardSelected")}</div>
+        )}
       </div>
     </>
   );

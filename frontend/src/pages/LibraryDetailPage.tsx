@@ -19,6 +19,12 @@ import { useAppData } from "../lib/app-data";
 import { api, type LibraryDetail, type LibrarySummary, type MediaFileRow, type MediaFileSortKey, type ScanJob } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import {
+  getLibraryStatisticPanelItems,
+  getLibraryStatisticsSettings,
+  getVisibleLibraryStatisticPanels,
+  getVisibleLibraryStatisticTableColumns,
+} from "../lib/library-statistics-settings";
+import {
   InflightPageRequestGate,
   buildFilePageRequestKey,
   mergeUniqueFiles,
@@ -52,16 +58,7 @@ function formatDistributionItems(
 
 const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
   "file",
-  "size",
-  "video_codec",
-  "resolution",
-  "duration",
-  "audio_codecs",
-  "audio_languages",
-  "subtitle_languages",
-  "subtitle_codecs",
-  "subtitle_sources",
-  "quality_score",
+  ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings()),
 ];
 
 const PAGE_SIZE = 50;
@@ -229,7 +226,16 @@ export function LibraryDetailPage() {
   const deferredSearchQuery = useDeferredValue(searchQuery.trim());
   const librarySummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = library ?? librarySummary;
+  const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const fileColumns = useMemo(() => buildFileColumns(t), [t]);
+  const visibleStatisticColumns = useMemo(
+    () => getVisibleLibraryStatisticTableColumns(statisticsSettings),
+    [statisticsSettings],
+  );
+  const visibleStatisticPanels = useMemo(
+    () => getVisibleLibraryStatisticPanels(statisticsSettings),
+    [statisticsSettings],
+  );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
     [fileColumns, visibleColumns],
@@ -315,28 +321,6 @@ export function LibraryDetailPage() {
     }
   });
 
-  function toggleColumn(columnKey: FileColumnKey) {
-    const column = fileColumns.find((entry) => entry.key === columnKey);
-    if (!column || column.hideable === false) {
-      return;
-    }
-
-    startTransition(() => {
-      setVisibleColumns((current) => {
-        if (current.includes(columnKey)) {
-          if (sortKey === columnKey) {
-            setSortKey("file");
-            setSortDirection("asc");
-          }
-          return current.filter((entry) => entry !== columnKey);
-        }
-
-        const next = [...current, columnKey];
-        return fileColumns.filter((entry) => next.includes(entry.key)).map((entry) => entry.key);
-      });
-    });
-  }
-
   function updateSort(nextKey: FileColumnKey) {
     startTransition(() => {
       if (sortKey === nextKey) {
@@ -356,6 +340,18 @@ export function LibraryDetailPage() {
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    setVisibleColumns(["file", ...visibleStatisticColumns]);
+  }, [visibleStatisticColumns]);
+
+  useEffect(() => {
+    if (visibleColumns.includes(sortKey)) {
+      return;
+    }
+    setSortKey("file");
+    setSortDirection("asc");
+  }, [sortKey, visibleColumns]);
 
   useEffect(() => {
     if (initializedLibraryIdRef.current === libraryId) {
@@ -483,82 +479,27 @@ export function LibraryDetailPage() {
       </section>
 
       <div className="media-grid">
-        <AsyncPanel
-          title={t("libraryDetail.videoCodecs")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList
-            items={formatDistributionItems(library?.video_codec_distribution ?? [], "video")}
-            maxVisibleRows={5}
-            scrollable
-          />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.resolutions")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList items={library?.resolution_distribution ?? []} maxVisibleRows={5} scrollable />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.hdrCoverage")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList items={library?.hdr_distribution ?? []} maxVisibleRows={5} scrollable />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.audioCodecs")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList
-            items={formatDistributionItems(library?.audio_codec_distribution ?? [], "audio")}
-            maxVisibleRows={5}
-            scrollable
-          />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.audioLanguages")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList items={library?.audio_language_distribution ?? []} maxVisibleRows={5} scrollable />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.subtitleLanguages")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList items={library?.subtitle_language_distribution ?? []} maxVisibleRows={5} scrollable />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.subtitleCodecs")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList
-            items={formatDistributionItems(library?.subtitle_codec_distribution ?? [], "subtitle")}
-            maxVisibleRows={5}
-            scrollable
-          />
-        </AsyncPanel>
-        <AsyncPanel
-          title={t("libraryDetail.subtitleSources")}
-          loading={isLibraryLoading && !library && !error}
-          error={error}
-          bodyClassName="async-panel-body-scroll"
-        >
-          <DistributionList items={library?.subtitle_source_distribution ?? []} maxVisibleRows={5} scrollable />
-        </AsyncPanel>
+        {visibleStatisticPanels.length > 0 ? (
+          visibleStatisticPanels.map((panel) => {
+            const items = getLibraryStatisticPanelItems(library, panel);
+            const formattedItems = panel.panelFormatKind
+              ? formatDistributionItems(items, panel.panelFormatKind)
+              : items;
+            return (
+              <AsyncPanel
+                key={panel.id}
+                title={t(panel.panelTitleKey ?? panel.nameKey)}
+                loading={isLibraryLoading && !library && !error}
+                error={error}
+                bodyClassName="async-panel-body-scroll"
+              >
+                <DistributionList items={formattedItems} maxVisibleRows={5} scrollable />
+              </AsyncPanel>
+            );
+          })
+        ) : (
+          <div className="notice">{t("libraryStatistics.noPanelsSelected")}</div>
+        )}
       </div>
 
       <AsyncPanel
@@ -593,28 +534,6 @@ export function LibraryDetailPage() {
           </div>
         }
       >
-        <div className="data-table-tools">
-          <div className="column-picker" aria-label="Visible metadata columns">
-            <span className="badge">
-              {t("sort.prefix")}: {t(fileColumns.find((column) => column.key === sortKey)?.labelKey ?? "fileTable.file")}
-            </span>
-            <span className="badge">{t(`sort.${sortDirection}`)}</span>
-            {fileColumns.map((column) => {
-              const isVisible = visibleColumns.includes(column.key);
-              return (
-                <button
-                  key={column.key}
-                  type="button"
-                  className={`column-toggle${isVisible ? " is-active" : ""}`}
-                  onClick={() => toggleColumn(column.key)}
-                  disabled={column.hideable === false}
-                >
-                  {t(column.labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
         {isFilesLoading && files.length === 0 ? (
           <div className="panel-loader">
             <LoaderPinwheelIcon className="panel-loader-icon" size={30} />

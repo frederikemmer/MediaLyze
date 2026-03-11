@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCodecLabel } from "./format";
+import { formatCodecLabel, formatDuration } from "./format";
 
 describe("formatCodecLabel", () => {
   it("formats raw audio codec identifiers into readable labels", () => {
@@ -13,5 +13,56 @@ describe("formatCodecLabel", () => {
 
   it("formats common video codec identifiers into readable labels", () => {
     expect(formatCodecLabel("h264", "video")).toBe("H.264 / AVC");
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats seconds as minutes", () => {
+    expect(formatDuration(120)).toBe("2m");
+  });
+
+  it("formats seconds as hours and minutes", () => {
+    expect(formatDuration(3665)).toBe("1h 1m");
+  });
+
+  it("formats seconds as days, hours, and minutes", () => {
+    expect(formatDuration(90061)).toBe("1d 1h 1m");
+  });
+
+  it("formats seconds as weeks and days", () => {
+    expect(formatDuration(604800 + 86400)).toBe("1w 1d");
+  });
+
+  it("formats seconds as months, weeks, and days", () => {
+    expect(formatDuration(2592000 + 604800 + 86400)).toBe("1mo 1w 1d");
+  });
+
+  it("returns 'n/a' for null input", () => {
+    expect(formatDuration(null)).toBe("n/a");
+  });
+
+  it("returns 'n/a' for invalid input", () => {
+    expect(formatDuration(NaN)).toBe("n/a");
+  });
+
+  it("returns '0m' for zero seconds", () => {
+    expect(formatDuration(0)).toBe("0m");
+  });
+
+  it("formats large durations with all units", () => {
+    const months = 2;
+    const weeks = 3;
+    const days = 4;
+    const hours = 5;
+    const minutes = 6;
+    
+    const totalSeconds = 
+      months * 2592000 + 
+      weeks * 604800 + 
+      days * 86400 + 
+      hours * 3600 + 
+      minutes * 60;
+    
+    expect(formatDuration(totalSeconds)).toBe("2mo 3w 4d 5h 6m");
   });
 });

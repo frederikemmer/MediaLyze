@@ -25,6 +25,7 @@
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
+    "audioCodecs": "Audio-Codecs",
     "audioLanguages": "Audio-Sprachen",
     "subtitleSources": "Untertitel-Sprachen"
   },
@@ -51,6 +52,31 @@
     "appSettings": "App-Einstellungen",
     "language": "Sprache der Oberfläche",
     "languageHint": "Wirkt sofort und wird im Browser gespeichert."
+  },
+  "libraryStatistics": {
+    "title": "Bibliotheks-Statistiken",
+    "subtitle": "Wähle aus, welche Metriken über der Medientabelle, in der Tabelle und im Dashboard angezeigt werden. Ziehe Zeilen, um die Reihenfolge zu ändern.",
+    "name": "Name",
+    "statistics": "Statistiken",
+    "table": "Tabelle",
+    "dashboard": "Dashboard",
+    "dragHint": "Zum Umordnen ziehen",
+    "unavailable": "Nicht verfügbar",
+    "noPanelsSelected": "Es sind keine Statistik-Panels ausgewählt.",
+    "noDashboardSelected": "Es sind keine Dashboard-Statistik-Panels ausgewählt.",
+    "items": {
+      "size": "Dateigröße",
+      "videoCodec": "Video-Codec",
+      "resolution": "Auflösung",
+      "hdr": "HDR",
+      "duration": "Dauer",
+      "audioCodecs": "Audio-Codecs",
+      "audioLanguages": "Audio-Sprachen",
+      "subtitleLanguages": "Untertitel-Sprachen",
+      "subtitleCodecs": "Untertitel-Codecs",
+      "subtitleSources": "Untertitel-Quellen",
+      "qualityScore": "Qualitäts-Score"
+    }
   },
   "libraryTypes": {
     "movies": "Filme",

@@ -192,6 +192,90 @@
   gap: 10px;
 }
 
+.settings-table-shell {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.settings-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.settings-data-table th,
+.settings-data-table td {
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.settings-data-table thead th {
+  background: #f6f1ea;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.settings-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.library-statistics-table th:nth-child(2),
+.library-statistics-table th:nth-child(3),
+.library-statistics-table th:nth-child(4),
+.library-statistics-table td:nth-child(2),
+.library-statistics-table td:nth-child(3),
+.library-statistics-table td:nth-child(4) {
+  width: 96px;
+  text-align: center;
+}
+
+.library-statistics-table tbody tr.is-drop-target td {
+  background: rgba(27, 153, 139, 0.08);
+}
+
+.statistic-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.statistics-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: rgba(31, 28, 22, 0.42);
+  cursor: grab;
+}
+
+.statistics-drag-handle.is-dragging {
+  opacity: 0.5;
+}
+
+.statistics-drag-handle:active {
+  cursor: grabbing;
+}
+
+.settings-checkbox-cell input {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-checkbox-cell input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .async-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);

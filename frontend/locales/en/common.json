@@ -25,6 +25,7 @@
     "videoCodecs": "Video codecs",
     "resolutions": "Resolutions",
     "hdrCoverage": "HDR coverage",
+    "audioCodecs": "Audio codecs",
     "audioLanguages": "Audio languages",
     "subtitleSources": "Subtitle languages"
   },
@@ -51,6 +52,31 @@
     "appSettings": "App settings",
     "language": "Interface language",
     "languageHint": "Applies immediately and is stored in the browser."
+  },
+  "libraryStatistics": {
+    "title": "Library statistics",
+    "subtitle": "Choose which metrics appear above the media table, inside the table, and on the dashboard. Drag rows to change the order.",
+    "name": "Name",
+    "statistics": "Statistics",
+    "table": "Table",
+    "dashboard": "Dashboard",
+    "dragHint": "Drag to reorder",
+    "unavailable": "Unavailable",
+    "noPanelsSelected": "No statistic panels selected.",
+    "noDashboardSelected": "No dashboard statistic panels selected.",
+    "items": {
+      "size": "File size",
+      "videoCodec": "Video codec",
+      "resolution": "Resolution",
+      "hdr": "HDR",
+      "duration": "Duration",
+      "audioCodecs": "Audio codecs",
+      "audioLanguages": "Audio languages",
+      "subtitleLanguages": "Subtitle languages",
+      "subtitleCodecs": "Subtitle codecs",
+      "subtitleSources": "Subtitle sources",
+      "qualityScore": "Quality score"
+    }
   },
   "libraryTypes": {
     "movies": "Movies",
