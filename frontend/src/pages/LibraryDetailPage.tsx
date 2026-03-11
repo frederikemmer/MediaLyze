@@ -17,7 +17,7 @@ import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
 import { api, type LibraryDetail, type LibrarySummary, type MediaFileRow, type MediaFileSortKey, type ScanJob } from "../lib/api";
-import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import {
   InflightPageRequestGate,
   buildFilePageRequestKey,
@@ -43,14 +43,24 @@ type CachedFileList = {
   items: MediaFileRow[];
 };
 
+function formatDistributionItems(
+  items: { label: string; value: number }[],
+  kind: "video" | "audio" | "subtitle",
+) {
+  return items.map((item) => ({ ...item, label: formatCodecLabel(item.label, kind) }));
+}
+
 const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
   "file",
   "size",
   "video_codec",
   "resolution",
   "duration",
+  "audio_codecs",
   "audio_languages",
   "subtitle_languages",
+  "subtitle_codecs",
+  "subtitle_sources",
   "quality_score",
 ];
 
@@ -67,7 +77,7 @@ function compactValues(values: string[], limit = 4): string {
     return "n/a";
   }
   const visible = values.slice(0, limit);
-  return values.length > limit ? `${visible.join(",")},...` : visible.join(",");
+  return values.length > limit ? `${visible.join(", ")}, ...` : visible.join(", ");
 }
 
 function scoreMeterLabel(score: number): string {
@@ -114,7 +124,7 @@ function buildFileColumns(t: (key: string, options?: Record<string, unknown>) =>
     {
       key: "video_codec",
       labelKey: "fileTable.codec",
-      render: (file) => file.video_codec ?? t("fileTable.na"),
+      render: (file) => (file.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileTable.na")),
     },
     {
       key: "resolution",
@@ -132,14 +142,29 @@ function buildFileColumns(t: (key: string, options?: Record<string, unknown>) =>
       render: (file) => formatDuration(file.duration),
     },
     {
+      key: "audio_codecs",
+      labelKey: "fileTable.audioCodecs",
+      render: (file) => compactValues(file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio"))),
+    },
+    {
       key: "audio_languages",
-      labelKey: "fileTable.audio",
+      labelKey: "fileTable.audioLanguages",
       render: (file) => compactValues(file.audio_languages),
     },
     {
       key: "subtitle_languages",
-      labelKey: "fileTable.subtitles",
+      labelKey: "fileTable.subtitleLanguages",
       render: (file) => compactValues(file.subtitle_languages),
+    },
+    {
+      key: "subtitle_codecs",
+      labelKey: "fileTable.subtitleCodecs",
+      render: (file) => compactValues(file.subtitle_codecs.map((codec) => formatCodecLabel(codec, "subtitle"))),
+    },
+    {
+      key: "subtitle_sources",
+      labelKey: "fileTable.subtitleSources",
+      render: (file) => compactValues(file.subtitle_sources, 2),
     },
     {
       key: "mtime",
@@ -464,7 +489,11 @@ export function LibraryDetailPage() {
           error={error}
           bodyClassName="async-panel-body-scroll"
         >
-          <DistributionList items={library?.video_codec_distribution ?? []} maxVisibleRows={5} scrollable />
+          <DistributionList
+            items={formatDistributionItems(library?.video_codec_distribution ?? [], "video")}
+            maxVisibleRows={5}
+            scrollable
+          />
         </AsyncPanel>
         <AsyncPanel
           title={t("libraryDetail.resolutions")}
@@ -483,12 +512,52 @@ export function LibraryDetailPage() {
           <DistributionList items={library?.hdr_distribution ?? []} maxVisibleRows={5} scrollable />
         </AsyncPanel>
         <AsyncPanel
+          title={t("libraryDetail.audioCodecs")}
+          loading={isLibraryLoading && !library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={formatDistributionItems(library?.audio_codec_distribution ?? [], "audio")}
+            maxVisibleRows={5}
+            scrollable
+          />
+        </AsyncPanel>
+        <AsyncPanel
           title={t("libraryDetail.audioLanguages")}
           loading={isLibraryLoading && !library && !error}
           error={error}
           bodyClassName="async-panel-body-scroll"
         >
           <DistributionList items={library?.audio_language_distribution ?? []} maxVisibleRows={5} scrollable />
+        </AsyncPanel>
+        <AsyncPanel
+          title={t("libraryDetail.subtitleLanguages")}
+          loading={isLibraryLoading && !library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList items={library?.subtitle_language_distribution ?? []} maxVisibleRows={5} scrollable />
+        </AsyncPanel>
+        <AsyncPanel
+          title={t("libraryDetail.subtitleCodecs")}
+          loading={isLibraryLoading && !library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList
+            items={formatDistributionItems(library?.subtitle_codec_distribution ?? [], "subtitle")}
+            maxVisibleRows={5}
+            scrollable
+          />
+        </AsyncPanel>
+        <AsyncPanel
+          title={t("libraryDetail.subtitleSources")}
+          loading={isLibraryLoading && !library && !error}
+          error={error}
+          bodyClassName="async-panel-body-scroll"
+        >
+          <DistributionList items={library?.subtitle_source_distribution ?? []} maxVisibleRows={5} scrollable />
         </AsyncPanel>
       </div>
 

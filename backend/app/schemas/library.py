@@ -42,5 +42,8 @@ class LibraryDetail(LibrarySummary):
     video_codec_distribution: list[dict]
     resolution_distribution: list[dict]
     hdr_distribution: list[dict]
+    audio_codec_distribution: list[dict]
     audio_language_distribution: list[dict]
     subtitle_language_distribution: list[dict]
+    subtitle_codec_distribution: list[dict]
+    subtitle_source_distribution: list[dict]

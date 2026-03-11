@@ -34,8 +34,11 @@ export type LibraryDetail = LibrarySummary & {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
+  audio_codec_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_language_distribution: DistributionItem[];
+  subtitle_codec_distribution: DistributionItem[];
+  subtitle_source_distribution: DistributionItem[];
 };
 
 export type MediaFileRow = {
@@ -54,8 +57,11 @@ export type MediaFileRow = {
   video_codec: string | null;
   resolution: string | null;
   hdr_type: string | null;
+  audio_codecs: string[];
   audio_languages: string[];
   subtitle_languages: string[];
+  subtitle_codecs: string[];
+  subtitle_sources: string[];
 };
 
 export type MediaFileSortKey =
@@ -65,8 +71,11 @@ export type MediaFileSortKey =
   | "resolution"
   | "hdr_type"
   | "duration"
+  | "audio_codecs"
   | "audio_languages"
   | "subtitle_languages"
+  | "subtitle_codecs"
+  | "subtitle_sources"
   | "mtime"
   | "last_analyzed_at"
   | "quality_score";

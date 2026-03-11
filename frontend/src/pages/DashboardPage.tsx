@@ -5,7 +5,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { DistributionList } from "../components/DistributionList";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
-import { formatBytes, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
 import { useScanJobs } from "../lib/scan-jobs";
 
 export function DashboardPage() {
@@ -51,7 +51,12 @@ export function DashboardPage() {
 
       <div className="media-grid">
         <AsyncPanel title={t("dashboard.videoCodecs")} loading={!dashboard && !error} error={error}>
-          <DistributionList items={dashboard?.video_codec_distribution ?? []} />
+          <DistributionList
+            items={(dashboard?.video_codec_distribution ?? []).map((item) => ({
+              ...item,
+              label: formatCodecLabel(item.label, "video"),
+            }))}
+          />
         </AsyncPanel>
         <AsyncPanel
           title={t("dashboard.resolutions")}

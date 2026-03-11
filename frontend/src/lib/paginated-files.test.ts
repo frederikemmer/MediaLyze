@@ -26,8 +26,11 @@ function createFile(id: number): MediaFileRow {
     video_codec: "h264",
     resolution: "1920x1080",
     hdr_type: null,
+    audio_codecs: ["aac"],
     audio_languages: ["en"],
     subtitle_languages: ["en"],
+    subtitle_codecs: ["srt"],
+    subtitle_sources: ["external"],
   };
 }
 

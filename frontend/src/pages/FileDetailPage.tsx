@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { api, type MediaFileDetail } from "../lib/api";
-import { formatBytes, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
 
 function JsonPreview({ value }: { value: unknown }) {
   return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
@@ -37,7 +37,7 @@ export function FileDetailPage() {
         <p className="eyebrow">{t("fileDetail.eyebrow")}</p>
         <h2>{file?.filename ?? t("fileDetail.loading")}</h2>
         <div className="meta-tags">
-          <span className="badge">{file?.video_codec ?? t("fileDetail.unknownCodec")}</span>
+          <span className="badge">{file?.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileDetail.unknownCodec")}</span>
           <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
           <span className="badge">{file?.hdr_type ?? t("fileTable.sdr")}</span>
         </div>

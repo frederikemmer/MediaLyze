@@ -86,8 +86,11 @@ class MediaFileTableRow(BaseModel):
     video_codec: str | None = None
     resolution: str | None = None
     hdr_type: str | None = None
+    audio_codecs: list[str] = Field(default_factory=list)
     audio_languages: list[str] = Field(default_factory=list)
     subtitle_languages: list[str] = Field(default_factory=list)
+    subtitle_codecs: list[str] = Field(default_factory=list)
+    subtitle_sources: list[str] = Field(default_factory=list)
 
 
 class MediaFileDetail(MediaFileTableRow):
