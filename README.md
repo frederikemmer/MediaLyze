@@ -51,8 +51,14 @@ Bring your own auth (for now).
 
 ### Run the published image
 
-using docker-compose: 
-[docker-compose-prod.yaml](docker-compose-prod.yaml)
+using docker-compose:
+```bash
+cd docker
+cp .env.example .env
+```
+with production ready:
+[docker-compose-prod.yaml](docker/docker-compose-prod.yaml)
+___
 
 using docker run:
 ```bash
@@ -68,10 +74,12 @@ docker run -d \
 ```
 
 Open `http://localhost:8080`.
+The container serves plain HTTP on port `8080`; if you want HTTPS, terminate it in a reverse proxy.
 
 ### Build locally
 
 ```bash
+cd docker
 cp .env.example .env
 docker compose up --build
 ```
@@ -110,13 +118,16 @@ Relevant environment variables:
 
 - `CONFIG_PATH`: writable config/data directory, default `/config`
 - `MEDIA_ROOT`: media mount root, default `/media`
-- `HOST_PORT`: HTTP port exposed on the host, default `8080`
+- `HOST_PORT`: HTTP port exposed on the host, default `8080`; access the app via `http://<host>:<HOST_PORT>`
 - `APP_PORT`: internal app port, default `8080`
 - `TZ`: process/container timezone, default `UTC`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `SCAN_RUNTIME_WORKER_COUNT`: maximum number of libraries scanned in parallel, default `4`
+- `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
 
 `MEDIA_ROOT` should be mounted read-only in production.
+
+If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The compose files already load `.env`, so no compose changes are required.
 
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
 
