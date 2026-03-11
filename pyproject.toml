@@ -13,7 +13,6 @@ authors = [
   { name = "Frederik Emmer" }
 ]
 dependencies = [
-  "alembic>=1.14.1,<2",
   "apscheduler>=3.10.4,<4",
   "fastapi>=0.116.1,<1",
   "pydantic-settings>=2.8.1,<3",

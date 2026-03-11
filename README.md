@@ -132,7 +132,7 @@ For SMB / NAS setups, the recommended approach is to mount the share on the Dock
 
 ## Tech Stack
 
-- Backend: Python, FastAPI, SQLAlchemy, Alembic, SQLite
+- Backend: Python, FastAPI, SQLAlchemy, SQLite
 - Frontend: React, Vite, TypeScript, i18next
 - Media analysis: `ffprobe` / FFmpeg
 - Scheduling and watch mode: APScheduler, watchdog

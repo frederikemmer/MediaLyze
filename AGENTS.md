@@ -253,7 +253,6 @@ Backend:
 Python
 FastAPI
 SQLAlchemy
-Alembic
 SQLite
 ```
 

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import traceback
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
@@ -148,6 +148,46 @@ def queue_scan_job(db: Session, library_id: int, scan_type: str = "incremental")
     return job, True
 
 
+def _incomplete_analysis_file_ids(db: Session, library_id: int) -> set[int]:
+    incomplete_ids = set(
+        db.scalars(
+            select(MediaFile.id).where(
+                MediaFile.library_id == library_id,
+                or_(
+                    MediaFile.last_analyzed_at.is_(None),
+                    MediaFile.raw_ffprobe_json.is_(None),
+                    MediaFile.scan_status != ScanStatus.ready,
+                ),
+            )
+        ).all()
+    )
+    incomplete_ids.update(
+        db.scalars(
+            select(AudioStream.media_file_id)
+            .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+            .where(MediaFile.library_id == library_id, AudioStream.codec.is_(None))
+        ).all()
+    )
+    incomplete_ids.update(
+        db.scalars(
+            select(SubtitleStream.media_file_id)
+            .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+            .where(
+                MediaFile.library_id == library_id,
+                or_(SubtitleStream.codec.is_(None), SubtitleStream.subtitle_type.is_(None)),
+            )
+        ).all()
+    )
+    incomplete_ids.update(
+        db.scalars(
+            select(ExternalSubtitle.media_file_id)
+            .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+            .where(MediaFile.library_id == library_id, ExternalSubtitle.format.is_(None))
+        ).all()
+    )
+    return incomplete_ids
+
+
 def execute_scan_job(job_id: int, settings: Settings) -> None:
     db = SessionLocal()
     try:
@@ -216,6 +256,7 @@ def run_scan(
         media_file.relative_path: media_file
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
+    incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
 
     discovered = _iter_media_files(root, settings.allowed_media_extensions, should_cancel=_should_cancel)
     seen_relative_paths: set[str] = set()
@@ -253,12 +294,13 @@ def run_scan(
             to_analyze.append((media_file, file_path))
         else:
             changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
+            analysis_incomplete = media_file.id in incomplete_analysis_ids
             media_file.filename = file_path.name
             media_file.extension = file_path.suffix.lower().lstrip(".")
             media_file.size_bytes = stat.st_size
             media_file.mtime = stat.st_mtime
             media_file.last_seen_at = utc_now()
-            if changed or scan_type == "full":
+            if changed or scan_type == "full" or analysis_incomplete:
                 media_file.scan_status = ScanStatus.pending
                 to_analyze.append((media_file, file_path))
 

@@ -25,7 +25,6 @@ RUN apk add --no-cache ffmpeg su-exec tzdata
 
 COPY pyproject.toml README.md LICENSE CONTRIBUTING.md ./
 COPY backend ./backend
-COPY alembic ./alembic
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY frontend/package.json ./frontend/package.json
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
