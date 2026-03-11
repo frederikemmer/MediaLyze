@@ -383,17 +383,6 @@ export function LibraryDetailPage() {
   return (
     <>
       <section className="panel stack">
-        {activeJob ? (
-          <div className="notice">
-            <div className="distribution-copy">
-              <strong>{t("libraryDetail.scanInProgress")}</strong>
-              <span>{renderActiveJobDetail(t, activeJob)}</span>
-            </div>
-            <div className="progress">
-              <span style={{ width: `${activeJob.progress_percent}%` }} />
-            </div>
-          </div>
-        ) : null}
         <div className="panel-title-row">
           <h2>{library?.name ?? t("libraryDetail.loading")}</h2>
           {library?.path ? (
