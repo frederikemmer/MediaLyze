@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { House, RefreshCwOff, Settings } from "lucide-react";
@@ -25,9 +25,11 @@ function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown
 
 export function AppShell() {
   const { t } = useTranslation();
-  const { activeJobs, stopAll } = useScanJobs();
-  const { libraries, librariesLoaded, loadLibraries } = useAppData();
+  const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
+  const { libraries, librariesLoaded, loadDashboard, loadLibraries } = useAppData();
   const [stoppingScans, setStoppingScans] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const hadActiveJobsRef = useRef(hasActiveJobs);
 
   useEffect(() => {
     if (librariesLoaded) {
@@ -35,6 +37,17 @@ export function AppShell() {
     }
     void loadLibraries().catch(() => undefined);
   }, [librariesLoaded, loadLibraries]);
+
+  useEffect(() => {
+    if (hadActiveJobsRef.current && !hasActiveJobs) {
+      void Promise.all([loadLibraries(true), loadDashboard(true)])
+        .then(() => setSyncError(null))
+        .catch((reason: Error) => {
+          setSyncError(reason.message);
+        });
+    }
+    hadActiveJobsRef.current = hasActiveJobs;
+  }, [hasActiveJobs, loadDashboard, loadLibraries]);
 
   return (
     <div className="layout media-app-shell">
@@ -134,6 +147,7 @@ export function AppShell() {
             </div>
           </div>
         ) : null}
+        {syncError ? <div className="alert">{syncError}</div> : null}
       </header>
       <Outlet />
     </div>

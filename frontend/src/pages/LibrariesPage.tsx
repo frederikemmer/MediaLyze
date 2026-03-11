@@ -64,7 +64,7 @@ export function LibrariesPage() {
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [form, setForm] = useState(EMPTY_FORM);
-  const { activeJobs, hasActiveJobs, refresh } = useScanJobs();
+  const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
 
   const refreshLibraries = (showLoading = false, force = false) => {
@@ -195,9 +195,9 @@ export function LibrariesPage() {
     }
 
     try {
-      await api.scanLibrary(libraryId, "incremental");
+      const job = await api.scanLibrary(libraryId, "incremental");
+      trackJob(job);
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
-      await refresh();
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
       return;

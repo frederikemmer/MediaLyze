@@ -1,21 +1,24 @@
-import { createContext, useContext, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api, type ScanJob } from "./api";
-import { getIdlePollInterval, usePageVisibility } from "./page-visibility";
+import { usePageVisibility } from "./page-visibility";
 
 type ScanJobsContextValue = {
   activeJobs: ScanJob[];
   hasActiveJobs: boolean;
   refresh: () => Promise<void>;
+  trackJob: (job: ScanJob) => void;
   stopAll: () => Promise<void>;
 };
 
 const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
+export const ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS = 15000;
 
 export function ScanJobsProvider({ children }: { children: ReactNode }) {
   const [activeJobs, setActiveJobs] = useState<ScanJob[]>([]);
   const isPageVisible = usePageVisibility();
-  const pollInterval = isPageVisible ? (activeJobs.length > 0 ? 3000 : getIdlePollInterval()) : null;
+  const wasPageVisibleRef = useRef(isPageVisible);
+  const pollInterval = isPageVisible && activeJobs.length > 0 ? ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS : null;
 
   const refresh = useEffectEvent(async () => {
     try {
@@ -35,8 +38,39 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const trackJob = useEffectEvent((job: ScanJob) => {
+    setActiveJobs((current) => {
+      const next = current.filter((entry) => entry.library_id !== job.library_id);
+      return [...next, job];
+    });
+  });
+
   useEffect(() => {
-    void refresh();
+    if (typeof window === "undefined" || activeJobs.length === 0) {
+      return undefined;
+    }
+
+    function handleWindowFocus() {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void refresh();
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [activeJobs.length, refresh]);
+
+  useEffect(() => {
+    if (activeJobs.length > 0 && isPageVisible && !wasPageVisibleRef.current) {
+      void refresh();
+    }
+    wasPageVisibleRef.current = isPageVisible;
+  }, [activeJobs.length, isPageVisible, refresh]);
+
+  useEffect(() => {
     if (pollInterval === null) {
       return undefined;
     }
@@ -55,6 +89,7 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
       activeJobs,
       hasActiveJobs: activeJobs.length > 0,
       refresh,
+      trackJob,
       stopAll,
     }),
     [activeJobs],

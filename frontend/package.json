@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "i18next": "^25.0.1",
@@ -18,11 +19,15 @@
     "react-router-dom": "^7.2.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.0.1",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.5",
     "@vitejs/plugin-react-swc": "^3.8.0",
+    "jsdom": "^28.1.0",
     "typescript": "^5.8.2",
-    "vite": "^6.2.1"
+    "vite": "^6.2.1",
+    "vitest": "^4.0.18"
   }
 }

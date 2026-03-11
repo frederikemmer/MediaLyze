@@ -18,6 +18,13 @@ import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
 import { api, type LibraryDetail, type LibrarySummary, type MediaFileRow, type MediaFileSortKey, type ScanJob } from "../lib/api";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import {
+  InflightPageRequestGate,
+  buildFilePageRequestKey,
+  mergeUniqueFiles,
+  resolveFileLoadTransition,
+  shouldRequestNextPage,
+} from "../lib/paginated-files";
 import { useScanJobs } from "../lib/scan-jobs";
 
 type FileColumnKey = MediaFileSortKey;
@@ -50,7 +57,6 @@ const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
 const PAGE_SIZE = 50;
 const libraryDetailCache = new Map<string, LibraryDetail>();
 const libraryFileListCache = new Map<string, CachedFileList>();
-const libraryScanHistoryCache = new Map<string, ScanJob[]>();
 
 function joinValues(values: string[]): string {
   return values.length > 0 ? values.join(", ") : "n/a";
@@ -165,21 +171,6 @@ function buildFileCacheKey(
   return `${libraryId}::${searchQuery}::${sortKey}::${sortDirection}`;
 }
 
-function mergeUniqueFiles(current: MediaFileRow[], next: MediaFileRow[]) {
-  const seen = new Set<number>();
-  const merged: MediaFileRow[] = [];
-
-  for (const file of [...current, ...next]) {
-    if (seen.has(file.id)) {
-      continue;
-    }
-    seen.add(file.id);
-    merged.push(file);
-  }
-
-  return merged;
-}
-
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
@@ -188,9 +179,9 @@ export function LibraryDetailPage() {
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [scanHistory, setScanHistory] = useState<ScanJob[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
+  const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
@@ -212,8 +203,13 @@ export function LibraryDetailPage() {
     [deferredSearchQuery, libraryId, sortDirection, sortKey],
   );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
+  const filesRef = useRef<MediaFileRow[]>([]);
+  const dataTableShellRef = useRef<HTMLDivElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-  const inflightRequestRef = useRef<string | null>(null);
+  const inflightRequestGateRef = useRef(new InflightPageRequestGate());
+  const initializedLibraryIdRef = useRef<string | null>(null);
+  const initializedFileQueryKeyRef = useRef<string | null>(null);
+  const previousLibraryIdRef = useRef(libraryId);
   const hasMoreFiles = files.length < filesTotal;
 
   const loadLibraryDetail = useEffectEvent(async (showLoading = false) => {
@@ -235,26 +231,16 @@ export function LibraryDetailPage() {
     }
   });
 
-  const loadScanHistory = useEffectEvent(async () => {
-    try {
-      const payload = await api.libraryScanJobs(libraryId);
-      libraryScanHistoryCache.set(libraryId, payload);
-      setScanHistory(payload);
-      setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
-    }
-  });
-
   const loadFilesPage = useEffectEvent(async (offset: number, append: boolean, queryKey: string) => {
-    const requestKey = `${queryKey}:${offset}`;
-    if (inflightRequestRef.current === requestKey) {
+    const requestKey = buildFilePageRequestKey(queryKey, offset);
+    if (!inflightRequestGateRef.current.begin(requestKey)) {
       return;
     }
 
-    inflightRequestRef.current = requestKey;
     if (append) {
       setIsLoadingMore(true);
+    } else if (filesRef.current.length > 0 && previousLibraryIdRef.current === libraryId) {
+      setIsFilesRefreshing(true);
     } else {
       setIsFilesLoading(true);
     }
@@ -271,7 +257,7 @@ export function LibraryDetailPage() {
         return;
       }
 
-      const nextItems = append ? mergeUniqueFiles(files, payload.items) : payload.items;
+      const nextItems = append ? mergeUniqueFiles(filesRef.current, payload.items) : payload.items;
       libraryFileListCache.set(queryKey, { total: payload.total, items: nextItems });
       startTransition(() => {
         setFiles(nextItems);
@@ -283,13 +269,12 @@ export function LibraryDetailPage() {
         setError((reason as Error).message);
       }
     } finally {
-      if (inflightRequestRef.current === requestKey) {
-        inflightRequestRef.current = null;
-      }
+      inflightRequestGateRef.current.end(requestKey);
       if (append) {
         setIsLoadingMore(false);
       } else {
         setIsFilesLoading(false);
+        setIsFilesRefreshing(false);
       }
     }
   });
@@ -333,20 +318,37 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
-    const cachedLibrary = libraryDetailCache.get(libraryId) ?? null;
-    const cachedScanHistory = libraryScanHistoryCache.get(libraryId) ?? [];
+    filesRef.current = files;
+  }, [files]);
 
+  useEffect(() => {
+    if (initializedLibraryIdRef.current === libraryId) {
+      return;
+    }
+    initializedLibraryIdRef.current = libraryId;
+
+    const cachedLibrary = libraryDetailCache.get(libraryId) ?? null;
     setLibrary(cachedLibrary);
-    setScanHistory(cachedScanHistory);
     setError(null);
     setIsLibraryLoading(cachedLibrary === null);
 
     void loadLibraryDetail(cachedLibrary === null);
-    void loadScanHistory();
-  }, [libraryId, loadLibraryDetail, loadScanHistory]);
+  }, [libraryId, loadLibraryDetail]);
 
   useEffect(() => {
+    if (initializedFileQueryKeyRef.current === fileQueryKey) {
+      return;
+    }
+    initializedFileQueryKeyRef.current = fileQueryKey;
+
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
+    const isSameLibrary = previousLibraryIdRef.current === libraryId;
+    const currentFilesLength = filesRef.current.length;
+    const transition = resolveFileLoadTransition({
+      hasCachedFiles: Boolean(cachedFiles),
+      currentFilesLength,
+      isSameLibrary,
+    });
 
     setError(null);
     setIsLoadingMore(false);
@@ -354,17 +356,30 @@ export function LibraryDetailPage() {
       setFiles(cachedFiles.items);
       setFilesTotal(cachedFiles.total);
       setIsFilesLoading(false);
+      setIsFilesRefreshing(false);
+      previousLibraryIdRef.current = libraryId;
       return;
     }
 
-    setFiles([]);
-    setFilesTotal(0);
-    setIsFilesLoading(true);
+    if (transition.clearExisting) {
+      setFiles([]);
+      setFilesTotal(0);
+    }
+    setIsFilesLoading(transition.showFullLoader);
+    setIsFilesRefreshing(transition.showInlineRefresh);
+
+    previousLibraryIdRef.current = libraryId;
     void loadFilesPage(0, false, fileQueryKey);
-  }, [fileQueryKey, loadFilesPage]);
+  }, [fileQueryKey, libraryId, loadFilesPage]);
 
   useEffect(() => {
-    if (!hasMoreFiles || isFilesLoading || isLoadingMore) {
+    if (
+      !shouldRequestNextPage({
+        hasMoreFiles,
+        isFilesLoading,
+        isLoadingMore,
+      })
+    ) {
       return;
     }
 
@@ -381,7 +396,8 @@ export function LibraryDetailPage() {
         void loadFilesPage(files.length, true, fileQueryKey);
       },
       {
-        rootMargin: "600px 0px",
+        root: dataTableShellRef.current,
+        rootMargin: "120px 0px",
       },
     );
 
@@ -393,11 +409,10 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       libraryFileListCache.delete(fileQueryKey);
       void loadLibraryDetail(false);
-      void loadScanHistory();
       void loadFilesPage(0, false, fileQueryKey);
     }
     hadActiveJobRef.current = Boolean(activeJob);
-  }, [activeJob, fileQueryKey, loadFilesPage, loadLibraryDetail, loadScanHistory]);
+  }, [activeJob, fileQueryKey, loadFilesPage, loadLibraryDetail]);
 
   return (
     <>
@@ -520,7 +535,7 @@ export function LibraryDetailPage() {
             })}
           </div>
         </div>
-        {isFilesLoading ? (
+        {isFilesLoading && files.length === 0 ? (
           <div className="panel-loader">
             <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
             <span>{t("libraryDetail.loadingFiles")}</span>
@@ -528,7 +543,7 @@ export function LibraryDetailPage() {
         ) : files.length === 0 ? (
           <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
         ) : (
-          <div className="data-table-shell">
+          <div ref={dataTableShellRef} className="data-table-shell">
             <table className="media-data-table">
               <thead>
                 <tr>
@@ -563,32 +578,11 @@ export function LibraryDetailPage() {
               <span className="media-meta">
                 {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
               </span>
-              {isLoadingMore ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
+              {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
             </div>
             <div ref={loadMoreSentinelRef} className="data-table-sentinel" aria-hidden="true" />
           </div>
         )}
-      </AsyncPanel>
-
-      <AsyncPanel title={t("libraryDetail.recentScanJobs")} subtitle={t("libraryDetail.recentScanJobsSubtitle")} error={error}>
-        <div className="listing">
-          {scanHistory.map((job) => (
-            <div className="media-card compact-row-card" key={job.id}>
-              <div className="stack">
-                <strong>{t("libraryDetail.jobLabel", { id: job.id })}</strong>
-                <span className="media-meta">{job.job_type} · {job.phase_label}</span>
-                {job.phase_detail ? <span className="media-meta">{job.phase_detail}</span> : null}
-              </div>
-              <div className="stack">
-                <span>{job.files_total > 0 ? `${job.files_scanned}/${job.files_total}` : job.phase_label}</span>
-                <div className="progress">
-                  <span style={{ width: `${job.progress_percent}%` }} />
-                </div>
-              </div>
-              <span className="badge">{job.status}</span>
-            </div>
-          ))}
-        </div>
       </AsyncPanel>
     </>
   );
