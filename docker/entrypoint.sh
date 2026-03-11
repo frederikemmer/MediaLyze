@@ -25,7 +25,7 @@ if [ -n "${PUID:-}" ] || [ -n "${PGID:-}" ]; then
         chown -R "${PUID}:${PGID}" /config
     fi
 
-    exec gosu "${PUID}:${PGID}" "$@"
+    exec su-exec "${PUID}:${PGID}" "$@"
 fi
 
 exec "$@"

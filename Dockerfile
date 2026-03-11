@@ -5,7 +5,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-alpine AS runtime
 ARG APP_VERSION=0.0.5
 
 LABEL name="MediaLyze"
@@ -21,10 +21,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg gosu tzdata \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ffmpeg su-exec tzdata
 
 COPY pyproject.toml README.md LICENSE CONTRIBUTING.md ./
 COPY backend ./backend

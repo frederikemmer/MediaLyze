@@ -79,7 +79,6 @@ The container serves plain HTTP on port `8080`; if you want HTTPS, terminate it 
 ### Build locally
 
 ```bash
-cd docker
 cp docker/.env.example .env
 docker compose up --build
 ```
