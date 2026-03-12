@@ -29,12 +29,12 @@ describe("formatDuration", () => {
     expect(formatDuration(90061)).toBe("1d 1h 1m");
   });
 
-  it("formats seconds as weeks and days", () => {
-    expect(formatDuration(604800 + 86400)).toBe("1w 1d");
+  it("formats multi-day durations without weeks", () => {
+    expect(formatDuration(604800 + 86400)).toBe("8d");
   });
 
-  it("formats seconds as months, weeks, and days", () => {
-    expect(formatDuration(2592000 + 604800 + 86400)).toBe("1mo 1w 1d");
+  it("formats seconds as years and days", () => {
+    expect(formatDuration(31536000 + 86400)).toBe("1a 1d");
   });
 
   it("returns 'n/a' for null input", () => {
@@ -50,19 +50,19 @@ describe("formatDuration", () => {
   });
 
   it("formats large durations with all units", () => {
-    const months = 2;
-    const weeks = 3;
+    const years = 2;
+    const extraDays = 25;
     const days = 4;
     const hours = 5;
     const minutes = 6;
-    
-    const totalSeconds = 
-      months * 2592000 + 
-      weeks * 604800 + 
-      days * 86400 + 
-      hours * 3600 + 
+
+    const totalSeconds =
+      years * 31536000 +
+      extraDays * 86400 +
+      days * 86400 +
+      hours * 3600 +
       minutes * 60;
-    
-    expect(formatDuration(totalSeconds)).toBe("2mo 3w 4d 5h 6m");
+
+    expect(formatDuration(totalSeconds)).toBe("2a 29d 5h 6m");
   });
 });

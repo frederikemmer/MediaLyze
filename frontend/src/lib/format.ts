@@ -85,45 +85,38 @@ export function formatDuration(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) {
     return "n/a";
   }
-  
+
   const SECONDS_PER_MINUTE = 60;
   const SECONDS_PER_HOUR = 3600;
   const SECONDS_PER_DAY = 86400;
-  const SECONDS_PER_WEEK = 604800;
-  const SECONDS_PER_MONTH = 2592000; // 30 Tage
-  
+  const SECONDS_PER_YEAR = 31536000; // 365 days
+
   let remaining = seconds;
   const parts: string[] = [];
-  
-  const months = Math.floor(remaining / SECONDS_PER_MONTH);
-  if (months > 0) {
-    parts.push(`${months}mo`);
-    remaining %= SECONDS_PER_MONTH;
+
+  const years = Math.floor(remaining / SECONDS_PER_YEAR);
+  if (years > 0) {
+    parts.push(`${years}a`);
+    remaining %= SECONDS_PER_YEAR;
   }
-  
-  const weeks = Math.floor(remaining / SECONDS_PER_WEEK);
-  if (weeks > 0) {
-    parts.push(`${weeks}w`);
-    remaining %= SECONDS_PER_WEEK;
-  }
-  
+
   const days = Math.floor(remaining / SECONDS_PER_DAY);
   if (days > 0) {
     parts.push(`${days}d`);
     remaining %= SECONDS_PER_DAY;
   }
-  
+
   const hours = Math.floor(remaining / SECONDS_PER_HOUR);
   if (hours > 0) {
     parts.push(`${hours}h`);
     remaining %= SECONDS_PER_HOUR;
   }
-  
+
   const minutes = Math.floor(remaining / SECONDS_PER_MINUTE);
   if (minutes > 0) {
     parts.push(`${minutes}m`);
   }
-  
+
   return parts.length > 0 ? parts.join(" ") : "0m";
 }
 

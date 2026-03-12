@@ -4,11 +4,40 @@ MediaLyze ignore rules use glob patterns.
 
 They are matched against the normalized path relative to the library root.
 
+The settings UI separates:
+
+- custom ignore patterns
+- default ignore patterns
+
+Both sections are fully editable and removable.
+
 Examples:
 
 - `movie.nfo`
 - `Season 1/Extras/behind-the-scenes.mkv`
 - `Samples/trailer-1080p.mkv`
+
+## Built-in defaults
+
+MediaLyze preloads these default ignore patterns on fresh installations:
+
+```text
+*/.DS_Store
+*/._*
+*/@eaDir/*
+*/#recycle/*
+*/.recycle/*
+*/Thumbs.db
+*/Desktop.ini
+*/$RECYCLE.BIN/*
+*/.thumbnails/*
+*.part
+*.tmp
+*.temp
+*thumbs.db
+```
+
+Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` to skip preloading this built-in list. The defaults section remains visible in the UI so you can still add or edit entries manually.
 
 ## Common patterns
 
