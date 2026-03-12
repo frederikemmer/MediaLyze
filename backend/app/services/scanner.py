@@ -23,10 +23,12 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
+from backend.app.services.app_settings import get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
 from backend.app.services.quality import calculate_quality_score
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.subtitles import detect_external_subtitles
+from backend.app.utils.glob_patterns import matches_ignore_pattern
 from backend.app.utils.time import utc_now
 
 
@@ -42,22 +44,36 @@ def _iter_media_files(
     root: Path,
     allowed_extensions: tuple[str, ...],
     *,
+    ignore_patterns: tuple[str, ...] = (),
     should_cancel: Callable[[], bool] | None = None,
 ) -> list[Path]:
     suffixes = {extension.lower() for extension in allowed_extensions}
     files: list[Path] = []
+
+    def _is_ignored(relative_path: str, *, is_dir: bool = False) -> bool:
+        return matches_ignore_pattern(relative_path, ignore_patterns, is_dir=is_dir)
+
     for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         if should_cancel and should_cancel():
             raise ScanCanceled()
 
+        current_root_path = Path(current_root)
         dirnames[:] = sorted(
-            [dirname for dirname in dirnames if not Path(current_root, dirname).is_symlink()],
+            [
+                dirname
+                for dirname in dirnames
+                if not (current_root_path / dirname).is_symlink()
+                and not _is_ignored((current_root_path / dirname).relative_to(root).as_posix(), is_dir=True)
+            ],
             key=str.lower,
         )
 
         for filename in sorted(filenames, key=str.lower):
-            file_path = Path(current_root, filename)
+            file_path = current_root_path / filename
             if file_path.is_symlink():
+                continue
+            relative_path = file_path.relative_to(root).as_posix()
+            if _is_ignored(relative_path):
                 continue
             if file_path.suffix.lower() in suffixes:
                 files.append(file_path)
@@ -65,12 +81,13 @@ def _iter_media_files(
 
 
 def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: list[dict[str, str | None]]) -> None:
-    media_file.media_format = MediaFormat(
-        container_format=normalized.media_format.container_format,
-        duration=normalized.media_format.duration,
-        bit_rate=normalized.media_format.bit_rate,
-        probe_score=normalized.media_format.probe_score,
-    )
+    if media_file.media_format is None:
+        media_file.media_format = MediaFormat()
+
+    media_file.media_format.container_format = normalized.media_format.container_format
+    media_file.media_format.duration = normalized.media_format.duration
+    media_file.media_format.bit_rate = normalized.media_format.bit_rate
+    media_file.media_format.probe_score = normalized.media_format.probe_score
     media_file.video_streams = [
         VideoStream(
             stream_index=stream.stream_index,
@@ -119,9 +136,21 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
     ]
 
 
-def _analyze_path(file_path: Path, settings: Settings) -> tuple[dict, list[dict[str, str | None]]]:
+def _analyze_path(
+    file_path: Path,
+    library_root: Path,
+    settings: Settings,
+    ignore_patterns: tuple[str, ...],
+) -> tuple[dict, list[dict[str, str | None]]]:
     payload = run_ffprobe(file_path, settings.ffprobe_path)
-    subtitles = detect_external_subtitles(file_path, settings.subtitle_extensions)
+    subtitles = [
+        subtitle
+        for subtitle in detect_external_subtitles(file_path, settings.subtitle_extensions)
+        if not matches_ignore_pattern(
+            (file_path.parent / str(subtitle["path"])).relative_to(library_root).as_posix(),
+            ignore_patterns,
+        )
+    ]
     return payload, subtitles
 
 
@@ -257,8 +286,14 @@ def run_scan(
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
+    ignore_patterns = get_ignore_patterns(db)
 
-    discovered = _iter_media_files(root, settings.allowed_media_extensions, should_cancel=_should_cancel)
+    discovered = _iter_media_files(
+        root,
+        settings.allowed_media_extensions,
+        ignore_patterns=ignore_patterns,
+        should_cancel=_should_cancel,
+    )
     seen_relative_paths: set[str] = set()
     to_analyze: list[tuple[MediaFile, Path]] = []
     discovery_counter = 0
@@ -321,7 +356,7 @@ def run_scan(
     def _safe_analyze(pair: tuple[MediaFile, Path]) -> tuple[MediaFile, dict | None, list[dict[str, str | None]], str | None]:
         media_file, path = pair
         try:
-            payload, subtitles = _analyze_path(path, settings)
+            payload, subtitles = _analyze_path(path, root, settings, ignore_patterns)
             return media_file, payload, subtitles, None
         except Exception:
             return media_file, None, [], traceback.format_exc()

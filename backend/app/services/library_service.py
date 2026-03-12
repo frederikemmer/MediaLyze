@@ -41,6 +41,10 @@ def _normalize_audio_codec(value: str | None) -> str:
     return candidate or "unknown"
 
 
+def _sorted_count_items(counts: dict[str, int]) -> list[tuple[str, int]]:
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
 def normalize_scan_config(scan_mode, scan_config: dict | None) -> dict:
     candidate = dict(scan_config or {})
     normalized = deepcopy(DEFAULT_SCAN_CONFIG)
@@ -308,11 +312,11 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
         ],
         subtitle_language_distribution=[
             {"label": key, "value": value}
-            for key, value in sorted(subtitle_counts.items(), key=lambda item: item[1], reverse=True)
+            for key, value in _sorted_count_items(subtitle_counts)
         ],
         subtitle_codec_distribution=[
             {"label": key, "value": value}
-            for key, value in sorted(subtitle_codec_counts.items(), key=lambda item: item[1], reverse=True)
+            for key, value in _sorted_count_items(subtitle_codec_counts)
         ],
         subtitle_source_distribution=[item for item in subtitle_source_distribution if item["value"] > 0],
     )

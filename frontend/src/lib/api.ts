@@ -111,6 +111,10 @@ export type BrowseResponse = {
   }>;
 };
 
+export type AppSettings = {
+  ignore_patterns: string[];
+};
+
 export type ScanJob = {
   id: number;
   library_id: number;
@@ -156,6 +160,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  appSettings: () => request<AppSettings>("/app-settings"),
   dashboard: () => request<DashboardResponse>("/dashboard"),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   libraries: () => request<LibrarySummary[]>("/libraries"),
@@ -192,6 +197,11 @@ export const api = {
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
+  updateAppSettings: (payload: { ignore_patterns?: string[] }) =>
+    request<AppSettings>("/app-settings", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   createLibrary: (payload: {
     name: string;
     path: string;

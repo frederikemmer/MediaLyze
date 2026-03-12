@@ -13,3 +13,4 @@ dist/
 config/
 .vscode/
 .env
+media/

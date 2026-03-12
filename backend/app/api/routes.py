@@ -5,11 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runtime
 from backend.app.core.config import Settings
+from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.library import LibraryCreate, LibraryDetail, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileTablePage
 from backend.app.schemas.scan import ScanCancelResponse, ScanJobRead, ScanRequest
 from backend.app.models.entities import ScanJob
+from backend.app.services.app_settings import get_app_settings as load_app_settings
+from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.library_service import (
     create_library,
@@ -50,6 +53,22 @@ def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
 @router.get("/scan-jobs/active", response_model=list[ScanJobRead])
 def active_scan_jobs(db: Session = Depends(get_db_session)) -> list[ScanJobRead]:
     return list_active_scan_jobs(db)
+
+
+@router.get("/app-settings", response_model=AppSettingsRead)
+def app_settings(db: Session = Depends(get_db_session)) -> AppSettingsRead:
+    return load_app_settings(db)
+
+
+@router.patch("/app-settings", response_model=AppSettingsRead)
+def app_settings_update(
+    payload: AppSettingsUpdate,
+    db: Session = Depends(get_db_session),
+) -> AppSettingsRead:
+    try:
+        return update_app_settings(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/scan-jobs/active/cancel", response_model=ScanCancelResponse)

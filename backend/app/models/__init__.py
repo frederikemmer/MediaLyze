@@ -1,4 +1,5 @@
 from backend.app.models.entities import (
+    AppSetting,
     AudioStream,
     ExternalSubtitle,
     Library,
@@ -10,6 +11,7 @@ from backend.app.models.entities import (
 )
 
 __all__ = [
+    "AppSetting",
     "AudioStream",
     "ExternalSubtitle",
     "Library",
@@ -19,4 +21,3 @@ __all__ = [
     "SubtitleStream",
     "VideoStream",
 ]
-

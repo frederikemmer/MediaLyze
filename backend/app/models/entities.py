@@ -75,6 +75,13 @@ class Library(TimestampMixin, Base):
     )
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
 class MediaFile(Base):
     __tablename__ = "media_files"
     __table_args__ = (
