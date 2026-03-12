@@ -4,33 +4,106 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import Settings, get_settings
 from backend.app.models.entities import AppSetting
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.utils.glob_patterns import normalize_ignore_patterns
 
 APP_SETTINGS_KEY = "global"
-DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = ()
-def _deserialize_app_settings(value: Any) -> AppSettingsRead:
+BUILT_IN_DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
+    "*/.DS_Store",
+    "*/._*",
+    "*/@eaDir/*",
+    "*/#recycle/*",
+    "*/.recycle/*",
+    "*/Thumbs.db",
+    "*/Desktop.ini",
+    "*/$RECYCLE.BIN/*",
+    "*/.thumbnails/*",
+    "*.part",
+    "*.tmp",
+    "*.temp",
+    "*thumbs.db",
+)
+
+
+def _seeded_default_ignore_patterns(settings: Settings) -> list[str]:
+    if settings.disable_default_ignore_patterns:
+        return []
+    return list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
+
+
+def _merge_ignore_patterns(*pattern_groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    for group in pattern_groups:
+        for pattern in group:
+            if pattern in seen:
+                continue
+            merged.append(pattern)
+            seen.add(pattern)
+
+    return merged
+
+
+def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead:
     payload = value if isinstance(value, dict) else {}
-    ignore_patterns = payload.get("ignore_patterns", DEFAULT_IGNORE_PATTERNS)
-    if not isinstance(ignore_patterns, list):
-        ignore_patterns = list(DEFAULT_IGNORE_PATTERNS)
-    return AppSettingsRead(ignore_patterns=normalize_ignore_patterns(ignore_patterns))
+    user_ignore_patterns = payload.get("user_ignore_patterns")
+    default_ignore_patterns = payload.get("default_ignore_patterns")
+    legacy_ignore_patterns = payload.get("ignore_patterns")
+
+    if isinstance(user_ignore_patterns, list) or isinstance(default_ignore_patterns, list):
+        normalized_user = normalize_ignore_patterns(user_ignore_patterns if isinstance(user_ignore_patterns, list) else [])
+        normalized_default = normalize_ignore_patterns(
+            default_ignore_patterns if isinstance(default_ignore_patterns, list) else []
+        )
+    elif isinstance(legacy_ignore_patterns, list):
+        normalized_user = normalize_ignore_patterns(legacy_ignore_patterns)
+        normalized_default = []
+    else:
+        normalized_user = []
+        normalized_default = _seeded_default_ignore_patterns(settings)
+
+    return AppSettingsRead(
+        ignore_patterns=_merge_ignore_patterns(normalized_user, normalized_default),
+        user_ignore_patterns=normalized_user,
+        default_ignore_patterns=normalized_default,
+    )
 
 
-def get_app_settings(db: Session) -> AppSettingsRead:
+def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettingsRead:
+    resolved_settings = settings or get_settings()
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
     if setting is None:
-        return AppSettingsRead(ignore_patterns=list(DEFAULT_IGNORE_PATTERNS))
-    return _deserialize_app_settings(setting.value)
+        return AppSettingsRead(
+            ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
+            user_ignore_patterns=[],
+            default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
+        )
+    return _deserialize_app_settings(setting.value, resolved_settings)
 
 
-def update_app_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
-    current = get_app_settings(db)
-    next_ignore_patterns = (
-        normalize_ignore_patterns(payload.ignore_patterns)
-        if payload.ignore_patterns is not None
-        else current.ignore_patterns
+def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Settings | None = None) -> AppSettingsRead:
+    current = get_app_settings(db, settings)
+
+    update_user_patterns = payload.user_ignore_patterns is not None
+    update_default_patterns = payload.default_ignore_patterns is not None
+    use_legacy_ignore_patterns = (
+        not update_user_patterns and not update_default_patterns and payload.ignore_patterns is not None
+    )
+
+    next_user_ignore_patterns = (
+        normalize_ignore_patterns(payload.user_ignore_patterns)
+        if update_user_patterns
+        else normalize_ignore_patterns(payload.ignore_patterns)
+        if use_legacy_ignore_patterns
+        else current.user_ignore_patterns
+    )
+    next_default_ignore_patterns = (
+        normalize_ignore_patterns(payload.default_ignore_patterns)
+        if update_default_patterns
+        else current.default_ignore_patterns
     )
 
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
@@ -38,11 +111,15 @@ def update_app_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsR
         setting = AppSetting(key=APP_SETTINGS_KEY, value={})
         db.add(setting)
 
-    setting.value = {"ignore_patterns": next_ignore_patterns}
+    setting.value = {
+        "user_ignore_patterns": next_user_ignore_patterns,
+        "default_ignore_patterns": next_default_ignore_patterns,
+    }
     db.commit()
     db.refresh(setting)
-    return _deserialize_app_settings(setting.value)
+    return _deserialize_app_settings(setting.value, settings or get_settings())
 
-def get_ignore_patterns(db: Session) -> tuple[str, ...]:
-    settings = get_app_settings(db)
-    return tuple(settings.ignore_patterns)
+
+def get_ignore_patterns(db: Session, settings: Settings | None = None) -> tuple[str, ...]:
+    app_settings = get_app_settings(db, settings)
+    return tuple(app_settings.ignore_patterns)

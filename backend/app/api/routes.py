@@ -58,17 +58,21 @@ def active_scan_jobs(db: Session = Depends(get_db_session)) -> list[ScanJobRead]
 
 
 @router.get("/app-settings", response_model=AppSettingsRead)
-def app_settings(db: Session = Depends(get_db_session)) -> AppSettingsRead:
-    return load_app_settings(db)
+def app_settings(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> AppSettingsRead:
+    return load_app_settings(db, settings)
 
 
 @router.patch("/app-settings", response_model=AppSettingsRead)
 def app_settings_update(
     payload: AppSettingsUpdate,
     db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
 ) -> AppSettingsRead:
     try:
-        return update_app_settings(db, payload)
+        return update_app_settings(db, payload, settings)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

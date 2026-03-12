@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { PathBrowser } from "../components/PathBrowser";
@@ -9,6 +9,7 @@ import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { api, type LibrarySummary } from "../lib/api";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
   getLibraryStatisticsSettings,
   getOrderedLibraryStatisticDefinitions,
@@ -32,6 +33,12 @@ type LibrarySettingsForm = {
   interval_minutes: number;
   debounce_seconds: number;
 };
+
+type IgnorePatternGroup = "user" | "default";
+
+type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
+
+type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 
 function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
   return {
@@ -69,6 +76,16 @@ function normalizeIgnorePatterns(patterns: string[]): string[] {
     .filter(Boolean);
 }
 
+function toPersistedIgnorePatterns(payload: {
+  user_ignore_patterns?: string[];
+  default_ignore_patterns?: string[];
+}): PersistedIgnorePatterns {
+  return {
+    user: payload.user_ignore_patterns ?? [],
+    default: payload.default_ignore_patterns ?? [],
+  };
+}
+
 export function LibrariesPage() {
   const { t, i18n } = useTranslation();
   const { libraries, librariesLoaded, loadLibraries, upsertLibrary, removeLibrary: removeLibraryFromStore } = useAppData();
@@ -83,8 +100,10 @@ export function LibrariesPage() {
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [ignorePatternInputs, setIgnorePatternInputs] = useState<string[]>([]);
-  const [ignorePatternDraft, setIgnorePatternDraft] = useState("");
+  const [userIgnorePatternInputs, setUserIgnorePatternInputs] = useState<string[]>([]);
+  const [defaultIgnorePatternInputs, setDefaultIgnorePatternInputs] = useState<string[]>([]);
+  const [ignorePatternDrafts, setIgnorePatternDrafts] = useState<IgnorePatternDrafts>({ user: "", default: "" });
+  const [ignorePatternSectionState, setIgnorePatternSectionState] = useState(() => getIgnorePatternSectionState());
   const [ignorePatternsLoadError, setIgnorePatternsLoadError] = useState<string | null>(null);
   const [ignorePatternsStatus, setIgnorePatternsStatus] = useState<string | null>(null);
   const [isLoadingIgnorePatterns, setIsLoadingIgnorePatterns] = useState(true);
@@ -92,7 +111,7 @@ export function LibrariesPage() {
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
-  const persistedIgnorePatterns = useRef<string[]>([]);
+  const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
@@ -153,9 +172,11 @@ export function LibrariesPage() {
         if (!active) {
           return;
         }
-        persistedIgnorePatterns.current = payload.ignore_patterns;
+        const persisted = toPersistedIgnorePatterns(payload);
+        persistedIgnorePatterns.current = persisted;
         ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
-        setIgnorePatternInputs(payload.ignore_patterns);
+        setUserIgnorePatternInputs(persisted.user);
+        setDefaultIgnorePatternInputs(persisted.default);
         setIgnorePatternsLoadError(null);
       })
       .catch((reason: Error) => {
@@ -308,24 +329,43 @@ export function LibrariesPage() {
     }
   }
 
-  async function persistIgnorePatterns(nextPatterns: string[]) {
+  function persistIgnorePatternSectionStateValue(
+    nextState: Parameters<typeof saveIgnorePatternSectionState>[0],
+  ) {
+    setIgnorePatternSectionState(saveIgnorePatternSectionState(nextState));
+  }
+
+  function toggleIgnorePatternSection(section: "customExpanded" | "defaultsExpanded") {
+    persistIgnorePatternSectionStateValue({
+      ...ignorePatternSectionState,
+      [section]: !ignorePatternSectionState[section],
+    });
+  }
+
+  async function persistIgnorePatterns(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
     const requestId = ignorePatternsRequestId.current + 1;
     ignorePatternsRequestId.current = requestId;
     setIsSavingIgnorePatterns(true);
     try {
-      const updated = await api.updateAppSettings({ ignore_patterns: normalizeIgnorePatterns(nextPatterns) });
+      const updated = await api.updateAppSettings({
+        user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
+        default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
+      });
+      const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
         ignorePatternsSuccessId.current = requestId;
-        persistedIgnorePatterns.current = updated.ignore_patterns;
+        persistedIgnorePatterns.current = persisted;
       }
       if (requestId === ignorePatternsRequestId.current) {
-        setIgnorePatternInputs(updated.ignore_patterns);
+        setUserIgnorePatternInputs(persisted.user);
+        setDefaultIgnorePatternInputs(persisted.default);
         setIgnorePatternsStatus(null);
       }
-      return updated.ignore_patterns;
+      return persisted;
     } catch (reason) {
       if (requestId === ignorePatternsRequestId.current) {
-        setIgnorePatternInputs(persistedIgnorePatterns.current);
+        setUserIgnorePatternInputs(persistedIgnorePatterns.current.user);
+        setDefaultIgnorePatternInputs(persistedIgnorePatterns.current.default);
         setIgnorePatternsStatus((reason as Error).message);
       }
       return null;
@@ -336,56 +376,77 @@ export function LibrariesPage() {
     }
   }
 
-  function scheduleIgnorePatternsSave(nextPatterns: string[]) {
-    setIgnorePatternInputs(nextPatterns);
+  function scheduleIgnorePatternsSave(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
+    setUserIgnorePatternInputs(nextUserPatterns);
+    setDefaultIgnorePatternInputs(nextDefaultPatterns);
     setIgnorePatternsStatus(null);
     if (ignorePatternsSaveTimer.current) {
       window.clearTimeout(ignorePatternsSaveTimer.current);
     }
     ignorePatternsSaveTimer.current = window.setTimeout(() => {
       ignorePatternsSaveTimer.current = null;
-      void persistIgnorePatterns(nextPatterns);
+      void persistIgnorePatterns(nextUserPatterns, nextDefaultPatterns);
     }, 450);
   }
 
-  function flushIgnorePatternsSave(nextPatterns: string[]) {
+  function flushIgnorePatternsSave(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
     if (ignorePatternsSaveTimer.current) {
       window.clearTimeout(ignorePatternsSaveTimer.current);
       ignorePatternsSaveTimer.current = null;
     }
-    return persistIgnorePatterns(nextPatterns);
+    return persistIgnorePatterns(nextUserPatterns, nextDefaultPatterns);
   }
 
-  async function addIgnorePattern() {
-    const candidate = ignorePatternDraft.trim();
+  async function addIgnorePattern(group: IgnorePatternGroup) {
+    const candidate = ignorePatternDrafts[group].trim();
     if (!candidate) {
       return;
     }
-    const updated = await flushIgnorePatternsSave([...ignorePatternInputs, candidate]);
+    const nextUserPatterns = group === "user" ? [...userIgnorePatternInputs, candidate] : userIgnorePatternInputs;
+    const nextDefaultPatterns =
+      group === "default" ? [...defaultIgnorePatternInputs, candidate] : defaultIgnorePatternInputs;
+    const updated = await flushIgnorePatternsSave(nextUserPatterns, nextDefaultPatterns);
     if (updated) {
-      setIgnorePatternDraft("");
+      setIgnorePatternDrafts((current) => ({ ...current, [group]: "" }));
     }
   }
 
-  async function removeIgnorePattern(index: number) {
-    const nextPatterns = ignorePatternInputs.filter((_, rowIndex) => rowIndex !== index);
-    setIgnorePatternInputs(nextPatterns);
-    await flushIgnorePatternsSave(nextPatterns);
+  async function removeIgnorePattern(group: IgnorePatternGroup, index: number) {
+    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
+    const nextPatterns = sourcePatterns.filter((_, rowIndex) => rowIndex !== index);
+    if (group === "user") {
+      setUserIgnorePatternInputs(nextPatterns);
+      await flushIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
+      return;
+    }
+    setDefaultIgnorePatternInputs(nextPatterns);
+    await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
   }
 
-  function updateIgnorePattern(index: number, value: string) {
-    const nextPatterns = ignorePatternInputs.map((pattern, rowIndex) => (rowIndex === index ? value : pattern));
-    scheduleIgnorePatternsSave(nextPatterns);
+  function updateIgnorePattern(group: IgnorePatternGroup, index: number, value: string) {
+    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
+    const nextPatterns = sourcePatterns.map((pattern, rowIndex) => (rowIndex === index ? value : pattern));
+    if (group === "user") {
+      scheduleIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
+      return;
+    }
+    scheduleIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
   }
 
-  async function finalizeIgnorePatternEdit(index: number) {
-    const currentValue = ignorePatternInputs[index];
+  async function finalizeIgnorePatternEdit(group: IgnorePatternGroup, index: number) {
+    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
+    const currentValue = sourcePatterns[index];
     if (currentValue === undefined) {
       return;
     }
-    const nextPatterns = ignorePatternInputs.map((pattern, rowIndex) => (rowIndex === index ? pattern.trim() : pattern));
-    setIgnorePatternInputs(nextPatterns);
-    await flushIgnorePatternsSave(nextPatterns);
+    const nextPatterns = sourcePatterns.map((pattern, rowIndex) => (rowIndex === index ? pattern.trim() : pattern));
+    if (group === "user") {
+      setUserIgnorePatternInputs(nextPatterns);
+      await flushIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
+      return;
+    }
+    setDefaultIgnorePatternInputs(nextPatterns);
+    await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
   }
 
   function updateStatisticsSettings(
@@ -413,6 +474,85 @@ export function LibrariesPage() {
     updateStatisticsSettings((current) => moveLibraryStatistic(current, draggedStatisticId, targetId));
     setDraggedStatisticId(null);
     setDropTargetStatisticId(null);
+  }
+
+  function renderIgnorePatternSection(
+    group: IgnorePatternGroup,
+    title: string,
+    expanded: boolean,
+    toggleKey: "customExpanded" | "defaultsExpanded",
+    inputId: string,
+  ) {
+    const patterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
+    const draftValue = ignorePatternDrafts[group];
+    const ToggleIcon = expanded ? ChevronDown : ChevronRight;
+
+    return (
+      <div className="ignore-pattern-section" key={group}>
+        <button
+          type="button"
+          className="secondary ignore-pattern-section-toggle"
+          aria-expanded={expanded}
+          onClick={() => toggleIgnorePatternSection(toggleKey)}
+        >
+          <span className="ignore-pattern-section-title">{title}</span>
+          <span className="ignore-pattern-section-meta">
+            <span className="badge">{patterns.length}</span>
+            <ToggleIcon aria-hidden="true" className="nav-icon" />
+          </span>
+        </button>
+        {expanded ? (
+          <div className="ignore-pattern-section-body">
+            <div className="ignore-pattern-row ignore-pattern-row-draft">
+              <input
+                id={inputId}
+                type="text"
+                value={draftValue}
+                onChange={(event) => {
+                  setIgnorePatternDrafts((current) => ({ ...current, [group]: event.target.value }));
+                  setIgnorePatternsStatus(null);
+                }}
+                placeholder={t("libraries.ignorePatternsPlaceholder")}
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="secondary icon-only-button"
+                aria-label={t("libraries.ignorePatternsAddAria")}
+                title={t("libraries.ignorePatternsAddAria")}
+                disabled={isSavingIgnorePatterns || !draftValue.trim()}
+                onClick={() => void addIgnorePattern(group)}
+              >
+                <Plus aria-hidden="true" className="nav-icon" />
+              </button>
+            </div>
+            <div className="ignore-patterns-stack">
+              {patterns.map((pattern, index) => (
+                <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${group}-ignore-pattern-${index}`}>
+                  <input
+                    type="text"
+                    value={pattern}
+                    onChange={(event) => updateIgnorePattern(group, index, event.target.value)}
+                    onBlur={() => void finalizeIgnorePatternEdit(group, index)}
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-only-button"
+                    aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
+                    title={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
+                    disabled={isSavingIgnorePatterns}
+                    onClick={() => void removeIgnorePattern(group, index)}
+                  >
+                    <Trash2 aria-hidden="true" className="nav-icon" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -679,7 +819,7 @@ export function LibrariesPage() {
             <div className="form-grid">
               <div className="field">
                 <div className="field-label-row">
-                  <label htmlFor="ignore-patterns">{t("libraries.ignorePatternsLabel")}</label>
+                  <label>{t("libraries.ignorePatternsLabel")}</label>
                   <TooltipTrigger
                     ariaLabel={t("libraries.ignorePatternsTooltipAria")}
                     content={t("libraries.ignorePatternsTooltip")}
@@ -688,51 +828,21 @@ export function LibrariesPage() {
                     ?
                   </TooltipTrigger>
                 </div>
-                <div className="ignore-pattern-row ignore-pattern-row-draft">
-                  <input
-                    id="ignore-patterns"
-                    type="text"
-                    value={ignorePatternDraft}
-                    onChange={(event) => {
-                      setIgnorePatternDraft(event.target.value);
-                      setIgnorePatternsStatus(null);
-                    }}
-                    placeholder={t("libraries.ignorePatternsPlaceholder")}
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className="secondary icon-only-button"
-                    aria-label={t("libraries.ignorePatternsAddAria")}
-                    title={t("libraries.ignorePatternsAddAria")}
-                    disabled={isSavingIgnorePatterns || !ignorePatternDraft.trim()}
-                    onClick={() => void addIgnorePattern()}
-                  >
-                    <Plus aria-hidden="true" className="nav-icon" />
-                  </button>
-                </div>
-                <div className="ignore-patterns-stack">
-                  {ignorePatternInputs.map((pattern, index) => (
-                    <div className="ignore-pattern-row ignore-pattern-row-saved" key={`ignore-pattern-${index}`}>
-                      <input
-                        type="text"
-                        value={pattern}
-                        onChange={(event) => updateIgnorePattern(index, event.target.value)}
-                        onBlur={() => void finalizeIgnorePatternEdit(index)}
-                        spellCheck={false}
-                      />
-                      <button
-                        type="button"
-                        className="secondary icon-only-button"
-                        aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
-                        title={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
-                        disabled={isSavingIgnorePatterns}
-                        onClick={() => void removeIgnorePattern(index)}
-                      >
-                        <Trash2 aria-hidden="true" className="nav-icon" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="ignore-pattern-sections">
+                  {renderIgnorePatternSection(
+                    "user",
+                    t("libraries.ignorePatternsCustomTitle"),
+                    ignorePatternSectionState.customExpanded,
+                    "customExpanded",
+                    "custom-ignore-patterns",
+                  )}
+                  {renderIgnorePatternSection(
+                    "default",
+                    t("libraries.ignorePatternsDefaultTitle"),
+                    ignorePatternSectionState.defaultsExpanded,
+                    "defaultsExpanded",
+                    "default-ignore-patterns",
+                  )}
                 </div>
                 <p className="field-hint">{t("libraries.ignorePatternsHint")}</p>
               </div>

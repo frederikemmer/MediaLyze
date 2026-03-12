@@ -121,6 +121,7 @@ Relevant environment variables:
 - `HOST_PORT`: HTTP port exposed on the host, default `8080`; access the app via `http://<host>:<HOST_PORT>`
 - `APP_PORT`: internal app port, default `8080`
 - `TZ`: process/container timezone, default `UTC`
+- `DISABLE_DEFAULT_IGNORE_PATTERNS`: optional; when set to `true`, built-in default ignore patterns are not preloaded
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `SCAN_RUNTIME_WORKER_COUNT`: maximum number of libraries scanned in parallel, default `4`
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
@@ -131,7 +132,7 @@ If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The com
 
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
 
-Ignore rules use glob patterns matched against the normalized relative path inside each library. Examples: `*.nfo`, `*.jpg`, `*/Sample/*`, `*/Extras/*`, `*trailer*`.
+Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
 See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short guide.
 
 ## Tech Stack

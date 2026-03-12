@@ -113,6 +113,8 @@ export type BrowseResponse = {
 
 export type AppSettings = {
   ignore_patterns: string[];
+  user_ignore_patterns: string[];
+  default_ignore_patterns: string[];
 };
 
 export type ScanJob = {
@@ -203,7 +205,11 @@ export const api = {
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
-  updateAppSettings: (payload: { ignore_patterns?: string[] }) =>
+  updateAppSettings: (payload: {
+    ignore_patterns?: string[];
+    user_ignore_patterns?: string[];
+    default_ignore_patterns?: string[];
+  }) =>
     request<AppSettings>("/app-settings", {
       method: "PATCH",
       body: JSON.stringify(payload),

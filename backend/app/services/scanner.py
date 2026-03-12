@@ -286,7 +286,7 @@ def run_scan(
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
-    ignore_patterns = get_ignore_patterns(db)
+    ignore_patterns = get_ignore_patterns(db, settings)
 
     discovered = _iter_media_files(
         root,
