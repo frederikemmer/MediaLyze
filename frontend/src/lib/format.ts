@@ -82,7 +82,7 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDuration(seconds: number | null): string {
-  if (!seconds || !Number.isFinite(seconds)) {
+  if (seconds === null || !Number.isFinite(seconds)) {
     return "n/a";
   }
   

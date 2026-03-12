@@ -30,7 +30,7 @@ export type LibrarySummary = {
   pending_files: number;
 };
 
-export type LibraryDetail = LibrarySummary & {
+export type LibraryStatistics = {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
@@ -164,7 +164,10 @@ export const api = {
   dashboard: () => request<DashboardResponse>("/dashboard"),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   libraries: () => request<LibrarySummary[]>("/libraries"),
-  library: (id: string | number) => request<LibraryDetail>(`/libraries/${id}`),
+  librarySummary: (id: string | number, signal?: AbortSignal) =>
+    request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
+  libraryStatistics: (id: string | number, signal?: AbortSignal) =>
+    request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
   libraryFiles: (
     id: string | number,
     params?: {
@@ -173,6 +176,7 @@ export const api = {
       search?: string;
       sortKey?: MediaFileSortKey;
       sortDirection?: "asc" | "desc";
+      signal?: AbortSignal;
     },
   ) => {
     const searchParams = new URLSearchParams();
@@ -192,7 +196,9 @@ export const api = {
       searchParams.set("sort_direction", params.sortDirection);
     }
     const query = searchParams.toString();
-    return request<MediaFileTablePage>(`/libraries/${id}/files${query ? `?${query}` : ""}`);
+    return request<MediaFileTablePage>(`/libraries/${id}/files${query ? `?${query}` : ""}`, {
+      signal: params?.signal,
+    });
   },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),

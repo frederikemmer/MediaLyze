@@ -1,4 +1,4 @@
-import type { DashboardResponse, LibraryDetail, MediaFileSortKey } from "./api";
+import type { DashboardResponse, LibraryStatistics, MediaFileSortKey } from "./api";
 
 export type LibraryStatisticId =
   | "size"
@@ -447,7 +447,7 @@ export function getVisibleLibraryStatisticTableColumns(
 }
 
 export function getLibraryStatisticPanelItems(
-  library: LibraryDetail | null,
+  library: LibraryStatistics | null,
   definition: LibraryStatisticDefinition,
 ) {
   if (!library || !definition.panelDataKey) {

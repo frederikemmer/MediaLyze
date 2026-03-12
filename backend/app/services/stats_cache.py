@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from threading import Lock
 
-from backend.app.schemas.library import LibraryDetail, LibrarySummary
+from backend.app.schemas.library import LibraryStatistics, LibrarySummary
 from backend.app.schemas.media import DashboardResponse
 
 
@@ -12,7 +12,8 @@ class StatsCache:
         self._lock = Lock()
         self._dashboard: dict[str, DashboardResponse] = {}
         self._libraries: dict[str, list[LibrarySummary]] = {}
-        self._library_details: dict[str, dict[int, LibraryDetail]] = {}
+        self._library_summaries: dict[str, dict[int, LibrarySummary]] = {}
+        self._library_statistics: dict[str, dict[int, LibraryStatistics]] = {}
 
     def get_dashboard(self, cache_key: str) -> DashboardResponse | None:
         with self._lock:
@@ -30,22 +31,32 @@ class StatsCache:
         with self._lock:
             self._libraries[cache_key] = deepcopy(payload)
 
-    def get_library_detail(self, cache_key: str, library_id: int) -> LibraryDetail | None:
+    def get_library_summary(self, cache_key: str, library_id: int) -> LibrarySummary | None:
         with self._lock:
-            return deepcopy(self._library_details.get(cache_key, {}).get(library_id))
+            return deepcopy(self._library_summaries.get(cache_key, {}).get(library_id))
 
-    def set_library_detail(self, cache_key: str, library_id: int, payload: LibraryDetail) -> None:
+    def set_library_summary(self, cache_key: str, library_id: int, payload: LibrarySummary) -> None:
         with self._lock:
-            self._library_details.setdefault(cache_key, {})[library_id] = deepcopy(payload)
+            self._library_summaries.setdefault(cache_key, {})[library_id] = deepcopy(payload)
+
+    def get_library_statistics(self, cache_key: str, library_id: int) -> LibraryStatistics | None:
+        with self._lock:
+            return deepcopy(self._library_statistics.get(cache_key, {}).get(library_id))
+
+    def set_library_statistics(self, cache_key: str, library_id: int, payload: LibraryStatistics) -> None:
+        with self._lock:
+            self._library_statistics.setdefault(cache_key, {})[library_id] = deepcopy(payload)
 
     def invalidate(self, cache_key: str, library_id: int | None = None) -> None:
         with self._lock:
             self._dashboard.pop(cache_key, None)
             self._libraries.pop(cache_key, None)
             if library_id is None:
-                self._library_details.pop(cache_key, None)
+                self._library_summaries.pop(cache_key, None)
+                self._library_statistics.pop(cache_key, None)
             else:
-                self._library_details.setdefault(cache_key, {}).pop(library_id, None)
+                self._library_summaries.setdefault(cache_key, {}).pop(library_id, None)
+                self._library_statistics.setdefault(cache_key, {}).pop(library_id, None)
 
 
 stats_cache = StatsCache()

@@ -686,28 +686,46 @@
   padding: 0.9rem 1rem 1rem;
 }
 
-.data-table-sentinel {
-  width: 100%;
-  height: 16px;
-}
-
 .media-data-table {
   width: max-content;
   min-width: 100%;
   min-width: max(100%, 920px);
-  border-collapse: separate;
-  border-spacing: 0;
+  position: relative;
 }
 
-.media-data-table th:first-child,
-.media-data-table td:first-child {
-  width: 24rem;
-  min-width: 24rem;
-  max-width: 24rem;
+.media-data-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
 }
 
-.media-data-table th,
-.media-data-table td {
+.media-data-row {
+  display: grid;
+  align-items: stretch;
+  min-width: max(100%, 920px);
+}
+
+.media-data-head-row {
+  background: #f6f1ea;
+  border-bottom: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.media-data-table-body {
+  position: relative;
+}
+
+.media-data-body-row {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.media-data-body-row:hover .media-data-cell {
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.media-data-cell {
   min-width: 0;
   padding: 12px 14px;
   text-align: left;
@@ -715,39 +733,25 @@
   border-bottom: 1px solid rgba(31, 28, 22, 0.08);
 }
 
-.media-data-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+.media-data-header-cell {
   background: #f6f1ea;
-  box-shadow: none;
 }
 
-.media-data-table thead,
-.media-data-table thead tr,
-.media-data-table thead th,
-.media-data-table thead .is-sticky {
-  box-shadow: none;
-  filter: none;
+.media-data-row > :first-child {
+  width: 24rem;
+  min-width: 24rem;
+  max-width: 24rem;
 }
 
-.media-data-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.media-data-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.54);
-}
-
-.media-data-table .is-sticky {
+.media-data-cell.is-sticky {
   position: sticky;
   left: 0;
-  z-index: 1;
+  z-index: 2;
   background: rgba(255, 255, 255, 0.72);
 }
 
-.media-data-table thead .is-sticky {
-  z-index: 3;
+.media-data-header-cell.is-sticky {
+  z-index: 5;
   background: #f6f1ea;
 }
 

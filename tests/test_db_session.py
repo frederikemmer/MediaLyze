@@ -142,7 +142,14 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     assert "ix_media_files_library_relative_path" in index_names
     assert "ix_media_files_scan_status" in index_names
     assert "ix_media_files_quality_score" in index_names
+    assert "ix_media_files_library_size_bytes" in index_names
+    assert "ix_media_files_library_mtime" in index_names
+    assert "ix_media_files_library_last_analyzed_at" in index_names
+    assert "ix_media_files_library_quality_score" in index_names
     assert "ix_subtitle_streams_codec" in subtitle_index_names
     assert "ix_subtitle_streams_language" in subtitle_index_names
+    assert "ix_subtitle_streams_media_file_id" in subtitle_index_names
     assert "ix_external_subtitles_language" in external_subtitle_index_names
+    assert "ix_external_subtitles_media_file_id" in external_subtitle_index_names
     assert "ix_scan_jobs_status" in scan_job_index_names
+    assert "ix_scan_jobs_library_id" in scan_job_index_names

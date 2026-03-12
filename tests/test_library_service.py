@@ -21,7 +21,14 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.schemas.library import LibraryUpdate
-from backend.app.services.library_service import delete_library, get_library_detail, normalize_scan_config, update_library_settings
+from backend.app.services.library_service import (
+    delete_library,
+    get_library_statistics,
+    get_library_summary,
+    library_exists,
+    normalize_scan_config,
+    update_library_settings,
+)
 
 
 def test_normalize_scan_config_for_manual_mode() -> None:
@@ -108,7 +115,72 @@ def test_update_library_settings_can_rename_library() -> None:
         assert updated.name == "Films"
 
 
-def test_get_library_detail_includes_subtitle_languages_codecs_and_sources() -> None:
+def test_library_exists_checks_library_presence() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Shows",
+            path="/tmp/shows",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        assert library_exists(db, library.id) is True
+        assert library_exists(db, library.id + 1) is False
+
+
+def test_get_library_summary_includes_totals() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Shows",
+            path="/tmp/shows",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="episode-01.mkv",
+            filename="episode-01.mkv",
+            extension="mkv",
+            size_bytes=321,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(MediaFormat(media_file_id=media_file.id, container_format="matroska", duration=120.0, bit_rate=1, probe_score=1))
+        db.commit()
+
+        summary = get_library_summary(db, library.id)
+
+    assert summary is not None
+    assert summary.file_count == 1
+    assert summary.total_size_bytes == 321
+    assert summary.total_duration_seconds == 120.0
+    assert summary.ready_files == 1
+    assert summary.pending_files == 0
+
+
+def test_get_library_statistics_includes_subtitle_languages_codecs_and_sources() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
@@ -145,10 +217,19 @@ def test_get_library_detail_includes_subtitle_languages_codecs_and_sources() -> 
         db.add(ExternalSubtitle(media_file_id=media_file.id, path="episode-01.en.ass", language="eng", format="ass"))
         db.commit()
 
-        detail = get_library_detail(db, library.id)
+        statistics = get_library_statistics(db, library.id)
 
-    assert detail is not None
-    assert detail.audio_codec_distribution == [{"label": "dts", "value": 1}]
-    assert detail.subtitle_language_distribution == [{"label": "de", "value": 1}, {"label": "en", "value": 1}]
-    assert detail.subtitle_codec_distribution == [{"label": "ass", "value": 1}, {"label": "subrip", "value": 1}]
-    assert detail.subtitle_source_distribution == [{"label": "internal", "value": 1}, {"label": "external", "value": 1}]
+    assert statistics is not None
+    assert [item.model_dump() for item in statistics.audio_codec_distribution] == [{"label": "dts", "value": 1}]
+    assert [item.model_dump() for item in statistics.subtitle_language_distribution] == [
+        {"label": "de", "value": 1},
+        {"label": "en", "value": 1},
+    ]
+    assert [item.model_dump() for item in statistics.subtitle_codec_distribution] == [
+        {"label": "ass", "value": 1},
+        {"label": "subrip", "value": 1},
+    ]
+    assert [item.model_dump() for item in statistics.subtitle_source_distribution] == [
+        {"label": "internal", "value": 1},
+        {"label": "external", "value": 1},
+    ]
