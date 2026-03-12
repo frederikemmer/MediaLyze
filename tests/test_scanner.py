@@ -189,9 +189,15 @@ def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: P
                 key="global",
                 value={
                     "ignore_patterns": [
+<<<<<<< HEAD
                         "(^|/)extras(/|$)",
                         "(^|/)sample\\.[^/]+$",
                         "\\.skip\\.srt$",
+=======
+                        "*/extras/*",
+                        "sample.*",
+                        "*.skip.srt",
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
                     ]
                 },
             )

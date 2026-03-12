@@ -5,6 +5,7 @@ import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { PathBrowser } from "../components/PathBrowser";
+import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { api, type LibrarySummary } from "../lib/api";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
@@ -621,6 +622,7 @@ export function LibrariesPage() {
               <div className="field">
                 <div className="field-label-row">
                   <label htmlFor="ignore-patterns">{t("libraries.ignorePatternsLabel")}</label>
+<<<<<<< HEAD
                   <span
                     aria-label={t("libraries.ignorePatternsTooltipAria")}
                     className="tooltip-trigger"
@@ -629,6 +631,15 @@ export function LibrariesPage() {
                   >
                     ?
                   </span>
+=======
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.ignorePatternsTooltipAria")}
+                    content={t("libraries.ignorePatternsTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
                 </div>
                 <div className="ignore-pattern-row ignore-pattern-row-draft">
                   <input

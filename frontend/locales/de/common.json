@@ -50,12 +50,21 @@
     "files": "Dateien",
     "active": "Aktiv",
     "ignorePatternsTitle": "Ignoriermuster",
+<<<<<<< HEAD
     "ignorePatternsSubtitle": "Regex-Muster werden vor Indexierung und Analyse gegen Pfade geprüft, die relativ zum jeweiligen Bibliothekswurzelpfad sind.",
     "ignorePatternsLabel": "Regex-Muster",
     "ignorePatternsHint": "Regex eingeben und mit Plus direkt speichern. Passende Ordner und Dateien werden bei Scans übersprungen.",
     "ignorePatternsPlaceholder": "^extras(/|$)",
     "ignorePatternsTooltipAria": "Beispiele für Ignoriermuster anzeigen",
     "ignorePatternsTooltip": "Beispiele:\n\\.nfo$ = alle .nfo-Dateien ignorieren\n(^|/)sample\\.[^/]+$ = Dateien namens sample.* ignorieren\n^Sample/ = den Ordner Sample auf oberster Ebene ignorieren\n(^|/)extras(/|$) = jeden Ordner namens extras ignorieren\n(^|/)cover\\.(jpg|png)$ = passende Bilddateien ignorieren",
+=======
+    "ignorePatternsSubtitle": "Glob-Muster werden vor Indexierung und Analyse gegen den normalisierten Pfad relativ zum Bibliothekswurzelpfad geprüft.",
+    "ignorePatternsLabel": "Glob-Muster",
+    "ignorePatternsHint": "Glob-Muster eingeben und mit Plus direkt speichern. Passende Dateien und Ordner werden bei Scans übersprungen.",
+    "ignorePatternsPlaceholder": "*/Extras/*",
+    "ignorePatternsTooltipAria": "Beispiele für Ignoriermuster anzeigen",
+    "ignorePatternsTooltip": "Beispiele:\n\nAlle .nfo-Dateien ignorieren:\n\"*.nfo\"\n\nAlles unterhalb des Extras-Ordners auf oberster Ebene ignorieren:\n\"Extras/*\"\n\nJeden Ordner namens Sample ignorieren:\n\"*/Sample/*\"\n\nDateien und Ordner ignorieren, deren Pfad trailer enthält:\n\"*trailer*\"",
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
     "ignorePatternsAddAria": "Neues Ignoriermuster hinzufügen",
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "appSettings": "App-Einstellungen",

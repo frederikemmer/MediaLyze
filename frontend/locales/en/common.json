@@ -50,12 +50,21 @@
     "files": "Files",
     "active": "Active",
     "ignorePatternsTitle": "Ignore patterns",
+<<<<<<< HEAD
     "ignorePatternsSubtitle": "Regex patterns are matched against paths relative to each library root before files are indexed or analyzed.",
     "ignorePatternsLabel": "Regex patterns",
     "ignorePatternsHint": "Enter a regex and save it directly with plus. Matching folders and files are skipped during scans.",
     "ignorePatternsPlaceholder": "^extras(/|$)",
     "ignorePatternsTooltipAria": "Show ignore pattern examples",
     "ignorePatternsTooltip": "Examples:\n\\.nfo$ = ignore all .nfo files\n(^|/)sample\\.[^/]+$ = ignore files named sample.*\n^Sample/ = ignore the top-level folder Sample\n(^|/)extras(/|$) = ignore any folder named extras\n(^|/)cover\\.(jpg|png)$ = ignore matching image files",
+=======
+    "ignorePatternsSubtitle": "Glob patterns are matched against the normalized path relative to each library root before files are indexed or analyzed.",
+    "ignorePatternsLabel": "Glob patterns",
+    "ignorePatternsHint": "Enter a glob pattern and save it directly with plus. Matching files and folders are skipped during scans.",
+    "ignorePatternsPlaceholder": "*/Extras/*",
+    "ignorePatternsTooltipAria": "Show ignore pattern examples",
+    "ignorePatternsTooltip": "Examples:\n\nIgnore all .nfo files:\n\"*.nfo\"\n\nIgnore everything below the top-level Extras folder:\n\"Extras/*\"\n\nIgnore any folder named Sample:\n\"*/Sample/*\"\n\nIgnore files and folders whose path contains trailer:\n\"*trailer*\"",
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
     "ignorePatternsAddAria": "Add a new ignore pattern",
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",

@@ -15,6 +15,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { DistributionList } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
+import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { api, type LibraryDetail, type LibrarySummary, type MediaFileRow, type MediaFileSortKey, type ScanJob } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
@@ -452,14 +453,18 @@ export function LibraryDetailPage() {
         <div className="panel-title-row">
           <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
           {displayLibrary?.path ? (
+<<<<<<< HEAD
             <span
               className="tooltip-trigger tooltip-trigger-below"
               tabIndex={0}
               aria-label={t("libraryDetail.libraryPathAria")}
               data-tooltip={displayLibrary.path}
             >
+=======
+            <TooltipTrigger ariaLabel={t("libraryDetail.libraryPathAria")} content={displayLibrary.path}>
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
               ?
-            </span>
+            </TooltipTrigger>
           ) : null}
         </div>
         <div className="card-grid grid">

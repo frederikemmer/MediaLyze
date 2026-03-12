@@ -34,6 +34,7 @@ Bring your own auth (for now).
 - Full and incremental scans using `path + size + mtime`
 - Normalized formats, streams, subtitles, scan jobs, and quality scores (feel free to suggest improvements)
 - Detection of internal and external subtitle files
+- Ignore files and folders with simple glob patterns such as `*.nfo` or `*/Extras/*`
 - SQLite with WAL mode and indexed filter fields
 - FastAPI backend with a React + Vite frontend
 - Docker-first deployment with a read-only media mount
@@ -129,6 +130,9 @@ Relevant environment variables:
 If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The compose files already load `.env`, so no compose changes are required.
 
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
+
+Ignore rules use glob patterns matched against the normalized relative path inside each library. Examples: `*.nfo`, `*.jpg`, `*/Sample/*`, `*/Extras/*`, `*trailer*`.
+See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short guide.
 
 ## Tech Stack
 

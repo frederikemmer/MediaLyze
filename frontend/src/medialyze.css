@@ -290,6 +290,10 @@
   align-items: start;
 }
 
+.async-panel .panel-header .subtitle {
+  margin-top: 8px;
+}
+
 .panel-title-row {
   display: flex;
   align-items: center;
@@ -514,20 +518,25 @@
 }
 
 .tooltip-trigger {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   background: rgba(31, 28, 22, 0.08);
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: help;
+  box-sizing: border-box;
+  appearance: none;
+  flex-shrink: 0;
 }
 
+<<<<<<< HEAD
 .tooltip-trigger::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -536,24 +545,45 @@
   bottom: calc(100% + 10px);
   transform: translateX(-50%);
   width: min(320px, 70vw);
+=======
+.tooltip-trigger:hover {
+  color: var(--ink);
+}
+
+.tooltip-trigger:focus-visible {
+  outline: 2px solid rgba(31, 28, 22, 0.22);
+  outline-offset: 2px;
+}
+
+.tooltip-portal {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(31, 28, 22, 0.94);
   color: #f3efe8;
   font-size: 0.82rem;
   line-height: 1.35;
+<<<<<<< HEAD
   white-space: pre-line;
   text-align: left;
+=======
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-y: auto;
+  pointer-events: auto;
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
   box-shadow: 0 14px 28px rgba(31, 28, 22, 0.18);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.tooltip-trigger:hover::after,
-.tooltip-trigger:focus-visible::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(-2px);
+.tooltip-portal-preline {
+  white-space: pre-line;
 }
 
 .tooltip-trigger-below::after {

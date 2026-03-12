@@ -24,11 +24,16 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
+<<<<<<< HEAD
 from backend.app.services.app_settings import get_compiled_ignore_patterns
+=======
+from backend.app.services.app_settings import get_ignore_patterns
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
 from backend.app.services.quality import calculate_quality_score
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.subtitles import detect_external_subtitles
+from backend.app.utils.glob_patterns import matches_ignore_pattern
 from backend.app.utils.time import utc_now
 
 
@@ -44,15 +49,23 @@ def _iter_media_files(
     root: Path,
     allowed_extensions: tuple[str, ...],
     *,
+<<<<<<< HEAD
     ignore_patterns: tuple[re.Pattern[str], ...] = (),
+=======
+    ignore_patterns: tuple[str, ...] = (),
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
     should_cancel: Callable[[], bool] | None = None,
 ) -> list[Path]:
     suffixes = {extension.lower() for extension in allowed_extensions}
     files: list[Path] = []
 
     def _is_ignored(relative_path: str, *, is_dir: bool = False) -> bool:
+<<<<<<< HEAD
         candidates = (relative_path, f"{relative_path}/") if is_dir else (relative_path,)
         return any(pattern.search(candidate) for pattern in ignore_patterns for candidate in candidates)
+=======
+        return matches_ignore_pattern(relative_path, ignore_patterns, is_dir=is_dir)
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
 
     for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         if should_cancel and should_cancel():
@@ -140,15 +153,25 @@ def _analyze_path(
     file_path: Path,
     library_root: Path,
     settings: Settings,
+<<<<<<< HEAD
     ignore_patterns: tuple[re.Pattern[str], ...],
+=======
+    ignore_patterns: tuple[str, ...],
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
 ) -> tuple[dict, list[dict[str, str | None]]]:
     payload = run_ffprobe(file_path, settings.ffprobe_path)
     subtitles = [
         subtitle
         for subtitle in detect_external_subtitles(file_path, settings.subtitle_extensions)
+<<<<<<< HEAD
         if not any(
             pattern.search((file_path.parent / str(subtitle["path"])).relative_to(library_root).as_posix())
             for pattern in ignore_patterns
+=======
+        if not matches_ignore_pattern(
+            (file_path.parent / str(subtitle["path"])).relative_to(library_root).as_posix(),
+            ignore_patterns,
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
         )
     ]
     return payload, subtitles
@@ -286,7 +309,11 @@ def run_scan(
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
+<<<<<<< HEAD
     ignore_patterns = get_compiled_ignore_patterns(db)
+=======
+    ignore_patterns = get_ignore_patterns(db)
+>>>>>>> 70fd2e4 (feat: add option to ignore blo patterns)
 
     discovered = _iter_media_files(
         root,
