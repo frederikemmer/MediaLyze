@@ -496,6 +496,23 @@
   align-content: start;
 }
 
+.ignore-patterns-toolbar {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.ignore-patterns-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.ignore-pattern-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .tooltip-trigger {
   position: relative;
   display: inline-flex;
@@ -514,6 +531,7 @@
 .tooltip-trigger::after {
   content: attr(data-tooltip);
   position: absolute;
+  box-sizing: border-box;
   left: 50%;
   bottom: calc(100% + 10px);
   transform: translateX(-50%);
@@ -524,6 +542,8 @@
   color: #f3efe8;
   font-size: 0.82rem;
   line-height: 1.35;
+  white-space: pre-line;
+  text-align: left;
   box-shadow: 0 14px 28px rgba(31, 28, 22, 0.18);
   opacity: 0;
   pointer-events: none;
@@ -534,6 +554,24 @@
 .tooltip-trigger:focus-visible::after {
   opacity: 1;
   transform: translateX(-50%) translateY(-2px);
+}
+
+.tooltip-trigger-below::after {
+  top: calc(100% + 10px);
+  bottom: auto;
+  left: 0;
+  right: auto;
+  transform: translateY(0);
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tooltip-trigger-below:hover::after,
+.tooltip-trigger-below:focus-visible::after {
+  transform: translateY(2px);
 }
 
 .compact-row-card {

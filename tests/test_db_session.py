@@ -65,6 +65,7 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     subtitle_columns = {column["name"] for column in inspector.get_columns("subtitle_streams")}
     external_subtitle_columns = {column["name"] for column in inspector.get_columns("external_subtitles")}
 
+    assert "app_settings" in inspector.get_table_names()
     assert {"last_scan_at", "scan_mode", "scan_config"}.issubset(library_columns)
     assert {"last_seen_at", "last_analyzed_at", "scan_status", "quality_score", "raw_ffprobe_json"}.issubset(
         media_file_columns

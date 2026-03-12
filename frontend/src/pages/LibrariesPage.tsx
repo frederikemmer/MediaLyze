@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Pencil, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { PathBrowser } from "../components/PathBrowser";
@@ -62,6 +62,12 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
   );
 }
 
+function normalizeIgnorePatterns(patterns: string[]): string[] {
+  return patterns
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export function LibrariesPage() {
   const { t, i18n } = useTranslation();
   const { libraries, librariesLoaded, loadLibraries, upsertLibrary, removeLibrary: removeLibraryFromStore } = useAppData();
@@ -76,6 +82,12 @@ export function LibrariesPage() {
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [savedIgnorePatterns, setSavedIgnorePatterns] = useState<string[]>([]);
+  const [ignorePatternDraft, setIgnorePatternDraft] = useState("");
+  const [ignorePatternsLoadError, setIgnorePatternsLoadError] = useState<string | null>(null);
+  const [ignorePatternsStatus, setIgnorePatternsStatus] = useState<string | null>(null);
+  const [isLoadingIgnorePatterns, setIsLoadingIgnorePatterns] = useState(true);
+  const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
@@ -126,6 +138,35 @@ export function LibrariesPage() {
     }
     hadActiveJobsRef.current = hasActiveJobs;
   }, [hasActiveJobs]);
+
+  useEffect(() => {
+    let active = true;
+    setIsLoadingIgnorePatterns(true);
+    void api
+      .appSettings()
+      .then((payload) => {
+        if (!active) {
+          return;
+        }
+        setSavedIgnorePatterns(payload.ignore_patterns);
+        setIgnorePatternsLoadError(null);
+      })
+      .catch((reason: Error) => {
+        if (!active) {
+          return;
+        }
+        setIgnorePatternsLoadError(reason.message);
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingIgnorePatterns(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -255,6 +296,37 @@ export function LibrariesPage() {
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
     }
+  }
+
+  async function persistIgnorePatterns(nextPatterns: string[]) {
+    setIsSavingIgnorePatterns(true);
+    try {
+      const updated = await api.updateAppSettings({ ignore_patterns: normalizeIgnorePatterns(nextPatterns) });
+      setSavedIgnorePatterns(updated.ignore_patterns);
+      setIgnorePatternsStatus(null);
+      return updated.ignore_patterns;
+    } catch (reason) {
+      setIgnorePatternsStatus((reason as Error).message);
+      return null;
+    } finally {
+      setIsSavingIgnorePatterns(false);
+    }
+  }
+
+  async function addIgnorePattern() {
+    const candidate = ignorePatternDraft.trim();
+    if (!candidate) {
+      return;
+    }
+    const updated = await persistIgnorePatterns([...savedIgnorePatterns, candidate]);
+    if (updated) {
+      setIgnorePatternDraft("");
+    }
+  }
+
+  async function removeIgnorePattern(index: number) {
+    const nextPatterns = savedIgnorePatterns.filter((_, rowIndex) => rowIndex !== index);
+    await persistIgnorePatterns(nextPatterns);
   }
 
   function updateStatisticsSettings(
@@ -537,6 +609,75 @@ export function LibrariesPage() {
                 {submitting ? t("libraries.creating") : t("libraries.createButton")}
               </button>
             </form>
+          </AsyncPanel>
+
+          <AsyncPanel
+            title={t("libraries.ignorePatternsTitle")}
+            subtitle={t("libraries.ignorePatternsSubtitle")}
+            loading={isLoadingIgnorePatterns}
+            error={ignorePatternsLoadError}
+          >
+            <div className="form-grid">
+              <div className="field">
+                <div className="field-label-row">
+                  <label htmlFor="ignore-patterns">{t("libraries.ignorePatternsLabel")}</label>
+                  <span
+                    aria-label={t("libraries.ignorePatternsTooltipAria")}
+                    className="tooltip-trigger"
+                    data-tooltip={t("libraries.ignorePatternsTooltip")}
+                    tabIndex={0}
+                  >
+                    ?
+                  </span>
+                </div>
+                <div className="ignore-pattern-row ignore-pattern-row-draft">
+                  <input
+                    id="ignore-patterns"
+                    type="text"
+                    value={ignorePatternDraft}
+                    onChange={(event) => {
+                      setIgnorePatternDraft(event.target.value);
+                      setIgnorePatternsStatus(null);
+                    }}
+                    placeholder={t("libraries.ignorePatternsPlaceholder")}
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-only-button"
+                    aria-label={t("libraries.ignorePatternsAddAria")}
+                    title={t("libraries.ignorePatternsAddAria")}
+                    disabled={isSavingIgnorePatterns || !ignorePatternDraft.trim()}
+                    onClick={() => void addIgnorePattern()}
+                  >
+                    <Plus aria-hidden="true" className="nav-icon" />
+                  </button>
+                </div>
+                <div className="ignore-patterns-stack">
+                  {savedIgnorePatterns.map((pattern, index) => (
+                    <div className="ignore-pattern-row" key={`ignore-pattern-${index}`}>
+                      <input
+                        type="text"
+                        value={pattern}
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        className="secondary icon-only-button"
+                        aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
+                        title={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
+                        disabled={isSavingIgnorePatterns}
+                        onClick={() => void removeIgnorePattern(index)}
+                      >
+                        <Trash2 aria-hidden="true" className="nav-icon" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="field-hint">{t("libraries.ignorePatternsHint")}</p>
+              </div>
+              {ignorePatternsStatus ? <div className="alert">{ignorePatternsStatus}</div> : null}
+            </div>
           </AsyncPanel>
 
           <AsyncPanel title={t("libraries.appSettings")}>

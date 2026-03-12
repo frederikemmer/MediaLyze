@@ -10,7 +10,7 @@ os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
-from backend.app.models.entities import AudioStream, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
+from backend.app.models.entities import AppSetting, AudioStream, ExternalSubtitle, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
@@ -138,3 +138,80 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
     assert len(subtitle_streams) == 1
     assert subtitle_streams[0].codec == "subrip"
     assert subtitle_streams[0].subtitle_type == "text"
+
+
+def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "movie.mkv").write_text("video")
+    (media_dir / "movie.en.srt").write_text("subtitle")
+    (media_dir / "movie.skip.srt").write_text("subtitle")
+    skipped_dir = media_dir / "extras"
+    skipped_dir.mkdir()
+    (skipped_dir / "bonus.mkv").write_text("video")
+    (media_dir / "sample.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "ignore_patterns": [
+                        "(^|/)extras(/|$)",
+                        "(^|/)sample\\.[^/]+$",
+                        "\\.skip\\.srt$",
+                    ]
+                },
+            )
+        )
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        subtitles = db.scalars(select(ExternalSubtitle).order_by(ExternalSubtitle.path)).all()
+
+    assert job.files_total == 1
+    assert job.files_scanned == 1
+    assert [media_file.relative_path for media_file in indexed_files] == ["movie.mkv"]
+    assert [subtitle.path for subtitle in subtitles] == ["movie.en.srt"]

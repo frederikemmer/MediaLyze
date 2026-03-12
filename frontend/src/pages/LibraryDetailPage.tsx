@@ -453,7 +453,7 @@ export function LibraryDetailPage() {
           <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
           {displayLibrary?.path ? (
             <span
-              className="tooltip-trigger"
+              className="tooltip-trigger tooltip-trigger-below"
               tabIndex={0}
               aria-label={t("libraryDetail.libraryPathAria")}
               data-tooltip={displayLibrary.path}
