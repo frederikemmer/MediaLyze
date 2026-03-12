@@ -88,6 +88,10 @@ class MediaFile(Base):
         Index("ix_media_files_library_relative_path", "library_id", "relative_path", unique=True),
         Index("ix_media_files_scan_status", "scan_status"),
         Index("ix_media_files_quality_score", "quality_score"),
+        Index("ix_media_files_library_size_bytes", "library_id", "size_bytes"),
+        Index("ix_media_files_library_mtime", "library_id", "mtime"),
+        Index("ix_media_files_library_last_analyzed_at", "library_id", "last_analyzed_at"),
+        Index("ix_media_files_library_quality_score", "library_id", "quality_score"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -159,6 +163,7 @@ class VideoStream(Base):
         Index("ix_video_streams_codec", "codec"),
         Index("ix_video_streams_resolution", "width", "height"),
         Index("ix_video_streams_hdr_type", "hdr_type"),
+        Index("ix_video_streams_media_file_stream_index", "media_file_id", "stream_index"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -185,6 +190,7 @@ class AudioStream(Base):
         Index("ix_audio_streams_codec", "codec"),
         Index("ix_audio_streams_layout", "channel_layout"),
         Index("ix_audio_streams_language", "language"),
+        Index("ix_audio_streams_media_file_id", "media_file_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -207,6 +213,7 @@ class SubtitleStream(Base):
     __table_args__ = (
         Index("ix_subtitle_streams_codec", "codec"),
         Index("ix_subtitle_streams_language", "language"),
+        Index("ix_subtitle_streams_media_file_id", "media_file_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -223,7 +230,10 @@ class SubtitleStream(Base):
 
 class ExternalSubtitle(Base):
     __tablename__ = "external_subtitles"
-    __table_args__ = (Index("ix_external_subtitles_language", "language"),)
+    __table_args__ = (
+        Index("ix_external_subtitles_language", "language"),
+        Index("ix_external_subtitles_media_file_id", "media_file_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     media_file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), nullable=False)
@@ -236,7 +246,10 @@ class ExternalSubtitle(Base):
 
 class ScanJob(Base):
     __tablename__ = "scan_jobs"
-    __table_args__ = (Index("ix_scan_jobs_status", "status"),)
+    __table_args__ = (
+        Index("ix_scan_jobs_status", "status"),
+        Index("ix_scan_jobs_library_id", "library_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)

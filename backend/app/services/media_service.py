@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import String, and_, case, cast, exists, false, func, literal, or_, select, union_all
+from sqlalchemy import String, and_, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
@@ -103,47 +103,125 @@ def _match_patterns(expression, patterns: list[str]):
     return or_(*(func.lower(func.coalesce(expression, "")).like(pattern) for pattern in patterns))
 
 
-def _audio_sort_expr():
+def _audio_aggregate_subquery(name: str = "audio_aggregates"):
     return (
-        select(func.coalesce(func.min(func.lower(AudioStream.language)), ""))
-        .where(AudioStream.media_file_id == MediaFile.id)
-        .scalar_subquery()
+        select(
+            AudioStream.media_file_id.label("media_file_id"),
+            func.coalesce(func.min(func.lower(AudioStream.language)), "").label("min_audio_language"),
+            func.coalesce(func.min(func.lower(AudioStream.codec)), "").label("min_audio_codec"),
+            func.coalesce(func.group_concat(func.lower(func.coalesce(AudioStream.language, "")), " "), "").label(
+                "audio_languages_search"
+            ),
+            func.coalesce(func.group_concat(func.lower(func.coalesce(AudioStream.codec, "")), " "), "").label(
+                "audio_codecs_search"
+            ),
+        )
+        .group_by(AudioStream.media_file_id)
+        .subquery(name)
     )
 
 
-def _audio_codec_sort_expr():
+def _subtitle_aggregate_subquery(name: str = "subtitle_aggregates"):
+    language_values = union_all(
+        select(
+            SubtitleStream.media_file_id.label("media_file_id"),
+            func.lower(func.coalesce(SubtitleStream.language, "")).label("value"),
+        ),
+        select(
+            ExternalSubtitle.media_file_id.label("media_file_id"),
+            func.lower(func.coalesce(ExternalSubtitle.language, "")).label("value"),
+        ),
+    ).subquery(f"{name}_language_values")
+    codec_values = union_all(
+        select(
+            SubtitleStream.media_file_id.label("media_file_id"),
+            func.lower(func.coalesce(SubtitleStream.codec, "")).label("value"),
+        ),
+        select(
+            ExternalSubtitle.media_file_id.label("media_file_id"),
+            func.lower(func.coalesce(ExternalSubtitle.format, "")).label("value"),
+        ),
+    ).subquery(f"{name}_codec_values")
+    source_values = union_all(
+        select(
+            SubtitleStream.media_file_id.label("media_file_id"),
+            literal(1).label("has_internal_subtitles"),
+            literal(0).label("has_external_subtitles"),
+        ),
+        select(
+            ExternalSubtitle.media_file_id.label("media_file_id"),
+            literal(0).label("has_internal_subtitles"),
+            literal(1).label("has_external_subtitles"),
+        ),
+    ).subquery(f"{name}_source_values")
+    media_file_ids = union_all(
+        select(SubtitleStream.media_file_id.label("media_file_id")),
+        select(ExternalSubtitle.media_file_id.label("media_file_id")),
+    ).subquery(f"{name}_file_ids")
+
+    language_aggregates = (
+        select(
+            language_values.c.media_file_id,
+            func.coalesce(func.min(language_values.c.value), "").label("min_subtitle_language"),
+            func.coalesce(func.group_concat(language_values.c.value, " "), "").label("subtitle_languages_search"),
+        )
+        .group_by(language_values.c.media_file_id)
+        .subquery(f"{name}_language_aggregates")
+    )
+    codec_aggregates = (
+        select(
+            codec_values.c.media_file_id,
+            func.coalesce(func.min(codec_values.c.value), "").label("min_subtitle_codec"),
+            func.coalesce(func.group_concat(codec_values.c.value, " "), "").label("subtitle_codecs_search"),
+        )
+        .group_by(codec_values.c.media_file_id)
+        .subquery(f"{name}_codec_aggregates")
+    )
+    source_aggregates = (
+        select(
+            source_values.c.media_file_id,
+            func.max(source_values.c.has_internal_subtitles).label("has_internal_subtitles"),
+            func.max(source_values.c.has_external_subtitles).label("has_external_subtitles"),
+        )
+        .group_by(source_values.c.media_file_id)
+        .subquery(f"{name}_source_aggregates")
+    )
+    base_ids = (
+        select(media_file_ids.c.media_file_id)
+        .group_by(media_file_ids.c.media_file_id)
+        .subquery(f"{name}_base_ids")
+    )
+
     return (
-        select(func.coalesce(func.min(func.lower(AudioStream.codec)), ""))
-        .where(AudioStream.media_file_id == MediaFile.id)
-        .scalar_subquery()
+        select(
+            base_ids.c.media_file_id,
+            func.coalesce(language_aggregates.c.min_subtitle_language, "").label("min_subtitle_language"),
+            func.coalesce(codec_aggregates.c.min_subtitle_codec, "").label("min_subtitle_codec"),
+            func.coalesce(language_aggregates.c.subtitle_languages_search, "").label("subtitle_languages_search"),
+            func.coalesce(codec_aggregates.c.subtitle_codecs_search, "").label("subtitle_codecs_search"),
+            func.coalesce(source_aggregates.c.has_internal_subtitles, 0).label("has_internal_subtitles"),
+            func.coalesce(source_aggregates.c.has_external_subtitles, 0).label("has_external_subtitles"),
+        )
+        .select_from(base_ids)
+        .outerjoin(language_aggregates, language_aggregates.c.media_file_id == base_ids.c.media_file_id)
+        .outerjoin(codec_aggregates, codec_aggregates.c.media_file_id == base_ids.c.media_file_id)
+        .outerjoin(source_aggregates, source_aggregates.c.media_file_id == base_ids.c.media_file_id)
+        .subquery(name)
     )
 
 
-def _subtitle_sort_expr():
-    subtitle_languages = union_all(
-        select(SubtitleStream.language.label("value")).where(SubtitleStream.media_file_id == MediaFile.id),
-        select(ExternalSubtitle.language.label("value")).where(ExternalSubtitle.media_file_id == MediaFile.id),
-    ).subquery()
-    return select(func.coalesce(func.min(func.lower(subtitle_languages.c.value)), "")).scalar_subquery()
+def _subtitle_source_sort_expr(subtitle_aggregates):
+    has_internal = func.coalesce(subtitle_aggregates.c.has_internal_subtitles, 0)
+    has_external = func.coalesce(subtitle_aggregates.c.has_external_subtitles, 0)
+    return case(
+        (and_(has_internal == 1, has_external == 1), "internal,external"),
+        (has_internal == 1, "internal"),
+        (has_external == 1, "external"),
+        else_="",
+    )
 
 
-def _subtitle_codec_sort_expr():
-    subtitle_codecs = union_all(
-        select(SubtitleStream.codec.label("value")).where(SubtitleStream.media_file_id == MediaFile.id),
-        select(ExternalSubtitle.format.label("value")).where(ExternalSubtitle.media_file_id == MediaFile.id),
-    ).subquery()
-    return select(func.coalesce(func.min(func.lower(subtitle_codecs.c.value)), "")).scalar_subquery()
-
-
-def _subtitle_source_sort_expr():
-    subtitle_sources = union_all(
-        select(literal("internal").label("value")).where(SubtitleStream.media_file_id == MediaFile.id),
-        select(literal("external").label("value")).where(ExternalSubtitle.media_file_id == MediaFile.id),
-    ).subquery()
-    return select(func.coalesce(func.min(func.lower(subtitle_sources.c.value)), "")).scalar_subquery()
-
-
-def _sort_expression(sort_key: FileSortKey, primary_video_streams):
+def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggregates, subtitle_aggregates):
     resolution_pixels = case(
         (
             and_(primary_video_streams.c.width.is_not(None), primary_video_streams.c.height.is_not(None)),
@@ -159,11 +237,11 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams):
         "resolution": resolution_pixels,
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
         "duration": func.coalesce(MediaFormat.duration, 0),
-        "audio_codecs": _audio_codec_sort_expr(),
-        "audio_languages": _audio_sort_expr(),
-        "subtitle_languages": _subtitle_sort_expr(),
-        "subtitle_codecs": _subtitle_codec_sort_expr(),
-        "subtitle_sources": _subtitle_source_sort_expr(),
+        "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
+        "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
+        "subtitle_languages": func.coalesce(subtitle_aggregates.c.min_subtitle_language, ""),
+        "subtitle_codecs": func.coalesce(subtitle_aggregates.c.min_subtitle_codec, ""),
+        "subtitle_sources": _subtitle_source_sort_expr(subtitle_aggregates),
         "mtime": MediaFile.mtime,
         "last_analyzed_at": func.coalesce(cast(MediaFile.last_analyzed_at, String), ""),
         "quality_score": MediaFile.quality_score,
@@ -171,7 +249,11 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams):
     return sort_map[sort_key]
 
 
-def _apply_search(query, primary_video_streams, search: str):
+def _token_matches_source(token: str, source_label: str) -> bool:
+    return bool(token) and source_label.startswith(token)
+
+
+def _apply_search(query, primary_video_streams, audio_aggregates, subtitle_aggregates, search: str):
     resolution_label = _resolution_label_expr(primary_video_streams)
 
     for token in _search_tokens(search):
@@ -180,49 +262,11 @@ def _apply_search(query, primary_video_streams, search: str):
             patterns.add(f"%{language_term}%")
         pattern_list = sorted(patterns)
 
-        audio_language_match = exists(
-            select(1).where(
-                AudioStream.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(AudioStream.language, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        audio_codec_match = exists(
-            select(1).where(
-                AudioStream.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(AudioStream.codec, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        subtitle_language_match = exists(
-            select(1).where(
-                SubtitleStream.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(SubtitleStream.language, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        external_subtitle_language_match = exists(
-            select(1).where(
-                ExternalSubtitle.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(ExternalSubtitle.language, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        subtitle_codec_match = exists(
-            select(1).where(
-                SubtitleStream.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(SubtitleStream.codec, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        external_subtitle_codec_match = exists(
-            select(1).where(
-                ExternalSubtitle.media_file_id == MediaFile.id,
-                or_(*(func.lower(func.coalesce(ExternalSubtitle.format, "")).like(pattern) for pattern in pattern_list)),
-            )
-        )
-        pattern_terms = {pattern.strip("%") for pattern in pattern_list}
         source_matches = []
-        if any(term and term in "internal" for term in pattern_terms):
-            source_matches.append(exists(select(1).where(SubtitleStream.media_file_id == MediaFile.id)))
-        if any(term and term in "external" for term in pattern_terms):
-            source_matches.append(exists(select(1).where(ExternalSubtitle.media_file_id == MediaFile.id)))
-        subtitle_source_match = or_(*source_matches) if source_matches else false()
+        if any(_token_matches_source(pattern.strip("%"), "internal") for pattern in pattern_list):
+            source_matches.append(func.coalesce(subtitle_aggregates.c.has_internal_subtitles, 0) == 1)
+        if any(_token_matches_source(pattern.strip("%"), "external") for pattern in pattern_list):
+            source_matches.append(func.coalesce(subtitle_aggregates.c.has_external_subtitles, 0) == 1)
 
         query = query.where(
             or_(
@@ -232,13 +276,11 @@ def _apply_search(query, primary_video_streams, search: str):
                 _match_patterns(primary_video_streams.c.codec, pattern_list),
                 _match_patterns(primary_video_streams.c.hdr_type, pattern_list),
                 _match_patterns(resolution_label, pattern_list),
-                audio_codec_match,
-                audio_language_match,
-                subtitle_language_match,
-                external_subtitle_language_match,
-                subtitle_codec_match,
-                external_subtitle_codec_match,
-                subtitle_source_match,
+                _match_patterns(audio_aggregates.c.audio_codecs_search, pattern_list),
+                _match_patterns(audio_aggregates.c.audio_languages_search, pattern_list),
+                _match_patterns(subtitle_aggregates.c.subtitle_languages_search, pattern_list),
+                _match_patterns(subtitle_aggregates.c.subtitle_codecs_search, pattern_list),
+                or_(*source_matches) if source_matches else literal(False),
             )
         )
     return query
@@ -255,18 +297,22 @@ def list_library_files(
     sort_direction: FileSortDirection = "asc",
 ) -> MediaFileTablePage:
     primary_video_streams = primary_video_streams_subquery("media_list_primary_video")
+    audio_aggregates = _audio_aggregate_subquery("media_list_audio_aggregates")
+    subtitle_aggregates = _subtitle_aggregate_subquery("media_list_subtitle_aggregates")
 
     base_query = (
         select(MediaFile.id)
         .select_from(MediaFile)
         .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
         .outerjoin(primary_video_streams, primary_video_streams.c.media_file_id == MediaFile.id)
+        .outerjoin(audio_aggregates, audio_aggregates.c.media_file_id == MediaFile.id)
+        .outerjoin(subtitle_aggregates, subtitle_aggregates.c.media_file_id == MediaFile.id)
         .where(MediaFile.library_id == library_id)
     )
-    filtered_query = _apply_search(base_query, primary_video_streams, search)
+    filtered_query = _apply_search(base_query, primary_video_streams, audio_aggregates, subtitle_aggregates, search)
     total = db.scalar(select(func.count()).select_from(filtered_query.order_by(None).subquery())) or 0
 
-    sort_expression = _sort_expression(sort_key, primary_video_streams)
+    sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
     ordered_query = filtered_query.order_by(
         sort_expression.desc() if sort_direction == "desc" else sort_expression.asc(),
         func.lower(MediaFile.relative_path).asc(),

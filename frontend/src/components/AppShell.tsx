@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { type ScanJob } from "../lib/api";
+import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
 import { useScanJobs } from "../lib/scan-jobs";
 
@@ -30,6 +31,7 @@ export function AppShell() {
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const hadActiveJobsRef = useRef(hasActiveJobs);
+  const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
 
   useEffect(() => {
     if (librariesLoaded) {
@@ -54,8 +56,11 @@ export function AppShell() {
       <div className="bg-shapes" />
       <header className="panel hero-panel">
         <div className="app-header media-header">
-          <div>
+          <div className="app-title-block">
             <h1>{t("app.title")}</h1>
+            <span className="app-version" aria-label={`Version ${APP_VERSION}`}>
+              {versionLabel}
+            </span>
           </div>
           <nav className="media-nav-panel" aria-label="Primary">
             <div className="media-nav-icons">

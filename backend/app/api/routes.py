@@ -7,7 +7,7 @@ from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runt
 from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
-from backend.app.schemas.library import LibraryCreate, LibraryDetail, LibrarySummary, LibraryUpdate
+from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileTablePage
 from backend.app.schemas.scan import ScanCancelResponse, ScanJobRead, ScanRequest
 from backend.app.models.entities import ScanJob
@@ -17,7 +17,9 @@ from backend.app.services.browse import browse_media_root
 from backend.app.services.library_service import (
     create_library,
     delete_library,
-    get_library_detail,
+    get_library_statistics,
+    get_library_summary,
+    library_exists,
     list_libraries,
     update_library_settings,
 )
@@ -102,12 +104,20 @@ def libraries_create(
     raise HTTPException(status_code=500, detail="Failed to load created library")
 
 
-@router.get("/libraries/{library_id}", response_model=LibraryDetail)
-def library_detail(library_id: int, db: Session = Depends(get_db_session)) -> LibraryDetail:
-    library = get_library_detail(db, library_id)
+@router.get("/libraries/{library_id}/summary", response_model=LibrarySummary)
+def library_summary(library_id: int, db: Session = Depends(get_db_session)) -> LibrarySummary:
+    library = get_library_summary(db, library_id)
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
     return library
+
+
+@router.get("/libraries/{library_id}/statistics", response_model=LibraryStatistics)
+def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -> LibraryStatistics:
+    statistics = get_library_statistics(db, library_id)
+    if not statistics:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return statistics
 
 
 @router.get("/libraries/{library_id}/scan-jobs", response_model=list[ScanJobRead])
@@ -116,7 +126,7 @@ def library_scan_jobs(
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db_session),
 ) -> list[ScanJobRead]:
-    if get_library_detail(db, library_id) is None:
+    if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
     return list_library_scan_jobs(db, library_id, limit)
 
@@ -148,7 +158,7 @@ def library_delete(
     db: Session = Depends(get_db_session),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> None:
-    if get_library_detail(db, library_id) is None:
+    if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
 
     runtime.cancel_library_jobs(library_id)
@@ -183,7 +193,7 @@ def library_files(
     sort_direction: Literal["asc", "desc"] = Query(default="asc"),
     db: Session = Depends(get_db_session),
 ) -> MediaFileTablePage:
-    if get_library_detail(db, library_id) is None:
+    if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
     return list_library_files(
         db,
@@ -203,7 +213,7 @@ def library_scan(
     db: Session = Depends(get_db_session),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> ScanJobRead:
-    if get_library_detail(db, library_id) is None:
+    if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
 
     job_id, _created = runtime.request_scan(library_id, payload.scan_type)

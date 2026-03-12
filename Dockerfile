@@ -1,6 +1,9 @@
 FROM node:24-alpine AS frontend-build
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=${APP_VERSION}
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build

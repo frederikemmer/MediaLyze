@@ -18,11 +18,12 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
-from backend.app.schemas.library import LibraryCreate, LibraryDetail, LibrarySummary, LibraryUpdate
+from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
+from backend.app.schemas.media import DistributionItem
 from backend.app.services.languages import merge_language_counts
 from backend.app.services.stats_cache import stats_cache
-from backend.app.utils.pathing import ensure_relative_to_root
 from backend.app.services.video_queries import primary_video_streams_subquery
+from backend.app.utils.pathing import ensure_relative_to_root
 
 
 DEFAULT_SCAN_CONFIG = {
@@ -43,6 +44,27 @@ def _normalize_audio_codec(value: str | None) -> str:
 
 def _sorted_count_items(counts: dict[str, int]) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
+def _resolution_label(width: int | None, height: int | None) -> str:
+    if not width or not height:
+        return "unknown"
+    return f"{width}x{height}"
+
+
+def _library_summary_from_model(library: Library, aggregate: dict[str, int | float] | None = None) -> LibrarySummary:
+    summary = LibrarySummary.model_validate(library)
+    for key, value in (aggregate or {}).items():
+        setattr(summary, key, value)
+    return summary
+
+
+def _distribution_items(rows: list[tuple[str | None, int]], *, fallback: str = "unknown") -> list[DistributionItem]:
+    return [
+        DistributionItem(label=(label or fallback), value=value)
+        for label, value in rows
+        if value > 0
+    ]
 
 
 def normalize_scan_config(scan_mode, scan_config: dict | None) -> dict:
@@ -131,6 +153,10 @@ def delete_library(db: Session, library_id: int) -> bool:
     return True
 
 
+def library_exists(db: Session, library_id: int) -> bool:
+    return db.scalar(select(Library.id).where(Library.id == library_id)) is not None
+
+
 def _library_aggregate_map(db: Session) -> dict[int, dict[str, int | float]]:
     rows = db.execute(
         select(
@@ -157,6 +183,30 @@ def _library_aggregate_map(db: Session) -> dict[int, dict[str, int | float]]:
     return aggregates
 
 
+def _library_aggregate(db: Session, library_id: int) -> dict[str, int | float]:
+    row = db.execute(
+        select(
+            func.count(MediaFile.id),
+            func.coalesce(func.sum(MediaFile.size_bytes), 0),
+            func.coalesce(func.sum(MediaFormat.duration), 0.0),
+            func.sum(case((MediaFile.scan_status == ScanStatus.ready, 1), else_=0)),
+            func.sum(case((MediaFile.scan_status != ScanStatus.ready, 1), else_=0)),
+        )
+        .select_from(MediaFile)
+        .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id, isouter=True)
+        .where(MediaFile.library_id == library_id)
+    ).one()
+
+    count, size_bytes, duration, ready_files, pending_files = row
+    return {
+        "file_count": count or 0,
+        "total_size_bytes": size_bytes or 0,
+        "total_duration_seconds": duration or 0.0,
+        "ready_files": ready_files or 0,
+        "pending_files": pending_files or 0,
+    }
+
+
 def list_libraries(db: Session) -> list[LibrarySummary]:
     cache_key = str(id(db.get_bind()))
     cached = stats_cache.get_libraries(cache_key)
@@ -165,19 +215,14 @@ def list_libraries(db: Session) -> list[LibrarySummary]:
 
     libraries = db.scalars(select(Library).order_by(Library.name.asc())).all()
     aggregates = _library_aggregate_map(db)
-    result: list[LibrarySummary] = []
-    for library in libraries:
-        summary = LibrarySummary.model_validate(library)
-        for key, value in aggregates.get(library.id, {}).items():
-            setattr(summary, key, value)
-        result.append(summary)
+    result = [_library_summary_from_model(library, aggregates.get(library.id)) for library in libraries]
     stats_cache.set_libraries(cache_key, result)
     return result
 
 
-def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
+def get_library_summary(db: Session, library_id: int) -> LibrarySummary | None:
     cache_key = str(id(db.get_bind()))
-    cached = stats_cache.get_library_detail(cache_key, library_id)
+    cached = stats_cache.get_library_summary(cache_key, library_id)
     if cached is not None:
         return cached
 
@@ -185,9 +230,19 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
     if not library:
         return None
 
-    summary = LibrarySummary.model_validate(library)
-    for key, value in _library_aggregate_map(db).get(library.id, {}).items():
-        setattr(summary, key, value)
+    payload = _library_summary_from_model(library, _library_aggregate(db, library_id))
+    stats_cache.set_library_summary(cache_key, library_id, payload)
+    return payload
+
+
+def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | None:
+    cache_key = str(id(db.get_bind()))
+    cached = stats_cache.get_library_statistics(cache_key, library_id)
+    if cached is not None:
+        return cached
+
+    if not library_exists(db, library_id):
+        return None
 
     primary_video_streams = primary_video_streams_subquery("library_primary_video_streams")
 
@@ -233,6 +288,7 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
         .group_by(AudioStream.codec)
         .order_by(func.count(AudioStream.id).desc())
     ).all()
+
     subtitle_counts: dict[str, int] = defaultdict(int)
     for language, count in merge_language_counts(
         db.execute(
@@ -274,51 +330,52 @@ def get_library_detail(db: Session, library_id: int) -> LibraryDetail | None:
         subtitle_codec_counts[_normalize_subtitle_codec(codec)] += count
 
     subtitle_source_distribution = [
-        {
-            "label": "internal",
-            "value": db.scalar(
+        DistributionItem(
+            label="internal",
+            value=db.scalar(
                 select(func.count(SubtitleStream.id))
                 .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
                 .where(MediaFile.library_id == library_id)
             )
             or 0,
-        },
-        {
-            "label": "external",
-            "value": db.scalar(
+        ),
+        DistributionItem(
+            label="external",
+            value=db.scalar(
                 select(func.count(ExternalSubtitle.id))
                 .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
                 .where(MediaFile.library_id == library_id)
             )
             or 0,
-        },
+        ),
     ]
 
-    payload = LibraryDetail(
-        **summary.model_dump(),
-        video_codec_distribution=[{"label": key or "unknown", "value": value} for key, value in video_codec_distribution],
+    payload = LibraryStatistics(
+        video_codec_distribution=_distribution_items(video_codec_distribution),
         resolution_distribution=[
-            {"label": f"{width}x{height}" if width and height else "unknown", "value": value}
+            DistributionItem(label=_resolution_label(width, height), value=value)
             for width, height, value in resolution_distribution
         ],
-        hdr_distribution=[{"label": key or "SDR", "value": value} for key, value in hdr_distribution],
+        hdr_distribution=_distribution_items(hdr_distribution, fallback="SDR"),
         audio_codec_distribution=[
-            {"label": _normalize_audio_codec(key), "value": value}
+            DistributionItem(label=_normalize_audio_codec(key), value=value)
             for key, value in audio_codec_distribution
         ],
         audio_language_distribution=[
-            {"label": key, "value": value}
+            DistributionItem(label=key, value=value)
             for key, value in merge_language_counts(audio_language_distribution, fallback="und")
         ],
         subtitle_language_distribution=[
-            {"label": key, "value": value}
+            DistributionItem(label=key, value=value)
             for key, value in _sorted_count_items(subtitle_counts)
         ],
         subtitle_codec_distribution=[
-            {"label": key, "value": value}
+            DistributionItem(label=key, value=value)
             for key, value in _sorted_count_items(subtitle_codec_counts)
         ],
-        subtitle_source_distribution=[item for item in subtitle_source_distribution if item["value"] > 0],
+        subtitle_source_distribution=[
+            item for item in subtitle_source_distribution if item.value > 0
+        ],
     )
-    stats_cache.set_library_detail(cache_key, library_id, payload)
+    stats_cache.set_library_statistics(cache_key, library_id, payload)
     return payload

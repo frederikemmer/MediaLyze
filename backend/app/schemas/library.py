@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import LibraryType, ScanMode
+from backend.app.schemas.media import DistributionItem
 
 
 class LibraryCreate(BaseModel):
@@ -38,12 +39,12 @@ class LibrarySummary(BaseModel):
     pending_files: int = 0
 
 
-class LibraryDetail(LibrarySummary):
-    video_codec_distribution: list[dict]
-    resolution_distribution: list[dict]
-    hdr_distribution: list[dict]
-    audio_codec_distribution: list[dict]
-    audio_language_distribution: list[dict]
-    subtitle_language_distribution: list[dict]
-    subtitle_codec_distribution: list[dict]
-    subtitle_source_distribution: list[dict]
+class LibraryStatistics(BaseModel):
+    video_codec_distribution: list[DistributionItem]
+    resolution_distribution: list[DistributionItem]
+    hdr_distribution: list[DistributionItem]
+    audio_codec_distribution: list[DistributionItem]
+    audio_language_distribution: list[DistributionItem]
+    subtitle_language_distribution: list[DistributionItem]
+    subtitle_codec_distribution: list[DistributionItem]
+    subtitle_source_distribution: list[DistributionItem]
