@@ -164,4 +164,90 @@ describe("LibraryDetailPage", () => {
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
   });
+
+  it("adds and removes metadata search fields and sends field-specific filters", async () => {
+    const libraryId = 404;
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /video codec/i }));
+
+    const codecInput = await screen.findByPlaceholderText("e.g. hevc av1");
+    fireEvent.change(codecInput, { target: { value: "hevc" } });
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            video_codec: "hevc",
+          }),
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /remove video codec search field/i }));
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: {},
+        }),
+      ),
+    );
+  });
+
+  it("combines file/path and metadata filters in the same request", async () => {
+    const libraryId = 505;
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search file and path"), { target: { value: "episode" } });
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /subtitle sources/i }));
+    fireEvent.change(screen.getByPlaceholderText("e.g. internal external"), { target: { value: "external" } });
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            file: "episode",
+            subtitle_sources: "external",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("blocks invalid structured search values and shows an inline validation error", async () => {
+    const libraryId = 606;
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    const initialCalls = libraryFilesSpy.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /duration/i }));
+    fireEvent.change(screen.getByPlaceholderText("e.g. >=1h 30m"), { target: { value: "oops" } });
+
+    expect(await screen.findByText("Use a duration like >90m or >=1h 30m.")).toBeInTheDocument();
+    await waitFor(() => expect(libraryFilesSpy.mock.calls.length).toBe(initialCalls));
+  });
 });

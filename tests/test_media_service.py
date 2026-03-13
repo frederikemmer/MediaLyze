@@ -14,6 +14,7 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
+from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import list_library_files
 
 
@@ -329,3 +330,245 @@ def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
     ]
     assert [item.filename for item in internal_search.items] == ["02-internal.mkv", "03-both.mkv"]
     assert [item.filename for item in external_search.items] == ["01-external.mkv", "03-both.mkv"]
+
+
+def test_list_library_files_filters_by_field_specific_search_intersection() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Intersection",
+            path="/tmp/intersection",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        first = MediaFile(
+            library_id=library.id,
+            relative_path="movie-a.mkv",
+            filename="movie-a.mkv",
+            extension="mkv",
+            size_bytes=5_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        second = MediaFile(
+            library_id=library.id,
+            relative_path="movie-b.mkv",
+            filename="movie-b.mkv",
+            extension="mkv",
+            size_bytes=2_000_000_000,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add_all([first, second])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=first.id, duration=7200.0),
+                MediaFormat(media_file_id=second.id, duration=5400.0),
+                VideoStream(media_file_id=first.id, stream_index=0, codec="hevc", width=3840, height=2160, hdr_type="HDR10"),
+                VideoStream(media_file_id=second.id, stream_index=0, codec="h264", width=1920, height=1080),
+                AudioStream(media_file_id=first.id, stream_index=1, codec="aac", language="eng"),
+                AudioStream(media_file_id=second.id, stream_index=1, codec="aac", language="eng"),
+                SubtitleStream(media_file_id=first.id, stream_index=2, codec="srt", language="eng", default_flag=False, forced_flag=False),
+                ExternalSubtitle(media_file_id=first.id, path="movie-a.en.srt", language="eng", format="srt"),
+                ExternalSubtitle(media_file_id=second.id, path="movie-b.de.srt", language="deu", format="srt"),
+            ]
+        )
+        db.commit()
+
+        filtered = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(
+                file_search="movie",
+                search_video_codec="hevc",
+                search_resolution="4k",
+                search_hdr_type="hdr10",
+                search_audio_languages="english",
+                search_subtitle_sources="internal ext",
+            ),
+        )
+
+    assert filtered.total == 1
+    assert [item.filename for item in filtered.items] == ["movie-a.mkv"]
+
+
+def test_list_library_files_supports_structured_numeric_field_searches() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Structured",
+            path="/tmp/structured",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        short = MediaFile(
+            library_id=library.id,
+            relative_path="short.mkv",
+            filename="short.mkv",
+            extension="mkv",
+            size_bytes=800_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        feature = MediaFile(
+            library_id=library.id,
+            relative_path="feature.mkv",
+            filename="feature.mkv",
+            extension="mkv",
+            size_bytes=6_000_000_000,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=9,
+        )
+        db.add_all([short, feature])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=short.id, duration=1800.0),
+                MediaFormat(media_file_id=feature.id, duration=7200.0),
+            ]
+        )
+        db.commit()
+
+        large_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_size=">4GB"),
+        )
+        long_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_duration=">=1h 30m"),
+        )
+        high_scores = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_quality_score=">=8"),
+        )
+
+    assert [item.filename for item in large_files.items] == ["feature.mkv"]
+    assert [item.filename for item in long_files.items] == ["feature.mkv"]
+    assert [item.filename for item in high_scores.items] == ["feature.mkv"]
+
+
+def test_list_library_files_supports_resolution_aliases_and_sdr_filter() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Aliases",
+            path="/tmp/aliases",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        hdr = MediaFile(
+            library_id=library.id,
+            relative_path="hdr.mkv",
+            filename="hdr.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        sdr = MediaFile(
+            library_id=library.id,
+            relative_path="sdr.mkv",
+            filename="sdr.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        db.add_all([hdr, sdr])
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(media_file_id=hdr.id, stream_index=0, codec="hevc", width=3840, height=2160, hdr_type="Dolby Vision"),
+                VideoStream(media_file_id=sdr.id, stream_index=0, codec="h264", width=1920, height=1080),
+            ]
+        )
+        db.commit()
+
+        four_k_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_resolution="4k"),
+        )
+        sdr_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_hdr_type="sdr"),
+        )
+        dv_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_hdr_type="dv"),
+        )
+
+    assert [item.filename for item in four_k_files.items] == ["hdr.mkv"]
+    assert [item.filename for item in sdr_files.items] == ["sdr.mkv"]
+    assert [item.filename for item in dv_files.items] == ["hdr.mkv"]
+
+
+def test_list_library_files_rejects_invalid_structured_search_expressions() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Invalid",
+            path="/tmp/invalid",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        try:
+            list_library_files(
+                db,
+                library.id,
+                limit=50,
+                search_filters=LibraryFileSearchFilters(search_duration="abc"),
+            )
+            raised = None
+        except SearchValidationError as exc:
+            raised = exc
+
+    assert raised is not None
+    assert str(raised) == "Invalid search expression for duration"
