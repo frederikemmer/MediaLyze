@@ -123,7 +123,7 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
   {
     field: "hdr_type",
     icon: SunMedium,
-    labelKey: "libraryStatistics.items.hdr",
+    labelKey: "libraryStatistics.items.dynamicRange",
     placeholderKey: "libraryDetail.searchFields.hdr.placeholder",
   },
   {

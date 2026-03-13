@@ -99,7 +99,7 @@
       "size": "File size",
       "videoCodec": "Video codec",
       "resolution": "Resolution",
-      "hdr": "HDR",
+      "dynamicRange": "Dynamic Range",
       "duration": "Duration",
       "audioCodecs": "Audio codecs",
       "audioLanguages": "Audio languages",

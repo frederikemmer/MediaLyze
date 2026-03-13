@@ -121,7 +121,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   },
   {
     id: "hdr_type",
-    nameKey: "libraryStatistics.items.hdr",
+    nameKey: "libraryStatistics.items.dynamicRange",
     supportsPanel: true,
     supportsTable: true,
     supportsDashboard: true,
