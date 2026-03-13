@@ -7,7 +7,7 @@ from pathlib import Path
 import traceback
 
 from sqlalchemy import delete, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
@@ -25,7 +25,11 @@ from backend.app.models.entities import (
 )
 from backend.app.services.app_settings import get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
-from backend.app.services.quality import calculate_quality_score
+from backend.app.services.quality import (
+    build_quality_score_input,
+    build_quality_score_input_from_media_file,
+    calculate_quality_score,
+)
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.subtitles import detect_external_subtitles
 from backend.app.utils.glob_patterns import matches_ignore_pattern
@@ -136,6 +140,12 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
     ]
 
 
+def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
+    media_file.quality_score = breakdown.score
+    media_file.quality_score_raw = breakdown.score_raw
+    media_file.quality_score_breakdown = breakdown.model_dump(mode="json")
+
+
 def _analyze_path(
     file_path: Path,
     library_root: Path,
@@ -159,6 +169,7 @@ def queue_scan_job(db: Session, library_id: int, scan_type: str = "incremental")
         select(ScanJob)
         .where(
             ScanJob.library_id == library_id,
+            ScanJob.job_type.in_(["incremental", "full"]),
             ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
         )
         .order_by(ScanJob.id.desc())
@@ -166,15 +177,51 @@ def queue_scan_job(db: Session, library_id: int, scan_type: str = "incremental")
     if existing_job is not None:
         return existing_job, False
 
-    job = ScanJob(
-        library_id=library_id,
-        status=JobStatus.queued,
-        job_type=scan_type,
-    )
+    job = ScanJob(library_id=library_id, status=JobStatus.queued, job_type=scan_type)
     db.add(job)
     db.commit()
     db.refresh(job)
     return job, True
+
+
+def queue_quality_recompute_job(db: Session, library_id: int) -> tuple[ScanJob, bool]:
+    active_jobs = db.scalars(
+        select(ScanJob)
+        .where(
+            ScanJob.library_id == library_id,
+            ScanJob.job_type == "quality_recompute",
+            ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
+        )
+        .order_by(ScanJob.id.asc())
+    ).all()
+    queued_job = next((job for job in active_jobs if job.status == JobStatus.queued), None)
+    if queued_job is not None:
+        return queued_job, False
+
+    running_job = next((job for job in active_jobs if job.status == JobStatus.running), None)
+    if running_job is None and active_jobs:
+        return active_jobs[0], False
+
+    job = ScanJob(library_id=library_id, status=JobStatus.queued, job_type="quality_recompute")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job, True
+
+
+def libraries_needing_quality_backfill(db: Session) -> list[int]:
+    rows = db.scalars(
+        select(MediaFile.library_id)
+        .where(
+            or_(
+                MediaFile.quality_score_raw <= 0,
+                MediaFile.quality_score_breakdown.is_(None),
+            )
+        )
+        .group_by(MediaFile.library_id)
+        .order_by(MediaFile.library_id.asc())
+    ).all()
+    return list(rows)
 
 
 def _incomplete_analysis_file_ids(db: Session, library_id: int) -> set[int]:
@@ -246,10 +293,15 @@ def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
         job.finished_at = job.finished_at or utc_now()
         db.commit()
         return job
+
     job.status = JobStatus.running
     job.started_at = utc_now()
+    job.finished_at = None
     db.commit()
     db.refresh(job)
+
+    if job.job_type == "quality_recompute":
+        return run_quality_recompute(db, job.library_id, job)
     return run_scan(db, settings, job.library_id, job.job_type, job)
 
 
@@ -387,7 +439,11 @@ def run_scan(
                     normalized = normalize_ffprobe_payload(payload)
                     media_file.raw_ffprobe_json = payload
                     _replace_analysis(media_file, normalized, subtitles)
-                    media_file.quality_score = calculate_quality_score(normalized)
+                    breakdown = calculate_quality_score(
+                        build_quality_score_input(normalized, subtitles),
+                        library.quality_profile,
+                    )
+                    _persist_quality_breakdown(media_file, breakdown)
                     media_file.last_analyzed_at = utc_now()
                     media_file.scan_status = ScanStatus.ready
                 else:
@@ -416,5 +472,74 @@ def run_scan(
     job.finished_at = utc_now()
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
+    db.refresh(job)
+    return job
+
+
+def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | None = None) -> ScanJob:
+    cache_key = str(id(db.get_bind()))
+    library = db.get(Library, library_id)
+    if not library:
+        raise ValueError(f"Library {library_id} not found")
+
+    job = existing_job or ScanJob(
+        library_id=library_id,
+        status=JobStatus.running,
+        job_type="quality_recompute",
+        started_at=utc_now(),
+    )
+    if existing_job is None:
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+    def _should_cancel() -> bool:
+        db.refresh(job)
+        return job.status == JobStatus.canceled
+
+    media_files = db.scalars(
+        select(MediaFile)
+        .where(
+            MediaFile.library_id == library_id,
+            MediaFile.last_analyzed_at.is_not(None),
+            MediaFile.raw_ffprobe_json.is_not(None),
+            MediaFile.scan_status == ScanStatus.ready,
+        )
+        .options(
+            selectinload(MediaFile.media_format),
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+        )
+        .order_by(MediaFile.id.asc())
+    ).all()
+
+    job.files_total = len(media_files)
+    job.files_scanned = 0
+    db.commit()
+    stats_cache.invalidate(cache_key, library_id)
+
+    batch_counter = 0
+    for media_file in media_files:
+        if _should_cancel():
+            raise ScanCanceled()
+        breakdown = calculate_quality_score(build_quality_score_input_from_media_file(media_file), library.quality_profile)
+        _persist_quality_breakdown(media_file, breakdown)
+        job.files_scanned += 1
+        batch_counter += 1
+        if batch_counter >= 200:
+            db.commit()
+            stats_cache.invalidate(cache_key, library_id)
+            batch_counter = 0
+
+    if batch_counter:
+        db.commit()
+        stats_cache.invalidate(cache_key, library_id)
+
+    job.status = JobStatus.failed if job.errors else JobStatus.completed
+    job.finished_at = utc_now()
+    db.commit()
+    stats_cache.invalidate(cache_key, library_id)
     db.refresh(job)
     return job

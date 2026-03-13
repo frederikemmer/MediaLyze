@@ -13,7 +13,12 @@ from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode
 from backend.app.utils.time import utc_now
-from backend.app.services.scanner import execute_scan_job, queue_scan_job
+from backend.app.services.scanner import (
+    execute_scan_job,
+    libraries_needing_quality_backfill,
+    queue_quality_recompute_job,
+    queue_scan_job,
+)
 
 
 class LibraryWatchHandler(FileSystemEventHandler):
@@ -47,6 +52,7 @@ class ScanRuntimeManager:
             self.scheduler.start()
             self.started = True
         self._recover_orphaned_jobs()
+        self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
         self._resume_active_jobs()
 
@@ -132,6 +138,30 @@ class ScanRuntimeManager:
 
         if job_id is None:
             raise ValueError(f"Failed to request scan for library {library_id}")
+        return job_id, created
+
+    def request_quality_recompute(self, library_id: int) -> tuple[int, bool]:
+        created = False
+        should_submit = False
+        job_id: int | None = None
+
+        with self.lock:
+            db = SessionLocal()
+            try:
+                job, created = queue_quality_recompute_job(db, library_id)
+                job_id = job.id
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                    self.active_library_ids.add(library_id)
+                    self.submitted_job_ids.add(job.id)
+                    should_submit = True
+            finally:
+                db.close()
+
+        if should_submit and job_id is not None:
+            self.executor.submit(self._run_job, job_id, library_id)
+
+        if job_id is None:
+            raise ValueError(f"Failed to request quality recompute for library {library_id}")
         return job_id, created
 
     def submit_scan_job(self, job_id: int) -> None:
@@ -281,9 +311,6 @@ class ScanRuntimeManager:
 
             for job in active_jobs:
                 if job.library_id in seen_libraries:
-                    job.status = JobStatus.failed
-                    job.finished_at = utc_now()
-                    job.errors += 1
                     continue
                 seen_libraries.add(job.library_id)
                 chosen_job_ids.append(job.id)
@@ -307,15 +334,7 @@ class ScanRuntimeManager:
             if not running_jobs:
                 return
 
-            seen_libraries: set[int] = set()
             for job in running_jobs:
-                if job.library_id in seen_libraries:
-                    job.status = JobStatus.failed
-                    job.finished_at = utc_now()
-                    job.errors += 1
-                    continue
-
-                seen_libraries.add(job.library_id)
                 job.status = JobStatus.queued
                 job.started_at = None
                 job.finished_at = None
@@ -342,6 +361,14 @@ class ScanRuntimeManager:
 
         if next_job is not None:
             self.submit_scan_job(next_job.id)
+
+    def _queue_quality_backfill_jobs(self) -> None:
+        db = SessionLocal()
+        try:
+            for library_id in libraries_needing_quality_backfill(db):
+                queue_quality_recompute_job(db, library_id)
+        finally:
+            db.close()
 
     def _remove_scheduled_job(self, library_id: int) -> None:
         job_id = self._scheduled_job_id(library_id)

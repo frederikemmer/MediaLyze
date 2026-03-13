@@ -21,6 +21,7 @@ from backend.app.models.entities import (
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DistributionItem
 from backend.app.services.languages import merge_language_counts
+from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
 from backend.app.utils.pathing import ensure_relative_to_root
@@ -104,6 +105,7 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
         type=payload.type,
         scan_mode=payload.scan_mode,
         scan_config=normalize_scan_config(payload.scan_mode, payload.scan_config),
+        quality_profile=normalize_quality_profile(payload.quality_profile),
     )
     db.add(library)
     db.commit()
@@ -112,11 +114,13 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
     return library
 
 
-def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate) -> Library | None:
+def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate) -> tuple[Library | None, bool]:
     cache_key = str(id(db.get_bind()))
     library = db.get(Library, library_id)
     if not library:
-        return None
+        return None, False
+
+    quality_profile_changed = False
 
     if payload.name is not None:
         next_name = payload.name.strip()
@@ -127,10 +131,15 @@ def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate
     if payload.scan_mode is not None:
         library.scan_mode = payload.scan_mode
         library.scan_config = normalize_scan_config(payload.scan_mode, payload.scan_config)
+    if payload.quality_profile is not None:
+        next_quality_profile = normalize_quality_profile(payload.quality_profile)
+        if next_quality_profile != normalize_quality_profile(library.quality_profile):
+            library.quality_profile = next_quality_profile
+            quality_profile_changed = True
     db.commit()
     db.refresh(library)
     stats_cache.invalidate(cache_key, library.id)
-    return library
+    return library, quality_profile_changed
 
 
 def delete_library(db: Session, library_id: int) -> bool:

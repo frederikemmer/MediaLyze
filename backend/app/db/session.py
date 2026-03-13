@@ -1,3 +1,4 @@
+import json
 from collections.abc import Generator
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.core.config import Settings, get_settings
+from backend.app.services.quality import default_quality_profile
 
 
 def _sqlite_url(database_path: Path) -> str:
@@ -41,12 +43,15 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "last_scan_at": "ALTER TABLE libraries ADD COLUMN last_scan_at DATETIME",
         "scan_mode": "ALTER TABLE libraries ADD COLUMN scan_mode VARCHAR(16) NOT NULL DEFAULT 'manual'",
         "scan_config": "ALTER TABLE libraries ADD COLUMN scan_config JSON NOT NULL DEFAULT '{}'",
+        "quality_profile": "ALTER TABLE libraries ADD COLUMN quality_profile JSON NOT NULL DEFAULT '{}'",
     },
     "media_files": {
         "last_seen_at": "ALTER TABLE media_files ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "last_analyzed_at": "ALTER TABLE media_files ADD COLUMN last_analyzed_at DATETIME",
         "scan_status": "ALTER TABLE media_files ADD COLUMN scan_status VARCHAR(16) NOT NULL DEFAULT 'pending'",
         "quality_score": "ALTER TABLE media_files ADD COLUMN quality_score INTEGER NOT NULL DEFAULT 1",
+        "quality_score_raw": "ALTER TABLE media_files ADD COLUMN quality_score_raw FLOAT NOT NULL DEFAULT 0",
+        "quality_score_breakdown": "ALTER TABLE media_files ADD COLUMN quality_score_breakdown JSON",
         "raw_ffprobe_json": "ALTER TABLE media_files ADD COLUMN raw_ffprobe_json JSON",
     },
     "media_formats": {
@@ -144,6 +149,15 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
 
         for statement in SQLITE_INDEX_STATEMENTS:
             connection.execute(text(statement))
+
+        if _sqlite_has_table(connection, "libraries"):
+            connection.execute(
+                text(
+                    "UPDATE libraries SET quality_profile = :quality_profile "
+                    "WHERE quality_profile IS NULL OR quality_profile = '{}' OR quality_profile = 'null'"
+                ),
+                {"quality_profile": json.dumps(default_quality_profile())},
+            )
 
 
 def init_db(engine: Engine | None = None) -> None:

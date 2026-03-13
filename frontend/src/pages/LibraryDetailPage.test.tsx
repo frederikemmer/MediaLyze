@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppDataProvider } from "../lib/app-data";
 import {
   api,
+  DEFAULT_QUALITY_PROFILE,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileTablePage,
@@ -25,6 +26,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     scan_config: {},
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
+    quality_profile: DEFAULT_QUALITY_PROFILE,
     file_count: 2,
     total_size_bytes: 2048,
     total_duration_seconds: 7200,
@@ -64,6 +66,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         last_analyzed_at: "2026-03-12T09:00:00Z",
         scan_status: "ready",
         quality_score: 8,
+        quality_score_raw: 82.4,
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",
@@ -86,6 +89,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         last_analyzed_at: "2026-03-12T09:00:00Z",
         scan_status: "ready",
         quality_score: 7,
+        quality_score_raw: 74.1,
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",

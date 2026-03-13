@@ -4,6 +4,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import ScanStatus
+from backend.app.schemas.quality import QualityBreakdownRead
 
 
 class DistributionItem(BaseModel):
@@ -82,6 +83,7 @@ class MediaFileTableRow(BaseModel):
     last_analyzed_at: datetime | None
     scan_status: ScanStatus
     quality_score: int
+    quality_score_raw: float = 0.0
     duration: float | None = None
     video_codec: str | None = None
     resolution: str | None = None
@@ -107,6 +109,13 @@ class MediaFileTablePage(BaseModel):
     offset: int
     limit: int
     items: list[MediaFileTableRow]
+
+
+class MediaFileQualityScoreDetail(BaseModel):
+    id: int
+    score: int
+    score_raw: float
+    breakdown: QualityBreakdownRead
 
 
 class DashboardResponse(BaseModel):

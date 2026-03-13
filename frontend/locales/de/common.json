@@ -43,6 +43,7 @@
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
     "scanNow": "Manueller Scan",
+    "qualityScoreTitle": "Qualitäts-Score",
     "renamePrompt": "Neuen Bibliotheksnamen eingeben",
     "renameAria": "Bibliothek {{name}} umbenennen",
     "deleteAria": "Bibliothek {{name}} löschen",
@@ -62,6 +63,25 @@
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "appSettings": "App-Einstellungen",
     "language": "Sprache der Oberfläche",
+    "quality": {
+      "weight": "Gewichtung",
+      "minimum": "Minimum",
+      "ideal": "Ideal",
+      "noneSelected": "Keine Auswahl",
+      "resolution": "Auflösung",
+      "visual_density": "Visuelle Dichte",
+      "visualDensityHint": "Gib den Video-Speicherverbrauch fuer einen typischen 1080p-Titel in GB pro Minute an. Hoehere Aufloesungen werden ueber die Pixelzahl nach oben skaliert, niedrigere nach unten. Beispiel: 0.02 bedeutet etwa 20 MB pro Minute fuer reine 1080p-Videodaten.",
+      "video_codec": "Video-Codec",
+      "audio_channels": "Audiokanäle",
+      "audio_codec": "Audio-Codec",
+      "dynamic_range": "Dynamikumfang",
+      "language_preferences": "Sprachpräferenzen",
+      "audioLanguages": "Audio-Sprachen",
+      "subtitleLanguages": "Untertitel-Sprachen",
+      "addLanguage": "Hinzufuegen",
+      "languageCodePlaceholder": "ISO-Code",
+      "languageCodeInvalid": "Bitte einen gueltigen ISO 639-1 Sprachcode mit zwei Buchstaben eingeben, z. B. de oder en."
+    },
     "languageHint": "Wirkt sofort und wird im Browser gespeichert."
   },
   "libraryStatistics": {
@@ -215,6 +235,7 @@
     "size": "Größe",
     "duration": "Dauer",
     "quality": "Qualität",
+    "qualityBreakdown": "Qualitätsaufschlüsselung",
     "format": "Format",
     "videoStreams": "Video-Streams",
     "audioStreams": "Audio-Streams",
@@ -228,5 +249,26 @@
   "language": {
     "en": "English",
     "de": "Deutsch"
+  },
+  "quality": {
+    "tooltipAria": "Qualitätsaufschlüsselung anzeigen",
+    "loading": "Qualitätsaufschlüsselung wird geladen…",
+    "unavailable": "Keine Qualitätsaufschlüsselung verfügbar.",
+    "rawScore": "Rohwert {{value}} / 100",
+    "weight": "Gewichtung: {{value}}",
+    "actual": "Ist: {{value}}",
+    "minimum": "Minimum: {{value}}",
+    "ideal": "Ideal: {{value}}",
+    "skipped": "Übersprungen",
+    "unknownMapping": "Unbekannter Wert wurde neutral bewertet.",
+    "category": {
+      "resolution": "Auflösung",
+      "visual_density": "Visuelle Dichte",
+      "video_codec": "Video-Codec",
+      "audio_channels": "Audiokanäle",
+      "audio_codec": "Audio-Codec",
+      "dynamic_range": "Dynamikumfang",
+      "language_preferences": "Sprachpräferenzen"
+    }
   }
 }

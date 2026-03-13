@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
-import { api, type MediaFileDetail } from "../lib/api";
+import { api, type MediaFileDetail, type MediaFileQualityScoreDetail } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
 
 function JsonPreview({ value }: { value: unknown }) {
@@ -14,6 +14,7 @@ export function FileDetailPage() {
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
   const [file, setFile] = useState<MediaFileDetail | null>(null);
+  const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,6 +25,10 @@ export function FileDetailPage() {
         setError(null);
       })
       .catch((reason: Error) => setError(reason.message));
+    api
+      .fileQualityScore(fileId)
+      .then((payload) => setQualityDetail(payload))
+      .catch(() => setQualityDetail(null));
   }, [fileId]);
 
   return (
@@ -62,6 +67,27 @@ export function FileDetailPage() {
       </section>
 
       <div className="media-grid">
+        <AsyncPanel title={t("fileDetail.qualityBreakdown")} loading={!qualityDetail && !error} error={null}>
+          {qualityDetail ? (
+            <div className="quality-tooltip-content quality-detail-list">
+              <div className="quality-tooltip-summary">
+                <strong>{qualityDetail.score}/10</strong>
+                <span>{t("quality.rawScore", { value: qualityDetail.score_raw.toFixed(2) })}</span>
+              </div>
+              {qualityDetail.breakdown.categories.map((category) => (
+                <div className="quality-tooltip-row" key={category.key}>
+                  <div className="quality-tooltip-head">
+                    <strong>{t(`quality.category.${category.key}`)}</strong>
+                    <span>{category.score.toFixed(1)}</span>
+                  </div>
+                  <div>{t("quality.weight", { value: category.weight })}</div>
+                  {category.skipped ? <div>{t("quality.skipped")}</div> : null}
+                  {category.unknown_mapping ? <div>{t("quality.unknownMapping")}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </AsyncPanel>
         <AsyncPanel title={t("fileDetail.format")} loading={!file && !error} error={error}>
           <JsonPreview value={file?.media_format ?? {}} />
         </AsyncPanel>

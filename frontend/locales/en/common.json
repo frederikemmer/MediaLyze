@@ -43,6 +43,7 @@
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
     "scanNow": "Manual scan",
+    "qualityScoreTitle": "Quality score",
     "renamePrompt": "Enter a new library name",
     "renameAria": "Rename library {{name}}",
     "deleteAria": "Delete library {{name}}",
@@ -62,6 +63,25 @@
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",
     "language": "Interface language",
+    "quality": {
+      "weight": "Weight",
+      "minimum": "Minimum",
+      "ideal": "Ideal",
+      "noneSelected": "No selection",
+      "resolution": "Resolution",
+      "visual_density": "Visual density",
+      "visualDensityHint": "Enter the video storage for a typical 1080p title in GB per minute. Higher resolutions are scaled upward by pixel count, lower ones downward. Example: 0.02 means about 20 MB per minute for 1080p video-only data.",
+      "video_codec": "Video codec",
+      "audio_channels": "Audio channels",
+      "audio_codec": "Audio codec",
+      "dynamic_range": "Dynamic range",
+      "language_preferences": "Language preferences",
+      "audioLanguages": "Audio languages",
+      "subtitleLanguages": "Subtitle languages",
+      "addLanguage": "Add",
+      "languageCodePlaceholder": "ISO code",
+      "languageCodeInvalid": "Enter a valid two-letter ISO 639-1 language code, for example de or en."
+    },
     "languageHint": "Applies immediately and is stored in the browser."
   },
   "libraryStatistics": {
@@ -215,6 +235,7 @@
     "size": "Size",
     "duration": "Duration",
     "quality": "Quality",
+    "qualityBreakdown": "Quality breakdown",
     "format": "Format",
     "videoStreams": "Video streams",
     "audioStreams": "Audio streams",
@@ -228,5 +249,26 @@
   "language": {
     "en": "English",
     "de": "German"
+  },
+  "quality": {
+    "tooltipAria": "Show quality score breakdown",
+    "loading": "Loading quality breakdown…",
+    "unavailable": "Quality breakdown unavailable.",
+    "rawScore": "Raw {{value}} / 100",
+    "weight": "Weight: {{value}}",
+    "actual": "Actual: {{value}}",
+    "minimum": "Minimum: {{value}}",
+    "ideal": "Ideal: {{value}}",
+    "skipped": "Skipped",
+    "unknownMapping": "Unknown value mapped neutrally.",
+    "category": {
+      "resolution": "Resolution",
+      "visual_density": "Visual density",
+      "video_codec": "Video codec",
+      "audio_channels": "Audio channels",
+      "audio_codec": "Audio codec",
+      "dynamic_range": "Dynamic range",
+      "language_preferences": "Language preferences"
+    }
   }
 }

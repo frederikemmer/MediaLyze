@@ -6,7 +6,8 @@ from sqlalchemy import String, and_, case, cast, func, literal, select, union_al
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
-from backend.app.schemas.media import MediaFileDetail, MediaFileTablePage, MediaFileTableRow
+from backend.app.schemas.media import MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage, MediaFileTableRow
+from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.media_search import (
     LibraryFileSearchFilters,
@@ -72,6 +73,7 @@ def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
         last_analyzed_at=media_file.last_analyzed_at,
         scan_status=media_file.scan_status,
         quality_score=media_file.quality_score,
+        quality_score_raw=media_file.quality_score_raw,
         duration=duration,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
@@ -230,7 +232,7 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "subtitle_sources": _subtitle_source_sort_expr(subtitle_aggregates),
         "mtime": MediaFile.mtime,
         "last_analyzed_at": func.coalesce(cast(MediaFile.last_analyzed_at, String), ""),
-        "quality_score": MediaFile.quality_score,
+        "quality_score": case((MediaFile.quality_score_raw > 0, MediaFile.quality_score_raw), else_=MediaFile.quality_score * 10),
     }
     return sort_map[sort_key]
 def list_library_files(
@@ -323,4 +325,22 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
         subtitle_streams=media_file.subtitle_streams,
         external_subtitles=media_file.external_subtitles,
         raw_ffprobe_json=media_file.raw_ffprobe_json,
+    )
+
+
+def get_media_file_quality_score_detail(db: Session, file_id: int) -> MediaFileQualityScoreDetail | None:
+    media_file = db.get(MediaFile, file_id)
+    if media_file is None:
+        return None
+
+    breakdown_payload = media_file.quality_score_breakdown or {
+        "score": media_file.quality_score,
+        "score_raw": media_file.quality_score_raw,
+        "categories": [],
+    }
+    return MediaFileQualityScoreDetail(
+        id=media_file.id,
+        score=media_file.quality_score,
+        score_raw=media_file.quality_score_raw,
+        breakdown=QualityBreakdownRead.model_validate(breakdown_payload),
     )

@@ -14,24 +14,52 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     if files_total > 0 and files_scanned > 0:
         progress_percent = min(100.0, round((files_scanned / files_total) * 100, 1))
 
-    if scan_job.status == JobStatus.queued:
+    is_quality_recompute = scan_job.job_type == "quality_recompute"
+    if scan_job.status == JobStatus.queued and is_quality_recompute:
+        phase_label = "Queued"
+        phase_detail = "Waiting to recompute quality scores"
+    elif scan_job.status == JobStatus.queued:
         phase_label = "Queued"
         phase_detail = "Waiting to start"
+    elif scan_job.status == JobStatus.running and is_quality_recompute:
+        phase_label = "Recomputing quality scores"
+        phase_detail = (
+            f"{files_scanned} of {files_total} files updated"
+            if files_total > 0
+            else "Loading analyzed files"
+        )
     elif scan_job.status == JobStatus.running and files_scanned == 0:
         phase_label = "Discovering files"
         phase_detail = f"{files_total} files found so far" if files_total > 0 else "Scanning directories"
     elif scan_job.status == JobStatus.running:
         phase_label = "Analyzing media"
         phase_detail = f"{files_scanned} of {files_total} files analyzed"
+    elif scan_job.status == JobStatus.completed and is_quality_recompute:
+        phase_label = "Completed"
+        phase_detail = f"{files_scanned} of {files_total} quality scores updated"
     elif scan_job.status == JobStatus.completed:
         phase_label = "Completed"
         phase_detail = f"{files_scanned} of {files_total} files analyzed"
+    elif scan_job.status == JobStatus.canceled and is_quality_recompute:
+        phase_label = "Canceled"
+        phase_detail = (
+            f"Stopped after {files_scanned} of {files_total} scores"
+            if files_total > 0
+            else "Stopped before recompute started"
+        )
     elif scan_job.status == JobStatus.canceled:
         phase_label = "Canceled"
         phase_detail = (
             f"Stopped after {files_scanned} of {files_total} files"
             if files_total > 0
             else "Stopped before analysis started"
+        )
+    elif is_quality_recompute:
+        phase_label = "Failed"
+        phase_detail = (
+            f"Failed after {files_scanned} of {files_total} scores"
+            if files_total > 0
+            else "Quality recompute failed before processing started"
         )
     else:
         phase_label = "Failed"

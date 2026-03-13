@@ -109,10 +109,11 @@ def test_update_library_settings_can_rename_library() -> None:
         db.add(library)
         db.commit()
 
-        updated = update_library_settings(db, library.id, LibraryUpdate(name="Films"))
+        updated, quality_profile_changed = update_library_settings(db, library.id, LibraryUpdate(name="Films"))
 
         assert updated is not None
         assert updated.name == "Films"
+        assert quality_profile_changed is False
 
 
 def test_library_exists_checks_library_presence() -> None:

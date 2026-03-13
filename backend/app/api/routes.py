@@ -8,7 +8,7 @@ from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
-from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileTablePage
+from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
 from backend.app.schemas.scan import ScanCancelResponse, ScanJobRead, ScanRequest
 from backend.app.models.entities import ScanJob
 from backend.app.services.app_settings import get_app_settings as load_app_settings
@@ -24,7 +24,7 @@ from backend.app.services.library_service import (
     update_library_settings,
 )
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
-from backend.app.services.media_service import get_media_file_detail, list_library_files
+from backend.app.services.media_service import get_media_file_detail, get_media_file_quality_score_detail, list_library_files
 from backend.app.services.runtime import ScanRuntimeManager
 from backend.app.services.scan_jobs import list_active_scan_jobs, list_library_scan_jobs, serialize_scan_job
 from backend.app.services.stats import build_dashboard
@@ -144,13 +144,15 @@ def library_update(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> LibrarySummary:
     try:
-        library = update_library_settings(db, library_id, payload)
+        library, quality_profile_changed = update_library_settings(db, library_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if library is None:
         raise HTTPException(status_code=404, detail="Library not found")
 
     runtime.sync_library(library.id)
+    if quality_profile_changed:
+        runtime.request_quality_recompute(library.id)
     for item in list_libraries(db):
         if item.id == library.id:
             return item
@@ -263,3 +265,11 @@ def file_detail(file_id: int, db: Session = Depends(get_db_session)) -> MediaFil
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
     return media_file
+
+
+@router.get("/files/{file_id}/quality-score", response_model=MediaFileQualityScoreDetail)
+def file_quality_score(file_id: int, db: Session = Depends(get_db_session)) -> MediaFileQualityScoreDetail:
+    payload = get_media_file_quality_score_detail(db, file_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return payload

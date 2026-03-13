@@ -4,7 +4,7 @@ from backend.app.services.ffprobe_parser import (
     NormalizedVideoStream,
     ProbeResult,
 )
-from backend.app.services.quality import calculate_quality_score
+from backend.app.services.quality import build_quality_score_input, calculate_quality_score
 
 
 def test_quality_score_rewards_modern_high_quality_media() -> None:
@@ -47,16 +47,16 @@ def test_quality_score_rewards_modern_high_quality_media() -> None:
         ],
     )
 
-    assert calculate_quality_score(probe) >= 8
+    assert calculate_quality_score(build_quality_score_input(probe)).score >= 8
 
 
-def test_quality_score_penalizes_inefficient_video() -> None:
+def test_quality_score_penalizes_low_quality_media() -> None:
     probe = ProbeResult(
         raw={},
         media_format=NormalizedFormat(
             container_format="matroska",
             duration=7200,
-            bit_rate=45000000,
+            bit_rate=500000,
             probe_score=100,
         ),
         video_streams=[
@@ -64,18 +64,17 @@ def test_quality_score_penalizes_inefficient_video() -> None:
                 stream_index=0,
                 codec="h264",
                 profile="High",
-                width=1920,
-                height=1080,
+                width=640,
+                height=360,
                 pix_fmt="yuv420p",
                 color_space=None,
                 color_transfer=None,
                 color_primaries=None,
                 frame_rate=24.0,
-                bit_rate=43000000,
+                bit_rate=450000,
                 hdr_type=None,
             )
         ],
     )
 
-    assert calculate_quality_score(probe) <= 4
-
+    assert calculate_quality_score(build_quality_score_input(probe)).score <= 5

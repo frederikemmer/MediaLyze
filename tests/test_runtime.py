@@ -25,7 +25,7 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-def test_recover_orphaned_jobs_requeues_single_running_job_and_fails_duplicates(monkeypatch) -> None:
+def test_recover_orphaned_jobs_requeues_running_jobs_without_failing_duplicates(monkeypatch) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
 
@@ -86,9 +86,10 @@ def test_recover_orphaned_jobs_requeues_single_running_job_and_fails_duplicates(
     assert jobs[0].started_at is None
     assert jobs[0].files_total == 0
     assert jobs[0].files_scanned == 0
-    assert jobs[1].status == JobStatus.failed
-    assert jobs[1].finished_at is not None
-    assert jobs[1].errors == 1
+    assert jobs[1].status == JobStatus.queued
+    assert jobs[1].started_at is None
+    assert jobs[1].files_total == 0
+    assert jobs[1].files_scanned == 0
     assert jobs[2].status == JobStatus.queued
 
 

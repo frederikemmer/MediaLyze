@@ -46,12 +46,15 @@ def _hdr_type(stream: dict[str, Any]) -> str | None:
     transfer = (stream.get("color_transfer") or "").lower()
     profile = (stream.get("profile") or "").lower()
     side_data = stream.get("side_data_list") or []
+    side_data_text = " ".join(str(item).lower() for item in side_data)
 
     if "arib-std-b67" in transfer:
         return "HLG"
     if "smpte2084" in transfer:
-        if "dovi" in profile or any("dovi" in str(item).lower() for item in side_data):
+        if "dovi" in profile or "dovi" in side_data_text:
             return "Dolby Vision"
+        if "dynamic_metadata_plus" in side_data_text or "hdr10+" in side_data_text or "smpte2094" in side_data_text:
+            return "HDR10+"
         return "HDR10"
     return None
 

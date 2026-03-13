@@ -23,6 +23,7 @@ import {
   api,
   type LibraryStatistics,
   type LibrarySummary,
+  type MediaFileQualityScoreDetail,
   type MediaFileRow,
   type MediaFileSortKey,
 } from "../lib/api";
@@ -208,7 +209,44 @@ function buildColumnTemplate(
     .join(" ");
 }
 
-function buildFileColumns(t: (key: string, options?: Record<string, unknown>) => string): FileColumnDefinition[] {
+function buildQualityTooltipContent(
+  detail: MediaFileQualityScoreDetail | undefined,
+  isLoading: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ReactNode {
+  if (isLoading) {
+    return t("quality.loading");
+  }
+  if (!detail) {
+    return t("quality.unavailable");
+  }
+  return (
+    <div className="quality-tooltip-content">
+      <div className="quality-tooltip-summary">
+        <strong>{detail.score}/10</strong>
+        <span>{t("quality.rawScore", { value: detail.score_raw.toFixed(2) })}</span>
+      </div>
+      {detail.breakdown.categories.map((category) => (
+        <div className="quality-tooltip-row" key={category.key}>
+          <div className="quality-tooltip-head">
+            <strong>{t(`quality.category.${category.key}`)}</strong>
+            <span>{category.score.toFixed(1)}</span>
+          </div>
+          <div>{t("quality.weight", { value: category.weight })}</div>
+          {category.skipped ? <div>{t("quality.skipped")}</div> : null}
+          {category.unknown_mapping ? <div>{t("quality.unknownMapping")}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildFileColumns(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  detailCache: Record<number, MediaFileQualityScoreDetail>,
+  detailLoading: Record<number, boolean>,
+  loadDetail: (fileId: number) => void,
+): FileColumnDefinition[] {
   return [
     {
       key: "file",
@@ -316,15 +354,22 @@ function buildFileColumns(t: (key: string, options?: Record<string, unknown>) =>
       sizing: { mode: "content", minPx: 120, maxPx: 120 },
       measureValue: (file) => `${file.quality_score}/10`,
       render: (file) => (
-        <div className="score-cell">
-          <strong>{file.quality_score}/10</strong>
-          <div className="score-meter" aria-hidden="true">
-            <span
-              className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
-              style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
-            />
+        <TooltipTrigger
+          ariaLabel={t("quality.tooltipAria")}
+          className="quality-score-tooltip-trigger"
+          content={buildQualityTooltipContent(detailCache[file.id], Boolean(detailLoading[file.id]), t)}
+          onOpen={() => loadDetail(file.id)}
+        >
+          <div className="score-cell">
+            <strong>{file.quality_score}/10</strong>
+            <div className="score-meter" aria-hidden="true">
+              <span
+                className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+                style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+              />
+            </div>
           </div>
-        </div>
+        </TooltipTrigger>
       ),
     },
   ];
@@ -406,13 +451,36 @@ export function LibraryDetailPage() {
   const [fieldValues, setFieldValues] = useState<Partial<Record<LibraryFileMetadataSearchField, string>>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
+  const [qualityScoreDetails, setQualityScoreDetails] = useState<Record<number, MediaFileQualityScoreDetail>>({});
+  const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
   const { activeJobs } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
-  const fileColumns = useMemo(() => buildFileColumns(t), [t]);
+  const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
+    if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
+      return;
+    }
+    setQualityScoreLoading((current) => ({ ...current, [fileId]: true }));
+    try {
+      const payload = await api.fileQualityScore(fileId);
+      setQualityScoreDetails((current) => ({ ...current, [fileId]: payload }));
+    } catch {
+      // Ignore transient tooltip fetch errors.
+    } finally {
+      setQualityScoreLoading((current) => {
+        const next = { ...current };
+        delete next[fileId];
+        return next;
+      });
+    }
+  });
+  const fileColumns = useMemo(
+    () => buildFileColumns(t, qualityScoreDetails, qualityScoreLoading, loadQualityScoreDetail),
+    [loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, t],
+  );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
@@ -426,6 +494,10 @@ export function LibraryDetailPage() {
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
     [fileColumns, visibleColumns],
+  );
+  const activeColumnSignature = useMemo(
+    () => activeColumns.map((column) => column.key).join("|"),
+    [activeColumns],
   );
   const columnTemplate = useMemo(
     () => buildColumnTemplate(activeColumns, files, t),
@@ -777,8 +849,13 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
+    setQualityScoreDetails({});
+    setQualityScoreLoading({});
+  }, [fileQueryKey]);
+
+  useEffect(() => {
     rowVirtualizer.measure();
-  }, [activeColumns, rowVirtualizer]);
+  }, [activeColumnSignature, rowVirtualizer]);
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
@@ -796,6 +873,8 @@ export function LibraryDetailPage() {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
+      setQualityScoreDetails({});
+      setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
       void loadFilesPage(0, false, fileQueryKey);

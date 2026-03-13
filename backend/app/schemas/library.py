@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import LibraryType, ScanMode
 from backend.app.schemas.media import DistributionItem
+from backend.app.schemas.quality import QualityProfile
 
 
 class LibraryCreate(BaseModel):
@@ -12,12 +13,14 @@ class LibraryCreate(BaseModel):
     type: LibraryType
     scan_mode: ScanMode = ScanMode.manual
     scan_config: dict = Field(default_factory=dict)
+    quality_profile: QualityProfile = Field(default_factory=QualityProfile)
 
 
 class LibraryUpdate(BaseModel):
     name: str | None = None
     scan_mode: ScanMode | None = None
     scan_config: dict = Field(default_factory=dict)
+    quality_profile: QualityProfile | None = None
 
 
 class LibrarySummary(BaseModel):
@@ -32,6 +35,7 @@ class LibrarySummary(BaseModel):
     scan_config: dict
     created_at: datetime
     updated_at: datetime
+    quality_profile: QualityProfile = Field(default_factory=QualityProfile)
     file_count: int = 0
     total_size_bytes: int = 0
     total_duration_seconds: float = 0

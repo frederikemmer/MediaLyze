@@ -12,11 +12,12 @@ import { createPortal } from "react-dom";
 type TooltipAlign = "center" | "start";
 
 type TooltipTriggerProps = {
-  content: string;
+  content: ReactNode;
   ariaLabel: string;
   align?: TooltipAlign;
   className?: string;
   preserveLineBreaks?: boolean;
+  onOpen?: () => void;
   children?: ReactNode;
 };
 
@@ -30,6 +31,7 @@ export function TooltipTrigger({
   align = "center",
   className,
   preserveLineBreaks = false,
+  onOpen,
   children = "?",
 }: TooltipTriggerProps) {
   const tooltipId = useId();
@@ -43,6 +45,12 @@ export function TooltipTrigger({
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
 
   const isOpen = isHovered || isTooltipHovered || isFocused || isPinned;
+
+  useEffect(() => {
+    if (isOpen) {
+      onOpen?.();
+    }
+  }, [isOpen, onOpen]);
 
   const clearCloseTimer = useEffectEvent(() => {
     if (closeTimerRef.current === null) {
@@ -104,11 +112,20 @@ export function TooltipTrigger({
 
   useLayoutEffect(() => {
     if (!isOpen) {
-      setTooltipStyle(null);
+      if (tooltipStyle !== null) {
+        setTooltipStyle(null);
+      }
       return;
     }
     updatePosition();
-  }, [isOpen, updatePosition, content, align, preserveLineBreaks]);
+  }, [align, isOpen, preserveLineBreaks, tooltipStyle, updatePosition]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    updatePosition();
+  }, [content, isOpen, updatePosition]);
 
   useEffect(() => {
     if (!isOpen) {

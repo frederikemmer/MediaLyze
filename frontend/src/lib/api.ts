@@ -3,6 +3,60 @@ export type DistributionItem = {
   value: number;
 };
 
+export type QualityCategoryConfig = {
+  weight: number;
+  minimum: string | number;
+  ideal: string | number;
+};
+
+export type QualityLanguagePreferencesConfig = {
+  weight: number;
+  mode: "partial";
+  audio_languages: string[];
+  subtitle_languages: string[];
+};
+
+export type QualityProfile = {
+  version: number;
+  resolution: QualityCategoryConfig;
+  visual_density: QualityCategoryConfig;
+  video_codec: QualityCategoryConfig;
+  audio_channels: QualityCategoryConfig;
+  audio_codec: QualityCategoryConfig;
+  dynamic_range: QualityCategoryConfig;
+  language_preferences: QualityLanguagePreferencesConfig;
+};
+
+export type QualityCategoryBreakdown = {
+  key: string;
+  score: number;
+  weight: number;
+  active: boolean;
+  skipped: boolean;
+  minimum: string | number | null;
+  ideal: string | number | null;
+  actual: string | number | string[] | null;
+  unknown_mapping: boolean;
+  notes: string[];
+};
+
+export type QualityBreakdown = {
+  score: number;
+  score_raw: number;
+  categories: QualityCategoryBreakdown[];
+};
+
+export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
+  version: 1,
+  resolution: { weight: 8, minimum: "1080p", ideal: "4k" },
+  visual_density: { weight: 10, minimum: 0.02, ideal: 0.04 },
+  video_codec: { weight: 5, minimum: "h264", ideal: "hevc" },
+  audio_channels: { weight: 4, minimum: "stereo", ideal: "5.1" },
+  audio_codec: { weight: 3, minimum: "aac", ideal: "eac3" },
+  dynamic_range: { weight: 4, minimum: "sdr", ideal: "hdr10" },
+  language_preferences: { weight: 6, mode: "partial", audio_languages: [], subtitle_languages: [] },
+};
+
 export type DashboardResponse = {
   totals: Record<string, number>;
   video_codec_distribution: DistributionItem[];
@@ -23,6 +77,7 @@ export type LibrarySummary = {
   scan_config: Record<string, number>;
   created_at: string;
   updated_at: string;
+  quality_profile: QualityProfile;
   file_count: number;
   total_size_bytes: number;
   total_duration_seconds: number;
@@ -53,6 +108,7 @@ export type MediaFileRow = {
   last_analyzed_at: string | null;
   scan_status: string;
   quality_score: number;
+  quality_score_raw: number;
   duration: number | null;
   video_codec: string | null;
   resolution: string | null;
@@ -113,6 +169,13 @@ export type MediaFileDetail = MediaFileRow & {
   subtitle_streams: Array<Record<string, string | number | boolean | null>>;
   external_subtitles: Array<Record<string, string | null>>;
   raw_ffprobe_json: Record<string, unknown> | null;
+};
+
+export type MediaFileQualityScoreDetail = {
+  id: number;
+  score: number;
+  score_raw: number;
+  breakdown: QualityBreakdown;
 };
 
 export type BrowseResponse = {
@@ -242,6 +305,7 @@ export const api = {
   },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
+  fileQualityScore: (id: string | number) => request<MediaFileQualityScoreDetail>(`/files/${id}/quality-score`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
   updateAppSettings: (payload: {
     ignore_patterns?: string[];
@@ -258,6 +322,7 @@ export const api = {
     type: string;
     scan_mode: string;
     scan_config?: Record<string, number>;
+    quality_profile?: QualityProfile;
   }) =>
     request<LibrarySummary>("/libraries", {
       method: "POST",
@@ -269,6 +334,7 @@ export const api = {
       name?: string;
       scan_mode?: string;
       scan_config?: Record<string, number>;
+      quality_profile?: QualityProfile;
     },
   ) =>
     request<LibrarySummary>(`/libraries/${libraryId}`, {

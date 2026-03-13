@@ -7,6 +7,7 @@ from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignK
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
+from backend.app.services.quality import default_quality_profile
 from backend.app.utils.time import utc_now
 
 
@@ -62,6 +63,7 @@ class Library(TimestampMixin, Base):
         nullable=False,
     )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    quality_profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
 
     media_files: Mapped[list[MediaFile]] = relationship(
         back_populates="library",
@@ -109,6 +111,8 @@ class MediaFile(Base):
         nullable=False,
     )
     quality_score: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    quality_score_raw: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    quality_score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     raw_ffprobe_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     library: Mapped[Library] = relationship(back_populates="media_files")

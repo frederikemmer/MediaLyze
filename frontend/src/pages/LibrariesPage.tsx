@@ -7,7 +7,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { PathBrowser } from "../components/PathBrowser";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
-import { api, type LibrarySummary } from "../lib/api";
+import { api, DEFAULT_QUALITY_PROFILE, type LibrarySummary, type QualityProfile } from "../lib/api";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
@@ -32,6 +32,7 @@ type LibrarySettingsForm = {
   scan_mode: string;
   interval_minutes: number;
   debounce_seconds: number;
+  quality_profile: QualityProfile;
 };
 
 type IgnorePatternGroup = "user" | "default";
@@ -40,11 +41,69 @@ type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
 
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 
+const RESOLUTION_OPTIONS = ["sd", "720p", "1080p", "1440p", "4k", "8k"];
+const VIDEO_CODEC_OPTIONS = ["h264", "hevc", "av1"];
+const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
+const AUDIO_CODEC_OPTIONS = ["aac", "ac3", "eac3", "dts", "dts_hd", "truehd", "flac"];
+const DYNAMIC_RANGE_OPTIONS = ["sdr", "hdr10", "hdr10_plus", "dolby_vision"];
+const LANGUAGE_OPTIONS = ["de", "en", "fr", "es", "it", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "zh", "cs", "nl"];
+const ISO_639_1_CODES = new Set([
+  "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az",
+  "ba", "be", "bg", "bh", "bi", "bm", "bn", "bo", "br", "bs",
+  "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv", "cy",
+  "da", "de", "dv", "dz",
+  "ee", "el", "en", "eo", "es", "et", "eu",
+  "fa", "ff", "fi", "fj", "fo", "fr", "fy",
+  "ga", "gd", "gl", "gn", "gu", "gv",
+  "ha", "he", "hi", "ho", "hr", "ht", "hu", "hy", "hz",
+  "ia", "id", "ie", "ig", "ii", "ik", "io", "is", "it", "iu",
+  "ja", "jv",
+  "ka", "kg", "ki", "kj", "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku", "kv", "kw", "ky",
+  "la", "lb", "lg", "li", "ln", "lo", "lt", "lu", "lv",
+  "mg", "mh", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my",
+  "na", "nb", "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv", "ny",
+  "oc", "oj", "om", "or", "os",
+  "pa", "pi", "pl", "ps", "pt",
+  "qu",
+  "rm", "rn", "ro", "ru", "rw",
+  "sa", "sc", "sd", "se", "sg", "si", "sk", "sl", "sm", "sn", "so", "sq", "sr", "ss", "st", "su", "sv", "sw",
+  "ta", "te", "tg", "th", "ti", "tk", "tl", "tn", "to", "tr", "ts", "tt", "tw", "ty",
+  "ug", "uk", "ur", "uz",
+  "ve", "vi", "vo",
+  "wa", "wo",
+  "xh",
+  "yi", "yo",
+  "za", "zh", "zu",
+]);
+const QUALITY_OPTION_RANKS: Record<string, Record<string, number>> = {
+  resolution: Object.fromEntries(RESOLUTION_OPTIONS.map((value, index) => [value, index])),
+  video_codec: Object.fromEntries(VIDEO_CODEC_OPTIONS.map((value, index) => [value, index])),
+  audio_channels: Object.fromEntries(AUDIO_CHANNEL_OPTIONS.map((value, index) => [value, index])),
+  audio_codec: Object.fromEntries(AUDIO_CODEC_OPTIONS.map((value, index) => [value, index])),
+  dynamic_range: Object.fromEntries(DYNAMIC_RANGE_OPTIONS.map((value, index) => [value, index])),
+};
+
+function cloneQualityProfile(profile: QualityProfile): QualityProfile {
+  return JSON.parse(JSON.stringify(profile)) as QualityProfile;
+}
+
+function weightFieldStyle(weight: number) {
+  const clamped = Math.max(0, Math.min(10, weight));
+  const lightness = 90 - clamped * 3.4;
+  const alpha = 0.16 + clamped * 0.035;
+  return {
+    backgroundColor: `hsla(157, 57%, ${lightness}%, ${alpha})`,
+    borderColor: `hsla(157, 57%, 38%, ${0.18 + clamped * 0.04})`,
+    color: clamped >= 7 ? "#f7fbf9" : "#145c49",
+  };
+}
+
 function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
   return {
     scan_mode: library.scan_mode,
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
+    quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
   };
 }
 
@@ -66,7 +125,8 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
   return (
     current.scan_mode === settings.scan_mode &&
     current.interval_minutes === settings.interval_minutes &&
-    current.debounce_seconds === settings.debounce_seconds
+    current.debounce_seconds === settings.debounce_seconds &&
+    JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
   );
 }
 
@@ -94,6 +154,10 @@ export function LibrariesPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [settingsForms, setSettingsForms] = useState<Record<number, LibrarySettingsForm>>({});
+  const [qualitySectionOpen, setQualitySectionOpen] = useState<Record<number, boolean>>({});
+  const [qualityPickerOpenKey, setQualityPickerOpenKey] = useState<string | null>(null);
+  const [qualityLanguageDrafts, setQualityLanguageDrafts] = useState<Record<string, string>>({});
+  const [qualityLanguageErrors, setQualityLanguageErrors] = useState<Record<string, string | null>>({});
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
@@ -164,6 +228,23 @@ export function LibrariesPage() {
   }, [hasActiveJobs]);
 
   useEffect(() => {
+    if (!qualityPickerOpenKey) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest(".quality-picker-field-shell")) {
+        return;
+      }
+      setQualityPickerOpenKey(null);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [qualityPickerOpenKey]);
+
+  useEffect(() => {
     let active = true;
     setIsLoadingIgnorePatterns(true);
     void api
@@ -230,6 +311,7 @@ export function LibrariesPage() {
       scan_mode: "manual",
       interval_minutes: 60,
       debounce_seconds: 15,
+      quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
     };
     const next = { ...current, ...patch };
     setSettingsForms((forms) => ({
@@ -247,6 +329,7 @@ export function LibrariesPage() {
         const updated = await api.updateLibrarySettings(libraryId, {
           scan_mode: next.scan_mode,
           scan_config: buildScanConfig(next),
+          quality_profile: next.quality_profile,
         });
         upsertLibrary(updated);
         setSettingsForms((forms) => ({
@@ -262,6 +345,16 @@ export function LibrariesPage() {
     }, 450);
   }
 
+  function updateLibraryQualityProfile(
+    libraryId: number,
+    transform: (current: QualityProfile) => QualityProfile,
+  ) {
+    const fallback =
+      libraries.find((library) => library.id === libraryId)?.quality_profile ?? DEFAULT_QUALITY_PROFILE;
+    const current = settingsForms[libraryId]?.quality_profile ?? cloneQualityProfile(fallback);
+    updateLibraryForm(libraryId, { quality_profile: transform(cloneQualityProfile(current)) });
+  }
+
   async function runLibraryScan(libraryId: number) {
     const current = settingsForms[libraryId];
     if (current && autoSaveTimers.current[libraryId]) {
@@ -271,6 +364,7 @@ export function LibrariesPage() {
         const updated = await api.updateLibrarySettings(libraryId, {
           scan_mode: current.scan_mode,
           scan_config: buildScanConfig(current),
+          quality_profile: current.quality_profile,
         });
         upsertLibrary(updated);
       } catch (reason) {
@@ -555,6 +649,389 @@ export function LibrariesPage() {
     );
   }
 
+  function qualityPickerKey(libraryId: number, fieldKey: string): string {
+    return `${libraryId}:${fieldKey}`;
+  }
+
+  function toggleQualityPicker(libraryId: number, fieldKey: string) {
+    const nextKey = qualityPickerKey(libraryId, fieldKey);
+    setQualityPickerOpenKey((current) => (current === nextKey ? null : nextKey));
+  }
+
+  function updateOrderedQualityBoundary(
+    libraryId: number,
+    key: "resolution" | "video_codec" | "audio_channels" | "audio_codec" | "dynamic_range",
+    boundary: "minimum" | "ideal",
+    value: string,
+  ) {
+    updateLibraryQualityProfile(libraryId, (current) => {
+      const category = current[key];
+      const ranks = QUALITY_OPTION_RANKS[key];
+      const nextCategory = { ...category, [boundary]: value };
+      const minimumValue = String(boundary === "minimum" ? value : nextCategory.minimum);
+      const idealValue = String(boundary === "ideal" ? value : nextCategory.ideal);
+      if (ranks[idealValue] < ranks[minimumValue]) {
+        if (boundary === "minimum") {
+          nextCategory.ideal = value;
+        } else {
+          nextCategory.minimum = value;
+        }
+      }
+      return { ...current, [key]: nextCategory };
+    });
+    setQualityPickerOpenKey(null);
+  }
+
+  function toggleLanguagePreference(
+    libraryId: number,
+    field: "audio_languages" | "subtitle_languages",
+    value: string,
+  ) {
+    updateLibraryQualityProfile(libraryId, (current) => {
+      const source = current.language_preferences[field];
+      const nextValues = source.includes(value)
+        ? source.filter((entry) => entry !== value)
+        : [...source, value].sort();
+      return {
+        ...current,
+        language_preferences: {
+          ...current.language_preferences,
+          [field]: nextValues,
+        },
+      };
+    });
+  }
+
+  function updateLanguageDraft(fieldKey: string, value: string) {
+    setQualityLanguageDrafts((current) => ({ ...current, [fieldKey]: value.toLowerCase() }));
+    setQualityLanguageErrors((current) => ({ ...current, [fieldKey]: null }));
+  }
+
+  function submitCustomLanguagePreference(
+    libraryId: number,
+    field: "audio_languages" | "subtitle_languages",
+    fieldKey: string,
+  ) {
+    const normalized = (qualityLanguageDrafts[fieldKey] ?? "").trim().toLowerCase();
+    if (!normalized) {
+      return;
+    }
+    if (!ISO_639_1_CODES.has(normalized)) {
+      setQualityLanguageErrors((current) => ({
+        ...current,
+        [fieldKey]: t("libraries.quality.languageCodeInvalid"),
+      }));
+      return;
+    }
+    updateLibraryQualityProfile(libraryId, (current) => {
+      const source = current.language_preferences[field];
+      if (source.includes(normalized)) {
+        return current;
+      }
+      return {
+        ...current,
+        language_preferences: {
+          ...current.language_preferences,
+          [field]: [...source, normalized].sort(),
+        },
+      };
+    });
+    setQualityLanguageDrafts((current) => ({ ...current, [fieldKey]: "" }));
+    setQualityLanguageErrors((current) => ({ ...current, [fieldKey]: null }));
+  }
+
+  function renderPickerField(
+    libraryId: number,
+    fieldKey: string,
+    label: string,
+    values: string[],
+    options: string[],
+    onSelect: (value: string) => void,
+    onRemove?: (value: string) => void,
+    disabledOptions: Set<string> = new Set(),
+    popoverClassName = "",
+    customEntry?: {
+      draft: string;
+      error: string | null;
+      placeholder: string;
+      addLabel: string;
+      onDraftChange: (value: string) => void;
+      onSubmit: () => void;
+    },
+  ) {
+    const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
+    const displayOptions = [...new Set([...options, ...values])];
+    return (
+      <div className="field">
+        <label>{label}</label>
+        <div className="quality-picker-field-shell search-filter-picker">
+          <button
+            type="button"
+            className={`quality-picker-field${open ? " is-open" : ""}`}
+            aria-expanded={open}
+            onClick={() => toggleQualityPicker(libraryId, fieldKey)}
+          >
+            <div className="quality-picker-values">
+              {values.length > 0 ? (
+                values.map((value) => (
+                  <span className="badge quality-picker-chip" key={`${fieldKey}-${value}`}>
+                    {value}
+                  </span>
+                ))
+              ) : (
+                <span className="quality-picker-empty">{t("libraries.quality.noneSelected")}</span>
+              )}
+            </div>
+          </button>
+          {open ? (
+            <div className={`search-filter-picker-popover quality-picker-popover ${popoverClassName}`.trim()}>
+              {customEntry ? (
+                <div className="quality-picker-custom-entry">
+                  <div className="quality-picker-custom-row">
+                    <input
+                      type="text"
+                      value={customEntry.draft}
+                      placeholder={customEntry.placeholder}
+                      maxLength={2}
+                      className={`quality-picker-custom-input${customEntry.error ? " is-invalid" : ""}`}
+                      onChange={(event) => customEntry.onDraftChange(event.target.value.replace(/[^a-zA-Z]/g, "").slice(0, 2))}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          customEntry.onSubmit();
+                        }
+                      }}
+                    />
+                    <button type="button" className="quality-picker-custom-submit" onClick={customEntry.onSubmit}>
+                      {customEntry.addLabel}
+                    </button>
+                  </div>
+                  {customEntry.error ? <div className="quality-picker-custom-error">{customEntry.error}</div> : null}
+                </div>
+              ) : null}
+              {displayOptions.map((option) => {
+                const isSelected = values.includes(option);
+                const isDisabled = disabledOptions.has(option);
+                return (
+                  <button
+                    type="button"
+                    key={option}
+                    className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                    role="menuitemcheckbox"
+                    aria-checked={isSelected}
+                    disabled={isDisabled}
+                    onClick={() => {
+                      if (isSelected && onRemove) {
+                        onRemove(option);
+                        setQualityPickerOpenKey(null);
+                        return;
+                      }
+                      onSelect(option);
+                    }}
+                  >
+                    <span>{option}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  function renderQualityWeightField(
+    label: string,
+    value: number,
+    onChange: (value: number) => void,
+  ) {
+    return (
+      <div className="field quality-weight-field">
+        <label>{label}</label>
+        <input
+          className="quality-weight-input"
+          type="number"
+          min={0}
+          max={10}
+          value={value}
+          style={weightFieldStyle(value)}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </div>
+    );
+  }
+
+  function renderQualityOrdinalRow(
+    library: LibrarySummary,
+    key: "resolution" | "video_codec" | "audio_channels" | "audio_codec" | "dynamic_range",
+    options: string[],
+  ) {
+    const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
+    const category = profile[key];
+    const ranks = QUALITY_OPTION_RANKS[key];
+    const minimumValue = String(category.minimum);
+    const idealValue = String(category.ideal);
+    const disabledForMinimum = new Set(
+      options.filter((option) => ranks[option] > ranks[idealValue]),
+    );
+    const disabledForIdeal = new Set(
+      options.filter((option) => ranks[option] < ranks[minimumValue]),
+    );
+
+    return (
+      <div className="quality-settings-group" key={key}>
+        <div className="quality-settings-group-title">{t(`libraries.quality.${key}`)}</div>
+        {renderPickerField(
+          library.id,
+          `${key}:minimum`,
+          t("libraries.quality.minimum"),
+          [minimumValue],
+          options,
+          (value) => updateOrderedQualityBoundary(library.id, key, "minimum", value),
+          undefined,
+          disabledForMinimum,
+        )}
+        {renderPickerField(
+          library.id,
+          `${key}:ideal`,
+          t("libraries.quality.ideal"),
+          [idealValue],
+          options,
+          (value) => updateOrderedQualityBoundary(library.id, key, "ideal", value),
+          undefined,
+          disabledForIdeal,
+        )}
+        {renderQualityWeightField(
+          t("libraries.quality.weight"),
+          category.weight,
+          (value) =>
+            updateLibraryQualityProfile(library.id, (current) => ({
+              ...current,
+              [key]: { ...current[key], weight: value },
+            })),
+        )}
+      </div>
+    );
+  }
+
+  function renderQualitySettings(library: LibrarySummary) {
+    const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
+    return (
+      <div className="quality-settings-panel field-span-full">
+        {renderQualityOrdinalRow(library, "resolution", RESOLUTION_OPTIONS)}
+        {renderQualityOrdinalRow(library, "video_codec", VIDEO_CODEC_OPTIONS)}
+        {renderQualityOrdinalRow(library, "audio_channels", AUDIO_CHANNEL_OPTIONS)}
+        {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS)}
+        {renderQualityOrdinalRow(library, "dynamic_range", DYNAMIC_RANGE_OPTIONS)}
+        <div className="quality-settings-group">
+          <div className="quality-settings-group-title">{t("libraries.quality.language_preferences")}</div>
+          {renderPickerField(
+            library.id,
+            "language_preferences:audio",
+          t("libraries.quality.audioLanguages"),
+          profile.language_preferences.audio_languages,
+          LANGUAGE_OPTIONS,
+          (value) => toggleLanguagePreference(library.id, "audio_languages", value),
+          (value) => toggleLanguagePreference(library.id, "audio_languages", value),
+          new Set(),
+          "quality-picker-popover-languages",
+          {
+            draft: qualityLanguageDrafts["language_preferences:audio"] ?? "",
+            error: qualityLanguageErrors["language_preferences:audio"] ?? null,
+            placeholder: t("libraries.quality.languageCodePlaceholder"),
+            addLabel: t("libraries.quality.addLanguage"),
+            onDraftChange: (value) => updateLanguageDraft("language_preferences:audio", value),
+            onSubmit: () => submitCustomLanguagePreference(library.id, "audio_languages", "language_preferences:audio"),
+          },
+        )}
+        {renderPickerField(
+          library.id,
+          "language_preferences:subtitle",
+          t("libraries.quality.subtitleLanguages"),
+          profile.language_preferences.subtitle_languages,
+          LANGUAGE_OPTIONS,
+          (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
+          (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
+          new Set(),
+          "quality-picker-popover-languages",
+          {
+            draft: qualityLanguageDrafts["language_preferences:subtitle"] ?? "",
+            error: qualityLanguageErrors["language_preferences:subtitle"] ?? null,
+            placeholder: t("libraries.quality.languageCodePlaceholder"),
+            addLabel: t("libraries.quality.addLanguage"),
+            onDraftChange: (value) => updateLanguageDraft("language_preferences:subtitle", value),
+            onSubmit: () =>
+              submitCustomLanguagePreference(library.id, "subtitle_languages", "language_preferences:subtitle"),
+          },
+        )}
+          {renderQualityWeightField(
+            t("libraries.quality.weight"),
+            profile.language_preferences.weight,
+            (value) =>
+              updateLibraryQualityProfile(library.id, (current) => ({
+                ...current,
+                language_preferences: { ...current.language_preferences, weight: value },
+              })),
+          )}
+        </div>
+        <div className="quality-settings-group">
+          <div className="quality-settings-group-title">
+            {t("libraries.quality.visual_density")}
+            <span className="quality-settings-hint">{t("libraries.quality.visualDensityHint")}</span>
+          </div>
+          <div className="field">
+            <label>{t("libraries.quality.minimum")}</label>
+            <input
+              className="quality-density-input"
+              type="number"
+              min={0}
+              step="0.001"
+              value={Number(profile.visual_density.minimum)}
+              onChange={(event) =>
+                updateLibraryQualityProfile(library.id, (current) => {
+                  const minimum = Number(event.target.value);
+                  const ideal = Math.max(minimum, Number(current.visual_density.ideal));
+                  return {
+                    ...current,
+                    visual_density: { ...current.visual_density, minimum, ideal },
+                  };
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>{t("libraries.quality.ideal")}</label>
+            <input
+              className="quality-density-input"
+              type="number"
+              min={Number(profile.visual_density.minimum)}
+              step="0.001"
+              value={Number(profile.visual_density.ideal)}
+              onChange={(event) =>
+                updateLibraryQualityProfile(library.id, (current) => ({
+                  ...current,
+                  visual_density: {
+                    ...current.visual_density,
+                    ideal: Math.max(Number(current.visual_density.minimum), Number(event.target.value)),
+                  },
+                }))
+              }
+            />
+          </div>
+          {renderQualityWeightField(
+            t("libraries.quality.weight"),
+            profile.visual_density.weight,
+            (value) =>
+              updateLibraryQualityProfile(library.id, (current) => ({
+                ...current,
+                visual_density: { ...current.visual_density, weight: value },
+              })),
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="settings-layout">
@@ -676,6 +1153,24 @@ export function LibrariesPage() {
                         />
                       </div>
                     ) : null}
+                    <div className="field field-span-full">
+                      <button
+                        type="button"
+                        className="secondary quality-settings-toggle"
+                        aria-expanded={Boolean(qualitySectionOpen[library.id])}
+                        onClick={() =>
+                          setQualitySectionOpen((current) => ({ ...current, [library.id]: !current[library.id] }))
+                        }
+                      >
+                        <span>{t("libraries.qualityScoreTitle")}</span>
+                        {qualitySectionOpen[library.id] ? (
+                          <ChevronDown aria-hidden="true" className="nav-icon" />
+                        ) : (
+                          <ChevronRight aria-hidden="true" className="nav-icon" />
+                        )}
+                      </button>
+                    </div>
+                    {qualitySectionOpen[library.id] ? renderQualitySettings(library) : null}
                   </div>
                   {libraryMessages[library.id] ? <div className="alert">{libraryMessages[library.id]}</div> : null}
                 </div>
