@@ -23,6 +23,7 @@ from backend.app.services.library_service import (
     list_libraries,
     update_library_settings,
 )
+from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import get_media_file_detail, list_library_files
 from backend.app.services.runtime import ScanRuntimeManager
 from backend.app.services.scan_jobs import list_active_scan_jobs, list_library_scan_jobs, serialize_scan_job
@@ -178,6 +179,18 @@ def library_files(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     search: str = Query(default="", max_length=200),
+    file_search: str = Query(default="", max_length=200),
+    search_size: str = Query(default="", max_length=64),
+    search_quality_score: str = Query(default="", max_length=32),
+    search_video_codec: str = Query(default="", max_length=200),
+    search_resolution: str = Query(default="", max_length=64),
+    search_hdr_type: str = Query(default="", max_length=200),
+    search_duration: str = Query(default="", max_length=64),
+    search_audio_codecs: str = Query(default="", max_length=200),
+    search_audio_languages: str = Query(default="", max_length=200),
+    search_subtitle_languages: str = Query(default="", max_length=200),
+    search_subtitle_codecs: str = Query(default="", max_length=200),
+    search_subtitle_sources: str = Query(default="", max_length=64),
     sort_key: Literal[
         "file",
         "size",
@@ -199,15 +212,32 @@ def library_files(
 ) -> MediaFileTablePage:
     if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
-    return list_library_files(
-        db,
-        library_id,
-        offset=offset,
-        limit=limit,
-        search=search,
-        sort_key=sort_key,
-        sort_direction=sort_direction,
-    )
+    try:
+        return list_library_files(
+            db,
+            library_id,
+            offset=offset,
+            limit=limit,
+            search=search,
+            search_filters=LibraryFileSearchFilters(
+                file_search=file_search,
+                search_size=search_size,
+                search_quality_score=search_quality_score,
+                search_video_codec=search_video_codec,
+                search_resolution=search_resolution,
+                search_hdr_type=search_hdr_type,
+                search_duration=search_duration,
+                search_audio_codecs=search_audio_codecs,
+                search_audio_languages=search_audio_languages,
+                search_subtitle_languages=search_subtitle_languages,
+                search_subtitle_codecs=search_subtitle_codecs,
+                search_subtitle_sources=search_subtitle_sources,
+            ),
+            sort_key=sort_key,
+            sort_direction=sort_direction,
+        )
+    except SearchValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/libraries/{library_id}/scan", response_model=ScanJobRead, status_code=202)

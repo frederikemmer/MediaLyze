@@ -80,6 +80,20 @@ export type MediaFileSortKey =
   | "last_analyzed_at"
   | "quality_score";
 
+export type LibraryFileSearchField =
+  | "file"
+  | "size"
+  | "quality_score"
+  | "video_codec"
+  | "resolution"
+  | "hdr_type"
+  | "duration"
+  | "audio_codecs"
+  | "audio_languages"
+  | "subtitle_languages"
+  | "subtitle_codecs"
+  | "subtitle_sources";
+
 export type MediaFileTablePage = {
   total: number;
   offset: number;
@@ -176,6 +190,7 @@ export const api = {
       offset?: number;
       limit?: number;
       search?: string;
+      filters?: Partial<Record<LibraryFileSearchField, string>>;
       sortKey?: MediaFileSortKey;
       sortDirection?: "asc" | "desc";
       signal?: AbortSignal;
@@ -190,6 +205,29 @@ export const api = {
     }
     if (params?.search) {
       searchParams.set("search", params.search);
+    }
+    if (params?.filters) {
+      const filterEntries: Array<[LibraryFileSearchField, string]> = [
+        ["file", "file_search"],
+        ["size", "search_size"],
+        ["quality_score", "search_quality_score"],
+        ["video_codec", "search_video_codec"],
+        ["resolution", "search_resolution"],
+        ["hdr_type", "search_hdr_type"],
+        ["duration", "search_duration"],
+        ["audio_codecs", "search_audio_codecs"],
+        ["audio_languages", "search_audio_languages"],
+        ["subtitle_languages", "search_subtitle_languages"],
+        ["subtitle_codecs", "search_subtitle_codecs"],
+        ["subtitle_sources", "search_subtitle_sources"],
+      ];
+      for (const [field, queryKey] of filterEntries) {
+        const rawValue = params.filters[field];
+        const value = rawValue?.trim();
+        if (value) {
+          searchParams.set(queryKey, value);
+        }
+      }
     }
     if (params?.sortKey) {
       searchParams.set("sort_key", params.sortKey);

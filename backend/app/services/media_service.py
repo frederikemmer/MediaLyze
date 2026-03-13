@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sqlalchemy import String, and_, case, cast, func, literal, or_, select, union_all
+from sqlalchemy import String, and_, case, cast, func, literal, select, union_all
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
 from backend.app.schemas.media import MediaFileDetail, MediaFileTablePage, MediaFileTableRow
-from backend.app.services.languages import expand_language_search_terms, normalize_language_code
+from backend.app.services.languages import normalize_language_code
+from backend.app.services.media_search import (
+    LibraryFileSearchFilters,
+    apply_field_search_filters,
+    apply_legacy_search,
+)
 from backend.app.services.video_queries import primary_video_streams_subquery
 
 FileSortKey = Literal[
@@ -83,25 +88,6 @@ def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
         ),
         subtitle_sources=_subtitle_sources(media_file),
     )
-
-
-def _search_tokens(search: str) -> list[str]:
-    return [token.strip().lower() for token in search.split() if token.strip()]
-
-
-def _resolution_label_expr(primary_video_streams):
-    return case(
-        (
-            and_(primary_video_streams.c.width.is_not(None), primary_video_streams.c.height.is_not(None)),
-            cast(primary_video_streams.c.width, String) + literal("x") + cast(primary_video_streams.c.height, String),
-        ),
-        else_="",
-    )
-
-
-def _match_patterns(expression, patterns: list[str]):
-    return or_(*(func.lower(func.coalesce(expression, "")).like(pattern) for pattern in patterns))
-
 
 def _audio_aggregate_subquery(name: str = "audio_aggregates"):
     return (
@@ -247,45 +233,6 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "quality_score": MediaFile.quality_score,
     }
     return sort_map[sort_key]
-
-
-def _token_matches_source(token: str, source_label: str) -> bool:
-    return bool(token) and source_label.startswith(token)
-
-
-def _apply_search(query, primary_video_streams, audio_aggregates, subtitle_aggregates, search: str):
-    resolution_label = _resolution_label_expr(primary_video_streams)
-
-    for token in _search_tokens(search):
-        patterns = {f"%{token}%"}
-        for language_term in expand_language_search_terms(token):
-            patterns.add(f"%{language_term}%")
-        pattern_list = sorted(patterns)
-
-        source_matches = []
-        if any(_token_matches_source(pattern.strip("%"), "internal") for pattern in pattern_list):
-            source_matches.append(func.coalesce(subtitle_aggregates.c.has_internal_subtitles, 0) == 1)
-        if any(_token_matches_source(pattern.strip("%"), "external") for pattern in pattern_list):
-            source_matches.append(func.coalesce(subtitle_aggregates.c.has_external_subtitles, 0) == 1)
-
-        query = query.where(
-            or_(
-                _match_patterns(MediaFile.filename, pattern_list),
-                _match_patterns(MediaFile.relative_path, pattern_list),
-                _match_patterns(MediaFile.extension, pattern_list),
-                _match_patterns(primary_video_streams.c.codec, pattern_list),
-                _match_patterns(primary_video_streams.c.hdr_type, pattern_list),
-                _match_patterns(resolution_label, pattern_list),
-                _match_patterns(audio_aggregates.c.audio_codecs_search, pattern_list),
-                _match_patterns(audio_aggregates.c.audio_languages_search, pattern_list),
-                _match_patterns(subtitle_aggregates.c.subtitle_languages_search, pattern_list),
-                _match_patterns(subtitle_aggregates.c.subtitle_codecs_search, pattern_list),
-                or_(*source_matches) if source_matches else literal(False),
-            )
-        )
-    return query
-
-
 def list_library_files(
     db: Session,
     library_id: int,
@@ -293,6 +240,7 @@ def list_library_files(
     offset: int = 0,
     limit: int = 50,
     search: str = "",
+    search_filters: LibraryFileSearchFilters | None = None,
     sort_key: FileSortKey = "file",
     sort_direction: FileSortDirection = "asc",
 ) -> MediaFileTablePage:
@@ -309,7 +257,14 @@ def list_library_files(
         .outerjoin(subtitle_aggregates, subtitle_aggregates.c.media_file_id == MediaFile.id)
         .where(MediaFile.library_id == library_id)
     )
-    filtered_query = _apply_search(base_query, primary_video_streams, audio_aggregates, subtitle_aggregates, search)
+    filtered_query = apply_legacy_search(base_query, primary_video_streams, audio_aggregates, subtitle_aggregates, search)
+    filtered_query = apply_field_search_filters(
+        filtered_query,
+        primary_video_streams,
+        audio_aggregates,
+        subtitle_aggregates,
+        search_filters,
+    )
     total = db.scalar(select(func.count()).select_from(filtered_query.order_by(None).subquery())) or 0
 
     sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)

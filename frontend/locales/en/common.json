@@ -126,6 +126,58 @@
     "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
     "searchLabel": "Search files and metadata",
     "searchPlaceholder": "search files and metadata",
+    "searchFields": {
+      "addMetadata": "Metadata",
+      "addMetadataAria": "Add metadata search field",
+      "activeMetadata": "Active metadata search fields",
+      "removeAria": "Remove {{field}} search field",
+      "tooltipAria": "Show supported search syntax",
+      "file": {
+        "label": "File and path",
+        "placeholder": "Search file and path"
+      },
+      "size": {
+        "placeholder": "e.g. >4GB",
+        "tooltip": "Supported: >4GB, >=700MB, <1.5GiB, =800MB"
+      },
+      "qualityScore": {
+        "placeholder": "e.g. >=8",
+        "tooltip": "Supported: >=8, =10, <5"
+      },
+      "videoCodec": {
+        "placeholder": "e.g. hevc av1"
+      },
+      "resolution": {
+        "placeholder": "e.g. 1080p or 3840x2160"
+      },
+      "hdr": {
+        "placeholder": "e.g. hdr10, dv, sdr"
+      },
+      "duration": {
+        "placeholder": "e.g. >=1h 30m",
+        "tooltip": "Supported: >90m, <=2h, =5400s, >=1h 30m"
+      },
+      "audioCodecs": {
+        "placeholder": "e.g. dts aac"
+      },
+      "audioLanguages": {
+        "placeholder": "e.g. en german"
+      },
+      "subtitleLanguages": {
+        "placeholder": "e.g. en de"
+      },
+      "subtitleCodecs": {
+        "placeholder": "e.g. srt ass"
+      },
+      "subtitleSources": {
+        "placeholder": "e.g. internal external"
+      },
+      "validation": {
+        "size": "Use a comparison like >4GB or <=700MB.",
+        "quality_score": "Use a score from 1 to 10, for example >=8.",
+        "duration": "Use a duration like >90m or >=1h 30m."
+      }
+    },
     "loadingFiles": "Loading analyzed files…",
     "loadingMore": "Loading more entries…",
     "noAnalyzedFiles": "No analyzed files yet.",

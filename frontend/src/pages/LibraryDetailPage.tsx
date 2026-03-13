@@ -1,4 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   startTransition,
@@ -27,6 +28,15 @@ import {
 } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import {
+  LIBRARY_METADATA_SEARCH_FIELDS,
+  deserializeLibraryFileSearchFilters,
+  getLibraryFileSearchConfig,
+  serializeLibraryFileSearchFilters,
+  validateLibraryFileSearchField,
+  type LibraryFileMetadataSearchField,
+} from "../lib/library-file-search";
+import {
+  LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
   getVisibleLibraryStatisticPanels,
@@ -70,6 +80,8 @@ type CachedFileList = {
   total: number;
   items: MediaFileRow[];
 };
+
+type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 
 const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
@@ -324,11 +336,50 @@ function findLibrarySummary(libraries: LibrarySummary[], libraryId: string) {
 
 function buildFileCacheKey(
   libraryId: string,
-  searchQuery: string,
+  searchFilters: string,
   sortKey: FileColumnKey,
   sortDirection: SortDirection,
 ) {
-  return `${libraryId}::${searchQuery}::${sortKey}::${sortDirection}`;
+  return `${libraryId}::${searchFilters}::${sortKey}::${sortDirection}`;
+}
+
+function hasActiveSearchFilters(filters: LibraryFileSearchFilters): boolean {
+  return Object.values(filters).some((value) => Boolean(value?.trim()));
+}
+
+function buildSearchFieldErrorMap(
+  fieldValues: Partial<Record<LibraryFileMetadataSearchField, string>>,
+): Partial<Record<LibraryFileMetadataSearchField, string>> {
+  const nextErrors: Partial<Record<LibraryFileMetadataSearchField, string>> = {};
+  for (const field of LIBRARY_METADATA_SEARCH_FIELDS) {
+    const rawValue = fieldValues[field] ?? "";
+    const errorKey = validateLibraryFileSearchField(field, rawValue);
+    if (errorKey) {
+      nextErrors[field] = errorKey;
+    }
+  }
+  return nextErrors;
+}
+
+function buildActiveSearchFilters(
+  baseSearch: string,
+  selectedFields: LibraryFileMetadataSearchField[],
+  fieldValues: Partial<Record<LibraryFileMetadataSearchField, string>>,
+): LibraryFileSearchFilters {
+  const filters: LibraryFileSearchFilters = {};
+  const normalizedBaseSearch = baseSearch.trim();
+  if (normalizedBaseSearch) {
+    filters.file = normalizedBaseSearch;
+  }
+
+  for (const field of selectedFields) {
+    const value = fieldValues[field]?.trim();
+    if (value) {
+      filters[field] = value;
+    }
+  }
+
+  return filters;
 }
 
 export function LibraryDetailPage() {
@@ -350,15 +401,20 @@ export function LibraryDetailPage() {
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [baseSearch, setBaseSearch] = useState("");
+  const [selectedMetadataFields, setSelectedMetadataFields] = useState<LibraryFileMetadataSearchField[]>([]);
+  const [fieldValues, setFieldValues] = useState<Partial<Record<LibraryFileMetadataSearchField, string>>>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
   const { activeJobs } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
   const hadActiveJobRef = useRef(Boolean(activeJob));
-  const deferredSearchQuery = useDeferredValue(searchQuery.trim());
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const fileColumns = useMemo(() => buildFileColumns(t), [t]);
+  const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
+  const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
     () => getVisibleLibraryStatisticTableColumns(statisticsSettings),
     [statisticsSettings],
@@ -375,13 +431,48 @@ export function LibraryDetailPage() {
     () => buildColumnTemplate(activeColumns, files, t),
     [activeColumns, files, t],
   );
+  const orderedMetadataFieldDefinitions = useMemo(
+    () => LIBRARY_STATISTIC_DEFINITIONS.filter((definition) => LIBRARY_METADATA_SEARCH_FIELDS.includes(definition.id)),
+    [],
+  );
+  const orderedSelectedMetadataFields = useMemo(
+    () =>
+      orderedMetadataFieldDefinitions
+        .map((definition) => definition.id)
+        .filter((field) => selectedMetadataFields.includes(field)),
+    [orderedMetadataFieldDefinitions, selectedMetadataFields],
+  );
+  const searchFieldErrors = useMemo(() => buildSearchFieldErrorMap(fieldValues), [fieldValues]);
+  const hasInvalidSearchField = useMemo(
+    () => Object.keys(searchFieldErrors).length > 0,
+    [searchFieldErrors],
+  );
+  const nextSearchFilters = useMemo(
+    () => buildActiveSearchFilters(baseSearch, orderedSelectedMetadataFields, fieldValues),
+    [baseSearch, fieldValues, orderedSelectedMetadataFields],
+  );
+  const appliedSearchFilterKey = useMemo(
+    () => serializeLibraryFileSearchFilters(appliedSearchFilters),
+    [appliedSearchFilters],
+  );
+  const deferredAppliedSearchFilterKey = useDeferredValue(appliedSearchFilterKey);
+  const deferredAppliedSearchFilters = useMemo(
+    () => deserializeLibraryFileSearchFilters(deferredAppliedSearchFilterKey),
+    [deferredAppliedSearchFilterKey],
+  );
+  const hasAppliedSearchFilters = useMemo(
+    () => hasActiveSearchFilters(deferredAppliedSearchFilters),
+    [deferredAppliedSearchFilters],
+  );
   const fileQueryKey = useMemo(
-    () => buildFileCacheKey(libraryId, deferredSearchQuery, sortKey, sortDirection),
-    [deferredSearchQuery, libraryId, sortDirection, sortKey],
+    () => buildFileCacheKey(libraryId, deferredAppliedSearchFilterKey, sortKey, sortDirection),
+    [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
   );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
   const filesRef = useRef<MediaFileRow[]>([]);
   const dataTableShellRef = useRef<HTMLDivElement | null>(null);
+  const searchToolsHeaderRef = useRef<HTMLDivElement | null>(null);
+  const searchToolsBodyRef = useRef<HTMLDivElement | null>(null);
   const inflightRequestGateRef = useRef(new InflightPageRequestGate());
   const initializedLibraryIdRef = useRef<string | null>(null);
   const initializedFileQueryKeyRef = useRef<string | null>(null);
@@ -398,6 +489,42 @@ export function LibraryDetailPage() {
     overscan: OVERSCAN_ROWS,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  const toggleMetadataField = useEffectEvent((field: LibraryFileMetadataSearchField) => {
+    startTransition(() => {
+      setSelectedMetadataFields((current) => {
+        if (current.includes(field)) {
+          return current.filter((entry) => entry !== field);
+        }
+        return [...current, field];
+      });
+      setFieldValues((current) => {
+        if (!(field in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[field];
+        return next;
+      });
+    });
+  });
+
+  const removeMetadataField = useEffectEvent((field: LibraryFileMetadataSearchField) => {
+    startTransition(() => {
+      setSelectedMetadataFields((current) => current.filter((entry) => entry !== field));
+      setFieldValues((current) => {
+        const next = { ...current };
+        delete next[field];
+        return next;
+      });
+    });
+  });
+
+  const updateMetadataFieldValue = useEffectEvent((field: LibraryFileMetadataSearchField, value: string) => {
+    startTransition(() => {
+      setFieldValues((current) => ({ ...current, [field]: value }));
+    });
+  });
 
   const loadLibrarySummary = useEffectEvent(async (showLoading = false) => {
     summaryAbortRef.current?.abort();
@@ -479,7 +606,7 @@ export function LibraryDetailPage() {
       const payload = await api.libraryFiles(libraryId, {
         offset,
         limit: PAGE_SIZE,
-        search: deferredSearchQuery,
+        filters: deferredAppliedSearchFilters,
         sortKey,
         sortDirection,
         signal: controller.signal,
@@ -533,8 +660,44 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
+    if (hasInvalidSearchField) {
+      return;
+    }
+    setAppliedSearchFilters(nextSearchFilters);
+  }, [hasInvalidSearchField, nextSearchFilters]);
+
+  useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        searchToolsHeaderRef.current?.contains(event.target as Node) ||
+        searchToolsBodyRef.current?.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setPickerOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [pickerOpen]);
 
   useEffect(() => {
     setVisibleColumns(["file", ...visibleStatisticColumns]);
@@ -709,7 +872,7 @@ export function LibraryDetailPage() {
       <AsyncPanel
         title={t("libraryDetail.analyzedFiles")}
         subtitle={
-          deferredSearchQuery
+          hasAppliedSearchFilters
             ? t("libraryDetail.indexedEntriesFiltered", {
                 shown: filesTotal,
                 total: displayLibrary?.file_count ?? filesTotal,
@@ -718,26 +881,119 @@ export function LibraryDetailPage() {
         }
         error={filesError}
         headerAddon={
-          <div className="data-table-search">
-            <label className="sr-only" htmlFor="library-file-search">
-              {t("libraryDetail.searchLabel")}
-            </label>
-            <input
-              id="library-file-search"
-              type="search"
-              value={searchQuery}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                startTransition(() => {
-                  setSearchQuery(nextValue);
-                });
-              }}
-              placeholder={t("libraryDetail.searchPlaceholder")}
-              autoComplete="off"
-            />
+          <div ref={searchToolsHeaderRef} className="data-table-search-layout">
+            <div className="metadata-search-control metadata-search-control-base search-filter-picker">
+              <button
+                type="button"
+                className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
+                aria-expanded={pickerOpen}
+                aria-controls="library-search-picker"
+                aria-label={t("libraryDetail.searchFields.addMetadataAria")}
+                title={t("libraryDetail.searchFields.addMetadata")}
+                onClick={() => setPickerOpen((current) => !current)}
+              >
+                <Plus size={18} aria-hidden="true" />
+              </button>
+              {pickerOpen ? (
+                <div id="library-search-picker" className="search-filter-picker-popover" role="menu">
+                  {orderedMetadataFieldDefinitions.map((definition) => {
+                    const field = definition.id;
+                    const config = getLibraryFileSearchConfig(field);
+                    const Icon = config.icon;
+                    const isSelected = selectedMetadataFields.includes(field);
+                    return (
+                      <button
+                        key={field}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={isSelected}
+                        className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                        onClick={() => toggleMetadataField(field)}
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                        <span>{t(config.labelKey)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <label className="sr-only" htmlFor="library-file-search">
+                {t("libraryDetail.searchLabel")}
+              </label>
+              <TooltipTrigger
+                ariaLabel={t("libraryDetail.searchLabel")}
+                content={t(baseSearchConfig.labelKey)}
+                className="metadata-search-icon-button metadata-search-icon-button-middle"
+              >
+                <BaseSearchIcon size={16} aria-hidden="true" />
+              </TooltipTrigger>
+              <input
+                id="library-file-search"
+                type="search"
+                value={baseSearch}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  startTransition(() => {
+                    setBaseSearch(nextValue);
+                  });
+                }}
+                placeholder={t("libraryDetail.searchFields.file.placeholder")}
+                autoComplete="off"
+              />
+            </div>
           </div>
         }
       >
+        <div className="data-table-tools data-table-tools-search">
+          {orderedSelectedMetadataFields.length > 0 ? (
+            <div
+              ref={searchToolsBodyRef}
+              className="metadata-search-fields"
+              aria-label={t("libraryDetail.searchFields.activeMetadata")}
+            >
+              {orderedSelectedMetadataFields.map((field) => {
+                const config = getLibraryFileSearchConfig(field);
+                const Icon = config.icon;
+                const errorKey = searchFieldErrors[field];
+                return (
+                  <div key={field} className={`metadata-search-row${errorKey ? " is-invalid" : ""}`}>
+                    <div className="metadata-search-control">
+                      <TooltipTrigger
+                        ariaLabel={t("libraryDetail.searchFields.tooltipAria")}
+                        content={
+                          config.tooltipKey
+                            ? `${t(config.labelKey)}\n\n${t(config.tooltipKey)}`
+                            : t(config.labelKey)
+                        }
+                        preserveLineBreaks={Boolean(config.tooltipKey)}
+                        className="metadata-search-icon-button"
+                      >
+                        <Icon size={16} />
+                      </TooltipTrigger>
+                      <input
+                        id={`library-metadata-search-${field}`}
+                        type="search"
+                        value={fieldValues[field] ?? ""}
+                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
+                        placeholder={t(config.placeholderKey)}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        className="metadata-search-remove"
+                        aria-label={t("libraryDetail.searchFields.removeAria", { field: t(config.labelKey) })}
+                        onClick={() => removeMetadataField(field)}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                    {errorKey ? <p className="metadata-search-error">{t(errorKey)}</p> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
         {isFilesLoading && files.length === 0 ? (
           <div className="panel-loader">
             <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
