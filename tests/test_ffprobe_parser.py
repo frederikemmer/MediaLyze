@@ -83,3 +83,31 @@ def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:
 
     assert len(normalized.video_streams) == 1
     assert normalized.video_streams[0].codec == "h264"
+
+
+def test_normalize_ffprobe_payload_extracts_dolby_vision_profile() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+                "side_data_list": [
+                    {
+                        "side_data_type": "DOVI configuration record",
+                        "dv_profile": 8,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 8"

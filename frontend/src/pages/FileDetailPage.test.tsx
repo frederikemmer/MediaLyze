@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+import { AppDataProvider } from "../lib/app-data";
 import { api, type MediaFileDetail, type MediaFileQualityScoreDetail } from "../lib/api";
 import { FileDetailPage } from "./FileDetailPage";
 
@@ -62,9 +63,11 @@ function createQualityDetail(): MediaFileQualityScoreDetail {
 function renderPage(fileId: number) {
   return render(
     <MemoryRouter initialEntries={[`/files/${fileId}`]}>
-      <Routes>
-        <Route path="/files/:fileId" element={<FileDetailPage />} />
-      </Routes>
+      <AppDataProvider>
+        <Routes>
+          <Route path="/files/:fileId" element={<FileDetailPage />} />
+        </Routes>
+      </AppDataProvider>
     </MemoryRouter>,
   );
 }
@@ -77,6 +80,12 @@ afterEach(() => {
 describe("FileDetailPage", () => {
   it("renders long paths as segmented chips with full-path and filename tooltips", async () => {
     const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false },
+    });
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
 
@@ -99,6 +108,12 @@ describe("FileDetailPage", () => {
 
   it("stays stable when the quality detail request fails", async () => {
     const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false },
+    });
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockRejectedValue(new Error("quality unavailable"));
 

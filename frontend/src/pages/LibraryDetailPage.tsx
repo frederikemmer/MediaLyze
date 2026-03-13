@@ -28,6 +28,7 @@ import {
   type MediaFileSortKey,
 } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
+import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
   deserializeLibraryFileSearchFilters,
@@ -246,6 +247,7 @@ function buildFileColumns(
   detailCache: Record<number, MediaFileQualityScoreDetail>,
   detailLoading: Record<number, boolean>,
   loadDetail: (fileId: number) => void,
+  showDolbyVisionProfiles: boolean,
 ): FileColumnDefinition[] {
   return [
     {
@@ -289,8 +291,8 @@ function buildFileColumns(
       key: "hdr_type",
       labelKey: "fileTable.hdr",
       sizing: { mode: "content", minPx: 72, maxPx: 92 },
-      measureValue: (file) => file.hdr_type ?? t("fileTable.sdr"),
-      render: (file) => file.hdr_type ?? t("fileTable.sdr"),
+      measureValue: (file) => formatHdrType(file.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr"),
+      render: (file) => formatHdrType(file.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr"),
     },
     {
       key: "duration",
@@ -430,7 +432,7 @@ function buildActiveSearchFilters(
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
-  const { libraries } = useAppData();
+  const { appSettings, libraries } = useAppData();
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
@@ -459,6 +461,7 @@ export function LibraryDetailPage() {
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
+  const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -478,8 +481,8 @@ export function LibraryDetailPage() {
     }
   });
   const fileColumns = useMemo(
-    () => buildFileColumns(t, qualityScoreDetails, qualityScoreLoading, loadQualityScoreDetail),
-    [loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, t],
+    () => buildFileColumns(t, qualityScoreDetails, qualityScoreLoading, loadQualityScoreDetail, showDolbyVisionProfiles),
+    [loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, showDolbyVisionProfiles, t],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
@@ -927,7 +930,9 @@ export function LibraryDetailPage() {
       <div className="media-grid">
         {visibleStatisticPanels.length > 0 ? (
           visibleStatisticPanels.map((panel) => {
-            const items = getLibraryStatisticPanelItems(libraryStatistics, panel);
+            const items = panel.id === "hdr_type"
+              ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel), showDolbyVisionProfiles)
+              : getLibraryStatisticPanelItems(libraryStatistics, panel);
             const formattedItems = panel.panelFormatKind
               ? formatDistributionItems(items, panel.panelFormatKind)
               : items;

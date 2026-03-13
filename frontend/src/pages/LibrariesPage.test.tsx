@@ -14,6 +14,9 @@ function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     ignore_patterns: ["movie.tmp", "*/@eaDir/*"],
     user_ignore_patterns: ["movie.tmp"],
     default_ignore_patterns: ["*/@eaDir/*"],
+    feature_flags: {
+      show_dolby_vision_profiles: false,
+    },
     ...overrides,
   };
 }
@@ -110,6 +113,35 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith({
         user_ignore_patterns: ["movie.tmp"],
         default_ignore_patterns: ["*/#recycle/*"],
+        feature_flags: {
+          show_dolby_vision_profiles: false,
+        },
+      }),
+    );
+  });
+
+  it("persists the dolby vision profile feature flag", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        feature_flags: {
+          show_dolby_vision_profiles: true,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("Show Dolby Vision Profiles");
+    await waitFor(() => expect(checkbox).toBeEnabled());
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        feature_flags: {
+          show_dolby_vision_profiles: true,
+        },
       }),
     );
   });

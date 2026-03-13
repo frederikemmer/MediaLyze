@@ -1,5 +1,6 @@
 import {
   createContext,
+  useEffect,
   useContext,
   useEffectEvent,
   useMemo,
@@ -8,15 +9,19 @@ import {
   type ReactNode,
 } from "react";
 
-import { api, type DashboardResponse, type LibrarySummary } from "./api";
+import { api, type AppSettings, type DashboardResponse, type LibrarySummary } from "./api";
 
 type AppDataContextValue = {
+  appSettings: AppSettings;
+  appSettingsLoaded: boolean;
   dashboard: DashboardResponse | null;
   dashboardLoaded: boolean;
   libraries: LibrarySummary[];
   librariesLoaded: boolean;
+  loadAppSettings: (force?: boolean) => Promise<AppSettings>;
   loadDashboard: (force?: boolean) => Promise<DashboardResponse>;
   loadLibraries: (force?: boolean) => Promise<LibrarySummary[]>;
+  setAppSettings: (payload: AppSettings) => void;
   setDashboard: (payload: DashboardResponse) => void;
   setLibraries: (payload: LibrarySummary[]) => void;
   upsertLibrary: (payload: LibrarySummary) => void;
@@ -25,13 +30,41 @@ type AppDataContextValue = {
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  ignore_patterns: [],
+  user_ignore_patterns: [],
+  default_ignore_patterns: [],
+  feature_flags: {
+    show_dolby_vision_profiles: false,
+  },
+};
+
+function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined): AppSettings {
+  return {
+    ignore_patterns: payload?.ignore_patterns ?? [],
+    user_ignore_patterns: payload?.user_ignore_patterns ?? [],
+    default_ignore_patterns: payload?.default_ignore_patterns ?? [],
+    feature_flags: {
+      show_dolby_vision_profiles: payload?.feature_flags?.show_dolby_vision_profiles ?? false,
+    },
+  };
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
+  const [appSettings, setAppSettingsState] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
   const [dashboard, setDashboardState] = useState<DashboardResponse | null>(null);
   const [dashboardLoaded, setDashboardLoaded] = useState(false);
   const [libraries, setLibrariesState] = useState<LibrarySummary[]>([]);
   const [librariesLoaded, setLibrariesLoaded] = useState(false);
+  const appSettingsRequestRef = useRef<Promise<AppSettings> | null>(null);
   const dashboardRequestRef = useRef<Promise<DashboardResponse> | null>(null);
   const librariesRequestRef = useRef<Promise<LibrarySummary[]> | null>(null);
+
+  const setAppSettings = useEffectEvent((payload: AppSettings) => {
+    setAppSettingsState(normalizeAppSettings(payload));
+    setAppSettingsLoaded(true);
+  });
 
   const setDashboard = useEffectEvent((payload: DashboardResponse) => {
     setDashboardState(payload);
@@ -60,6 +93,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const removeLibrary = useEffectEvent((libraryId: number) => {
     setLibrariesState((current) => current.filter((library) => library.id !== libraryId));
     setLibrariesLoaded(true);
+  });
+
+  const loadAppSettings = useEffectEvent(async (force = false) => {
+    if (!force) {
+      if (appSettingsRequestRef.current) {
+        return appSettingsRequestRef.current;
+      }
+      if (appSettingsLoaded) {
+        return appSettings;
+      }
+    }
+
+    const request = api
+      .appSettings()
+      .then((payload) => {
+        const normalized = normalizeAppSettings(payload);
+        setAppSettingsState(normalized);
+        setAppSettingsLoaded(true);
+        return normalized;
+      })
+      .finally(() => {
+        if (appSettingsRequestRef.current === request) {
+          appSettingsRequestRef.current = null;
+        }
+      });
+
+    appSettingsRequestRef.current = request;
+    return request;
   });
 
   const loadDashboard = useEffectEvent(async (force = false) => {
@@ -118,30 +179,42 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      appSettings,
+      appSettingsLoaded,
       dashboard,
       dashboardLoaded,
       libraries,
       librariesLoaded,
+      loadAppSettings,
       loadDashboard,
       loadLibraries,
+      setAppSettings,
       setDashboard,
       setLibraries,
       upsertLibrary,
       removeLibrary,
     }),
     [
+      appSettings,
+      appSettingsLoaded,
       dashboard,
       dashboardLoaded,
       libraries,
       librariesLoaded,
+      loadAppSettings,
       loadDashboard,
       loadLibraries,
+      setAppSettings,
       setDashboard,
       setLibraries,
       upsertLibrary,
       removeLibrary,
     ],
   );
+
+  useEffect(() => {
+    void loadAppSettings().catch(() => undefined);
+  }, [loadAppSettings]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }

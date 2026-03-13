@@ -192,6 +192,9 @@ export type AppSettings = {
   ignore_patterns: string[];
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
+  feature_flags: {
+    show_dolby_vision_profiles: boolean;
+  };
 };
 
 export type ScanJob = {
@@ -311,6 +314,9 @@ export const api = {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
+    feature_flags?: {
+      show_dolby_vision_profiles?: boolean;
+    };
   }) =>
     request<AppSettings>("/app-settings", {
       method: "PATCH",

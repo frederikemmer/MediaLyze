@@ -513,7 +513,14 @@ def test_list_library_files_supports_resolution_aliases_and_sdr_filter() -> None
         db.flush()
         db.add_all(
             [
-                VideoStream(media_file_id=hdr.id, stream_index=0, codec="hevc", width=3840, height=2160, hdr_type="Dolby Vision"),
+                VideoStream(
+                    media_file_id=hdr.id,
+                    stream_index=0,
+                    codec="hevc",
+                    width=3840,
+                    height=2160,
+                    hdr_type="Dolby Vision Profile 8",
+                ),
                 VideoStream(media_file_id=sdr.id, stream_index=0, codec="h264", width=1920, height=1080),
             ]
         )

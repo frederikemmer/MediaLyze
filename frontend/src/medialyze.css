@@ -717,6 +717,46 @@
   box-shadow: 0 0 0 4px rgba(27, 153, 139, 0.12);
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.app-settings-flag-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.app-settings-flag-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-settings-flag-toggle span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-settings-flag-toggle input {
+  margin: 0;
+  justify-self: start;
+  flex: 0 0 auto;
+}
+
 .tooltip-trigger {
   display: inline-flex;
   align-items: center;

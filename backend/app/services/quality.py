@@ -324,6 +324,8 @@ def _normalize_dynamic_range(value: str | None) -> str:
     candidate = (value or "").strip().lower().replace(" ", "_")
     if not candidate:
         return "sdr"
+    if candidate.startswith("dolby_vision"):
+        return "dolby_vision"
     mapping = {
         "sdr": "sdr",
         "hdr10": "hdr10",

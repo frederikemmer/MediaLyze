@@ -78,3 +78,36 @@ def test_quality_score_penalizes_low_quality_media() -> None:
     )
 
     assert calculate_quality_score(build_quality_score_input(probe)).score <= 5
+
+
+def test_quality_score_treats_dolby_vision_profiles_as_dolby_vision() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=14000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="hevc",
+                profile="Main 10",
+                width=3840,
+                height=2160,
+                pix_fmt="yuv420p10le",
+                color_space=None,
+                color_transfer="smpte2084",
+                color_primaries=None,
+                frame_rate=23.976,
+                bit_rate=12000000,
+                hdr_type="Dolby Vision Profile 8",
+            )
+        ],
+    )
+
+    breakdown = calculate_quality_score(build_quality_score_input(probe))
+    dynamic_range = next(category for category in breakdown.categories if category.key == "dynamic_range")
+
+    assert dynamic_range.actual == "dolby_vision"

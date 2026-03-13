@@ -42,17 +42,34 @@ def _parse_frame_rate(value: str | None) -> float | None:
     return _safe_float(value)
 
 
+def _dolby_vision_profile(stream: dict[str, Any]) -> int | None:
+    side_data = stream.get("side_data_list") or []
+    for entry in side_data:
+        if not isinstance(entry, dict):
+            continue
+        side_data_type = str(entry.get("side_data_type") or "").strip().lower()
+        if "dovi configuration record" not in side_data_type:
+            continue
+        profile = _safe_int(entry.get("dv_profile"))
+        if profile is not None:
+            return profile
+    return None
+
+
 def _hdr_type(stream: dict[str, Any]) -> str | None:
     transfer = (stream.get("color_transfer") or "").lower()
     profile = (stream.get("profile") or "").lower()
     side_data = stream.get("side_data_list") or []
     side_data_text = " ".join(str(item).lower() for item in side_data)
+    dolby_vision_profile = _dolby_vision_profile(stream)
 
+    if dolby_vision_profile is not None:
+        return f"Dolby Vision Profile {dolby_vision_profile}"
+    if "dovi" in profile or "dovi" in side_data_text:
+        return "Dolby Vision"
     if "arib-std-b67" in transfer:
         return "HLG"
     if "smpte2084" in transfer:
-        if "dovi" in profile or "dovi" in side_data_text:
-            return "Dolby Vision"
         if "dynamic_metadata_plus" in side_data_text or "hdr10+" in side_data_text or "smpte2094" in side_data_text:
             return "HDR10+"
         return "HDR10"

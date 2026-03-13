@@ -63,6 +63,12 @@
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",
     "language": "Interface language",
+    "featureFlagsTitle": "Feature flags",
+    "featureFlags": {
+      "showDolbyVisionProfiles": "Show Dolby Vision Profiles",
+      "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
+      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\"."
+    },
     "quality": {
       "weight": "Weight",
       "minimum": "Minimum",

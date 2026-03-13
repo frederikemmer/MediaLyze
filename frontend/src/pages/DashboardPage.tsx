@@ -6,6 +6,7 @@ import { DistributionList } from "../components/DistributionList";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
+import { collapseHdrDistribution } from "../lib/hdr";
 import {
   getDashboardStatisticPanelItems,
   getLibraryStatisticsSettings,
@@ -15,12 +16,13 @@ import { useScanJobs } from "../lib/scan-jobs";
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const { dashboard, dashboardLoaded, loadDashboard } = useAppData();
+  const { appSettings, dashboard, dashboardLoaded, loadDashboard } = useAppData();
   const [error, setError] = useState<string | null>(null);
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const visibleDashboardPanels = getVisibleDashboardStatisticPanels(statisticsSettings);
+  const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
 
   useEffect(() => {
     if (dashboardLoaded) {
@@ -59,7 +61,9 @@ export function DashboardPage() {
       <div className="media-grid">
         {visibleDashboardPanels.length > 0 ? (
           visibleDashboardPanels.map((panel) => {
-            const items = getDashboardStatisticPanelItems(dashboard, panel);
+            const items = panel.id === "hdr_type"
+              ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel), showDolbyVisionProfiles)
+              : getDashboardStatisticPanelItems(dashboard, panel);
             const dashboardFormatKind = panel.dashboardFormatKind;
             const formattedItems = dashboardFormatKind
               ? items.map((item) => ({

@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.models.entities import AppSetting
-from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
+from backend.app.schemas.app_settings import (
+    AppSettingsRead,
+    AppSettingsUpdate,
+    FeatureFlagsRead,
+)
 from backend.app.utils.glob_patterns import normalize_ignore_patterns
 
 APP_SETTINGS_KEY = "global"
@@ -47,6 +51,17 @@ def _merge_ignore_patterns(*pattern_groups: list[str]) -> list[str]:
     return merged
 
 
+def _default_feature_flags() -> FeatureFlagsRead:
+    return FeatureFlagsRead()
+
+
+def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
+    candidate = payload if isinstance(payload, dict) else {}
+    return FeatureFlagsRead(
+        show_dolby_vision_profiles=bool(candidate.get("show_dolby_vision_profiles", False)),
+    )
+
+
 def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead:
     payload = value if isinstance(value, dict) else {}
     user_ignore_patterns = payload.get("user_ignore_patterns")
@@ -64,11 +79,13 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
     else:
         normalized_user = []
         normalized_default = _seeded_default_ignore_patterns(settings)
+    feature_flags = _deserialize_feature_flags(payload.get("feature_flags"))
 
     return AppSettingsRead(
         ignore_patterns=_merge_ignore_patterns(normalized_user, normalized_default),
         user_ignore_patterns=normalized_user,
         default_ignore_patterns=normalized_default,
+        feature_flags=feature_flags,
     )
 
 
@@ -80,6 +97,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
             user_ignore_patterns=[],
             default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
+            feature_flags=_default_feature_flags(),
         )
     return _deserialize_app_settings(setting.value, resolved_settings)
 
@@ -105,6 +123,9 @@ def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Setti
         if update_default_patterns
         else current.default_ignore_patterns
     )
+    next_feature_flags = current.feature_flags.model_copy(
+        update=payload.feature_flags.model_dump(exclude_none=True) if payload.feature_flags is not None else {}
+    )
 
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
     if setting is None:
@@ -114,6 +135,7 @@ def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Setti
     setting.value = {
         "user_ignore_patterns": next_user_ignore_patterns,
         "default_ignore_patterns": next_default_ignore_patterns,
+        "feature_flags": next_feature_flags.model_dump(mode="json"),
     }
     db.commit()
     db.refresh(setting)

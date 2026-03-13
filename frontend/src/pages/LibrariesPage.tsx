@@ -148,7 +148,17 @@ function toPersistedIgnorePatterns(payload: {
 
 export function LibrariesPage() {
   const { t, i18n } = useTranslation();
-  const { libraries, librariesLoaded, loadLibraries, upsertLibrary, removeLibrary: removeLibraryFromStore } = useAppData();
+  const {
+    appSettings,
+    appSettingsLoaded,
+    libraries,
+    librariesLoaded,
+    loadAppSettings,
+    loadLibraries,
+    setAppSettings,
+    upsertLibrary,
+    removeLibrary: removeLibraryFromStore,
+  } = useAppData();
   const [isLoadingLibraries, setIsLoadingLibraries] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -172,6 +182,9 @@ export function LibrariesPage() {
   const [ignorePatternsStatus, setIgnorePatternsStatus] = useState<string | null>(null);
   const [isLoadingIgnorePatterns, setIsLoadingIgnorePatterns] = useState(true);
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
+  const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
+  const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
+  const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -245,19 +258,19 @@ export function LibrariesPage() {
   }, [qualityPickerOpenKey]);
 
   useEffect(() => {
+    if (appSettingsLoaded) {
+      setIsLoadingIgnorePatterns(false);
+      setIgnorePatternsLoadError(null);
+      return;
+    }
+
     let active = true;
     setIsLoadingIgnorePatterns(true);
-    void api
-      .appSettings()
-      .then((payload) => {
+    void loadAppSettings()
+      .then(() => {
         if (!active) {
           return;
         }
-        const persisted = toPersistedIgnorePatterns(payload);
-        persistedIgnorePatterns.current = persisted;
-        ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
-        setUserIgnorePatternInputs(persisted.user);
-        setDefaultIgnorePatternInputs(persisted.default);
         setIgnorePatternsLoadError(null);
       })
       .catch((reason: Error) => {
@@ -275,7 +288,19 @@ export function LibrariesPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [appSettingsLoaded, loadAppSettings]);
+
+  useEffect(() => {
+    if (!appSettingsLoaded) {
+      return;
+    }
+    const persisted = toPersistedIgnorePatterns(appSettings);
+    persistedIgnorePatterns.current = persisted;
+    ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
+    setUserIgnorePatternInputs(persisted.user);
+    setDefaultIgnorePatternInputs(persisted.default);
+    setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
+  }, [appSettings, appSettingsLoaded]);
 
   useEffect(() => {
     return () => {
@@ -436,15 +461,34 @@ export function LibrariesPage() {
     });
   }
 
-  async function persistIgnorePatterns(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
+  async function persistAppSettingsSnapshot(
+    nextUserPatterns: string[],
+    nextDefaultPatterns: string[],
+    nextShowDolbyVisionProfiles: boolean,
+  ) {
+    return api.updateAppSettings({
+      user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
+      default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
+      feature_flags: {
+        show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
+      },
+    });
+  }
+
+  async function persistIgnorePatterns(
+    nextUserPatterns: string[],
+    nextDefaultPatterns: string[],
+    nextShowDolbyVisionProfiles = showDolbyVisionProfiles,
+  ) {
     const requestId = ignorePatternsRequestId.current + 1;
     ignorePatternsRequestId.current = requestId;
     setIsSavingIgnorePatterns(true);
     try {
-      const updated = await api.updateAppSettings({
-        user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
-        default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
-      });
+      const updated = await persistAppSettingsSnapshot(
+        nextUserPatterns,
+        nextDefaultPatterns,
+        nextShowDolbyVisionProfiles,
+      );
       const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
         ignorePatternsSuccessId.current = requestId;
@@ -453,8 +497,11 @@ export function LibrariesPage() {
       if (requestId === ignorePatternsRequestId.current) {
         setUserIgnorePatternInputs(persisted.user);
         setDefaultIgnorePatternInputs(persisted.default);
+        setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setIgnorePatternsStatus(null);
+        setFeatureFlagsStatus(null);
       }
+      setAppSettings(updated);
       return persisted;
     } catch (reason) {
       if (requestId === ignorePatternsRequestId.current) {
@@ -467,6 +514,25 @@ export function LibrariesPage() {
       if (requestId === ignorePatternsRequestId.current) {
         setIsSavingIgnorePatterns(false);
       }
+    }
+  }
+
+  async function toggleDolbyVisionProfiles(enabled: boolean) {
+    const previousValue = showDolbyVisionProfiles;
+    setShowDolbyVisionProfiles(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(userIgnorePatternInputs, defaultIgnorePatternInputs, enabled);
+      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setShowDolbyVisionProfiles(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
     }
   }
 
@@ -1358,6 +1424,31 @@ export function LibrariesPage() {
                   <option value="de">{t("language.de")}</option>
                 </select>
               </div>
+              <div className="field">
+                <div className="field-label-row">
+                  <label>{t("libraries.featureFlagsTitle")}</label>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="show-dolby-vision-profiles">
+                    <input
+                      id="show-dolby-vision-profiles"
+                      type="checkbox"
+                      checked={showDolbyVisionProfiles}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleDolbyVisionProfiles(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.showDolbyVisionProfiles")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showDolbyVisionProfilesTooltipAria")}
+                    content={t("libraries.featureFlags.showDolbyVisionProfilesTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+              </div>
+              {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}
             </div>
           </AsyncPanel>
         </div>
