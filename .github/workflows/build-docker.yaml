@@ -1,8 +1,15 @@
 name: publish official release
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'CHANGELOG.md'
+      - '.github/scripts/release_metadata.py'
 
 permissions:
   contents: write
@@ -21,16 +28,49 @@ jobs:
           fetch-depth: 0
 
       - name: Validate release metadata
-        run: python3 .github/scripts/release_metadata.py validate --tag-ref "${GITHUB_REF}"
+        run: python3 .github/scripts/release_metadata.py validate
 
       - name: Resolve release version
         id: version
         run: echo "version=$(python3 .github/scripts/release_metadata.py version)" >> "$GITHUB_OUTPUT"
 
+      - name: Check existing tag and release state
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version.outputs.version }}"
+          tag_name="v${version}"
+
+          git fetch --tags origin
+
+          if git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
+            tag_commit="$(git rev-list -n 1 "refs/tags/${tag_name}")"
+            if [[ "${tag_commit}" != "${GITHUB_SHA}" ]]; then
+              echo "Tag ${tag_name} already exists on ${tag_commit}, expected ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if gh release view "${tag_name}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Log release target
-        run: echo "Publishing version ${{ steps.version.outputs.version }} from ${GITHUB_REF_NAME}"
+        run: |
+          echo "Publishing version ${{ steps.version.outputs.version }} from ${GITHUB_SHA}"
+          echo "tag_exists=${{ steps.state.outputs.tag_exists }}"
+          echo "release_exists=${{ steps.state.outputs.release_exists }}"
 
       - name: Log in to GitHub Container Registry
+        if: steps.state.outputs.release_exists != 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -38,6 +78,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
+        if: steps.state.outputs.release_exists != 'true'
         run: |
           docker build \
             --build-arg APP_VERSION="${{ steps.version.outputs.version }}" \
@@ -48,13 +89,23 @@ jobs:
           docker push "${IMAGE_NAME}:${{ steps.version.outputs.version }}"
 
       - name: Extract release notes
+        if: steps.state.outputs.release_exists != 'true'
         run: python3 .github/scripts/release_metadata.py release-notes --version "${{ steps.version.outputs.version }}" > release-notes.md
 
+      - name: Create annotated git tag
+        if: steps.state.outputs.tag_exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" "${GITHUB_SHA}" -m "MediaLyze v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
       - name: Create GitHub release
+        if: steps.state.outputs.release_exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "v${{ steps.version.outputs.version }}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "MediaLyze ${GITHUB_REF_NAME}" \
+            --title "MediaLyze v${{ steps.version.outputs.version }}" \
             --notes-file release-notes.md
