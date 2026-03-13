@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch origin main --depth=1
+          git fetch origin main:refs/remotes/origin/main
           git fetch --tags origin
 
           main_branch_version="$(
@@ -47,7 +47,9 @@ jobs:
             base_commit="$(git rev-list -n 1 "${latest_release_tag}")"
           else
             base_version="${main_branch_version}"
-            base_commit="$(git merge-base HEAD origin/main)"
+            if ! base_commit="$(git merge-base HEAD origin/main)"; then
+              base_commit="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+            fi
           fi
 
           if [[ -z "${base_version}" ]]; then
