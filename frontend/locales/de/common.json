@@ -140,7 +140,7 @@
     "size": "Größe",
     "codec": "Codec",
     "resolution": "Auflösung",
-    "hdr": "HDR",
+    "hdr": "DynR",
     "duration": "Dauer",
     "audioCodecs": "Audio-Codecs",
     "audioLanguages": "Audio-Sprachen",

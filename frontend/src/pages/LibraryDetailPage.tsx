@@ -43,12 +43,26 @@ import { useScanJobs } from "../lib/scan-jobs";
 type FileColumnKey = MediaFileSortKey;
 type SortDirection = "asc" | "desc";
 
+type FileColumnSizing =
+  | {
+      mode: "content";
+      minPx?: number;
+      maxPx?: number;
+    }
+  | {
+      mode: "flex";
+      minPx: number;
+      fr: number;
+      maxPx?: number;
+    };
+
 type FileColumnDefinition = {
   key: FileColumnKey;
   labelKey: string;
-  width: string;
+  sizing: FileColumnSizing;
   sticky?: boolean;
   hideable?: boolean;
+  measureValue: (file: MediaFileRow) => string;
   render: (file: MediaFileRow) => ReactNode;
 };
 
@@ -61,9 +75,17 @@ const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
+const HEADER_FONT_SIZE_PX = 12.48;
+const BODY_FONT_SIZE_PX = 16;
+const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
+const BODY_FONT = `400 ${BODY_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
+const HEADER_LETTER_SPACING_PX = HEADER_FONT_SIZE_PX * 0.08;
+const CELL_HORIZONTAL_PADDING_PX = 20;
+const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
 const libraryFileListCache = new Map<string, CachedFileList>();
+let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
 function formatDistributionItems(
   items: { label: string; value: number }[],
@@ -106,14 +128,83 @@ function ariaSortValue(isActive: boolean, direction: SortDirection): "none" | "a
   return direction === "asc" ? "ascending" : "descending";
 }
 
+function getMeasurementContext(): CanvasRenderingContext2D | null {
+  if (measurementCanvasContext !== undefined) {
+    return measurementCanvasContext;
+  }
+
+  if (typeof document === "undefined") {
+    measurementCanvasContext = null;
+    return measurementCanvasContext;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom")) {
+    measurementCanvasContext = null;
+    return measurementCanvasContext;
+  }
+
+  measurementCanvasContext = document.createElement("canvas").getContext("2d");
+  return measurementCanvasContext;
+}
+
+function measureTextWidth(text: string, font: string, letterSpacingPx = 0): number {
+  const content = text.trim();
+  if (content.length === 0) {
+    return 0;
+  }
+
+  const context = getMeasurementContext();
+  if (!context) {
+    const estimatedFontSize = font.includes(`${HEADER_FONT_SIZE_PX}px`) ? HEADER_FONT_SIZE_PX : BODY_FONT_SIZE_PX;
+    return content.length * estimatedFontSize * 0.62 + Math.max(content.length - 1, 0) * letterSpacingPx;
+  }
+
+  context.font = font;
+  return context.measureText(content).width + Math.max(content.length - 1, 0) * letterSpacingPx;
+}
+
+function clampWidth(widthPx: number, minPx?: number, maxPx?: number): number {
+  const min = minPx ?? 0;
+  const max = maxPx ?? Number.POSITIVE_INFINITY;
+  return Math.min(Math.max(widthPx, min), max);
+}
+
+function buildColumnTemplate(
+  columns: FileColumnDefinition[],
+  files: MediaFileRow[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return columns
+    .map((column) => {
+      const headerWidth =
+        measureTextWidth(t(column.labelKey).toUpperCase(), HEADER_FONT, HEADER_LETTER_SPACING_PX) +
+        SORT_INDICATOR_WIDTH_PX +
+        CELL_HORIZONTAL_PADDING_PX;
+      const contentWidth = files.reduce((maxWidth, file) => {
+        const valueWidth = measureTextWidth(column.measureValue(file), BODY_FONT) + CELL_HORIZONTAL_PADDING_PX;
+        return Math.max(maxWidth, valueWidth);
+      }, 0);
+      const measuredWidth = Math.ceil(Math.max(headerWidth, contentWidth));
+
+      if (column.sizing.mode === "content") {
+        return `${Math.ceil(clampWidth(measuredWidth, column.sizing.minPx, column.sizing.maxPx))}px`;
+      }
+
+      const flexibleMinWidth = clampWidth(measuredWidth, column.sizing.minPx, column.sizing.maxPx);
+      return `minmax(${Math.ceil(flexibleMinWidth)}px, ${column.sizing.fr}fr)`;
+    })
+    .join(" ");
+}
+
 function buildFileColumns(t: (key: string, options?: Record<string, unknown>) => string): FileColumnDefinition[] {
   return [
     {
       key: "file",
       labelKey: "fileTable.file",
-      width: "24rem",
+      sizing: { mode: "flex", minPx: 240, fr: 2.2, maxPx: 420 },
       sticky: true,
       hideable: false,
+      measureValue: (file) => file.filename,
       render: (file) => (
         <div className="media-file-cell">
           <Link to={`/files/${file.id}`} className="file-link">
@@ -125,79 +216,93 @@ function buildFileColumns(t: (key: string, options?: Record<string, unknown>) =>
     {
       key: "size",
       labelKey: "fileTable.size",
-      width: "9rem",
+      sizing: { mode: "content", minPx: 82, maxPx: 110 },
+      measureValue: (file) => formatBytes(file.size_bytes),
       render: (file) => formatBytes(file.size_bytes),
     },
     {
       key: "video_codec",
       labelKey: "fileTable.codec",
-      width: "10rem",
+      sizing: { mode: "content", minPx: 112, maxPx: 168 },
+      measureValue: (file) =>
+        file.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileTable.na"),
       render: (file) => (file.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileTable.na")),
     },
     {
       key: "resolution",
       labelKey: "fileTable.resolution",
-      width: "10rem",
+      sizing: { mode: "content", minPx: 120, maxPx: 156 },
+      measureValue: (file) => file.resolution ?? t("fileTable.na"),
       render: (file) => file.resolution ?? t("fileTable.na"),
     },
     {
       key: "hdr_type",
       labelKey: "fileTable.hdr",
-      width: "8rem",
+      sizing: { mode: "content", minPx: 72, maxPx: 92 },
+      measureValue: (file) => file.hdr_type ?? t("fileTable.sdr"),
       render: (file) => file.hdr_type ?? t("fileTable.sdr"),
     },
     {
       key: "duration",
       labelKey: "fileTable.duration",
-      width: "9rem",
+      sizing: { mode: "content", minPx: 90, maxPx: 110 },
+      measureValue: (file) => formatDuration(file.duration),
       render: (file) => formatDuration(file.duration),
     },
     {
       key: "audio_codecs",
       labelKey: "fileTable.audioCodecs",
-      width: "13rem",
+      sizing: { mode: "content", minPx: 132, maxPx: 220 },
+      measureValue: (file) => compactValues(file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio"))),
       render: (file) => compactValues(file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio"))),
     },
     {
       key: "audio_languages",
       labelKey: "fileTable.audioLanguages",
-      width: "12rem",
+      sizing: { mode: "flex", minPx: 144, fr: 1.15, maxPx: 240 },
+      measureValue: (file) => compactValues(file.audio_languages),
       render: (file) => compactValues(file.audio_languages),
     },
     {
       key: "subtitle_languages",
       labelKey: "fileTable.subtitleLanguages",
-      width: "12rem",
+      sizing: { mode: "flex", minPx: 144, fr: 1.15, maxPx: 240 },
+      measureValue: (file) => compactValues(file.subtitle_languages),
       render: (file) => compactValues(file.subtitle_languages),
     },
     {
       key: "subtitle_codecs",
       labelKey: "fileTable.subtitleCodecs",
-      width: "13rem",
+      sizing: { mode: "content", minPx: 126, maxPx: 220 },
+      measureValue: (file) => compactValues(file.subtitle_codecs.map((codec) => formatCodecLabel(codec, "subtitle"))),
       render: (file) => compactValues(file.subtitle_codecs.map((codec) => formatCodecLabel(codec, "subtitle"))),
     },
     {
       key: "subtitle_sources",
       labelKey: "fileTable.subtitleSources",
-      width: "11rem",
+      sizing: { mode: "content", minPx: 110, maxPx: 170 },
+      measureValue: (file) => compactValues(file.subtitle_sources, 2),
       render: (file) => compactValues(file.subtitle_sources, 2),
     },
     {
       key: "mtime",
       labelKey: "fileTable.modified",
-      width: "12rem",
+      sizing: { mode: "content", minPx: 128, maxPx: 164 },
+      measureValue: (file) => formatDate(new Date(file.mtime * 1000).toISOString()),
       render: (file) => formatDate(new Date(file.mtime * 1000).toISOString()),
     },
     {
       key: "last_analyzed_at",
       labelKey: "fileTable.lastAnalyzed",
-      width: "12rem",
+      sizing: { mode: "content", minPx: 138, maxPx: 172 },
+      measureValue: (file) => formatDate(file.last_analyzed_at),
       render: (file) => formatDate(file.last_analyzed_at),
     },
     {
       key: "quality_score",
       labelKey: "fileTable.score",
-      width: "10rem",
+      sizing: { mode: "content", minPx: 120, maxPx: 120 },
+      measureValue: (file) => `${file.quality_score}/10`,
       render: (file) => (
         <div className="score-cell">
           <strong>{file.quality_score}/10</strong>
@@ -267,8 +372,8 @@ export function LibraryDetailPage() {
     [fileColumns, visibleColumns],
   );
   const columnTemplate = useMemo(
-    () => activeColumns.map((column) => `minmax(0, ${column.width})`).join(" "),
-    [activeColumns],
+    () => buildColumnTemplate(activeColumns, files, t),
+    [activeColumns, files, t],
   );
   const fileQueryKey = useMemo(
     () => buildFileCacheKey(libraryId, deferredSearchQuery, sortKey, sortDirection),
