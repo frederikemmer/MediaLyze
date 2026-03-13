@@ -270,6 +270,10 @@ h3 {
   gap: 10px;
 }
 
+.card-grid > * {
+  min-width: 0;
+}
+
 .card-grid.grid {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
@@ -282,6 +286,7 @@ h3 {
   border: 1px solid rgba(31, 28, 22, 0.08);
   background: var(--panel-strong);
   transition: box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  min-width: 0;
 }
 
 .media-card:hover {

@@ -361,12 +361,15 @@
   align-content: start;
   align-items: start;
   gap: 4px;
+  min-width: 0;
 }
 
 .metric-card h3 {
   margin: 0;
   font-size: clamp(1.35rem, 1.8vw, 1.9rem);
   line-height: 1.1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .metric-card .eyebrow {
@@ -390,6 +393,76 @@
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(231, 236, 255, 0.95)),
     var(--panel-strong);
+}
+
+.file-detail-title-row {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-detail-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.metric-card-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-detail-path-card {
+  min-width: 0;
+}
+
+.path-segment-trail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.path-segment-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.path-segment {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(31, 28, 22, 0.06);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.path-segment-separator {
+  flex: 0 0 auto;
+  color: rgba(31, 28, 22, 0.4);
+  font-weight: 700;
+}
+
+.path-segment-leaf {
+  background: rgba(27, 153, 139, 0.12);
+  color: var(--ink);
 }
 
 .distribution-row {
@@ -1438,5 +1511,9 @@
 
   .settings-layout {
     grid-template-columns: 1fr;
+  }
+
+  .file-detail-title {
+    -webkit-line-clamp: 3;
   }
 }

@@ -231,6 +231,8 @@
     "loading": "Loading file…",
     "unknownCodec": "Unknown codec",
     "unknownResolution": "Unknown resolution",
+    "showFullFilename": "Show full file name",
+    "showFullRelativePath": "Show full relative path",
     "relativePath": "Relative path",
     "size": "Size",
     "duration": "Duration",
