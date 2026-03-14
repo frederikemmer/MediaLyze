@@ -371,9 +371,91 @@ h3 {
 }
 
 @media (max-width: 900px) {
+
   .app-header,
   .detail-back {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* ─── Dark mode ─────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] {
+
+  & {
+    --bg: #1a1815;
+    --bg-alt: #242118;
+    --ink: #f0ece4;
+    --muted: #9a968d;
+    --panel: rgba(38, 35, 31, 0.88);
+    --panel-strong: rgba(46, 43, 39, 0.96);
+    --shadow: 0 18px 45px rgba(0, 0, 0, 0.40);
+    background: radial-gradient(circle at top left, #251f12, transparent 55%),
+      radial-gradient(circle at 80% 20%, #101f1e, transparent 40%),
+      linear-gradient(120deg, var(--bg), var(--bg-alt));
+    background-color: var(--bg);
+  }
+
+  &::before {
+    background: radial-gradient(circle at top left, #251f12, transparent 55%),
+      radial-gradient(circle at 80% 20%, #101f1e, transparent 40%),
+      linear-gradient(120deg, var(--bg), var(--bg-alt));
+  }
+
+  input,
+  select,
+  textarea {
+    background: #1c1a16;
+    border-color: rgba(240, 236, 228, 0.16);
+    outline: none;
+    color: var(--ink);
+  }
+
+  button.secondary {
+    background: rgba(46, 43, 39, 0.8);
+    border-color: rgba(240, 236, 228, 0.12);
+  }
+
+  button.ghost {
+    border-color: rgba(240, 236, 228, 0.18);
+  }
+
+  .tabs {
+    background: rgba(38, 35, 31, 0.6);
+    border-color: rgba(240, 236, 228, 0.10);
+  }
+
+  .tab-button:hover {
+    background: rgba(50, 46, 42, 0.8);
+    color: var(--ink);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .media-card {
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .notice {
+    background: rgba(100, 114, 200, 0.15);
+  }
+
+  .alert {
+    background: rgba(255, 107, 61, 0.18);
+    color: #f0907a;
+  }
+
+  .badge {
+    color: #f0907a;
+  }
+
+  .alert.success {
+    background: rgba(27, 153, 139, 0.18);
+    color: #3ec5b8;
+  }
+
+  .progress {
+    background: rgba(240, 236, 228, 0.10);
+  }
+
 }

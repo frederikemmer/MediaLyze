@@ -88,7 +88,9 @@
       "languageCodePlaceholder": "ISO code",
       "languageCodeInvalid": "Enter a valid two-letter ISO 639-1 language code, for example de or en."
     },
-    "languageHint": "Applies immediately and is stored in the browser."
+    "languageHint": "Applies immediately and is stored in the browser.",
+    "theme": "Color theme",
+    "themeHint": "Applies immediately and is stored in the browser."
   },
   "libraryStatistics": {
     "title": "Library statistics",
@@ -257,6 +259,11 @@
   "language": {
     "en": "English",
     "de": "German"
+  },
+  "theme": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
   },
   "quality": {
     "tooltipAria": "Show quality score breakdown",

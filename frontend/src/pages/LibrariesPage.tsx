@@ -20,6 +20,7 @@ import {
   type LibraryStatisticsSettings,
 } from "../lib/library-statistics-settings";
 import { useScanJobs } from "../lib/scan-jobs";
+import { useTheme, type ThemePreference } from "../lib/theme";
 
 const EMPTY_FORM = {
   name: "",
@@ -189,6 +190,7 @@ export function LibrariesPage() {
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
+  const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
@@ -1423,6 +1425,20 @@ export function LibrariesPage() {
                   <option value="en">{t("language.en")}</option>
                   <option value="de">{t("language.de")}</option>
                 </select>
+                <p className="field-hint">{t("libraries.languageHint")}</p>
+              </div>
+              <div className="field">
+                <label htmlFor="app-theme">{t("libraries.theme")}</label>
+                <select
+                  id="app-theme"
+                  value={themePref}
+                  onChange={(event) => setThemePref(event.target.value as ThemePreference)}
+                >
+                  <option value="system">{t("theme.system")}</option>
+                  <option value="light">{t("theme.light")}</option>
+                  <option value="dark">{t("theme.dark")}</option>
+                </select>
+                <p className="field-hint">{t("libraries.themeHint")}</p>
               </div>
               <div className="field">
                 <div className="field-label-row">
