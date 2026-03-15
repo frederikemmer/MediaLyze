@@ -88,4 +88,8 @@ export class InflightPageRequestGate {
       this.activeRequestKey = null;
     }
   }
+
+  reset() {
+    this.activeRequestKey = null;
+  }
 }

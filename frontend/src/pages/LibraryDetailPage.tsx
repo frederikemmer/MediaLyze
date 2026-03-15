@@ -311,14 +311,14 @@ function buildFileColumns(
     {
       key: "audio_languages",
       labelKey: "fileTable.audioLanguages",
-      sizing: { mode: "flex", minPx: 144, fr: 1.15, maxPx: 240 },
+      sizing: { mode: "content", minPx: 112, maxPx: 176 },
       measureValue: (file) => compactValues(file.audio_languages),
       render: (file) => compactValues(file.audio_languages),
     },
     {
       key: "subtitle_languages",
       labelKey: "fileTable.subtitleLanguages",
-      sizing: { mode: "flex", minPx: 144, fr: 1.15, maxPx: 240 },
+      sizing: { mode: "content", minPx: 112, maxPx: 176 },
       measureValue: (file) => compactValues(file.subtitle_languages),
       render: (file) => compactValues(file.subtitle_languages),
     },
@@ -549,8 +549,6 @@ export function LibraryDetailPage() {
   const searchToolsHeaderRef = useRef<HTMLDivElement | null>(null);
   const searchToolsBodyRef = useRef<HTMLDivElement | null>(null);
   const inflightRequestGateRef = useRef(new InflightPageRequestGate());
-  const initializedLibraryIdRef = useRef<string | null>(null);
-  const initializedFileQueryKeyRef = useRef<string | null>(null);
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
@@ -787,11 +785,6 @@ export function LibraryDetailPage() {
   }, [sortKey, visibleColumns]);
 
   useEffect(() => {
-    if (initializedLibraryIdRef.current === libraryId) {
-      return;
-    }
-    initializedLibraryIdRef.current = libraryId;
-
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
 
@@ -804,14 +797,9 @@ export function LibraryDetailPage() {
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryStatistics(cachedStatistics === null);
-  }, [fallbackSummary, libraryId, loadLibraryStatistics, loadLibrarySummary]);
+  }, [libraryId]);
 
   useEffect(() => {
-    if (initializedFileQueryKeyRef.current === fileQueryKey) {
-      return;
-    }
-    initializedFileQueryKeyRef.current = fileQueryKey;
-
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
     const currentFilesLength = filesRef.current.length;
@@ -842,7 +830,7 @@ export function LibraryDetailPage() {
 
     previousLibraryIdRef.current = libraryId;
     void loadFilesPage(0, false, fileQueryKey);
-  }, [fileQueryKey, libraryId, loadFilesPage]);
+  }, [fileQueryKey, libraryId]);
 
   useEffect(() => {
     if (!dataTableShellRef.current) {
@@ -869,7 +857,7 @@ export function LibraryDetailPage() {
       return;
     }
     void loadFilesPage(files.length, true, fileQueryKey);
-  }, [fileQueryKey, files.length, hasMoreFiles, isFilesLoading, isLoadingMore, loadFilesPage, virtualRows]);
+  }, [fileQueryKey, files.length, hasMoreFiles, isFilesLoading, isLoadingMore, virtualRows]);
 
   useEffect(() => {
     if (hadActiveJobRef.current && !activeJob) {
@@ -883,13 +871,14 @@ export function LibraryDetailPage() {
       void loadFilesPage(0, false, fileQueryKey);
     }
     hadActiveJobRef.current = Boolean(activeJob);
-  }, [activeJob, fileQueryKey, libraryId, loadFilesPage, loadLibraryStatistics, loadLibrarySummary]);
+  }, [activeJob, fileQueryKey, libraryId]);
 
   useEffect(() => {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
+      inflightRequestGateRef.current.reset();
     };
   }, []);
 
