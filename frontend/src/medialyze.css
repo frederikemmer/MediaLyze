@@ -310,7 +310,7 @@
   min-width: 0;
 }
 
-.async-panel .panel-header > :first-child {
+.async-panel .panel-header> :first-child {
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -1556,4 +1556,210 @@
   .file-detail-title {
     -webkit-line-clamp: 3;
   }
+}
+
+/* ─── Dark mode ─────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] {
+
+  .app-version {
+    background: rgba(240, 236, 228, 0.10);
+  }
+
+  .media-nav-icons,
+  .media-nav-libraries {
+    background: rgba(38, 35, 31, 0.64);
+    border-color: rgba(240, 236, 228, 0.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.20);
+  }
+
+  .nav-active-pill {
+    background: linear-gradient(180deg, rgba(58, 54, 50, 1), rgba(52, 49, 45, 0.98));
+    box-shadow:
+      0 10px 22px rgba(0, 0, 0, 0.28),
+      0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  }
+
+  .scan-banner {
+    background: rgba(27, 153, 139, 0.15);
+    border-color: rgba(27, 153, 139, 0.22);
+  }
+
+  .scan-banner-stop {
+    background: rgba(46, 43, 39, 0.82);
+    border-color: rgba(240, 236, 228, 0.12);
+  }
+
+  .scan-banner-stop:hover {
+    background: rgba(58, 54, 50, 0.96);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.20);
+  }
+
+  .scan-banner-icon {
+    color: #3ec5b8;
+  }
+
+  .settings-table-shell {
+    background: rgba(38, 35, 31, 0.72);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .settings-data-table thead th {
+    background: #1e1c18;
+  }
+
+  .settings-data-table th,
+  .settings-data-table td {
+    border-bottom-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .library-statistics-table tbody tr.is-drop-target td {
+    background: rgba(27, 153, 139, 0.10);
+  }
+
+  .statistics-drag-handle {
+    color: rgba(240, 236, 228, 0.42);
+  }
+
+  .panel-loader-icon {
+    color: #3ec5b8;
+  }
+
+  .metric-card-default {
+    background:
+      linear-gradient(145deg, rgba(46, 43, 39, 0.96), rgba(38, 32, 22, 0.92)),
+      var(--panel-strong);
+  }
+
+  .metric-card-teal {
+    background:
+      linear-gradient(145deg, rgba(46, 43, 39, 0.96), rgba(14, 32, 30, 0.95)),
+      var(--panel-strong);
+  }
+
+  .metric-card-blue {
+    background:
+      linear-gradient(145deg, rgba(46, 43, 39, 0.96), rgba(20, 24, 50, 0.95)),
+      var(--panel-strong);
+  }
+
+  .data-table-shell {
+    background: rgba(38, 35, 31, 0.72);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .media-data-head-row {
+    background: #1e1c18;
+    border-bottom-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .media-data-header-cell {
+    background: #1e1c18;
+  }
+
+  .media-data-header-cell.is-sticky {
+    background: #1e1c18;
+  }
+
+  .media-data-body-row {
+    background: rgba(38, 35, 31, 0.72);
+  }
+
+  .media-data-body-row:hover .media-data-cell {
+    background: rgba(46, 43, 39, 0.54);
+  }
+
+  .media-data-cell {
+    border-bottom-color: rgba(240, 236, 228, 0.06);
+  }
+
+  .media-data-cell.is-sticky {
+    background: rgba(38, 35, 31, 0.72);
+  }
+
+  .column-toggle {
+    background: rgba(38, 35, 31, 0.72);
+    border-color: rgba(240, 236, 228, 0.12);
+  }
+
+  .column-toggle.is-active {
+    background: rgba(27, 153, 139, 0.15);
+    border-color: rgba(27, 153, 139, 0.28);
+    color: #3ec5b8;
+  }
+
+  .data-table-search input {
+    background: rgba(38, 35, 31, 0.8);
+  }
+
+  .scan-badge {
+    background: rgba(27, 153, 139, 0.18);
+    color: #3ec5b8;
+  }
+
+  .path-browser {
+    background: rgba(38, 35, 31, 0.55);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .path-entry.active {
+    background: rgba(255, 107, 61, 0.18);
+    border-color: rgba(255, 107, 61, 0.28);
+  }
+
+  .ignore-pattern-section {
+    background: rgba(38, 35, 31, 0.55);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .ignore-pattern-row-saved input {
+    background: rgba(27, 153, 139, 0.12);
+    border-color: rgba(27, 153, 139, 0.28);
+    color: #3ec5b8;
+  }
+
+  .ignore-pattern-row-saved input:focus {
+    box-shadow: 0 0 0 4px rgba(27, 153, 139, 0.15);
+  }
+
+  .tooltip-trigger {
+    background: rgba(240, 236, 228, 0.10);
+  }
+
+  .quality-score-tooltip-trigger,
+  .quality-score-tooltip-trigger.tooltip-trigger {
+    background: transparent;
+  }
+
+  .score-meter {
+    background: rgba(31, 28, 22, 0.8);
+  }
+
+  .app-settings-flag-row {
+    background: #1c1a16;
+  }
+
+  .search-filter-picker-popover {
+    background: #1c1a16;
+  }
+
+  .metadata-search-remove {
+    background: #393732;
+  }
+
+  .file-link:hover {
+    color: #3ec5b8;
+  }
+
+  .sort-indicator.is-active {
+    color: #3ec5b8;
+  }
+
+  .json-preview {
+    background: #0e0d0b;
+  }
+
 }
