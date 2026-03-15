@@ -310,7 +310,7 @@
   min-width: 0;
 }
 
-.async-panel .panel-header > :first-child {
+.async-panel .panel-header> :first-child {
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -1740,6 +1740,14 @@ html[data-theme="dark"] {
 
   .app-settings-flag-row {
     background: #1c1a16;
+  }
+
+  .search-filter-picker-popover {
+    background: #1c1a16;
+  }
+
+  .metadata-search-remove {
+    background: #393732;
   }
 
   .file-link:hover {
