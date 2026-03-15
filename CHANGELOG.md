@@ -8,6 +8,19 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+## v0.1.3
+
+>2026-03-15
+
+### ✨ New
+
+- [@MSCodeDev](https://github.com/MSCodeDev) added a color theme setting with `System`, `Light`, and `Dark` modes, including persistent browser-side preference storage and automatic OS theme following in `System` mode.
+- Tightened the analyzed-files table layout so audio language and subtitle language columns use less horizontal space.
+
+### New Contributors
+
+[@MSCodeDev](https://github.com/MSCodeDev)
+
 ## v0.1.2
 
 >2026-03-13

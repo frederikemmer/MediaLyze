@@ -1,5 +1,6 @@
 import "../i18n";
 
+import { StrictMode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -104,8 +105,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
-function renderPage(libraryId: number) {
-  return render(
+function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
+  const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
       <AppDataProvider>
         <ScanJobsProvider>
@@ -114,7 +115,11 @@ function renderPage(libraryId: number) {
           </Routes>
         </ScanJobsProvider>
       </AppDataProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
+  );
+
+  return render(
+    strictMode ? <StrictMode>{tree}</StrictMode> : tree,
   );
 }
 
@@ -143,6 +148,58 @@ describe("LibraryDetailPage", () => {
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("still loads statistics and files under strict mode remounts", async () => {
+    const libraryId = 111;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false },
+    });
+    const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId, { strictMode: true });
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(await screen.findByText("H.264 / AVC")).toBeInTheDocument();
+    expect(screen.queryByText("No analyzed data yet.")).not.toBeInTheDocument();
+    expect(librarySummarySpy.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(libraryStatisticsSpy.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(libraryFilesSpy.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("retries file loading after a strict mode abort cycle", async () => {
+    const libraryId = 112;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+
+    let requestCount = 0;
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockImplementation(async (_id, params) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return new Promise<MediaFileTablePage>((resolve, reject) => {
+          params?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+            once: true,
+          });
+        });
+      }
+      return createFilesPage(libraryId);
+    });
+
+    renderPage(libraryId, { strictMode: true });
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(libraryFilesSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps files usable when statistics loading fails", async () => {
