@@ -302,12 +302,22 @@
   min-height: 0;
 }
 
+.async-panel.is-collapsed {
+  grid-template-rows: auto;
+  box-shadow: 0 14px 28px rgba(31, 28, 22, 0.08);
+}
+
 .async-panel .panel-header {
   align-self: start;
   margin-bottom: 12px;
   width: 100%;
   align-items: start;
   min-width: 0;
+}
+
+.async-panel.is-collapsed .panel-header {
+  margin-bottom: 0;
+  align-items: center;
 }
 
 .async-panel .panel-header> :first-child {
@@ -323,6 +333,36 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.async-panel-toggle-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.async-panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.async-panel-toggle:hover {
+  transform: none;
+}
+
+.async-panel.is-collapsed .async-panel-toggle {
+  align-items: center;
+  min-height: 28px;
 }
 
 .async-panel-body {

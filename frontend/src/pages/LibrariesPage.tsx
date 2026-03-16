@@ -19,6 +19,11 @@ import {
   type LibraryStatisticId,
   type LibraryStatisticsSettings,
 } from "../lib/library-statistics-settings";
+import {
+  getSettingsPanelState,
+  saveSettingsPanelState,
+  type SettingsPanelId,
+} from "../lib/settings-panel-state";
 import { useScanJobs } from "../lib/scan-jobs";
 import { useTheme, type ThemePreference } from "../lib/theme";
 
@@ -183,6 +188,7 @@ export function LibrariesPage() {
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
+  const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -472,6 +478,15 @@ export function LibrariesPage() {
       ...ignorePatternSectionState,
       [section]: !ignorePatternSectionState[section],
     });
+  }
+
+  function toggleSettingsPanel(panelId: SettingsPanelId) {
+    setSettingsPanelState((current) =>
+      saveSettingsPanelState({
+        ...current,
+        [panelId]: !current[panelId],
+      }),
+    );
   }
 
   async function persistAppSettingsSnapshot(
@@ -1151,7 +1166,16 @@ export function LibrariesPage() {
     <>
       <div className="settings-layout">
         <div className="settings-main-column">
-          <AsyncPanel title={t("libraries.configured")} loading={isLoadingLibraries} error={error}>
+          <AsyncPanel
+            title={t("libraries.configured")}
+            loading={isLoadingLibraries}
+            error={error}
+            collapseState={{
+              collapsed: !settingsPanelState.configuredLibraries,
+              onToggle: () => toggleSettingsPanel("configuredLibraries"),
+              bodyId: "configured-libraries-panel-body",
+            }}
+          >
             <div className="listing">
               {!libraries.length ? <div className="notice">{t("libraries.addFirstLibrary")}</div> : null}
               {libraries.map((library) => (
@@ -1293,7 +1317,14 @@ export function LibrariesPage() {
             </div>
           </AsyncPanel>
 
-          <AsyncPanel title={t("libraryStatistics.title")}>
+          <AsyncPanel
+            title={t("libraryStatistics.title")}
+            collapseState={{
+              collapsed: !settingsPanelState.libraryStatistics,
+              onToggle: () => toggleSettingsPanel("libraryStatistics"),
+              bodyId: "library-statistics-panel-body",
+            }}
+          >
             <div className="settings-sidebar-stack">
               <p className="settings-copy">{t("libraryStatistics.subtitle")}</p>
               <div className="settings-table-shell">
@@ -1385,7 +1416,15 @@ export function LibrariesPage() {
         </div>
 
         <div className="settings-sidebar">
-          <AsyncPanel title={t("libraries.createTitle")} error={submitError}>
+          <AsyncPanel
+            title={t("libraries.createTitle")}
+            error={submitError}
+            collapseState={{
+              collapsed: !settingsPanelState.createLibrary,
+              onToggle: () => toggleSettingsPanel("createLibrary"),
+              bodyId: "create-library-panel-body",
+            }}
+          >
             <form className="form-grid" onSubmit={handleSubmit}>
               <div className="field">
                 <label htmlFor="library-name">{t("libraries.name")}</label>
@@ -1425,6 +1464,11 @@ export function LibrariesPage() {
             subtitle={t("libraries.ignorePatternsSubtitle")}
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
+            collapseState={{
+              collapsed: !settingsPanelState.ignorePatterns,
+              onToggle: () => toggleSettingsPanel("ignorePatterns"),
+              bodyId: "ignore-patterns-panel-body",
+            }}
           >
             <div className="form-grid">
               <div className="field">
@@ -1460,7 +1504,14 @@ export function LibrariesPage() {
             </div>
           </AsyncPanel>
 
-          <AsyncPanel title={t("libraries.appSettings")}>
+          <AsyncPanel
+            title={t("libraries.appSettings")}
+            collapseState={{
+              collapsed: !settingsPanelState.appSettings,
+              onToggle: () => toggleSettingsPanel("appSettings"),
+              bodyId: "app-settings-panel-body",
+            }}
+          >
             <div className="settings-sidebar-stack">
               <div className="field">
                 <label htmlFor="app-language">{t("libraries.language")}</label>

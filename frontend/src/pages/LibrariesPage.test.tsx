@@ -188,3 +188,58 @@ describe("LibrariesPage ignore patterns", () => {
     await waitFor(() => expect(maximumInput).toHaveValue(0.09));
   });
 });
+
+describe("LibrariesPage settings panels", () => {
+  it("shows the main settings panels expanded by default", async () => {
+    renderPage();
+
+    const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
+
+    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+  });
+
+  it("restores persisted settings panel state from localStorage", async () => {
+    window.localStorage.setItem(
+      "medialyze-settings-panel-state",
+      JSON.stringify({
+        configuredLibraries: false,
+        libraryStatistics: true,
+        createLibrary: true,
+        ignorePatterns: false,
+        appSettings: false,
+      }),
+    );
+
+    renderPage();
+
+    const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
+    const ignorePatternsToggle = screen.getByRole("button", { name: /^ignore patterns$/i });
+    const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
+
+    expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
+    expect(ignorePatternsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Add first library")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
+  });
+
+  it("persists panel collapse changes when toggled", async () => {
+    renderPage();
+
+    const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
+    fireEvent.click(appSettingsToggle);
+
+    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("medialyze-settings-panel-state")).toBe(
+      JSON.stringify({
+        configuredLibraries: true,
+        libraryStatistics: true,
+        createLibrary: true,
+        ignorePatterns: true,
+        appSettings: false,
+      }),
+    );
+  });
+});
