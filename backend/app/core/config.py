@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "MediaLyze"
-    app_version: str = "0.1.3"
+    app_version: str = "0.2.0"
     app_port: int = 8080
     api_prefix: str = "/api"
     config_path: Path = Field(default=Path("/config"))
