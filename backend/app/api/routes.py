@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
 from backend.app.schemas.scan import (
+    RecentScanJobPageRead,
     RecentScanJobRead,
     ScanCancelResponse,
     ScanJobDetailRead,
@@ -70,12 +72,21 @@ def active_scan_jobs(db: Session = Depends(get_db_session)) -> list[ScanJobRead]
     return list_active_scan_jobs(db)
 
 
-@router.get("/scan-jobs/recent", response_model=list[RecentScanJobRead])
+@router.get("/scan-jobs/recent", response_model=RecentScanJobPageRead)
 def recent_scan_jobs(
-    limit: int = Query(default=20, ge=1, le=50),
+    limit: int = Query(default=20, ge=1, le=200),
+    since_hours: int | None = Query(default=None, ge=1, le=168),
+    before_finished_at: datetime | None = Query(default=None),
+    before_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db_session),
-) -> list[RecentScanJobRead]:
-    return list_recent_scan_jobs(db, limit)
+) -> RecentScanJobPageRead:
+    return list_recent_scan_jobs(
+        db,
+        limit,
+        since_hours=since_hours,
+        before_finished_at=before_finished_at,
+        before_id=before_id,
+    )
 
 
 @router.get("/scan-jobs/{job_id}", response_model=ScanJobDetailRead)

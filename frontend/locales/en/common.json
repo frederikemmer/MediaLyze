@@ -218,9 +218,11 @@
   },
   "scanLogs": {
     "title": "Recent scan logs",
-    "subtitle": "Latest completed scan history across all libraries",
+    "subtitle": "Latest completed scan history across all libraries from the last 24 hours",
     "empty": "No completed scans yet.",
     "loadingDetail": "Loading scan details…",
+    "loadingMore": "Loading more…",
+    "loadMore": "Load more",
     "unknownLibrary": "Unknown library",
     "jobLabel": "Job #{{id}}",
     "jobTypeIncremental": "Incremental",

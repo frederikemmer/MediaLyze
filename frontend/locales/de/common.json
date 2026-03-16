@@ -218,9 +218,11 @@
   },
   "scanLogs": {
     "title": "Letzte Scan-Logs",
-    "subtitle": "Zuletzt abgeschlossene Scan-Historie über alle Libraries",
+    "subtitle": "Zuletzt abgeschlossene Scan-Historie der letzten 24 Stunden über alle Libraries",
     "empty": "Noch keine abgeschlossenen Scans vorhanden.",
     "loadingDetail": "Scan-Details werden geladen…",
+    "loadingMore": "Weitere Scans werden geladen…",
+    "loadMore": "Weitere laden",
     "unknownLibrary": "Unbekannte Library",
     "jobLabel": "Job #{{id}}",
     "jobTypeIncremental": "Inkrementell",

@@ -292,6 +292,11 @@ export type ScanJobDetail = RecentScanJob & {
   scan_summary: ScanSummary;
 };
 
+export type RecentScanJobPage = {
+  items: RecentScanJob[];
+  has_more: boolean;
+};
+
 export type ScanCancelResponse = {
   canceled_jobs: number;
 };
@@ -324,7 +329,28 @@ export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   dashboard: () => request<DashboardResponse>("/dashboard"),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
-  recentScanJobs: (limit = 20) => request<RecentScanJob[]>(`/scan-jobs/recent?limit=${limit}`),
+  recentScanJobs: (params?: {
+    limit?: number;
+    sinceHours?: number;
+    beforeFinishedAt?: string;
+    beforeId?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    if (params?.sinceHours !== undefined) {
+      searchParams.set("since_hours", String(params.sinceHours));
+    }
+    if (params?.beforeFinishedAt) {
+      searchParams.set("before_finished_at", params.beforeFinishedAt);
+    }
+    if (params?.beforeId !== undefined) {
+      searchParams.set("before_id", String(params.beforeId));
+    }
+    const query = searchParams.toString();
+    return request<RecentScanJobPage>(`/scan-jobs/recent${query ? `?${query}` : ""}`);
+  },
   scanJobDetail: (jobId: string | number) => request<ScanJobDetail>(`/scan-jobs/${jobId}`),
   libraries: () => request<LibrarySummary[]>("/libraries"),
   librarySummary: (id: string | number, signal?: AbortSignal) =>

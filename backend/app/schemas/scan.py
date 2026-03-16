@@ -103,5 +103,10 @@ class ScanJobDetailRead(RecentScanJobRead):
     scan_summary: ScanSummaryRead = Field(default_factory=ScanSummaryRead)
 
 
+class RecentScanJobPageRead(BaseModel):
+    items: list[RecentScanJobRead] = Field(default_factory=list)
+    has_more: bool = False
+
+
 class ScanCancelResponse(BaseModel):
     canceled_jobs: int

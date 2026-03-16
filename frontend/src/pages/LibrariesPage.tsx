@@ -264,6 +264,8 @@ export function LibrariesPage() {
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
   const [recentScanJobsError, setRecentScanJobsError] = useState<string | null>(null);
+  const [hasMoreRecentScanJobs, setHasMoreRecentScanJobs] = useState(false);
+  const [isLoadingMoreRecentScanJobs, setIsLoadingMoreRecentScanJobs] = useState(false);
   const [expandedScanJobIds, setExpandedScanJobIds] = useState<Record<number, boolean>>({});
   const [scanJobDetails, setScanJobDetails] = useState<Record<number, ScanJobDetail>>({});
   const [scanJobDetailLoading, setScanJobDetailLoading] = useState<Record<number, boolean>>({});
@@ -296,9 +298,10 @@ export function LibrariesPage() {
       setIsLoadingRecentScanJobs(true);
     }
     return api
-      .recentScanJobs()
+      .recentScanJobs({ sinceHours: 24, limit: 200 })
       .then((payload) => {
-        setRecentScanJobs(payload);
+        setRecentScanJobs(payload.items);
+        setHasMoreRecentScanJobs(payload.items.length > 0);
         setRecentScanJobsError(null);
         return payload;
       })
@@ -312,6 +315,31 @@ export function LibrariesPage() {
         }
       });
   };
+
+  async function loadMoreRecentScanJobs() {
+    if (isLoadingMoreRecentScanJobs || recentScanJobs.length === 0) {
+      return;
+    }
+    const lastJob = recentScanJobs[recentScanJobs.length - 1];
+    if (!lastJob.finished_at) {
+      return;
+    }
+    setIsLoadingMoreRecentScanJobs(true);
+    try {
+      const payload = await api.recentScanJobs({
+        limit: 20,
+        beforeFinishedAt: lastJob.finished_at,
+        beforeId: lastJob.id,
+      });
+      setRecentScanJobs((current) => [...current, ...payload.items]);
+      setHasMoreRecentScanJobs(payload.has_more);
+      setRecentScanJobsError(null);
+    } catch (reason) {
+      setRecentScanJobsError((reason as Error).message);
+    } finally {
+      setIsLoadingMoreRecentScanJobs(false);
+    }
+  }
 
   const refreshLibraries = (showLoading = false, force = false) => {
     if (showLoading) {
@@ -1659,60 +1687,6 @@ export function LibrariesPage() {
           </AsyncPanel>
 
           <AsyncPanel
-            title={t("scanLogs.title")}
-            subtitle={t("scanLogs.subtitle")}
-            loading={isLoadingRecentScanJobs}
-            error={recentScanJobsError}
-            collapseState={{
-              collapsed: !settingsPanelState.recentScanLogs,
-              onToggle: () => toggleSettingsPanel("recentScanLogs"),
-              bodyId: "recent-scan-logs-panel-body",
-            }}
-          >
-            {recentScanJobs.length === 0 ? (
-              <div className="notice">{t("scanLogs.empty")}</div>
-            ) : (
-              <div className="scan-log-list">
-                {recentScanJobs.map((job) => {
-                  const expanded = Boolean(expandedScanJobIds[job.id]);
-                  return (
-                    <div className="media-card scan-log-card" key={job.id}>
-                      <button
-                        type="button"
-                        className="scan-log-summary"
-                        aria-expanded={expanded}
-                        onClick={() => void toggleScanJobExpansion(job.id)}
-                      >
-                        <div className="scan-log-summary-head">
-                          <div className="scan-log-summary-copy">
-                            <strong>{scanLogTitle(job)}</strong>
-                            <span>{job.library_name ?? t("scanLogs.unknownLibrary")}</span>
-                          </div>
-                          <div className="meta-tags">
-                            <span className={`badge scan-log-outcome badge-${job.outcome}`}>
-                              {formatOutcome(t, job.outcome)}
-                            </span>
-                            <span className="badge">{formatTriggerSource(t, job.trigger_source)}</span>
-                            {job.job_type === "full" ? (
-                              <span className="badge">{formatScanJobType(t, job.job_type)}</span>
-                            ) : null}
-                            {expanded ? (
-                              <ChevronDown aria-hidden="true" className="nav-icon" />
-                            ) : (
-                              <ChevronRight aria-hidden="true" className="nav-icon" />
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                      {expanded ? renderScanJobDetail(job) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </AsyncPanel>
-
-          <AsyncPanel
             title={t("libraryStatistics.title")}
             collapseState={{
               collapsed: !settingsPanelState.libraryStatistics,
@@ -1807,6 +1781,76 @@ export function LibrariesPage() {
                 </table>
               </div>
             </div>
+          </AsyncPanel>
+
+          <AsyncPanel
+            title={t("scanLogs.title")}
+            subtitle={t("scanLogs.subtitle")}
+            loading={isLoadingRecentScanJobs}
+            error={recentScanJobsError}
+            collapseState={{
+              collapsed: !settingsPanelState.recentScanLogs,
+              onToggle: () => toggleSettingsPanel("recentScanLogs"),
+              bodyId: "recent-scan-logs-panel-body",
+            }}
+          >
+            {recentScanJobs.length === 0 ? (
+              <div className="notice">{t("scanLogs.empty")}</div>
+            ) : (
+              <>
+                <div className="scan-log-list-shell">
+                  <div className="scan-log-list">
+                    {recentScanJobs.map((job) => {
+                      const expanded = Boolean(expandedScanJobIds[job.id]);
+                      return (
+                        <div className="media-card scan-log-card" key={job.id}>
+                          <button
+                            type="button"
+                            className="scan-log-summary"
+                            aria-expanded={expanded}
+                            onClick={() => void toggleScanJobExpansion(job.id)}
+                          >
+                            <div className="scan-log-summary-head">
+                              <div className="scan-log-summary-copy">
+                                <strong>{scanLogTitle(job)}</strong>
+                                <span>{job.library_name ?? t("scanLogs.unknownLibrary")}</span>
+                              </div>
+                              <div className="meta-tags">
+                                <span className={`badge scan-log-outcome badge-${job.outcome}`}>
+                                  {formatOutcome(t, job.outcome)}
+                                </span>
+                                <span className="badge">{formatTriggerSource(t, job.trigger_source)}</span>
+                                {job.job_type === "full" ? (
+                                  <span className="badge">{formatScanJobType(t, job.job_type)}</span>
+                                ) : null}
+                                {expanded ? (
+                                  <ChevronDown aria-hidden="true" className="nav-icon" />
+                                ) : (
+                                  <ChevronRight aria-hidden="true" className="nav-icon" />
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                          {expanded ? renderScanJobDetail(job) : null}
+                        </div>
+                      );
+                    })}
+                    {hasMoreRecentScanJobs ? (
+                      <div className="scan-log-load-more">
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={isLoadingMoreRecentScanJobs}
+                          onClick={() => void loadMoreRecentScanJobs()}
+                        >
+                          {isLoadingMoreRecentScanJobs ? t("scanLogs.loadingMore") : t("scanLogs.loadMore")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            )}
           </AsyncPanel>
         </div>
 

@@ -11,6 +11,7 @@ import {
   type AppSettings,
   type BrowseResponse,
   type LibrarySummary,
+  type RecentScanJobPage,
   type RecentScanJob,
   type ScanJobDetail,
 } from "../lib/api";
@@ -119,6 +120,14 @@ function createScanJobDetail(overrides: Partial<ScanJobDetail> = {}): ScanJobDet
   };
 }
 
+function createRecentScanJobPage(overrides: Partial<RecentScanJobPage> = {}): RecentScanJobPage {
+  return {
+    items: [],
+    has_more: false,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -136,7 +145,7 @@ beforeEach(() => {
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
-  vi.spyOn(api, "recentScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage());
   vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail());
   vi.spyOn(api, "updateAppSettings").mockResolvedValue(createAppSettings());
 });
@@ -320,9 +329,11 @@ describe("LibrariesPage settings panels", () => {
   });
 
   it("renders recent scan log cards and lazy-loads details", async () => {
-    vi.spyOn(api, "recentScanJobs").mockResolvedValue([
-      createRecentScanJob({ outcome: "failed", trigger_source: "watchdog", analysis_failed: 1 }),
-    ]);
+    const recentSpy = vi.spyOn(api, "recentScanJobs").mockResolvedValue(
+      createRecentScanJobPage({
+        items: [createRecentScanJob({ outcome: "failed", trigger_source: "watchdog", analysis_failed: 1 })],
+      }),
+    );
     const detailSpy = vi.spyOn(api, "scanJobDetail").mockResolvedValue(
       createScanJobDetail({
         outcome: "failed",
@@ -343,6 +354,8 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
+    await waitFor(() => expect(recentSpy).toHaveBeenCalledWith({ sinceHours: 24, limit: 200 }));
+
     const jobButton = await screen.findByRole("button", { name: /movies/i });
     expect(screen.getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText("Watchdog")).toBeInTheDocument();
@@ -355,5 +368,36 @@ describe("LibrariesPage settings panels", () => {
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));
     expect((await screen.findAllByText("broken.mkv")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("loads older scans when clicking load more", async () => {
+    const recentSpy = vi
+      .spyOn(api, "recentScanJobs")
+      .mockResolvedValueOnce(
+        createRecentScanJobPage({
+          items: [createRecentScanJob({ id: 10, finished_at: "2026-03-16T10:03:00Z" })],
+          has_more: false,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createRecentScanJobPage({
+          items: [createRecentScanJob({ id: 9, finished_at: "2026-03-15T10:03:00Z" })],
+          has_more: false,
+        }),
+      );
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Load more" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    await waitFor(() =>
+      expect(recentSpy).toHaveBeenNthCalledWith(2, {
+        limit: 20,
+        beforeFinishedAt: "2026-03-16T10:03:00Z",
+        beforeId: 10,
+      }),
+    );
+    expect(await screen.findByText("Mar 15, 2026, 11:03 AM")).toBeInTheDocument();
   });
 });

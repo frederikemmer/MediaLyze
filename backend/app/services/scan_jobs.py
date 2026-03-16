@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import JobStatus, ScanJob
-from backend.app.schemas.scan import RecentScanJobRead, ScanJobDetailRead, ScanJobRead, ScanSummaryRead
+from backend.app.schemas.scan import RecentScanJobPageRead, RecentScanJobRead, ScanJobDetailRead, ScanJobRead, ScanSummaryRead
+from backend.app.utils.time import utc_now
 
 
 def _duration_seconds(started_at: datetime | None, finished_at: datetime | None) -> float | None:
@@ -169,8 +170,15 @@ def list_library_scan_jobs(db: Session, library_id: int, limit: int = 10) -> lis
     return [serialize_scan_job(job) for job in jobs]
 
 
-def list_recent_scan_jobs(db: Session, limit: int = 20) -> list[RecentScanJobRead]:
-    jobs = db.scalars(
+def list_recent_scan_jobs(
+    db: Session,
+    limit: int = 20,
+    *,
+    since_hours: int | None = None,
+    before_finished_at: datetime | None = None,
+    before_id: int | None = None,
+) -> RecentScanJobPageRead:
+    statement = (
         select(ScanJob)
         .where(
             ScanJob.status.in_([JobStatus.completed, JobStatus.failed, JobStatus.canceled]),
@@ -178,9 +186,27 @@ def list_recent_scan_jobs(db: Session, limit: int = 20) -> list[RecentScanJobRea
         )
         .options(selectinload(ScanJob.library))
         .order_by(ScanJob.finished_at.desc(), ScanJob.id.desc())
-        .limit(limit)
-    ).all()
-    return [serialize_recent_scan_job(job) for job in jobs]
+    )
+
+    if since_hours is not None:
+        cutoff = utc_now() - timedelta(hours=since_hours)
+        statement = statement.where(ScanJob.finished_at.is_not(None), ScanJob.finished_at >= cutoff)
+
+    if before_finished_at is not None:
+        cursor_filter = ScanJob.finished_at < before_finished_at
+        if before_id is not None:
+            cursor_filter = or_(
+                ScanJob.finished_at < before_finished_at,
+                and_(ScanJob.finished_at == before_finished_at, ScanJob.id < before_id),
+            )
+        statement = statement.where(cursor_filter)
+
+    jobs = db.scalars(statement.limit(limit + 1)).all()
+    has_more = len(jobs) > limit
+    return RecentScanJobPageRead(
+        items=[serialize_recent_scan_job(job) for job in jobs[:limit]],
+        has_more=has_more,
+    )
 
 
 def get_scan_job_detail(db: Session, job_id: int) -> ScanJobDetailRead | None:

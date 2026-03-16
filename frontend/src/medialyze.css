@@ -648,6 +648,19 @@
   gap: 14px;
 }
 
+.scan-log-list-shell {
+  max-height: calc((5.5 * 6rem) + (5 * 14px));
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.scan-log-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
 .scan-log-card {
   gap: 8px;
   padding: 12px;
