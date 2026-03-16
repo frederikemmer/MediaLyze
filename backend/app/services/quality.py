@@ -9,6 +9,7 @@ from backend.app.schemas.quality import (
     QualityCategoryBreakdownRead,
     QualityCategoryConfig,
     QualityLanguagePreferencesConfig,
+    QualityNumericCategoryConfig,
     QualityProfile,
 )
 from backend.app.services.ffprobe_parser import ProbeResult
@@ -475,7 +476,7 @@ def _language_category(
 def _numeric_category(
     *,
     key: str,
-    config: QualityCategoryConfig,
+    config: QualityNumericCategoryConfig,
     actual: float | None,
     missing_is_zero: bool,
 ) -> QualityCategoryBreakdownRead:
@@ -490,10 +491,11 @@ def _numeric_category(
             active=True,
             minimum=config.minimum,
             ideal=config.ideal,
+            maximum=config.maximum,
             actual=None,
             notes=["missing_value"],
         )
-    score = _score_value(float(actual), float(config.minimum), float(config.ideal))
+    score = _score_value(float(actual), config.minimum, config.ideal, config.maximum)
     return QualityCategoryBreakdownRead(
         key=key,
         score=round(score, 2),
@@ -501,6 +503,7 @@ def _numeric_category(
         active=True,
         minimum=config.minimum,
         ideal=config.ideal,
+        maximum=config.maximum,
         actual=round(actual, 6),
     )
 
@@ -528,6 +531,7 @@ def _rank_category(
             active=True,
             minimum=minimum,
             ideal=ideal,
+            maximum=None,
             actual=None,
             notes=["missing_value"],
         )
@@ -540,6 +544,7 @@ def _rank_category(
             active=True,
             minimum=minimum,
             ideal=ideal,
+            maximum=None,
             actual=actual_key,
             unknown_mapping=True,
         )
@@ -555,11 +560,26 @@ def _rank_category(
         active=True,
         minimum=minimum,
         ideal=ideal,
+        maximum=None,
         actual=actual_key,
     )
 
 
-def _score_value(actual: float, minimum: float, ideal: float) -> float:
+def _score_value(actual: float, minimum: float, ideal: float, maximum: float | None = None) -> float:
+    if maximum is not None:
+        if maximum < ideal:
+            raise ValueError("maximum must be greater than or equal to ideal")
+        if actual <= ideal:
+            return _score_value(actual, minimum, ideal)
+        if maximum == ideal:
+            if maximum <= 0:
+                return 0.0
+            return max(0.0, min(100.0, (maximum / actual) * 100.0))
+        if actual <= maximum:
+            return 100.0 - ((actual - ideal) / (maximum - ideal)) * 40.0
+        if maximum <= 0:
+            return 0.0
+        return max(0.0, min(60.0, (maximum / actual) * 60.0))
     if ideal == minimum:
         if actual >= ideal:
             return 100.0

@@ -73,6 +73,7 @@
       "weight": "Weight",
       "minimum": "Minimum",
       "ideal": "Ideal",
+      "maximum": "Maximum",
       "noneSelected": "No selection",
       "resolution": "Resolution",
       "visual_density": "Visual density",
@@ -274,6 +275,7 @@
     "actual": "Actual: {{value}}",
     "minimum": "Minimum: {{value}}",
     "ideal": "Ideal: {{value}}",
+    "maximum": "Maximum: {{value}}",
     "skipped": "Skipped",
     "unknownMapping": "Unknown value mapped neutrally.",
     "category": {

@@ -88,6 +88,17 @@ function cloneQualityProfile(profile: QualityProfile): QualityProfile {
   return JSON.parse(JSON.stringify(profile)) as QualityProfile;
 }
 
+function normalizeVisualDensityBounds(minimum: number, ideal: number, maximum: number) {
+  const nextMinimum = Math.max(0, minimum);
+  const nextIdeal = Math.max(nextMinimum, ideal);
+  const nextMaximum = Math.max(nextIdeal, maximum);
+  return {
+    minimum: nextMinimum,
+    ideal: nextIdeal,
+    maximum: nextMaximum,
+  };
+}
+
 function weightFieldStyle(weight: number) {
   const clamped = Math.max(0, Math.min(10, weight));
   const lightness = 90 - clamped * 3.4;
@@ -1042,7 +1053,7 @@ export function LibrariesPage() {
               })),
           )}
         </div>
-        <div className="quality-settings-group">
+        <div className="quality-settings-group quality-settings-group-numeric">
           <div className="quality-settings-group-title">
             {t("libraries.quality.visual_density")}
             <span className="quality-settings-hint">{t("libraries.quality.visualDensityHint")}</span>
@@ -1057,11 +1068,14 @@ export function LibrariesPage() {
               value={Number(profile.visual_density.minimum)}
               onChange={(event) =>
                 updateLibraryQualityProfile(library.id, (current) => {
-                  const minimum = Number(event.target.value);
-                  const ideal = Math.max(minimum, Number(current.visual_density.ideal));
+                  const bounds = normalizeVisualDensityBounds(
+                    Number(event.target.value),
+                    Number(current.visual_density.ideal),
+                    Number(current.visual_density.maximum),
+                  );
                   return {
                     ...current,
-                    visual_density: { ...current.visual_density, minimum, ideal },
+                    visual_density: { ...current.visual_density, ...bounds },
                   };
                 })
               }
@@ -1076,13 +1090,46 @@ export function LibrariesPage() {
               step="0.001"
               value={Number(profile.visual_density.ideal)}
               onChange={(event) =>
-                updateLibraryQualityProfile(library.id, (current) => ({
-                  ...current,
-                  visual_density: {
-                    ...current.visual_density,
-                    ideal: Math.max(Number(current.visual_density.minimum), Number(event.target.value)),
-                  },
-                }))
+                updateLibraryQualityProfile(library.id, (current) => {
+                  const bounds = normalizeVisualDensityBounds(
+                    Number(current.visual_density.minimum),
+                    Number(event.target.value),
+                    Number(current.visual_density.maximum),
+                  );
+                  return {
+                    ...current,
+                    visual_density: {
+                      ...current.visual_density,
+                      ...bounds,
+                    },
+                  };
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>{t("libraries.quality.maximum")}</label>
+            <input
+              className="quality-density-input"
+              type="number"
+              min={Number(profile.visual_density.ideal)}
+              step="0.001"
+              value={Number(profile.visual_density.maximum)}
+              onChange={(event) =>
+                updateLibraryQualityProfile(library.id, (current) => {
+                  const bounds = normalizeVisualDensityBounds(
+                    Number(current.visual_density.minimum),
+                    Number(current.visual_density.ideal),
+                    Number(event.target.value),
+                  );
+                  return {
+                    ...current,
+                    visual_density: {
+                      ...current.visual_density,
+                      ...bounds,
+                    },
+                  };
+                })
               }
             />
           </div>

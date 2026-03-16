@@ -581,6 +581,10 @@
   border-top: 1px solid rgba(31, 28, 22, 0.08);
 }
 
+.quality-settings-group-numeric {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 72px;
+}
+
 .quality-settings-group-title {
   grid-column: 1 / -1;
   display: grid;

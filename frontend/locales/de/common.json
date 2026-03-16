@@ -73,6 +73,7 @@
       "weight": "Gewichtung",
       "minimum": "Minimum",
       "ideal": "Ideal",
+      "maximum": "Maximum",
       "noneSelected": "Keine Auswahl",
       "resolution": "Auflösung",
       "visual_density": "Visuelle Dichte",
@@ -274,6 +275,7 @@
     "actual": "Ist: {{value}}",
     "minimum": "Minimum: {{value}}",
     "ideal": "Ideal: {{value}}",
+    "maximum": "Maximum: {{value}}",
     "skipped": "Übersprungen",
     "unknownMapping": "Unbekannter Wert wurde neutral bewertet.",
     "category": {

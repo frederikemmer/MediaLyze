@@ -133,7 +133,8 @@ def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate
         library.scan_config = normalize_scan_config(payload.scan_mode, payload.scan_config)
     if payload.quality_profile is not None:
         next_quality_profile = normalize_quality_profile(payload.quality_profile)
-        if next_quality_profile != normalize_quality_profile(library.quality_profile):
+        current_quality_profile = normalize_quality_profile(library.quality_profile)
+        if next_quality_profile != current_quality_profile or library.quality_profile != current_quality_profile:
             library.quality_profile = next_quality_profile
             quality_profile_changed = True
     db.commit()

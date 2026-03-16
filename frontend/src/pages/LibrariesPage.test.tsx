@@ -1,11 +1,11 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
-import { api, type AppSettings, type BrowseResponse } from "../lib/api";
+import { api, DEFAULT_QUALITY_PROFILE, type AppSettings, type BrowseResponse, type LibrarySummary } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibrariesPage } from "./LibrariesPage";
 
@@ -32,6 +32,27 @@ function createBrowseResponse(): BrowseResponse {
         is_dir: true,
       },
     ],
+  };
+}
+
+function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibrarySummary {
+  return {
+    id: 1,
+    name: "Movies",
+    path: "/media/movies",
+    type: "movies",
+    last_scan_at: null,
+    scan_mode: "manual",
+    scan_config: {},
+    created_at: "2026-03-15T12:00:00Z",
+    updated_at: "2026-03-15T12:00:00Z",
+    quality_profile: DEFAULT_QUALITY_PROFILE,
+    file_count: 0,
+    total_size_bytes: 0,
+    total_duration_seconds: 0,
+    ready_files: 0,
+    pending_files: 0,
+    ...overrides,
   };
 }
 
@@ -132,6 +153,7 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage();
 
     const checkbox = await screen.findByLabelText("Show Dolby Vision Profiles");
+    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -144,5 +166,25 @@ describe("LibrariesPage ignore patterns", () => {
         },
       }),
     );
+  });
+
+  it("clamps visual density maximum when the ideal is raised above it", async () => {
+    const library = createLibrarySummary();
+    vi.spyOn(api, "libraries").mockResolvedValue([library]);
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
+    const visualDensityTitle = await screen.findByText("Visual density");
+    const visualDensityGroup = visualDensityTitle.closest(".quality-settings-group");
+    if (!(visualDensityGroup instanceof HTMLElement)) {
+      throw new Error("Expected visual density settings group");
+    }
+    const idealInput = within(visualDensityGroup).getByDisplayValue("0.04") as HTMLInputElement;
+    const maximumInput = within(visualDensityGroup).getByDisplayValue("0.08") as HTMLInputElement;
+    fireEvent.change(idealInput, { target: { value: "0.09" } });
+
+    await waitFor(() => expect(maximumInput).toHaveValue(0.09));
   });
 });

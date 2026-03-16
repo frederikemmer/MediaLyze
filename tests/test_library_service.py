@@ -116,6 +116,45 @@ def test_update_library_settings_can_rename_library() -> None:
         assert quality_profile_changed is False
 
 
+def test_update_library_settings_backfills_visual_density_maximum_for_legacy_profiles() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            quality_profile={
+                "version": 1,
+                "resolution": {"weight": 8, "minimum": "1080p", "ideal": "4k"},
+                "visual_density": {"weight": 10, "minimum": 0.02, "ideal": 0.04},
+                "video_codec": {"weight": 5, "minimum": "h264", "ideal": "hevc"},
+                "audio_channels": {"weight": 4, "minimum": "stereo", "ideal": "5.1"},
+                "audio_codec": {"weight": 3, "minimum": "aac", "ideal": "eac3"},
+                "dynamic_range": {"weight": 4, "minimum": "sdr", "ideal": "hdr10"},
+                "language_preferences": {"weight": 6, "mode": "partial", "audio_languages": [], "subtitle_languages": []},
+            },
+        )
+        db.add(library)
+        db.commit()
+
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            library.id,
+            LibraryUpdate(quality_profile=library.quality_profile),
+        )
+
+    assert updated is not None
+    assert updated.quality_profile["visual_density"]["maximum"] == 0.08
+    assert quality_profile_changed is True
+
+
 def test_library_exists_checks_library_presence() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

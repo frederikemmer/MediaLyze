@@ -9,6 +9,13 @@ export type QualityCategoryConfig = {
   ideal: string | number;
 };
 
+export type QualityNumericCategoryConfig = {
+  weight: number;
+  minimum: number;
+  ideal: number;
+  maximum: number;
+};
+
 export type QualityLanguagePreferencesConfig = {
   weight: number;
   mode: "partial";
@@ -19,7 +26,7 @@ export type QualityLanguagePreferencesConfig = {
 export type QualityProfile = {
   version: number;
   resolution: QualityCategoryConfig;
-  visual_density: QualityCategoryConfig;
+  visual_density: QualityNumericCategoryConfig;
   video_codec: QualityCategoryConfig;
   audio_channels: QualityCategoryConfig;
   audio_codec: QualityCategoryConfig;
@@ -35,6 +42,7 @@ export type QualityCategoryBreakdown = {
   skipped: boolean;
   minimum: string | number | null;
   ideal: string | number | null;
+  maximum?: string | number | null;
   actual: string | number | string[] | null;
   unknown_mapping: boolean;
   notes: string[];
@@ -49,7 +57,7 @@ export type QualityBreakdown = {
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
   resolution: { weight: 8, minimum: "1080p", ideal: "4k" },
-  visual_density: { weight: 10, minimum: 0.02, ideal: 0.04 },
+  visual_density: { weight: 10, minimum: 0.02, ideal: 0.04, maximum: 0.08 },
   video_codec: { weight: 5, minimum: "h264", ideal: "hevc" },
   audio_channels: { weight: 4, minimum: "stereo", ideal: "5.1" },
   audio_codec: { weight: 3, minimum: "aac", ideal: "eac3" },

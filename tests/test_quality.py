@@ -111,3 +111,74 @@ def test_quality_score_treats_dolby_vision_profiles_as_dolby_vision() -> None:
     dynamic_range = next(category for category in breakdown.categories if category.key == "dynamic_range")
 
     assert dynamic_range.actual == "dolby_vision"
+
+
+def test_visual_density_rewards_the_ideal_and_penalizes_bloated_media() -> None:
+    ideal_probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=8000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="h264",
+                profile="High",
+                width=1920,
+                height=1080,
+                pix_fmt="yuv420p",
+                color_space=None,
+                color_transfer=None,
+                color_primaries=None,
+                frame_rate=24.0,
+                bit_rate=8000000,
+                hdr_type=None,
+            )
+        ],
+    )
+    bloated_probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=16000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="h264",
+                profile="High",
+                width=1920,
+                height=1080,
+                pix_fmt="yuv420p",
+                color_space=None,
+                color_transfer=None,
+                color_primaries=None,
+                frame_rate=24.0,
+                bit_rate=16000000,
+                hdr_type=None,
+            )
+        ],
+    )
+    profile = {
+        "visual_density": {
+            "weight": 10,
+            "minimum": 0.03,
+            "ideal": 0.06,
+            "maximum": 0.09,
+        }
+    }
+
+    ideal_breakdown = calculate_quality_score(build_quality_score_input(ideal_probe), quality_profile=profile)
+    bloated_breakdown = calculate_quality_score(build_quality_score_input(bloated_probe), quality_profile=profile)
+    ideal_density = next(category for category in ideal_breakdown.categories if category.key == "visual_density")
+    bloated_density = next(category for category in bloated_breakdown.categories if category.key == "visual_density")
+
+    assert ideal_density.score == 100.0
+    assert bloated_density.actual == 0.12
+    assert bloated_density.maximum == 0.09
+    assert bloated_density.score == 45.0
