@@ -19,7 +19,7 @@
   MediaLyze focuses (for now) on just analysis, not playback, scraping, or file modification, READ ONLY on your files!
 </p>
 
-![MediaLyze dashboard](docs/images/Dashboard.jpg)
+![MediaLyze dashboard](docs/images/Dashboard.png)
 
 ## Why MediaLyze
 
@@ -43,8 +43,12 @@ Bring your own auth (for now).
 
 <table>
   <tr>
-    <td><img alt="Dashboard view" src="docs/images/Dashboard.jpg"></td>
-    <td><img alt="Settings view" src="docs/images/Settings.jpg"></td>
+    <td><img alt="Dashboard view" src="docs/images/Library.png"></td>
+    <td><img alt="Settings view" src="docs/images/Library-Tableview.png"></td>
+  </tr>
+  <tr>
+    <td><img alt="Dashboard view" src="docs/images/Library-Darkmode.png"></td>
+    <td><img alt="Settings view" src="docs/images/Settings-Logs-Ignored.png"></td>
   </tr>
 </table>
 
@@ -141,26 +145,14 @@ See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short gui
 - Frontend: React, Vite, TypeScript, i18next
 - Media analysis: `ffprobe` / FFmpeg
 - Scheduling and watch mode: APScheduler, watchdog
-- Packaging: Docker, GHCR
-
-## Repository Layout
-
-```text
-backend/   FastAPI app, database models, scanner, services
-frontend/  React + Vite application
-tests/     Python test suite
-docs/      Project documentation
-docker/    Docker related files
-```
+- Packaging: GHCR
 
 ## Project Status
 
 MediaLyze is an open-source project under active development. The current focus is technical media analysis for large self-hosted libraries, with the v1 scope centered on scanning, normalization, statistics, and file inspection.
 
-## Contributing
+## Contributing & License
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-
-## License
 
 This project is licensed under the [MIT License](LICENSE).
