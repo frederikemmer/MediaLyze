@@ -253,6 +253,7 @@
     "changedFiles": "Geänderte Dateien",
     "deletedFiles": "Gelöschte Dateien",
     "failedFiles": "Nicht analysierbare Dateien",
+    "failedFileReasonTooltipAria": "Analysedetails für {{path}} anzeigen",
     "watchEvents": "{{count}} Dateisystemereignisse wurden zusammengefasst.",
     "intervalMinutes": "Geplantes Intervall: {{minutes}} Minuten",
     "coalescedTriggers": "{{count}} zusätzliche Auslöser wurden diesem Scan zugeschlagen.",

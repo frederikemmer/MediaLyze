@@ -367,7 +367,16 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(screen.getAllByText("Ignore patterns")[1]);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));
-    expect((await screen.findAllByText("broken.mkv")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("ffprobe exploded")).not.toBeInTheDocument();
+
+    const failedFileTrigger = await screen.findByRole("button", {
+      name: "Show analysis failure details for broken.mkv",
+    });
+    expect(screen.queryByText("broken.mkv, ...")).not.toBeInTheDocument();
+    expect(failedFileTrigger).toHaveTextContent("broken.mkv");
+
+    fireEvent.click(failedFileTrigger);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("ffprobe exploded");
   });
 
   it("loads older scans when clicking load more", async () => {

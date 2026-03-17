@@ -808,9 +808,44 @@
   overflow-wrap: anywhere;
 }
 
-.scan-log-issue {
-  display: grid;
-  gap: 6px;
+.scan-log-path-tooltip-trigger,
+.scan-log-path-tooltip-trigger.tooltip-trigger {
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  justify-content: flex-start;
+  box-shadow: none;
+  appearance: none;
+}
+
+.scan-log-path-tooltip-trigger:hover,
+.scan-log-path-tooltip-trigger:focus-visible,
+.scan-log-path-tooltip-trigger.tooltip-trigger:hover,
+.scan-log-path-tooltip-trigger.tooltip-trigger:focus-visible {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.scan-log-path-tooltip-trigger:focus-visible {
+  outline: 2px solid rgba(31, 28, 22, 0.22);
+  outline-offset: 3px;
+}
+
+.scan-log-path-tooltip-trigger .scan-log-path {
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.scan-log-path-tooltip-trigger:hover .scan-log-path,
+.scan-log-path-tooltip-trigger:focus-visible .scan-log-path {
+  background: rgba(31, 28, 22, 0.1);
 }
 
 .scan-log-summary-grid {
@@ -2034,6 +2069,10 @@ html[data-theme="dark"] {
 
   .scan-log-path {
     background: rgba(240, 236, 228, 0.08);
+  }
+
+  .scan-log-path-tooltip-trigger:focus-visible {
+    outline-color: rgba(240, 236, 228, 0.22);
   }
 
   .scan-log-stat {

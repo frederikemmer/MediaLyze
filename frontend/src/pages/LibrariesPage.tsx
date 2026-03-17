@@ -872,8 +872,6 @@ export function LibrariesPage() {
     const patternHits = detail.scan_summary.discovery.ignored_pattern_hits;
     const ignorePatternsSummary = compactScanValues(detail.scan_summary.ignore_patterns);
     const patternHitsSummary = compactScanValues(patternHits.map((hit) => hit.pattern));
-    const failedFilesSummary = compactScanValues(detail.scan_summary.analysis.failed_files.map((entry) => entry.path));
-
     return (
       <div className="scan-log-detail">
         <div className="scan-log-summary-meta scan-log-summary-meta-detail">
@@ -999,7 +997,6 @@ export function LibrariesPage() {
             <summary className="scan-log-collapse-toggle">
               <span className="scan-log-collapse-copy">
                 <strong>{t("scanLogs.failedFiles")}</strong>
-                {failedFilesSummary ? <span className="scan-log-collapse-summary">{failedFilesSummary}</span> : null}
               </span>
               <span className="scan-log-collapse-meta">
                 <span className="badge">{detail.scan_summary.analysis.analysis_failed}</span>
@@ -1009,12 +1006,18 @@ export function LibrariesPage() {
             <div className="scan-log-collapse-content">
               {detail.scan_summary.analysis.failed_files.length > 0 ? (
                 <div className="scan-log-scroll-area">
-                  <div className="scan-log-issue-list">
+                  <div className="scan-log-path-list">
                     {detail.scan_summary.analysis.failed_files.map((entry) => (
-                      <div className="scan-log-issue" key={`${detail.id}-${entry.path}`}>
+                      <TooltipTrigger
+                        key={`${detail.id}-${entry.path}`}
+                        ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
+                        content={entry.reason}
+                        preserveLineBreaks
+                        align="start"
+                        className="scan-log-path-tooltip-trigger"
+                      >
                         <code className="scan-log-path">{entry.path}</code>
-                        <span>{entry.reason}</span>
-                      </div>
+                      </TooltipTrigger>
                     ))}
                   </div>
                 </div>
