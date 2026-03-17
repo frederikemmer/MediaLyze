@@ -6,9 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- Documented larger future-relevant changes in `AGENTS.md`
+### 🐛 Bug fixes
+
+## v0.2.1
+
+>2026-03-17
+
+### ✨ New
+
+- Expanded HDR10+ detection so more `ffprobe` metadata variants are recognized during analysis
+- Refreshed the README with current screenshots, project status updates, and a star-history chart
 
 ### 🐛 Bug fixes
+
+- Improved the scan-log failures UI so failed files stay readable and show their analysis error on demand
+- Hid container placeholder directories like `cdrom`, `floppy`, and `usb` in the path browser while keeping explicit mounted media paths visible
 
 ## v0.2.0
 
