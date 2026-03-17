@@ -27,4 +27,19 @@ describe("hdr helpers", () => {
       { label: "HDR10", value: 4 },
     ]);
   });
+
+  it("keeps HDR10+ separate from HDR10 when distributions are collapsed", () => {
+    expect(
+      collapseHdrDistribution(
+        [
+          { label: "HDR10", value: 4 },
+          { label: "HDR10+", value: 2 },
+        ],
+        false,
+      ),
+    ).toEqual([
+      { label: "HDR10", value: 4 },
+      { label: "HDR10+", value: 2 },
+    ]);
+  });
 });

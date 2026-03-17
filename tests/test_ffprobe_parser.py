@@ -111,3 +111,31 @@ def test_normalize_ffprobe_payload_extracts_dolby_vision_profile() -> None:
     normalized = normalize_ffprobe_payload(payload)
 
     assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 8"
+
+
+def test_normalize_ffprobe_payload_extracts_hdr10_plus() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+                "side_data_list": [
+                    {
+                        "side_data_type": "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)",
+                        "application_version": 1,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "HDR10+"

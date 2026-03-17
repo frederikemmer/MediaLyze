@@ -56,11 +56,29 @@ def _dolby_vision_profile(stream: dict[str, Any]) -> int | None:
     return None
 
 
+def _metadata_text(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join(
+            part
+            for item in value.items()
+            for part in (
+                str(item[0]),
+                _metadata_text(item[1]),
+            )
+            if part
+        )
+    if isinstance(value, list):
+        return " ".join(_metadata_text(item) for item in value if item is not None)
+    if value in (None, ""):
+        return ""
+    return str(value)
+
+
 def _hdr_type(stream: dict[str, Any]) -> str | None:
     transfer = (stream.get("color_transfer") or "").lower()
     profile = (stream.get("profile") or "").lower()
     side_data = stream.get("side_data_list") or []
-    side_data_text = " ".join(str(item).lower() for item in side_data)
+    side_data_text = _metadata_text(side_data).lower()
     dolby_vision_profile = _dolby_vision_profile(stream)
 
     if dolby_vision_profile is not None:
@@ -70,7 +88,15 @@ def _hdr_type(stream: dict[str, Any]) -> str | None:
     if "arib-std-b67" in transfer:
         return "HLG"
     if "smpte2084" in transfer:
-        if "dynamic_metadata_plus" in side_data_text or "hdr10+" in side_data_text or "smpte2094" in side_data_text:
+        if (
+            "dynamic_metadata_plus" in side_data_text
+            or "dynamic metadata plus" in side_data_text
+            or "dynamic hdr10+" in side_data_text
+            or "hdr10+" in side_data_text
+            or "hdr10plus" in side_data_text
+            or "smpte2094" in side_data_text
+            or "smpte 2094" in side_data_text
+        ):
             return "HDR10+"
         return "HDR10"
     return None
