@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
+- Documented larger future-relevant changes in `AGENTS.md`
+
 ### 🐛 Bug fixes
 
 ## v0.1.3

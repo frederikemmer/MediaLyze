@@ -1,162 +1,269 @@
 # AGENTS.md
 
-**Project:** Media Library Analyzer
-**Repository Type:** Open-source self-hosted media analysis tool
-**Primary Goal:** Analyze large video media collections using `ffprobe`, store normalized metadata in SQLite, and provide a performant web interface with detailed technical statistics.
+**Project:** MediaLyze  
+**Repository Type:** Open-source self-hosted media analysis tool  
+**Primary Goal:** Analyze large video media collections with `ffprobe`, persist normalized technical metadata in SQLite, and expose performant inspection, statistics, and scan-management workflows through a FastAPI + React application.
 
 ---
 
-# 1. Project Overview
+# 1. Current State Snapshot
 
-The **Media Library Analyzer** is a self-hosted application designed to scan and analyze large collections of video files.
+MediaLyze is no longer a greenfield v1 concept document. This file describes the **current `dev` branch implementation state** and should be treated as an engineering overview for agents working in this repository.
 
-It focuses strictly on **technical media analysis**, not media playback or metadata scraping.
+Current baseline:
 
-The application:
+* main branch: `main`
+* branch basis: `dev`
+* primary development branch: `dev`
+* latest public GitHub release: **`v0.2.0`**, published on **2026-03-16**
+* release line documented in GitHub: `v0.1.1`, `v0.1.2`, `v0.1.3`, `v0.2.0`
+* stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Docker**, **GHCR**
 
-* scans directories defined by the user as **Libraries**
-* analyzes media files using **ffprobe**
-* stores structured data in **SQLite**
-* provides a **web interface with statistics and filtering**
-* runs entirely inside **one Docker container**
-* supports collections with **100k+ media files**
+Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
 
-The system must be designed for **high performance, scalability, and extensibility**.
+* path-browser filtering for placeholder directories such as `cdrom`, `floppy`, and `usb` when they are only container-exposed shadow directories
+* broader HDR10+ detection from additional ffprobe side-data metadata variants
+
+Important documentation rule:
+
+* prefer the actual repository code and GitHub release metadata over `CHANGELOG.md` when they disagree
+* `CHANGELOG.md` is currently incomplete on `dev` and does **not** fully reflect the already published `v0.2.0` release
+* `main` is the primary stable / release branch, while `dev` is the primary ongoing development branch
 
 ---
 
-# 2. Key Principles
+# 2. Product Scope
 
-### 2.1 Core Design Goals
+MediaLyze is a **self-hosted technical media analyzer** for video collections.  
+It focuses on file analysis, scan orchestration, metadata normalization, and library statistics.
 
-* high performance
-* scalable to large libraries
-* deterministic scans
-* incremental scanning
-* strong normalization of media metadata
-* minimal dependencies
-* fully self-hosted
-* docker-native deployment
+## 2.1 Implemented Now
 
-### 2.2 Non-Goals (for v1)
+MediaLyze currently implements:
 
-The system does **not**:
+* library creation, update, rename, and deletion
+* safe directory browsing restricted to paths under `MEDIA_ROOT`
+* manual, scheduled, and watchdog-based scanning
+* full and incremental scans
+* scan cancelation
+* recent scan logs and detailed scan-job summaries
+* deterministic change detection using path, file size, and modification time
+* ffprobe-based normalization of media, stream, subtitle, and raw payload data
+* internal and external subtitle detection
+* configurable per-library quality profiles
+* per-file quality score breakdowns
+* structured metadata search, filtering, sorting, and pagination
+* dashboard and per-library statistics
+* theme selection and feature flags
+* English and German UI translations
+* Docker-first deployment and GHCR image publishing
+
+## 2.2 Explicit Non-Goals
+
+MediaLyze does **not** currently:
 
 * play media
-* scrape movie metadata
-* connect to external APIs
-* modify media files
-* integrate with media servers
+* scrape movie or TV metadata
+* connect to external metadata APIs
+* modify, rename, or transcode media files
+* manage authentication internally
+
+## 2.3 Backlog / Not Yet Implemented
+
+Open or clearly future-facing work includes:
+
+* duplicate-video detection
+* improved broken-file reporting and diagnostics
+* additional future analysis and recommendation workflows
+
+These items should be treated as backlog, not current behavior.
 
 ---
 
-# 3. Core Features (v1)
+# 3. Core Runtime Behavior
 
-### 3.1 Libraries
+## 3.1 Libraries
 
-Users can create libraries representing a directory.
+Libraries represent directories below `MEDIA_ROOT`.
 
-Each library has:
+Each library currently stores:
 
 * name
-* filesystem path
+* absolute resolved path
 * library type
-* scan configuration
+* `scan_mode`
+* `scan_config`
+* `quality_profile`
+* timestamps such as `created_at`, `updated_at`, and `last_scan_at`
 
-Library types:
+Supported library types:
 
-```
+```text
 movies
 series
 mixed
 other
 ```
 
-Only libraries of type **series** enable episode detection logic.
+Important correction:
 
----
+* the current code preserves the library type enum but does **not** implement special series-specific parsing that should be documented as an active feature
 
-### 3.2 File Scanning
+## 3.2 Path Browsing Safety
 
-The scanner must:
+The UI path browser is constrained to `MEDIA_ROOT`.
 
-1. recursively traverse library directories
-2. detect media files
-3. store file metadata
-4. run ffprobe analysis for new or modified files
-5. update database records
+Current behavior includes:
 
-File change detection uses:
+* rejecting paths outside `MEDIA_ROOT`
+* skipping symlinks that resolve outside `MEDIA_ROOT`
+* hiding placeholder container directories like `cdrom`, `floppy`, and `usb` when they are not real intended media targets
+* keeping explicit mounted directories visible when they are valid browse targets
 
-* path
+## 3.3 Scan Modes
+
+Libraries support three active scan modes:
+
+```text
+manual
+scheduled
+watch
+```
+
+Behavior:
+
+* `manual`: scans run only when requested
+* `scheduled`: APScheduler creates interval-based scan jobs
+* `watch`: watchdog observers debounce filesystem events and queue scans
+
+## 3.4 Scan Types
+
+The current API and runtime support:
+
+```text
+full
+incremental
+```
+
+Current scan execution behavior:
+
+1. traverse the library directory deterministically
+2. apply ignore-pattern filtering during discovery
+3. compare discovered files against stored records
+4. detect new, modified, deleted, or newly ignored files
+5. reanalyze files with incomplete metadata when needed
+6. persist detailed scan summaries and file-level failure samples
+
+Change detection uses:
+
+* relative path
 * file size
 * modification time
 
-Optional later:
+## 3.5 Scan Job Runtime
 
-* file hash
+The project does **not** currently use a separate abstract background-queue architecture from the early documentation.
+
+Actual implementation:
+
+* scan jobs are persisted in SQLite
+* the runtime is managed by `ScanRuntimeManager`
+* jobs are queued and deduplicated per library
+* execution is backed by a `ThreadPoolExecutor`
+* APScheduler manages scheduled work
+* watchdog observers feed filesystem-triggered scans
+* active jobs can be canceled globally or per library
+* quality recomputation runs as a distinct runtime-managed job type
+
+## 3.6 Scan Logs
+
+Scan-job tracking now includes:
+
+* active-job polling
+* recent completed/failed/canceled scan history
+* trigger source tracking
+* trigger details
+* progress state and phase labels
+* discovery summaries
+* change summaries
+* analysis failure summaries with sampled error reasons
 
 ---
 
-### 3.3 Media Analysis
+# 4. Media Analysis And Normalization
 
-Every video file is analyzed with:
+## 4.1 ffprobe Integration
 
-```
-ffprobe -v quiet -print_format json -show_format -show_streams -show_chapters
-```
+MediaLyze analyzes video files with `ffprobe` and stores both:
 
-The JSON output is parsed and normalized into database tables.
+* normalized structured metadata
+* raw ffprobe JSON payloads
 
----
+Normalized storage covers:
 
-### 3.4 Stream Detection
+* container / format data
+* video streams
+* audio streams
+* subtitle streams
+* external subtitle sidecars
 
-The system must detect:
+## 4.2 Video Streams
 
-Video Streams:
+Current normalized video stream fields include:
 
 * codec
-* resolution
-* bitrate
-* frame rate
+* profile
+* width
+* height
+* pixel format
 * color space
-* HDR type
+* color transfer
+* color primaries
+* frame rate
+* bitrate
+* HDR / dynamic range type
 
-Audio Streams:
+Current HDR handling includes:
+
+* SDR
+* HDR10
+* HDR10+
+* HLG
+* Dolby Vision
+* Dolby Vision profile variants when the feature flag is enabled in the UI
+
+## 4.3 Audio Streams
+
+Current normalized audio stream fields include:
 
 * codec
 * channels
 * channel layout
 * sample rate
-* language
 * bitrate
+* language
+* default flag
+* forced flag
 
-Subtitle Streams:
+## 4.4 Subtitle Streams
+
+Current normalized subtitle stream fields include:
 
 * codec
 * language
-* forced flag
 * default flag
-* text/image type
+* forced flag
+* `subtitle_type`
 
----
+`subtitle_type` distinguishes the parsed subtitle class at the schema level and is part of the current contract.
 
-### 3.5 External Subtitle Detection
+## 4.5 External Subtitles
 
-The system must detect external subtitles next to video files.
+External subtitle detection is implemented for sidecar files near media files.
 
-Examples:
+Supported extensions:
 
-```
-movie.de.srt
-movie.en.ass
-movie.forced.srt
-```
-
-Supported formats:
-
-```
+```text
 srt
 ass
 ssa
@@ -164,601 +271,512 @@ sub
 idx
 ```
 
+Stored fields include:
+
+* relative sidecar path
+* language
+* format
+
 ---
 
-### 3.6 Statistics
+# 5. Ignore Patterns
 
-The system must compute statistics including:
+Ignore rules are a current first-class feature.
 
-Video:
+Current implementation supports:
 
-* codec distribution
+* built-in default ignore patterns
+* user-managed custom ignore patterns
+* separate persisted storage of `user_ignore_patterns` and `default_ignore_patterns`
+* merged effective `ignore_patterns`
+* optional seeding disablement via `DISABLE_DEFAULT_IGNORE_PATTERNS=true`
+
+Built-in default patterns currently target common temporary, system, and NAS-generated files such as:
+
+* `*/.DS_Store`
+* `*/@eaDir/*`
+* `*.part`
+* `*.tmp`
+* `*.temp`
+* `*thumbs.db`
+
+Ignore rules are applied during discovery against normalized library-relative paths.
+
+---
+
+# 6. Quality Scoring
+
+The original static example score table is outdated and should not be used as the current description.
+
+MediaLyze now implements a **configurable quality-profile system** per library.
+
+## 6.1 Quality Profile Categories
+
+Current categories:
+
+* resolution
+* visual density
+* video codec
+* audio channels
+* audio codec
+* dynamic range
+* language preferences
+
+## 6.2 Quality Data Stored Per File
+
+Current media-file quality fields include:
+
+* `quality_score`
+* `quality_score_raw`
+* `quality_score_breakdown`
+
+The file detail view also exposes detailed category-level scoring.
+
+## 6.3 Quality Profile Behavior
+
+Current behavior:
+
+* every library stores a `quality_profile`
+* library updates can modify the profile
+* profile changes can queue quality recomputation jobs
+* visual density scoring uses actual file size and explicit bounds, not only bitrate metadata
+* dynamic range scoring normalizes Dolby Vision variants to the intended score tier
+
+---
+
+# 7. Statistics And Search
+
+## 7.1 Statistics
+
+Current aggregated statistics include:
+
+* dashboard totals for libraries, files, storage, and duration
+* video codec distribution
 * resolution distribution
-* HDR vs SDR
-* frame rate distribution
+* HDR / dynamic range distribution
+* audio codec distribution
+* audio language distribution
+* subtitle language distribution
+* subtitle codec distribution
+* subtitle source distribution
 
-Audio:
+## 7.2 Statistics Caching
 
-* codec distribution
-* channel layout distribution
-* language distribution
+The project currently uses in-process stats caching via `backend/app/services/stats_cache.py` for:
 
-Subtitles:
+* dashboard payloads
+* library lists
+* library summaries
+* library statistics
 
-* language distribution
-* internal vs external
+Cache invalidation is tied to library changes and scan activity.
 
-Library:
+## 7.3 File Table Search And Filtering
 
-* total files
-* total duration
-* total storage
-* bitrate distribution
+Library file browsing now supports structured search and field-specific filtering.
 
----
+Current searchable/filterable dimensions include:
 
-### 3.7 File Quality Score
+* file / path
+* size
+* duration
+* quality score
+* video codec
+* resolution
+* HDR type
+* audio codecs
+* audio languages
+* subtitle languages
+* subtitle codecs
+* subtitle source
 
-Each media file receives a **quality score from 1 to 10**.
+The backend supports:
 
-Score factors include:
-
-Video codec
-resolution
-bitrate efficiency
-HDR presence
-audio channels
-audio codec
-
-Example scoring logic:
-
-| Feature                        | Score Impact |
-| ------------------------------ | ------------ |
-| AV1 / HEVC                     | +2           |
-| H264                           | +1           |
-| 4K                             | +2           |
-| 1080p                          | +1           |
-| HDR                            | +1           |
-| 7.1 audio                      | +2           |
-| 5.1 audio                      | +1           |
-| very high bitrate inefficiency | -2           |
-
-The final score is normalized to **1–10**.
+* legacy broad search
+* field-specific search intersections
+* structured numeric expressions such as size, duration, and quality score comparisons
+* sorting across supported table columns
 
 ---
 
-# 4. Performance Requirements
+# 8. Web Interface
 
-The system must handle:
+## 8.1 Frontend Overview
 
+The frontend is a React SPA built with Vite and served by the backend from `frontend/dist` in production.
+
+Current route model:
+
+* `/` dashboard
+* `/settings` libraries page plus app settings
+* `/libraries/:libraryId` library detail
+* `/files/:fileId` file detail
+
+## 8.2 Current UX Features
+
+Implemented UI behavior includes:
+
+* live scan banner for active jobs
+* active scan polling with cancel-all support
+* library navigation in the main shell
+* path browser for safe library creation
+* collapsible settings panels
+* recent scan-log browsing and detailed scan summaries
+* virtualized library file table for larger datasets
+* infinite paging / paginated loading behavior
+* statistic-panel and table-column visibility customization
+* per-file quality tooltip and full breakdown view
+* persistent app theme preference
+* persistent local UI state for selected statistics and some panel/section visibility
+
+## 8.3 Internationalization
+
+Current translation state:
+
+* default language: English
+* additional shipped language: German
+* translation assets stored under `frontend/locales/`
+* frontend uses `i18next`
+
+## 8.4 Theme And Feature Flags
+
+Current theme support:
+
+```text
+system
+light
+dark
 ```
-100,000+ media files
-```
 
-Performance requirements:
+Theme behavior:
 
-* scanning must support parallel workers
-* database writes must be batched
-* ffprobe must run with configurable worker count
-* database must use WAL mode
-* indices must exist for all filterable fields
+* stored in browser `localStorage`
+* `system` follows OS/browser preference
+* applied through a `data-theme` attribute on `<html>`
+
+Current app feature flags include:
+
+* `show_dolby_vision_profiles`
+
+This flag changes how dynamic range variants are displayed in statistics and metadata views.
 
 ---
 
-# 5. Technology Stack
+# 9. API Surface
 
-Backend:
+The backend currently exposes a REST-style API under the configured prefix, typically `/api`.
 
-```
-Python
-FastAPI
-SQLAlchemy
-SQLite
-```
+## 9.1 Health And Runtime
 
-Worker System:
+* `GET /api/health`
+* `GET /api/dashboard`
+* `GET /api/scan-jobs/active`
+* `POST /api/scan-jobs/active/cancel`
+* `GET /api/scan-jobs/recent`
+* `GET /api/scan-jobs/{job_id}`
 
-```
-async worker queue
-APScheduler for scheduled scans
-```
+## 9.2 Safe Filesystem Browsing
 
-Frontend:
+* `GET /api/browse`
 
-```
-React + Vite
-```
+This endpoint is used for selecting library paths below `MEDIA_ROOT`.
 
-Media analysis:
+## 9.3 App Settings
 
-```
-ffprobe
-```
+* `GET /api/app-settings`
+* `PATCH /api/app-settings`
 
-Container:
+Important current payload concepts:
 
-```
-Docker
+* `ignore_patterns`
+* `user_ignore_patterns`
+* `default_ignore_patterns`
+* `feature_flags.show_dolby_vision_profiles`
+
+## 9.4 Libraries
+
+* `GET /api/libraries`
+* `POST /api/libraries`
+* `GET /api/libraries/{library_id}/summary`
+* `GET /api/libraries/{library_id}/statistics`
+* `GET /api/libraries/{library_id}/scan-jobs`
+* `PATCH /api/libraries/{library_id}`
+* `DELETE /api/libraries/{library_id}`
+* `GET /api/libraries/{library_id}/files`
+* `POST /api/libraries/{library_id}/scan`
+
+Important library contract concepts:
+
+* `scan_mode`
+* `scan_config`
+* `quality_profile`
+
+## 9.5 Files
+
+* `GET /api/files/{file_id}`
+* `GET /api/files/{file_id}/quality-score`
+
+Important file contract concepts:
+
+* `quality_score_raw`
+* `quality_score_breakdown`
+* `raw_ffprobe_json`
+* `subtitle_type`
+
+## 9.6 Scan Job Contract
+
+Important scan-job contract concepts:
+
+* `trigger_source`
+* `trigger_details`
+* `scan_summary`
+
+Supported trigger sources currently include:
+
+```text
+manual
+scheduled
+watchdog
 ```
 
 ---
 
-# 6. System Architecture
+# 10. Database Schema Overview
 
-Single container architecture.
+MediaLyze uses SQLite with WAL mode and additive migration logic during initialization.
 
-Internal components:
+Current logical schema includes:
 
-```
-Web API
-Scanner Worker
-Job Queue
-SQLite Database
-Frontend
-```
+* `libraries`
+* `app_settings`
+* `media_files`
+* `media_formats`
+* `video_streams`
+* `audio_streams`
+* `subtitle_streams`
+* `external_subtitles`
+* `scan_jobs`
+
+Important post-`0.0.1` additions that must be treated as real schema surface:
+
+* library `scan_mode`
+* library `scan_config`
+* library `quality_profile`
+* app-level settings storage
+* media `quality_score_raw`
+* media `quality_score_breakdown`
+* media `raw_ffprobe_json`
+* subtitle `subtitle_type`
+* scan job `trigger_source`
+* scan job `trigger_details`
+* scan job `scan_summary`
+
+Current database behavior:
+
+* SQLite foreign keys enabled
+* WAL mode enabled
+* additive column migrations on startup
+* index creation for actively queried fields
+* `PRAGMA optimize` run during initialization
 
 ---
 
-# 7. Docker Requirements
+# 11. System Architecture
 
-Container must include:
+## 11.1 Backend
 
+Implemented backend structure:
+
+* `backend/app/main.py` boots FastAPI, initializes the database, starts the scan runtime, and serves the built frontend
+* `backend/app/api/routes.py` defines the public HTTP API
+* `backend/app/models/entities.py` defines the ORM schema
+* the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
+* `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
+* `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
+* `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics
+
+## 11.2 Frontend
+
+Implemented frontend structure:
+
+* `frontend/src/App.tsx` wires routing and providers
+* `frontend/src/lib/app-data.tsx` manages cached app settings, dashboard, and library data
+* `frontend/src/lib/scan-jobs.tsx` manages active scan polling state
+* page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views
+
+## 11.3 Deployment Shape
+
+Current deployment model is still a **single container**, but it now includes:
+
+* backend API
+* scan runtime
+* scheduler
+* watchdog integration
+* SQLite database
+* served frontend bundle
+
+---
+
+# 12. Deployment And Configuration
+
+## 12.1 Docker Model
+
+MediaLyze is distributed as a Docker image, with GHCR as the primary registry target.
+
+Current public image naming:
+
+```text
+ghcr.io/frederikemmer/medialyze
 ```
-ffmpeg
-ffprobe
-python runtime
-sqlite
-node build tools
-```
 
-Expected runtime configuration:
+Current repository layout includes:
 
-```
-/config
-/media
-```
+* root `Dockerfile`
+* `docker/docker-compose.yaml`
+* `docker/env.example`
+* `docker/entrypoint.sh`
 
-Example container layout:
+## 12.2 Runtime Paths
 
-```
+Expected container paths:
+
+```text
 /app
 /config
 /media
 ```
 
----
+`MEDIA_ROOT` should be mounted read-only in production.
 
-# 8. Docker Usage
+Additional media mounts can be exposed under `/media/...` when needed, and the path browser should only surface valid targets inside that tree.
 
-Example docker compose:
+## 12.3 Important Environment Variables
 
-```
-services:
-  media-analyzer:
-    image: media-analyzer
-    ports:
-      - "8080:8080"
-    volumes:
-      - /path/to/config:/config
-      - /path/to/media:/media
-    environment:
-      - CONFIG_PATH=/config
-      - MEDIA_ROOT=/media
-```
+Current documented runtime configuration includes:
 
-Important rule:
+* `CONFIG_PATH`
+* `MEDIA_ROOT`
+* `APP_PORT`
+* `HOST_PORT`
+* `TZ`
+* `FFPROBE_PATH`
+* `SCAN_RUNTIME_WORKER_COUNT`
+* `DISABLE_DEFAULT_IGNORE_PATTERNS`
+* `PUID`
+* `PGID`
 
-The UI must **only allow browsing paths under MEDIA_ROOT**.
+Additional behavior:
 
----
-
-# 9. Database Schema
-
-## libraries
-
-```
-id
-name
-path
-type
-created_at
-updated_at
-last_scan_at
-scan_mode
-```
+* the backend defaults to serving on port `8080`
+* `PUID` and `PGID` support shared-folder or NAS permission setups
+* `FFPROBE_PATH` can override the ffprobe binary
 
 ---
 
-## media_files
+# 13. CI, Releases, And Versioning
 
-```
-id
-library_id
-relative_path
-filename
-extension
-size_bytes
-mtime
-last_seen_at
-last_analyzed_at
-scan_status
-quality_score
-```
+## 13.1 GitHub Actions
 
----
+Current workflows include:
 
-## media_formats
+* dev image publishing
+* official release publishing
+* release metadata validation for pull requests
 
-```
-id
-media_file_id
-container_format
-duration
-bit_rate
-probe_score
-```
+## 13.2 Release Metadata Rules
 
----
+The repository currently validates version alignment across:
 
-## video_streams
+* `Dockerfile`
+* `pyproject.toml`
+* `frontend/package.json`
 
-```
-id
-media_file_id
-stream_index
-codec
-profile
-width
-height
-pix_fmt
-color_space
-color_transfer
-color_primaries
-frame_rate
-bit_rate
-hdr_type
-```
+Release metadata is enforced through `.github/scripts/release_metadata.py`.
+
+## 13.3 Release Publishing Model
+
+Current release behavior:
+
+* dev images are pushed from `dev`
+* official images and GitHub releases are tag-driven from `main`
+* official images are published to GHCR
+* GitHub releases use extracted release notes based on repository metadata
+* upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
+* when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch
+
+Important current nuance:
+
+* version files on `dev` are **not** the authoritative source for the latest public release history
+* GitHub release data currently shows `v0.2.0` as latest public release even though the local `CHANGELOG.md` on `dev` is incomplete
 
 ---
 
-## audio_streams
-
-```
-id
-media_file_id
-stream_index
-codec
-channels
-channel_layout
-sample_rate
-bit_rate
-language
-default_flag
-forced_flag
-```
-
----
-
-## subtitle_streams
-
-```
-id
-media_file_id
-stream_index
-codec
-language
-default_flag
-forced_flag
-```
-
----
-
-## external_subtitles
-
-```
-id
-media_file_id
-path
-language
-format
-```
-
----
-
-## scan_jobs
-
-```
-id
-library_id
-status
-job_type
-files_total
-files_scanned
-errors
-started_at
-finished_at
-```
-
----
-
-# 10. Scanning Strategy
-
-Two scan types:
-
-### Full Scan
-
-Used for first library analysis.
-
-Steps:
-
-1 traverse filesystem
-2 record files
-3 analyze files
-
----
-
-### Incremental Scan
-
-Detects:
-
-* new files
-* modified files
-* deleted files
-
-Only changed files run ffprobe.
-
----
-
-# 11. Optional Watch Mode
-
-Libraries can enable file watching.
-
-Implementation:
-
-```
-watchdog
-```
-
-Used only if explicitly enabled.
-
----
-
-# 12. Supported Media Formats
-
-Video containers:
-
-```
-mkv
-mp4
-avi
-mov
-m4v
-ts
-m2ts
-wmv
-```
-
-Subtitles:
-
-```
-srt
-ass
-ssa
-sub
-idx
-```
-
----
-
-# 13. Web Interface
-
-Main UI pages:
-
-### Dashboard
-
-Displays:
-
-* total files
-* total storage
-* codec distribution
-* HDR distribution
-* resolution distribution
-
----
-
-### Libraries Page
-
-Displays:
-
-* all libraries
-* file counts
-* storage usage
-* scan status
-
----
-
-### Library Detail Page
-
-Includes:
-
-* charts
-* file table
-* scan controls
-
----
-
-### File Table
-
-Columns:
-
-```
-filename
-size
-duration
-codec
-resolution
-hdr
-audio languages
-subtitle languages
-quality score
-```
-
-Supports filtering.
-
----
-
-### File Detail Page
-
-Displays:
-
-* video streams
-* audio streams
-* subtitle streams
-* raw ffprobe JSON
-
----
-
-# 14. Internationalization
-
-The application must support multiple languages.
-
-Default language:
-
-```
-English
-```
-
-Architecture must allow easy addition of languages.
-
-Recommended library:
-
-```
-i18next
-```
-
-Translations stored in:
-
-```
-/frontend/locales/
-```
-
----
-
-# 15. Security Model
-
-No built-in user management in v1.
-
-Deployment assumes:
-
-* internal network usage
-  or
-* reverse proxy authentication.
-
----
-
-# 16. File System Safety
-
-Media directories must be mounted **read-only**.
-
-The application must not modify files in v1.
-
----
-
-# 17. Future Features (v2+)
-
-Possible future expansions:
-
-Transcode candidate detection
-
-Automatic renaming based on metadata
-
-Media deduplication
-
-JSON / CSV exports
-
-Jellyfin integration
-
-Media quality recommendations
-
----
-
-# 18. Repository Structure
-
-```
-MediaLyze/
-
-backend/
-frontend/
-scanner/
-db/
-workers/
-docker/
-tests/
-docs/
-
-AGENTS.md
+# 14. Repository Layout
+
+Current top-level layout:
+
+```text
+backend/        FastAPI app, ORM models, DB init, scanner, runtime, services
+frontend/       React + Vite application, translations, tests
+docs/           Supporting project documentation and screenshots
+docker/         Compose file, env example, entrypoint
+tests/          Python test suite
+.github/        Workflows, issue templates, helper scripts, agent metadata
+
+Dockerfile
+pyproject.toml
+CHANGELOG.md
 README.md
-docker-compose.yml
+AGENTS.md
 ```
+
+Important correction:
+
+* older documentation that references removed top-level scan, worker, or database folders is outdated and should not be reused
 
 ---
 
-# 19. Coding Guidelines
+# 15. Testing And Validation
 
-General rules:
+Current automated coverage includes backend and frontend test suites.
 
-* strict typing
-* clear modular structure
-* no monolithic modules
-* comprehensive logging
-* defensive parsing of ffprobe output
+Repository-level test coverage areas include:
 
----
+* app settings
+* path browsing
+* ffprobe parsing
+* glob matching
+* library services
+* media services and search
+* path safety
+* quality scoring
+* runtime behavior
+* scan jobs
+* scanner behavior
+* statistics
+* subtitles
+* frontend API helpers and page behavior
 
-# 20. Open Source Requirements
-
-License:
-
-```
-MIT
-```
-
-Repository must include:
-
-```
-README
-LICENSE
-CONTRIBUTING
-```
+When documenting or extending behavior, prefer tests and code over stale prose.
 
 ---
 
-# 21. Development Priority
+# 16. Working Rules For Agents
 
-Implementation order:
+When updating documentation, code, or behavior in this repository:
 
-1. Database models
-2. Scanner engine
-3. ffprobe parser
-4. API endpoints
-5. Worker queue
-6. Statistics system
-7. Frontend UI
-8. Docker packaging
-9. database migration logic (for future changes)
+* describe implemented behavior as implemented behavior
+* describe backlog items as backlog
+* do not resurrect outdated architectural labels from early versions
+* verify claims against code, tests, workflows, or GitHub release metadata
+* do not document unverified scale claims as benchmarked facts; treat large-library support as a design goal unless there is measured evidence
+* prefer concrete current file paths and interfaces over speculative future structure
+* if a larger change affects architecture, runtime behavior, public interfaces, release flow, repository structure, or other information relevant for future development, update `AGENTS.md` in the same work
+* if a change is relevant for the next release, add it to `CHANGELOG.md` under `vUnreleased`
+* when preparing or publishing a new version, move the accumulated `vUnreleased` entries into the new version section so the release history remains complete
 
----
+If documentation conflicts with code:
 
-# 22. Success Criteria
-
-The project is considered functional when it can:
-
-* create libraries
-* scan directories
-* analyze media with ffprobe
-* store normalized metadata
-* display statistics
-* handle collections of 100k files
-* run fully in Docker
-
----
+1. trust code and tests first
+2. use GitHub release metadata for public-release chronology
+3. treat `CHANGELOG.md` as advisory unless it matches the current repository and release state
