@@ -4,19 +4,29 @@ from backend.app.core.config import Settings
 from backend.app.schemas.browse import BrowseEntry, BrowseResponse
 from backend.app.utils.pathing import ensure_relative_to_root, relative_display_path
 
+_CONTAINER_PLACEHOLDER_DIRS = frozenset({"cdrom", "floppy", "usb"})
+
+
+def _is_container_placeholder_dir(entry: Path, root: Path) -> bool:
+    if entry.name not in _CONTAINER_PLACEHOLDER_DIRS:
+        return False
+
+    try:
+        if entry.parent.resolve() != root.resolve():
+            return False
+        if root.is_mount():
+            return False
+        return entry.is_dir() and not entry.is_mount()
+    except OSError:
+        return False
+
 
 def _is_visible_browse_entry(entry: Path, root: Path) -> bool:
     try:
         ensure_relative_to_root(entry, root)
     except (OSError, ValueError):
         return False
-
-    # Docker can expose nested runtime mounts below MEDIA_ROOT. Hide those so the
-    # browser reflects only the configured media tree.
-    try:
-        return not entry.is_mount()
-    except OSError:
-        return False
+    return not _is_container_placeholder_dir(entry, root)
 
 
 def browse_media_root(settings: Settings, relative_path: str = ".") -> BrowseResponse:
