@@ -589,6 +589,34 @@
   border-radius: 999px;
 }
 
+.analyzed-files-export-button {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.analyzed-files-export-button:hover,
+.analyzed-files-export-button:focus-visible {
+  transform: none;
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.analyzed-files-export-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  box-shadow: none;
+}
+
 .library-settings-form {
   display: grid;
   gap: 12px;

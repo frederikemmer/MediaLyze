@@ -424,6 +424,7 @@ Implemented UI behavior includes:
 * recent scan-log browsing and detailed scan summaries
 * virtualized library file table for larger datasets
 * infinite paging / paginated loading behavior
+* CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
@@ -503,6 +504,7 @@ Important current payload concepts:
 * `PATCH /api/libraries/{library_id}`
 * `DELETE /api/libraries/{library_id}`
 * `GET /api/libraries/{library_id}/files`
+* `GET /api/libraries/{library_id}/files/export.csv`
 * `POST /api/libraries/{library_id}/scan`
 
 Important library contract concepts:

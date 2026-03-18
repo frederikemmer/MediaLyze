@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
+import csv
+import io
+import re
+from datetime import datetime, timezone
+from typing import Iterator, Literal
 
 from sqlalchemy import String, and_, case, cast, func, literal, select, union_all
 from sqlalchemy.orm import Session, selectinload
@@ -33,6 +37,39 @@ FileSortKey = Literal[
     "quality_score",
 ]
 FileSortDirection = Literal["asc", "desc"]
+
+CSV_EXPORT_BATCH_SIZE = 500
+CSV_EXPORT_HEADERS = [
+    "relative_path",
+    "filename",
+    "size_bytes",
+    "video_codec",
+    "resolution",
+    "hdr_type",
+    "duration_seconds",
+    "audio_codecs",
+    "audio_languages",
+    "subtitle_languages",
+    "subtitle_codecs",
+    "subtitle_sources",
+    "mtime",
+    "last_analyzed_at",
+    "quality_score",
+]
+CSV_EXPORT_FILTER_LABELS = {
+    "file_search": "file",
+    "search_size": "size",
+    "search_quality_score": "quality_score",
+    "search_video_codec": "video_codec",
+    "search_resolution": "resolution",
+    "search_hdr_type": "hdr_type",
+    "search_duration": "duration",
+    "search_audio_codecs": "audio_codecs",
+    "search_audio_languages": "audio_languages",
+    "search_subtitle_languages": "subtitle_languages",
+    "search_subtitle_codecs": "subtitle_codecs",
+    "search_subtitle_sources": "subtitle_sources",
+}
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -90,6 +127,7 @@ def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
         ),
         subtitle_sources=_subtitle_sources(media_file),
     )
+
 
 def _audio_aggregate_subquery(name: str = "audio_aggregates"):
     return (
@@ -235,17 +273,37 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "quality_score": case((MediaFile.quality_score_raw > 0, MediaFile.quality_score_raw), else_=MediaFile.quality_score * 10),
     }
     return sort_map[sort_key]
-def list_library_files(
-    db: Session,
+
+
+def _load_media_files_by_ids(db: Session, selected_ids: list[int]) -> list[MediaFile]:
+    if not selected_ids:
+        return []
+
+    files = db.scalars(
+        select(MediaFile)
+        .where(MediaFile.id.in_(selected_ids))
+        .options(
+            selectinload(MediaFile.media_format),
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+        )
+    ).all()
+
+    order_map = {file_id: index for index, file_id in enumerate(selected_ids)}
+    files.sort(key=lambda media_file: order_map[media_file.id])
+    return files
+
+
+def _build_library_file_id_query(
     library_id: int,
     *,
-    offset: int = 0,
-    limit: int = 50,
     search: str = "",
     search_filters: LibraryFileSearchFilters | None = None,
     sort_key: FileSortKey = "file",
     sort_direction: FileSortDirection = "asc",
-) -> MediaFileTablePage:
+):
     primary_video_streams = primary_video_streams_subquery("media_list_primary_video")
     audio_aggregates = _audio_aggregate_subquery("media_list_audio_aggregates")
     subtitle_aggregates = _subtitle_aggregate_subquery("media_list_subtitle_aggregates")
@@ -267,32 +325,176 @@ def list_library_files(
         subtitle_aggregates,
         search_filters,
     )
-    total = db.scalar(select(func.count()).select_from(filtered_query.order_by(None).subquery())) or 0
-
     sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
-    ordered_query = filtered_query.order_by(
+    return filtered_query.order_by(
         sort_expression.desc() if sort_direction == "desc" else sort_expression.asc(),
         func.lower(MediaFile.relative_path).asc(),
     )
+
+
+def _active_export_search_entries(
+    search: str,
+    search_filters: LibraryFileSearchFilters | None,
+) -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    legacy_search = search.strip()
+    if legacy_search:
+        entries.append(("legacy", legacy_search))
+
+    normalized_filters = (search_filters or LibraryFileSearchFilters()).normalized()
+    for field_name, label in CSV_EXPORT_FILTER_LABELS.items():
+        value = getattr(normalized_filters, field_name)
+        if value:
+            entries.append((label, value))
+    return entries
+
+
+def _csv_export_filename(library_name: str, exported_at: datetime) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", library_name.strip().lower()).strip("-")
+    safe_slug = slug or "library"
+    timestamp = exported_at.strftime("%Y%m%dT%H%M%SZ")
+    return f"medialyze-{safe_slug}-files-{timestamp}.csv"
+
+
+def _csv_export_comment_lines(
+    *,
+    library_id: int,
+    library_name: str,
+    total_rows: int,
+    sort_key: FileSortKey,
+    sort_direction: FileSortDirection,
+    exported_at: datetime,
+    search: str,
+    search_filters: LibraryFileSearchFilters | None,
+) -> list[str]:
+    lines = [
+        "# MediaLyze CSV export",
+        f"# library_id: {library_id}",
+        f"# library_name: {library_name}",
+        f"# exported_at_utc: {exported_at.isoformat().replace('+00:00', 'Z')}",
+        f"# total_rows: {total_rows}",
+        f"# sort_key: {sort_key}",
+        f"# sort_direction: {sort_direction}",
+    ]
+    active_entries = _active_export_search_entries(search, search_filters)
+    if not active_entries:
+        lines.append("# search: none")
+        return lines
+
+    for field_name, value in active_entries:
+        lines.append(f"# search.{field_name}: {value}")
+    return lines
+
+
+def _stringify_export_scalar(value: str | int | float | datetime | None) -> str | int | float:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat().replace("+00:00", "Z")
+    return value
+
+
+def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
+    return [
+        row.relative_path,
+        row.filename,
+        row.size_bytes,
+        row.video_codec or "",
+        row.resolution or "",
+        row.hdr_type or "",
+        _stringify_export_scalar(row.duration),
+        " | ".join(row.audio_codecs),
+        " | ".join(row.audio_languages),
+        " | ".join(row.subtitle_languages),
+        " | ".join(row.subtitle_codecs),
+        " | ".join(row.subtitle_sources),
+        _stringify_export_scalar(row.mtime),
+        _stringify_export_scalar(row.last_analyzed_at),
+        row.quality_score,
+    ]
+
+
+def generate_library_files_csv_export(
+    db: Session,
+    library_id: int,
+    *,
+    library_name: str,
+    search: str = "",
+    search_filters: LibraryFileSearchFilters | None = None,
+    sort_key: FileSortKey = "file",
+    sort_direction: FileSortDirection = "asc",
+) -> tuple[str, Iterator[bytes]]:
+    ordered_query = _build_library_file_id_query(
+        library_id,
+        search=search,
+        search_filters=search_filters,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
+    )
+    total = db.scalar(select(func.count()).select_from(ordered_query.order_by(None).subquery())) or 0
+    exported_at = datetime.now(timezone.utc).replace(microsecond=0)
+    filename = _csv_export_filename(library_name, exported_at)
+    comment_lines = _csv_export_comment_lines(
+        library_id=library_id,
+        library_name=library_name,
+        total_rows=total,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
+        exported_at=exported_at,
+        search=search,
+        search_filters=search_filters,
+    )
+
+    def iter_csv_chunks() -> Iterator[bytes]:
+        yield "\ufeff".encode("utf-8")
+
+        initial_buffer = io.StringIO()
+        initial_writer = csv.writer(initial_buffer, lineterminator="\n")
+        initial_buffer.write("\n".join(comment_lines))
+        initial_buffer.write("\n\n")
+        initial_writer.writerow(CSV_EXPORT_HEADERS)
+        yield initial_buffer.getvalue().encode("utf-8")
+
+        for offset in range(0, total, CSV_EXPORT_BATCH_SIZE):
+            selected_ids = list(db.scalars(ordered_query.offset(offset).limit(CSV_EXPORT_BATCH_SIZE)).all())
+            files = _load_media_files_by_ids(db, selected_ids)
+            if not files:
+                continue
+
+            batch_buffer = io.StringIO()
+            batch_writer = csv.writer(batch_buffer, lineterminator="\n")
+            for media_file in files:
+                batch_writer.writerow(_csv_export_row(_row_from_model(media_file)))
+            yield batch_buffer.getvalue().encode("utf-8")
+
+    return filename, iter_csv_chunks()
+
+
+def list_library_files(
+    db: Session,
+    library_id: int,
+    *,
+    offset: int = 0,
+    limit: int = 50,
+    search: str = "",
+    search_filters: LibraryFileSearchFilters | None = None,
+    sort_key: FileSortKey = "file",
+    sort_direction: FileSortDirection = "asc",
+) -> MediaFileTablePage:
+    ordered_query = _build_library_file_id_query(
+        library_id,
+        search=search,
+        search_filters=search_filters,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
+    )
+    total = db.scalar(select(func.count()).select_from(ordered_query.order_by(None).subquery())) or 0
     selected_ids = list(db.scalars(ordered_query.offset(offset).limit(limit)).all())
 
     if not selected_ids:
         return MediaFileTablePage(total=total, offset=offset, limit=limit, items=[])
 
-    files = db.scalars(
-        select(MediaFile)
-        .where(MediaFile.id.in_(selected_ids))
-        .options(
-            selectinload(MediaFile.media_format),
-            selectinload(MediaFile.video_streams),
-            selectinload(MediaFile.audio_streams),
-            selectinload(MediaFile.subtitle_streams),
-            selectinload(MediaFile.external_subtitles),
-        )
-    ).all()
-
-    order_map = {file_id: index for index, file_id in enumerate(selected_ids)}
-    files.sort(key=lambda media_file: order_map[media_file.id])
+    files = _load_media_files_by_ids(db, selected_ids)
     return MediaFileTablePage(
         total=total,
         offset=offset,

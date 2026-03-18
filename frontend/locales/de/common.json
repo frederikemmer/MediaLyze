@@ -153,6 +153,12 @@
     "analyzedFiles": "Analysierte Dateien",
     "indexedEntries": "{{count}} indizierte Einträge",
     "indexedEntriesFiltered": "{{shown}} von {{total}} indizierten Einträgen",
+    "export": {
+      "aria": "Analysierte Dateien als CSV exportieren",
+      "tooltip": "Die vollstaendige gefilterte Ergebnismenge der analysierten Dateien als CSV exportieren",
+      "exporting": "CSV wird exportiert…",
+      "error": "CSV-Export fehlgeschlagen: {{message}}"
+    },
     "searchLabel": "Dateien und Metadaten durchsuchen",
     "searchPlaceholder": "Dateien und Metadaten suchen",
     "searchFields": {

@@ -301,7 +301,36 @@ export type ScanCancelResponse = {
   canceled_jobs: number;
 };
 
+type LibraryFilesRequestParams = {
+  offset?: number;
+  limit?: number;
+  search?: string;
+  filters?: Partial<Record<LibraryFileSearchField, string>>;
+  sortKey?: MediaFileSortKey;
+  sortDirection?: "asc" | "desc";
+  signal?: AbortSignal;
+};
+
+type DownloadedCsv = {
+  blob: Blob;
+  filename: string | null;
+};
+
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? "/api";
+const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = [
+  ["file", "file_search"],
+  ["size", "search_size"],
+  ["quality_score", "search_quality_score"],
+  ["video_codec", "search_video_codec"],
+  ["resolution", "search_resolution"],
+  ["hdr_type", "search_hdr_type"],
+  ["duration", "search_duration"],
+  ["audio_codecs", "search_audio_codecs"],
+  ["audio_languages", "search_audio_languages"],
+  ["subtitle_languages", "search_subtitle_languages"],
+  ["subtitle_codecs", "search_subtitle_codecs"],
+  ["subtitle_sources", "search_subtitle_sources"],
+];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_PREFIX}${path}`, {
@@ -323,6 +352,58 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+function buildLibraryFilesSearchParams(params?: LibraryFilesRequestParams): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  if (params?.offset !== undefined) {
+    searchParams.set("offset", String(params.offset));
+  }
+  if (params?.limit !== undefined) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params?.search) {
+    searchParams.set("search", params.search);
+  }
+  if (params?.filters) {
+    for (const [field, queryKey] of LIBRARY_FILE_FILTER_QUERY_KEYS) {
+      const rawValue = params.filters[field];
+      const value = rawValue?.trim();
+      if (value) {
+        searchParams.set(queryKey, value);
+      }
+    }
+  }
+  if (params?.sortKey) {
+    searchParams.set("sort_key", params.sortKey);
+  }
+  if (params?.sortDirection) {
+    searchParams.set("sort_direction", params.sortDirection);
+  }
+  return searchParams;
+}
+
+function buildLibraryFilesPath(
+  id: string | number,
+  params: LibraryFilesRequestParams | undefined,
+  suffix = "/files",
+): string {
+  const query = buildLibraryFilesSearchParams(params).toString();
+  return `/libraries/${id}${suffix}${query ? `?${query}` : ""}`;
+}
+
+function extractFilenameFromDisposition(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(value);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const basicMatch = /filename="?([^";]+)"?/i.exec(value);
+  return basicMatch?.[1] ?? null;
 }
 
 export const api = {
@@ -357,61 +438,28 @@ export const api = {
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
   libraryStatistics: (id: string | number, signal?: AbortSignal) =>
     request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
-  libraryFiles: (
+  libraryFiles: (id: string | number, params?: LibraryFilesRequestParams) =>
+    request<MediaFileTablePage>(buildLibraryFilesPath(id, params), {
+      signal: params?.signal,
+    }),
+  downloadLibraryFilesCsv: async (
     id: string | number,
-    params?: {
-      offset?: number;
-      limit?: number;
-      search?: string;
-      filters?: Partial<Record<LibraryFileSearchField, string>>;
-      sortKey?: MediaFileSortKey;
-      sortDirection?: "asc" | "desc";
-      signal?: AbortSignal;
-    },
-  ) => {
-    const searchParams = new URLSearchParams();
-    if (params?.offset !== undefined) {
-      searchParams.set("offset", String(params.offset));
-    }
-    if (params?.limit !== undefined) {
-      searchParams.set("limit", String(params.limit));
-    }
-    if (params?.search) {
-      searchParams.set("search", params.search);
-    }
-    if (params?.filters) {
-      const filterEntries: Array<[LibraryFileSearchField, string]> = [
-        ["file", "file_search"],
-        ["size", "search_size"],
-        ["quality_score", "search_quality_score"],
-        ["video_codec", "search_video_codec"],
-        ["resolution", "search_resolution"],
-        ["hdr_type", "search_hdr_type"],
-        ["duration", "search_duration"],
-        ["audio_codecs", "search_audio_codecs"],
-        ["audio_languages", "search_audio_languages"],
-        ["subtitle_languages", "search_subtitle_languages"],
-        ["subtitle_codecs", "search_subtitle_codecs"],
-        ["subtitle_sources", "search_subtitle_sources"],
-      ];
-      for (const [field, queryKey] of filterEntries) {
-        const rawValue = params.filters[field];
-        const value = rawValue?.trim();
-        if (value) {
-          searchParams.set(queryKey, value);
-        }
-      }
-    }
-    if (params?.sortKey) {
-      searchParams.set("sort_key", params.sortKey);
-    }
-    if (params?.sortDirection) {
-      searchParams.set("sort_direction", params.sortDirection);
-    }
-    const query = searchParams.toString();
-    return request<MediaFileTablePage>(`/libraries/${id}/files${query ? `?${query}` : ""}`, {
+    params?: Omit<LibraryFilesRequestParams, "offset" | "limit">,
+  ): Promise<DownloadedCsv> => {
+    const response = await fetch(`${API_PREFIX}${buildLibraryFilesPath(id, params, "/files/export.csv")}`, {
       signal: params?.signal,
     });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const detail = payload?.detail ?? response.statusText;
+      throw new Error(detail);
+    }
+
+    return {
+      blob: await response.blob(),
+      filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),
+    };
   },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),

@@ -153,6 +153,12 @@
     "analyzedFiles": "Analyzed files",
     "indexedEntries": "{{count}} indexed entries",
     "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
+    "export": {
+      "aria": "Export analyzed files as CSV",
+      "tooltip": "Export the full filtered analyzed-files result set as CSV",
+      "exporting": "Exporting CSV…",
+      "error": "CSV export failed: {{message}}"
+    },
     "searchLabel": "Search files and metadata",
     "searchPlaceholder": "search files and metadata",
     "searchFields": {
