@@ -458,8 +458,12 @@ Theme behavior:
 Current app feature flags include:
 
 * `show_dolby_vision_profiles`
+* `show_analyzed_files_csv_export`
 
-This flag changes how dynamic range variants are displayed in statistics and metadata views.
+These flags currently control:
+
+* whether Dolby Vision profile variants are displayed separately in statistics and metadata views
+* whether the analyzed-files CSV export button is shown in the library detail view
 
 ---
 

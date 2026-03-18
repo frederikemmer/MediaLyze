@@ -43,6 +43,7 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.default_ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert loaded.ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert loaded.feature_flags.show_dolby_vision_profiles is False
+    assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
 
 def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(tmp_path) -> None:
@@ -56,6 +57,7 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.default_ignore_patterns == []
     assert loaded.ignore_patterns == []
     assert loaded.feature_flags.show_dolby_vision_profiles is False
+    assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
 
 def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_path) -> None:
@@ -72,6 +74,7 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.default_ignore_patterns == []
     assert loaded.ignore_patterns == ["*.nfo", "*/Extras/*"]
     assert loaded.feature_flags.show_dolby_vision_profiles is False
+    assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
 
 def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective_list(tmp_path) -> None:
@@ -84,7 +87,10 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             AppSettingsUpdate(
                 user_ignore_patterns=["  *.tmp  ", "*/cache/*", "*.tmp"],
                 default_ignore_patterns=["*/.DS_Store", "*.tmp", "*/@eaDir/*"],
-                feature_flags={"show_dolby_vision_profiles": True},
+                feature_flags={
+                    "show_dolby_vision_profiles": True,
+                    "show_analyzed_files_csv_export": True,
+                },
             ),
             settings,
         )
@@ -95,12 +101,16 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.default_ignore_patterns == ["*/.DS_Store", "*.tmp", "*/@eaDir/*"]
     assert updated.ignore_patterns == ["*.tmp", "*/cache/*", "*/.DS_Store", "*/@eaDir/*"]
     assert updated.feature_flags.show_dolby_vision_profiles is True
+    assert updated.feature_flags.show_analyzed_files_csv_export is True
     assert loaded == updated
     assert stored is not None
     assert stored.value == {
         "user_ignore_patterns": ["*.tmp", "*/cache/*"],
         "default_ignore_patterns": ["*/.DS_Store", "*.tmp", "*/@eaDir/*"],
-        "feature_flags": {"show_dolby_vision_profiles": True},
+        "feature_flags": {
+            "show_dolby_vision_profiles": True,
+            "show_analyzed_files_csv_export": True,
+        },
     }
 
 
@@ -119,3 +129,4 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.default_ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert updated.ignore_patterns == ["[sample]", "*thumbs.db", *BUILT_IN_DEFAULT_IGNORE_PATTERNS[:-1]]
     assert updated.feature_flags.show_dolby_vision_profiles is False
+    assert updated.feature_flags.show_analyzed_files_csv_export is False

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 type AsyncPanelProps = {
   title: string;
   subtitle?: string;
+  subtitleAddon?: ReactNode;
   loading?: boolean;
   error?: string | null;
   bodyClassName?: string;
@@ -20,6 +21,7 @@ type AsyncPanelProps = {
 export function AsyncPanel({
   title,
   subtitle,
+  subtitleAddon,
   loading,
   error,
   bodyClassName,
@@ -56,6 +58,7 @@ export function AsyncPanel({
             )}
             {titleAddon}
           </div>
+          {subtitleAddon}
           {subtitle && !isCollapsed ? <p className="subtitle">{subtitle}</p> : null}
         </div>
         {headerAddon}

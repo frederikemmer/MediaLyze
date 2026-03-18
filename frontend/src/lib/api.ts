@@ -202,6 +202,7 @@ export type AppSettings = {
   default_ignore_patterns: string[];
   feature_flags: {
     show_dolby_vision_profiles: boolean;
+    show_analyzed_files_csv_export: boolean;
   };
 };
 
@@ -471,6 +472,7 @@ export const api = {
     default_ignore_patterns?: string[];
     feature_flags?: {
       show_dolby_vision_profiles?: boolean;
+      show_analyzed_files_csv_export?: boolean;
     };
   }) =>
     request<AppSettings>("/app-settings", {

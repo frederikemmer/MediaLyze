@@ -66,6 +66,7 @@
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showDolbyVisionProfiles": "Dolby-Vision-Profile anzeigen",
+      "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
       "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben."
     },

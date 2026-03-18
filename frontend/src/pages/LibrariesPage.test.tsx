@@ -25,6 +25,7 @@ function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     default_ignore_patterns: ["*/@eaDir/*"],
     feature_flags: {
       show_dolby_vision_profiles: false,
+      show_analyzed_files_csv_export: false,
     },
     ...overrides,
   };
@@ -210,6 +211,7 @@ describe("LibrariesPage ignore patterns", () => {
         default_ignore_patterns: ["*/#recycle/*"],
         feature_flags: {
           show_dolby_vision_profiles: false,
+          show_analyzed_files_csv_export: false,
         },
       }),
     );
@@ -220,6 +222,7 @@ describe("LibrariesPage ignore patterns", () => {
       createAppSettings({
         feature_flags: {
           show_dolby_vision_profiles: true,
+          show_analyzed_files_csv_export: false,
         },
       }),
     );
@@ -237,6 +240,36 @@ describe("LibrariesPage ignore patterns", () => {
         default_ignore_patterns: ["*/@eaDir/*"],
         feature_flags: {
           show_dolby_vision_profiles: true,
+          show_analyzed_files_csv_export: false,
+        },
+      }),
+    );
+  });
+
+  it("persists the analyzed files CSV export feature flag", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        feature_flags: {
+          show_dolby_vision_profiles: false,
+          show_analyzed_files_csv_export: true,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("Show analyzed-files CSV export");
+    await screen.findByDisplayValue("movie.tmp");
+    await waitFor(() => expect(checkbox).toBeEnabled());
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        feature_flags: {
+          show_dolby_vision_profiles: false,
+          show_analyzed_files_csv_export: true,
         },
       }),
     );

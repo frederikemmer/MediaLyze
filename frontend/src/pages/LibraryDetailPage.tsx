@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { FileChartColumnIncreasing, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   startTransition,
@@ -470,6 +470,7 @@ export function LibraryDetailPage() {
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
+  const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -931,6 +932,21 @@ export function LibraryDetailPage() {
     };
   }, []);
 
+  function renderExportButton(className: string) {
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={t("libraryDetail.export.aria")}
+        title={t(isExporting ? "libraryDetail.export.exporting" : "libraryDetail.export.tooltip")}
+        disabled={!displayLibrary || isExporting || hasInvalidSearchField}
+        onClick={() => void exportCsv()}
+      >
+        <span>export CSV</span>
+      </button>
+    );
+  }
+
   return (
     <>
       <section className="panel stack">
@@ -1002,18 +1018,8 @@ export function LibraryDetailPage() {
             : t("libraryDetail.indexedEntries", { count: filesTotal })
         }
         error={filesError}
-        titleAddon={
-          <button
-            type="button"
-            className="icon-only-button analyzed-files-export-button"
-            aria-label={t("libraryDetail.export.aria")}
-            title={t(isExporting ? "libraryDetail.export.exporting" : "libraryDetail.export.tooltip")}
-            disabled={!displayLibrary || isExporting || hasInvalidSearchField}
-            onClick={() => void exportCsv()}
-          >
-            <FileChartColumnIncreasing size={14} aria-hidden="true" />
-          </button>
-        }
+        titleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop") : null}
+        subtitleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile") : null}
         headerAddon={
           <div ref={searchToolsHeaderRef} className="data-table-search-layout">
             <div className="metadata-search-control metadata-search-control-base search-filter-picker">

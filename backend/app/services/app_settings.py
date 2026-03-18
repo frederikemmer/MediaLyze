@@ -59,6 +59,7 @@ def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
     candidate = payload if isinstance(payload, dict) else {}
     return FeatureFlagsRead(
         show_dolby_vision_profiles=bool(candidate.get("show_dolby_vision_profiles", False)),
+        show_analyzed_files_csv_export=bool(candidate.get("show_analyzed_files_csv_export", False)),
     )
 
 

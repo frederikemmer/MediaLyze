@@ -36,6 +36,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   default_ignore_patterns: [],
   feature_flags: {
     show_dolby_vision_profiles: false,
+    show_analyzed_files_csv_export: false,
   },
 };
 
@@ -46,6 +47,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     default_ignore_patterns: payload?.default_ignore_patterns ?? [],
     feature_flags: {
       show_dolby_vision_profiles: payload?.feature_flags?.show_dolby_vision_profiles ?? false,
+      show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
     },
   };
 }
