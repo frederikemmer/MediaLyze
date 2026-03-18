@@ -424,6 +424,7 @@ Implemented UI behavior includes:
 * recent scan-log browsing and detailed scan summaries
 * virtualized library file table for larger datasets
 * infinite paging / paginated loading behavior
+* CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
@@ -457,8 +458,12 @@ Theme behavior:
 Current app feature flags include:
 
 * `show_dolby_vision_profiles`
+* `show_analyzed_files_csv_export`
 
-This flag changes how dynamic range variants are displayed in statistics and metadata views.
+These flags currently control:
+
+* whether Dolby Vision profile variants are displayed separately in statistics and metadata views
+* whether the analyzed-files CSV export button is shown in the library detail view
 
 ---
 
@@ -503,6 +508,7 @@ Important current payload concepts:
 * `PATCH /api/libraries/{library_id}`
 * `DELETE /api/libraries/{library_id}`
 * `GET /api/libraries/{library_id}/files`
+* `GET /api/libraries/{library_id}/files/export.csv`
 * `POST /api/libraries/{library_id}/scan`
 
 Important library contract concepts:

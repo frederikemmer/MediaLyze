@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runtime
@@ -18,7 +19,7 @@ from backend.app.schemas.scan import (
     ScanJobRead,
     ScanRequest,
 )
-from backend.app.models.entities import ScanJob, ScanTriggerSource
+from backend.app.models.entities import Library, ScanJob, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
@@ -32,7 +33,12 @@ from backend.app.services.library_service import (
     update_library_settings,
 )
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
-from backend.app.services.media_service import get_media_file_detail, get_media_file_quality_score_detail, list_library_files
+from backend.app.services.media_service import (
+    generate_library_files_csv_export,
+    get_media_file_detail,
+    get_media_file_quality_score_detail,
+    list_library_files,
+)
 from backend.app.services.runtime import ScanRuntimeManager
 from backend.app.services.scan_jobs import (
     get_scan_job_detail,
@@ -44,6 +50,37 @@ from backend.app.services.scan_jobs import (
 from backend.app.services.stats import build_dashboard
 
 router = APIRouter()
+
+
+def _library_file_search_filters(
+    *,
+    file_search: str = "",
+    search_size: str = "",
+    search_quality_score: str = "",
+    search_video_codec: str = "",
+    search_resolution: str = "",
+    search_hdr_type: str = "",
+    search_duration: str = "",
+    search_audio_codecs: str = "",
+    search_audio_languages: str = "",
+    search_subtitle_languages: str = "",
+    search_subtitle_codecs: str = "",
+    search_subtitle_sources: str = "",
+) -> LibraryFileSearchFilters:
+    return LibraryFileSearchFilters(
+        file_search=file_search,
+        search_size=search_size,
+        search_quality_score=search_quality_score,
+        search_video_codec=search_video_codec,
+        search_resolution=search_resolution,
+        search_hdr_type=search_hdr_type,
+        search_duration=search_duration,
+        search_audio_codecs=search_audio_codecs,
+        search_audio_languages=search_audio_languages,
+        search_subtitle_languages=search_subtitle_languages,
+        search_subtitle_codecs=search_subtitle_codecs,
+        search_subtitle_sources=search_subtitle_sources,
+    )
 
 
 @router.get("/health")
@@ -260,7 +297,7 @@ def library_files(
             offset=offset,
             limit=limit,
             search=search,
-            search_filters=LibraryFileSearchFilters(
+            search_filters=_library_file_search_filters(
                 file_search=file_search,
                 search_size=search_size,
                 search_quality_score=search_quality_score,
@@ -279,6 +316,78 @@ def library_files(
         )
     except SearchValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/libraries/{library_id}/files/export.csv")
+def library_files_export_csv(
+    library_id: int,
+    search: str = Query(default="", max_length=200),
+    file_search: str = Query(default="", max_length=200),
+    search_size: str = Query(default="", max_length=64),
+    search_quality_score: str = Query(default="", max_length=32),
+    search_video_codec: str = Query(default="", max_length=200),
+    search_resolution: str = Query(default="", max_length=64),
+    search_hdr_type: str = Query(default="", max_length=200),
+    search_duration: str = Query(default="", max_length=64),
+    search_audio_codecs: str = Query(default="", max_length=200),
+    search_audio_languages: str = Query(default="", max_length=200),
+    search_subtitle_languages: str = Query(default="", max_length=200),
+    search_subtitle_codecs: str = Query(default="", max_length=200),
+    search_subtitle_sources: str = Query(default="", max_length=64),
+    sort_key: Literal[
+        "file",
+        "size",
+        "video_codec",
+        "resolution",
+        "hdr_type",
+        "duration",
+        "audio_codecs",
+        "audio_languages",
+        "subtitle_languages",
+        "subtitle_codecs",
+        "subtitle_sources",
+        "mtime",
+        "last_analyzed_at",
+        "quality_score",
+    ] = Query(default="file"),
+    sort_direction: Literal["asc", "desc"] = Query(default="asc"),
+    db: Session = Depends(get_db_session),
+) -> StreamingResponse:
+    library = db.get(Library, library_id)
+    if library is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+
+    try:
+        filename, content = generate_library_files_csv_export(
+            db,
+            library_id,
+            library_name=library.name,
+            search=search,
+            search_filters=_library_file_search_filters(
+                file_search=file_search,
+                search_size=search_size,
+                search_quality_score=search_quality_score,
+                search_video_codec=search_video_codec,
+                search_resolution=search_resolution,
+                search_hdr_type=search_hdr_type,
+                search_duration=search_duration,
+                search_audio_codecs=search_audio_codecs,
+                search_audio_languages=search_audio_languages,
+                search_subtitle_languages=search_subtitle_languages,
+                search_subtitle_codecs=search_subtitle_codecs,
+                search_subtitle_sources=search_subtitle_sources,
+            ),
+            sort_key=sort_key,
+            sort_direction=sort_direction,
+        )
+    except SearchValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return StreamingResponse(
+        content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/libraries/{library_id}/scan", response_model=ScanJobRead, status_code=202)

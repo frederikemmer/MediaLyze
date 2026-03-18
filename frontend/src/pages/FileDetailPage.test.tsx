@@ -84,7 +84,7 @@ describe("FileDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
     });
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
@@ -112,7 +112,7 @@ describe("FileDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
     });
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockRejectedValue(new Error("quality unavailable"));

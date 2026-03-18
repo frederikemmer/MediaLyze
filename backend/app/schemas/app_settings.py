@@ -3,10 +3,12 @@ from pydantic import BaseModel, Field
 
 class FeatureFlagsRead(BaseModel):
     show_dolby_vision_profiles: bool = False
+    show_analyzed_files_csv_export: bool = False
 
 
 class FeatureFlagsUpdate(BaseModel):
     show_dolby_vision_profiles: bool | None = None
+    show_analyzed_files_csv_export: bool | None = None
 
 
 class AppSettingsRead(BaseModel):

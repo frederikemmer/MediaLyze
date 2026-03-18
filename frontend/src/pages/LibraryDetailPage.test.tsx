@@ -136,7 +136,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -156,7 +156,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -178,7 +178,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -208,7 +208,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockRejectedValue(new Error("statistics unavailable"));
@@ -226,7 +226,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -250,7 +250,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -297,7 +297,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -331,7 +331,7 @@ describe("LibraryDetailPage", () => {
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false },
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -347,6 +347,94 @@ describe("LibraryDetailPage", () => {
     fireEvent.change(screen.getByPlaceholderText("e.g. >=1h 30m"), { target: { value: "oops" } });
 
     expect(await screen.findByText("Use a duration like >90m or >=1h 30m.")).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", { name: "Export analyzed files as CSV" })) {
+      expect(button).toBeDisabled();
+    }
     await waitFor(() => expect(libraryFilesSpy.mock.calls.length).toBe(initialCalls));
+  });
+
+  it("exports the current filtered and sorted result set as CSV", async () => {
+    const libraryId = 707;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    const downloadCsvSpy = vi.spyOn(api, "downloadLibraryFilesCsv").mockResolvedValue({
+      blob: new Blob(["csv"], { type: "text/csv" }),
+      filename: "MediaLyze_Series_707_20260318T120000Z.csv",
+    });
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    const createObjectUrlSpy = vi.fn(() => "blob:test");
+    const revokeObjectUrlSpy = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: createObjectUrlSpy });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: revokeObjectUrlSpy });
+    const anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    try {
+      renderPage(libraryId);
+
+      expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText("Search file and path"), { target: { value: "episode" } });
+      fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+      fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /subtitle sources/i }));
+      fireEvent.change(screen.getByPlaceholderText("e.g. internal external"), { target: { value: "external" } });
+      fireEvent.click(screen.getByRole("button", { name: /codec/i }));
+
+      fireEvent.click(screen.getAllByRole("button", { name: "Export analyzed files as CSV" })[0]);
+
+      await waitFor(() =>
+        expect(downloadCsvSpy).toHaveBeenCalledWith(
+          String(libraryId),
+          expect.objectContaining({
+            filters: expect.objectContaining({
+              file: "episode",
+              subtitle_sources: "external",
+            }),
+            sortKey: "video_codec",
+            sortDirection: "asc",
+            signal: expect.any(AbortSignal),
+          }),
+        ),
+      );
+      expect(createObjectUrlSpy).toHaveBeenCalled();
+      expect(anchorClickSpy).toHaveBeenCalled();
+      expect(revokeObjectUrlSpy).toHaveBeenCalledWith("blob:test");
+    } finally {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        writable: true,
+        value: originalCreateObjectUrl,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        writable: true,
+        value: originalRevokeObjectUrl,
+      });
+    }
+  });
+
+  it("hides the CSV export button when the feature flag is disabled", async () => {
+    const libraryId = 708;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export analyzed files as CSV" })).not.toBeInTheDocument();
   });
 });

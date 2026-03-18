@@ -282,6 +282,7 @@ export function LibrariesPage() {
   const [isLoadingIgnorePatterns, setIsLoadingIgnorePatterns] = useState(true);
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
+  const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
@@ -453,6 +454,7 @@ export function LibrariesPage() {
     setUserIgnorePatternInputs(persisted.user);
     setDefaultIgnorePatternInputs(persisted.default);
     setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
+    setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
   }, [appSettings, appSettingsLoaded]);
 
   useEffect(() => {
@@ -649,12 +651,14 @@ export function LibrariesPage() {
     nextUserPatterns: string[],
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles: boolean,
+    nextShowAnalyzedFilesCsvExport: boolean,
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
       default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
       feature_flags: {
         show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
+        show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
       },
     });
   }
@@ -663,6 +667,7 @@ export function LibrariesPage() {
     nextUserPatterns: string[],
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles = showDolbyVisionProfiles,
+    nextShowAnalyzedFilesCsvExport = showAnalyzedFilesCsvExport,
   ) {
     const requestId = ignorePatternsRequestId.current + 1;
     ignorePatternsRequestId.current = requestId;
@@ -672,6 +677,7 @@ export function LibrariesPage() {
         nextUserPatterns,
         nextDefaultPatterns,
         nextShowDolbyVisionProfiles,
+        nextShowAnalyzedFilesCsvExport,
       );
       const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
@@ -682,6 +688,7 @@ export function LibrariesPage() {
         setUserIgnorePatternInputs(persisted.user);
         setDefaultIgnorePatternInputs(persisted.default);
         setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+        setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
       }
@@ -707,13 +714,44 @@ export function LibrariesPage() {
     setFeatureFlagsStatus(null);
     setIsSavingFeatureFlags(true);
     try {
-      const updated = await persistAppSettingsSnapshot(userIgnorePatternInputs, defaultIgnorePatternInputs, enabled);
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        enabled,
+        showAnalyzedFilesCsvExport,
+      );
       setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowDolbyVisionProfiles(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
+  async function toggleAnalyzedFilesCsvExport(enabled: boolean) {
+    const previousValue = showAnalyzedFilesCsvExport;
+    setShowAnalyzedFilesCsvExport(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        enabled,
+      );
+      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setShowAnalyzedFilesCsvExport(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
     } finally {
       setIsSavingFeatureFlags(false);
@@ -2002,6 +2040,18 @@ export function LibrariesPage() {
                   >
                     ?
                   </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="show-analyzed-files-csv-export">
+                    <input
+                      id="show-analyzed-files-csv-export"
+                      type="checkbox"
+                      checked={showAnalyzedFilesCsvExport}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleAnalyzedFilesCsvExport(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
+                  </label>
                 </div>
               </div>
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}

@@ -429,6 +429,12 @@ function buildActiveSearchFilters(
   return filters;
 }
 
+function buildCsvFallbackFilename(libraryName: string): string {
+  const safeLibraryName = libraryName.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Library";
+  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return `MediaLyze_${safeLibraryName}_${timestamp}.csv`;
+}
+
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
@@ -445,6 +451,7 @@ export function LibraryDetailPage() {
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -453,6 +460,7 @@ export function LibraryDetailPage() {
   const [fieldValues, setFieldValues] = useState<Partial<Record<LibraryFileMetadataSearchField, string>>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
+  const [exportError, setExportError] = useState<string | null>(null);
   const [qualityScoreDetails, setQualityScoreDetails] = useState<Record<number, MediaFileQualityScoreDetail>>({});
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
   const { activeJobs } = useScanJobs();
@@ -462,6 +470,7 @@ export function LibraryDetailPage() {
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
+  const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -553,6 +562,7 @@ export function LibraryDetailPage() {
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
+  const exportAbortRef = useRef<AbortController | null>(null);
   const hasMoreFiles = files.length < filesTotal;
 
   const rowVirtualizer = useVirtualizer({
@@ -713,6 +723,45 @@ export function LibraryDetailPage() {
         setIsFilesLoading(false);
         setIsFilesRefreshing(false);
       }
+    }
+  });
+
+  const exportCsv = useEffectEvent(async () => {
+    if (!displayLibrary || hasInvalidSearchField || isExporting) {
+      return;
+    }
+
+    exportAbortRef.current?.abort();
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    setIsExporting(true);
+    setExportError(null);
+
+    try {
+      const payload = await api.downloadLibraryFilesCsv(libraryId, {
+        filters: deferredAppliedSearchFilters,
+        sortKey,
+        sortDirection,
+        signal: controller.signal,
+      });
+      const objectUrl = window.URL.createObjectURL(payload.blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = payload.filename ?? buildCsvFallbackFilename(displayLibrary.name);
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setExportError((reason as Error).message);
+    } finally {
+      if (exportAbortRef.current === controller) {
+        exportAbortRef.current = null;
+      }
+      setIsExporting(false);
     }
   });
 
@@ -878,9 +927,25 @@ export function LibraryDetailPage() {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
+      exportAbortRef.current?.abort();
       inflightRequestGateRef.current.reset();
     };
   }, []);
+
+  function renderExportButton(className: string) {
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={t("libraryDetail.export.aria")}
+        title={t(isExporting ? "libraryDetail.export.exporting" : "libraryDetail.export.tooltip")}
+        disabled={!displayLibrary || isExporting || hasInvalidSearchField}
+        onClick={() => void exportCsv()}
+      >
+        <span>export CSV</span>
+      </button>
+    );
+  }
 
   return (
     <>
@@ -953,6 +1018,8 @@ export function LibraryDetailPage() {
             : t("libraryDetail.indexedEntries", { count: filesTotal })
         }
         error={filesError}
+        titleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop") : null}
+        subtitleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile") : null}
         headerAddon={
           <div ref={searchToolsHeaderRef} className="data-table-search-layout">
             <div className="metadata-search-control metadata-search-control-base search-filter-picker">
@@ -1021,6 +1088,8 @@ export function LibraryDetailPage() {
         }
       >
         <div className="data-table-tools data-table-tools-search">
+          {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
+          {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
           {orderedSelectedMetadataFields.length > 0 ? (
             <div
               ref={searchToolsBodyRef}

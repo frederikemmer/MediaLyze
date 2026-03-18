@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - Documented larger future-relevant changes in `AGENTS.md`
+- Added CSV export for the full analyzed-files result set, including the active filters and sort order in the exported file header
+- Added a feature flag for the analyzed-files CSV export button, disabled by default and positioned below the title on smaller screens
 
 ### 🐛 Bug fixes
 

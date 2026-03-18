@@ -1,3 +1,6 @@
+import csv
+import io
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -15,7 +18,31 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
-from backend.app.services.media_service import list_library_files
+from backend.app.services.media_service import generate_library_files_csv_export, list_library_files
+
+
+def _collect_csv_export_text(chunks) -> str:
+    return b"".join(chunks).decode("utf-8-sig")
+
+
+def _split_csv_export(text: str) -> tuple[list[str], list[list[str]]]:
+    comment_lines: list[str] = []
+    csv_lines: list[str] = []
+    in_csv_body = False
+
+    for line in text.splitlines():
+        if not in_csv_body:
+            if line.startswith("# "):
+                comment_lines.append(line)
+                continue
+            if not line:
+                continue
+            in_csv_body = True
+        if in_csv_body:
+            csv_lines.append(line)
+
+    rows = list(csv.reader(io.StringIO("\n".join(csv_lines))))
+    return comment_lines, rows
 
 
 def test_list_library_files_paginates_and_sorts_by_quality_score() -> None:
@@ -579,3 +606,165 @@ def test_list_library_files_rejects_invalid_structured_search_expressions() -> N
 
     assert raised is not None
     assert str(raised) == "Invalid search expression for duration"
+
+
+def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metadata() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Export Batch",
+            path="/tmp/export-batch",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for index in range(1, 505):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=f"episode-{index:03d}.mkv",
+                filename=f"episode-{index:03d}.mkv",
+                extension="mkv",
+                size_bytes=1_000 + index,
+                mtime=float(index),
+                scan_status=ScanStatus.ready,
+                quality_score=7 if index % 2 == 0 else 5,
+                quality_score_raw=70.0 if index % 2 == 0 else 50.0,
+            )
+            db.add(media_file)
+            db.flush()
+            db.add(
+                MediaFormat(
+                    media_file_id=media_file.id,
+                    duration=1800.0 + index,
+                )
+            )
+            db.add(
+                VideoStream(
+                    media_file_id=media_file.id,
+                    stream_index=0,
+                    codec="hevc" if index % 2 == 0 else "h264",
+                    width=3840 if index % 2 == 0 else 1920,
+                    height=2160 if index % 2 == 0 else 1080,
+                    hdr_type="HDR10" if index % 2 == 0 else None,
+                )
+            )
+            db.add(AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", language="eng"))
+            if index % 2 == 0:
+                db.add(
+                    SubtitleStream(
+                        media_file_id=media_file.id,
+                        stream_index=2,
+                        codec="srt",
+                        language="eng",
+                        default_flag=False,
+                        forced_flag=False,
+                    )
+                )
+                db.add(
+                    ExternalSubtitle(
+                        media_file_id=media_file.id,
+                        path=f"episode-{index:03d}.en.srt",
+                        language="eng",
+                        format="srt",
+                    )
+                )
+        db.commit()
+
+        filename, chunks = generate_library_files_csv_export(
+            db,
+            library.id,
+            library_name=library.name,
+            search_filters=LibraryFileSearchFilters(
+                file_search="episode",
+                search_video_codec="hevc",
+                search_subtitle_sources="internal ext",
+            ),
+            sort_key="quality_score",
+            sort_direction="desc",
+        )
+        export_text = _collect_csv_export_text(chunks)
+
+    assert filename.startswith("MediaLyze_Export_Batch_")
+    comment_lines, rows = _split_csv_export(export_text)
+    header, data_rows = rows[0], rows[1:]
+
+    assert "# MediaLyze CSV export" in comment_lines
+    assert f"# library_id: {library.id}" in comment_lines
+    assert "# library_name: Export Batch" in comment_lines
+    assert "# total_rows: 252" in comment_lines
+    assert "# sort_key: quality_score" in comment_lines
+    assert "# sort_direction: desc" in comment_lines
+    assert "# search.file: episode" in comment_lines
+    assert "# search.video_codec: hevc" in comment_lines
+    assert "# search.subtitle_sources: internal ext" in comment_lines
+    assert header == [
+        "relative_path",
+        "filename",
+        "size_bytes",
+        "video_codec",
+        "resolution",
+        "hdr_type",
+        "duration_seconds",
+        "audio_codecs",
+        "audio_languages",
+        "subtitle_languages",
+        "subtitle_codecs",
+        "subtitle_sources",
+        "mtime",
+        "last_analyzed_at",
+        "quality_score",
+    ]
+    assert len(data_rows) == 252
+    assert data_rows[0][0] == "episode-002.mkv"
+    assert data_rows[0][3] == "hevc"
+    assert data_rows[0][4] == "3840x2160"
+    assert data_rows[0][5] == "HDR10"
+    assert data_rows[0][7] == "aac"
+    assert data_rows[0][10] == "srt"
+    assert data_rows[0][11] == "external | internal"
+    assert data_rows[-1][0] == "episode-504.mkv"
+
+
+def test_generate_library_files_csv_export_reports_no_search_when_unfiltered() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="No Filters",
+            path="/tmp/no-filters",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="sample.mkv",
+            filename="sample.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add(media_file)
+        db.commit()
+
+        _filename, chunks = generate_library_files_csv_export(db, library.id, library_name=library.name)
+        export_text = _collect_csv_export_text(chunks)
+
+    comment_lines, rows = _split_csv_export(export_text)
+
+    assert "# search: none" in comment_lines
+    assert rows[1][0] == "sample.mkv"
+    assert rows[1][3] == ""
+    assert rows[1][7] == ""
