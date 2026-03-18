@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
-import { DistributionList } from "../components/DistributionList";
+import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
 import { TooltipTrigger } from "../components/TooltipTrigger";
@@ -100,13 +100,6 @@ const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
 const libraryFileListCache = new Map<string, CachedFileList>();
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
-
-function formatDistributionItems(
-  items: { label: string; value: number }[],
-  kind: "video" | "audio" | "subtitle",
-) {
-  return items.map((item) => ({ ...item, label: formatCodecLabel(item.label, kind) }));
-}
 
 const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
   "file",
@@ -429,6 +422,29 @@ function buildActiveSearchFilters(
   return filters;
 }
 
+function searchValueTokens(value: string): string[] {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function hasSearchValueTokens(existingValue: string | undefined, candidateValue: string): boolean {
+  const existingTokens = new Set(searchValueTokens(existingValue ?? ""));
+  const candidateTokens = searchValueTokens(candidateValue);
+  return candidateTokens.length > 0 && candidateTokens.every((token) => existingTokens.has(token));
+}
+
+function appendSearchValue(existingValue: string | undefined, candidateValue: string): string {
+  const normalizedExisting = existingValue?.trim() ?? "";
+  const normalizedCandidate = candidateValue.trim();
+  if (!normalizedCandidate || hasSearchValueTokens(normalizedExisting, normalizedCandidate)) {
+    return normalizedExisting;
+  }
+  return normalizedExisting ? `${normalizedExisting} ${normalizedCandidate}` : normalizedCandidate;
+}
+
 function buildCsvFallbackFilename(libraryName: string): string {
   const safeLibraryName = libraryName.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Library";
   const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -554,6 +570,8 @@ export function LibraryDetailPage() {
   );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
   const filesRef = useRef<MediaFileRow[]>([]);
+  const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
+  const pendingStatisticFocusFieldRef = useRef<LibraryFileMetadataSearchField | null>(null);
   const dataTableShellRef = useRef<HTMLDivElement | null>(null);
   const searchToolsHeaderRef = useRef<HTMLDivElement | null>(null);
   const searchToolsBodyRef = useRef<HTMLDivElement | null>(null);
@@ -606,6 +624,33 @@ export function LibraryDetailPage() {
   const updateMetadataFieldValue = useEffectEvent((field: LibraryFileMetadataSearchField, value: string) => {
     startTransition(() => {
       setFieldValues((current) => ({ ...current, [field]: value }));
+    });
+  });
+
+  const applyStatisticFilter = useEffectEvent((field: LibraryFileMetadataSearchField, rawValue: string) => {
+    const normalizedValue = rawValue.trim();
+    if (!normalizedValue) {
+      return;
+    }
+
+    const shouldFocusField = !selectedMetadataFields.includes(field);
+
+    startTransition(() => {
+      setSelectedMetadataFields((current) => (current.includes(field) ? current : [...current, field]));
+      setFieldValues((current) => {
+        const nextValue = appendSearchValue(current[field], normalizedValue);
+        if (nextValue === (current[field]?.trim() ?? "")) {
+          return current;
+        }
+        return { ...current, [field]: nextValue };
+      });
+    });
+
+    if (shouldFocusField) {
+      pendingStatisticFocusFieldRef.current = field;
+    }
+    requestAnimationFrame(() => {
+      analyzedFilesPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     });
   });
 
@@ -822,6 +867,16 @@ export function LibraryDetailPage() {
   }, [pickerOpen]);
 
   useEffect(() => {
+    const pendingField = pendingStatisticFocusFieldRef.current;
+    if (!pendingField || !orderedSelectedMetadataFields.includes(pendingField)) {
+      return;
+    }
+
+    document.getElementById(`library-metadata-search-${pendingField}`)?.focus();
+    pendingStatisticFocusFieldRef.current = null;
+  }, [orderedSelectedMetadataFields]);
+
+  useEffect(() => {
     setVisibleColumns(["file", ...visibleStatisticColumns]);
   }, [visibleStatisticColumns]);
 
@@ -984,12 +1039,31 @@ export function LibraryDetailPage() {
       <div className="media-grid">
         {visibleStatisticPanels.length > 0 ? (
           visibleStatisticPanels.map((panel) => {
-            const items = panel.id === "hdr_type"
-              ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel), showDolbyVisionProfiles)
-              : getLibraryStatisticPanelItems(libraryStatistics, panel);
-            const formattedItems = panel.panelFormatKind
-              ? formatDistributionItems(items, panel.panelFormatKind)
-              : items;
+            const items =
+              panel.id === "hdr_type"
+                ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel), showDolbyVisionProfiles)
+                : getLibraryStatisticPanelItems(libraryStatistics, panel);
+            const formattedItems: DistributionListEntry[] = items.map((item) => {
+              const rawLabel = item.label;
+              const label = panel.panelFormatKind ? formatCodecLabel(rawLabel, panel.panelFormatKind) : rawLabel;
+              const isApplied = hasSearchValueTokens(fieldValues[panel.id], rawLabel);
+              return {
+                key: `${panel.id}:${rawLabel}`,
+                label,
+                value: item.value,
+                disabled: isApplied,
+                ariaLabel: isApplied
+                  ? t("libraryDetail.statistics.filterAlreadyApplied", {
+                      field: t(panel.nameKey),
+                      value: label,
+                    })
+                  : t("libraryDetail.statistics.filterByValue", {
+                      field: t(panel.nameKey),
+                      value: label,
+                    }),
+                onClick: statisticsError || !libraryStatistics ? undefined : () => applyStatisticFilter(panel.id, rawLabel),
+              };
+            });
             return (
               <AsyncPanel
                 key={panel.id}
@@ -1007,86 +1081,87 @@ export function LibraryDetailPage() {
         )}
       </div>
 
-      <AsyncPanel
-        title={t("libraryDetail.analyzedFiles")}
-        subtitle={
-          hasAppliedSearchFilters
-            ? t("libraryDetail.indexedEntriesFiltered", {
-                shown: filesTotal,
-                total: displayLibrary?.file_count ?? filesTotal,
-              })
-            : t("libraryDetail.indexedEntries", { count: filesTotal })
-        }
-        error={filesError}
-        titleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop") : null}
-        subtitleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile") : null}
-        headerAddon={
-          <div ref={searchToolsHeaderRef} className="data-table-search-layout">
-            <div className="metadata-search-control metadata-search-control-base search-filter-picker">
-              <button
-                type="button"
-                className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
-                aria-expanded={pickerOpen}
-                aria-controls="library-search-picker"
-                aria-label={t("libraryDetail.searchFields.addMetadataAria")}
-                title={t("libraryDetail.searchFields.addMetadata")}
-                onClick={() => setPickerOpen((current) => !current)}
-              >
-                <Plus size={18} aria-hidden="true" />
-              </button>
-              {pickerOpen ? (
-                <div id="library-search-picker" className="search-filter-picker-popover" role="menu">
-                  {orderedMetadataFieldDefinitions.map((definition) => {
-                    const field = definition.id;
-                    const config = getLibraryFileSearchConfig(field);
-                    const Icon = config.icon;
-                    const isSelected = selectedMetadataFields.includes(field);
-                    return (
-                      <button
-                        key={field}
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={isSelected}
-                        className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
-                        onClick={() => {
-                          toggleMetadataField(field);
-                          setPickerOpen(false);
-                        }}
-                      >
-                        <Icon size={16} aria-hidden="true" />
-                        <span>{t(config.labelKey)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-              <label className="sr-only" htmlFor="library-file-search">
-                {t("libraryDetail.searchLabel")}
-              </label>
-              <TooltipTrigger
-                ariaLabel={t("libraryDetail.searchLabel")}
-                content={t(baseSearchConfig.labelKey)}
-                className="metadata-search-icon-button metadata-search-icon-button-middle"
-              >
-                <BaseSearchIcon size={16} aria-hidden="true" />
-              </TooltipTrigger>
-              <input
-                id="library-file-search"
-                type="search"
-                value={baseSearch}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  startTransition(() => {
-                    setBaseSearch(nextValue);
-                  });
-                }}
-                placeholder={t("libraryDetail.searchFields.file.placeholder")}
-                autoComplete="off"
-              />
+      <div ref={analyzedFilesPanelRef}>
+        <AsyncPanel
+          title={t("libraryDetail.analyzedFiles")}
+          subtitle={
+            hasAppliedSearchFilters
+              ? t("libraryDetail.indexedEntriesFiltered", {
+                  shown: filesTotal,
+                  total: displayLibrary?.file_count ?? filesTotal,
+                })
+              : t("libraryDetail.indexedEntries", { count: filesTotal })
+          }
+          error={filesError}
+          titleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop") : null}
+          subtitleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile") : null}
+          headerAddon={
+            <div ref={searchToolsHeaderRef} className="data-table-search-layout">
+              <div className="metadata-search-control metadata-search-control-base search-filter-picker">
+                <button
+                  type="button"
+                  className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
+                  aria-expanded={pickerOpen}
+                  aria-controls="library-search-picker"
+                  aria-label={t("libraryDetail.searchFields.addMetadataAria")}
+                  title={t("libraryDetail.searchFields.addMetadata")}
+                  onClick={() => setPickerOpen((current) => !current)}
+                >
+                  <Plus size={18} aria-hidden="true" />
+                </button>
+                {pickerOpen ? (
+                  <div id="library-search-picker" className="search-filter-picker-popover" role="menu">
+                    {orderedMetadataFieldDefinitions.map((definition) => {
+                      const field = definition.id;
+                      const config = getLibraryFileSearchConfig(field);
+                      const Icon = config.icon;
+                      const isSelected = selectedMetadataFields.includes(field);
+                      return (
+                        <button
+                          key={field}
+                          type="button"
+                          role="menuitemcheckbox"
+                          aria-checked={isSelected}
+                          className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                          onClick={() => {
+                            toggleMetadataField(field);
+                            setPickerOpen(false);
+                          }}
+                        >
+                          <Icon size={16} aria-hidden="true" />
+                          <span>{t(config.labelKey)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <label className="sr-only" htmlFor="library-file-search">
+                  {t("libraryDetail.searchLabel")}
+                </label>
+                <TooltipTrigger
+                  ariaLabel={t("libraryDetail.searchLabel")}
+                  content={t(baseSearchConfig.labelKey)}
+                  className="metadata-search-icon-button metadata-search-icon-button-middle"
+                >
+                  <BaseSearchIcon size={16} aria-hidden="true" />
+                </TooltipTrigger>
+                <input
+                  id="library-file-search"
+                  type="search"
+                  value={baseSearch}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    startTransition(() => {
+                      setBaseSearch(nextValue);
+                    });
+                  }}
+                  placeholder={t("libraryDetail.searchFields.file.placeholder")}
+                  autoComplete="off"
+                />
+              </div>
             </div>
-          </div>
-        }
-      >
+          }
+        >
         <div className="data-table-tools data-table-tools-search">
           {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
           {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
@@ -1217,7 +1292,8 @@ export function LibraryDetailPage() {
             </div>
           </div>
         )}
-      </AsyncPanel>
+        </AsyncPanel>
+      </div>
     </>
   );
 }

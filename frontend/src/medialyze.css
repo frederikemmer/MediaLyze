@@ -533,6 +533,37 @@
   font-size: 0.9rem;
 }
 
+.distribution-value-button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: color 0.16s ease, opacity 0.16s ease;
+}
+
+.distribution-value-button:hover:not(:disabled),
+.distribution-value-button:focus-visible:not(:disabled) {
+  color: var(--accent);
+  outline: none;
+}
+
+.distribution-value-button:active:not(:disabled) {
+  opacity: 0.72;
+}
+
+.distribution-value-button.is-disabled,
+.distribution-value-button:disabled {
+  cursor: default;
+  color: var(--muted);
+  opacity: 1;
+}
+
 .library-card,
 .path-entry {
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;

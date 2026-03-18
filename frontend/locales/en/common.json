@@ -219,6 +219,10 @@
     "noAnalyzedFiles": "No analyzed files yet.",
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
+    "statistics": {
+      "filterByValue": "Filter analyzed files by {{field}}: {{value}}",
+      "filterAlreadyApplied": "Already added to analyzed files filter for {{field}}: {{value}}"
+    },
     "recentScanJobs": "Recent scan jobs",
     "recentScanJobsSubtitle": "Latest queue and run history",
     "jobLabel": "Job #{{id}}"
