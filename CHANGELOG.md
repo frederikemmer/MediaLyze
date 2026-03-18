@@ -6,26 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- Documented larger future-relevant changes in `AGENTS.md`
-- Added CSV export for the full analyzed-files result set, including the active filters and sort order in the exported file header
-- Added a feature flag for the analyzed-files CSV export button, disabled by default and positioned below the title on smaller screens
-- Made library statistic counts clickable so they can add matching analyzed-files table filters directly from the Library detail page
-
 ### 🐛 Bug fixes
 
-- Closed the analyzed-files metadata search picker immediately after choosing a filter, so it no longer stays open until an extra outside click
+## v0.2.2
 
-## v0.2.1
-
->2026-03-17
+>2026-03-18
 
 ### ✨ New
 
-- Expanded HDR10+ detection so more `ffprobe` metadata variants are recognized during analysis
-- Refreshed the README with current screenshots, project status updates, and a star-history chart
+- Added **clickable library statistic** counts so matching analyzed-files table filters can be applied directly from the Library detail page
+- Added **CSV export** for the full analyzed-files result set, including the active filters and sort order in the exported file header
+- Added a feature flag for the analyzed-files CSV export button, disabled by default and positioned below the title on smaller screens
+- **Expanded HDR10+ detection** so more `ffprobe` metadata variants are recognized during analysis
+
+### 📚 Documentation
+
+- Refreshed the README with current screenshots, updated project-status copy, and a star-history chart
+- Reworked `AGENTS.md` to document the actual current `dev` branch behavior, release chronology, runtime architecture, and repository layout
 
 ### 🐛 Bug fixes
 
+- Closed the metadata search picker immediately after choosing a filter, so it no longer stays open until an extra outside click
+- Replaced existing analyzed-files metadata values when a new statistic filter from the same category is selected, instead of duplicating the search field
 - Improved the scan-log failures UI so failed files stay readable and show their analysis error on demand
 - Hid container placeholder directories like `cdrom`, `floppy`, and `usb` in the path browser while keeping explicit mounted media paths visible
 
