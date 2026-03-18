@@ -981,7 +981,10 @@ export function LibraryDetailPage() {
                         role="menuitemcheckbox"
                         aria-checked={isSelected}
                         className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
-                        onClick={() => toggleMetadataField(field)}
+                        onClick={() => {
+                          toggleMetadataField(field);
+                          setPickerOpen(false);
+                        }}
                       >
                         <Icon size={16} aria-hidden="true" />
                         <span>{t(config.labelKey)}</span>

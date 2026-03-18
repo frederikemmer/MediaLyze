@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- Closed the analyzed-files metadata search picker immediately after choosing a filter, so it no longer stays open until an extra outside click
+
 ## v0.2.1
 
 >2026-03-17

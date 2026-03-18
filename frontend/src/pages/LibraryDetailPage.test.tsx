@@ -261,7 +261,9 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /video codec/i }));
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
 
     const codecInput = await screen.findByPlaceholderText("e.g. hevc av1");
     fireEvent.change(codecInput, { target: { value: "hevc" } });
