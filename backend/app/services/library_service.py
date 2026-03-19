@@ -21,10 +21,10 @@ from backend.app.models.entities import (
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DistributionItem
 from backend.app.services.languages import merge_language_counts
+from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path
 from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
-from backend.app.utils.pathing import ensure_relative_to_root
 
 
 DEFAULT_SCAN_CONFIG = {
@@ -94,17 +94,32 @@ def normalize_scan_config(scan_mode, scan_config: dict | None) -> dict:
     return normalized
 
 
+def _normalize_library_scan_settings(
+    settings: Settings,
+    path_value: str,
+    scan_mode,
+    scan_config: dict | None,
+) -> tuple:
+    if scan_mode == "watch" and not is_watch_supported_for_library(settings, path_value):
+        return "scheduled", normalize_scan_config("scheduled", {"interval_minutes": 60})
+    return scan_mode, normalize_scan_config(scan_mode, scan_config)
+
+
 def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> Library:
     cache_key = str(id(db.get_bind()))
-    safe_path = ensure_relative_to_root(settings.media_root / payload.path, settings.media_root)
-    if not safe_path.exists() or not safe_path.is_dir():
-        raise ValueError("Library path must exist as a directory under MEDIA_ROOT")
+    safe_path = resolve_library_path(settings, payload.path)
+    scan_mode, scan_config = _normalize_library_scan_settings(
+        settings,
+        str(safe_path),
+        payload.scan_mode,
+        payload.scan_config,
+    )
     library = Library(
         name=payload.name,
         path=str(safe_path),
         type=payload.type,
-        scan_mode=payload.scan_mode,
-        scan_config=normalize_scan_config(payload.scan_mode, payload.scan_config),
+        scan_mode=scan_mode,
+        scan_config=scan_config,
         quality_profile=normalize_quality_profile(payload.quality_profile),
     )
     db.add(library)
@@ -114,7 +129,12 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
     return library
 
 
-def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate) -> tuple[Library | None, bool]:
+def update_library_settings(
+    db: Session,
+    settings: Settings,
+    library_id: int,
+    payload: LibraryUpdate,
+) -> tuple[Library | None, bool]:
     cache_key = str(id(db.get_bind()))
     library = db.get(Library, library_id)
     if not library:
@@ -129,8 +149,12 @@ def update_library_settings(db: Session, library_id: int, payload: LibraryUpdate
         library.name = next_name
 
     if payload.scan_mode is not None:
-        library.scan_mode = payload.scan_mode
-        library.scan_config = normalize_scan_config(payload.scan_mode, payload.scan_config)
+        library.scan_mode, library.scan_config = _normalize_library_scan_settings(
+            settings,
+            library.path,
+            payload.scan_mode,
+            payload.scan_config,
+        )
     if payload.quality_profile is not None:
         next_quality_profile = normalize_quality_profile(payload.quality_profile)
         current_quality_profile = normalize_quality_profile(library.quality_profile)

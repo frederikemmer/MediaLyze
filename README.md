@@ -6,6 +6,7 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Docker-Single%20Container-2496ED?logo=docker&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Desktop-Electron-47848F?logo=electron&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-07405E?logo=sqlite&logoColor=white">
 </p>
 
@@ -34,6 +35,7 @@ Bring your own auth (for now).
 - Full and incremental scans using `path + size + mtime`
 - Normalized formats, streams, subtitles, scan jobs, and quality scores (feel free to suggest improvements)
 - Detection of internal and external subtitle files
+- Native desktop packaging for Windows, macOS, and Linux in addition to the Docker/web deployment path
 - Ignore files and folders with simple glob patterns such as `*.nfo` or `*/Extras/*`
 - SQLite with WAL mode and indexed filter fields
 - FastAPI backend with a React + Vite frontend
@@ -81,6 +83,23 @@ docker run -d \
 Open `http://localhost:8080`.
 The container serves plain HTTP on port `8080`; if you want HTTPS, terminate it in a reverse proxy.
 
+### Desktop app
+
+The `dev` branch also contains a native desktop distribution path built with Electron.
+Desktop builds run the same FastAPI + React stack locally with a local SQLite database and `ffprobe`.
+
+Desktop behavior:
+
+- choose local folders directly from the OS
+- choose mounted NAS / SMB locations and, on Windows, UNC paths such as `\\server\share\videos`
+- watch mode is limited to local paths; network paths fall back to scheduled scans
+
+Release artifacts are packaged as:
+
+- Windows: NSIS `.exe`
+- macOS: `.dmg`
+- Linux: `AppImage`
+
 ### Build locally
 
 ```bash
@@ -116,14 +135,35 @@ npm run dev
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8080`.
 
+### Desktop
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+
+cd frontend
+npm install
+npm run build
+
+cd ../desktop
+npm install
+npm run dev
+```
+
+Local desktop development expects `ffprobe` in your `PATH`.
+
 ## Configuration
 
 Relevant environment variables:
 
-- `CONFIG_PATH`: writable config/data directory, default `/config`
-- `MEDIA_ROOT`: media mount root, default `/media`
+- `MEDIALYZE_RUNTIME`: runtime mode, `server` or `desktop`, default `server`
+- `CONFIG_PATH`: writable config/data directory, default `/config` in server mode and the OS user-data directory in desktop mode
+- `MEDIA_ROOT`: media mount root for server mode, default `/media`
+- `APP_HOST`: bind host for the backend, default `0.0.0.0` in server mode and `127.0.0.1` in desktop mode
 - `HOST_PORT`: HTTP port exposed on the host, default `8080`; access the app via `http://<host>:<HOST_PORT>`
 - `APP_PORT`: internal app port, default `8080`
+- `FRONTEND_DIST_PATH`: optional explicit frontend bundle path, mainly used by packaged desktop builds
 - `TZ`: process/container timezone, default `UTC`
 - `DISABLE_DEFAULT_IGNORE_PATTERNS`: optional; when set to `true`, built-in default ignore patterns are not preloaded
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
@@ -135,6 +175,7 @@ Relevant environment variables:
 If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The compose files already load `.env`, so no compose changes are required.
 
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
+In the desktop app, mounted network shares and UNC paths can be selected directly.
 
 Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
 See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short guide.
@@ -143,6 +184,7 @@ See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short gui
 
 - Backend: Python, FastAPI, SQLAlchemy, SQLite
 - Frontend: React, Vite, TypeScript, i18next
+- Desktop packaging: Electron, electron-builder
 - Media analysis: `ffprobe` / FFmpeg
 - Scheduling and watch mode: APScheduler, watchdog
 - Packaging: GHCR

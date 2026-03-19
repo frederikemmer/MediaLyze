@@ -9,6 +9,7 @@ data/
 library/
 frontend/node_modules/
 frontend/dist/
+desktop/node_modules/
 dist/
 config/
 .vscode/

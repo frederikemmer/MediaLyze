@@ -17,7 +17,7 @@ Current baseline:
 * primary development branch: `dev`
 * latest public GitHub release: **`v0.2.0`**, published on **2026-03-16**
 * release line documented in GitHub: `v0.1.1`, `v0.1.2`, `v0.1.3`, `v0.2.0`
-* stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Docker**, **GHCR**
+* stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Electron**, **Docker**, **GHCR**
 
 Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
 
@@ -57,6 +57,7 @@ MediaLyze currently implements:
 * theme selection and feature flags
 * English and German UI translations
 * Docker-first deployment and GHCR image publishing
+* native desktop packaging for Windows, macOS, and Linux with a local backend sidecar
 
 ## 2.2 Explicit Non-Goals
 
@@ -84,7 +85,7 @@ These items should be treated as backlog, not current behavior.
 
 ## 3.1 Libraries
 
-Libraries represent directories below `MEDIA_ROOT`.
+Libraries represent directories below `MEDIA_ROOT` in server mode and absolute filesystem paths in desktop mode.
 
 Each library currently stores:
 
@@ -111,7 +112,7 @@ Important correction:
 
 ## 3.2 Path Browsing Safety
 
-The UI path browser is constrained to `MEDIA_ROOT`.
+The server-mode UI path browser is constrained to `MEDIA_ROOT`.
 
 Current behavior includes:
 
@@ -119,6 +120,7 @@ Current behavior includes:
 * skipping symlinks that resolve outside `MEDIA_ROOT`
 * hiding placeholder container directories like `cdrom`, `floppy`, and `usb` when they are not real intended media targets
 * keeping explicit mounted directories visible when they are valid browse targets
+* desktop builds using a native OS folder picker plus absolute-path validation instead of the backend browse tree
 
 ## 3.3 Scan Modes
 
@@ -135,6 +137,7 @@ Behavior:
 * `manual`: scans run only when requested
 * `scheduled`: APScheduler creates interval-based scan jobs
 * `watch`: watchdog observers debounce filesystem events and queue scans
+* desktop network paths fall back to `scheduled`; watch observers are only created for local desktop paths
 
 ## 3.4 Scan Types
 
@@ -484,6 +487,10 @@ The backend currently exposes a REST-style API under the configured prefix, typi
 
 * `GET /api/browse`
 
+Desktop-only path inspection:
+
+* `POST /api/paths/inspect`
+
 This endpoint is used for selecting library paths below `MEDIA_ROOT`.
 
 ## 9.3 App Settings
@@ -516,6 +523,7 @@ Important library contract concepts:
 * `scan_mode`
 * `scan_config`
 * `quality_profile`
+* `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
 ## 9.5 Files
 
@@ -609,17 +617,34 @@ Implemented frontend structure:
 * `frontend/src/lib/app-data.tsx` manages cached app settings, dashboard, and library data
 * `frontend/src/lib/scan-jobs.tsx` manages active scan polling state
 * page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views
+* `frontend/src/lib/desktop.ts` exposes the optional Electron preload bridge used by desktop builds
+
+Desktop packaging structure:
+
+* `desktop/main.cjs` boots Electron, starts the packaged backend, waits for `/api/health`, and opens the local app window
+* `desktop/preload.cjs` exposes the safe desktop bridge for native folder selection
+* `desktop/scripts/build-backend.mjs` builds the Python backend sidecar for packaging
 
 ## 11.3 Deployment Shape
 
-Current deployment model is still a **single container**, but it now includes:
+Current deployment models are:
 
-* backend API
-* scan runtime
-* scheduler
-* watchdog integration
-* SQLite database
-* served frontend bundle
+* a **single container** that includes:
+
+  * backend API
+  * scan runtime
+  * scheduler
+  * watchdog integration
+  * SQLite database
+  * served frontend bundle
+
+* a **native desktop app** that includes:
+
+  * an Electron shell
+  * a local backend sidecar process
+  * a local SQLite database under the user-data directory
+  * a bundled frontend build
+  * a bundled `ffprobe` binary per target platform
 
 ---
 
@@ -676,6 +701,8 @@ Additional behavior:
 * the backend defaults to serving on port `8080`
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
+* `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage
+* `FRONTEND_DIST_PATH` can point the backend at an explicit built frontend bundle, which is used by desktop packaging
 
 ---
 
@@ -687,6 +714,8 @@ Current workflows include:
 
 * dev image publishing
 * official release publishing
+* dev desktop artifact builds
+* desktop release artifact publishing
 * release metadata validation for pull requests
 
 ## 13.2 Release Metadata Rules
@@ -696,6 +725,7 @@ The repository currently validates version alignment across:
 * `Dockerfile`
 * `pyproject.toml`
 * `frontend/package.json`
+* `desktop/package.json`
 
 Release metadata is enforced through `.github/scripts/release_metadata.py`.
 
@@ -723,6 +753,7 @@ Current top-level layout:
 
 ```text
 backend/        FastAPI app, ORM models, DB init, scanner, runtime, services
+desktop/        Electron shell, preload bridge, desktop packaging scripts
 frontend/       React + Vite application, translations, tests
 docs/           Supporting project documentation and screenshots
 docker/         Compose file, env example, entrypoint

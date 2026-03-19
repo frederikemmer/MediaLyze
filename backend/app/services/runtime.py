@@ -13,6 +13,7 @@ from watchdog.observers import Observer
 from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, ScanTriggerSource
+from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
     execute_scan_job,
@@ -312,6 +313,9 @@ class ScanRuntimeManager:
         if not library.path or not library.path.strip():
             return
         if not Path(library_path).exists():
+            return
+        if not is_watch_supported_for_library(self.settings, library_path):
+            self._remove_watch_observer(library.id)
             return
 
         current = self.watch_observers.get(library.id)
