@@ -78,7 +78,7 @@ jobs:
           MEDIALYZE_FFPROBE_DIR: ${{ github.workspace }}/dist/ffprobe-bundle
 
       - name: Build desktop release
-        run: npx electron-builder --publish never
+        run: npm run dist -- --publish never
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

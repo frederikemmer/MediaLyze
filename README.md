@@ -100,6 +100,9 @@ Release artifacts are packaged as:
 - macOS: `.dmg`
 - Linux: `AppImage`
 
+Published GitHub releases attach those desktop installers directly as release assets.
+All desktop icons are generated from [`frontend/public/favicon.svg`](frontend/public/favicon.svg), so the web favicon and native app icons stay aligned.
+
 ### Build locally
 
 ```bash
