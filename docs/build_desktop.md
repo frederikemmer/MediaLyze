@@ -8,6 +8,8 @@ Important:
 - Build the Windows installer on Windows.
 - The packaged desktop app expects a bundled `ffprobe` binary.
 - The frontend bundle must exist before running the Electron packaging step.
+- `npm run dist` and `npm run dist:dir` only work inside `desktop/`, because the repository root does not have a `package.json`.
+- If you want to run the desktop build from the repository root, use `npm --prefix desktop run dist` or `npm --prefix desktop run dist:dir`.
 
 ## macOS
 
@@ -46,6 +48,12 @@ Build a release `.dmg` instead:
 
 ```bash
 npm run dist
+```
+
+From the repository root, the equivalent command is:
+
+```bash
+npm --prefix desktop run dist
 ```
 
 Additional output:
@@ -90,6 +98,13 @@ If you want the unpacked desktop app directory instead of the installer:
 
 ```powershell
 npm run dist:dir
+```
+
+From the repository root, the equivalent commands are:
+
+```powershell
+npm --prefix desktop run dist
+npm --prefix desktop run dist:dir
 ```
 
 Typical output:
