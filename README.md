@@ -155,6 +155,7 @@ npm run dev
 ```
 
 Local desktop development expects `ffprobe` in your `PATH`.
+For packaged `.app`, `.dmg`, `.exe`, and `AppImage` builds, see [docs/build_desktop.md](docs/build_desktop.md).
 
 ## Configuration
 
