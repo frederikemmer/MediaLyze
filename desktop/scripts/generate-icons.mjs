@@ -8,19 +8,15 @@ const desktopDir = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(desktopDir, "..");
 const sourceIcon = path.join(repoRoot, "frontend", "public", "favicon.svg");
 const outputDir = path.join(desktopDir, ".generated-icons");
-const iconGenExecutable = path.join(
-  desktopDir,
-  "node_modules",
-  ".bin",
-  process.platform === "win32" ? "icon-gen.cmd" : "icon-gen"
-);
+const iconGenCli = path.join(desktopDir, "node_modules", "icon-gen", "dist", "bin", "index.js");
 
 rmSync(outputDir, { recursive: true, force: true });
 mkdirSync(outputDir, { recursive: true });
 
 const iconGenResult = spawnSync(
-  iconGenExecutable,
+  process.execPath,
   [
+    iconGenCli,
     "-i",
     sourceIcon,
     "-o",
@@ -50,7 +46,7 @@ const iconGenResult = spawnSync(
 );
 
 if (iconGenResult.error) {
-  console.error(`Failed to run ${iconGenExecutable}:`, iconGenResult.error);
+  console.error(`Failed to run ${iconGenCli}:`, iconGenResult.error);
   process.exit(1);
 }
 
