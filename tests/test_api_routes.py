@@ -4,10 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.api.deps import get_db_session
+from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
 from backend.app.models.entities import Library, LibraryType, ScanMode
+from backend.app.core.config import Settings
 
 
 def _build_test_app(db: Session) -> TestClient:
@@ -51,3 +52,17 @@ def test_library_files_export_csv_returns_422_for_invalid_search_expression() ->
 
     assert response.status_code == 422
     assert response.json() == {"detail": "Invalid search expression for duration"}
+
+
+def test_paths_inspect_returns_404_outside_desktop_mode() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        client.app.dependency_overrides[get_app_settings] = lambda: Settings(runtime_mode="server")
+        response = client.post("/api/paths/inspect", json={"path": "/tmp"})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Path inspection is only available in desktop mode"}

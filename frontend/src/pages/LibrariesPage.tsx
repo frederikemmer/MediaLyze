@@ -11,10 +11,12 @@ import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type LibrarySummary,
+  type PathInspection,
   type QualityProfile,
   type RecentScanJob,
   type ScanJobDetail,
 } from "../lib/api";
+import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
@@ -34,12 +36,26 @@ import {
 import { useScanJobs } from "../lib/scan-jobs";
 import { useTheme, type ThemePreference } from "../lib/theme";
 
-const EMPTY_FORM = {
+type CreateLibraryForm = {
+  name: string;
+  path: string;
+  type: string;
+  scan_mode: string;
+};
+
+const EMPTY_FORM: CreateLibraryForm = {
   name: "",
   path: ".",
   type: "mixed",
   scan_mode: "manual",
 };
+
+function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
+  return {
+    ...EMPTY_FORM,
+    path: isDesktop ? "" : EMPTY_FORM.path,
+  };
+}
 
 type LibrarySettingsForm = {
   scan_mode: string;
@@ -235,8 +251,14 @@ function scanLogTitle(job: RecentScanJob) {
   return formatDate(job.finished_at ?? job.started_at);
 }
 
+function networkWatchFallbackApplied(inspection: PathInspection | null | undefined, scanMode: string): boolean {
+  return Boolean(inspection && !inspection.watch_supported && scanMode === "scheduled");
+}
+
 export function LibrariesPage() {
   const { t, i18n } = useTranslation();
+  const desktopBridge = getDesktopBridge();
+  const desktopApp = isDesktopApp();
   const {
     appSettings,
     appSettingsLoaded,
@@ -272,7 +294,10 @@ export function LibrariesPage() {
   const [scanJobDetailErrors, setScanJobDetailErrors] = useState<Record<number, string | null>>({});
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<CreateLibraryForm>(() => createEmptyForm(desktopApp));
+  const [formPathInspection, setFormPathInspection] = useState<PathInspection | null>(null);
+  const [formPathInspectionError, setFormPathInspectionError] = useState<string | null>(null);
+  const [libraryPathInspections, setLibraryPathInspections] = useState<Record<number, PathInspection | null>>({});
   const [userIgnorePatternInputs, setUserIgnorePatternInputs] = useState<string[]>([]);
   const [defaultIgnorePatternInputs, setDefaultIgnorePatternInputs] = useState<string[]>([]);
   const [ignorePatternDrafts, setIgnorePatternDrafts] = useState<IgnorePatternDrafts>({ user: "", default: "" });
@@ -375,6 +400,14 @@ export function LibrariesPage() {
   }, []);
 
   useEffect(() => {
+    setForm((current) =>
+      current.path === EMPTY_FORM.path || current.path === ""
+        ? createEmptyForm(desktopApp)
+        : current
+    );
+  }, [desktopApp]);
+
+  useEffect(() => {
     setSettingsForms((current) => {
       const next = { ...current };
       for (const library of libraries) {
@@ -387,12 +420,104 @@ export function LibrariesPage() {
   }, [libraries]);
 
   useEffect(() => {
+    if (!desktopApp) {
+      setFormPathInspection(null);
+      setFormPathInspectionError(null);
+      return;
+    }
+    if (!form.path.trim()) {
+      setFormPathInspection(null);
+      setFormPathInspectionError(null);
+      return;
+    }
+
+    let canceled = false;
+    void api
+      .inspectPath(form.path)
+      .then((payload) => {
+        if (canceled) {
+          return;
+        }
+        setFormPathInspection(payload);
+        setFormPathInspectionError(null);
+      })
+      .catch((reason: Error) => {
+        if (canceled) {
+          return;
+        }
+        setFormPathInspection(null);
+        setFormPathInspectionError(reason.message);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [desktopApp, form.path]);
+
+  useEffect(() => {
+    if (!desktopApp || libraries.length === 0) {
+      return;
+    }
+
+    let canceled = false;
+    void Promise.all(
+      libraries.map(async (library) => {
+        try {
+          const inspection = await api.inspectPath(library.path);
+          return [library.id, inspection] as const;
+        } catch {
+          return [library.id, null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (canceled) {
+        return;
+      }
+      setLibraryPathInspections((current) => ({
+        ...current,
+        ...Object.fromEntries(entries),
+      }));
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [desktopApp, libraries]);
+
+  useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
       void refreshLibraries(false, true).catch(() => undefined);
       void refreshRecentScanJobs().catch(() => undefined);
     }
     hadActiveJobsRef.current = hasActiveJobs;
   }, [hasActiveJobs]);
+
+  useEffect(() => {
+    if (!desktopApp) {
+      return;
+    }
+    setSettingsForms((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const [libraryIdText, inspection] of Object.entries(libraryPathInspections)) {
+        if (!inspection || inspection.watch_supported) {
+          continue;
+        }
+        const libraryId = Number(libraryIdText);
+        const formState = next[libraryId];
+        if (!formState || formState.scan_mode !== "watch") {
+          continue;
+        }
+        next[libraryId] = {
+          ...formState,
+          scan_mode: "scheduled",
+          interval_minutes: formState.interval_minutes || 60,
+        };
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [desktopApp, libraryPathInspections]);
 
   useEffect(() => {
     if (!qualityPickerOpenKey) {
@@ -474,13 +599,24 @@ export function LibrariesPage() {
     try {
       const created = await api.createLibrary(form);
       upsertLibrary(created);
-      setForm(EMPTY_FORM);
+      setForm(createEmptyForm(desktopApp));
+      setFormPathInspection(null);
+      setFormPathInspectionError(null);
       setSubmitError(null);
     } catch (reason) {
       setSubmitError((reason as Error).message);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function selectDesktopLibraryPath() {
+    const selectedPath = await desktopBridge?.selectLibraryPath();
+    if (!selectedPath) {
+      return;
+    }
+    setForm((current) => ({ ...current, path: selectedPath }));
+    setSubmitError(null);
   }
 
   function updateLibraryForm(
@@ -493,12 +629,23 @@ export function LibrariesPage() {
       debounce_seconds: 15,
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
     };
+    const inspection = libraryPathInspections[libraryId];
     const next = { ...current, ...patch };
+    if (desktopApp && next.scan_mode === "watch" && inspection && !inspection.watch_supported) {
+      next.scan_mode = "scheduled";
+      next.interval_minutes = next.interval_minutes || 60;
+      setLibraryMessages((messages) => ({
+        ...messages,
+        [libraryId]: t("libraries.watchUnavailableNetwork"),
+      }));
+    }
     setSettingsForms((forms) => ({
       ...forms,
       [libraryId]: next,
     }));
-    setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
+    if (!(desktopApp && next.scan_mode === "scheduled" && inspection && !inspection.watch_supported)) {
+      setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
+    }
 
     if (autoSaveTimers.current[libraryId]) {
       window.clearTimeout(autoSaveTimers.current[libraryId]);
@@ -1667,9 +1814,22 @@ export function LibrariesPage() {
                       >
                         <option value="manual">{t("scanModes.manual")}</option>
                         <option value="scheduled">{t("scanModes.scheduled")}</option>
-                        <option value="watch">{t("scanModes.watch")}</option>
+                        <option
+                          value="watch"
+                          disabled={Boolean(desktopApp && libraryPathInspections[library.id] && !libraryPathInspections[library.id]?.watch_supported)}
+                        >
+                          {t("scanModes.watch")}
+                        </option>
                       </select>
                     </div>
+                    {networkWatchFallbackApplied(
+                      libraryPathInspections[library.id],
+                      settingsForms[library.id]?.scan_mode ?? library.scan_mode,
+                    ) ? (
+                      <div className="field field-span-full">
+                        <p className="field-hint">{t("libraries.watchUnavailableNetwork")}</p>
+                      </div>
+                    ) : null}
                     {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "scheduled" ? (
                       <div className="field">
                         <label htmlFor={`interval-minutes-${library.id}`}>{t("libraries.intervalMinutes")}</label>
@@ -1906,6 +2066,9 @@ export function LibrariesPage() {
             }}
           >
             <form className="form-grid" onSubmit={handleSubmit}>
+              <p className="field-hint field-span-full">
+                {desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
+              </p>
               <div className="field">
                 <label htmlFor="library-name">{t("libraries.name")}</label>
                 <input
@@ -1929,10 +2092,48 @@ export function LibrariesPage() {
                   <option value="other">{t("libraryTypes.other")}</option>
                 </select>
               </div>
-              <PathBrowser
-                value={form.path}
-                onChange={(path) => setForm((current) => ({ ...current, path }))}
-              />
+              {desktopApp ? (
+                <div className="field field-span-full">
+                  <label htmlFor="library-path">{t("pathBrowser.selected")}</label>
+                  <div className="desktop-path-field">
+                    <div className="desktop-path-row">
+                      <input
+                        id="library-path"
+                        value={form.path}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, path: event.target.value }))
+                        }
+                        placeholder={t("libraries.desktopPathPlaceholder")}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void selectDesktopLibraryPath()}
+                      >
+                        {t("libraries.chooseFolder")}
+                      </button>
+                    </div>
+                    {formPathInspection ? (
+                      <div className="meta-row">
+                        <span className="badge">{t(`libraries.pathKinds.${formPathInspection.path_kind}`)}</span>
+                        {!formPathInspection.exists || !formPathInspection.is_directory ? (
+                          <span className="field-hint">{t("libraries.desktopPathMustExist")}</span>
+                        ) : null}
+                        {formPathInspection.exists && formPathInspection.is_directory && !formPathInspection.watch_supported ? (
+                          <span className="field-hint">{t("libraries.watchUnavailableNetwork")}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {formPathInspectionError ? <div className="alert">{formPathInspectionError}</div> : null}
+                  </div>
+                </div>
+              ) : (
+                <PathBrowser
+                  value={form.path}
+                  onChange={(path) => setForm((current) => ({ ...current, path }))}
+                />
+              )}
               <button type="submit" disabled={submitting}>
                 {submitting ? t("libraries.creating") : t("libraries.createButton")}
               </button>

@@ -11,6 +11,7 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
+from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
 from backend.app.schemas.scan import (
     RecentScanJobPageRead,
     RecentScanJobRead,
@@ -39,6 +40,7 @@ from backend.app.services.media_service import (
     get_media_file_quality_score_detail,
     list_library_files,
 )
+from backend.app.services.path_access import inspect_desktop_path
 from backend.app.services.runtime import ScanRuntimeManager
 from backend.app.services.scan_jobs import (
     get_scan_job_detail,
@@ -96,6 +98,19 @@ def browse(
     try:
         return browse_media_root(settings, path)
     except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/paths/inspect", response_model=PathInspectResponse)
+def inspect_path(
+    payload: PathInspectRequest,
+    settings: Settings = Depends(get_app_settings),
+) -> PathInspectResponse:
+    if not settings.is_desktop:
+        raise HTTPException(status_code=404, detail="Path inspection is only available in desktop mode")
+    try:
+        return inspect_desktop_path(payload.path)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -217,10 +232,11 @@ def library_update(
     library_id: int,
     payload: LibraryUpdate,
     db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> LibrarySummary:
     try:
-        library, quality_profile_changed = update_library_settings(db, library_id, payload)
+        library, quality_profile_changed = update_library_settings(db, settings, library_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if library is None:

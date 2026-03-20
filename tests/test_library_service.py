@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("CONFIG_PATH", tempfile.mkdtemp(prefix="medialyze-config-"))
 os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
+from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import (
     AudioStream,
@@ -20,8 +21,9 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
-from backend.app.schemas.library import LibraryUpdate
+from backend.app.schemas.library import LibraryCreate, LibraryUpdate
 from backend.app.services.library_service import (
+    create_library,
     delete_library,
     get_library_statistics,
     get_library_summary,
@@ -109,7 +111,12 @@ def test_update_library_settings_can_rename_library() -> None:
         db.add(library)
         db.commit()
 
-        updated, quality_profile_changed = update_library_settings(db, library.id, LibraryUpdate(name="Films"))
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            Settings(),
+            library.id,
+            LibraryUpdate(name="Films"),
+        )
 
         assert updated is not None
         assert updated.name == "Films"
@@ -146,6 +153,7 @@ def test_update_library_settings_backfills_visual_density_maximum_for_legacy_pro
 
         updated, quality_profile_changed = update_library_settings(
             db,
+            Settings(),
             library.id,
             LibraryUpdate(quality_profile=library.quality_profile),
         )
@@ -153,6 +161,78 @@ def test_update_library_settings_backfills_visual_density_maximum_for_legacy_pro
     assert updated is not None
     assert updated.quality_profile["visual_density"]["maximum"] == 0.08
     assert quality_profile_changed is True
+
+
+def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "desktop-library"
+    library_dir.mkdir()
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Desktop Movies",
+                path=str(library_dir),
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+
+    assert library.path == str(library_dir.resolve())
+
+
+def test_update_library_settings_falls_back_to_scheduled_for_desktop_network_paths(tmp_path, monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Network Movies",
+            path=str(tmp_path / "network-movies"),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        monkeypatch.setattr(
+            "backend.app.services.library_service.is_watch_supported_for_library",
+            lambda active_settings, path_value: False,
+        )
+
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            settings,
+            library.id,
+            LibraryUpdate(scan_mode=ScanMode.watch, scan_config={"debounce_seconds": 8}),
+        )
+
+    assert updated is not None
+    assert updated.scan_mode == ScanMode.scheduled
+    assert updated.scan_config == {"interval_minutes": 60}
+    assert quality_profile_changed is False
 
 
 def test_library_exists_checks_library_presence() -> None:

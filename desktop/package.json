@@ -1,0 +1,66 @@
+{
+  "name": "medialyze-desktop",
+  "version": "0.2.2",
+  "private": true,
+  "description": "Desktop packaging for the MediaLyze local media analysis app.",
+  "author": "Frederik Emmer",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "generate:icons": "node ./scripts/generate-icons.mjs",
+    "dist": "npm run generate:icons && electron-builder",
+    "dist:dir": "npm run generate:icons && electron-builder --dir",
+    "build:backend": "node ./scripts/build-backend.mjs"
+  },
+  "devDependencies": {
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12",
+    "icon-gen": "^5.0.0"
+  },
+  "build": {
+    "appId": "io.github.frederikemmer.medialyze",
+    "productName": "MediaLyze",
+    "directories": {
+      "output": "../dist/desktop-app",
+      "buildResources": ".generated-icons"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend-dist"
+      },
+      {
+        "from": "../dist/desktop-backend",
+        "to": "backend"
+      },
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "medialyze.icns",
+      "category": "public.app-category.video"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "icon512.png",
+      "category": "AudioVideo"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "medialyze.ico"
+    }
+  }
+}

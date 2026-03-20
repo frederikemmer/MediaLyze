@@ -16,6 +16,7 @@ dependencies = [
   "apscheduler>=3.10.4,<4",
   "fastapi>=0.116.1,<1",
   "pydantic-settings>=2.8.1,<3",
+  "psutil>=7.0.0,<8",
   "sqlalchemy>=2.0.39,<3",
   "uvicorn[standard]>=0.34.0,<1",
   "watchdog>=6.0.0,<7",

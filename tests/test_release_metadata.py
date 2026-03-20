@@ -20,9 +20,11 @@ def write_repo_files(
     docker_version: str = "0.1.1",
     pyproject_version: str = "0.1.1",
     frontend_version: str = "0.1.1",
+    desktop_version: str = "0.1.1",
     changelog: str | None = None,
 ) -> None:
     (repo_root / "frontend").mkdir(parents=True, exist_ok=True)
+    (repo_root / "desktop").mkdir(parents=True, exist_ok=True)
 
     (repo_root / "Dockerfile").write_text(
         "\n".join(
@@ -48,6 +50,12 @@ def write_repo_files(
     (repo_root / "frontend" / "package.json").write_text(
         '{\n  "name": "medialyze-frontend",\n'
         f'  "version": "{frontend_version}"\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    (repo_root / "desktop" / "package.json").write_text(
+        '{\n  "name": "medialyze-desktop",\n'
+        f'  "version": "{desktop_version}"\n'
         "}\n",
         encoding="utf-8",
     )

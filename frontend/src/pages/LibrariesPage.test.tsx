@@ -11,6 +11,7 @@ import {
   type AppSettings,
   type BrowseResponse,
   type LibrarySummary,
+  type PathInspection,
   type RecentScanJobPage,
   type RecentScanJob,
   type ScanJobDetail,
@@ -62,6 +63,17 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     total_duration_seconds: 0,
     ready_files: 0,
     pending_files: 0,
+    ...overrides,
+  };
+}
+
+function createPathInspection(overrides: Partial<PathInspection> = {}): PathInspection {
+  return {
+    normalized_path: "/media/movies",
+    exists: true,
+    is_directory: true,
+    path_kind: "local",
+    watch_supported: true,
     ...overrides,
   };
 }
@@ -145,10 +157,12 @@ beforeEach(() => {
   vi.spyOn(api, "libraries").mockResolvedValue([]);
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
+  vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
   vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage());
   vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail());
   vi.spyOn(api, "updateAppSettings").mockResolvedValue(createAppSettings());
+  delete window.medialyzeDesktop;
 });
 
 afterEach(() => {
@@ -293,6 +307,46 @@ describe("LibrariesPage ignore patterns", () => {
     fireEvent.change(idealInput, { target: { value: "0.09" } });
 
     await waitFor(() => expect(maximumInput).toHaveValue(0.09));
+  });
+});
+
+describe("LibrariesPage desktop mode", () => {
+  it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPath: vi.fn().mockResolvedValue("/mnt/media"),
+    };
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Choose folder" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Up" })).not.toBeInTheDocument();
+    expect(screen.getByText("Select a local folder, mounted network share, or UNC path to analyze.")).toBeInTheDocument();
+  });
+
+  it("falls back to scheduled scans when watch is selected for a network path", async () => {
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPath: vi.fn().mockResolvedValue("/mnt/network-media"),
+    };
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary({ path: "/mnt/network-media", scan_mode: "manual" }),
+    ]);
+    vi.spyOn(api, "inspectPath").mockResolvedValue(
+      createPathInspection({
+        normalized_path: "/mnt/network-media",
+        path_kind: "network",
+        watch_supported: false,
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    fireEvent.change(screen.getByLabelText("Scan mode"), { target: { value: "watch" } });
+
+    await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveValue("scheduled"));
+    expect(screen.getByText("Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.")).toBeInTheDocument();
   });
 });
 

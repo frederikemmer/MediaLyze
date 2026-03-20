@@ -196,6 +196,16 @@ export type BrowseResponse = {
   }>;
 };
 
+export type PathKind = "local" | "network" | "unknown";
+
+export type PathInspection = {
+  normalized_path: string;
+  exists: boolean;
+  is_directory: boolean;
+  path_kind: PathKind;
+  watch_supported: boolean;
+};
+
 export type AppSettings = {
   ignore_patterns: string[];
   user_ignore_patterns: string[];
@@ -466,6 +476,11 @@ export const api = {
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   fileQualityScore: (id: string | number) => request<MediaFileQualityScoreDetail>(`/files/${id}/quality-score`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
+  inspectPath: (path: string) =>
+    request<PathInspection>("/paths/inspect", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
   updateAppSettings: (payload: {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
