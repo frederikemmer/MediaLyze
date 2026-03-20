@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -188,7 +189,17 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
         "-show_chapters",
         str(file_path),
     ]
-    completed = subprocess.run(command, capture_output=True, text=True, check=True)
+    run_kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "text": True,
+        "check": True,
+    }
+    if os.name == "nt":
+        run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        run_kwargs["startupinfo"] = startupinfo
+    completed = subprocess.run(command, **run_kwargs)
     return json.loads(completed.stdout or "{}")
 
 
