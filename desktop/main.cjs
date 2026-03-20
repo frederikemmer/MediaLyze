@@ -127,6 +127,7 @@ function stopBackend() {
 function startBackend(port) {
   const launch = resolveBackendCommand();
   const configPath = app.getPath("userData");
+  const isPackagedWindows = app.isPackaged && process.platform === "win32";
   backendProcess = spawn(launch.command, launch.args, {
     cwd: launch.cwd,
     env: {
@@ -139,7 +140,8 @@ function startBackend(port) {
       FFPROBE_PATH: resolveFfprobePath(),
       PYTHONUNBUFFERED: "1",
     },
-    stdio: "inherit",
+    stdio: isPackagedWindows ? "ignore" : "inherit",
+    windowsHide: isPackagedWindows,
   });
   backendPort = port;
 

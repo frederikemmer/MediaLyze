@@ -76,14 +76,29 @@ jobs:
         env:
           MEDIALYZE_FFPROBE_DIR: ${{ github.workspace }}/dist/ffprobe-bundle
 
-      - name: Build unpacked desktop app
-        run: npm run dist:dir
+      - name: Build desktop release artifacts
+        run: npm run dist -- --publish never
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: Upload desktop artifact
+      - name: Upload Linux desktop artifact
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: medialyze-desktop-${{ matrix.os }}
-          path: dist/desktop-app
+          name: medialyze-desktop-linux
+          path: dist/desktop-app/*.AppImage
+
+      - name: Upload macOS desktop artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: medialyze-desktop-macos
+          path: dist/desktop-app/*.dmg
+
+      - name: Upload Windows desktop artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: medialyze-desktop-windows
+          path: dist/desktop-app/*.exe
