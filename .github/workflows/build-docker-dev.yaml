@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: ghcr.io/frederikemmer/medialyze
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   publish_dev_image:

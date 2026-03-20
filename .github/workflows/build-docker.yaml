@@ -16,7 +16,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/frederikemmer/medialyze
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   publish_release:
