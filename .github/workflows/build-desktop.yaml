@@ -3,12 +3,20 @@ name: publish desktop release artifacts
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to build desktop assets for, for example v0.2.3
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build_desktop_release:
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.event.release.tag_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -18,6 +26,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: Validate release metadata
-        run: python .github/scripts/release_metadata.py validate --tag-ref "refs/tags/${{ github.event.release.tag_name }}"
+        run: python .github/scripts/release_metadata.py validate --tag-ref "refs/tags/${{ env.RELEASE_TAG }}"
 
       - name: Install frontend dependencies
         run: npm ci
@@ -107,4 +117,4 @@ jobs:
             exit 1
           fi
 
-          gh release upload "${{ github.event.release.tag_name }}" "${assets[@]}" --clobber
+          gh release upload "${{ env.RELEASE_TAG }}" "${assets[@]}" --clobber

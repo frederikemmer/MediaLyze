@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+- Fixed the release automation so desktop installers are built from the tagged release ref and the desktop release workflow is triggered explicitly after publishing a GitHub release, ensuring `.dmg`, `.exe`, and `AppImage` assets attach reliably
+
 ## v0.2.3
 
 >2026-03-21
