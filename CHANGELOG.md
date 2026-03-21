@@ -4,19 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.2.3
+
+>2026-03-21
+
 ### ✨ New
-- Added a native Electron-based desktop distribution path for Windows, macOS, and Linux that runs the existing FastAPI + React stack locally with a bundled backend sidecar
-- Added desktop path inspection and absolute-path library support so local folders, mounted network shares, and Windows UNC paths can be selected outside Docker
-- Added release metadata and GitHub Actions scaffolding for desktop packaging, including per-platform release artifacts and dev desktop build jobs
-- Added generated desktop app icons for Windows, macOS, and Linux from the shared `frontend/public/favicon.svg` source asset so release builds attach branded installers instead of default Electron icons
-- Added Tiny Media Manager recycle folders under `*/.deletedByTMM/*` to the built-in default ignore patterns
+
+- feat: native Electron-based desktop app 
+- github: release workflows for Windows, macOS and Linux
+- github: Docker images for `linux/amd64` & `linux/arm64` - by [@patrickjmcd](https://github.com/patrickjmcd)
+- feat: Add `*/.deletedByTMM/*` default ignore pattern for Tiny Media Manager users
 
 ### 🐛 Bug fixes
-- Restricted desktop watch mode to local paths and automatically fell back to scheduled scans for network locations
-- Suppressed per-file `ffprobe` console windows on Windows desktop scans so analysis no longer flashes terminal windows for each media file
-- Improved Windows desktop `ffprobe` handling for network-path scans and surfaced the actual `ffprobe` error text in scan failures
-- Forced packaged desktop builds to prefer the bundled `ffprobe` over any inherited `FFPROBE_PATH` environment override
-- Fixed local Windows desktop backend builds to use the active virtualenv Python instead of failing on a missing `python3` alias
+- various bug related to desktop distribution
+
+### 📚 Documentation
+- local desktop build and packaging documentation
+- expanded README with desktop setup, runtime behavior, and desktop deployment details
+
+### New Contributors
+
+[@patrickjmcd](https://github.com/patrickjmcd) in [#57](https://github.com/frederikemmer/MediaLyze/pull/57)
 
 ## v0.2.2
 
@@ -29,17 +37,17 @@ All notable changes to this project will be documented in this file.
 - Added a feature flag for the analyzed-files CSV export button, disabled by default and positioned below the title on smaller screens
 - **Expanded HDR10+ detection** so more `ffprobe` metadata variants are recognized during analysis
 
-### 📚 Documentation
-
-- Refreshed the README with current screenshots, updated project-status copy, and a star-history chart
-- Reworked `AGENTS.md` to document the actual current `dev` branch behavior, release chronology, runtime architecture, and repository layout
-
 ### 🐛 Bug fixes
 
 - Closed the metadata search picker immediately after choosing a filter, so it no longer stays open until an extra outside click
 - Replaced existing analyzed-files metadata values when a new statistic filter from the same category is selected, instead of duplicating the search field
 - Improved the scan-log failures UI so failed files stay readable and show their analysis error on demand
 - Hid container placeholder directories like `cdrom`, `floppy`, and `usb` in the path browser while keeping explicit mounted media paths visible
+
+### 📚 Documentation
+
+- Refreshed the README with current screenshots, updated project-status copy, and a star-history chart
+- Reworked `AGENTS.md` to document the actual current `dev` branch behavior, release chronology, runtime architecture, and repository layout
 
 ## v0.2.0
 
@@ -67,7 +75,7 @@ All notable changes to this project will be documented in this file.
 
 ### New Contributors
 
-[@MSCodeDev](https://github.com/MSCodeDev)
+[@MSCodeDev](https://github.com/MSCodeDev) in [#40](https://github.com/frederikemmer/MediaLyze/pull/40)
 
 ## v0.1.2
 

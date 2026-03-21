@@ -15,8 +15,6 @@ Current baseline:
 * main branch: `main`
 * branch basis: `dev`
 * primary development branch: `dev`
-* latest public GitHub release: **`v0.2.0`**, published on **2026-03-16**
-* release line documented in GitHub: `v0.1.1`, `v0.1.2`, `v0.1.3`, `v0.2.0`
 * stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Electron**, **Docker**, **GHCR**
 
 Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
