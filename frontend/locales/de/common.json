@@ -63,7 +63,7 @@
     "ignorePatternsCustomTitle": "Eigene Ignoriermuster",
     "ignorePatternsDefaultTitle": "Standard-Ignoriermuster",
     "ignorePatternsTooltipAria": "Beispiele für Ignoriermuster anzeigen",
-    "ignorePatternsTooltip": "Die eingebauten Standards decken typische System- und Temporärdateien ab, zum Beispiel:\n\n\"*/.DS_Store\"\n\"*/@eaDir/*\"\n\"*/$RECYCLE.BIN/*\"\n\"*.part\"\n\"*.tmp\"\n\nBeide Bereiche lassen sich vollständig bearbeiten.",
+    "ignorePatternsTooltip": "Die eingebauten Standards decken typische System- und Temporärdateien ab, zum Beispiel:\n\n\"*/.DS_Store\"\n\"*/@eaDir/*\"\n\"*/.deletedByTMM/*\"\n\"*.part\"\n\"*.tmp\"\n\nBeide Bereiche lassen sich vollständig bearbeiten.",
     "ignorePatternsAddAria": "Neues Ignoriermuster hinzufügen",
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "appSettings": "App-Einstellungen",

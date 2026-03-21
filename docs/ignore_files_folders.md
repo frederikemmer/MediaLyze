@@ -26,6 +26,7 @@ MediaLyze preloads these default ignore patterns on fresh installations:
 */._*
 */@eaDir/*
 */#recycle/*
+*/.deletedByTMM/*
 */.recycle/*
 */Thumbs.db
 */Desktop.ini

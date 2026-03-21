@@ -181,7 +181,7 @@ If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The com
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
 In the desktop app, mounted network shares and UNC paths can be selected directly.
 
-Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
+Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, `*/.deletedByTMM/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
 See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short guide.
 
 ## Tech Stack

@@ -19,6 +19,7 @@ BUILT_IN_DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
     "*/._*",
     "*/@eaDir/*",
     "*/#recycle/*",
+    "*/.deletedByTMM/*",
     "*/.recycle/*",
     "*/Thumbs.db",
     "*/Desktop.ini",
