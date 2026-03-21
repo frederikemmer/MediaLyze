@@ -50,11 +50,11 @@ function resolveBackendCommand() {
 }
 
 function resolveFfprobePath() {
-  if (process.env.FFPROBE_PATH) {
-    return process.env.FFPROBE_PATH;
-  }
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "backend", "ffprobe", bundledFfprobeName());
+  }
+  if (process.env.FFPROBE_PATH) {
+    return process.env.FFPROBE_PATH;
   }
   return "ffprobe";
 }
