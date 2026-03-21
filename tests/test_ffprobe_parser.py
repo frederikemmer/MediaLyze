@@ -1,4 +1,7 @@
-from backend.app.services.ffprobe_parser import normalize_ffprobe_payload
+import subprocess
+from pathlib import Path
+
+from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload
 
 
 def test_normalize_ffprobe_payload_extracts_streams() -> None:
@@ -139,3 +142,19 @@ def test_normalize_ffprobe_payload_extracts_hdr10_plus() -> None:
     normalized = normalize_ffprobe_payload(payload)
 
     assert normalized.video_streams[0].hdr_type == "HDR10+"
+
+
+def test_ffprobe_error_message_prefers_stderr() -> None:
+    exc = subprocess.CalledProcessError(
+        1,
+        ["ffprobe", "movie.mkv"],
+        stderr="Invalid data found when processing input\nmore details",
+    )
+
+    assert _ffprobe_error_message(exc) == "Invalid data found when processing input"
+
+
+def test_ffprobe_input_path_preserves_non_windows_paths(tmp_path: Path) -> None:
+    file_path = tmp_path / "movie.mkv"
+
+    assert _ffprobe_input_path(file_path) == str(file_path)

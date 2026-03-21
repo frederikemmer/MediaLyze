@@ -280,6 +280,25 @@ def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
     media_file.quality_score_breakdown = breakdown.model_dump(mode="json")
 
 
+def _apply_analysis_result(
+    media_file: MediaFile,
+    payload: dict,
+    subtitles: list[dict[str, str | None]],
+    library: Library,
+) -> None:
+    media_file.scan_status = ScanStatus.analyzing
+    normalized = normalize_ffprobe_payload(payload)
+    media_file.raw_ffprobe_json = payload
+    _replace_analysis(media_file, normalized, subtitles)
+    breakdown = calculate_quality_score(
+        build_quality_score_input(normalized, subtitles, size_bytes=media_file.size_bytes),
+        library.quality_profile,
+    )
+    _persist_quality_breakdown(media_file, breakdown)
+    media_file.last_analyzed_at = utc_now()
+    media_file.scan_status = ScanStatus.ready
+
+
 def _analyze_path(
     file_path: Path,
     library_root: Path,
@@ -671,18 +690,14 @@ def run_scan(
                 pending.pop(future)
                 media_file, relative_path, payload, subtitles, error = future.result()
                 if error is None and payload is not None:
-                    media_file.scan_status = ScanStatus.analyzing
-                    normalized = normalize_ffprobe_payload(payload)
-                    media_file.raw_ffprobe_json = payload
-                    _replace_analysis(media_file, normalized, subtitles)
-                    breakdown = calculate_quality_score(
-                        build_quality_score_input(normalized, subtitles, size_bytes=media_file.size_bytes),
-                        library.quality_profile,
-                    )
-                    _persist_quality_breakdown(media_file, breakdown)
-                    media_file.last_analyzed_at = utc_now()
-                    media_file.scan_status = ScanStatus.ready
-                    analyzed_successfully += 1
+                    try:
+                        _apply_analysis_result(media_file, payload, subtitles, library)
+                        analyzed_successfully += 1
+                    except Exception as exc:
+                        logger.exception("Media normalization failed for %s", relative_path)
+                        media_file.scan_status = ScanStatus.failed
+                        job.errors += 1
+                        failed_files.add(relative_path, _short_error_reason(exc))
                 else:
                     media_file.scan_status = ScanStatus.failed
                     job.errors += 1

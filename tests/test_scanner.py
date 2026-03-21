@@ -11,6 +11,7 @@ os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import AppSetting, AudioStream, ExternalSubtitle, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
+from backend.app.services import scanner as scanner_service
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
@@ -480,4 +481,91 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     assert job.scan_summary["analysis"]["analysis_failed"] == 1
     assert job.scan_summary["analysis"]["failed_files"] == [
         {"path": "broken.mkv", "reason": "ffprobe exploded"}
+    ]
+
+
+def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "broken.mkv").write_text("video")
+    (media_dir / "good.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    original_normalize = scanner_service.normalize_ffprobe_payload
+
+    def normalize_with_failure(raw_payload):
+        format_name = ((raw_payload or {}).get("format") or {}).get("format_name")
+        if format_name == "broken-target":
+            raise ValueError("bad payload")
+        return original_normalize(raw_payload)
+
+    def run_ffprobe_with_one_bad_file(file_path, ffprobe_path):
+        if Path(file_path).name == "broken.mkv":
+            return {
+                **payload,
+                "format": {
+                    **payload["format"],
+                    "format_name": "broken-target",
+                },
+            }
+        return payload
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", run_ffprobe_with_one_bad_file)
+    monkeypatch.setattr("backend.app.services.scanner.normalize_ffprobe_payload", normalize_with_failure)
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+
+    assert job.files_total == 2
+    assert job.files_scanned == 2
+    assert job.status.value == "failed"
+    assert [(media_file.relative_path, media_file.scan_status.value) for media_file in indexed_files] == [
+        ("broken.mkv", "failed"),
+        ("good.mkv", "ready"),
+    ]
+    assert job.scan_summary["analysis"]["failed_files"] == [
+        {"path": "broken.mkv", "reason": "bad payload"}
     ]

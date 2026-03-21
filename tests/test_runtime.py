@@ -369,3 +369,36 @@ def test_ensure_scheduled_job_uses_scheduled_trigger_details(monkeypatch) -> Non
         "trigger_source": ScanTriggerSource.scheduled,
         "trigger_details": {"interval_minutes": 30},
     }
+
+
+def test_sync_library_skips_watch_observer_for_desktop_network_paths(monkeypatch, tmp_path) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    library_dir = tmp_path / "network-library"
+    library_dir.mkdir()
+
+    with session_factory() as db:
+        library = Library(
+            name="Network Movies",
+            path=str(library_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.watch,
+            scan_config={"debounce_seconds": 15},
+        )
+        db.add(library)
+        db.commit()
+        library_id = library.id
+
+    runtime = runtime_module.ScanRuntimeManager(
+        Settings(runtime_mode="desktop", config_path=tmp_path / "config")
+    )
+    monkeypatch.setattr(
+        runtime_module,
+        "is_watch_supported_for_library",
+        lambda settings, path_value: False,
+    )
+
+    runtime.sync_library(library_id)
+
+    assert runtime.watch_observers == {}

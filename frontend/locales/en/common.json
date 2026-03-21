@@ -34,14 +34,19 @@
     "addFirstLibrary": "Add first library",
     "createTitle": "Create library",
     "createSubtitle": "Path selection is restricted to directories below MEDIA_ROOT.",
+    "createSubtitleDesktop": "Select a local folder, mounted network share, or UNC path to analyze.",
     "createButton": "Create library",
     "creating": "Creating…",
     "name": "Name",
     "namePlaceholder": "Movies archive",
     "type": "Library type",
+    "desktopPathPlaceholder": "/Volumes/Media or \\\\server\\share\\videos",
+    "desktopPathMustExist": "Choose an existing directory.",
+    "chooseFolder": "Choose folder",
     "scanMode": "Scan mode",
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
+    "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
     "qualityScoreTitle": "Quality score",
     "renamePrompt": "Enter a new library name",
@@ -69,6 +74,11 @@
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
       "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
       "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\"."
+    },
+    "pathKinds": {
+      "local": "Local path",
+      "network": "Network path",
+      "unknown": "Unknown path type"
     },
     "quality": {
       "weight": "Weight",

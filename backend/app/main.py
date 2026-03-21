@@ -11,37 +11,47 @@ from backend.app.core.config import get_settings
 from backend.app.db.session import init_db
 from backend.app.services.runtime import ScanRuntimeManager
 
-settings = get_settings()
+def create_app(settings=None) -> FastAPI:
+    active_settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        init_db()
+        runtime = ScanRuntimeManager(active_settings)
+        _app.state.scan_runtime = runtime
+        runtime.start()
+        yield
+        runtime.stop()
+
+    app = FastAPI(
+        title=active_settings.app_name,
+        version=active_settings.app_version,
+        lifespan=lifespan,
+    )
+    if not active_settings.is_desktop:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    app.include_router(router, prefix=active_settings.api_prefix)
+
+    frontend_dist = Path(active_settings.frontend_dist_path)
+    if frontend_dist.exists():
+        assets_dir = frontend_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/{path:path}")
+        def serve_frontend(path: str) -> FileResponse:
+            candidate = frontend_dist / path
+            if path and candidate.exists() and candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(frontend_dist / "index.html")
+
+    return app
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    init_db()
-    runtime = ScanRuntimeManager(settings)
-    _app.state.scan_runtime = runtime
-    runtime.start()
-    yield
-    runtime.stop()
-
-
-app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.include_router(router, prefix=settings.api_prefix)
-
-
-frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-if frontend_dist.exists():
-    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
-
-    @app.get("/{path:path}")
-    def serve_frontend(path: str) -> FileResponse:
-        candidate = frontend_dist / path
-        if path and candidate.exists() and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(frontend_dist / "index.html")
+app = create_app()

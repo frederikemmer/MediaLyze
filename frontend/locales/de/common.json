@@ -34,14 +34,19 @@
     "addFirstLibrary": "Erste Bibliothek anlegen",
     "createTitle": "Bibliothek anlegen",
     "createSubtitle": "Die Pfadauswahl ist auf Verzeichnisse unterhalb von MEDIA_ROOT begrenzt.",
+    "createSubtitleDesktop": "Waehle einen lokalen Ordner, eine eingehangte Netzwerkfreigabe oder einen UNC-Pfad zur Analyse aus.",
     "createButton": "Bibliothek anlegen",
     "creating": "Wird angelegt…",
     "name": "Name",
     "namePlaceholder": "Filmarchiv",
     "type": "Bibliothekstyp",
+    "desktopPathPlaceholder": "/Volumes/Media oder \\\\server\\share\\videos",
+    "desktopPathMustExist": "Bitte ein vorhandenes Verzeichnis auswaehlen.",
+    "chooseFolder": "Ordner auswaehlen",
     "scanMode": "Scan-Modus",
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
+    "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
     "qualityScoreTitle": "Qualitäts-Score",
     "renamePrompt": "Neuen Bibliotheksnamen eingeben",
@@ -69,6 +74,11 @@
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
       "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben."
+    },
+    "pathKinds": {
+      "local": "Lokaler Pfad",
+      "network": "Netzwerkpfad",
+      "unknown": "Unbekannter Pfadtyp"
     },
     "quality": {
       "weight": "Gewichtung",

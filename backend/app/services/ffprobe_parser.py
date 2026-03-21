@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -120,6 +121,29 @@ def _is_attached_picture(stream: dict[str, Any]) -> bool:
     return bool(disposition.get("attached_pic"))
 
 
+def _ffprobe_input_path(file_path: Path) -> str:
+    path_value = str(file_path)
+    if os.name != "nt":
+        return path_value
+    if path_value.startswith("\\\\?\\"):
+        return path_value
+    if path_value.startswith("\\\\"):
+        return f"\\\\?\\UNC\\{path_value.lstrip('\\')}"
+    if len(path_value) >= 2 and path_value[1] == ":":
+        return f"\\\\?\\{path_value}"
+    return path_value
+
+
+def _ffprobe_error_message(exc: subprocess.CalledProcessError) -> str:
+    stderr = (exc.stderr or "").strip()
+    if stderr:
+        return stderr.splitlines()[0].strip()[:300]
+    stdout = (exc.stdout or "").strip()
+    if stdout:
+        return stdout.splitlines()[0].strip()[:300]
+    return str(exc)
+
+
 @dataclass(slots=True)
 class NormalizedFormat:
     container_format: str | None
@@ -186,9 +210,22 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
         "-show_format",
         "-show_streams",
         "-show_chapters",
-        str(file_path),
+        _ffprobe_input_path(file_path),
     ]
-    completed = subprocess.run(command, capture_output=True, text=True, check=True)
+    run_kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "text": True,
+        "check": True,
+    }
+    if os.name == "nt":
+        run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        run_kwargs["startupinfo"] = startupinfo
+    try:
+        completed = subprocess.run(command, **run_kwargs)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(_ffprobe_error_message(exc)) from exc
     return json.loads(completed.stdout or "{}")
 
 

@@ -79,11 +79,25 @@ def read_frontend_version(repo_root: Path) -> str:
     return version
 
 
+def read_desktop_version(repo_root: Path) -> str:
+    package_json_path = repo_root / "desktop" / "package.json"
+    try:
+        data = json.loads(read_text(package_json_path))
+    except json.JSONDecodeError as exc:
+        raise ReleaseMetadataError(f"Invalid JSON in {package_json_path}: {exc}") from exc
+
+    version = data.get("version")
+    if not isinstance(version, str):
+        raise ReleaseMetadataError("Missing string version in desktop/package.json.")
+    return version
+
+
 def read_versions(repo_root: Path) -> dict[str, str]:
     return {
         "Dockerfile": read_runtime_docker_version(repo_root),
         "pyproject.toml": read_pyproject_version(repo_root),
         "frontend/package.json": read_frontend_version(repo_root),
+        "desktop/package.json": read_desktop_version(repo_root),
     }
 
 

@@ -5,8 +5,17 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 ### ✨ New
+- Added a native Electron-based desktop distribution path for Windows, macOS, and Linux that runs the existing FastAPI + React stack locally with a bundled backend sidecar
+- Added desktop path inspection and absolute-path library support so local folders, mounted network shares, and Windows UNC paths can be selected outside Docker
+- Added release metadata and GitHub Actions scaffolding for desktop packaging, including per-platform release artifacts and dev desktop build jobs
+- Added generated desktop app icons for Windows, macOS, and Linux from the shared `frontend/public/favicon.svg` source asset so release builds attach branded installers instead of default Electron icons
 
 ### 🐛 Bug fixes
+- Restricted desktop watch mode to local paths and automatically fell back to scheduled scans for network locations
+- Suppressed per-file `ffprobe` console windows on Windows desktop scans so analysis no longer flashes terminal windows for each media file
+- Improved Windows desktop `ffprobe` handling for network-path scans and surfaced the actual `ffprobe` error text in scan failures
+- Forced packaged desktop builds to prefer the bundled `ffprobe` over any inherited `FFPROBE_PATH` environment override
+- Fixed local Windows desktop backend builds to use the active virtualenv Python instead of failing on a missing `python3` alias
 
 ## v0.2.2
 

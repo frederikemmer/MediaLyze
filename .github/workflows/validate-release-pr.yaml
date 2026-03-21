@@ -8,6 +8,7 @@ on:
       - 'Dockerfile'
       - 'pyproject.toml'
       - 'frontend/package.json'
+      - 'desktop/package.json'
       - 'CHANGELOG.md'
       - '.github/scripts/release_metadata.py'
 

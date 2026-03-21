@@ -1019,6 +1019,28 @@
   overflow: auto;
 }
 
+.desktop-path-field {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.desktop-path-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .desktop-path-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .path-entry {
   width: 100%;
   justify-content: space-between;
@@ -2174,6 +2196,11 @@ html[data-theme="dark"] {
   }
 
   .path-browser {
+    background: rgba(38, 35, 31, 0.55);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .desktop-path-field {
     background: rgba(38, 35, 31, 0.55);
     border-color: rgba(240, 236, 228, 0.08);
   }
