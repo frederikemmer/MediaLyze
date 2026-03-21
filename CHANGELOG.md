@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 - Restricted desktop watch mode to local paths and automatically fell back to scheduled scans for network locations
+- Suppressed per-file `ffprobe` console windows on Windows desktop scans so analysis no longer flashes terminal windows for each media file
+- Improved Windows desktop `ffprobe` handling for network-path scans and surfaced the actual `ffprobe` error text in scan failures
 
 ## v0.2.2
 
