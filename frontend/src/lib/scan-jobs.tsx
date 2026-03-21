@@ -12,12 +12,13 @@ type ScanJobsContextValue = {
 };
 
 const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
-export const ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS = 15000;
+export const ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS = 5000;
 
 export function ScanJobsProvider({ children }: { children: ReactNode }) {
   const [activeJobs, setActiveJobs] = useState<ScanJob[]>([]);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
+  const initializedRef = useRef(false);
   const pollInterval = isPageVisible && activeJobs.length > 0 ? ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS : null;
 
   const refresh = useEffectEvent(async () => {
@@ -44,6 +45,14 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
       return [...next, job];
     });
   });
+
+  useEffect(() => {
+    if (!isPageVisible || initializedRef.current) {
+      return;
+    }
+    initializedRef.current = true;
+    void refresh();
+  }, [isPageVisible, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined" || activeJobs.length === 0) {

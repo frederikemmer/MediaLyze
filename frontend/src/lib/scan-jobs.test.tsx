@@ -61,7 +61,7 @@ describe("ScanJobsProvider", () => {
     setVisibilityState("visible");
   });
 
-  it("does not poll at all while no scan is tracked", async () => {
+  it("refreshes once on mount but does not keep polling while no scan is tracked", async () => {
     const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
     render(
@@ -71,12 +71,14 @@ describe("ScanJobsProvider", () => {
     );
 
     await flushEffects();
+    const initialCallCount = activeScanJobsSpy.mock.calls.length;
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60000);
     });
 
-    expect(activeScanJobsSpy).not.toHaveBeenCalled();
+    expect(initialCallCount).toBeGreaterThan(0);
+    expect(activeScanJobsSpy).toHaveBeenCalledTimes(initialCallCount);
   });
 
   it("starts polling after a scan job is tracked", async () => {
@@ -89,6 +91,7 @@ describe("ScanJobsProvider", () => {
     );
 
     await flushEffects();
+    const initialCallCount = activeScanJobsSpy.mock.calls.length;
 
     fireEvent.click(screen.getByRole("button", { name: "track" }));
 
@@ -98,7 +101,7 @@ describe("ScanJobsProvider", () => {
 
     await flushEffects();
 
-    expect(activeScanJobsSpy).toHaveBeenCalledTimes(1);
+    expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
   });
 
   it("refreshes again on focus only while a scan is tracked", async () => {
@@ -111,6 +114,7 @@ describe("ScanJobsProvider", () => {
     );
 
     await flushEffects();
+    const initialCallCount = activeScanJobsSpy.mock.calls.length;
 
     fireEvent.click(screen.getByRole("button", { name: "track" }));
 
@@ -120,6 +124,6 @@ describe("ScanJobsProvider", () => {
 
     await flushEffects();
 
-    expect(activeScanJobsSpy).toHaveBeenCalledTimes(1);
+    expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
   });
 });

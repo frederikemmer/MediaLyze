@@ -139,9 +139,9 @@ def _ffprobe_error_message(exc: subprocess.CalledProcessError) -> str:
     if stderr:
         return stderr.splitlines()[0].strip()[:300]
     stdout = (exc.stdout or "").strip()
-    if stdout:
+    if stdout and stdout != "{":
         return stdout.splitlines()[0].strip()[:300]
-    return str(exc)
+    return f"ffprobe exited with status {exc.returncode}"
 
 
 @dataclass(slots=True)
@@ -204,7 +204,7 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
     command = [
         ffprobe_path,
         "-v",
-        "quiet",
+        "error",
         "-print_format",
         "json",
         "-show_format",
