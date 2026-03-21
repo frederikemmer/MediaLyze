@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Added desktop path inspection and absolute-path library support so local folders, mounted network shares, and Windows UNC paths can be selected outside Docker
 - Added release metadata and GitHub Actions scaffolding for desktop packaging, including per-platform release artifacts and dev desktop build jobs
 - Added generated desktop app icons for Windows, macOS, and Linux from the shared `frontend/public/favicon.svg` source asset so release builds attach branded installers instead of default Electron icons
+- Added Tiny Media Manager recycle folders under `*/.deletedByTMM/*` to the built-in default ignore patterns
 
 ### 🐛 Bug fixes
 - Restricted desktop watch mode to local paths and automatically fell back to scheduled scans for network locations

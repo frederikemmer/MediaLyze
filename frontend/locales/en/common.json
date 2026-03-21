@@ -63,7 +63,7 @@
     "ignorePatternsCustomTitle": "Custom ignore patterns",
     "ignorePatternsDefaultTitle": "Default ignore patterns",
     "ignorePatternsTooltipAria": "Show ignore pattern examples",
-    "ignorePatternsTooltip": "Built-in defaults include common system and temporary files, for example:\n\n\"*/.DS_Store\"\n\"*/@eaDir/*\"\n\"*/$RECYCLE.BIN/*\"\n\"*.part\"\n\"*.tmp\"\n\nBoth sections are fully editable.",
+    "ignorePatternsTooltip": "Built-in defaults include common system and temporary files, for example:\n\n\"*/.DS_Store\"\n\"*/@eaDir/*\"\n\"*/.deletedByTMM/*\"\n\"*.part\"\n\"*.tmp\"\n\nBoth sections are fully editable.",
     "ignorePatternsAddAria": "Add a new ignore pattern",
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",

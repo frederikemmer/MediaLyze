@@ -46,6 +46,10 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
 
+def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
+    assert "*/.deletedByTMM/*" in BUILT_IN_DEFAULT_IGNORE_PATTERNS
+
+
 def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path, disable_default_ignore_patterns=True)
