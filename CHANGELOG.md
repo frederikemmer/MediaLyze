@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Suppressed per-file `ffprobe` console windows on Windows desktop scans so analysis no longer flashes terminal windows for each media file
 - Improved Windows desktop `ffprobe` handling for network-path scans and surfaced the actual `ffprobe` error text in scan failures
 - Forced packaged desktop builds to prefer the bundled `ffprobe` over any inherited `FFPROBE_PATH` environment override
+- Fixed local Windows desktop backend builds to use the active virtualenv Python instead of failing on a missing `python3` alias
 
 ## v0.2.2
 

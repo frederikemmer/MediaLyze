@@ -8,8 +8,56 @@ const repoRoot = path.resolve(scriptDir, "..", "..");
 const outputDir = path.join(repoRoot, "dist", "desktop-backend");
 const workDir = path.join(repoRoot, "dist", "pyinstaller-work");
 const specDir = path.join(repoRoot, "dist", "pyinstaller-spec");
-const pythonBin = process.env.MEDIALYZE_DESKTOP_PYTHON || process.env.PYTHON || "python3";
+
+function resolvePythonInvocation() {
+  if (process.env.MEDIALYZE_DESKTOP_PYTHON) {
+    return {
+      command: process.env.MEDIALYZE_DESKTOP_PYTHON,
+      args: [],
+    };
+  }
+
+  if (process.platform === "win32") {
+    const venv = process.env.VIRTUAL_ENV;
+    if (venv) {
+      const venvPython = path.join(venv, "Scripts", "python.exe");
+      if (existsSync(venvPython)) {
+        return {
+          command: venvPython,
+          args: [],
+        };
+      }
+    }
+
+    if (process.env.PYTHON) {
+      return {
+        command: process.env.PYTHON,
+        args: [],
+      };
+    }
+
+    return {
+      command: "py",
+      args: ["-3.12"],
+    };
+  }
+
+  if (process.env.PYTHON) {
+    return {
+      command: process.env.PYTHON,
+      args: [],
+    };
+  }
+
+  return {
+    command: "python3",
+    args: [],
+  };
+}
+
+const pythonInvocation = resolvePythonInvocation();
 const pyInstallerArgs = [
+  ...pythonInvocation.args,
   "-m",
   "PyInstaller",
   "--noconfirm",
@@ -38,7 +86,7 @@ mkdirSync(workDir, { recursive: true });
 mkdirSync(specDir, { recursive: true });
 
 const pyInstallerResult = spawnSync(
-  pythonBin,
+  pythonInvocation.command,
   pyInstallerArgs,
   {
     cwd: repoRoot,
