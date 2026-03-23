@@ -13,6 +13,7 @@ on:
       - '.github/scripts/release_metadata.py'
 
 permissions:
+  actions: write
   contents: write
   packages: write
 
