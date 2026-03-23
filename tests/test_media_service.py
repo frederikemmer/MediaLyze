@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.db.base import Base
 from backend.app.models.entities import (
+    AppSetting,
     AudioStream,
     ExternalSubtitle,
     Library,
@@ -575,6 +576,118 @@ def test_list_library_files_supports_resolution_aliases_and_sdr_filter() -> None
     assert [item.filename for item in four_k_files.items] == ["hdr.mkv"]
     assert [item.filename for item in sdr_files.items] == ["sdr.mkv"]
     assert [item.filename for item in dv_files.items] == ["hdr.mkv"]
+
+
+def test_list_library_files_matches_custom_resolution_category_labels_and_returns_grouped_resolution_fields() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "resolution_categories": [
+                        {"id": "4k", "label": "UHD", "min_width": 3840, "min_height": 1600},
+                        {"id": "1080p", "label": "Full HD", "min_width": 1920, "min_height": 800},
+                        {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                    ]
+                },
+            )
+        )
+        library = Library(
+            name="Custom resolution labels",
+            path="/tmp/custom-resolution-labels",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie-uhd.mkv",
+            filename="movie-uhd.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(VideoStream(media_file_id=media_file.id, stream_index=0, codec="hevc", width=3840, height=1606))
+        db.commit()
+
+        page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_resolution="uhd"),
+        )
+
+    assert [item.filename for item in page.items] == ["movie-uhd.mkv"]
+    assert page.items[0].resolution == "3840x1606"
+    assert page.items[0].resolution_category_id == "4k"
+    assert page.items[0].resolution_category_label == "UHD"
+
+
+def test_list_library_files_matches_default_letterboxed_resolution_categories_by_width() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Cinema defaults",
+            path="/tmp/cinema-defaults",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for index, (name, width, height) in enumerate(
+            (
+                ("movie-1080p.mkv", 1920, 800),
+                ("movie-wqhd.mkv", 2560, 1066),
+                ("movie-4k.mkv", 3840, 1606),
+            ),
+            start=1,
+        ):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=name,
+                filename=name,
+                extension="mkv",
+                size_bytes=index,
+                mtime=float(index),
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+            )
+            db.add(media_file)
+            db.flush()
+            db.add(VideoStream(media_file_id=media_file.id, stream_index=0, codec="hevc", width=width, height=height))
+        db.commit()
+
+        four_k_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_resolution="4k"),
+        )
+        ten_eighty_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_resolution="1080p"),
+        )
+
+    assert [item.filename for item in four_k_page.items] == ["movie-4k.mkv"]
+    assert [item.filename for item in ten_eighty_page.items] == ["movie-1080p.mkv", "movie-wqhd.mkv"]
 
 
 def test_list_library_files_rejects_invalid_structured_search_expressions() -> None:

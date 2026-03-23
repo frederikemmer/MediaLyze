@@ -26,7 +26,7 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
-from backend.app.services.app_settings import get_ignore_patterns
+from backend.app.services.app_settings import get_app_settings, get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
 from backend.app.services.quality import (
     build_quality_score_input,
@@ -285,6 +285,7 @@ def _apply_analysis_result(
     payload: dict,
     subtitles: list[dict[str, str | None]],
     library: Library,
+    resolution_categories,
 ) -> None:
     media_file.scan_status = ScanStatus.analyzing
     normalized = normalize_ffprobe_payload(payload)
@@ -293,6 +294,7 @@ def _apply_analysis_result(
     breakdown = calculate_quality_score(
         build_quality_score_input(normalized, subtitles, size_bytes=media_file.size_bytes),
         library.quality_profile,
+        resolution_categories,
     )
     _persist_quality_breakdown(media_file, breakdown)
     media_file.last_analyzed_at = utc_now()
@@ -536,7 +538,8 @@ def run_scan(
         for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
-    ignore_patterns = get_ignore_patterns(db, settings)
+    app_settings = get_app_settings(db, settings)
+    ignore_patterns = tuple(app_settings.ignore_patterns)
     new_files = SampledPathList()
     modified_files = SampledPathList()
     deleted_files = SampledPathList()
@@ -691,7 +694,13 @@ def run_scan(
                 media_file, relative_path, payload, subtitles, error = future.result()
                 if error is None and payload is not None:
                     try:
-                        _apply_analysis_result(media_file, payload, subtitles, library)
+                        _apply_analysis_result(
+                            media_file,
+                            payload,
+                            subtitles,
+                            library,
+                            app_settings.resolution_categories,
+                        )
                         analyzed_successfully += 1
                     except Exception as exc:
                         logger.exception("Media normalization failed for %s", relative_path)
@@ -777,10 +786,15 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     stats_cache.invalidate(cache_key, library_id)
 
     batch_counter = 0
+    resolution_categories = get_app_settings(db).resolution_categories
     for media_file in media_files:
         if _should_cancel():
             raise ScanCanceled()
-        breakdown = calculate_quality_score(build_quality_score_input_from_media_file(media_file), library.quality_profile)
+        breakdown = calculate_quality_score(
+            build_quality_score_input_from_media_file(media_file),
+            library.quality_profile,
+            resolution_categories,
+        )
         _persist_quality_breakdown(media_file, breakdown)
         job.files_scanned += 1
         batch_counter += 1

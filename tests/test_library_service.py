@@ -340,19 +340,73 @@ def test_get_library_statistics_includes_subtitle_languages_codecs_and_sources()
         statistics = get_library_statistics(db, library.id)
 
     assert statistics is not None
-    assert [item.model_dump() for item in statistics.audio_codec_distribution] == [{"label": "dts", "value": 1}]
-    assert [item.model_dump() for item in statistics.subtitle_language_distribution] == [
+    assert [item.model_dump(exclude_none=True) for item in statistics.audio_codec_distribution] == [{"label": "dts", "value": 1}]
+    assert [item.model_dump(exclude_none=True) for item in statistics.subtitle_language_distribution] == [
         {"label": "de", "value": 1},
         {"label": "en", "value": 1},
     ]
-    assert [item.model_dump() for item in statistics.subtitle_codec_distribution] == [
+    assert [item.model_dump(exclude_none=True) for item in statistics.subtitle_codec_distribution] == [
         {"label": "ass", "value": 1},
         {"label": "subrip", "value": 1},
     ]
-    assert [item.model_dump() for item in statistics.subtitle_source_distribution] == [
+    assert [item.model_dump(exclude_none=True) for item in statistics.subtitle_source_distribution] == [
         {"label": "internal", "value": 1},
         {"label": "external", "value": 1},
     ]
+
+
+def test_get_library_statistics_groups_similar_resolutions_into_categories() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies-grouped",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        first = MediaFile(
+            library_id=library.id,
+            relative_path="scope-a.mkv",
+            filename="scope-a.mkv",
+            extension="mkv",
+            size_bytes=100,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        second = MediaFile(
+            library_id=library.id,
+            relative_path="scope-b.mkv",
+            filename="scope-b.mkv",
+            extension="mkv",
+            size_bytes=100,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add_all([first, second])
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(media_file_id=first.id, stream_index=0, codec="hevc", width=3840, height=1606),
+                VideoStream(media_file_id=second.id, stream_index=0, codec="hevc", width=3840, height=2160),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+
+    assert statistics is not None
+    assert [item.model_dump(exclude_none=True) for item in statistics.resolution_distribution] == [{"label": "4k", "value": 2}]
 
 
 def test_get_library_statistics_keeps_hdr10_plus_separate_from_hdr10() -> None:

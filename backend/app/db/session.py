@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.services.quality import default_quality_profile
@@ -18,6 +19,7 @@ def create_engine_for_settings(settings: Settings) -> Engine:
     engine = create_engine(
         _sqlite_url(settings.database_path),
         connect_args={"check_same_thread": False},
+        poolclass=NullPool,
         future=True,
     )
 

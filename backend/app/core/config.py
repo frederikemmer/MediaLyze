@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "MediaLyze"
-    app_version: str = "0.2.3"
+    app_version: str = "0.2.4"
     runtime_mode: RuntimeMode = Field(default=RuntimeMode.server, validation_alias="MEDIALYZE_RUNTIME")
     app_host: str | None = None
     app_port: int = 8080
