@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-### ✨ New
-- feat: global, configurable resolution categories in App Settings
-- feat: backend now uses the shared resolution-category configuration
-
 ### 🐛 Bug fixes
 - show scan banner earlier through better polling
 - lower default resolution-category minimum heights so cinema-scope and letterboxed releases still map to the expected width-based buckets
