@@ -748,6 +748,26 @@
   color: var(--muted);
 }
 
+.resolution-category-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.resolution-category-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 40px;
+  align-items: end;
+  padding-top: 12px;
+  border-top: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.resolution-category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .scan-badge {
   background: rgba(27, 153, 139, 0.16);
   color: #0e6b62;
@@ -2013,6 +2033,10 @@
   }
 
   .quality-settings-group {
+    grid-template-columns: 1fr;
+  }
+
+  .resolution-category-row {
     grid-template-columns: 1fr;
   }
 

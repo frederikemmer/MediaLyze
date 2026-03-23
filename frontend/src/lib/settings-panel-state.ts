@@ -2,6 +2,7 @@ export type SettingsPanelId =
   | "configuredLibraries"
   | "recentScanLogs"
   | "libraryStatistics"
+  | "resolutionCategories"
   | "createLibrary"
   | "ignorePatterns"
   | "appSettings";
@@ -14,6 +15,7 @@ const DEFAULT_STATE: SettingsPanelState = {
   configuredLibraries: true,
   recentScanLogs: true,
   libraryStatistics: true,
+  resolutionCategories: true,
   createLibrary: true,
   ignorePatterns: true,
   appSettings: true,
@@ -37,6 +39,10 @@ function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
       "libraryStatistics" in value && typeof value.libraryStatistics === "boolean"
         ? value.libraryStatistics
         : DEFAULT_STATE.libraryStatistics,
+    resolutionCategories:
+      "resolutionCategories" in value && typeof value.resolutionCategories === "boolean"
+        ? value.resolutionCategories
+        : DEFAULT_STATE.resolutionCategories,
     createLibrary:
       "createLibrary" in value && typeof value.createLibrary === "boolean"
         ? value.createLibrary

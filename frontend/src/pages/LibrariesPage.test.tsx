@@ -400,9 +400,12 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
+    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
 
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
+    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save resolution categories" })).toBeInTheDocument();
   });
 
   it("restores persisted settings panel state from localStorage", async () => {
@@ -412,6 +415,7 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: false,
         recentScanLogs: true,
         libraryStatistics: true,
+        resolutionCategories: false,
         createLibrary: true,
         ignorePatterns: false,
         appSettings: false,
@@ -422,10 +426,12 @@ describe("LibrariesPage settings panels", () => {
 
     const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
     const ignorePatternsToggle = screen.getByRole("button", { name: /^ignore patterns$/i });
+    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
     const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
 
     expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
     expect(ignorePatternsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Add first library")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
@@ -444,6 +450,7 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: true,
         recentScanLogs: true,
         libraryStatistics: true,
+        resolutionCategories: true,
         createLibrary: true,
         ignorePatterns: true,
         appSettings: false,

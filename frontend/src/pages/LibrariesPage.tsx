@@ -973,20 +973,6 @@ export function LibrariesPage() {
     setResolutionCategoriesStatus(null);
   }
 
-  function moveResolutionCategoryDraft(index: number, direction: -1 | 1) {
-    setResolutionCategoryDrafts((current) => {
-      const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= current.length) {
-        return current;
-      }
-      const next = [...current];
-      const [item] = next.splice(index, 1);
-      next.splice(targetIndex, 0, item);
-      return next;
-    });
-    setResolutionCategoriesStatus(null);
-  }
-
   function removeResolutionCategoryDraft(index: number) {
     setResolutionCategoryDrafts((current) => current.filter((_, draftIndex) => draftIndex !== index));
     setResolutionCategoriesStatus(null);
@@ -2138,6 +2124,94 @@ export function LibrariesPage() {
           </AsyncPanel>
 
           <AsyncPanel
+            title="Resolution categories"
+            collapseState={{
+              collapsed: !settingsPanelState.resolutionCategories,
+              onToggle: () => toggleSettingsPanel("resolutionCategories"),
+              bodyId: "resolution-categories-panel-body",
+            }}
+          >
+            <div className="settings-sidebar-stack">
+              <p className="field-hint">
+                Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
+              </p>
+              <div className="resolution-category-settings">
+                {resolutionCategoryDrafts.map((category, index) => (
+                  <div className="resolution-category-row" key={category.id}>
+                    <div className="field">
+                      <label htmlFor={`resolution-category-label-${category.id}`}>Label</label>
+                      <input
+                        id={`resolution-category-label-${category.id}`}
+                        type="text"
+                        value={category.label}
+                        onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
+                      <input
+                        id={`resolution-category-width-${category.id}`}
+                        type="number"
+                        min={0}
+                        value={category.min_width}
+                        onChange={(event) =>
+                          updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
+                      <input
+                        id={`resolution-category-height-${category.id}`}
+                        type="number"
+                        min={0}
+                        value={category.min_height}
+                        onChange={(event) =>
+                          updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
+                        }
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary icon-only-button"
+                      aria-label={`Remove resolution category ${category.label || category.id}`}
+                      title={`Remove resolution category ${category.label || category.id}`}
+                      onClick={() => removeResolutionCategoryDraft(index)}
+                      disabled={resolutionCategoryDrafts.length <= 1}
+                    >
+                      <Trash2 aria-hidden="true" className="nav-icon" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="resolution-category-actions">
+                <button type="button" className="secondary" onClick={addResolutionCategoryDraft}>
+                  Add resolution category
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void saveResolutionCategories()}
+                  disabled={!appSettingsLoaded || isSavingResolutionCategories || resolutionCategoryChangeKind === "none"}
+                >
+                  Save resolution categories
+                </button>
+              </div>
+              {resolutionCategoryChangeKind === "labels" ? (
+                <p className="field-hint">
+                  Saving now updates labels only. Search and detail pills change immediately; quality scores stay as-is.
+                </p>
+              ) : null}
+              {resolutionCategoryChangeKind === "logic" ? (
+                <p className="field-hint">
+                  Saving now updates bucket logic and queues quality-score recomputation for affected libraries.
+                </p>
+              ) : null}
+              {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
+            </div>
+          </AsyncPanel>
+
+          <AsyncPanel
             title={t("scanLogs.title")}
             subtitle={t("scanLogs.subtitle")}
             loading={isLoadingRecentScanJobs}
@@ -2371,106 +2445,6 @@ export function LibrariesPage() {
                   <option value="dark">{t("theme.dark")}</option>
                 </select>
                 <p className="field-hint">{t("libraries.themeHint")}</p>
-              </div>
-              <div className="field">
-                <div className="field-label-row">
-                  <label>Resolution categories</label>
-                </div>
-                <p className="field-hint">
-                  Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
-                </p>
-                <div className="settings-sidebar-stack">
-                  {resolutionCategoryDrafts.map((category, index) => (
-                    <div className="media-card" key={category.id}>
-                      <div className="field">
-                        <label htmlFor={`resolution-category-label-${category.id}`}>Label</label>
-                        <input
-                          id={`resolution-category-label-${category.id}`}
-                          type="text"
-                          value={category.label}
-                          onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
-                        />
-                      </div>
-                      <div className="field-row">
-                        <div className="field">
-                          <label htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
-                          <input
-                            id={`resolution-category-width-${category.id}`}
-                            type="number"
-                            min={0}
-                            value={category.min_width}
-                            onChange={(event) =>
-                              updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
-                            }
-                          />
-                        </div>
-                        <div className="field">
-                          <label htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
-                          <input
-                            id={`resolution-category-height-${category.id}`}
-                            type="number"
-                            min={0}
-                            value={category.min_height}
-                            onChange={(event) =>
-                              updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="meta-tags">
-                        <span className="badge">{category.id}</span>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => moveResolutionCategoryDraft(index, -1)}
-                          disabled={index === 0}
-                        >
-                          up
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => moveResolutionCategoryDraft(index, 1)}
-                          disabled={index === resolutionCategoryDrafts.length - 1}
-                        >
-                          down
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => removeResolutionCategoryDraft(index)}
-                          disabled={resolutionCategoryDrafts.length <= 1}
-                        >
-                          remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="field-row">
-                    <button type="button" className="secondary" onClick={addResolutionCategoryDraft}>
-                      Add resolution category
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => void saveResolutionCategories()}
-                      disabled={!appSettingsLoaded || isSavingResolutionCategories || resolutionCategoryChangeKind === "none"}
-                    >
-                      Save resolution categories
-                    </button>
-                  </div>
-                  {resolutionCategoryChangeKind === "labels" ? (
-                    <p className="field-hint">
-                      Saving now updates labels only. Search and detail pills change immediately; quality scores stay as-is.
-                    </p>
-                  ) : null}
-                  {resolutionCategoryChangeKind === "logic" ? (
-                    <p className="field-hint">
-                      Saving now updates bucket logic and queues quality-score recomputation for affected libraries.
-                    </p>
-                  ) : null}
-                  {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
-                </div>
               </div>
               <div className="field">
                 <div className="field-label-row">
