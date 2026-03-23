@@ -1,6 +1,13 @@
 from pydantic import BaseModel, Field
 
 
+class ResolutionCategory(BaseModel):
+    id: str
+    label: str
+    min_width: int = Field(ge=0)
+    min_height: int = Field(ge=0)
+
+
 class FeatureFlagsRead(BaseModel):
     show_dolby_vision_profiles: bool = False
     show_analyzed_files_csv_export: bool = False
@@ -15,6 +22,7 @@ class AppSettingsRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     user_ignore_patterns: list[str] = Field(default_factory=list)
     default_ignore_patterns: list[str] = Field(default_factory=list)
+    resolution_categories: list[ResolutionCategory] = Field(default_factory=list)
     feature_flags: FeatureFlagsRead = Field(default_factory=FeatureFlagsRead)
 
 
@@ -22,4 +30,5 @@ class AppSettingsUpdate(BaseModel):
     ignore_patterns: list[str] | None = None
     user_ignore_patterns: list[str] | None = None
     default_ignore_patterns: list[str] | None = None
+    resolution_categories: list[ResolutionCategory] | None = None
     feature_flags: FeatureFlagsUpdate | None = None

@@ -13,6 +13,7 @@ import {
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
+  type ResolutionCategory,
   type RecentScanJob,
   type ScanJobDetail,
 } from "../lib/api";
@@ -33,6 +34,10 @@ import {
   saveSettingsPanelState,
   type SettingsPanelId,
 } from "../lib/settings-panel-state";
+import {
+  normalizeResolutionCategories,
+  resolutionCategoryChangeSummary,
+} from "../lib/resolution-categories";
 import { useScanJobs } from "../lib/scan-jobs";
 import { useTheme, type ThemePreference } from "../lib/theme";
 
@@ -69,8 +74,6 @@ type IgnorePatternGroup = "user" | "default";
 type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
 
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
-
-const RESOLUTION_OPTIONS = ["sd", "720p", "1080p", "1440p", "4k", "8k"];
 const VIDEO_CODEC_OPTIONS = ["h264", "hevc", "av1"];
 const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
 const AUDIO_CODEC_OPTIONS = ["aac", "ac3", "eac3", "dts", "dts_hd", "truehd", "flac"];
@@ -105,12 +108,38 @@ const ISO_639_1_CODES = new Set([
   "za", "zh", "zu",
 ]);
 const QUALITY_OPTION_RANKS: Record<string, Record<string, number>> = {
-  resolution: Object.fromEntries(RESOLUTION_OPTIONS.map((value, index) => [value, index])),
   video_codec: Object.fromEntries(VIDEO_CODEC_OPTIONS.map((value, index) => [value, index])),
   audio_channels: Object.fromEntries(AUDIO_CHANNEL_OPTIONS.map((value, index) => [value, index])),
   audio_codec: Object.fromEntries(AUDIO_CODEC_OPTIONS.map((value, index) => [value, index])),
   dynamic_range: Object.fromEntries(DYNAMIC_RANGE_OPTIONS.map((value, index) => [value, index])),
 };
+
+type ResolutionCategoryDraft = ResolutionCategory & {
+  persisted: boolean;
+};
+
+function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
+  return categories.map((category) => ({ ...category, persisted: true }));
+}
+
+function createResolutionCategoryId(label: string, drafts: ResolutionCategoryDraft[]): string {
+  const base = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "resolution";
+  let candidate = base;
+  let suffix = 2;
+  while (drafts.some((draft) => draft.id === candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function resolutionCategoryRanks(categories: ResolutionCategory[]): Record<string, number> {
+  return Object.fromEntries(categories.map((category, index) => [category.id, categories.length - index]));
+}
 
 function cloneQualityProfile(profile: QualityProfile): QualityProfile {
   return JSON.parse(JSON.stringify(profile)) as QualityProfile;
@@ -308,12 +337,19 @@ export function LibrariesPage() {
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
+  const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
+  const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
+  const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
+  const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
+  const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
+  const resolutionOptionIds = resolutionOptions.map((category) => category.id);
+  const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
@@ -574,10 +610,13 @@ export function LibrariesPage() {
       return;
     }
     const persisted = toPersistedIgnorePatterns(appSettings);
+    const persistedResolution = normalizeResolutionCategories(appSettings.resolution_categories);
     persistedIgnorePatterns.current = persisted;
+    persistedResolutionCategories.current = persistedResolution;
     ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
     setUserIgnorePatternInputs(persisted.user);
     setDefaultIgnorePatternInputs(persisted.default);
+    setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
   }, [appSettings, appSettingsLoaded]);
@@ -799,10 +838,12 @@ export function LibrariesPage() {
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles: boolean,
     nextShowAnalyzedFilesCsvExport: boolean,
+    nextResolutionCategories?: ResolutionCategory[],
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
       default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
+      ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
       feature_flags: {
         show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
@@ -815,6 +856,7 @@ export function LibrariesPage() {
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles = showDolbyVisionProfiles,
     nextShowAnalyzedFilesCsvExport = showAnalyzedFilesCsvExport,
+    nextResolutionCategories?: ResolutionCategory[],
   ) {
     const requestId = ignorePatternsRequestId.current + 1;
     ignorePatternsRequestId.current = requestId;
@@ -825,6 +867,7 @@ export function LibrariesPage() {
         nextDefaultPatterns,
         nextShowDolbyVisionProfiles,
         nextShowAnalyzedFilesCsvExport,
+        nextResolutionCategories,
       );
       const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
@@ -836,8 +879,11 @@ export function LibrariesPage() {
         setDefaultIgnorePatternInputs(persisted.default);
         setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+        persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
+        setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
+        setResolutionCategoriesStatus(null);
       }
       setAppSettings(updated);
       return persisted;
@@ -902,6 +948,97 @@ export function LibrariesPage() {
       setFeatureFlagsStatus((reason as Error).message);
     } finally {
       setIsSavingFeatureFlags(false);
+    }
+  }
+
+  function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
+    setResolutionCategoryDrafts((current) =>
+      current.map((draft, draftIndex) => (draftIndex === index ? { ...draft, ...patch } : draft)),
+    );
+    setResolutionCategoriesStatus(null);
+  }
+
+  function addResolutionCategoryDraft() {
+    setResolutionCategoryDrafts((current) => {
+      const next = [...current];
+      next.splice(Math.max(0, next.length - 1), 0, {
+        id: createResolutionCategoryId("custom", current),
+        label: "Custom",
+        min_width: 1920,
+        min_height: 800,
+        persisted: false,
+      });
+      return next;
+    });
+    setResolutionCategoriesStatus(null);
+  }
+
+  function moveResolutionCategoryDraft(index: number, direction: -1 | 1) {
+    setResolutionCategoryDrafts((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+      const next = [...current];
+      const [item] = next.splice(index, 1);
+      next.splice(targetIndex, 0, item);
+      return next;
+    });
+    setResolutionCategoriesStatus(null);
+  }
+
+  function removeResolutionCategoryDraft(index: number) {
+    setResolutionCategoryDrafts((current) => current.filter((_, draftIndex) => draftIndex !== index));
+    setResolutionCategoriesStatus(null);
+  }
+
+  async function saveResolutionCategories() {
+    const nextCategories = normalizeResolutionCategories(
+      resolutionCategoryDrafts.map(({ persisted, ...category }) => category),
+    );
+    const changeKind = resolutionCategoryChangeSummary(persistedResolutionCategories.current, nextCategories);
+    if (changeKind === "none") {
+      setResolutionCategoriesStatus(null);
+      return;
+    }
+
+    if (changeKind === "labels") {
+      const confirmed = window.confirm(
+        "Saving these changes updates resolution labels in statistics, search, and detail views. Quality scores will not be recomputed.",
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    if (changeKind === "logic") {
+      const confirmed = window.confirm(
+        "Saving these changes updates resolution matching and queues quality-score recomputation for affected libraries.",
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setIsSavingResolutionCategories(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        showAnalyzedFilesCsvExport,
+        nextCategories,
+      );
+      const normalized = normalizeResolutionCategories(updated.resolution_categories);
+      persistedResolutionCategories.current = normalized;
+      setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(normalized));
+      setResolutionCategoriesStatus(null);
+      setIgnorePatternsStatus(null);
+      setFeatureFlagsStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setResolutionCategoriesStatus((reason as Error).message);
+    } finally {
+      setIsSavingResolutionCategories(false);
     }
   }
 
@@ -1409,6 +1546,7 @@ export function LibrariesPage() {
       onDraftChange: (value: string) => void;
       onSubmit: () => void;
     },
+    optionLabels?: Map<string, string>,
   ) {
     const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
     const displayOptions = [...new Set([...options, ...values])];
@@ -1426,7 +1564,7 @@ export function LibrariesPage() {
               {values.length > 0 ? (
                 values.map((value) => (
                   <span className="badge quality-picker-chip" key={`${fieldKey}-${value}`}>
-                    {value}
+                    {optionLabels?.get(value) ?? value}
                   </span>
                 ))
               ) : (
@@ -1480,7 +1618,7 @@ export function LibrariesPage() {
                       onSelect(option);
                     }}
                   >
-                    <span>{option}</span>
+                    <span>{optionLabels?.get(option) ?? option}</span>
                   </button>
                 );
               })}
@@ -1516,10 +1654,11 @@ export function LibrariesPage() {
     library: LibrarySummary,
     key: "resolution" | "video_codec" | "audio_channels" | "audio_codec" | "dynamic_range",
     options: string[],
+    labels?: Map<string, string>,
   ) {
     const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
     const category = profile[key];
-    const ranks = QUALITY_OPTION_RANKS[key];
+    const ranks = key === "resolution" ? resolutionCategoryRanks(resolutionOptions) : QUALITY_OPTION_RANKS[key];
     const minimumValue = String(category.minimum);
     const idealValue = String(category.ideal);
     const disabledForMinimum = new Set(
@@ -1541,6 +1680,9 @@ export function LibrariesPage() {
           (value) => updateOrderedQualityBoundary(library.id, key, "minimum", value),
           undefined,
           disabledForMinimum,
+          undefined,
+          undefined,
+          labels,
         )}
         {renderPickerField(
           library.id,
@@ -1551,6 +1693,9 @@ export function LibrariesPage() {
           (value) => updateOrderedQualityBoundary(library.id, key, "ideal", value),
           undefined,
           disabledForIdeal,
+          undefined,
+          undefined,
+          labels,
         )}
         {renderQualityWeightField(
           t("libraries.quality.weight"),
@@ -1569,7 +1714,7 @@ export function LibrariesPage() {
     const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
     return (
       <div className="quality-settings-panel field-span-full">
-        {renderQualityOrdinalRow(library, "resolution", RESOLUTION_OPTIONS)}
+        {renderQualityOrdinalRow(library, "resolution", resolutionOptionIds, resolutionOptionLabels)}
         {renderQualityOrdinalRow(library, "video_codec", VIDEO_CODEC_OPTIONS)}
         {renderQualityOrdinalRow(library, "audio_channels", AUDIO_CHANNEL_OPTIONS)}
         {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS)}
@@ -1718,6 +1863,14 @@ export function LibrariesPage() {
       </div>
     );
   }
+
+  const normalizedResolutionDrafts = normalizeResolutionCategories(
+    resolutionCategoryDrafts.map(({ persisted, ...category }) => category),
+  );
+  const resolutionCategoryChangeKind = resolutionCategoryChangeSummary(
+    persistedResolutionCategories.current,
+    normalizedResolutionDrafts,
+  );
 
   return (
     <>
@@ -2218,6 +2371,106 @@ export function LibrariesPage() {
                   <option value="dark">{t("theme.dark")}</option>
                 </select>
                 <p className="field-hint">{t("libraries.themeHint")}</p>
+              </div>
+              <div className="field">
+                <div className="field-label-row">
+                  <label>Resolution categories</label>
+                </div>
+                <p className="field-hint">
+                  Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
+                </p>
+                <div className="settings-sidebar-stack">
+                  {resolutionCategoryDrafts.map((category, index) => (
+                    <div className="media-card" key={category.id}>
+                      <div className="field">
+                        <label htmlFor={`resolution-category-label-${category.id}`}>Label</label>
+                        <input
+                          id={`resolution-category-label-${category.id}`}
+                          type="text"
+                          value={category.label}
+                          onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
+                        />
+                      </div>
+                      <div className="field-row">
+                        <div className="field">
+                          <label htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
+                          <input
+                            id={`resolution-category-width-${category.id}`}
+                            type="number"
+                            min={0}
+                            value={category.min_width}
+                            onChange={(event) =>
+                              updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
+                            }
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
+                          <input
+                            id={`resolution-category-height-${category.id}`}
+                            type="number"
+                            min={0}
+                            value={category.min_height}
+                            onChange={(event) =>
+                              updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="meta-tags">
+                        <span className="badge">{category.id}</span>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => moveResolutionCategoryDraft(index, -1)}
+                          disabled={index === 0}
+                        >
+                          up
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => moveResolutionCategoryDraft(index, 1)}
+                          disabled={index === resolutionCategoryDrafts.length - 1}
+                        >
+                          down
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => removeResolutionCategoryDraft(index)}
+                          disabled={resolutionCategoryDrafts.length <= 1}
+                        >
+                          remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="field-row">
+                    <button type="button" className="secondary" onClick={addResolutionCategoryDraft}>
+                      Add resolution category
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void saveResolutionCategories()}
+                      disabled={!appSettingsLoaded || isSavingResolutionCategories || resolutionCategoryChangeKind === "none"}
+                    >
+                      Save resolution categories
+                    </button>
+                  </div>
+                  {resolutionCategoryChangeKind === "labels" ? (
+                    <p className="field-hint">
+                      Saving now updates labels only. Search and detail pills change immediately; quality scores stay as-is.
+                    </p>
+                  ) : null}
+                  {resolutionCategoryChangeKind === "logic" ? (
+                    <p className="field-hint">
+                      Saving now updates bucket logic and queues quality-score recomputation for affected libraries.
+                    </p>
+                  ) : null}
+                  {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
+                </div>
               </div>
               <div className="field">
                 <div className="field-label-row">

@@ -10,6 +10,7 @@ from backend.app.schemas.quality import QualityBreakdownRead
 class DistributionItem(BaseModel):
     label: str
     value: int
+    filter_value: str | None = None
 
 
 class MediaFormatRead(BaseModel):
@@ -87,6 +88,8 @@ class MediaFileTableRow(BaseModel):
     duration: float | None = None
     video_codec: str | None = None
     resolution: str | None = None
+    resolution_category_id: str | None = None
+    resolution_category_label: str | None = None
     hdr_type: str | None = None
     audio_codecs: list[str] = Field(default_factory=list)
     audio_languages: list[str] = Field(default_factory=list)

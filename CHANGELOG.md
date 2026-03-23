@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+- Added global, configurable resolution categories in App Settings so grouped buckets like `4k`, `1080p`, or custom labels can be renamed, reordered, added, and removed
+- Switched resolution statistics, metadata resolution search, file-detail resolution badges, and resolution quality scoring to use the shared resolution-category configuration
+
 ### 🐛 Bug fixes
 - Fixed the release automation so desktop installers are built from the tagged release ref and the desktop release workflow is triggered explicitly after publishing a GitHub release, ensuring `.dmg`, `.exe`, and `AppImage` assets attach reliably
 - Refreshed active scan jobs immediately when the web UI loads and tightened scan polling so Docker/server scans show their banner and progress sooner

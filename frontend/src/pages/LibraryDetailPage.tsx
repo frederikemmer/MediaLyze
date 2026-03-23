@@ -1035,8 +1035,9 @@ export function LibraryDetailPage() {
                 : getLibraryStatisticPanelItems(libraryStatistics, panel);
             const formattedItems: DistributionListEntry[] = items.map((item) => {
               const rawLabel = item.label;
+              const filterValue = item.filter_value ?? rawLabel;
               const label = panel.panelFormatKind ? formatCodecLabel(rawLabel, panel.panelFormatKind) : rawLabel;
-              const isApplied = hasSearchValueTokens(fieldValues[panel.id], rawLabel);
+              const isApplied = hasSearchValueTokens(fieldValues[panel.id], filterValue);
               return {
                 key: `${panel.id}:${rawLabel}`,
                 label,
@@ -1051,7 +1052,7 @@ export function LibraryDetailPage() {
                       field: t(panel.nameKey),
                       value: label,
                     }),
-                onClick: statisticsError || !libraryStatistics ? undefined : () => applyStatisticFilter(panel.id, rawLabel),
+                onClick: statisticsError || !libraryStatistics ? undefined : () => applyStatisticFilter(panel.id, filterValue),
               };
             });
             return (

@@ -227,3 +227,44 @@ def test_visual_density_uses_real_file_size_to_penalize_short_bloated_files() ->
 
     assert density.actual == 1.6
     assert density.score == 3.0
+
+
+def test_quality_score_uses_dynamic_resolution_categories() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=14000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="hevc",
+                profile="Main 10",
+                width=3840,
+                height=1606,
+                pix_fmt="yuv420p10le",
+                color_space=None,
+                color_transfer="smpte2084",
+                color_primaries=None,
+                frame_rate=23.976,
+                bit_rate=12000000,
+                hdr_type="HDR10",
+            )
+        ],
+    )
+
+    breakdown = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={"resolution": {"weight": 8, "minimum": "1080p", "ideal": "4k"}},
+        resolution_categories=[
+            {"id": "4k", "label": "UHD", "min_width": 3840, "min_height": 2160},
+            {"id": "1080p", "label": "Full HD", "min_width": 1920, "min_height": 1080},
+            {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+        ],
+    )
+    resolution = next(category for category in breakdown.categories if category.key == "resolution")
+
+    assert resolution.actual == "4k"

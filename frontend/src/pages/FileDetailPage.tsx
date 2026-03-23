@@ -55,7 +55,13 @@ export function FileDetailPage() {
         </div>
         <div className="meta-tags">
           <span className="badge">{file?.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileDetail.unknownCodec")}</span>
-          <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
+          {file?.resolution_category_label ? (
+            <TooltipTrigger ariaLabel="Show exact resolution" content={file.resolution ?? t("fileDetail.unknownResolution")}>
+              <span className="badge">{file.resolution_category_label}</span>
+            </TooltipTrigger>
+          ) : (
+            <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
+          )}
           <span className="badge">{formatHdrType(file?.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr")}</span>
         </div>
         <div className="card-grid grid">

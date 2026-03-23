@@ -342,6 +342,7 @@ Current behavior:
 * every library stores a `quality_profile`
 * library updates can modify the profile
 * profile changes can queue quality recomputation jobs
+* the `resolution` quality category is now backed by global app-level resolution categories rather than a fixed hard-coded set
 * visual density scoring uses actual file size and explicit bounds, not only bitrate metadata
 * dynamic range scoring normalizes Dolby Vision variants to the intended score tier
 
@@ -355,7 +356,7 @@ Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
 * video codec distribution
-* resolution distribution
+* resolution distribution grouped by global resolution categories
 * HDR / dynamic range distribution
 * audio codec distribution
 * audio language distribution
@@ -392,6 +393,8 @@ Current searchable/filterable dimensions include:
 * subtitle languages
 * subtitle codecs
 * subtitle source
+
+Resolution search supports both exact `WIDTHxHEIGHT` terms and global resolution-category ids / labels. The analyzed-files table still shows exact stored resolutions, while grouped categories are used for statistics and the file-detail resolution badge.
 
 The backend supports:
 
@@ -503,6 +506,7 @@ Important current payload concepts:
 * `ignore_patterns`
 * `user_ignore_patterns`
 * `default_ignore_patterns`
+* `resolution_categories`
 * `feature_flags.show_dolby_vision_profiles`
 
 ## 9.4 Libraries
@@ -535,6 +539,8 @@ Important file contract concepts:
 * `quality_score_raw`
 * `quality_score_breakdown`
 * `raw_ffprobe_json`
+* `resolution_category_id`
+* `resolution_category_label`
 * `subtitle_type`
 
 ## 9.6 Scan Job Contract

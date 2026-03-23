@@ -27,6 +27,8 @@ function createFileDetail(): MediaFileDetail {
     duration: 3360,
     video_codec: "hevc",
     resolution: "3840x1606",
+    resolution_category_id: "4k",
+    resolution_category_label: "UHD",
     hdr_type: "Dolby Vision",
     audio_codecs: ["eac3"],
     audio_languages: ["en"],
@@ -91,7 +93,7 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByText("3840x1606")).toBeInTheDocument();
+    expect(await screen.findByText("UHD")).toBeInTheDocument();
     const segments = Array.from(container.querySelectorAll(".path-segment")).map((segment) => segment.textContent);
     expect(segments).toEqual([
       "Shows",
@@ -104,6 +106,9 @@ describe("FileDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show full file name" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.filename));
+
+    fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
+    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
   });
 
   it("stays stable when the quality detail request fails", async () => {
@@ -119,7 +124,7 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByText("3840x1606")).toBeInTheDocument();
+    expect(await screen.findByText("UHD")).toBeInTheDocument();
     expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
     expect(container.querySelectorAll(".path-segment")).toHaveLength(3);
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();

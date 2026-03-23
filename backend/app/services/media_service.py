@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session, selectinload
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
 from backend.app.schemas.media import MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage, MediaFileTableRow
 from backend.app.schemas.quality import QualityBreakdownRead
+from backend.app.services.app_settings import get_app_settings
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.media_search import (
     LibraryFileSearchFilters,
     apply_field_search_filters,
     apply_legacy_search,
 )
+from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.video_queries import primary_video_streams_subquery
 
 FileSortKey = Literal[
@@ -91,12 +93,15 @@ def _subtitle_sources(media_file: MediaFile) -> list[str]:
     return sorted(sources)
 
 
-def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
+def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaFileTableRow:
     primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
     duration = media_file.media_format.duration if media_file.media_format else None
     resolution = None
     if primary_video and primary_video.width and primary_video.height:
         resolution = f"{primary_video.width}x{primary_video.height}"
+    resolution_category = (
+        classify_resolution_category(primary_video.width, primary_video.height, resolution_categories) if primary_video else None
+    )
 
     return MediaFileTableRow(
         id=media_file.id,
@@ -114,6 +119,8 @@ def _row_from_model(media_file: MediaFile) -> MediaFileTableRow:
         duration=duration,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
+        resolution_category_id=resolution_category.id if resolution_category else None,
+        resolution_category_label=resolution_category.label if resolution_category else None,
         hdr_type=primary_video.hdr_type if primary_video else None,
         audio_codecs=sorted({_normalize_audio_codec(stream.codec) for stream in media_file.audio_streams}),
         audio_languages=sorted({normalize_language_code(stream.language) or "und" for stream in media_file.audio_streams}),
@@ -297,6 +304,7 @@ def _load_media_files_by_ids(db: Session, selected_ids: list[int]) -> list[Media
 
 
 def _build_library_file_id_query(
+    db: Session,
     library_id: int,
     *,
     search: str = "",
@@ -324,6 +332,7 @@ def _build_library_file_id_query(
         audio_aggregates,
         subtitle_aggregates,
         search_filters,
+        get_app_settings(db).resolution_categories,
     )
     sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
     return filtered_query.order_by(
@@ -425,6 +434,7 @@ def generate_library_files_csv_export(
     sort_direction: FileSortDirection = "asc",
 ) -> tuple[str, Iterator[bytes]]:
     ordered_query = _build_library_file_id_query(
+        db,
         library_id,
         search=search,
         search_filters=search_filters,
@@ -464,7 +474,7 @@ def generate_library_files_csv_export(
             batch_buffer = io.StringIO()
             batch_writer = csv.writer(batch_buffer, lineterminator="\n")
             for media_file in files:
-                batch_writer.writerow(_csv_export_row(_row_from_model(media_file)))
+                batch_writer.writerow(_csv_export_row(_row_from_model(media_file, get_app_settings(db).resolution_categories)))
             yield batch_buffer.getvalue().encode("utf-8")
 
     return filename, iter_csv_chunks()
@@ -482,6 +492,7 @@ def list_library_files(
     sort_direction: FileSortDirection = "asc",
 ) -> MediaFileTablePage:
     ordered_query = _build_library_file_id_query(
+        db,
         library_id,
         search=search,
         search_filters=search_filters,
@@ -495,11 +506,12 @@ def list_library_files(
         return MediaFileTablePage(total=total, offset=offset, limit=limit, items=[])
 
     files = _load_media_files_by_ids(db, selected_ids)
+    resolution_categories = get_app_settings(db).resolution_categories
     return MediaFileTablePage(
         total=total,
         offset=offset,
         limit=limit,
-        items=[_row_from_model(media_file) for media_file in files],
+        items=[_row_from_model(media_file, resolution_categories) for media_file in files],
     )
 
 
@@ -518,7 +530,7 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
     if not media_file:
         return None
 
-    row = _row_from_model(media_file)
+    row = _row_from_model(media_file, get_app_settings(db).resolution_categories)
     return MediaFileDetail(
         **row.model_dump(),
         media_format=media_file.media_format,

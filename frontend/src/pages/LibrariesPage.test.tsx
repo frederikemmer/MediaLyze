@@ -289,14 +289,59 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
+  it("saves renamed resolution categories through app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
+          { id: "1080p", label: "1080p", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "720p", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderPage();
+
+    const labelInput = (await screen.findByDisplayValue("4k")) as HTMLInputElement;
+    fireEvent.change(labelInput, { target: { value: "UHD" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save resolution categories" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution_categories: expect.arrayContaining([
+            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3840, min_height: 2160 }),
+          ]),
+        }),
+      ),
+    );
+  });
+
   it("clamps visual density maximum when the ideal is raised above it", async () => {
     const library = createLibrarySummary();
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
+          { id: "1080p", label: "Full HD", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "HD", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
 
     renderPage();
 
     await screen.findByText("Movies");
     fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
+    expect(await screen.findByText("UHD")).toBeInTheDocument();
     const visualDensityTitle = await screen.findByText("Visual density");
     const visualDensityGroup = visualDensityTitle.closest(".quality-settings-group");
     if (!(visualDensityGroup instanceof HTMLElement)) {

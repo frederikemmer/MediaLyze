@@ -162,11 +162,15 @@ def app_settings_update(
     payload: AppSettingsUpdate,
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> AppSettingsRead:
     try:
-        return update_app_settings(db, payload, settings)
+        updated_settings, recompute_library_ids = update_app_settings(db, payload, settings, include_effects=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    for library_id in recompute_library_ids:
+        runtime.request_quality_recompute(library_id)
+    return updated_settings
 
 
 @router.post("/scan-jobs/active/cancel", response_model=ScanCancelResponse)

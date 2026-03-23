@@ -111,6 +111,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert stored.value == {
         "user_ignore_patterns": ["*.tmp", "*/cache/*"],
         "default_ignore_patterns": ["*/.DS_Store", "*.tmp", "*/@eaDir/*"],
+        "resolution_categories": [item.model_dump(mode="json") for item in updated.resolution_categories],
         "feature_flags": {
             "show_dolby_vision_profiles": True,
             "show_analyzed_files_csv_export": True,
@@ -134,3 +135,24 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.ignore_patterns == ["[sample]", "*thumbs.db", *BUILT_IN_DEFAULT_IGNORE_PATTERNS[:-1]]
     assert updated.feature_flags.show_dolby_vision_profiles is False
     assert updated.feature_flags.show_analyzed_files_csv_export is False
+
+
+def test_update_app_settings_supports_resolution_category_renames_and_remaps_quality_profiles(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                resolution_categories=[
+                    {"id": "4k", "label": "UHD", "min_width": 3840, "min_height": 2160},
+                    {"id": "1080p", "label": "Full HD", "min_width": 1920, "min_height": 1080},
+                    {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                ]
+            ),
+            settings,
+        )
+
+    assert [item.id for item in updated.resolution_categories] == ["4k", "1080p", "sd"]
+    assert [item.label for item in updated.resolution_categories] == ["UHD", "Full HD", "SD"]
