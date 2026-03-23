@@ -263,7 +263,7 @@ def _resolution_category_clause(primary_video_streams, category_id: str, resolut
     max_edge = resolution_max_edge_expr(primary_video_streams)
     min_edge = resolution_min_edge_expr(primary_video_streams)
     target = categories[target_index]
-    clause = or_(max_edge >= target.min_width, min_edge >= target.min_height)
+    clause = and_(max_edge >= target.min_width, min_edge >= target.min_height)
     higher_categories = categories[:target_index]
     if not higher_categories:
         return clause
@@ -271,7 +271,7 @@ def _resolution_category_clause(primary_video_streams, category_id: str, resolut
         clause,
         ~or_(
             *[
-                or_(max_edge >= category.min_width, min_edge >= category.min_height)
+                and_(max_edge >= category.min_width, min_edge >= category.min_height)
                 for category in higher_categories
             ]
         ),

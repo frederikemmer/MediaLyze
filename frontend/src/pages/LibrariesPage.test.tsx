@@ -289,7 +289,7 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
-  it("saves renamed resolution categories through app settings", async () => {
+  it("auto-saves renamed resolution categories on blur", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         resolution_categories: [
@@ -302,20 +302,63 @@ describe("LibrariesPage ignore patterns", () => {
         ],
       }),
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
 
     const labelInput = (await screen.findByDisplayValue("4k")) as HTMLInputElement;
     fireEvent.change(labelInput, { target: { value: "UHD" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save resolution categories" }));
+    fireEvent.blur(labelInput);
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           resolution_categories: expect.arrayContaining([
-            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3840, min_height: 2160 }),
+            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3840, min_height: 1600 }),
           ]),
+        }),
+      ),
+    );
+  });
+
+  it("restores default resolution categories through app settings", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1080p", label: "Full HD", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "HD", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 3200 },
+          { id: "4k", label: "4k", min_width: 3840, min_height: 1600 },
+          { id: "1080p", label: "1080p", min_width: 1920, min_height: 800 },
+          { id: "720p", label: "720p", min_width: 1280, min_height: 533 },
+          { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByDisplayValue("UHD");
+    fireEvent.click(screen.getByRole("button", { name: "Restore defaults" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution_categories: [
+            expect.objectContaining({ id: "8k", label: "8k", min_width: 7680, min_height: 3200 }),
+            expect.objectContaining({ id: "4k", label: "4k", min_width: 3840, min_height: 1600 }),
+            expect.objectContaining({ id: "1080p", label: "1080p", min_width: 1920, min_height: 800 }),
+            expect.objectContaining({ id: "720p", label: "720p", min_width: 1280, min_height: 533 }),
+            expect.objectContaining({ id: "sd", label: "sd", min_width: 0, min_height: 0 }),
+          ],
         }),
       ),
     );
@@ -405,7 +448,8 @@ describe("LibrariesPage settings panels", () => {
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
     expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save resolution categories" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
   });
 
   it("restores persisted settings panel state from localStorage", async () => {

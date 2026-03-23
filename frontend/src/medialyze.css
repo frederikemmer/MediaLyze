@@ -762,6 +762,11 @@
   border-top: 1px solid rgba(31, 28, 22, 0.08);
 }
 
+.resolution-category-add-row {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .resolution-category-actions {
   display: flex;
   flex-wrap: wrap;

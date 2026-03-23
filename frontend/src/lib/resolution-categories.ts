@@ -1,17 +1,17 @@
 import type { ResolutionCategory } from "./api";
 
 export const DEFAULT_RESOLUTION_CATEGORIES: ResolutionCategory[] = [
-  { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
-  { id: "4k", label: "4k", min_width: 3840, min_height: 2160 },
-  { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
-  { id: "1080p", label: "1080p", min_width: 1920, min_height: 1080 },
-  { id: "720p", label: "720p", min_width: 1280, min_height: 720 },
+  { id: "8k", label: "8k", min_width: 7680, min_height: 3200 },
+  { id: "4k", label: "4k", min_width: 3840, min_height: 1600 },
+  { id: "1080p", label: "1080p", min_width: 1920, min_height: 800 },
+  { id: "720p", label: "720p", min_width: 1280, min_height: 533 },
   { id: "sd", label: "sd", min_width: 0, min_height: 0 },
 ];
 
 export function sortResolutionCategories(categories: ResolutionCategory[]): ResolutionCategory[] {
   return [...categories].sort(
     (left, right) =>
+      (right.min_width * right.min_height) - (left.min_width * left.min_height) ||
       right.min_height - left.min_height ||
       right.min_width - left.min_width ||
       left.id.localeCompare(right.id),

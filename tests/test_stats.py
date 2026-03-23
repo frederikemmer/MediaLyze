@@ -148,3 +148,43 @@ def test_dashboard_groups_similar_resolutions_into_shared_category() -> None:
         dashboard = build_dashboard(db)
 
     assert [item.model_dump(exclude_none=True) for item in dashboard.resolution_distribution] == [{"label": "4k", "value": 2}]
+
+
+def test_dashboard_defaults_cover_letterboxed_cinema_widths() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies-dashboard-cinema",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for index, (width, height) in enumerate(((1920, 800), (2560, 1066), (3840, 1606)), start=1):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=f"movie-{index}.mkv",
+                filename=f"movie-{index}.mkv",
+                extension="mkv",
+                size_bytes=123,
+                mtime=float(index),
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            )
+            db.add(media_file)
+            db.flush()
+            db.add(VideoStream(media_file_id=media_file.id, stream_index=0, codec="hevc", width=width, height=height))
+        db.commit()
+
+        dashboard = build_dashboard(db)
+
+    assert {item.label: item.value for item in dashboard.resolution_distribution} == {
+        "4k": 1,
+        "1080p": 2,
+    }

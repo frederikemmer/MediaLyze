@@ -5,32 +5,32 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 ### ✨ New
-- Added global, configurable resolution categories in App Settings so grouped buckets like `4k`, `1080p`, or custom labels can be renamed, reordered, added, and removed
-- Switched resolution statistics, metadata resolution search, file-detail resolution badges, and resolution quality scoring to use the shared resolution-category configuration
+- feat: global, configurable resolution categories in App Settings
+- feat: backend now uses the shared resolution-category configuration
 
 ### 🐛 Bug fixes
-- Fixed the release automation so desktop installers are built from the tagged release ref and the desktop release workflow is triggered explicitly after publishing a GitHub release, ensuring `.dmg`, `.exe`, and `AppImage` assets attach reliably
-- Refreshed active scan jobs immediately when the web UI loads and tightened scan polling so Docker/server scans show their banner and progress sooner
-- Switched SQLite runtime sessions to `NullPool` to avoid connection-pool exhaustion during scans and concurrent API polling
-- Changed `ffprobe` failures to use `-v error` and a cleaner fallback message so scan logs no longer collapse to `RuntimeError: {`
+- show scan banner earlier through better polling
+- lower default resolution-category minimum heights so cinema-scope and letterboxed releases still map to the expected width-based buckets
 
 ## v0.2.3
 
->2026-03-21
-
 ### ✨ New
-- Added a native Electron-based desktop distribution path for Windows, macOS, and Linux that runs the existing FastAPI + React stack locally with a bundled backend sidecar
-- Added desktop path inspection and absolute-path library support so local folders, mounted network shares, and Windows UNC paths can be selected outside Docker
-- Added release metadata and GitHub Actions scaffolding for desktop packaging, including per-platform release artifacts and dev desktop build jobs
-- Added generated desktop app icons for Windows, macOS, and Linux from the shared `frontend/public/favicon.svg` source asset so release builds attach branded installers instead of default Electron icons
-- Added Tiny Media Manager recycle folders under `*/.deletedByTMM/*` to the built-in default ignore patterns
+
+- feat: native Electron-based desktop app 
+- github: release workflows for Windows, macOS and Linux
+- github: Docker images for `linux/amd64` & `linux/arm64` - by [@patrickjmcd](https://github.com/patrickjmcd)
+- feat: Add `*/.deletedByTMM/*` default ignore pattern for Tiny Media Manager users
 
 ### 🐛 Bug fixes
-- Restricted desktop watch mode to local paths and automatically fell back to scheduled scans for network locations
-- Suppressed per-file `ffprobe` console windows on Windows desktop scans so analysis no longer flashes terminal windows for each media file
-- Improved Windows desktop `ffprobe` handling for network-path scans and surfaced the actual `ffprobe` error text in scan failures
-- Forced packaged desktop builds to prefer the bundled `ffprobe` over any inherited `FFPROBE_PATH` environment override
-- Fixed local Windows desktop backend builds to use the active virtualenv Python instead of failing on a missing `python3` alias
+- various bug related to desktop distribution
+
+### 📚 Documentation
+- local desktop build and packaging documentation
+- expanded README with desktop setup, runtime behavior, and desktop deployment details
+
+### New Contributors
+
+[@patrickjmcd](https://github.com/patrickjmcd) in [#57](https://github.com/frederikemmer/MediaLyze/pull/57)
 
 ## v0.2.2
 

@@ -6,17 +6,15 @@ from dataclasses import dataclass
 from backend.app.schemas.app_settings import ResolutionCategory
 
 DEFAULT_RESOLUTION_CATEGORIES: tuple[ResolutionCategory, ...] = (
-    ResolutionCategory(id="8k", label="8k", min_width=7680, min_height=4320),
-    ResolutionCategory(id="4k", label="4k", min_width=3840, min_height=2160),
-    ResolutionCategory(id="1440p", label="1440p", min_width=2560, min_height=1440),
-    ResolutionCategory(id="1080p", label="1080p", min_width=1920, min_height=1080),
-    ResolutionCategory(id="720p", label="720p", min_width=1280, min_height=720),
+    ResolutionCategory(id="8k", label="8k", min_width=7680, min_height=3200),
+    ResolutionCategory(id="4k", label="4k", min_width=3840, min_height=1600),
+    ResolutionCategory(id="1080p", label="1080p", min_width=1920, min_height=800),
+    ResolutionCategory(id="720p", label="720p", min_width=1280, min_height=533),
     ResolutionCategory(id="sd", label="sd", min_width=0, min_height=0),
 )
 LEGACY_RESOLUTION_ALIASES: dict[str, str] = {
     "2160p": "4k",
     "4k": "4k",
-    "1440p": "1440p",
     "1080p": "1080p",
     "720p": "720p",
     "sd": "sd",
@@ -46,7 +44,7 @@ def _coerce_categories(categories: list[ResolutionCategory] | list[dict] | None)
 
 
 def category_sort_key(category: ResolutionCategory) -> tuple[int, int, str]:
-    return (-category.min_height, -category.min_width, category.id)
+    return (-(category.min_width * category.min_height), -category.min_height, -category.min_width, category.id)
 
 
 def normalize_resolution_category_id(value: str) -> str:
@@ -145,7 +143,7 @@ def classify_resolution_category(
     max_edge, min_edge = normalized
     ordered = _coerce_categories(categories)
     for category in ordered:
-        if max_edge >= category.min_width or min_edge >= category.min_height:
+        if max_edge >= category.min_width and min_edge >= category.min_height:
             return category
     return ordered[-1]
 
