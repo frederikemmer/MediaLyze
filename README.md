@@ -197,6 +197,8 @@ See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short gui
 
 MediaLyze is an open-source project under active development. The current focus is technical media analysis for large self-hosted libraries, with the v1 scope centered on scanning, normalization, statistics, and file inspection.
 
+>mentioned on [selfh.st](https://selfh.st/weekly/2026-03-13/)
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/image?repos=frederikemmer/medialyze&type=date&legend=top-left)](https://www.star-history.com/?repos=frederikemmer%2Fmedialyze&type=date&legend=top-left)

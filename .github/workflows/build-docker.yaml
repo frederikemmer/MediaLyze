@@ -119,3 +119,12 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --title "MediaLyze v${{ steps.version.outputs.version }}" \
             --notes-file release-notes.md
+
+      - name: Trigger desktop release workflow
+        if: steps.state.outputs.release_exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-desktop.yaml \
+            --repo "${GITHUB_REPOSITORY}" \
+            -f tag_name="v${{ steps.version.outputs.version }}"
