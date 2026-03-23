@@ -1407,7 +1407,6 @@ export function LibrariesPage() {
                 type="button"
                 className="secondary icon-only-button"
                 aria-label={t("libraries.ignorePatternsAddAria")}
-                title={t("libraries.ignorePatternsAddAria")}
                 disabled={isSavingIgnorePatterns || !draftValue.trim()}
                 onClick={() => void addIgnorePattern(group)}
               >
@@ -1428,7 +1427,6 @@ export function LibrariesPage() {
                     type="button"
                     className="secondary icon-only-button"
                     aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
-                    title={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
                     disabled={isSavingIgnorePatterns}
                     onClick={() => void removeIgnorePattern(group, index)}
                   >
@@ -1924,7 +1922,6 @@ export function LibrariesPage() {
                             type="button"
                             className="secondary icon-only-button"
                             aria-label={t("libraries.renameAria", { name: library.name })}
-                            title={t("libraries.renameAria", { name: library.name })}
                             onClick={() => void renameLibrary(library)}
                           >
                             <Pencil aria-hidden="true" className="nav-icon" />
@@ -1933,7 +1930,6 @@ export function LibrariesPage() {
                             type="button"
                             className="secondary icon-only-button"
                             aria-label={t("libraries.deleteAria", { name: library.name })}
-                            title={t("libraries.deleteAria", { name: library.name })}
                             onClick={() => void removeLibrary(library.id)}
                           >
                             <Trash2 aria-hidden="true" className="nav-icon" />
@@ -2103,7 +2099,6 @@ export function LibrariesPage() {
                                   setDraggedStatisticId(null);
                                   setDropTargetStatisticId(null);
                                 }}
-                                title={t("libraryStatistics.dragHint")}
                                 aria-hidden="true"
                               >
                                 <GripVertical className="nav-icon" />
@@ -2116,7 +2111,6 @@ export function LibrariesPage() {
                               type="checkbox"
                               checked={visibility.panelEnabled}
                               disabled={!statistic.supportsPanel}
-                              title={!statistic.supportsPanel ? t("libraryStatistics.unavailable") : undefined}
                               onChange={() => toggleStatisticVisibility(statistic.id, "panelEnabled")}
                             />
                           </td>
@@ -2125,7 +2119,6 @@ export function LibrariesPage() {
                               type="checkbox"
                               checked={visibility.tableEnabled}
                               disabled={!statistic.supportsTable}
-                              title={!statistic.supportsTable ? t("libraryStatistics.unavailable") : undefined}
                               onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
                             />
                           </td>
@@ -2134,7 +2127,6 @@ export function LibrariesPage() {
                               type="checkbox"
                               checked={visibility.dashboardEnabled}
                               disabled={!statistic.supportsDashboard}
-                              title={!statistic.supportsDashboard ? t("libraryStatistics.unavailable") : undefined}
                               onChange={() => toggleStatisticVisibility(statistic.id, "dashboardEnabled")}
                             />
                           </td>
@@ -2197,7 +2189,6 @@ export function LibrariesPage() {
                     type="button"
                     className="secondary icon-only-button"
                     aria-label="Add resolution category"
-                    title="Add resolution category"
                     onClick={() => void addResolutionCategoryDraft()}
                     disabled={!newResolutionCategoryDraft.label.trim() || isSavingResolutionCategories}
                   >
@@ -2246,7 +2237,6 @@ export function LibrariesPage() {
                       type="button"
                       className="secondary icon-only-button"
                       aria-label={`Remove resolution category ${category.label || category.id}`}
-                      title={`Remove resolution category ${category.label || category.id}`}
                       onClick={() => void removeResolutionCategoryDraft(index)}
                       disabled={resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories}
                     >

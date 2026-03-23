@@ -983,7 +983,6 @@ export function LibraryDetailPage() {
         type="button"
         className={className}
         aria-label={t("libraryDetail.export.aria")}
-        title={t(isExporting ? "libraryDetail.export.exporting" : "libraryDetail.export.tooltip")}
         disabled={!displayLibrary || isExporting || hasInvalidSearchField}
         onClick={() => void exportCsv()}
       >
@@ -1095,7 +1094,6 @@ export function LibraryDetailPage() {
                   aria-expanded={pickerOpen}
                   aria-controls="library-search-picker"
                   aria-label={t("libraryDetail.searchFields.addMetadataAria")}
-                  title={t("libraryDetail.searchFields.addMetadata")}
                   onClick={() => setPickerOpen((current) => !current)}
                 >
                   <Plus size={18} aria-hidden="true" />

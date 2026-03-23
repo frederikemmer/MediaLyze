@@ -126,7 +126,6 @@ export function AppShell() {
                 type="button"
                 className="scan-banner-stop"
                 aria-label={t("scanBanner.stopAria")}
-                title={t("scanBanner.stopAria")}
                 disabled={stoppingScans}
                 onClick={async () => {
                   setStoppingScans(true);

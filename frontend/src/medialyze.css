@@ -1266,15 +1266,21 @@
   box-sizing: border-box;
   appearance: none;
   flex-shrink: 0;
+  box-shadow: none;
+  transform: none;
 }
 
 .tooltip-trigger:hover {
   color: var(--ink);
+  box-shadow: none;
+  transform: none;
 }
 
 .tooltip-trigger:focus-visible {
   outline: 2px solid rgba(31, 28, 22, 0.22);
   outline-offset: 2px;
+  box-shadow: none;
+  transform: none;
 }
 
 .tooltip-portal {
