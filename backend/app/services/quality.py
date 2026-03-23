@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
+from backend.app.schemas.app_settings import ResolutionCategory
 from backend.app.schemas.quality import (
     QualityBreakdownRead,
     QualityCategoryBreakdownRead,
@@ -14,16 +15,14 @@ from backend.app.schemas.quality import (
 )
 from backend.app.services.ffprobe_parser import ProbeResult
 from backend.app.services.languages import normalize_language_code
+from backend.app.services.resolution_categories import (
+    classify_resolution_category,
+    default_resolution_categories,
+    resolve_resolution_category_fallback,
+    resolution_category_rank_map,
+)
 
 
-RESOLUTION_RANKS = {
-    "sd": 1.0,
-    "720p": 2.0,
-    "1080p": 3.0,
-    "1440p": 4.0,
-    "4k": 5.0,
-    "8k": 6.0,
-}
 VIDEO_CODEC_RANKS = {
     "h264": 1.0,
     "hevc": 2.0,
@@ -95,10 +94,22 @@ def default_quality_profile() -> dict[str, Any]:
     return QualityProfile().model_dump(mode="json")
 
 
-def normalize_quality_profile(payload: dict[str, Any] | QualityProfile | None) -> dict[str, Any]:
+def normalize_quality_profile(
+    payload: dict[str, Any] | QualityProfile | None,
+    resolution_categories: list[ResolutionCategory] | None = None,
+) -> dict[str, Any]:
+    categories = resolution_categories or default_resolution_categories()
     profile = payload if isinstance(payload, QualityProfile) else QualityProfile.model_validate(payload or {})
+    resolution_minimum = resolve_resolution_category_fallback(str(profile.resolution.minimum), categories)
+    resolution_ideal = resolve_resolution_category_fallback(str(profile.resolution.ideal), categories)
     normalized = profile.model_copy(
         update={
+            "resolution": profile.resolution.model_copy(
+                update={
+                    "minimum": resolution_minimum,
+                    "ideal": resolution_ideal,
+                }
+            ),
             "language_preferences": profile.language_preferences.model_copy(
                 update={
                     "audio_languages": _normalized_language_list(profile.language_preferences.audio_languages),
@@ -185,20 +196,24 @@ def build_quality_score_input_from_media_file(media_file) -> QualityScoreInput:
 def calculate_quality_score(
     score_input: QualityScoreInput,
     quality_profile: dict[str, Any] | QualityProfile | None = None,
+    resolution_categories: list[ResolutionCategory] | None = None,
 ) -> QualityBreakdownRead:
-    profile = QualityProfile.model_validate(normalize_quality_profile(quality_profile))
+    categories = resolution_categories or default_resolution_categories()
+    resolution_ranks = resolution_category_rank_map(categories)
+    profile = QualityProfile.model_validate(normalize_quality_profile(quality_profile, categories))
     primary_video = _primary_video_stream(score_input.video_streams)
     selected_audio = _select_audio_stream(score_input.audio_streams, profile.language_preferences.audio_languages)
+    resolution_category = (
+        classify_resolution_category(primary_video.width, primary_video.height, categories) if primary_video else None
+    )
 
     categories = [
         _rank_category(
             key="resolution",
             config=profile.resolution,
-            actual_key=_resolution_bucket(primary_video.width, primary_video.height) if primary_video else None,
-            actual_value=RESOLUTION_RANKS.get(_resolution_bucket(primary_video.width, primary_video.height))
-            if primary_video
-            else None,
-            ranks=RESOLUTION_RANKS,
+            actual_key=resolution_category.id if resolution_category else None,
+            actual_value=resolution_ranks.get(resolution_category.id) if resolution_category else None,
+            ranks=resolution_ranks,
             missing_is_zero=True,
         ),
         _numeric_category(
@@ -274,24 +289,6 @@ def _normalized_language_list(values: list[str]) -> list[str]:
 
 def _primary_video_stream(video_streams: list[QualityVideoStream]) -> QualityVideoStream | None:
     return min(video_streams, key=lambda stream: stream.stream_index, default=None)
-
-
-def _resolution_bucket(width: int | None, height: int | None) -> str | None:
-    if not width or not height:
-        return None
-    max_edge = max(width, height)
-    min_edge = min(width, height)
-    if max_edge >= 7680 or min_edge >= 4320:
-        return "8k"
-    if max_edge >= 3840 or min_edge >= 2160:
-        return "4k"
-    if max_edge >= 2560 or min_edge >= 1440:
-        return "1440p"
-    if max_edge >= 1920 or min_edge >= 1080:
-        return "1080p"
-    if max_edge >= 1280 or min_edge >= 720:
-        return "720p"
-    return "sd"
 
 
 def _normalize_video_codec(value: str | None) -> str | None:

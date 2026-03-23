@@ -446,6 +446,39 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("uses stable resolution filter values when statistics provide them", async () => {
+    const libraryId = 777;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(
+      createLibraryStatistics({
+        resolution_distribution: [{ label: "UHD", value: 2, filter_value: "4k" }],
+      }),
+    );
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by resolution: uhd/i }));
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            resolution: "4k",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("combines file/path and metadata filters in the same request", async () => {
     const libraryId = 505;
     vi.spyOn(api, "appSettings").mockResolvedValue({

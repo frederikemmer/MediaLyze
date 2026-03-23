@@ -1,6 +1,14 @@
 export type DistributionItem = {
   label: string;
   value: number;
+  filter_value?: string | null;
+};
+
+export type ResolutionCategory = {
+  id: string;
+  label: string;
+  min_width: number;
+  min_height: number;
 };
 
 export type QualityCategoryConfig = {
@@ -120,6 +128,8 @@ export type MediaFileRow = {
   duration: number | null;
   video_codec: string | null;
   resolution: string | null;
+  resolution_category_id?: string | null;
+  resolution_category_label?: string | null;
   hdr_type: string | null;
   audio_codecs: string[];
   audio_languages: string[];
@@ -210,6 +220,7 @@ export type AppSettings = {
   ignore_patterns: string[];
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
+  resolution_categories?: ResolutionCategory[];
   feature_flags: {
     show_dolby_vision_profiles: boolean;
     show_analyzed_files_csv_export: boolean;
@@ -485,6 +496,7 @@ export const api = {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
+    resolution_categories?: ResolutionCategory[];
     feature_flags?: {
       show_dolby_vision_profiles?: boolean;
       show_analyzed_files_csv_export?: boolean;

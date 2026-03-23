@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
-from backend.app.models.entities import AppSetting
+from backend.app.models.entities import AppSetting, Library
 from backend.app.schemas.app_settings import (
     AppSettingsRead,
     AppSettingsUpdate,
     FeatureFlagsRead,
+    ResolutionCategory,
+)
+from backend.app.services.quality import normalize_quality_profile
+from backend.app.services.resolution_categories import (
+    ResolutionCategoryUpdateResult,
+    default_resolution_categories,
+    normalize_resolution_categories,
+    resolve_resolution_category_fallback,
 )
 from backend.app.utils.glob_patterns import normalize_ignore_patterns
 
@@ -82,11 +91,16 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         normalized_user = []
         normalized_default = _seeded_default_ignore_patterns(settings)
     feature_flags = _deserialize_feature_flags(payload.get("feature_flags"))
+    resolution_categories_payload = payload.get("resolution_categories")
+    normalized_resolution_categories = normalize_resolution_categories(
+        resolution_categories_payload if isinstance(resolution_categories_payload, list) else None
+    ).categories
 
     return AppSettingsRead(
         ignore_patterns=_merge_ignore_patterns(normalized_user, normalized_default),
         user_ignore_patterns=normalized_user,
         default_ignore_patterns=normalized_default,
+        resolution_categories=normalized_resolution_categories,
         feature_flags=feature_flags,
     )
 
@@ -99,12 +113,45 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
             user_ignore_patterns=[],
             default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
+            resolution_categories=default_resolution_categories(),
             feature_flags=_default_feature_flags(),
         )
     return _deserialize_app_settings(setting.value, resolved_settings)
 
 
-def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Settings | None = None) -> AppSettingsRead:
+def _update_libraries_for_resolution_categories(
+    db: Session,
+    categories: list[ResolutionCategory],
+    current_categories: list[ResolutionCategory],
+) -> list[int]:
+    affected_library_ids: list[int] = []
+    current_ids = {item.id for item in current_categories}
+    next_ids = {item.id for item in categories}
+    removed_ids = current_ids - next_ids
+
+    for library in db.scalars(select(Library).order_by(Library.id.asc())).all():
+        current_profile = normalize_quality_profile(library.quality_profile, current_categories)
+        next_profile = normalize_quality_profile(current_profile, categories)
+        if removed_ids:
+            for key in ("minimum", "ideal"):
+                next_profile["resolution"][key] = resolve_resolution_category_fallback(
+                    str(current_profile["resolution"][key]),
+                    categories,
+                )
+        if current_profile != next_profile or library.quality_profile != next_profile:
+            library.quality_profile = next_profile
+            affected_library_ids.append(library.id)
+
+    return affected_library_ids
+
+
+def update_app_settings(
+    db: Session,
+    payload: AppSettingsUpdate,
+    settings: Settings | None = None,
+    *,
+    include_effects: bool = False,
+) -> AppSettingsRead | tuple[AppSettingsRead, list[int]]:
     current = get_app_settings(db, settings)
 
     update_user_patterns = payload.user_ignore_patterns is not None
@@ -125,9 +172,32 @@ def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Setti
         if update_default_patterns
         else current.default_ignore_patterns
     )
+    resolution_update: ResolutionCategoryUpdateResult
+    if payload.resolution_categories is not None:
+        resolution_update = normalize_resolution_categories(
+            payload.resolution_categories,
+            existing_categories=current.resolution_categories,
+        )
+        next_resolution_categories = resolution_update.categories
+    else:
+        resolution_update = ResolutionCategoryUpdateResult(
+            categories=current.resolution_categories,
+            changed=False,
+            logic_changed=False,
+            removed_ids=set(),
+        )
+        next_resolution_categories = current.resolution_categories
     next_feature_flags = current.feature_flags.model_copy(
         update=payload.feature_flags.model_dump(exclude_none=True) if payload.feature_flags is not None else {}
     )
+
+    affected_library_ids: list[int] = []
+    if resolution_update.changed:
+        affected_library_ids = _update_libraries_for_resolution_categories(
+            db,
+            next_resolution_categories,
+            current.resolution_categories,
+        )
 
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
     if setting is None:
@@ -137,11 +207,16 @@ def update_app_settings(db: Session, payload: AppSettingsUpdate, settings: Setti
     setting.value = {
         "user_ignore_patterns": next_user_ignore_patterns,
         "default_ignore_patterns": next_default_ignore_patterns,
+        "resolution_categories": [item.model_dump(mode="json") for item in next_resolution_categories],
         "feature_flags": next_feature_flags.model_dump(mode="json"),
     }
     db.commit()
     db.refresh(setting)
-    return _deserialize_app_settings(setting.value, settings or get_settings())
+    result = _deserialize_app_settings(setting.value, settings or get_settings())
+    if include_effects:
+        recompute_library_ids = affected_library_ids if resolution_update.logic_changed else []
+        return result, recompute_library_ids
+    return result
 
 
 def get_ignore_patterns(db: Session, settings: Settings | None = None) -> tuple[str, ...]:

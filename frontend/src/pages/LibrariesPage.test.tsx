@@ -289,14 +289,102 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
+  it("auto-saves renamed resolution categories on blur", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
+          { id: "1080p", label: "1080p", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "720p", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    const labelInput = (await screen.findByDisplayValue("4k")) as HTMLInputElement;
+    fireEvent.change(labelInput, { target: { value: "UHD" } });
+    fireEvent.blur(labelInput);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution_categories: expect.arrayContaining([
+            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3840, min_height: 1600 }),
+          ]),
+        }),
+      ),
+    );
+  });
+
+  it("restores default resolution categories through app settings", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1080p", label: "Full HD", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "HD", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 3200 },
+          { id: "4k", label: "4k", min_width: 3840, min_height: 1600 },
+          { id: "1080p", label: "1080p", min_width: 1920, min_height: 800 },
+          { id: "720p", label: "720p", min_width: 1280, min_height: 533 },
+          { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByDisplayValue("UHD");
+    fireEvent.click(screen.getByRole("button", { name: "Restore defaults" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution_categories: [
+            expect.objectContaining({ id: "8k", label: "8k", min_width: 7680, min_height: 3200 }),
+            expect.objectContaining({ id: "4k", label: "4k", min_width: 3840, min_height: 1600 }),
+            expect.objectContaining({ id: "1080p", label: "1080p", min_width: 1920, min_height: 800 }),
+            expect.objectContaining({ id: "720p", label: "720p", min_width: 1280, min_height: 533 }),
+            expect.objectContaining({ id: "sd", label: "sd", min_width: 0, min_height: 0 }),
+          ],
+        }),
+      ),
+    );
+  });
+
   it("clamps visual density maximum when the ideal is raised above it", async () => {
     const library = createLibrarySummary();
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "UHD", min_width: 3840, min_height: 2160 },
+          { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
+          { id: "1080p", label: "Full HD", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "HD", min_width: 1280, min_height: 720 },
+          { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
 
     renderPage();
 
     await screen.findByText("Movies");
     fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
+    expect(await screen.findByText("UHD")).toBeInTheDocument();
     const visualDensityTitle = await screen.findByText("Visual density");
     const visualDensityGroup = visualDensityTitle.closest(".quality-settings-group");
     if (!(visualDensityGroup instanceof HTMLElement)) {
@@ -355,9 +443,13 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
+    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
 
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
+    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
   });
 
   it("restores persisted settings panel state from localStorage", async () => {
@@ -367,6 +459,7 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: false,
         recentScanLogs: true,
         libraryStatistics: true,
+        resolutionCategories: false,
         createLibrary: true,
         ignorePatterns: false,
         appSettings: false,
@@ -377,10 +470,12 @@ describe("LibrariesPage settings panels", () => {
 
     const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
     const ignorePatternsToggle = screen.getByRole("button", { name: /^ignore patterns$/i });
+    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
     const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
 
     expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
     expect(ignorePatternsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Add first library")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
@@ -399,6 +494,7 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: true,
         recentScanLogs: true,
         libraryStatistics: true,
+        resolutionCategories: true,
         createLibrary: true,
         ignorePatterns: true,
         appSettings: false,

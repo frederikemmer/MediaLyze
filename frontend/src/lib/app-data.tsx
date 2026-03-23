@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { api, type AppSettings, type DashboardResponse, type LibrarySummary } from "./api";
+import { DEFAULT_RESOLUTION_CATEGORIES, normalizeResolutionCategories } from "./resolution-categories";
 
 type AppDataContextValue = {
   appSettings: AppSettings;
@@ -34,6 +35,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   ignore_patterns: [],
   user_ignore_patterns: [],
   default_ignore_patterns: [],
+  resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   feature_flags: {
     show_dolby_vision_profiles: false,
     show_analyzed_files_csv_export: false,
@@ -45,6 +47,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     ignore_patterns: payload?.ignore_patterns ?? [],
     user_ignore_patterns: payload?.user_ignore_patterns ?? [],
     default_ignore_patterns: payload?.default_ignore_patterns ?? [],
+    resolution_categories: normalizeResolutionCategories(payload?.resolution_categories),
     feature_flags: {
       show_dolby_vision_profiles: payload?.feature_flags?.show_dolby_vision_profiles ?? false,
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,

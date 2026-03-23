@@ -7,6 +7,11 @@ from sqlalchemy import String, and_, case, cast, func, literal, or_
 
 from backend.app.models.entities import MediaFile, MediaFormat
 from backend.app.services.languages import expand_language_search_terms
+from backend.app.services.resolution_categories import (
+    ResolutionCategory,
+    default_resolution_categories,
+    resolution_category_search_terms,
+)
 
 
 class SearchValidationError(ValueError):
@@ -69,13 +74,6 @@ _SIZE_UNITS = {
     "gib": 1024**3,
     "tib": 1024**4,
 }
-_RESOLUTION_HEIGHT_ALIASES = {
-    "720p": 720,
-    "1080p": 1080,
-    "1440p": 1440,
-    "2160p": 2160,
-    "4k": 2160,
-}
 _HDR_TOKEN_ALIASES = {
     "dv": {"dv", "dolby vision"},
     "dovi": {"dovi", "dolby vision"},
@@ -99,6 +97,14 @@ def resolution_label_expr(primary_video_streams):
         ),
         else_="",
     )
+
+
+def resolution_max_edge_expr(primary_video_streams):
+    return func.max(primary_video_streams.c.width, primary_video_streams.c.height)
+
+
+def resolution_min_edge_expr(primary_video_streams):
+    return func.min(primary_video_streams.c.width, primary_video_streams.c.height)
 
 
 def match_patterns(expression, patterns: list[str]):
@@ -248,8 +254,33 @@ def _apply_file_search_filter(query, raw_value: str):
     return query
 
 
-def _apply_resolution_filter(query, primary_video_streams, raw_value: str):
+def _resolution_category_clause(primary_video_streams, category_id: str, resolution_categories: list[ResolutionCategory]):
+    categories = list(resolution_categories or default_resolution_categories())
+    target_index = next((index for index, category in enumerate(categories) if category.id == category_id), None)
+    if target_index is None:
+        return literal(False)
+
+    max_edge = resolution_max_edge_expr(primary_video_streams)
+    min_edge = resolution_min_edge_expr(primary_video_streams)
+    target = categories[target_index]
+    clause = and_(max_edge >= target.min_width, min_edge >= target.min_height)
+    higher_categories = categories[:target_index]
+    if not higher_categories:
+        return clause
+    return and_(
+        clause,
+        ~or_(
+            *[
+                and_(max_edge >= category.min_width, min_edge >= category.min_height)
+                for category in higher_categories
+            ]
+        ),
+    )
+
+
+def _apply_resolution_filter(query, primary_video_streams, raw_value: str, resolution_categories: list[ResolutionCategory]):
     resolution_label = resolution_label_expr(primary_video_streams)
+    category_terms = resolution_category_search_terms(resolution_categories)
 
     for token in search_tokens(raw_value):
         resolution_match = _RESOLUTION_RE.match(token)
@@ -264,9 +295,9 @@ def _apply_resolution_filter(query, primary_video_streams, raw_value: str):
             )
             continue
 
-        alias_height = _RESOLUTION_HEIGHT_ALIASES.get(token)
-        if alias_height is not None:
-            query = query.where(primary_video_streams.c.height == alias_height)
+        category_id = category_terms.get(token)
+        if category_id is not None:
+            query = query.where(_resolution_category_clause(primary_video_streams, category_id, resolution_categories))
             continue
 
         query = query.where(match_patterns(resolution_label, _text_token_patterns(token)))
@@ -310,6 +341,7 @@ def apply_field_search_filters(
     audio_aggregates,
     subtitle_aggregates,
     filters: LibraryFileSearchFilters | None,
+    resolution_categories: list[ResolutionCategory] | None = None,
 ):
     if filters is None:
         return query
@@ -330,7 +362,12 @@ def apply_field_search_filters(
     if normalized.search_video_codec:
         query = _apply_text_filter(query, primary_video_streams.c.codec, normalized.search_video_codec)
     if normalized.search_resolution:
-        query = _apply_resolution_filter(query, primary_video_streams, normalized.search_resolution)
+        query = _apply_resolution_filter(
+            query,
+            primary_video_streams,
+            normalized.search_resolution,
+            list(resolution_categories or default_resolution_categories()),
+        )
     if normalized.search_hdr_type:
         query = _apply_hdr_filter(query, primary_video_streams, normalized.search_hdr_type)
     if normalized.search_duration:

@@ -20,9 +20,11 @@ from backend.app.models.entities import (
 )
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DistributionItem
+from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.languages import merge_language_counts
 from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path
 from backend.app.services.quality import normalize_quality_profile
+from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
 
@@ -51,6 +53,28 @@ def _resolution_label(width: int | None, height: int | None) -> str:
     if not width or not height:
         return "unknown"
     return f"{width}x{height}"
+
+
+def _group_resolution_distribution(
+    rows: list[tuple[int | None, int | None, int]],
+    *,
+    resolution_categories,
+) -> list[DistributionItem]:
+    counts: dict[str, int] = defaultdict(int)
+    labels: dict[str, str] = {}
+
+    for width, height, value in rows:
+        category = classify_resolution_category(width, height, resolution_categories)
+        label = category.label if category else "unknown"
+        filter_value = category.id if category else None
+        key = filter_value or label
+        counts[key] += value
+        labels[key] = label
+
+    return [
+        DistributionItem(label=labels[key], value=value, filter_value=key if key in labels and key != labels[key] else None)
+        for key, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
 
 
 def _library_summary_from_model(library: Library, aggregate: dict[str, int | float] | None = None) -> LibrarySummary:
@@ -107,6 +131,7 @@ def _normalize_library_scan_settings(
 
 def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> Library:
     cache_key = str(id(db.get_bind()))
+    app_settings = load_app_settings(db, settings)
     safe_path = resolve_library_path(settings, payload.path)
     scan_mode, scan_config = _normalize_library_scan_settings(
         settings,
@@ -120,7 +145,7 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
         type=payload.type,
         scan_mode=scan_mode,
         scan_config=scan_config,
-        quality_profile=normalize_quality_profile(payload.quality_profile),
+        quality_profile=normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories),
     )
     db.add(library)
     db.commit()
@@ -141,6 +166,7 @@ def update_library_settings(
         return None, False
 
     quality_profile_changed = False
+    app_settings = load_app_settings(db, settings)
 
     if payload.name is not None:
         next_name = payload.name.strip()
@@ -156,8 +182,8 @@ def update_library_settings(
             payload.scan_config,
         )
     if payload.quality_profile is not None:
-        next_quality_profile = normalize_quality_profile(payload.quality_profile)
-        current_quality_profile = normalize_quality_profile(library.quality_profile)
+        next_quality_profile = normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories)
+        current_quality_profile = normalize_quality_profile(library.quality_profile, app_settings.resolution_categories)
         if next_quality_profile != current_quality_profile or library.quality_profile != current_quality_profile:
             library.quality_profile = next_quality_profile
             quality_profile_changed = True
@@ -278,6 +304,7 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
     if not library_exists(db, library_id):
         return None
 
+    app_settings = load_app_settings(db)
     primary_video_streams = primary_video_streams_subquery("library_primary_video_streams")
 
     video_codec_distribution = db.execute(
@@ -386,10 +413,10 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
 
     payload = LibraryStatistics(
         video_codec_distribution=_distribution_items(video_codec_distribution),
-        resolution_distribution=[
-            DistributionItem(label=_resolution_label(width, height), value=value)
-            for width, height, value in resolution_distribution
-        ],
+        resolution_distribution=_group_resolution_distribution(
+            resolution_distribution,
+            resolution_categories=app_settings.resolution_categories,
+        ),
         hdr_distribution=_distribution_items(hdr_distribution, fallback="SDR"),
         audio_codec_distribution=[
             DistributionItem(label=_normalize_audio_codec(key), value=value)
