@@ -56,7 +56,11 @@ export function FileDetailPage() {
         <div className="meta-tags">
           <span className="badge">{file?.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileDetail.unknownCodec")}</span>
           {file?.resolution_category_label ? (
-            <TooltipTrigger ariaLabel="Show exact resolution" content={file.resolution ?? t("fileDetail.unknownResolution")}>
+            <TooltipTrigger
+              ariaLabel="Show exact resolution"
+              content={file.resolution ?? t("fileDetail.unknownResolution")}
+              className="file-detail-badge-tooltip-trigger"
+            >
               <span className="badge">{file.resolution_category_label}</span>
             </TooltipTrigger>
           ) : (

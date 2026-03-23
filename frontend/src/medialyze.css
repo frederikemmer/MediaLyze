@@ -463,6 +463,45 @@
   min-width: 0;
 }
 
+.file-detail-badge-tooltip-trigger,
+.file-detail-badge-tooltip-trigger.tooltip-trigger {
+  display: inline-flex;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  justify-content: flex-start;
+  box-shadow: none;
+  appearance: none;
+  vertical-align: top;
+  cursor: help;
+}
+
+.file-detail-badge-tooltip-trigger:hover,
+.file-detail-badge-tooltip-trigger:focus-visible,
+.file-detail-badge-tooltip-trigger.tooltip-trigger:hover,
+.file-detail-badge-tooltip-trigger.tooltip-trigger:focus-visible {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.file-detail-badge-tooltip-trigger:focus-visible {
+  outline: 2px solid rgba(31, 28, 22, 0.22);
+  outline-offset: 3px;
+}
+
 .path-segment-trail {
   display: flex;
   flex-wrap: wrap;
