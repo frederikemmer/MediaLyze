@@ -1,10 +1,9 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import LibraryType, ScanMode
 from backend.app.schemas.media import DistributionItem
 from backend.app.schemas.quality import QualityProfile
+from backend.app.schemas._time import UtcDateTime
 
 
 class LibraryCreate(BaseModel):
@@ -30,11 +29,11 @@ class LibrarySummary(BaseModel):
     name: str
     path: str
     type: LibraryType
-    last_scan_at: datetime | None
+    last_scan_at: UtcDateTime | None
     scan_mode: ScanMode
     scan_config: dict
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
     file_count: int = 0
     total_size_bytes: int = 0

@@ -137,19 +137,38 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
 
 
 def _audio_aggregate_subquery(name: str = "audio_aggregates"):
-    return (
+    normalized_language = func.lower(func.trim(func.coalesce(AudioStream.language, "")))
+    normalized_language = case(
+        (func.length(normalized_language) == 0, "und"),
+        else_=normalized_language,
+    )
+    normalized_codec = func.lower(func.trim(func.coalesce(AudioStream.codec, "")))
+    normalized_codec = case(
+        (func.length(normalized_codec) == 0, "unknown"),
+        else_=normalized_codec,
+    )
+    distinct_values = (
         select(
             AudioStream.media_file_id.label("media_file_id"),
-            func.coalesce(func.min(func.lower(AudioStream.language)), "").label("min_audio_language"),
-            func.coalesce(func.min(func.lower(AudioStream.codec)), "").label("min_audio_codec"),
-            func.coalesce(func.group_concat(func.lower(func.coalesce(AudioStream.language, "")), " "), "").label(
+            normalized_language.label("language"),
+            normalized_codec.label("codec"),
+        )
+        .distinct()
+        .subquery(f"{name}_distinct_values")
+    )
+    return (
+        select(
+            distinct_values.c.media_file_id.label("media_file_id"),
+            func.coalesce(func.min(distinct_values.c.language), "").label("min_audio_language"),
+            func.coalesce(func.min(distinct_values.c.codec), "").label("min_audio_codec"),
+            func.coalesce(func.group_concat(distinct_values.c.language, " "), "").label(
                 "audio_languages_search"
             ),
-            func.coalesce(func.group_concat(func.lower(func.coalesce(AudioStream.codec, "")), " "), "").label(
+            func.coalesce(func.group_concat(distinct_values.c.codec, " "), "").label(
                 "audio_codecs_search"
             ),
         )
-        .group_by(AudioStream.media_file_id)
+        .group_by(distinct_values.c.media_file_id)
         .subquery(name)
     )
 
@@ -192,22 +211,48 @@ def _subtitle_aggregate_subquery(name: str = "subtitle_aggregates"):
         select(ExternalSubtitle.media_file_id.label("media_file_id")),
     ).subquery(f"{name}_file_ids")
 
+    normalized_language_value = func.lower(func.trim(func.coalesce(language_values.c.value, "")))
+    normalized_language_value = case(
+        (func.length(normalized_language_value) == 0, "und"),
+        else_=normalized_language_value,
+    )
+    normalized_codec_value = func.lower(func.trim(func.coalesce(codec_values.c.value, "")))
+    normalized_codec_value = case(
+        (func.length(normalized_codec_value) == 0, "unknown"),
+        else_=normalized_codec_value,
+    )
+    distinct_language_values = (
+        select(
+            language_values.c.media_file_id.label("media_file_id"),
+            normalized_language_value.label("value"),
+        )
+        .distinct()
+        .subquery(f"{name}_distinct_language_values")
+    )
+    distinct_codec_values = (
+        select(
+            codec_values.c.media_file_id.label("media_file_id"),
+            normalized_codec_value.label("value"),
+        )
+        .distinct()
+        .subquery(f"{name}_distinct_codec_values")
+    )
     language_aggregates = (
         select(
-            language_values.c.media_file_id,
-            func.coalesce(func.min(language_values.c.value), "").label("min_subtitle_language"),
-            func.coalesce(func.group_concat(language_values.c.value, " "), "").label("subtitle_languages_search"),
+            distinct_language_values.c.media_file_id,
+            func.coalesce(func.min(distinct_language_values.c.value), "").label("min_subtitle_language"),
+            func.coalesce(func.group_concat(distinct_language_values.c.value, " "), "").label("subtitle_languages_search"),
         )
-        .group_by(language_values.c.media_file_id)
+        .group_by(distinct_language_values.c.media_file_id)
         .subquery(f"{name}_language_aggregates")
     )
     codec_aggregates = (
         select(
-            codec_values.c.media_file_id,
-            func.coalesce(func.min(codec_values.c.value), "").label("min_subtitle_codec"),
-            func.coalesce(func.group_concat(codec_values.c.value, " "), "").label("subtitle_codecs_search"),
+            distinct_codec_values.c.media_file_id,
+            func.coalesce(func.min(distinct_codec_values.c.value), "").label("min_subtitle_codec"),
+            func.coalesce(func.group_concat(distinct_codec_values.c.value, " "), "").label("subtitle_codecs_search"),
         )
-        .group_by(codec_values.c.media_file_id)
+        .group_by(distinct_codec_values.c.media_file_id)
         .subquery(f"{name}_codec_aggregates")
     )
     source_aggregates = (

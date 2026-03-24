@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.2.5
+
+>2026-03-24
+
+### ✨ New
+- The browser now renders scan and library times in the user's local timezone
+
+### 🐛 Bug fixes
+- serialize API timestamps as explicit UTC `Z` values and restore SQLite datetime fields as UTC ([#66](https://github.com/frederikemmer/MediaLyze/issues/66))
+- align clickable statistics with table - counted streams instead of files ([#67](https://github.com/frederikemmer/MediaLyze/issues/67))
+
 ## v0.2.4
 
 >2026-03-23

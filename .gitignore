@@ -16,3 +16,4 @@ config/
 .vscode/
 .env
 media/
+.local-config

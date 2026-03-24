@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import JobStatus, ScanTriggerSource
+from backend.app.schemas._time import UtcDateTime
 
 
 class ScanRequest(BaseModel):
@@ -20,8 +19,8 @@ class ScanJobRead(BaseModel):
     files_total: int
     files_scanned: int
     errors: int
-    started_at: datetime | None
-    finished_at: datetime | None
+    started_at: UtcDateTime | None
+    finished_at: UtcDateTime | None
     progress_percent: float = 0.0
     phase_label: str = "queued"
     phase_detail: str | None = None
@@ -87,8 +86,8 @@ class RecentScanJobRead(BaseModel):
     outcome: str
     job_type: str
     trigger_source: ScanTriggerSource
-    started_at: datetime | None
-    finished_at: datetime | None
+    started_at: UtcDateTime | None
+    finished_at: UtcDateTime | None
     duration_seconds: float | None = None
     discovered_files: int = 0
     ignored_total: int = 0
