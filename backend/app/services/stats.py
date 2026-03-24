@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import distinct, func, select, union_all
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
@@ -14,7 +14,7 @@ from backend.app.models.entities import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.schemas.media import DashboardResponse, DistributionItem
-from backend.app.services.languages import merge_language_counts
+from backend.app.services.languages import merge_language_counts, normalize_language_code
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
@@ -26,6 +26,32 @@ def _distribution(rows: list[tuple[str | None, int]], fallback: str = "unknown")
         for label, value in rows
         if value > 0
     ]
+
+
+def _normalized_language_expr(expression):
+    candidate = func.lower(func.trim(func.coalesce(expression, "")))
+    return func.coalesce(func.nullif(candidate, ""), "und")
+
+
+def _normalized_text_expr(expression, fallback: str):
+    candidate = func.lower(func.trim(func.coalesce(expression, "")))
+    return func.coalesce(func.nullif(candidate, ""), fallback)
+
+
+def _count_distinct_normalized_languages(
+    rows: list[tuple[int, str | None]] | tuple[tuple[int, str | None], ...],
+    *,
+    fallback: str = "und",
+) -> list[tuple[str, int]]:
+    values_by_file: dict[int, set[str]] = {}
+    for media_file_id, raw_value in rows:
+        values_by_file.setdefault(media_file_id, set()).add(normalize_language_code(raw_value) or fallback)
+
+    counts: dict[str, int] = {}
+    for values in values_by_file.values():
+        for value in values:
+            counts[value] = counts.get(value, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
 
 
 def _resolution_label(width: int | None, height: int | None) -> str:
@@ -87,20 +113,47 @@ def build_dashboard(db: Session) -> DashboardResponse:
         .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
         .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
+    audio_codec_values = (
+        select(
+            AudioStream.media_file_id.label("media_file_id"),
+            _normalized_text_expr(AudioStream.codec, "unknown").label("value"),
+        )
+        .distinct()
+        .subquery("dashboard_audio_codec_values")
+    )
     audio_codec_rows = db.execute(
-        select(AudioStream.codec, func.count(AudioStream.id))
-        .group_by(AudioStream.codec)
-        .order_by(func.count(AudioStream.id).desc())
+        select(
+            audio_codec_values.c.value,
+            func.count(distinct(audio_codec_values.c.media_file_id)),
+        )
+        .group_by(audio_codec_values.c.value)
+        .order_by(func.count(distinct(audio_codec_values.c.media_file_id)).desc())
     ).all()
-    audio_language_rows = db.execute(
-        select(AudioStream.language, func.count(AudioStream.id))
-        .group_by(AudioStream.language)
-        .order_by(func.count(AudioStream.id).desc())
-    ).all()
+    audio_language_values = (
+        select(
+            AudioStream.media_file_id.label("media_file_id"),
+            _normalized_language_expr(AudioStream.language).label("value"),
+        )
+        .distinct()
+        .subquery("dashboard_audio_language_values")
+    )
+    audio_language_rows = _count_distinct_normalized_languages(
+        db.execute(select(audio_language_values.c.media_file_id, audio_language_values.c.value)).all(),
+        fallback="und",
+    )
 
-    subtitle_language_rows = merge_language_counts(
-        db.execute(select(SubtitleStream.language, func.count(SubtitleStream.id)).group_by(SubtitleStream.language)).all()
-        + db.execute(select(ExternalSubtitle.language, func.count(ExternalSubtitle.id)).group_by(ExternalSubtitle.language)).all(),
+    subtitle_language_values = union_all(
+        select(
+            SubtitleStream.media_file_id.label("media_file_id"),
+            _normalized_language_expr(SubtitleStream.language).label("value"),
+        ),
+        select(
+            ExternalSubtitle.media_file_id.label("media_file_id"),
+            _normalized_language_expr(ExternalSubtitle.language).label("value"),
+        ),
+    ).subquery("dashboard_subtitle_language_values")
+    subtitle_language_rows = _count_distinct_normalized_languages(
+        db.execute(select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)).all(),
         fallback="und",
     )
 

@@ -18,6 +18,7 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
+from backend.app.services.library_service import get_library_statistics
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import generate_library_files_csv_export, list_library_files
 
@@ -881,3 +882,220 @@ def test_generate_library_files_csv_export_reports_no_search_when_unfiltered() -
     assert rows[1][0] == "sample.mkv"
     assert rows[1][3] == ""
     assert rows[1][7] == ""
+
+
+def test_list_library_files_matches_undefined_language_statistics_counts() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Undefined Language Search",
+            path="/tmp/undefined-language-search",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for index in range(119):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=f"episode-{index:03d}.mkv",
+                filename=f"episode-{index:03d}.mkv",
+                extension="mkv",
+                size_bytes=100 + index,
+                mtime=float(index + 1),
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            )
+            db.add(media_file)
+            db.flush()
+            db.add(AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", language=None))
+            db.add(AudioStream(media_file_id=media_file.id, stream_index=2, codec="aac", language=""))
+
+        german_audio = MediaFile(
+            library_id=library.id,
+            relative_path="german-audio.mkv",
+            filename="german-audio.mkv",
+            extension="mkv",
+            size_bytes=999,
+            mtime=150.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        subtitle_undefined = MediaFile(
+            library_id=library.id,
+            relative_path="subtitle-und.mkv",
+            filename="subtitle-und.mkv",
+            extension="mkv",
+            size_bytes=1000,
+            mtime=151.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        subtitle_english = MediaFile(
+            library_id=library.id,
+            relative_path="subtitle-en.mkv",
+            filename="subtitle-en.mkv",
+            extension="mkv",
+            size_bytes=1001,
+            mtime=152.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([german_audio, subtitle_undefined, subtitle_english])
+        db.flush()
+        db.add(AudioStream(media_file_id=german_audio.id, stream_index=1, codec="aac", language="ger"))
+        db.add_all(
+            [
+                SubtitleStream(
+                    media_file_id=subtitle_undefined.id,
+                    stream_index=2,
+                    codec="subrip",
+                    language=None,
+                    default_flag=False,
+                    forced_flag=False,
+                ),
+                ExternalSubtitle(
+                    media_file_id=subtitle_undefined.id,
+                    path="subtitle-und.und.srt",
+                    language="",
+                    format="srt",
+                ),
+                SubtitleStream(
+                    media_file_id=subtitle_english.id,
+                    stream_index=2,
+                    codec="subrip",
+                    language="eng",
+                    default_flag=False,
+                    forced_flag=False,
+                ),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+        und_audio_page = list_library_files(
+            db,
+            library.id,
+            limit=200,
+            search_filters=LibraryFileSearchFilters(search_audio_languages="und"),
+        )
+        de_audio_page = list_library_files(
+            db,
+            library.id,
+            limit=200,
+            search_filters=LibraryFileSearchFilters(search_audio_languages="de"),
+        )
+        und_subtitle_page = list_library_files(
+            db,
+            library.id,
+            limit=200,
+            search_filters=LibraryFileSearchFilters(search_subtitle_languages="und"),
+        )
+        en_subtitle_page = list_library_files(
+            db,
+            library.id,
+            limit=200,
+            search_filters=LibraryFileSearchFilters(search_subtitle_languages="en"),
+        )
+
+    assert statistics is not None
+    audio_languages = {item.label: item.value for item in statistics.audio_language_distribution}
+    subtitle_languages = {item.label: item.value for item in statistics.subtitle_language_distribution}
+    assert audio_languages["und"] == 119
+    assert und_audio_page.total == 119
+    assert audio_languages["de"] == 1
+    assert de_audio_page.total == 1
+    assert subtitle_languages["und"] == 1
+    assert und_subtitle_page.total == 1
+    assert subtitle_languages["en"] == 1
+    assert en_subtitle_page.total == 1
+
+
+def test_list_library_files_matches_deduplicated_codec_and_source_statistics() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Deduplicated Filter Matches",
+            path="/tmp/deduplicated-filter-matches",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="episode-01.mkv",
+            filename="episode-01.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add_all(
+            [
+                AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", language="eng"),
+                AudioStream(media_file_id=media_file.id, stream_index=2, codec="aac", language="eng"),
+                SubtitleStream(
+                    media_file_id=media_file.id,
+                    stream_index=3,
+                    codec="subrip",
+                    language="eng",
+                    default_flag=False,
+                    forced_flag=False,
+                ),
+                SubtitleStream(
+                    media_file_id=media_file.id,
+                    stream_index=4,
+                    codec="subrip",
+                    language="eng",
+                    default_flag=False,
+                    forced_flag=False,
+                ),
+                ExternalSubtitle(media_file_id=media_file.id, path="episode-01.en.srt", language="eng", format="subrip"),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+        audio_codec_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_audio_codecs="aac"),
+        )
+        subtitle_codec_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_subtitle_codecs="subrip"),
+        )
+        subtitle_source_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_subtitle_sources="internal"),
+        )
+
+    assert statistics is not None
+    audio_codecs = {item.label: item.value for item in statistics.audio_codec_distribution}
+    subtitle_codecs = {item.label: item.value for item in statistics.subtitle_codec_distribution}
+    subtitle_sources = {item.label: item.value for item in statistics.subtitle_source_distribution}
+    assert audio_codecs["aac"] == 1
+    assert subtitle_codecs["subrip"] == 1
+    assert subtitle_sources["internal"] == 1
+    assert audio_codec_page.total == 1
+    assert subtitle_codec_page.total == 1
+    assert subtitle_source_page.total == 1
