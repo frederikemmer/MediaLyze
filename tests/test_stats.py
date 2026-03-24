@@ -106,8 +106,8 @@ def test_dashboard_merges_common_audio_language_aliases() -> None:
         dashboard = build_dashboard(db)
 
     audio_languages = {item.label: item.value for item in dashboard.audio_language_distribution}
-    assert audio_languages["de"] == 3
-    assert audio_languages["en"] == 2
+    assert audio_languages["de"] == 1
+    assert audio_languages["en"] == 1
     assert "deu" not in audio_languages
     assert "ger" not in audio_languages
     assert "eng" not in audio_languages
