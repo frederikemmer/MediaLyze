@@ -1,10 +1,10 @@
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import ScanStatus
 from backend.app.schemas.quality import QualityBreakdownRead
+from backend.app.schemas._time import UtcDateTime
 
 
 class DistributionItem(BaseModel):
@@ -80,8 +80,8 @@ class MediaFileTableRow(BaseModel):
     extension: str
     size_bytes: int
     mtime: float
-    last_seen_at: datetime
-    last_analyzed_at: datetime | None
+    last_seen_at: UtcDateTime
+    last_analyzed_at: UtcDateTime | None
     scan_status: ScanStatus
     quality_score: int
     quality_score_raw: float = 0.0

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+- fix: serialize API timestamps as explicit UTC `Z` values and restore SQLite datetime fields as UTC so the browser can render scan and library times in the user's local timezone ([#66](https://github.com/frederikemmer/MediaLyze/issues/66))
+
 ## v0.2.4
 
 >2026-03-23
