@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -7,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
-from backend.app.models.entities import Library, LibraryType, ScanMode
+from backend.app.models.entities import JobStatus, Library, LibraryType, ScanJob, ScanMode
 from backend.app.core.config import Settings
 
 
@@ -66,3 +68,70 @@ def test_paths_inspect_returns_404_outside_desktop_mode() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Path inspection is only available in desktop mode"}
+
+
+def test_libraries_route_serializes_timestamps_as_utc_z_strings() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            created_at=datetime(2026, 3, 24, 4, 6, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 24, 4, 7, tzinfo=UTC),
+            last_scan_at=datetime(2026, 3, 24, 4, 8, tzinfo=UTC),
+        )
+        db.add(library)
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/libraries")
+
+    assert response.status_code == 200
+    payload = response.json()[0]
+    assert payload["created_at"].endswith("Z")
+    assert payload["updated_at"].endswith("Z")
+    assert payload["last_scan_at"].endswith("Z")
+    assert payload["created_at"] == "2026-03-24T04:06:00Z"
+    assert payload["updated_at"] == "2026-03-24T04:07:00Z"
+    assert payload["last_scan_at"] == "2026-03-24T04:08:00Z"
+
+
+def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.running,
+                job_type="incremental",
+                started_at=datetime(2026, 3, 24, 4, 6, tzinfo=UTC),
+                finished_at=datetime(2026, 3, 24, 4, 10, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/scan-jobs/active")
+
+    assert response.status_code == 200
+    payload = response.json()[0]
+    assert payload["started_at"] == "2026-03-24T04:06:00Z"
+    assert payload["finished_at"] == "2026-03-24T04:10:00Z"

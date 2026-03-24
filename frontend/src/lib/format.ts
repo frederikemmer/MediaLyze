@@ -124,8 +124,12 @@ export function formatDate(value: string | null): string {
   if (!value) {
     return "never";
   }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "never";
+  }
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(parsed);
 }

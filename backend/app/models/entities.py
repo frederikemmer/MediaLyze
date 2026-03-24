@@ -3,18 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
+from backend.app.db.types import UTCDateTime
 from backend.app.services.quality import default_quality_profile
 from backend.app.utils.time import utc_now
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         default=utc_now,
         onupdate=utc_now,
         nullable=False,
@@ -62,7 +63,7 @@ class Library(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     path: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
     type: Mapped[LibraryType] = mapped_column(SqlEnum(LibraryType, native_enum=False), nullable=False)
-    last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_scan_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     scan_mode: Mapped[ScanMode] = mapped_column(
         SqlEnum(ScanMode, native_enum=False),
         default=ScanMode.manual,
@@ -109,8 +110,8 @@ class MediaFile(Base):
     extension: Mapped[str] = mapped_column(String(32), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     mtime: Mapped[float] = mapped_column(Float, nullable=False)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    last_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    last_analyzed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     scan_status: Mapped[ScanStatus] = mapped_column(
         SqlEnum(ScanStatus, native_enum=False),
         default=ScanStatus.pending,
@@ -272,8 +273,8 @@ class ScanJob(Base):
     files_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     files_scanned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     errors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     trigger_source: Mapped[ScanTriggerSource] = mapped_column(
         SqlEnum(ScanTriggerSource, native_enum=False),
         default=ScanTriggerSource.manual,

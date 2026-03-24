@@ -814,6 +814,7 @@ When updating documentation, code, or behavior in this repository:
 * prefer concrete current file paths and interfaces over speculative future structure
 * if a larger change affects architecture, runtime behavior, public interfaces, release flow, repository structure, or other information relevant for future development, update `AGENTS.md` in the same work
 * if a change is relevant for the next release, add it to `CHANGELOG.md` under `vUnreleased`
+* when a changelog entry corresponds to a tracked GitHub issue, include the GitHub issue link in the `CHANGELOG.md` entry, for example `[#66](https://github.com/frederikemmer/MediaLyze/issues/66)`
 * when preparing or publishing a new version, move the accumulated `vUnreleased` entries into the new version section so the release history remains complete
 
 If documentation conflicts with code:

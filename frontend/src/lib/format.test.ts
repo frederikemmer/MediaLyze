@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCodecLabel, formatDuration } from "./format";
+import { formatCodecLabel, formatDate, formatDuration } from "./format";
 
 describe("formatCodecLabel", () => {
   it("formats raw audio codec identifiers into readable labels", () => {
@@ -64,5 +64,22 @@ describe("formatDuration", () => {
       minutes * 60;
 
     expect(formatDuration(totalSeconds)).toBe("2a 29d 5h 6m");
+  });
+});
+
+describe("formatDate", () => {
+  it("formats UTC timestamps in the local browser timezone", () => {
+    const value = "2026-03-24T04:06:00Z";
+
+    expect(formatDate(value)).toBe(
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value)),
+    );
+  });
+
+  it("returns 'never' for invalid input", () => {
+    expect(formatDate("not-a-date")).toBe("never");
   });
 });
