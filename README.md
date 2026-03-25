@@ -64,7 +64,7 @@ cd docker
 cp .env.example .env
 ```
 with production ready:
-[docker-compose-prod.yaml](docker/docker-compose-prod.yaml)
+[docker-compose.yaml](docker/docker-compose.yaml)
 ___
 
 using docker run:

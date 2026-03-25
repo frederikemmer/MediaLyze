@@ -1463,7 +1463,7 @@ export function LibrariesPage() {
   ) {
     updateLibraryQualityProfile(libraryId, (current) => {
       const category = current[key];
-      const ranks = QUALITY_OPTION_RANKS[key];
+      const ranks = key === "resolution" ? resolutionCategoryRanks(resolutionOptions) : QUALITY_OPTION_RANKS[key];
       const nextCategory = { ...category, [boundary]: value };
       const minimumValue = String(boundary === "minimum" ? value : nextCategory.minimum);
       const idealValue = String(boundary === "ideal" ? value : nextCategory.ideal);
