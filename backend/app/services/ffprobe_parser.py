@@ -128,7 +128,10 @@ def _ffprobe_input_path(file_path: Path) -> str:
     if path_value.startswith("\\\\?\\"):
         return path_value
     if path_value.startswith("\\\\"):
-        return f"\\\\?\\UNC\\{path_value.lstrip('\\')}"
+        # Keep UNC paths in their canonical form for ffprobe. Discovery works with
+        # network shares directly, but the extended-length UNC prefix can prevent
+        # ffprobe from opening the same file on Windows desktop scans.
+        return path_value
     if len(path_value) >= 2 and path_value[1] == ":":
         return f"\\\\?\\{path_value}"
     return path_value
