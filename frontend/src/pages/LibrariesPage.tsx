@@ -136,7 +136,12 @@ function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): Resolu
 }
 
 function resolutionCategoriesFromDrafts(drafts: ResolutionCategoryDraft[]): ResolutionCategory[] {
-  return normalizeResolutionCategories(drafts.map(({ persisted, ...category }) => category));
+  return normalizeResolutionCategories(
+    drafts.map(({ persisted, ...category }) => ({
+      ...category,
+      id: persisted ? category.id : "",
+    })),
+  );
 }
 
 function createResolutionCategoryId(label: string, drafts: ResolutionCategoryDraft[]): string {
@@ -1868,9 +1873,7 @@ export function LibrariesPage() {
     );
   }
 
-  const normalizedResolutionDrafts = normalizeResolutionCategories(
-    resolutionCategoryDrafts.map(({ persisted, ...category }) => category),
-  );
+  const normalizedResolutionDrafts = resolutionCategoriesFromDrafts(resolutionCategoryDrafts);
   const resolutionCategoryChangeKind = resolutionCategoryChangeSummary(
     persistedResolutionCategories.current,
     normalizedResolutionDrafts,
