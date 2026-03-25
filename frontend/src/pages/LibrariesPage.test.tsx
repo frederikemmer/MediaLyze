@@ -364,6 +364,43 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
+  it("adds new resolution categories without persisting a client-generated id", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        resolution_categories: [
+          { id: "8k", label: "8k", min_width: 7680, min_height: 4320 },
+          { id: "4k", label: "4k", min_width: 3840, min_height: 2160 },
+          { id: "1440p", label: "1440p", min_width: 2560, min_height: 1440 },
+          { id: "1080p", label: "1080p", min_width: 1920, min_height: 1080 },
+          { id: "720p", label: "720p", min_width: 1280, min_height: 720 },
+          { id: "480p", label: "480p", min_width: 854, min_height: 480 },
+          { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    fireEvent.change(await screen.findByPlaceholderText("New category"), { target: { value: "480p" } });
+    fireEvent.change(screen.getByLabelText("Min width", { selector: "#resolution-category-new-width" }), {
+      target: { value: "854" },
+    });
+    fireEvent.change(screen.getByLabelText("Min height", { selector: "#resolution-category-new-height" }), {
+      target: { value: "480" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add resolution category" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution_categories: expect.arrayContaining([
+            expect.objectContaining({ id: "", label: "480p", min_width: 854, min_height: 480 }),
+          ]),
+        }),
+      ),
+    );
+  });
+
   it("clamps visual density maximum when the ideal is raised above it", async () => {
     const library = createLibrarySummary();
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
