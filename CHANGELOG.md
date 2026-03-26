@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 ### 🐛 Bug fixes
+- restrict `main` release publishing to real version bumps so unchanged-version commits no longer try to recreate existing tags and releases
 - allow adding new resolution categories from the settings UI without tripping the backend's immutable-id validation ([#71](https://github.com/frederikemmer/MediaLyze/issues/71))
 - fix resolution quality-boundary updates in the library quality settings when `minimum` / `ideal` values are changed ([#72](https://github.com/frederikemmer/MediaLyze/pull/72)) - by [@eivarin](https://github.com/eivarin)
 - keep Windows UNC network-share paths in their normal form for `ffprobe` so desktop scans analyze files on network shares instead of only listing them
+- lower the default resolution-category minimum width and height thresholds by 5% so cropped widescreen encodes stay in their expected buckets, and document the relaxed defaults in the settings tooltip ([#79](https://github.com/frederikemmer/MediaLyze/issues/79))
 
 ## v0.2.5
 

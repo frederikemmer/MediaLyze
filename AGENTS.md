@@ -738,8 +738,9 @@ Release metadata is enforced through `.github/scripts/release_metadata.py`.
 Current release behavior:
 
 * dev images are pushed from `dev`
-* official images and GitHub releases are tag-driven from `main`
+* official images and GitHub releases are published from `main` only when a push increases the aligned repository version metadata
 * official images are published to GHCR
+* the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
 * when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch
