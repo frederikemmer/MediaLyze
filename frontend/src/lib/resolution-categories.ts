@@ -1,10 +1,10 @@
 import type { ResolutionCategory } from "./api";
 
 export const DEFAULT_RESOLUTION_CATEGORIES: ResolutionCategory[] = [
-  { id: "8k", label: "8k", min_width: 7680, min_height: 3200 },
-  { id: "4k", label: "4k", min_width: 3840, min_height: 1600 },
-  { id: "1080p", label: "1080p", min_width: 1920, min_height: 800 },
-  { id: "720p", label: "720p", min_width: 1280, min_height: 533 },
+  { id: "8k", label: "8k", min_width: 7296, min_height: 3040 },
+  { id: "4k", label: "4k", min_width: 3648, min_height: 1520 },
+  { id: "1080p", label: "1080p", min_width: 1824, min_height: 760 },
+  { id: "720p", label: "720p", min_width: 1216, min_height: 506 },
   { id: "sd", label: "sd", min_width: 0, min_height: 0 },
 ];
 

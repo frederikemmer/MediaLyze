@@ -43,6 +43,13 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.default_ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert loaded.ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert [item.id for item in loaded.resolution_categories] == ["8k", "4k", "1080p", "720p", "sd"]
+    assert [(item.min_width, item.min_height) for item in loaded.resolution_categories] == [
+        (7296, 3040),
+        (3648, 1520),
+        (1824, 760),
+        (1216, 506),
+        (0, 0),
+    ]
     assert loaded.feature_flags.show_dolby_vision_profiles is False
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
 

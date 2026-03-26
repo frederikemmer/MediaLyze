@@ -313,7 +313,7 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           resolution_categories: expect.arrayContaining([
-            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3840, min_height: 1600 }),
+            expect.objectContaining({ id: "4k", label: "UHD", min_width: 3648, min_height: 1520 }),
           ]),
         }),
       ),
@@ -335,10 +335,10 @@ describe("LibrariesPage ignore patterns", () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         resolution_categories: [
-          { id: "8k", label: "8k", min_width: 7680, min_height: 3200 },
-          { id: "4k", label: "4k", min_width: 3840, min_height: 1600 },
-          { id: "1080p", label: "1080p", min_width: 1920, min_height: 800 },
-          { id: "720p", label: "720p", min_width: 1280, min_height: 533 },
+          { id: "8k", label: "8k", min_width: 7296, min_height: 3040 },
+          { id: "4k", label: "4k", min_width: 3648, min_height: 1520 },
+          { id: "1080p", label: "1080p", min_width: 1824, min_height: 760 },
+          { id: "720p", label: "720p", min_width: 1216, min_height: 506 },
           { id: "sd", label: "sd", min_width: 0, min_height: 0 },
         ],
       }),
@@ -353,15 +353,27 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           resolution_categories: [
-            expect.objectContaining({ id: "8k", label: "8k", min_width: 7680, min_height: 3200 }),
-            expect.objectContaining({ id: "4k", label: "4k", min_width: 3840, min_height: 1600 }),
-            expect.objectContaining({ id: "1080p", label: "1080p", min_width: 1920, min_height: 800 }),
-            expect.objectContaining({ id: "720p", label: "720p", min_width: 1280, min_height: 533 }),
+            expect.objectContaining({ id: "8k", label: "8k", min_width: 7296, min_height: 3040 }),
+            expect.objectContaining({ id: "4k", label: "4k", min_width: 3648, min_height: 1520 }),
+            expect.objectContaining({ id: "1080p", label: "1080p", min_width: 1824, min_height: 760 }),
+            expect.objectContaining({ id: "720p", label: "720p", min_width: 1216, min_height: 506 }),
             expect.objectContaining({ id: "sd", label: "sd", min_width: 0, min_height: 0 }),
           ],
         }),
       ),
     );
+  });
+
+  it("shows the resolution category tooltip with relaxed thresholds and reference formats", async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain reduced default resolution thresholds" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Default buckets intentionally use 5% lower minimum width and height thresholds",
+    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent("4k / UHD: 3840x2160");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("1080p / Full HD: 1920x1080");
   });
 
   it("adds new resolution categories without persisting a client-generated id", async () => {

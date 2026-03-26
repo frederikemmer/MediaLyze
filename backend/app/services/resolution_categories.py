@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from backend.app.schemas.app_settings import ResolutionCategory
 
 DEFAULT_RESOLUTION_CATEGORIES: tuple[ResolutionCategory, ...] = (
-    ResolutionCategory(id="8k", label="8k", min_width=7680, min_height=3200),
-    ResolutionCategory(id="4k", label="4k", min_width=3840, min_height=1600),
-    ResolutionCategory(id="1080p", label="1080p", min_width=1920, min_height=800),
-    ResolutionCategory(id="720p", label="720p", min_width=1280, min_height=533),
+    ResolutionCategory(id="8k", label="8k", min_width=7296, min_height=3040),
+    ResolutionCategory(id="4k", label="4k", min_width=3648, min_height=1520),
+    ResolutionCategory(id="1080p", label="1080p", min_width=1824, min_height=760),
+    ResolutionCategory(id="720p", label="720p", min_width=1216, min_height=506),
     ResolutionCategory(id="sd", label="sd", min_width=0, min_height=0),
 )
 LEGACY_RESOLUTION_ALIASES: dict[str, str] = {

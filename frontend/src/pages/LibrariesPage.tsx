@@ -119,6 +119,15 @@ type ResolutionCategoryDraft = ResolutionCategory & {
   persisted: boolean;
 };
 
+const RESOLUTION_CATEGORY_TOOLTIP = [
+  "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
+  "Reference dimensions:",
+  "8k: 7680x4320",
+  "4k / UHD: 3840x2160",
+  "1080p / Full HD: 1920x1080",
+  "720p / HD: 1280x720",
+].join("\n");
+
 type NewResolutionCategoryDraft = {
   label: string;
   min_width: string;
@@ -2151,9 +2160,18 @@ export function LibrariesPage() {
             }}
           >
             <div className="settings-sidebar-stack">
-              <p className="field-hint">
-                Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
-              </p>
+              <div className="field-label-row">
+                <p className="field-hint">
+                  Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
+                </p>
+                <TooltipTrigger
+                  ariaLabel="Explain reduced default resolution thresholds"
+                  content={RESOLUTION_CATEGORY_TOOLTIP}
+                  preserveLineBreaks
+                >
+                  ?
+                </TooltipTrigger>
+              </div>
               <div className="resolution-category-settings">
                 <div className="resolution-category-row resolution-category-add-row">
                   <div className="field">
