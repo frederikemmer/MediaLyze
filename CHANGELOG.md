@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - keep Windows UNC network-share paths in their normal form for `ffprobe` so desktop scans analyze files on network shares instead of only listing them
 - lower the default resolution-category minimum width and height thresholds by 5% so cropped widescreen encodes stay in their expected buckets, and document the relaxed defaults in the settings tooltip ([#79](https://github.com/frederikemmer/MediaLyze/issues/79))
 - make desktop packaging always create the bundled `backend/ffprobe` structure, auto-detect `ffprobe` on the build machine, and use more robust packaged-path fallbacks at runtime before failing ([#80](https://github.com/frederikemmer/MediaLyze/issues/80))
+- treat NAS snapshot symlink loops under `MEDIA_ROOT` as invalid paths so browse and library setup return `400` or skip the entry instead of crashing with a `500` ([#81](https://github.com/frederikemmer/MediaLyze/issues/81))
 
 ## v0.2.5
 
