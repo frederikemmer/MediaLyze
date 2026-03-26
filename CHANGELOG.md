@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.3.0
+
+>2026-03-26
+
 ### 🐛 Bug fixes
 - restrict `main` release publishing to real version bumps so unchanged-version commits no longer try to recreate existing tags and releases
 - allow adding new resolution categories from the settings UI without tripping the backend's immutable-id validation ([#71](https://github.com/frederikemmer/MediaLyze/issues/71))
