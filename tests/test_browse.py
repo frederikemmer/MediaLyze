@@ -51,3 +51,21 @@ def test_browse_media_root_skips_symlinks_outside_media_root(tmp_path: Path) -> 
     response = browse_media_root(Settings(config_path=tmp_path / "config", media_root=tmp_path))
 
     assert [entry.name for entry in response.entries] == ["movies"]
+
+
+def test_browse_media_root_skips_snapshot_symlink_loops(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "movies").mkdir()
+    snapshot = tmp_path / "#snapshot"
+    snapshot.mkdir()
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs) -> Path:
+        if self == snapshot:
+            raise RuntimeError(f"Symlink loop from {self!r}")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    response = browse_media_root(Settings(config_path=tmp_path / "config", media_root=tmp_path))
+
+    assert [entry.name for entry in response.entries] == ["movies"]

@@ -655,6 +655,7 @@ def test_list_library_files_matches_default_letterboxed_resolution_categories_by
             (
                 ("movie-1080p.mkv", 1920, 800),
                 ("movie-wqhd.mkv", 2560, 1066),
+                ("movie-cropped-4k.mkv", 3832, 1596),
                 ("movie-4k.mkv", 3840, 1606),
             ),
             start=1,
@@ -687,7 +688,7 @@ def test_list_library_files_matches_default_letterboxed_resolution_categories_by
             search_filters=LibraryFileSearchFilters(search_resolution="1080p"),
         )
 
-    assert [item.filename for item in four_k_page.items] == ["movie-4k.mkv"]
+    assert [item.filename for item in four_k_page.items] == ["movie-4k.mkv", "movie-cropped-4k.mkv"]
     assert [item.filename for item in ten_eighty_page.items] == ["movie-1080p.mkv", "movie-wqhd.mkv"]
 
 

@@ -11,12 +11,22 @@ from backend.app.api.routes import router
 from backend.app.db.base import Base
 from backend.app.models.entities import JobStatus, Library, LibraryType, ScanJob, ScanMode
 from backend.app.core.config import Settings
+from pathlib import Path
 
 
 def _build_test_app(db: Session) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: db
+    app.state.scan_runtime = type(
+        "TestScanRuntime",
+        (),
+        {
+            "sync_library": lambda self, library_id: None,
+            "request_quality_recompute": lambda self, library_id: None,
+            "cancel_active_jobs": lambda self: [],
+        },
+    )()
     return TestClient(app)
 
 
@@ -68,6 +78,66 @@ def test_paths_inspect_returns_404_outside_desktop_mode() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Path inspection is only available in desktop mode"}
+
+
+def test_browse_returns_400_for_snapshot_symlink_loops(tmp_path, monkeypatch) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    snapshot = tmp_path / "#snapshot"
+    snapshot.mkdir()
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs):
+        if self == snapshot:
+            raise RuntimeError(f"Symlink loop from {self!r}")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        client.app.dependency_overrides[get_app_settings] = lambda: Settings(runtime_mode="server", media_root=tmp_path)
+        response = client.get("/api/browse", params={"path": "#snapshot"})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": f"Invalid path under MEDIA_ROOT: {snapshot}"}
+
+
+def test_library_create_returns_400_for_snapshot_symlink_loops(tmp_path, monkeypatch) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    snapshot = tmp_path / "#snapshot"
+    snapshot.mkdir()
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs):
+        if self == snapshot:
+            raise RuntimeError(f"Symlink loop from {self!r}")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        client.app.dependency_overrides[get_app_settings] = lambda: Settings(runtime_mode="server", media_root=tmp_path)
+        response = client.post(
+            "/api/libraries",
+            json={
+                "name": "Snapshot",
+                "path": "#snapshot",
+                "type": "movies",
+                "scan_mode": "manual",
+                "scan_config": {},
+                "quality_profile": {},
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": f"Invalid path under MEDIA_ROOT: {snapshot}"}
 
 
 def test_libraries_route_serializes_timestamps_as_utc_z_strings() -> None:

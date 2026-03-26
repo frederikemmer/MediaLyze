@@ -3,6 +3,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { resolveFfprobePath } = require("./ffprobe-paths.cjs");
 
 let mainWindow = null;
 let backendProcess = null;
@@ -15,10 +16,6 @@ function repoRoot() {
 
 function bundledBinaryName() {
   return process.platform === "win32" ? "medialyze-backend.exe" : "medialyze-backend";
-}
-
-function bundledFfprobeName() {
-  return process.platform === "win32" ? "ffprobe.exe" : "ffprobe";
 }
 
 function resolveFrontendDistPath() {
@@ -47,16 +44,6 @@ function resolveBackendCommand() {
     args: ["-m", "backend.app.launcher"],
     cwd: repoRoot(),
   };
-}
-
-function resolveFfprobePath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "backend", "ffprobe", bundledFfprobeName());
-  }
-  if (process.env.FFPROBE_PATH) {
-    return process.env.FFPROBE_PATH;
-  }
-  return "ffprobe";
 }
 
 function findFreePort() {
@@ -137,7 +124,10 @@ function startBackend(port) {
       APP_PORT: String(port),
       CONFIG_PATH: configPath,
       FRONTEND_DIST_PATH: resolveFrontendDistPath(),
-      FFPROBE_PATH: resolveFfprobePath(),
+      FFPROBE_PATH: resolveFfprobePath({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+      }),
       PYTHONUNBUFFERED: "1",
     },
     stdio: isPackagedWindows ? "ignore" : "inherit",

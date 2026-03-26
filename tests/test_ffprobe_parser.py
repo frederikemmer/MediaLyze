@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
+import backend.app.services.ffprobe_parser as ffprobe_parser
 from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload
 
 
@@ -158,3 +160,15 @@ def test_ffprobe_input_path_preserves_non_windows_paths(tmp_path: Path) -> None:
     file_path = tmp_path / "movie.mkv"
 
     assert _ffprobe_input_path(file_path) == str(file_path)
+
+
+def test_ffprobe_input_path_preserves_windows_unc_paths(monkeypatch) -> None:
+    monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="nt"))
+
+    assert _ffprobe_input_path(Path(r"\\server\share\movies\movie.mkv")) == r"\\server\share\movies\movie.mkv"
+
+
+def test_ffprobe_input_path_adds_extended_prefix_for_windows_drive_paths(monkeypatch) -> None:
+    monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="nt"))
+
+    assert _ffprobe_input_path(Path(r"C:\media\movie.mkv")) == r"\\?\C:\media\movie.mkv"
