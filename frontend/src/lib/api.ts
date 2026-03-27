@@ -254,6 +254,8 @@ export type ScanJob = {
   eta_seconds: number | null;
   scan_mode_label: string | null;
   duplicate_detection_mode: string | null;
+  queued_for_analysis: number;
+  unchanged_files: number;
 };
 
 export type ScanTriggerSource = "manual" | "scheduled" | "watchdog";

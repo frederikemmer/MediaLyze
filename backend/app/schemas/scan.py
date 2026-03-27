@@ -31,6 +31,8 @@ class ScanJobRead(BaseModel):
     eta_seconds: float | None = None
     scan_mode_label: str | None = None
     duplicate_detection_mode: str | None = None
+    queued_for_analysis: int = 0
+    unchanged_files: int = 0
 
 
 class ScanFileListRead(BaseModel):

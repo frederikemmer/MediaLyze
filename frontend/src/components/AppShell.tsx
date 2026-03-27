@@ -5,49 +5,10 @@ import { House, RefreshCwOff, Settings } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
-import { type ScanJob } from "../lib/api";
 import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
+import { describeActiveScanJob, formatScanJobProgressPercent } from "../lib/scan-job-progress";
 import { useScanJobs } from "../lib/scan-jobs";
-
-function formatProgressPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0";
-  }
-  if (value >= 99 || value <= 0) {
-    return String(Math.round(value));
-  }
-  if (value < 10) {
-    return value.toFixed(1);
-  }
-  return value.toFixed(1);
-}
-
-function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
-  if (job.phase_key === "discovering") {
-    return t("scanBanner.searchingFound", { count: job.files_total });
-  }
-  if (job.phase_key === "analyzing" && job.phase_total > 0) {
-    const unchanged = Math.max(0, job.files_total - job.phase_total);
-    if (unchanged > 0) {
-      return t("scanBanner.analyzingQueuedProgress", {
-        scanned: job.phase_current,
-        total: job.phase_total,
-        percent: formatProgressPercent(job.phase_progress_percent),
-        unchanged,
-      });
-    }
-    return t("scanBanner.analyzingProgress", {
-      scanned: job.phase_current,
-      total: job.phase_total,
-      percent: formatProgressPercent(job.phase_progress_percent),
-    });
-  }
-  if (job.phase_detail) {
-    return job.eta_seconds ? `${job.phase_detail} · ~${Math.max(1, Math.round(job.eta_seconds))}s remaining` : job.phase_detail;
-  }
-  return job.phase_label;
-}
 
 export function AppShell() {
   const { t } = useTranslation();
@@ -166,8 +127,8 @@ export function AppShell() {
                 <div className="scan-banner-job" key={job.id}>
                   <div className="distribution-copy">
                     <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
-                    <span>{job.phase_label} · {formatProgressPercent(job.progress_percent)}%</span>
-                    <span>{renderActiveJobDetail(t, job)}</span>
+                    <span>{job.phase_label} · {formatScanJobProgressPercent(job.progress_percent)}%</span>
+                    <span>{describeActiveScanJob(t, job)}</span>
                   </div>
                   <div className="progress">
                     <span style={{ width: `${job.progress_percent}%` }} />

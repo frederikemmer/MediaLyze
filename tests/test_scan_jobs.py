@@ -76,6 +76,48 @@ def test_serialize_scan_job_for_analysis_phase() -> None:
     assert payload.progress_percent == 28.8
 
 
+def test_serialize_scan_job_uses_queued_analysis_counts_instead_of_library_total() -> None:
+    job = ScanJob(
+        id=1,
+        library_id=2,
+        status=JobStatus.running,
+        job_type="incremental",
+        files_total=8982,
+        files_scanned=22,
+        errors=0,
+        started_at=datetime.now(UTC),
+        finished_at=None,
+        scan_summary={
+            "changes": {
+                "queued_for_analysis": 22,
+                "unchanged_files": 8960,
+            },
+            "analysis": {
+                "queued_for_analysis": 22,
+                "analyzed_successfully": 22,
+                "analysis_failed": 0,
+            },
+            "runtime": {
+                "phase_key": "analyzing",
+                "phase_label": "Analyzing media",
+                "phase_current": 22,
+                "phase_total": 8982,
+                "phase_progress_percent": 0.2,
+            },
+        },
+    )
+
+    payload = serialize_scan_job(job)
+
+    assert payload.files_total == 8982
+    assert payload.queued_for_analysis == 22
+    assert payload.unchanged_files == 8960
+    assert payload.phase_current == 22
+    assert payload.phase_total == 22
+    assert payload.phase_progress_percent == 100.0
+    assert payload.phase_detail == "22 of 22 queued files analyzed, 8960 unchanged"
+
+
 def test_list_active_scan_jobs_deduplicates_per_library() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

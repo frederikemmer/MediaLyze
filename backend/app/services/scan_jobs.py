@@ -35,6 +35,8 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
     summary = _normalize_scan_summary(scan_job.scan_summary)
+    queued_for_analysis = max(summary.analysis.queued_for_analysis, summary.changes.queued_for_analysis)
+    unchanged_files = summary.changes.unchanged_files
     runtime = dict(summary.runtime or {})
     phase_key = str(runtime.get("phase_key") or "queued")
     phase_label = str(runtime.get("phase_label") or "Queued")
@@ -58,9 +60,27 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
             phase_key = "analyzing"
             phase_label = "Analyzing media"
             phase_current = files_scanned
+            phase_total = queued_for_analysis or files_total
+            phase_progress_percent = round((files_scanned / phase_total) * 100, 1) if phase_total > 0 else 0.0
+            phase_detail = f"{files_scanned} of {phase_total} files analyzed"
+
+    if phase_key == "analyzing":
+        if queued_for_analysis > 0:
+            phase_total = queued_for_analysis
+        if phase_total <= 0 and files_total > 0:
             phase_total = files_total
-            phase_progress_percent = round((files_scanned / files_total) * 100, 1) if files_total > 0 else 0.0
-            phase_detail = f"{files_scanned} of {files_total} files analyzed"
+        if phase_total > 0:
+            phase_current = min(phase_total, max(phase_current, files_scanned))
+        elif phase_current <= 0 and files_scanned > 0:
+            phase_current = files_scanned
+        phase_progress_percent = round((phase_current / phase_total) * 100, 1) if phase_total > 0 else 0.0
+        if phase_total > 0:
+            if unchanged_files > 0:
+                phase_detail = (
+                    f"{phase_current} of {phase_total} queued files analyzed, {unchanged_files} unchanged"
+                )
+            else:
+                phase_detail = f"{phase_current} of {phase_total} files analyzed"
 
     progress_percent = 0.0
     if phase_key == "discovering":
@@ -97,6 +117,8 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         eta_seconds=float(eta_seconds) if eta_seconds is not None else None,
         scan_mode_label=str(scan_mode_label) if scan_mode_label is not None else None,
         duplicate_detection_mode=str(duplicate_detection_mode) if duplicate_detection_mode is not None else None,
+        queued_for_analysis=queued_for_analysis,
+        unchanged_files=unchanged_files,
     )
 
 

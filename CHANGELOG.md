@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 - bundle and resolve `ffmpeg` for desktop runtime so perceptual duplicate hashing can extract representative frames consistently in packaged builds
+- correct active scan progress details so analyzed-file counts use the actual queued-for-analysis total and unchanged-file count instead of implying that whole libraries were still being analyzed
 
 ## v0.3.0
 

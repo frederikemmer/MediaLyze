@@ -20,6 +20,7 @@ import {
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
+import { describeActiveScanJob, formatScanJobProgressPercent } from "../lib/scan-job-progress";
 import {
   getLibraryStatisticsSettings,
   getOrderedLibraryStatisticDefinitions,
@@ -79,15 +80,6 @@ type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 const VIDEO_CODEC_OPTIONS = ["h264", "hevc", "av1"];
 const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
 
-function formatProgressPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0";
-  }
-  if (value >= 99 || value <= 0) {
-    return String(Math.round(value));
-  }
-  return value.toFixed(1);
-}
 const AUDIO_CODEC_OPTIONS = ["aac", "ac3", "eac3", "dts", "dts_hd", "truehd", "flac"];
 const DYNAMIC_RANGE_OPTIONS = ["sdr", "hdr10", "hdr10_plus", "dolby_vision"];
 const LANGUAGE_OPTIONS = ["de", "en", "fr", "es", "it", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "zh", "cs", "nl"];
@@ -2029,9 +2021,10 @@ export function LibrariesPage() {
                         />
                       </div>
                       <p className="media-meta">
-                        {formatProgressPercent(activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0)}% ·{" "}
-                        {activeJobs.find((job) => job.library_id === library.id)?.phase_detail ??
-                          activeJobs.find((job) => job.library_id === library.id)?.phase_label}
+                        {formatScanJobProgressPercent(activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0)}% ·{" "}
+                        {activeJobs.find((job) => job.library_id === library.id)
+                          ? describeActiveScanJob(t, activeJobs.find((job) => job.library_id === library.id)!)
+                          : null}
                       </p>
                     </>
                   ) : null}

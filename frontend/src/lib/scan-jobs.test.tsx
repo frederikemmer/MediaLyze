@@ -31,6 +31,8 @@ function createJob(id: number): ScanJob {
     eta_seconds: null,
     scan_mode_label: "incremental",
     duplicate_detection_mode: "filename",
+    queued_for_analysis: 100,
+    unchanged_files: 0,
   };
 }
 
