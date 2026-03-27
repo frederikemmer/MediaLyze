@@ -330,7 +330,7 @@ def _analyze_path(
     settings: Settings,
     ignore_patterns: tuple[str, ...],
 ) -> tuple[dict, list[dict[str, str | None]]]:
-    payload = run_ffprobe(file_path, settings.ffprobe_path)
+    payload = run_ffprobe(file_path, settings.ffprobe_path, settings.ffprobe_timeout_seconds)
     subtitles = [
         subtitle
         for subtitle in detect_external_subtitles(file_path, settings.subtitle_extensions)
@@ -766,7 +766,12 @@ def _run_duplicate_detection(
         )
         _update_job_phase_progress(job, index - 1, len(media_files), detail=current_detail)
         db.commit()
-        result = strategy.ensure_artifact(media_file, file_path, ffmpeg_path=settings.ffmpeg_path)
+        result = strategy.ensure_artifact(
+            media_file,
+            file_path,
+            ffmpeg_path=settings.ffmpeg_path,
+            ffmpeg_timeout_seconds=settings.ffmpeg_timeout_seconds,
+        )
         if result.cache_hit:
             artifact_hits += 1
         else:

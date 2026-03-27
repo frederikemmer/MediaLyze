@@ -35,7 +35,14 @@ def normalize_duplicate_filename(value: str) -> str:
 class FilenameDuplicateStrategy:
     mode = DuplicateDetectionMode.filename
 
-    def ensure_artifact(self, media_file: MediaFile, file_path: Path, *, ffmpeg_path: str) -> ArtifactResult:
+    def ensure_artifact(
+        self,
+        media_file: MediaFile,
+        file_path: Path,
+        *,
+        ffmpeg_path: str,
+        ffmpeg_timeout_seconds: int | None = None,
+    ) -> ArtifactResult:
         normalized = normalize_duplicate_filename(file_path.name)
         if media_file.duplicate_filename_key == normalized:
             return ArtifactResult(updated=False, cache_hit=True)

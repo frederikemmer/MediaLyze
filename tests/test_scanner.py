@@ -86,7 +86,7 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -209,7 +209,7 @@ def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: P
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -286,7 +286,7 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -364,7 +364,7 @@ def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatc
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -431,7 +431,7 @@ def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -484,7 +484,7 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-    def fail_ffprobe(_file_path, _ffprobe_path):
+    def fail_ffprobe(_file_path, _ffprobe_path, _timeout_seconds=None):
         raise RuntimeError("ffprobe exploded\nwith internal details")
 
     monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", fail_ffprobe)
@@ -546,7 +546,7 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     original_normalize = scanner_service.normalize_ffprobe_payload
@@ -557,7 +557,7 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
             raise ValueError("bad payload")
         return original_normalize(raw_payload)
 
-    def run_ffprobe_with_one_bad_file(file_path, ffprobe_path):
+    def run_ffprobe_with_one_bad_file(file_path, ffprobe_path, timeout_seconds=None):
         if Path(file_path).name == "broken.mkv":
             return {
                 **payload,

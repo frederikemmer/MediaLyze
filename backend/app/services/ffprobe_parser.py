@@ -203,7 +203,7 @@ class ProbeResult:
     subtitle_streams: list[NormalizedSubtitleStream] = field(default_factory=list)
 
 
-def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
+def run_ffprobe(file_path: Path, ffprobe_path: str, timeout_seconds: int | None = None) -> dict[str, Any]:
     command = [
         ffprobe_path,
         "-v",
@@ -220,6 +220,8 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
         "text": True,
         "check": True,
     }
+    if timeout_seconds and timeout_seconds > 0:
+        run_kwargs["timeout"] = timeout_seconds
     if os.name == "nt":
         run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         startupinfo = subprocess.STARTUPINFO()
@@ -229,6 +231,8 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
         completed = subprocess.run(command, **run_kwargs)
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(_ffprobe_error_message(exc)) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"ffprobe timed out after {int(timeout_seconds or 0)}s") from exc
     return json.loads(completed.stdout or "{}")
 
 

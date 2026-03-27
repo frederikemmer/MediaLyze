@@ -36,7 +36,14 @@ class DuplicateGroupAssignment:
 class DuplicateStrategy(Protocol):
     mode: DuplicateDetectionMode
 
-    def ensure_artifact(self, media_file: MediaFile, file_path: Path, *, ffmpeg_path: str) -> ArtifactResult:
+    def ensure_artifact(
+        self,
+        media_file: MediaFile,
+        file_path: Path,
+        *,
+        ffmpeg_path: str,
+        ffmpeg_timeout_seconds: int | None = None,
+    ) -> ArtifactResult:
         ...
 
     def artifact_ready(self, media_file: MediaFile) -> bool:

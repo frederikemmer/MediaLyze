@@ -32,7 +32,13 @@ def _hamming_distance(left: int, right: int) -> int:
     return (left ^ right).bit_count()
 
 
-def _extract_frame_hash(ffmpeg_path: str, file_path: Path, timestamp_seconds: float) -> int:
+def _extract_frame_hash(
+    ffmpeg_path: str,
+    file_path: Path,
+    timestamp_seconds: float,
+    *,
+    timeout_seconds: int | None = None,
+) -> int:
     command = [
         ffmpeg_path,
         "-hide_banner",
@@ -52,7 +58,17 @@ def _extract_frame_hash(ffmpeg_path: str, file_path: Path, timestamp_seconds: fl
         "gray",
         "pipe:1",
     ]
-    result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    run_kwargs = {
+        "check": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+    }
+    if timeout_seconds and timeout_seconds > 0:
+        run_kwargs["timeout"] = timeout_seconds
+    try:
+        result = subprocess.run(command, **run_kwargs)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"ffmpeg frame extraction timed out after {int(timeout_seconds or 0)}s") from exc
     expected_length = FRAME_WIDTH * FRAME_HEIGHT
     if len(result.stdout) != expected_length:
         raise ValueError(f"Unexpected perceptual hash frame size for {file_path}")
@@ -62,7 +78,14 @@ def _extract_frame_hash(ffmpeg_path: str, file_path: Path, timestamp_seconds: fl
 class PerceptualDuplicateStrategy:
     mode = DuplicateDetectionMode.perceptual_hash
 
-    def ensure_artifact(self, media_file: MediaFile, file_path: Path, *, ffmpeg_path: str) -> ArtifactResult:
+    def ensure_artifact(
+        self,
+        media_file: MediaFile,
+        file_path: Path,
+        *,
+        ffmpeg_path: str,
+        ffmpeg_timeout_seconds: int | None = None,
+    ) -> ArtifactResult:
         existing = media_file.perceptual_hash or {}
         if existing and media_file.perceptual_hash_version == PERCEPTUAL_HASH_VERSION:
             return ArtifactResult(updated=False, cache_hit=True)
@@ -71,7 +94,15 @@ class PerceptualDuplicateStrategy:
         if media_file.media_format and media_file.media_format.duration:
             duration = max(0.0, float(media_file.media_format.duration))
         timestamps = [max(0.0, duration * ratio) for ratio in FRAME_TIMESTAMPS]
-        hashes = [_extract_frame_hash(ffmpeg_path, file_path, timestamp) for timestamp in timestamps]
+        hashes = [
+            _extract_frame_hash(
+                ffmpeg_path,
+                file_path,
+                timestamp,
+                timeout_seconds=ffmpeg_timeout_seconds,
+            )
+            for timestamp in timestamps
+        ]
         media_file.perceptual_hash = {
             "version": PERCEPTUAL_HASH_VERSION,
             "frame_hashes": hashes,
