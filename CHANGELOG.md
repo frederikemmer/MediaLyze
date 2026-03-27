@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - include the desktop `ffmpeg`/`ffprobe` path helper modules in packaged Electron builds so macOS, Linux, and Windows app launches no longer fail with missing desktop helper modules
 - run `ffprobe` and perceptual-hash `ffmpeg` subprocesses with `-nostdin` and closed stdin so scans do not hang on the first file in non-interactive desktop/container environments
 - reduce `dev` branch Docker publishing to `linux/amd64` only so development image builds finish faster while keeping official `main` release images multi-arch
+- refresh library summaries, statistics, and analyzed-files results continuously during active scans and show clearer discovery-versus-analysis progress details while scans run
 
 ## v0.3.0
 

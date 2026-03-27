@@ -681,6 +681,27 @@ def _duplicate_phase_detail(label: str, current: int, total: int, eta_seconds: f
     return detail
 
 
+def _discovery_phase_detail(current: int, total: int, queued_for_analysis: int) -> str:
+    return f"Discovered {current} of {total} files, {queued_for_analysis} queued for analysis"
+
+
+def _analysis_phase_detail(
+    current: int,
+    total: int,
+    *,
+    discovered_files: int,
+    unchanged_files: int,
+    pending_in_progress: int = 0,
+) -> str:
+    detail = (
+        f"Analyzed {current} of {total} queued files, "
+        f"{unchanged_files} unchanged of {discovered_files} discovered"
+    )
+    if pending_in_progress > 0:
+        detail += f", {pending_in_progress} in progress"
+    return detail
+
+
 def _should_commit_progress(last_commit_at: float, *, processed: int, total: int, batch_size: int) -> bool:
     if processed >= total:
         return True
@@ -931,7 +952,7 @@ def run_scan(
         job,
         "discovering",
         "Discovering files",
-        _duplicate_phase_detail("Discovering files", 0, discovery_total, None),
+        _discovery_phase_detail(0, discovery_total, 0),
         total=discovery_total,
         scan_mode_label=scan_type,
     )
@@ -952,7 +973,7 @@ def run_scan(
             job,
             discovery_counter,
             discovery_total,
-            detail=_duplicate_phase_detail("Discovering files", discovery_counter, discovery_total, None),
+            detail=_discovery_phase_detail(discovery_counter, discovery_total, len(to_analyze)),
         )
         if _should_commit_progress(
             discovery_last_commit_at,
@@ -1027,7 +1048,12 @@ def run_scan(
         job,
         "analyzing",
         "Analyzing media",
-        f"0 of {len(to_analyze)} files analyzed",
+        _analysis_phase_detail(
+            0,
+            len(to_analyze),
+            discovered_files=len(discovery.files),
+            unchanged_files=unchanged_files,
+        ),
         total=max(1, len(to_analyze)),
         scan_mode_label=scan_type,
         duplicate_detection_mode=library.duplicate_detection_mode.value,
@@ -1078,9 +1104,12 @@ def run_scan(
                         job,
                         job.files_scanned,
                         max(1, len(to_analyze)),
-                        detail=(
-                            f"{job.files_scanned} of {len(to_analyze)} files analyzed, "
-                            f"{len(pending)} in progress"
+                        detail=_analysis_phase_detail(
+                            job.files_scanned,
+                            len(to_analyze),
+                            discovered_files=len(discovery.files),
+                            unchanged_files=unchanged_files,
+                            pending_in_progress=len(pending),
                         ),
                     )
                     job.scan_summary = _build_scan_summary(discovery, len(to_analyze))
@@ -1117,7 +1146,12 @@ def run_scan(
                     job,
                     job.files_scanned,
                     max(1, len(to_analyze)),
-                    detail=f"{job.files_scanned} of {len(to_analyze)} files analyzed",
+                    detail=_analysis_phase_detail(
+                        job.files_scanned,
+                        len(to_analyze),
+                        discovered_files=len(discovery.files),
+                        unchanged_files=unchanged_files,
+                    ),
                 )
                 if _should_commit_progress(
                     analysis_last_commit_at,

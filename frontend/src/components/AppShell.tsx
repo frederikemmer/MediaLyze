@@ -10,6 +10,8 @@ import { useAppData } from "../lib/app-data";
 import { describeActiveScanJob, formatScanJobProgressPercent, getDisplayedScanJobPercent } from "../lib/scan-job-progress";
 import { useScanJobs } from "../lib/scan-jobs";
 
+const ACTIVE_SCAN_APP_DATA_REFRESH_INTERVAL_MS = 3000;
+
 export function AppShell() {
   const { t } = useTranslation();
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
@@ -35,6 +37,20 @@ export function AppShell() {
         });
     }
     hadActiveJobsRef.current = hasActiveJobs;
+  }, [hasActiveJobs, loadDashboard, loadLibraries]);
+
+  useEffect(() => {
+    if (!hasActiveJobs) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      void Promise.all([loadLibraries(true), loadDashboard(true)]).catch(() => undefined);
+    }, ACTIVE_SCAN_APP_DATA_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
   }, [hasActiveJobs, loadDashboard, loadLibraries]);
 
   return (

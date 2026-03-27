@@ -89,6 +89,7 @@ const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
+const ACTIVE_SCAN_DATA_REFRESH_INTERVAL_MS = 2000;
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
 const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
@@ -966,6 +967,25 @@ export function LibraryDetailPage() {
     }
     hadActiveJobRef.current = Boolean(activeJob);
   }, [activeJob, fileQueryKey, libraryId]);
+
+  useEffect(() => {
+    if (!activeJob) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      librarySummaryCache.delete(libraryId);
+      libraryStatisticsCache.delete(libraryId);
+      libraryFileListCache.delete(fileQueryKey);
+      void loadLibrarySummary(false);
+      void loadLibraryStatistics(false);
+      void loadFilesPage(0, false, fileQueryKey);
+    }, ACTIVE_SCAN_DATA_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeJob, fileQueryKey, libraryId, loadFilesPage, loadLibraryStatistics, loadLibrarySummary]);
 
   useEffect(() => {
     return () => {

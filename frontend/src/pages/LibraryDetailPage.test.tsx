@@ -17,11 +17,21 @@ import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibraryDetailPage } from "./LibraryDetailPage";
 
 const scrollIntoViewMock = vi.fn();
+const requestAnimationFrameMock = vi.fn((callback: FrameRequestCallback) => {
+  callback(0);
+  return 1;
+});
 
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
   writable: true,
   value: scrollIntoViewMock,
+});
+
+Object.defineProperty(window, "requestAnimationFrame", {
+  configurable: true,
+  writable: true,
+  value: requestAnimationFrameMock,
 });
 
 function createLibrarySummary(id: number): LibrarySummary {
@@ -136,8 +146,10 @@ function renderPage(libraryId: number, { strictMode = false }: { strictMode?: bo
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   scrollIntoViewMock.mockClear();
+  requestAnimationFrameMock.mockClear();
   window.localStorage.clear();
 });
 
@@ -160,6 +172,78 @@ describe("LibraryDetailPage", () => {
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("refreshes summary, statistics, and files while a scan is active", async () => {
+    const libraryId = 109;
+    const refreshCallbacks: Array<() => void> = [];
+    vi.spyOn(window, "setInterval").mockImplementation(((handler: TimerHandler) => {
+      if (typeof handler === "function") {
+        refreshCallbacks.push(handler);
+      }
+      return 1 as unknown as ReturnType<typeof window.setInterval>;
+    }) as typeof window.setInterval);
+    vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([
+      {
+        id: 1,
+        library_id: libraryId,
+        library_name: `Series ${libraryId}`,
+        status: "running",
+        job_type: "incremental",
+        files_total: 100,
+        files_scanned: 10,
+        errors: 0,
+        started_at: "2026-03-12T09:00:00Z",
+        finished_at: null,
+        progress_percent: 20,
+        phase_key: "analyzing",
+        phase_label: "Analyzing media",
+        phase_detail: "Analyzed 10 of 40 queued files, 60 unchanged of 100 discovered",
+        phase_progress_percent: 25,
+        phase_current: 10,
+        phase_total: 40,
+        eta_seconds: null,
+        scan_mode_label: "incremental",
+        duplicate_detection_mode: "filename",
+        queued_for_analysis: 40,
+        unchanged_files: 60,
+      },
+    ]);
+    const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    await waitFor(() => {
+      expect(activeScanJobsSpy).toHaveBeenCalled();
+    });
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(refreshCallbacks.length).toBeGreaterThan(1);
+    });
+
+    const initialSummaryCalls = librarySummarySpy.mock.calls.length;
+    const initialStatisticsCalls = libraryStatisticsSpy.mock.calls.length;
+    const initialFilesCalls = libraryFilesSpy.mock.calls.length;
+
+    expect(refreshCallbacks.length).toBeGreaterThan(1);
+    for (const refreshCallback of refreshCallbacks) {
+      refreshCallback();
+    }
+
+    await waitFor(() => {
+      expect(librarySummarySpy.mock.calls.length).toBeGreaterThan(initialSummaryCalls);
+      expect(libraryStatisticsSpy.mock.calls.length).toBeGreaterThan(initialStatisticsCalls);
+      expect(libraryFilesSpy.mock.calls.length).toBeGreaterThan(initialFilesCalls);
+    });
   });
 
   it("still loads statistics and files under strict mode remounts", async () => {
@@ -332,7 +416,9 @@ describe("LibraryDetailPage", () => {
         }),
       ),
     );
-    expect(scrollIntoViewMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
   });
 
   it("replaces existing statistic values in the same field", async () => {
