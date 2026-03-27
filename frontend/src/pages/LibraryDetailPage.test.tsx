@@ -550,6 +550,39 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
+    window.localStorage.setItem(
+      "medialyze-library-statistics-settings",
+      JSON.stringify({
+        order: [
+          "size",
+          "duplicates",
+          "quality_score",
+          "video_codec",
+          "resolution",
+          "hdr_type",
+          "duration",
+          "audio_codecs",
+          "audio_languages",
+          "subtitle_languages",
+          "subtitle_codecs",
+          "subtitle_sources",
+        ],
+        visibility: {
+          size: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          duplicates: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+          quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          video_codec: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          resolution: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          hdr_type: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          duration: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          audio_codecs: { panelEnabled: true, tableEnabled: false, dashboardEnabled: true },
+          audio_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          subtitle_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          subtitle_codecs: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+          subtitle_sources: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+        },
+      }),
+    );
     vi.spyOn(api, "appSettings").mockResolvedValue({
       ignore_patterns: [],
       user_ignore_patterns: [],

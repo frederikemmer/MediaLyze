@@ -1,5 +1,13 @@
 import type { ScanJob } from "./api";
 
+const ACTIVE_PHASE_KEYS = new Set([
+  "discovering",
+  "analyzing",
+  "detecting_duplicates_preparing",
+  "detecting_duplicates_artifacts",
+  "detecting_duplicates_grouping",
+]);
+
 export function formatScanJobProgressPercent(value: number): string {
   if (!Number.isFinite(value)) {
     return "0";
@@ -8,6 +16,13 @@ export function formatScanJobProgressPercent(value: number): string {
     return String(Math.round(value));
   }
   return value.toFixed(1);
+}
+
+export function getDisplayedScanJobPercent(job: ScanJob): number {
+  if (ACTIVE_PHASE_KEYS.has(job.phase_key)) {
+    return job.phase_progress_percent;
+  }
+  return job.progress_percent;
 }
 
 export function describeActiveScanJob(
@@ -23,11 +38,13 @@ export function describeActiveScanJob(
     if (total > 0) {
       const scanned = Math.min(total, Math.max(job.phase_current, job.files_scanned));
       if (job.unchanged_files > 0) {
+        const discovered = Math.max(job.files_total, total + job.unchanged_files);
         return t("scanBanner.analyzingQueuedProgress", {
           scanned,
           total,
           percent: formatScanJobProgressPercent(job.phase_progress_percent),
           unchanged: job.unchanged_files,
+          discovered,
         });
       }
       return t("scanBanner.analyzingProgress", {

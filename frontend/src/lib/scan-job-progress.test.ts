@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import i18n from "i18next";
 
 import type { ScanJob } from "./api";
-import { describeActiveScanJob, formatScanJobProgressPercent } from "./scan-job-progress";
+import { describeActiveScanJob, formatScanJobProgressPercent, getDisplayedScanJobPercent } from "./scan-job-progress";
 
 function createJob(overrides: Partial<ScanJob> = {}): ScanJob {
   return {
@@ -40,11 +40,26 @@ describe("scan job progress helpers", () => {
 
     expect(detail).toContain("22/22 queued files analyzed");
     expect(detail).toContain("8960 unchanged");
+    expect(detail).toContain("8982 discovered");
   });
 
   it("formats non-integer progress values consistently", () => {
     expect(formatScanJobProgressPercent(15.04)).toBe("15.0");
     expect(formatScanJobProgressPercent(0)).toBe("0");
     expect(formatScanJobProgressPercent(100)).toBe("100");
+  });
+
+  it("uses the active phase percent for the visible progress label", () => {
+    const job = createJob({
+      progress_percent: 15,
+      phase_progress_percent: 0,
+      phase_current: 0,
+      files_scanned: 0,
+      queued_for_analysis: 822,
+      unchanged_files: 0,
+      phase_total: 822,
+    });
+
+    expect(getDisplayedScanJobPercent(job)).toBe(0);
   });
 });

@@ -20,7 +20,7 @@ import {
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
-import { describeActiveScanJob, formatScanJobProgressPercent } from "../lib/scan-job-progress";
+import { describeActiveScanJob, formatScanJobProgressPercent, getDisplayedScanJobPercent } from "../lib/scan-job-progress";
 import {
   getLibraryStatisticsSettings,
   getOrderedLibraryStatisticDefinitions,
@@ -2011,23 +2011,27 @@ export function LibrariesPage() {
                       <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
                     </div>
                   </div>
-                  {activeJobs.find((job) => job.library_id === library.id) ? (
-                    <>
-                      <div className="progress">
-                        <span
-                          style={{
-                            width: `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="media-meta">
-                        {formatScanJobProgressPercent(activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0)}% ·{" "}
-                        {activeJobs.find((job) => job.library_id === library.id)
-                          ? describeActiveScanJob(t, activeJobs.find((job) => job.library_id === library.id)!)
-                          : null}
-                      </p>
-                    </>
-                  ) : null}
+                  {(() => {
+                    const activeJob = activeJobs.find((job) => job.library_id === library.id);
+                    if (!activeJob) {
+                      return null;
+                    }
+                    return (
+                      <>
+                        <div className="progress">
+                          <span
+                            style={{
+                              width: `${activeJob.progress_percent ?? 0}%`,
+                            }}
+                          />
+                        </div>
+                        <p className="media-meta">
+                          {activeJob.phase_label} · {formatScanJobProgressPercent(getDisplayedScanJobPercent(activeJob))}% ·{" "}
+                          {describeActiveScanJob(t, activeJob)}
+                        </p>
+                      </>
+                    );
+                  })()}
                   <div className="library-settings-form">
                     <div className="field">
                       <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>

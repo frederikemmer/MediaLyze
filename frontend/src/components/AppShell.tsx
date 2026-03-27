@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
-import { describeActiveScanJob, formatScanJobProgressPercent } from "../lib/scan-job-progress";
+import { describeActiveScanJob, formatScanJobProgressPercent, getDisplayedScanJobPercent } from "../lib/scan-job-progress";
 import { useScanJobs } from "../lib/scan-jobs";
 
 export function AppShell() {
@@ -127,7 +127,7 @@ export function AppShell() {
                 <div className="scan-banner-job" key={job.id}>
                   <div className="distribution-copy">
                     <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
-                    <span>{job.phase_label} · {formatScanJobProgressPercent(job.progress_percent)}%</span>
+                    <span>{job.phase_label} · {formatScanJobProgressPercent(getDisplayedScanJobPercent(job))}%</span>
                     <span>{describeActiveScanJob(t, job)}</span>
                   </div>
                   <div className="progress">
