@@ -16,6 +16,7 @@ from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, S
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
+    _empty_scan_summary,
     execute_scan_job,
     libraries_needing_quality_backfill,
     queue_duplicate_refresh_job,
@@ -402,6 +403,8 @@ class ScanRuntimeManager:
                     job.finished_at = None
                     job.files_total = 0
                     job.files_scanned = 0
+                    job.errors = 0
+                    job.scan_summary = _empty_scan_summary()
 
             db.commit()
         finally:

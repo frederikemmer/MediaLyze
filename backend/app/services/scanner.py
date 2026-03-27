@@ -1046,7 +1046,8 @@ def run_scan(
             logger.exception("Media analysis failed for %s", relative_path)
             return media_file, relative_path, None, [], _short_error_reason(exc)
 
-    with ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count) as executor:
+    executor = ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count)
+    try:
         batch_counter = 0
         next_index = 0
         pending: dict[Future, tuple[MediaFile, Path]] = {}
@@ -1062,9 +1063,32 @@ def run_scan(
             if _should_cancel():
                 for future in pending:
                     future.cancel()
+                executor.shutdown(wait=False, cancel_futures=True)
                 raise ScanCanceled()
 
-            done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+            done, _ = wait(pending.keys(), timeout=0.5, return_when=FIRST_COMPLETED)
+            if not done:
+                if _should_commit_progress(
+                    analysis_last_commit_at,
+                    processed=job.files_scanned,
+                    total=max(1, len(to_analyze)),
+                    batch_size=0,
+                ):
+                    _update_job_phase_progress(
+                        job,
+                        job.files_scanned,
+                        max(1, len(to_analyze)),
+                        detail=(
+                            f"{job.files_scanned} of {len(to_analyze)} files analyzed, "
+                            f"{len(pending)} in progress"
+                        ),
+                    )
+                    job.scan_summary = _build_scan_summary(discovery, len(to_analyze))
+                    db.commit()
+                    stats_cache.invalidate(cache_key, job.library_id)
+                    analysis_last_commit_at = monotonic()
+                continue
+
             for future in done:
                 pending.pop(future)
                 media_file, relative_path, payload, subtitles, error = future.result()
@@ -1116,6 +1140,8 @@ def run_scan(
             job.scan_summary = _build_scan_summary(discovery, len(to_analyze))
             db.commit()
             stats_cache.invalidate(cache_key, job.library_id)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     if _should_cancel():
         raise ScanCanceled()

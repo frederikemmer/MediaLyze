@@ -57,6 +57,15 @@ def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monke
                     started_at=datetime.now(UTC),
                     files_total=120,
                     files_scanned=40,
+                    errors=3,
+                    scan_summary={
+                        "runtime": {
+                            "phase_key": "analyzing",
+                            "phase_current": 43,
+                            "phase_total": 8982,
+                            "phase_detail": "43/8982 ~ 1% analyzed",
+                        }
+                    },
                 ),
                 ScanJob(
                     library_id=first_library.id,
@@ -99,6 +108,9 @@ def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monke
     assert jobs[0].started_at is None
     assert jobs[0].files_total == 0
     assert jobs[0].files_scanned == 0
+    assert jobs[0].errors == 0
+    assert jobs[0].scan_summary["runtime"]["phase_key"] == "queued"
+    assert jobs[0].scan_summary["runtime"]["phase_detail"] == "Waiting to start"
     assert jobs[1].status == JobStatus.queued
     assert jobs[1].started_at is None
     assert jobs[1].files_total == 0
