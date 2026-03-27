@@ -119,6 +119,14 @@ If you want a different external port, set `HOST_PORT` in `.env`.
 
 ## Local Development
 
+Quick start for local API + frontend on MacOS:
+
+```bash
+./scripts/dev-local.sh
+```
+
+The script starts the backend with `CONFIG_PATH=.local-config`, `MEDIA_ROOT=$HOME/Desktop`, waits for `/api/health`, and then launches the Vite dev server in the foreground. Override those defaults by exporting `CONFIG_PATH`, `MEDIA_ROOT`, `BACKEND_PORT`, or `FRONTEND_PORT` before running it.
+
 ### Backend
 
 ```bash
