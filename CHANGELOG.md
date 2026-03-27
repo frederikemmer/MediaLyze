@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+- add per-library duplicate detection modes for `filename`, `content_hash`, and `perceptual_hash`
+- persist duplicate artifacts and duplicate-group memberships in SQLite and surface duplicate groups through the library API, statistics panels, and analyzed-files filters
+- show duplicate detection as an explicit live scan phase with phase-aware progress, detail text, and duplicate metrics in scan logs
+
+### 🐛 Bug fixes
+- bundle and resolve `ffmpeg` for desktop runtime so perceptual duplicate hashing can extract representative frames consistently in packaged builds
+
 ## v0.3.0
 
 >2026-03-26

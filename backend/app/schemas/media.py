@@ -96,6 +96,9 @@ class MediaFileTableRow(BaseModel):
     subtitle_languages: list[str] = Field(default_factory=list)
     subtitle_codecs: list[str] = Field(default_factory=list)
     subtitle_sources: list[str] = Field(default_factory=list)
+    duplicate_group_key: str | None = None
+    duplicate_group_label: str | None = None
+    duplicate_group_member_count: int = 0
 
 
 class MediaFileDetail(MediaFileTableRow):
@@ -129,3 +132,25 @@ class DashboardResponse(BaseModel):
     audio_codec_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]
     subtitle_distribution: list[DistributionItem]
+
+
+class DuplicateGroupRead(BaseModel):
+    group_key: str
+    label: str
+    file_count: int
+    file_ids: list[int] = Field(default_factory=list)
+    mode: str
+
+
+class DuplicateGroupPageRead(BaseModel):
+    total: int
+    offset: int
+    limit: int
+    items: list[DuplicateGroupRead] = Field(default_factory=list)
+
+
+class DuplicateSummaryRead(BaseModel):
+    mode: str
+    groups_found: int = 0
+    duplicate_files: int = 0
+    pending_files: int = 0

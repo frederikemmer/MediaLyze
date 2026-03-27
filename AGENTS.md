@@ -43,6 +43,7 @@ MediaLyze currently implements:
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
 * full and incremental scans
+* per-library duplicate detection with `filename`, `content_hash`, and `perceptual_hash` modes
 * scan cancelation
 * recent scan logs and detailed scan-job summaries
 * deterministic change detection using path, file size, and modification time
@@ -71,7 +72,6 @@ MediaLyze does **not** currently:
 
 Open or clearly future-facing work includes:
 
-* duplicate-video detection
 * improved broken-file reporting and diagnostics
 * additional future analysis and recommendation workflows
 
@@ -185,6 +185,7 @@ Scan-job tracking now includes:
 * trigger source tracking
 * trigger details
 * progress state and phase labels
+* explicit duplicate-detection phase progress and duplicate-result summaries
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled error reasons
@@ -695,6 +696,7 @@ Current documented runtime configuration includes:
 * `HOST_PORT`
 * `TZ`
 * `FFPROBE_PATH`
+* `FFMPEG_PATH`
 * `SCAN_RUNTIME_WORKER_COUNT`
 * `DISABLE_DEFAULT_IGNORE_PATTERNS`
 * `PUID`
@@ -705,6 +707,7 @@ Additional behavior:
 * the backend defaults to serving on port `8080`
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
+* `FFMPEG_PATH` can override the ffmpeg binary used for perceptual duplicate hashing
 * `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage
 * `FRONTEND_DIST_PATH` can point the backend at an explicit built frontend bundle, which is used by desktop packaging
 

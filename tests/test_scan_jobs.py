@@ -27,6 +27,36 @@ def test_serialize_scan_job_for_discovery_phase() -> None:
     assert payload.progress_percent == 0.0
 
 
+def test_serialize_scan_job_uses_runtime_discovery_progress() -> None:
+    job = ScanJob(
+        id=1,
+        library_id=2,
+        status=JobStatus.running,
+        job_type="incremental",
+        files_total=10,
+        files_scanned=0,
+        errors=0,
+        started_at=datetime.now(UTC),
+        finished_at=None,
+        scan_summary={
+            "runtime": {
+                "phase_key": "discovering",
+                "phase_label": "Discovering files",
+                "phase_detail": "Discovering files: 5 of 10",
+                "phase_current": 5,
+                "phase_total": 10,
+                "phase_progress_percent": 50.0,
+            }
+        },
+    )
+
+    payload = serialize_scan_job(job)
+
+    assert payload.phase_current == 5
+    assert payload.phase_total == 10
+    assert payload.progress_percent == 7.5
+
+
 def test_serialize_scan_job_for_analysis_phase() -> None:
     job = ScanJob(
         id=1,
@@ -43,7 +73,7 @@ def test_serialize_scan_job_for_analysis_phase() -> None:
     payload = serialize_scan_job(job)
 
     assert payload.phase_label == "Analyzing media"
-    assert payload.progress_percent == 25.0
+    assert payload.progress_percent == 28.8
 
 
 def test_list_active_scan_jobs_deduplicates_per_library() -> None:

@@ -27,7 +27,7 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-def test_recover_orphaned_jobs_requeues_running_jobs_without_failing_duplicates(monkeypatch) -> None:
+def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monkeypatch) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
 
@@ -74,6 +74,17 @@ def test_recover_orphaned_jobs_requeues_running_jobs_without_failing_duplicates(
                     files_total=12,
                     files_scanned=1,
                 ),
+                ScanJob(
+                    library_id=second_library.id,
+                    status=JobStatus.running,
+                    job_type="duplicate_refresh",
+                    started_at=datetime.now(UTC),
+                ),
+                ScanJob(
+                    library_id=second_library.id,
+                    status=JobStatus.queued,
+                    job_type="quality_recompute",
+                ),
             ]
         )
         db.commit()
@@ -93,6 +104,10 @@ def test_recover_orphaned_jobs_requeues_running_jobs_without_failing_duplicates(
     assert jobs[1].files_total == 0
     assert jobs[1].files_scanned == 0
     assert jobs[2].status == JobStatus.queued
+    assert jobs[3].status == JobStatus.canceled
+    assert jobs[3].finished_at is not None
+    assert jobs[4].status == JobStatus.canceled
+    assert jobs[4].finished_at is not None
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

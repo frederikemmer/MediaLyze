@@ -35,6 +35,12 @@ class ScanMode(str, Enum):
     watch = "watch"
 
 
+class DuplicateDetectionMode(str, Enum):
+    filename = "filename"
+    content_hash = "content_hash"
+    perceptual_hash = "perceptual_hash"
+
+
 class ScanStatus(str, Enum):
     pending = "pending"
     analyzing = "analyzing"
@@ -71,6 +77,11 @@ class Library(TimestampMixin, Base):
     )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     quality_profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
+    duplicate_detection_mode: Mapped[DuplicateDetectionMode] = mapped_column(
+        SqlEnum(DuplicateDetectionMode, native_enum=False),
+        default=DuplicateDetectionMode.filename,
+        nullable=False,
+    )
 
     media_files: Mapped[list[MediaFile]] = relationship(
         back_populates="library",
@@ -101,6 +112,9 @@ class MediaFile(Base):
         Index("ix_media_files_library_mtime", "library_id", "mtime"),
         Index("ix_media_files_library_last_analyzed_at", "library_id", "last_analyzed_at"),
         Index("ix_media_files_library_quality_score", "library_id", "quality_score"),
+        Index("ix_media_files_library_content_hash", "library_id", "content_hash"),
+        Index("ix_media_files_library_duplicate_group_key", "library_id", "duplicate_group_key"),
+        Index("ix_media_files_library_duplicate_group_member_count", "library_id", "duplicate_group_member_count"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -121,6 +135,13 @@ class MediaFile(Base):
     quality_score_raw: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     quality_score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     raw_ffprobe_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    duplicate_filename_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    perceptual_hash: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    perceptual_hash_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    duplicate_group_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    duplicate_group_label: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    duplicate_group_member_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="media_files")
     media_format: Mapped[MediaFormat | None] = relationship(

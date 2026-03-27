@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   SunMedium,
   Waypoints,
+  CopyPlus,
 } from "lucide-react";
 
 import {
@@ -151,6 +152,12 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     icon: Captions,
     labelKey: "libraryStatistics.items.subtitleLanguages",
     placeholderKey: "libraryDetail.searchFields.subtitleLanguages.placeholder",
+  },
+  {
+    field: "duplicates",
+    icon: CopyPlus,
+    labelKey: "libraryStatistics.items.duplicates",
+    placeholderKey: "libraryDetail.searchFields.duplicates.placeholder",
   },
   {
     field: "subtitle_codecs",
