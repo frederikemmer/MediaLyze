@@ -16,6 +16,11 @@
     "libraryFallback": "Library #{{id}}",
     "stopAria": "Stop active scans"
   },
+  "duplicateDetectionModes": {
+    "filename": "Filename",
+    "content_hash": "Content hash",
+    "perceptual_hash": "Perceptual hash"
+  },
   "dashboard": {
     "liveUpdates": "Live updates are active while scans run. Dashboard metrics refresh automatically.",
     "libraries": "Libraries",
@@ -46,6 +51,9 @@
     "scanMode": "Scan mode",
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
+    "duplicateDetectionMode": "Duplicate detection",
+    "duplicateDetectionModeTooltipAria": "Explain duplicate detection modes",
+    "duplicateDetectionModeTooltip": "filename: Probable duplicates based on normalized file names and fuzzy matching.\n\ncontent_hash: Exact duplicates based on a hash of the full file contents.\n\nperceptual_hash: Visually similar videos based on representative video frames. Most expensive mode.",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
     "qualityScoreTitle": "Quality score",
@@ -126,6 +134,7 @@
       "subtitleLanguages": "Subtitle languages",
       "subtitleCodecs": "Subtitle codecs",
       "subtitleSources": "Subtitle sources",
+      "duplicates": "Duplicates",
       "qualityScore": "Quality score"
     }
   },
@@ -161,6 +170,7 @@
     "subtitleLanguages": "Subtitle languages",
     "subtitleCodecs": "Subtitle codecs",
     "subtitleSources": "Subtitle sources",
+    "duplicates": "Duplicates",
     "analyzedFiles": "Analyzed files",
     "indexedEntries": "{{count}} indexed entries",
     "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
@@ -218,6 +228,9 @@
       "subtitleSources": {
         "placeholder": "e.g. internal external"
       },
+      "duplicates": {
+        "placeholder": "any or group:<id>"
+      },
       "validation": {
         "size": "Use a comparison like >4GB or <=700MB.",
         "quality_score": "Use a score from 1 to 10, for example >=8.",
@@ -264,6 +277,7 @@
     "metricIgnored": "Ignored",
     "metricAnalyzed": "Analyzed",
     "metricFailed": "Failed",
+    "metricDuplicates": "Duplicates",
     "metricNew": "New",
     "metricChanged": "Changed",
     "metricDeleted": "Deleted",
@@ -274,6 +288,11 @@
     "changedFiles": "Changed files",
     "deletedFiles": "Deleted files",
     "failedFiles": "Files that could not be analyzed",
+    "duplicateDetection": "Duplicate detection",
+    "duplicateArtifacts": "Artifacts computed",
+    "duplicateCacheHits": "Cache hits",
+    "duplicateGroups": "Groups found",
+    "duplicatePending": "Pending files",
     "failedFileReasonTooltipAria": "Show analysis failure details for {{path}}",
     "watchEvents": "{{count}} filesystem events were aggregated.",
     "intervalMinutes": "Schedule interval: {{minutes}} minutes",

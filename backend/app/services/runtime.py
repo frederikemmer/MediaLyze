@@ -18,6 +18,7 @@ from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
     execute_scan_job,
     libraries_needing_quality_backfill,
+    queue_duplicate_refresh_job,
     queue_quality_recompute_job,
     queue_scan_job,
 )
@@ -179,6 +180,30 @@ class ScanRuntimeManager:
 
         if job_id is None:
             raise ValueError(f"Failed to request quality recompute for library {library_id}")
+        return job_id, created
+
+    def request_duplicate_refresh(self, library_id: int) -> tuple[int, bool]:
+        created = False
+        should_submit = False
+        job_id: int | None = None
+
+        with self.lock:
+            db = SessionLocal()
+            try:
+                job, created = queue_duplicate_refresh_job(db, library_id)
+                job_id = job.id
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                    self.active_library_ids.add(library_id)
+                    self.submitted_job_ids.add(job.id)
+                    should_submit = True
+            finally:
+                db.close()
+
+        if should_submit and job_id is not None:
+            self.executor.submit(self._run_job, job_id, library_id)
+
+        if job_id is None:
+            raise ValueError(f"Failed to request duplicate refresh for library {library_id}")
         return job_id, created
 
     def submit_scan_job(self, job_id: int) -> None:
@@ -357,21 +382,26 @@ class ScanRuntimeManager:
     def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            running_jobs = db.scalars(
+            active_jobs = db.scalars(
                 select(ScanJob)
-                .where(ScanJob.status == JobStatus.running)
+                .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            if not running_jobs:
+            if not active_jobs:
                 return
 
-            for job in running_jobs:
-                job.status = JobStatus.queued
-                job.started_at = None
-                job.finished_at = None
-                job.files_total = 0
-                job.files_scanned = 0
+            for job in active_jobs:
+                if job.job_type in {"quality_recompute", "duplicate_refresh"}:
+                    job.status = JobStatus.canceled
+                    job.finished_at = utc_now()
+                    continue
+                if job.status == JobStatus.running:
+                    job.status = JobStatus.queued
+                    job.started_at = None
+                    job.finished_at = None
+                    job.files_total = 0
+                    job.files_scanned = 0
 
             db.commit()
         finally:

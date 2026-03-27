@@ -13,13 +13,24 @@ type ScanJobsContextValue = {
 
 const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
 export const ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS = 5000;
+export const ACTIVE_DUPLICATE_PHASE_POLL_INTERVAL_MS = 750;
+export const ACTIVE_SCAN_PROGRESS_POLL_INTERVAL_MS = 1000;
 
 export function ScanJobsProvider({ children }: { children: ReactNode }) {
   const [activeJobs, setActiveJobs] = useState<ScanJob[]>([]);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
   const initializedRef = useRef(false);
-  const pollInterval = isPageVisible && activeJobs.length > 0 ? ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS : null;
+  const hasDuplicatePhaseJob = activeJobs.some((job) =>
+    [
+      "detecting_duplicates_preparing",
+      "detecting_duplicates_artifacts",
+      "detecting_duplicates_grouping",
+    ].includes(job.phase_key),
+  );
+  const pollInterval = isPageVisible && activeJobs.length > 0
+    ? (hasDuplicatePhaseJob ? ACTIVE_DUPLICATE_PHASE_POLL_INTERVAL_MS : ACTIVE_SCAN_PROGRESS_POLL_INTERVAL_MS)
+    : null;
 
   const refresh = useEffectEvent(async () => {
     try {
@@ -41,6 +52,14 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
 
   const trackJob = useEffectEvent((job: ScanJob) => {
     setActiveJobs((current) => {
+      const existing = current.find((entry) => entry.library_id === job.library_id);
+      if (
+        existing &&
+        existing.status === "running" &&
+        job.status === "queued"
+      ) {
+        return current;
+      }
       const next = current.filter((entry) => entry.library_id !== job.library_id);
       return [...next, job];
     });

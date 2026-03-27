@@ -36,6 +36,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    duplicate_detection_mode: "filename",
     file_count: 2,
     total_size_bytes: 2048,
     total_duration_seconds: 7200,
@@ -54,6 +55,7 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
     subtitle_source_distribution: [{ label: "external", value: 2 }],
+    duplicate_distribution: [{ label: "All duplicates", value: 0, filter_value: "any" }],
     ...overrides,
   };
 }

@@ -68,6 +68,7 @@ type LibrarySettingsForm = {
   interval_minutes: number;
   debounce_seconds: number;
   quality_profile: QualityProfile;
+  duplicate_detection_mode: "filename" | "content_hash" | "perceptual_hash";
 };
 
 type IgnorePatternGroup = "user" | "default";
@@ -204,6 +205,7 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
+    duplicate_detection_mode: library.duplicate_detection_mode ?? "filename",
   };
 }
 
@@ -226,6 +228,7 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
     current.scan_mode === settings.scan_mode &&
     current.interval_minutes === settings.interval_minutes &&
     current.debounce_seconds === settings.debounce_seconds &&
+    current.duplicate_detection_mode === settings.duplicate_detection_mode &&
     JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
   );
 }
@@ -385,7 +388,7 @@ export function LibrariesPage() {
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const { preference: themePref, setPreference: setThemePref } = useTheme();
-  const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
+  const { activeJobs, hasActiveJobs, refresh } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
 
@@ -701,6 +704,7 @@ export function LibrariesPage() {
       interval_minutes: 60,
       debounce_seconds: 15,
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
+      duplicate_detection_mode: "filename",
     };
     const inspection = libraryPathInspections[libraryId];
     const next = { ...current, ...patch };
@@ -730,6 +734,7 @@ export function LibrariesPage() {
           scan_mode: next.scan_mode,
           scan_config: buildScanConfig(next),
           quality_profile: next.quality_profile,
+          duplicate_detection_mode: next.duplicate_detection_mode,
         });
         upsertLibrary(updated);
         setSettingsForms((forms) => ({
@@ -765,6 +770,7 @@ export function LibrariesPage() {
           scan_mode: current.scan_mode,
           scan_config: buildScanConfig(current),
           quality_profile: current.quality_profile,
+          duplicate_detection_mode: current.duplicate_detection_mode,
         });
         upsertLibrary(updated);
       } catch (reason) {
@@ -774,8 +780,8 @@ export function LibrariesPage() {
     }
 
     try {
-      const job = await api.scanLibrary(libraryId, "incremental");
-      trackJob(job);
+      await api.scanLibrary(libraryId, "incremental");
+      await refresh();
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
@@ -1239,6 +1245,10 @@ export function LibrariesPage() {
             <strong>{detail.scan_summary.analysis.analysis_failed}</strong>
             <span>{t("scanLogs.metricFailed")}</span>
           </div>
+          <div className="scan-log-stat">
+            <strong>{detail.scan_summary.duplicates.duplicate_files}</strong>
+            <span>{t("scanLogs.metricDuplicates")}</span>
+          </div>
         </div>
 
         <div className="scan-log-panels-grid">
@@ -1334,6 +1344,41 @@ export function LibrariesPage() {
             detail.scan_summary.changes.deleted_files.truncated_count,
             compactScanValues(detail.scan_summary.changes.deleted_files.paths),
           )}
+
+          <details className="scan-log-detail-block scan-log-collapsible-block">
+            <summary className="scan-log-collapse-toggle">
+              <span className="scan-log-collapse-copy">
+                <strong>{t("scanLogs.duplicateDetection")}</strong>
+                <span className="scan-log-collapse-summary">
+                  {detail.scan_summary.duplicates.mode ?? t("scanLogs.none")}
+                </span>
+              </span>
+              <span className="scan-log-collapse-meta">
+                <span className="badge">{detail.scan_summary.duplicates.groups_found}</span>
+                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
+              </span>
+            </summary>
+            <div className="scan-log-collapse-content">
+              <div className="scan-log-summary-grid">
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.artifacts_completed}</strong>
+                  <span>{t("scanLogs.duplicateArtifacts")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.artifact_cache_hits}</strong>
+                  <span>{t("scanLogs.duplicateCacheHits")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.groups_found}</strong>
+                  <span>{t("scanLogs.duplicateGroups")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.pending_files}</strong>
+                  <span>{t("scanLogs.duplicatePending")}</span>
+                </div>
+              </div>
+            </div>
+          </details>
 
           <details className="scan-log-detail-block scan-log-collapsible-block">
             <summary className="scan-log-collapse-toggle">
@@ -1919,7 +1964,7 @@ export function LibrariesPage() {
                           .filter((job) => job.library_id === library.id)
                           .map((job) => (
                             <span className="badge scan-badge" key={job.id}>
-                              {job.files_total > 0 ? `${job.progress_percent}%` : t("libraries.active")}
+                              {job.phase_label}
                             </span>
                           ))}
                       </div>
@@ -1965,13 +2010,20 @@ export function LibrariesPage() {
                     </div>
                   </div>
                   {activeJobs.find((job) => job.library_id === library.id) ? (
-                    <div className="progress">
-                      <span
-                        style={{
-                          width: `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`,
-                        }}
-                      />
-                    </div>
+                    <>
+                      <div className="progress">
+                        <span
+                          style={{
+                            width: `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="media-meta">
+                        {Math.round(activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0)}% ·{" "}
+                        {activeJobs.find((job) => job.library_id === library.id)?.phase_detail ??
+                          activeJobs.find((job) => job.library_id === library.id)?.phase_label}
+                      </p>
+                    </>
                   ) : null}
                   <div className="library-settings-form">
                     <div className="field">
@@ -2033,6 +2085,29 @@ export function LibrariesPage() {
                         />
                       </div>
                     ) : null}
+                    <div className="field">
+                      <label htmlFor={`duplicate-detection-mode-${library.id}`}>
+                        {t("libraries.duplicateDetectionMode")}{" "}
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.duplicateDetectionModeTooltipAria")}
+                          content={t("libraries.duplicateDetectionModeTooltip")}
+                          preserveLineBreaks
+                        />
+                      </label>
+                      <select
+                        id={`duplicate-detection-mode-${library.id}`}
+                        value={settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode}
+                        onChange={(event) =>
+                          updateLibraryForm(library.id, {
+                            duplicate_detection_mode: event.target.value as LibrarySettingsForm["duplicate_detection_mode"],
+                          })
+                        }
+                      >
+                        <option value="filename">{t("duplicateDetectionModes.filename")}</option>
+                        <option value="content_hash">{t("duplicateDetectionModes.content_hash")}</option>
+                        <option value="perceptual_hash">{t("duplicateDetectionModes.perceptual_hash")}</option>
+                      </select>
+                    </div>
                     <div className="field field-span-full">
                       <button
                         type="button"

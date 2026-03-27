@@ -32,6 +32,7 @@ class LibraryFileSearchFilters:
     search_subtitle_languages: str = ""
     search_subtitle_codecs: str = ""
     search_subtitle_sources: str = ""
+    search_duplicates: str = ""
 
     def normalized(self) -> LibraryFileSearchFilters:
         return LibraryFileSearchFilters(
@@ -47,6 +48,7 @@ class LibraryFileSearchFilters:
             search_subtitle_languages=self.search_subtitle_languages.strip(),
             search_subtitle_codecs=self.search_subtitle_codecs.strip(),
             search_subtitle_sources=self.search_subtitle_sources.strip(),
+            search_duplicates=self.search_duplicates.strip(),
         )
 
     def active(self) -> dict[str, str]:
@@ -327,6 +329,17 @@ def _apply_subtitle_source_filter(query, subtitle_aggregates, raw_value: str):
     return query
 
 
+def _apply_duplicates_filter(query, raw_value: str):
+    candidate = raw_value.strip().lower()
+    if candidate == "any":
+        return query.where(MediaFile.duplicate_group_member_count >= 2)
+    if candidate.startswith("group:"):
+        group_key = candidate.split(":", 1)[1].strip()
+        if group_key:
+            return query.where(MediaFile.duplicate_group_key == group_key)
+    return query.where(literal(False))
+
+
 def _apply_numeric_filter(query, expression, raw_value: str, parser, field_key: str):
     operator, value = _parse_comparison(raw_value, field_key)
     parsed_value = parser(value)
@@ -398,5 +411,7 @@ def apply_field_search_filters(
         query = _apply_text_filter(query, subtitle_aggregates.c.subtitle_codecs_search, normalized.search_subtitle_codecs)
     if normalized.search_subtitle_sources:
         query = _apply_subtitle_source_filter(query, subtitle_aggregates, normalized.search_subtitle_sources)
+    if normalized.search_duplicates:
+        query = _apply_duplicates_filter(query, normalized.search_duplicates)
 
     return query

@@ -133,6 +133,9 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
             | {_normalize_subtitle_codec(subtitle.format) for subtitle in media_file.external_subtitles}
         ),
         subtitle_sources=_subtitle_sources(media_file),
+        duplicate_group_key=media_file.duplicate_group_key,
+        duplicate_group_label=media_file.duplicate_group_label,
+        duplicate_group_member_count=media_file.duplicate_group_member_count,
     )
 
 

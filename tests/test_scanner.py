@@ -10,9 +10,10 @@ os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
-from backend.app.models.entities import AppSetting, AudioStream, ExternalSubtitle, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
+from backend.app.models.entities import AppSetting, AudioStream, ExternalSubtitle, JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, SubtitleStream
 from backend.app.services import scanner as scanner_service
 from backend.app.services.scanner import _iter_media_files
+from backend.app.services.scanner import queue_duplicate_refresh_job
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
 
@@ -140,6 +141,38 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
     assert len(subtitle_streams) == 1
     assert subtitle_streams[0].codec == "subrip"
     assert subtitle_streams[0].subtitle_type == "text"
+
+
+def test_queue_duplicate_refresh_job_reuses_running_job(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(tmp_path / "library"),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        running_job = ScanJob(
+            library_id=library.id,
+            status=JobStatus.running,
+            job_type="duplicate_refresh",
+            scan_summary=scanner_service._empty_scan_summary(),
+        )
+        db.add(running_job)
+        db.commit()
+        db.refresh(running_job)
+
+        job, created = queue_duplicate_refresh_job(db, library.id)
+
+    assert created is False
+    assert job.id == running_job.id
 
 
 def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: Path, monkeypatch) -> None:

@@ -11,17 +11,20 @@ import { useAppData } from "../lib/app-data";
 import { useScanJobs } from "../lib/scan-jobs";
 
 function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
-  if (job.phase_label === "Discovering files") {
+  if (job.phase_key === "discovering") {
     return t("scanBanner.searchingFound", { count: job.files_total });
   }
-  if (job.phase_label === "Analyzing media" && job.files_total > 0) {
+  if (job.phase_key === "analyzing" && job.phase_total > 0) {
     return t("scanBanner.analyzingProgress", {
-      scanned: job.files_scanned,
-      total: job.files_total,
-      percent: Math.round((job.files_scanned / job.files_total) * 100),
+      scanned: job.phase_current,
+      total: job.phase_total,
+      percent: Math.round(job.phase_progress_percent),
     });
   }
-  return job.phase_detail ?? job.phase_label;
+  if (job.phase_detail) {
+    return job.eta_seconds ? `${job.phase_detail} · ~${Math.max(1, Math.round(job.eta_seconds))}s remaining` : job.phase_detail;
+  }
+  return job.phase_label;
 }
 
 export function AppShell() {
@@ -141,6 +144,7 @@ export function AppShell() {
                 <div className="scan-banner-job" key={job.id}>
                   <div className="distribution-copy">
                     <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
+                    <span>{job.phase_label} · {Math.round(job.progress_percent)}%</span>
                     <span>{renderActiveJobDetail(t, job)}</span>
                   </div>
                   <div className="progress">
