@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -77,5 +77,25 @@ test("bundleFfprobe creates the expected ffprobe folder structure", () => {
     );
     assert.equal(existsSync(bundledExecutable), true);
     assert.equal(readFileSync(bundledExecutable, "utf8"), "ffprobe-binary");
+  });
+});
+
+test("bundleFfprobe dereferences symlinked executables", { skip: process.platform === "win32" }, () => {
+  withTempDir((tempDir) => {
+    const sourceBinary = path.join(tempDir, "ffprobe-real");
+    const sourceLink = path.join(tempDir, "ffprobe");
+    const outputDir = path.join(tempDir, "desktop-backend");
+    writeFileSync(sourceBinary, "ffprobe-binary");
+    symlinkSync(sourceBinary, sourceLink);
+    mkdirSync(outputDir, { recursive: true });
+
+    const bundledExecutable = bundleFfprobe(outputDir, {
+      env: { MEDIALYZE_FFPROBE_DIR: sourceLink },
+      platform: "linux",
+    });
+
+    assert.equal(existsSync(bundledExecutable), true);
+    assert.equal(readFileSync(bundledExecutable, "utf8"), "ffprobe-binary");
+    assert.equal(lstatSync(bundledExecutable).isSymbolicLink(), false);
   });
 });

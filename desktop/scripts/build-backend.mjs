@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -150,12 +150,12 @@ export function bundleFfprobe(outputPath, options = {}) {
   mkdirSync(targetDir, { recursive: true });
 
   if (source.kind === "directory") {
-    cpSync(source.sourcePath, targetDir, { recursive: true });
+    cpSync(source.sourcePath, targetDir, { recursive: true, dereference: true });
     return path.join(targetDir, source.executableName);
   }
 
   const targetExecutable = path.join(targetDir, source.executableName);
-  cpSync(source.sourcePath, targetExecutable);
+  cpSync(realpathSync(source.sourcePath), targetExecutable);
   return targetExecutable;
 }
 
@@ -166,12 +166,12 @@ export function bundleFfmpeg(outputPath, options = {}) {
   mkdirSync(targetDir, { recursive: true });
 
   if (source.kind === "directory") {
-    cpSync(source.sourcePath, targetDir, { recursive: true });
+    cpSync(source.sourcePath, targetDir, { recursive: true, dereference: true });
     return path.join(targetDir, source.executableName);
   }
 
   const targetExecutable = path.join(targetDir, source.executableName);
-  cpSync(source.sourcePath, targetExecutable);
+  cpSync(realpathSync(source.sourcePath), targetExecutable);
   return targetExecutable;
 }
 
