@@ -13,6 +13,7 @@
     "running": "Scan läuft...",
     "searchingFound": "Suche... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analysiert",
+    "analyzingQueuedProgress": "{{scanned}}/{{total}} zu analysierende Dateien verarbeitet ~ {{percent}}% · {{unchanged}} unverändert",
     "libraryFallback": "Bibliothek #{{id}}",
     "stopAria": "Aktive Scans stoppen"
   },

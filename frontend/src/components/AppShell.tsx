@@ -10,15 +10,37 @@ import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
 import { useScanJobs } from "../lib/scan-jobs";
 
+function formatProgressPercent(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+  if (value >= 99 || value <= 0) {
+    return String(Math.round(value));
+  }
+  if (value < 10) {
+    return value.toFixed(1);
+  }
+  return value.toFixed(1);
+}
+
 function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
   if (job.phase_key === "discovering") {
     return t("scanBanner.searchingFound", { count: job.files_total });
   }
   if (job.phase_key === "analyzing" && job.phase_total > 0) {
+    const unchanged = Math.max(0, job.files_total - job.phase_total);
+    if (unchanged > 0) {
+      return t("scanBanner.analyzingQueuedProgress", {
+        scanned: job.phase_current,
+        total: job.phase_total,
+        percent: formatProgressPercent(job.phase_progress_percent),
+        unchanged,
+      });
+    }
     return t("scanBanner.analyzingProgress", {
       scanned: job.phase_current,
       total: job.phase_total,
-      percent: Math.round(job.phase_progress_percent),
+      percent: formatProgressPercent(job.phase_progress_percent),
     });
   }
   if (job.phase_detail) {
@@ -144,7 +166,7 @@ export function AppShell() {
                 <div className="scan-banner-job" key={job.id}>
                   <div className="distribution-copy">
                     <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
-                    <span>{job.phase_label} · {Math.round(job.progress_percent)}%</span>
+                    <span>{job.phase_label} · {formatProgressPercent(job.progress_percent)}%</span>
                     <span>{renderActiveJobDetail(t, job)}</span>
                   </div>
                   <div className="progress">
