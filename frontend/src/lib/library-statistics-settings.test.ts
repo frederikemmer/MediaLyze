@@ -17,10 +17,12 @@ describe("library statistics settings", () => {
     const settings = getLibraryStatisticsSettings();
 
     expect(settings.order[0]).toBe("size");
-    expect(settings.order[1]).toBe("quality_score");
+    expect(settings.order[1]).toBe("duplicates");
     expect(settings.visibility.hdr_type.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
+    expect(settings.visibility.subtitle_sources.panelEnabled).toBe(false);
+    expect(settings.visibility.subtitle_sources.tableEnabled).toBe(false);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
     expect(getVisibleLibraryStatisticTableColumns(settings)).toEqual([
@@ -72,6 +74,8 @@ describe("library statistics settings", () => {
       JSON.stringify({
         order: [
           "size",
+          "duplicates",
+          "quality_score",
           "video_codec",
           "resolution",
           "hdr_type",
@@ -81,10 +85,11 @@ describe("library statistics settings", () => {
           "subtitle_languages",
           "subtitle_codecs",
           "subtitle_sources",
-          "quality_score",
         ],
         visibility: {
           size: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          duplicates: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+          quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
           video_codec: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
           resolution: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
           hdr_type: { panelEnabled: true, tableEnabled: false, dashboardEnabled: true },
@@ -93,19 +98,16 @@ describe("library statistics settings", () => {
           audio_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
           subtitle_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
           subtitle_codecs: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
-          subtitle_sources: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
-          quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          subtitle_sources: { panelEnabled: false, tableEnabled: false, dashboardEnabled: false },
         },
       }),
     );
 
     const settings = getLibraryStatisticsSettings();
 
-    expect(settings.order[1]).toBe("quality_score");
-    expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
-    expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
+    expect(settings.order[1]).toBe("duplicates");
+    expect(settings.visibility.subtitle_sources.panelEnabled).toBe(false);
     expect(settings.visibility.subtitle_sources.tableEnabled).toBe(false);
-    expect(settings.visibility.audio_codecs.dashboardEnabled).toBe(true);
   });
 
   it("persists reordered settings", () => {
