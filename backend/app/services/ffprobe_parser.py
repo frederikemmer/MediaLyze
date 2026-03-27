@@ -140,7 +140,19 @@ def _ffprobe_input_path(file_path: Path) -> str:
 def _ffprobe_error_message(exc: subprocess.CalledProcessError) -> str:
     stderr = (exc.stderr or "").strip()
     if stderr:
-        return stderr.splitlines()[0].strip()[:300]
+        lines = [line.strip() for line in stderr.splitlines() if line.strip()]
+        for line in lines:
+            normalized = line.lower()
+            if normalized.startswith("ffprobe version "):
+                continue
+            if normalized.startswith("built with "):
+                continue
+            if normalized.startswith("configuration:"):
+                continue
+            if normalized.startswith("libav"):
+                continue
+            return line[:300]
+        return lines[-1][:300]
     stdout = (exc.stdout or "").strip()
     if stdout and stdout != "{":
         return stdout.splitlines()[0].strip()[:300]
@@ -206,7 +218,6 @@ class ProbeResult:
 def run_ffprobe(file_path: Path, ffprobe_path: str, timeout_seconds: int | None = None) -> dict[str, Any]:
     command = [
         ffprobe_path,
-        "-nostdin",
         "-v",
         "error",
         "-print_format",

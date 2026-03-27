@@ -804,6 +804,11 @@ Repository-level test coverage areas include:
 
 When documenting or extending behavior, prefer tests and code over stale prose.
 
+Bug-fix expectation:
+
+* when fixing a bug, add or update an automated test that reproduces the failure mode and verifies the fix whenever reasonably possible
+* prefer regression tests that would have failed before the fix, so the bug remains reproducible in CI and future refactors cannot silently reintroduce it
+
 ---
 
 # 16. Working Rules For Agents
@@ -814,6 +819,7 @@ When updating documentation, code, or behavior in this repository:
 * describe backlog items as backlog
 * do not resurrect outdated architectural labels from early versions
 * verify claims against code, tests, workflows, or GitHub release metadata
+* when a user reports a bug or a runtime/build failure, treat a reproducing or regression test as part of the expected fix unless the issue cannot be meaningfully covered by automation
 * do not document unverified scale claims as benchmarked facts; treat large-library support as a design goal unless there is measured evidence
 * prefer concrete current file paths and interfaces over speculative future structure
 * if a larger change affects architecture, runtime behavior, public interfaces, release flow, repository structure, or other information relevant for future development, update `AGENTS.md` in the same work
