@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import backend.app.services.ffprobe_parser as ffprobe_parser
-from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload
+from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload, run_ffprobe
 
 
 def test_normalize_ffprobe_payload_extracts_streams() -> None:
@@ -172,3 +172,23 @@ def test_ffprobe_input_path_adds_extended_prefix_for_windows_drive_paths(monkeyp
     monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="nt"))
 
     assert _ffprobe_input_path(Path(r"C:\media\movie.mkv")) == r"\\?\C:\media\movie.mkv"
+
+
+def test_run_ffprobe_disables_stdin_and_uses_nostdin(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class CompletedProcess:
+        stdout = "{}"
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return CompletedProcess()
+
+    monkeypatch.setattr(ffprobe_parser.subprocess, "run", fake_run)
+
+    result = run_ffprobe(tmp_path / "movie.mkv", "ffprobe")
+
+    assert result == {}
+    assert captured["command"][1] == "-nostdin"
+    assert captured["kwargs"]["stdin"] is ffprobe_parser.subprocess.DEVNULL

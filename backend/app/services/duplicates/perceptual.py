@@ -41,6 +41,7 @@ def _extract_frame_hash(
 ) -> int:
     command = [
         ffmpeg_path,
+        "-nostdin",
         "-hide_banner",
         "-loglevel",
         "error",
@@ -62,6 +63,7 @@ def _extract_frame_hash(
         "check": True,
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE,
+        "stdin": subprocess.DEVNULL,
     }
     if timeout_seconds and timeout_seconds > 0:
         run_kwargs["timeout"] = timeout_seconds

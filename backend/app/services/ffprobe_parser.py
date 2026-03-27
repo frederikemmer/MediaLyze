@@ -206,6 +206,7 @@ class ProbeResult:
 def run_ffprobe(file_path: Path, ffprobe_path: str, timeout_seconds: int | None = None) -> dict[str, Any]:
     command = [
         ffprobe_path,
+        "-nostdin",
         "-v",
         "error",
         "-print_format",
@@ -219,6 +220,7 @@ def run_ffprobe(file_path: Path, ffprobe_path: str, timeout_seconds: int | None 
         "capture_output": True,
         "text": True,
         "check": True,
+        "stdin": subprocess.DEVNULL,
     }
     if timeout_seconds and timeout_seconds > 0:
         run_kwargs["timeout"] = timeout_seconds

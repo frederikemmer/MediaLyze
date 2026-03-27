@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 - bundle and resolve `ffmpeg` for desktop runtime so perceptual duplicate hashing can extract representative frames consistently in packaged builds
 - correct active scan progress details so analyzed-file counts use the actual queued-for-analysis total and unchanged-file count instead of implying that whole libraries were still being analyzed
+- include the desktop `ffmpeg`/`ffprobe` path helper modules in packaged Electron builds so macOS, Linux, and Windows app launches no longer fail with missing desktop helper modules
+- run `ffprobe` and perceptual-hash `ffmpeg` subprocesses with `-nostdin` and closed stdin so scans do not hang on the first file in non-interactive desktop/container environments
+- reduce `dev` branch Docker publishing to `linux/amd64` only so development image builds finish faster while keeping official `main` release images multi-arch
 
 ## v0.3.0
 
