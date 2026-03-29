@@ -25,6 +25,10 @@ export function getDisplayedScanJobPercent(job: ScanJob): number {
   return job.progress_percent;
 }
 
+function isQualityRecomputeJob(job: ScanJob): boolean {
+  return job.job_type === "quality_recompute" || job.scan_mode_label === "quality_recompute";
+}
+
 export function describeActiveScanJob(
   t: (key: string, options?: Record<string, unknown>) => string,
   job: ScanJob,
@@ -33,7 +37,7 @@ export function describeActiveScanJob(
     return t("scanBanner.searchingFound", { count: job.files_total });
   }
 
-  if (job.phase_key === "analyzing") {
+  if (job.phase_key === "analyzing" && !isQualityRecomputeJob(job)) {
     const total = job.queued_for_analysis > 0 ? job.queued_for_analysis : job.phase_total;
     if (total > 0) {
       const scanned = Math.min(total, Math.max(job.phase_current, job.files_scanned));

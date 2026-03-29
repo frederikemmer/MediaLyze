@@ -270,6 +270,7 @@ export type ScanFileList = {
 export type ScanFileIssue = {
   path: string;
   reason: string;
+  details?: string | null;
 };
 
 export type ScanPatternHit = {

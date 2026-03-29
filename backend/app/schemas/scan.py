@@ -44,6 +44,7 @@ class ScanFileListRead(BaseModel):
 class ScanFileIssueRead(BaseModel):
     path: str
     reason: str
+    details: str | None = None
 
 
 class ScanPatternHitRead(BaseModel):

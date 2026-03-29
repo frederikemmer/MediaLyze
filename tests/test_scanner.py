@@ -13,6 +13,7 @@ from backend.app.db.base import Base
 from backend.app.models.entities import AppSetting, AudioStream, ExternalSubtitle, JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, SubtitleStream
 from backend.app.services import scanner as scanner_service
 from backend.app.services.scanner import _iter_media_files
+from backend.app.services.scanner import execute_scan_job
 from backend.app.services.scanner import queue_duplicate_refresh_job
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
@@ -513,7 +514,11 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     assert job.status.value == "failed"
     assert job.scan_summary["analysis"]["analysis_failed"] == 1
     assert job.scan_summary["analysis"]["failed_files"] == [
-        {"path": "broken.mkv", "reason": "ffprobe exploded"}
+        {
+            "path": "broken.mkv",
+            "reason": "ffprobe exploded",
+            "details": "ffprobe exploded\nwith internal details",
+        }
     ]
 
 
@@ -602,3 +607,43 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
     assert job.scan_summary["analysis"]["failed_files"] == [
         {"path": "broken.mkv", "reason": "bad payload"}
     ]
+
+
+def test_execute_scan_job_persists_runtime_failure_details(tmp_path: Path, monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    monkeypatch.setattr(scanner_service, "SessionLocal", session_factory)
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path)
+
+    with session_factory() as db:
+        library = Library(
+            name="Series",
+            path=str(tmp_path / "series"),
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        job = ScanJob(library_id=library.id, status=JobStatus.queued, job_type="incremental")
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    def fail_run_scan_job(db, settings, job_id):
+        raise RuntimeError("scan exploded\nwith traceback context")
+
+    monkeypatch.setattr(scanner_service, "_run_scan_job", fail_run_scan_job)
+
+    execute_scan_job(job_id, settings)
+
+    with session_factory() as db:
+        stored_job = db.get(ScanJob, job_id)
+
+    assert stored_job is not None
+    assert stored_job.status == JobStatus.failed
+    assert stored_job.scan_summary["runtime"]["fatal_error_type"] == "RuntimeError"
+    assert stored_job.scan_summary["runtime"]["fatal_error_message"] == "scan exploded\nwith traceback context"
+    assert "RuntimeError: scan exploded" in stored_job.scan_summary["runtime"]["fatal_error_traceback"]

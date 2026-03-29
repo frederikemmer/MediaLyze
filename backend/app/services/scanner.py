@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 from time import monotonic
+import traceback
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -114,9 +115,12 @@ class FailedFileSamples:
     items: list[dict[str, str]] = field(default_factory=list)
     truncated_count: int = 0
 
-    def add(self, path: str, reason: str) -> None:
+    def add(self, path: str, reason: str, details: str | None = None) -> None:
+        payload = {"path": path, "reason": reason}
+        if details and details != reason:
+            payload["details"] = details
         if len(self.items) < MAX_FAILED_FILE_SAMPLE_SIZE:
-            self.items.append({"path": path, "reason": reason})
+            self.items.append(payload)
         else:
             self.truncated_count += 1
 
@@ -191,6 +195,32 @@ def _short_error_reason(exc: Exception) -> str:
         if first_line:
             return first_line[:300]
     return exc.__class__.__name__
+
+
+def _error_details(exc: Exception, *, limit: int = 4000) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    return message[:limit]
+
+
+def _error_traceback(exc: Exception, *, limit: int = 16000) -> str:
+    rendered = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).strip()
+    if not rendered:
+        rendered = exc.__class__.__name__
+    return rendered[:limit]
+
+
+def _record_runtime_failure(job: ScanJob, exc: Exception) -> None:
+    summary = _runtime_summary(job)
+    runtime = summary["runtime"]
+    runtime.update(
+        {
+            "fatal_error_type": exc.__class__.__name__,
+            "fatal_error_message": _error_details(exc),
+            "fatal_error_traceback": _error_traceback(exc),
+            "fatal_error_at": utc_now().isoformat(),
+        }
+    )
+    job.scan_summary = summary
 
 
 def _iter_media_files(
@@ -641,12 +671,13 @@ def execute_scan_job(job_id: int, settings: Settings) -> None:
             job.status = JobStatus.canceled
             job.finished_at = utc_now()
             db.commit()
-    except Exception:
+    except Exception as exc:
         job = db.get(ScanJob, job_id)
         if job:
             job.status = JobStatus.failed
             job.finished_at = utc_now()
             job.errors += 1
+            _record_runtime_failure(job, exc)
             db.commit()
     finally:
         db.close()
@@ -1058,15 +1089,15 @@ def run_scan(
 
     def _safe_analyze(
         pair: tuple[MediaFile, Path],
-    ) -> tuple[MediaFile, str, dict | None, list[dict[str, str | None]], str | None]:
+    ) -> tuple[MediaFile, str, dict | None, list[dict[str, str | None]], str | None, str | None]:
         media_file, path = pair
         relative_path = path.relative_to(root).as_posix()
         try:
             payload, subtitles = _analyze_path(path, root, settings, ignore_patterns)
-            return media_file, relative_path, payload, subtitles, None
+            return media_file, relative_path, payload, subtitles, None, None
         except Exception as exc:
             logger.exception("Media analysis failed for %s", relative_path)
-            return media_file, relative_path, None, [], _short_error_reason(exc)
+            return media_file, relative_path, None, [], _short_error_reason(exc), _error_details(exc)
 
     executor = ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count)
     try:
@@ -1116,7 +1147,7 @@ def run_scan(
 
             for future in done:
                 pending.pop(future)
-                media_file, relative_path, payload, subtitles, error = future.result()
+                media_file, relative_path, payload, subtitles, error, error_details = future.result()
                 if error is None and payload is not None:
                     try:
                         _apply_analysis_result(
@@ -1131,11 +1162,11 @@ def run_scan(
                         logger.exception("Media normalization failed for %s", relative_path)
                         media_file.scan_status = ScanStatus.failed
                         job.errors += 1
-                        failed_files.add(relative_path, _short_error_reason(exc))
+                        failed_files.add(relative_path, _short_error_reason(exc), _error_details(exc))
                 else:
                     media_file.scan_status = ScanStatus.failed
                     job.errors += 1
-                    failed_files.add(relative_path, error or "Unknown analysis failure")
+                    failed_files.add(relative_path, error or "Unknown analysis failure", error_details)
                 job.files_scanned += 1
                 batch_counter += 1
                 _update_job_phase_progress(

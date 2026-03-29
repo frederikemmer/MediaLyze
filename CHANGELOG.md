@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - include the desktop `ffprobe` path helper module in packaged Electron builds so macOS, Linux, and Windows app launches no longer fail with missing desktop helper modules
 - reduce `dev` branch Docker publishing to `linux/amd64` only so development image builds finish faster while keeping official `main` release images multi-arch
 - refresh library summaries, statistics, and analyzed-files results continuously during active scans and show clearer discovery-versus-analysis progress details while scans run
+- keep quality-recompute jobs out of the media-analysis progress wording and persist richer scan-log diagnostics, including full per-file error details and fatal runtime tracebacks for failed scans
 
 ## v0.3.0
 

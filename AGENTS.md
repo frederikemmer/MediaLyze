@@ -188,7 +188,8 @@ Scan-job tracking now includes:
 * explicit duplicate-detection phase progress and duplicate-result summaries
 * discovery summaries
 * change summaries
-* analysis failure summaries with sampled error reasons
+* analysis failure summaries with sampled short reasons plus fuller stored failure details
+* persisted fatal runtime failure diagnostics for failed scans, including error type, message, and traceback in scan details
 
 ---
 

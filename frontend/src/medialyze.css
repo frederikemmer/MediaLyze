@@ -1065,6 +1065,17 @@
   scrollbar-gutter: stable;
 }
 
+.scan-log-debug-output {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(31, 28, 22, 0.06);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .scan-log-summary-meta-detail {
   padding: 0 2px;
 }

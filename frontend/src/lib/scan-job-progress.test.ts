@@ -43,6 +43,27 @@ describe("scan job progress helpers", () => {
     expect(detail).toContain("8982 discovered");
   });
 
+  it("keeps quality recompute detail separate from queued analysis wording", () => {
+    const detail = describeActiveScanJob(
+      i18n.t.bind(i18n),
+      createJob({
+        job_type: "quality_recompute",
+        scan_mode_label: "quality_recompute",
+        phase_label: "Recomputing quality scores",
+        phase_detail: "31 of 8989 files updated",
+        phase_progress_percent: 0.3,
+        phase_current: 31,
+        phase_total: 8989,
+        files_total: 8989,
+        files_scanned: 31,
+        queued_for_analysis: 31,
+        unchanged_files: 8958,
+      }),
+    );
+
+    expect(detail).toBe("31 of 8989 files updated");
+  });
+
   it("formats non-integer progress values consistently", () => {
     expect(formatScanJobProgressPercent(15.04)).toBe("15.0");
     expect(formatScanJobProgressPercent(0)).toBe("0");

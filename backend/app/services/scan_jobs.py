@@ -47,6 +47,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     eta_seconds = runtime.get("eta_seconds")
     scan_mode_label = runtime.get("scan_mode_label")
     duplicate_detection_mode = runtime.get("duplicate_detection_mode")
+    is_quality_recompute = scan_job.job_type == "quality_recompute" or scan_mode_label == "quality_recompute"
 
     if not runtime.get("phase_key"):
         if scan_job.status == JobStatus.queued:
@@ -58,13 +59,17 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
             phase_detail = "Scanning directories"
         else:
             phase_key = "analyzing"
-            phase_label = "Analyzing media"
+            phase_label = "Recomputing quality scores" if is_quality_recompute else "Analyzing media"
             phase_current = files_scanned
-            phase_total = queued_for_analysis or files_total
+            phase_total = files_total if is_quality_recompute else (queued_for_analysis or files_total)
             phase_progress_percent = round((files_scanned / phase_total) * 100, 1) if phase_total > 0 else 0.0
-            phase_detail = f"{files_scanned} of {phase_total} files analyzed"
+            phase_detail = (
+                f"{files_scanned} of {phase_total} files updated"
+                if is_quality_recompute
+                else f"{files_scanned} of {phase_total} files analyzed"
+            )
 
-    if phase_key == "analyzing":
+    if phase_key == "analyzing" and not is_quality_recompute:
         if queued_for_analysis > 0:
             phase_total = queued_for_analysis
         if phase_total <= 0 and files_total > 0:
@@ -81,12 +86,22 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
                 )
             else:
                 phase_detail = f"{phase_current} of {phase_total} files analyzed"
+    elif phase_key == "analyzing" and is_quality_recompute:
+        if phase_total <= 0 and files_total > 0:
+            phase_total = files_total
+        if phase_total > 0:
+            phase_current = min(phase_total, max(phase_current, files_scanned))
+            phase_progress_percent = round((phase_current / phase_total) * 100, 1)
+        elif phase_current <= 0 and files_scanned > 0:
+            phase_current = files_scanned
+        if not phase_detail and phase_total > 0:
+            phase_detail = f"{phase_current} of {phase_total} files updated"
 
     progress_percent = 0.0
     if phase_key == "discovering":
         progress_percent = min(15.0, phase_progress_percent * 0.15)
     elif phase_key == "analyzing":
-        progress_percent = 15.0 + (phase_progress_percent * 0.55)
+        progress_percent = phase_progress_percent if is_quality_recompute else 15.0 + (phase_progress_percent * 0.55)
     elif phase_key in {"detecting_duplicates_preparing", "detecting_duplicates_artifacts"}:
         progress_percent = 70.0 + (phase_progress_percent * 0.20)
     elif phase_key == "detecting_duplicates_grouping":

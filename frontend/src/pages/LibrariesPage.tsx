@@ -1400,7 +1400,7 @@ export function LibrariesPage() {
                       <TooltipTrigger
                         key={`${detail.id}-${entry.path}`}
                         ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
-                        content={entry.reason}
+                        content={entry.details ?? entry.reason}
                         preserveLineBreaks
                         align="start"
                         className="scan-log-path-tooltip-trigger"
@@ -1420,6 +1420,51 @@ export function LibrariesPage() {
               ) : null}
             </div>
           </details>
+
+          {(typeof detail.scan_summary.runtime?.fatal_error_message === "string" &&
+            detail.scan_summary.runtime.fatal_error_message.length > 0) ? (
+              <details className="scan-log-detail-block scan-log-collapsible-block">
+                <summary className="scan-log-collapse-toggle">
+                  <span className="scan-log-collapse-copy">
+                    <strong>{t("scanLogs.executionFailure")}</strong>
+                    <span className="scan-log-collapse-summary">
+                      {String(detail.scan_summary.runtime.fatal_error_type ?? t("scanLogs.none"))}
+                    </span>
+                  </span>
+                  <span className="scan-log-collapse-meta">
+                    <span className="badge">!</span>
+                    <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
+                  </span>
+                </summary>
+                <div className="scan-log-collapse-content">
+                  <div className="scan-log-summary-grid">
+                    <div className="scan-log-stat">
+                      <strong>{String(detail.scan_summary.runtime.fatal_error_type ?? t("scanLogs.none"))}</strong>
+                      <span>{t("scanLogs.failureType")}</span>
+                    </div>
+                    <div className="scan-log-stat">
+                      <strong>{String(detail.scan_summary.runtime.fatal_error_at ?? t("scanLogs.none"))}</strong>
+                      <span>{t("scanLogs.failureAt")}</span>
+                    </div>
+                  </div>
+                  <div className="scan-log-scroll-area">
+                    <div className="stack">
+                      <div className="scan-log-path-list">
+                        <strong>{t("scanLogs.failureMessage")}</strong>
+                        <pre className="scan-log-debug-output">{String(detail.scan_summary.runtime.fatal_error_message)}</pre>
+                      </div>
+                      {typeof detail.scan_summary.runtime.fatal_error_traceback === "string" &&
+                      detail.scan_summary.runtime.fatal_error_traceback.length > 0 ? (
+                        <div className="scan-log-path-list">
+                          <strong>{t("scanLogs.failureTraceback")}</strong>
+                          <pre className="scan-log-debug-output">{String(detail.scan_summary.runtime.fatal_error_traceback)}</pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </details>
+            ) : null}
         </div>
       </div>
     );

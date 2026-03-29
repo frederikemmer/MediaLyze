@@ -544,6 +544,44 @@ describe("LibrariesPage settings panels", () => {
     expect(progressFill).toHaveStyle({ width: "0%" });
   });
 
+  it("keeps quality recompute progress separate from media analysis counts", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([
+      {
+        id: 22,
+        library_id: 1,
+        library_name: "Movies",
+        status: "running",
+        job_type: "quality_recompute",
+        files_total: 8989,
+        files_scanned: 31,
+        errors: 0,
+        started_at: "2026-03-29T10:00:00Z",
+        finished_at: null,
+        progress_percent: 0.3,
+        phase_key: "analyzing",
+        phase_label: "Recomputing quality scores",
+        phase_detail: "31 of 8989 files updated",
+        phase_progress_percent: 0.3,
+        phase_current: 31,
+        phase_total: 8989,
+        eta_seconds: null,
+        scan_mode_label: "quality_recompute",
+        duplicate_detection_mode: "filename",
+        queued_for_analysis: 31,
+        unchanged_files: 8958,
+      },
+    ]);
+
+    const { container } = renderPage();
+
+    expect(await screen.findByText(/recomputing quality scores · 0.3% · 31 of 8989 files updated/i)).toBeInTheDocument();
+
+    const progressFill = container.querySelector(".library-settings-card .progress span");
+    expect(progressFill).not.toBeNull();
+    expect(progressFill).toHaveStyle({ width: "0.3%" });
+  });
+
   it("shows only filename and filehash duplicate detection modes", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
 
@@ -645,8 +683,14 @@ describe("LibrariesPage settings panels", () => {
             queued_for_analysis: 4,
             analyzed_successfully: 3,
             analysis_failed: 1,
-            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded" }],
+            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded", details: "ffprobe exploded\nwith stderr" }],
             failed_files_truncated_count: 0,
+          },
+          runtime: {
+            fatal_error_type: "RuntimeError",
+            fatal_error_message: "job failed at finalization",
+            fatal_error_traceback: "Traceback: job failed at finalization",
+            fatal_error_at: "2026-03-16T10:02:59Z",
           },
         },
       }),
@@ -676,7 +720,12 @@ describe("LibrariesPage settings panels", () => {
     expect(failedFileTrigger).toHaveTextContent("broken.mkv");
 
     fireEvent.click(failedFileTrigger);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("ffprobe exploded");
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("with stderr");
+    expect(screen.getByText("Execution failure")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Execution failure"));
+    expect(screen.getAllByText("RuntimeError")).toHaveLength(2);
+    expect(screen.getByText("job failed at finalization")).toBeInTheDocument();
+    expect(screen.getByText("Traceback: job failed at finalization")).toBeInTheDocument();
   });
 
   it("loads older scans when clicking load more", async () => {
