@@ -2,13 +2,14 @@ import "../i18n";
 
 import { StrictMode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileTablePage,
@@ -36,6 +37,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    duplicate_detection_mode: "filename",
     file_count: 2,
     total_size_bytes: 2048,
     total_duration_seconds: 7200,
@@ -114,6 +116,40 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
+function createDuplicateGroupsPage(): DuplicateGroupPage {
+  return {
+    mode: "filename",
+    total_groups: 1,
+    duplicate_file_count: 2,
+    offset: 0,
+    limit: 25,
+    items: [
+      {
+        signature: "episode 01",
+        label: "episode 01",
+        file_count: 2,
+        total_size_bytes: 2048,
+        items: [
+          {
+            id: 1,
+            relative_path: "episode-01.mkv",
+            filename: "episode-01.mkv",
+            size_bytes: 1024,
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+          },
+          {
+            id: 2,
+            relative_path: "episode_01.mp4",
+            filename: "episode_01.mp4",
+            size_bytes: 1024,
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
@@ -131,6 +167,10 @@ function renderPage(libraryId: number, { strictMode = false }: { strictMode?: bo
     strictMode ? <StrictMode>{tree}</StrictMode> : tree,
   );
 }
+
+beforeEach(() => {
+  vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupsPage());
+});
 
 afterEach(() => {
   cleanup();
@@ -158,6 +198,25 @@ describe("LibraryDetailPage", () => {
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("renders duplicate groups in a dedicated panel", async () => {
+    const libraryId = 102;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("Duplicate groups")).toBeInTheDocument();
+    expect(screen.getByText("episode 01")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "episode-01.mkv" })).toBeInTheDocument();
   });
 
   it("still loads statistics and files under strict mode remounts", async () => {

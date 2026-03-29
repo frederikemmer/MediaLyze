@@ -57,7 +57,6 @@ class ScanRuntimeManager:
         self._recover_orphaned_jobs()
         self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
-        self._resume_active_jobs()
 
     def stop(self) -> None:
         with self.lock:
@@ -357,19 +356,20 @@ class ScanRuntimeManager:
     def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            running_jobs = db.scalars(
+            active_jobs = db.scalars(
                 select(ScanJob)
-                .where(ScanJob.status == JobStatus.running)
+                .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            if not running_jobs:
+            if not active_jobs:
                 return
 
-            for job in running_jobs:
-                job.status = JobStatus.queued
-                job.started_at = None
-                job.finished_at = None
+            for job in active_jobs:
+                job.status = JobStatus.canceled
+                if job.started_at is None:
+                    job.started_at = utc_now()
+                job.finished_at = utc_now()
                 job.files_total = 0
                 job.files_scanned = 0
 

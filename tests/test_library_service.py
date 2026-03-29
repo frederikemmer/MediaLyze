@@ -11,6 +11,7 @@ from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import (
     AudioStream,
+    DuplicateDetectionMode,
     ExternalSubtitle,
     Library,
     LibraryType,
@@ -121,6 +122,61 @@ def test_update_library_settings_can_rename_library() -> None:
         assert updated is not None
         assert updated.name == "Films"
         assert quality_profile_changed is False
+
+
+def test_create_library_defaults_duplicate_detection_mode_to_filename(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "movies"
+    library_dir.mkdir()
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            Settings(runtime_mode="desktop", config_path=tmp_path / "config", media_root=tmp_path / "media-root"),
+            LibraryCreate(
+                name="Movies",
+                path=str(library_dir),
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+
+    assert library.duplicate_detection_mode == DuplicateDetectionMode.filename
+
+
+def test_update_library_settings_updates_duplicate_detection_mode() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            Settings(),
+            library.id,
+            LibraryUpdate(duplicate_detection_mode=DuplicateDetectionMode.filehash),
+        )
+
+    assert updated is not None
+    assert updated.duplicate_detection_mode == DuplicateDetectionMode.filehash
+    assert quality_profile_changed is False
 
 
 def test_update_library_settings_backfills_visual_density_maximum_for_legacy_profiles() -> None:

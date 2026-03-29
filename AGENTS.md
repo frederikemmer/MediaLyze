@@ -48,6 +48,7 @@ MediaLyze currently implements:
 * deterministic change detection using path, file size, and modification time
 * ffprobe-based normalization of media, stream, subtitle, and raw payload data
 * internal and external subtitle detection
+* per-library duplicate detection with `filename` and `filehash` modes
 * configurable per-library quality profiles
 * per-file quality score breakdowns
 * structured metadata search, filtering, sorting, and pagination
@@ -71,7 +72,6 @@ MediaLyze does **not** currently:
 
 Open or clearly future-facing work includes:
 
-* duplicate-video detection
 * improved broken-file reporting and diagnostics
 * additional future analysis and recommendation workflows
 
@@ -93,6 +93,7 @@ Each library currently stores:
 * `scan_mode`
 * `scan_config`
 * `quality_profile`
+* `duplicate_detection_mode`
 * timestamps such as `created_at`, `updated_at`, and `last_scan_at`
 
 Supported library types:
@@ -152,8 +153,10 @@ Current scan execution behavior:
 2. apply ignore-pattern filtering during discovery
 3. compare discovered files against stored records
 4. detect new, modified, deleted, or newly ignored files
-5. reanalyze files with incomplete metadata when needed
-6. persist detailed scan summaries and file-level failure samples
+5. build a work queue for new, modified, and duplicate-backfill files
+6. reanalyze files with incomplete metadata when needed
+7. run duplicate-signature processing for queued files after optional media analysis
+8. persist detailed scan summaries and file-level failure samples
 
 Change detection uses:
 
@@ -175,6 +178,7 @@ Actual implementation:
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
 * quality recomputation runs as a distinct runtime-managed job type
+* startup cleanup cancels previously queued or running scan jobs instead of resuming them automatically
 
 ## 3.6 Scan Logs
 
@@ -188,6 +192,7 @@ Scan-job tracking now includes:
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled error reasons
+* duplicate-processing summaries and duplicate-group counts
 
 ---
 
@@ -431,6 +436,7 @@ Implemented UI behavior includes:
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * per-file quality tooltip and full breakdown view
+* duplicate-group browsing in the library detail view
 * persistent app theme preference
 * persistent local UI state for selected statistics and some panel/section visibility
 
@@ -513,6 +519,7 @@ Important current payload concepts:
 * `POST /api/libraries`
 * `GET /api/libraries/{library_id}/summary`
 * `GET /api/libraries/{library_id}/statistics`
+* `GET /api/libraries/{library_id}/duplicates`
 * `GET /api/libraries/{library_id}/scan-jobs`
 * `PATCH /api/libraries/{library_id}`
 * `DELETE /api/libraries/{library_id}`
@@ -525,6 +532,7 @@ Important library contract concepts:
 * `scan_mode`
 * `scan_config`
 * `quality_profile`
+* `duplicate_detection_mode`
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
 ## 9.5 Files
@@ -537,6 +545,9 @@ Important file contract concepts:
 * `quality_score_raw`
 * `quality_score_breakdown`
 * `raw_ffprobe_json`
+* `filename_signature`
+* `content_hash`
+* `content_hash_algorithm`
 * `resolution_category_id`
 * `resolution_category_label`
 * `subtitle_type`
@@ -580,10 +591,14 @@ Important post-`0.0.1` additions that must be treated as real schema surface:
 * library `scan_mode`
 * library `scan_config`
 * library `quality_profile`
+* library `duplicate_detection_mode`
 * app-level settings storage
 * media `quality_score_raw`
 * media `quality_score_breakdown`
 * media `raw_ffprobe_json`
+* media `filename_signature`
+* media `content_hash`
+* media `content_hash_algorithm`
 * subtitle `subtitle_type`
 * scan job `trigger_source`
 * scan job `trigger_details`
@@ -609,8 +624,9 @@ Implemented backend structure:
 * `backend/app/api/routes.py` defines the public HTTP API
 * `backend/app/models/entities.py` defines the ORM schema
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
-* `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
+* `backend/app/services/scanner.py` performs discovery, change detection, work-queue construction, ffprobe analysis, duplicate-signature processing, normalization, and scan-summary generation
 * `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
+* `backend/app/services/duplicates/service.py` provides duplicate-detection strategies and duplicate-group queries
 * `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics
 
 ## 11.2 Frontend

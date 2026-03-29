@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.models.entities import LibraryType, ScanMode
+from backend.app.models.entities import DuplicateDetectionMode, LibraryType, ScanMode
 from backend.app.schemas.media import DistributionItem
 from backend.app.schemas.quality import QualityProfile
 from backend.app.schemas._time import UtcDateTime
@@ -13,6 +13,7 @@ class LibraryCreate(BaseModel):
     scan_mode: ScanMode = ScanMode.manual
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
+    duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
 
 
 class LibraryUpdate(BaseModel):
@@ -20,6 +21,7 @@ class LibraryUpdate(BaseModel):
     scan_mode: ScanMode | None = None
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile | None = None
+    duplicate_detection_mode: DuplicateDetectionMode | None = None
 
 
 class LibrarySummary(BaseModel):
@@ -35,6 +37,7 @@ class LibrarySummary(BaseModel):
     created_at: UtcDateTime
     updated_at: UtcDateTime
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
+    duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
     file_count: int = 0
     total_size_bytes: int = 0
     total_duration_seconds: float = 0

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+- add per-library duplicate detection with configurable `filename` and exact `filehash` modes, persisted duplicate signatures / content hashes, scan-integrated duplicate processing, a duplicate-groups API, and a duplicate-groups panel in the library detail view
+
+### 🐛 Bug fixes
+- stop auto-resuming queued or interrupted scan jobs on startup; previous active jobs are now closed during runtime initialization and only future watchdog or scheduled triggers start new scans
+
 ## v0.3.0
 
 >2026-03-26

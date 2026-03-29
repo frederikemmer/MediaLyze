@@ -46,6 +46,8 @@
     "scanMode": "Scan-Modus",
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
+    "duplicateDetection": "Duplikat-Erkennung",
+    "duplicateDetectionHint": "Dateiname ist schneller und findet wahrscheinliche Duplikate. Dateihash liest die komplette Datei und findet exakte Duplikate.",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
     "qualityScoreTitle": "Qualitäts-Score",
@@ -139,6 +141,10 @@
     "manual": "Manuell",
     "scheduled": "Geplant",
     "watch": "Überwacht"
+  },
+  "duplicateDetectionModes": {
+    "filename": "Dateiname",
+    "filehash": "Dateihash"
   },
   "sort": {
     "prefix": "Sortierung",
@@ -235,7 +241,16 @@
     },
     "recentScanJobs": "Letzte Scan-Jobs",
     "recentScanJobsSubtitle": "Neueste Queue- und Laufhistorie",
-    "jobLabel": "Job #{{id}}"
+    "jobLabel": "Job #{{id}}",
+    "duplicates": {
+      "title": "Duplikat-Gruppen",
+      "subtitle": "Wahrscheinliche oder exakte Duplikate innerhalb dieser Bibliothek, basierend auf dem konfigurierten Modus.",
+      "empty": "Keine Duplikat-Gruppen erkannt.",
+      "summary": "{{groups}} Gruppen über {{files}} Dateien",
+      "filesBadge": "{{count}} Dateien",
+      "loadMore": "Mehr Duplikat-Gruppen laden",
+      "loadingMore": "Weitere Duplikat-Gruppen werden geladen…"
+    }
   },
   "scanLogs": {
     "title": "Letzte Scan-Logs",
@@ -264,6 +279,8 @@
     "metricIgnored": "Ignoriert",
     "metricAnalyzed": "Analysiert",
     "metricFailed": "Fehler",
+    "metricDuplicateGroups": "Duplikat-Gruppen",
+    "metricDuplicateFiles": "Duplikat-Dateien",
     "metricNew": "Neu",
     "metricChanged": "Geändert",
     "metricDeleted": "Gelöscht",
@@ -274,6 +291,10 @@
     "changedFiles": "Geänderte Dateien",
     "deletedFiles": "Gelöschte Dateien",
     "failedFiles": "Nicht analysierbare Dateien",
+    "duplicates": "Duplikat-Verarbeitung",
+    "duplicatesQueued": "Eingereiht",
+    "duplicatesProcessed": "Verarbeitet",
+    "duplicatesFailed": "Fehlgeschlagen",
     "failedFileReasonTooltipAria": "Analysedetails für {{path}} anzeigen",
     "watchEvents": "{{count}} Dateisystemereignisse wurden zusammengefasst.",
     "intervalMinutes": "Geplantes Intervall: {{minutes}} Minuten",

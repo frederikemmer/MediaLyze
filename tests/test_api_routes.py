@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
-from backend.app.models.entities import JobStatus, Library, LibraryType, ScanJob, ScanMode
+from backend.app.models.entities import DuplicateDetectionMode, JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode
 from backend.app.core.config import Settings
 from pathlib import Path
 
@@ -205,3 +205,68 @@ def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None
     payload = response.json()[0]
     assert payload["started_at"] == "2026-03-24T04:06:00Z"
     assert payload["finished_at"] == "2026-03-24T04:10:00Z"
+
+
+def test_library_duplicates_route_returns_grouped_duplicates() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.2024.mkv",
+                    filename="Movie.2024.mkv",
+                    extension="mkv",
+                    size_bytes=100,
+                    mtime=1.0,
+                    filename_signature="movie 2024",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie_2024.mp4",
+                    filename="Movie_2024.mp4",
+                    extension="mp4",
+                    size_bytes=200,
+                    mtime=2.0,
+                    filename_signature="movie 2024",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "filename"
+    assert payload["total_groups"] == 1
+    assert payload["duplicate_file_count"] == 2
+    assert payload["items"][0]["signature"] == "movie 2024"
+    assert payload["items"][0]["file_count"] == 2
+
+
+def test_library_duplicates_route_returns_404_for_unknown_library() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/libraries/999/duplicates")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Library not found"}

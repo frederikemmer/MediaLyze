@@ -10,6 +10,7 @@ import { useAppData } from "../lib/app-data";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type DuplicateDetectionMode,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -68,6 +69,7 @@ type LibrarySettingsForm = {
   interval_minutes: number;
   debounce_seconds: number;
   quality_profile: QualityProfile;
+  duplicate_detection_mode: DuplicateDetectionMode;
 };
 
 type IgnorePatternGroup = "user" | "default";
@@ -204,6 +206,7 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
+    duplicate_detection_mode: library.duplicate_detection_mode ?? "filename",
   };
 }
 
@@ -226,7 +229,8 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
     current.scan_mode === settings.scan_mode &&
     current.interval_minutes === settings.interval_minutes &&
     current.debounce_seconds === settings.debounce_seconds &&
-    JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
+    JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile) &&
+    current.duplicate_detection_mode === settings.duplicate_detection_mode
   );
 }
 
@@ -701,6 +705,7 @@ export function LibrariesPage() {
       interval_minutes: 60,
       debounce_seconds: 15,
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
+      duplicate_detection_mode: "filename",
     };
     const inspection = libraryPathInspections[libraryId];
     const next = { ...current, ...patch };
@@ -730,6 +735,7 @@ export function LibrariesPage() {
           scan_mode: next.scan_mode,
           scan_config: buildScanConfig(next),
           quality_profile: next.quality_profile,
+          duplicate_detection_mode: next.duplicate_detection_mode,
         });
         upsertLibrary(updated);
         setSettingsForms((forms) => ({
@@ -765,6 +771,7 @@ export function LibrariesPage() {
           scan_mode: current.scan_mode,
           scan_config: buildScanConfig(current),
           quality_profile: current.quality_profile,
+          duplicate_detection_mode: current.duplicate_detection_mode,
         });
         upsertLibrary(updated);
       } catch (reason) {
@@ -1239,6 +1246,14 @@ export function LibrariesPage() {
             <strong>{detail.scan_summary.analysis.analysis_failed}</strong>
             <span>{t("scanLogs.metricFailed")}</span>
           </div>
+          <div className="scan-log-stat">
+            <strong>{detail.scan_summary.duplicates.duplicate_groups}</strong>
+            <span>{t("scanLogs.metricDuplicateGroups")}</span>
+          </div>
+          <div className="scan-log-stat">
+            <strong>{detail.scan_summary.duplicates.duplicate_files}</strong>
+            <span>{t("scanLogs.metricDuplicateFiles")}</span>
+          </div>
         </div>
 
         <div className="scan-log-panels-grid">
@@ -1369,6 +1384,53 @@ export function LibrariesPage() {
               {detail.scan_summary.analysis.failed_files_truncated_count > 0 ? (
                 <div className="subtitle">
                   {t("scanLogs.moreEntries", { count: detail.scan_summary.analysis.failed_files_truncated_count })}
+                </div>
+              ) : null}
+            </div>
+          </details>
+
+          <details className="scan-log-detail-block scan-log-collapsible-block">
+            <summary className="scan-log-collapse-toggle">
+              <span className="scan-log-collapse-copy">
+                <strong>{t("scanLogs.duplicates")}</strong>
+                <span className="scan-log-collapse-summary">
+                  {t(`duplicateDetectionModes.${detail.scan_summary.duplicates.mode}`)}
+                </span>
+              </span>
+              <span className="scan-log-collapse-meta">
+                <span className="badge">{detail.scan_summary.duplicates.duplicate_groups}</span>
+                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
+              </span>
+            </summary>
+            <div className="scan-log-collapse-content">
+              <div className="scan-log-summary-meta scan-log-summary-meta-detail">
+                <span>{t("scanLogs.duplicatesQueued")}: {detail.scan_summary.duplicates.queued_for_processing}</span>
+                <span>{t("scanLogs.duplicatesProcessed")}: {detail.scan_summary.duplicates.processed_successfully}</span>
+                <span>{t("scanLogs.duplicatesFailed")}: {detail.scan_summary.duplicates.processing_failed}</span>
+              </div>
+              {detail.scan_summary.duplicates.failed_files.length > 0 ? (
+                <div className="scan-log-scroll-area">
+                  <div className="scan-log-path-list">
+                    {detail.scan_summary.duplicates.failed_files.map((entry) => (
+                      <TooltipTrigger
+                        key={`${detail.id}-duplicate-${entry.path}`}
+                        ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
+                        content={entry.reason}
+                        preserveLineBreaks
+                        align="start"
+                        className="scan-log-path-tooltip-trigger"
+                      >
+                        <code className="scan-log-path">{entry.path}</code>
+                      </TooltipTrigger>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>
+              )}
+              {detail.scan_summary.duplicates.failed_files_truncated_count > 0 ? (
+                <div className="subtitle">
+                  {t("scanLogs.moreEntries", { count: detail.scan_summary.duplicates.failed_files_truncated_count })}
                 </div>
               ) : null}
             </div>
@@ -2033,6 +2095,22 @@ export function LibrariesPage() {
                         />
                       </div>
                     ) : null}
+                    <div className="field">
+                      <label htmlFor={`duplicate-detection-mode-${library.id}`}>{t("libraries.duplicateDetection")}</label>
+                      <select
+                        id={`duplicate-detection-mode-${library.id}`}
+                        value={settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode}
+                        onChange={(event) =>
+                          updateLibraryForm(library.id, {
+                            duplicate_detection_mode: event.target.value as DuplicateDetectionMode,
+                          })
+                        }
+                      >
+                        <option value="filename">{t("duplicateDetectionModes.filename")}</option>
+                        <option value="filehash">{t("duplicateDetectionModes.filehash")}</option>
+                      </select>
+                      <p className="field-hint">{t("libraries.duplicateDetectionHint")}</p>
+                    </div>
                     <div className="field field-span-full">
                       <button
                         type="button"

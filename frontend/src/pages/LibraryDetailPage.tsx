@@ -21,6 +21,7 @@ import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
   api,
+  type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileQualityScoreDetail,
@@ -99,7 +100,9 @@ const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
 const libraryFileListCache = new Map<string, CachedFileList>();
+const duplicateGroupCache = new Map<string, DuplicateGroupPage>();
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
+const DUPLICATE_GROUP_PAGE_SIZE = 25;
 
 const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
   "file",
@@ -450,14 +453,18 @@ export function LibraryDetailPage() {
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
+  const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
+  const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingMoreDuplicateGroups, setIsLoadingMoreDuplicateGroups] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
@@ -571,6 +578,7 @@ export function LibraryDetailPage() {
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
+  const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
   const hasMoreFiles = files.length < filesTotal;
 
@@ -698,6 +706,49 @@ export function LibraryDetailPage() {
       }
       if (showLoading) {
         setIsStatisticsLoading(false);
+      }
+    }
+  });
+
+  const loadDuplicateGroups = useEffectEvent(async (offset = 0, append = false, showLoading = false) => {
+    duplicateGroupsAbortRef.current?.abort();
+    const controller = new AbortController();
+    duplicateGroupsAbortRef.current = controller;
+
+    if (append) {
+      setIsLoadingMoreDuplicateGroups(true);
+    } else if (showLoading) {
+      setIsDuplicateGroupsLoading(true);
+    }
+
+    try {
+      const payload = await api.libraryDuplicates(libraryId, {
+        offset,
+        limit: DUPLICATE_GROUP_PAGE_SIZE,
+        signal: controller.signal,
+      });
+      const nextPayload = append && duplicateGroups
+        ? {
+            ...payload,
+            items: [...duplicateGroups.items, ...payload.items],
+          }
+        : payload;
+      duplicateGroupCache.set(libraryId, nextPayload);
+      setDuplicateGroups(nextPayload);
+      setDuplicateGroupsError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setDuplicateGroupsError((reason as Error).message);
+    } finally {
+      if (duplicateGroupsAbortRef.current === controller) {
+        duplicateGroupsAbortRef.current = null;
+      }
+      if (append) {
+        setIsLoadingMoreDuplicateGroups(false);
+      } else if (showLoading) {
+        setIsDuplicateGroupsLoading(false);
       }
     }
   });
@@ -881,16 +932,21 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
+    const cachedDuplicateGroups = duplicateGroupCache.get(libraryId) ?? null;
 
     setLibrarySummary(cachedSummary);
     setLibraryStatistics(cachedStatistics);
+    setDuplicateGroups(cachedDuplicateGroups);
     setSummaryError(null);
     setStatisticsError(null);
+    setDuplicateGroupsError(null);
     setIsSummaryLoading(cachedSummary === null);
     setIsStatisticsLoading(cachedStatistics === null);
+    setIsDuplicateGroupsLoading(cachedDuplicateGroups === null);
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryStatistics(cachedStatistics === null);
+    void loadDuplicateGroups(0, false, cachedDuplicateGroups === null);
   }, [libraryId]);
 
   useEffect(() => {
@@ -958,10 +1014,12 @@ export function LibraryDetailPage() {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
+      duplicateGroupCache.delete(libraryId);
       setQualityScoreDetails({});
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
+      void loadDuplicateGroups(0, false, false);
       void loadFilesPage(0, false, fileQueryKey);
     }
     hadActiveJobRef.current = Boolean(activeJob);
@@ -972,6 +1030,7 @@ export function LibraryDetailPage() {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
+      duplicateGroupsAbortRef.current?.abort();
       exportAbortRef.current?.abort();
       inflightRequestGateRef.current.reset();
     };
@@ -1070,6 +1129,57 @@ export function LibraryDetailPage() {
           <div className="notice">{t("libraryStatistics.noPanelsSelected")}</div>
         )}
       </div>
+
+      <AsyncPanel
+        title={t("libraryDetail.duplicates.title")}
+        subtitle={t("libraryDetail.duplicates.subtitle")}
+        loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
+        error={duplicateGroupsError}
+      >
+        {!duplicateGroups || duplicateGroups.items.length === 0 ? (
+          <div className="notice">{t("libraryDetail.duplicates.empty")}</div>
+        ) : (
+          <div className="listing">
+            <div className="subtitle">
+              {t("libraryDetail.duplicates.summary", {
+                groups: duplicateGroups.total_groups,
+                files: duplicateGroups.duplicate_file_count,
+              })}{" "}
+              <span className="badge">{t(`duplicateDetectionModes.${duplicateGroups.mode}`)}</span>
+            </div>
+            {duplicateGroups.items.map((group) => (
+              <div className="media-card" key={group.signature}>
+                <div className="library-title-row">
+                  <h3>{group.label}</h3>
+                  <div className="meta-tags">
+                    <span className="badge">{t("libraryDetail.duplicates.filesBadge", { count: group.file_count })}</span>
+                    <span className="badge">{formatBytes(group.total_size_bytes)}</span>
+                  </div>
+                </div>
+                <div className="scan-log-path-list">
+                  {group.items.map((item) => (
+                    <Link key={item.id} to={`/files/${item.id}`} className="file-link">
+                      {item.relative_path}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {duplicateGroups.items.length < duplicateGroups.total_groups ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={isLoadingMoreDuplicateGroups}
+                onClick={() => void loadDuplicateGroups(duplicateGroups.items.length, true, false)}
+              >
+                {isLoadingMoreDuplicateGroups
+                  ? t("libraryDetail.duplicates.loadingMore")
+                  : t("libraryDetail.duplicates.loadMore")}
+              </button>
+            ) : null}
+          </div>
+        )}
+      </AsyncPanel>
 
       <div ref={analyzedFilesPanelRef}>
         <AsyncPanel

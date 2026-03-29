@@ -9,6 +9,7 @@ from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runt
 from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
+from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
 from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
@@ -24,6 +25,7 @@ from backend.app.models.entities import Library, ScanJob, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
+from backend.app.services.duplicates import list_duplicate_groups
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -218,6 +220,19 @@ def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -
     if not statistics:
         raise HTTPException(status_code=404, detail="Library not found")
     return statistics
+
+
+@router.get("/libraries/{library_id}/duplicates", response_model=DuplicateGroupPageRead)
+def library_duplicates(
+    library_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db_session),
+) -> DuplicateGroupPageRead:
+    library = db.get(Library, library_id)
+    if library is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return list_duplicate_groups(db, library, offset=offset, limit=limit)
 
 
 @router.get("/libraries/{library_id}/scan-jobs", response_model=list[ScanJobRead])

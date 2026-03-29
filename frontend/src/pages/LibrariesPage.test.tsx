@@ -58,6 +58,7 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    duplicate_detection_mode: "filename",
     file_count: 0,
     total_size_bytes: 0,
     total_duration_seconds: 0,
@@ -127,6 +128,16 @@ function createScanJobDetail(overrides: Partial<ScanJobDetail> = {}): ScanJobDet
         analysis_failed: 0,
         failed_files: [],
         failed_files_truncated_count: 0,
+      },
+      duplicates: {
+        mode: "filename",
+        queued_for_processing: 4,
+        processed_successfully: 4,
+        processing_failed: 0,
+        failed_files: [],
+        failed_files_truncated_count: 0,
+        duplicate_groups: 1,
+        duplicate_files: 2,
       },
     },
     ...overrides,
@@ -484,6 +495,27 @@ describe("LibrariesPage desktop mode", () => {
 
     await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveValue("scheduled"));
     expect(screen.getByText("Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.")).toBeInTheDocument();
+  });
+
+  it("saves duplicate detection mode changes per library", async () => {
+    const library = createLibrarySummary();
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue({
+      ...library,
+      duplicate_detection_mode: "filehash",
+    });
+    vi.spyOn(api, "libraries").mockResolvedValue([library]);
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "filehash" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        library.id,
+        expect.objectContaining({ duplicate_detection_mode: "filehash" }),
+      ),
+    );
   });
 });
 
