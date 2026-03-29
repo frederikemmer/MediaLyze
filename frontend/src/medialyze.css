@@ -925,6 +925,24 @@
   gap: 8px;
 }
 
+.duplicate-group-list {
+  display: grid;
+  gap: 10px;
+}
+
+.duplicate-group-card {
+  display: grid;
+  gap: 12px;
+}
+
+.duplicate-group-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .scan-log-pattern-card {
   display: grid;
   gap: 8px;
@@ -1553,6 +1571,10 @@
   max-width: 100%;
 }
 
+.duplicate-search-layout {
+  --search-control-width: clamp(15rem, 30vw, 24rem);
+}
+
 .search-filter-picker {
   position: relative;
   width: 100%;
@@ -1689,6 +1711,10 @@
   position: relative;
 }
 
+.duplicate-search-control .metadata-search-icon-button {
+  cursor: default;
+}
+
 .metadata-search-icon-button {
   display: flex;
   align-items: center;
@@ -1733,6 +1759,11 @@
   flex: 1;
   min-width: 0;
   outline: none;
+}
+
+.duplicate-search-control input.has-trailing-action {
+  border-right: 0;
+  border-radius: 0;
 }
 
 .metadata-search-row .metadata-search-control input {

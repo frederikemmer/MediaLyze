@@ -30,6 +30,10 @@ from backend.app.models.entities import (
     SubtitleStream,
     VideoStream,
 )
+from backend.app.services.duplicates import (
+    get_duplicate_detection_strategy,
+    get_duplicate_group_counts,
+)
 from backend.app.services.app_settings import get_app_settings, get_ignore_patterns
 from backend.app.services.duplicates import count_duplicate_groups, get_duplicate_detection_strategy
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
@@ -139,6 +143,7 @@ class QueuedMediaWork:
     needs_duplicate_processing: bool
 
 
+<<<<<<< HEAD
 @dataclass
 class QueuedMediaWorkResult:
     media_file: MediaFile
@@ -150,6 +155,8 @@ class QueuedMediaWorkResult:
     duplicate_error: str | None
 
 
+=======
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 def _library_root(library: Library) -> Path:
     return Path(library.path)
 
@@ -538,13 +545,18 @@ def queue_scan_job(
         db.refresh(existing_job)
         return existing_job, False
 
+    library = db.get(Library, library_id)
+    scan_summary = _empty_scan_summary()
+    if library is not None:
+        scan_summary["duplicates"]["mode"] = library.duplicate_detection_mode.value
+
     job = ScanJob(
         library_id=library_id,
         status=JobStatus.queued,
         job_type=scan_type,
         trigger_source=trigger_source,
         trigger_details=_coerce_trigger_details(trigger_details),
-        scan_summary=_empty_scan_summary(),
+        scan_summary=scan_summary,
     )
     db.add(job)
     db.commit()
@@ -935,6 +947,7 @@ def run_scan(
     analyzed_successfully = 0
     duplicate_processed_successfully = 0
     duplicate_processing_failed = 0
+<<<<<<< HEAD
     duplicate_groups = 0
     duplicate_files = 0
 
@@ -944,11 +957,18 @@ def run_scan(
 
     _refresh_duplicate_counts()
 
+=======
+
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     def _build_scan_summary(
         discovery: DiscoveryResult,
         queued_for_analysis: int,
         queued_for_duplicate_processing: int,
     ) -> dict:
+<<<<<<< HEAD
+=======
+        duplicate_groups, duplicate_files = get_duplicate_group_counts(db, library.id, library.duplicate_detection_mode)
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
         return {
             "ignore_patterns": list(ignore_patterns),
             "discovery": {
@@ -977,10 +997,11 @@ def run_scan(
             "analysis": {
                 "queued_for_analysis": queued_for_analysis,
                 "analyzed_successfully": analyzed_successfully,
-                "analysis_failed": job.errors,
+                "analysis_failed": len(failed_files.items) + failed_files.truncated_count,
                 **failed_files.as_dict(),
             },
             "duplicates": {
+<<<<<<< HEAD
                 "mode": library.duplicate_detection_mode.value,
                 "queued_for_processing": queued_for_duplicate_processing,
                 "processed_successfully": duplicate_processed_successfully,
@@ -988,6 +1009,15 @@ def run_scan(
                 **duplicate_failed_files.as_dict(),
                 "duplicate_groups": duplicate_groups,
                 "duplicate_files": duplicate_files,
+=======
+                "mode": duplicate_strategy.mode.value,
+                "queued_for_processing": queued_for_duplicate_processing,
+                "processed_successfully": duplicate_processed_successfully,
+                "processing_failed": duplicate_processing_failed,
+                "duplicate_groups": duplicate_groups,
+                "duplicate_files": duplicate_files,
+                **duplicate_failed_files.as_dict(),
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
             },
         }
 
@@ -1008,7 +1038,11 @@ def run_scan(
     )
     db.commit()
     seen_relative_paths: set[str] = set()
+<<<<<<< HEAD
     work_queue: list[QueuedMediaWork] = []
+=======
+    queued_work: list[QueuedMediaWork] = []
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     discovery_counter = 0
     discovery_last_commit_at = monotonic()
 
@@ -1032,9 +1066,17 @@ def run_scan(
             batch_size=settings.scan_discovery_batch_size,
         ):
             job.files_total = len(seen_relative_paths)
+<<<<<<< HEAD
             queued_for_analysis = sum(1 for work in work_queue if work.needs_analysis)
             queued_for_duplicate_processing = sum(1 for work in work_queue if work.needs_duplicate_processing)
             job.scan_summary = _build_scan_summary(discovery, queued_for_analysis, queued_for_duplicate_processing)
+=======
+            job.scan_summary = _build_scan_summary(
+                discovery,
+                sum(1 for work in queued_work if work.needs_analysis),
+                sum(1 for work in queued_work if work.needs_duplicate_processing),
+            )
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
             db.commit()
             stats_cache.invalidate(cache_key, job.library_id)
             discovery_last_commit_at = monotonic()
@@ -1055,7 +1097,11 @@ def run_scan(
             db.add(media_file)
             db.flush()
             new_files.add(relative_path)
+<<<<<<< HEAD
             work_queue.append(
+=======
+            queued_work.append(
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
                 QueuedMediaWork(
                     media_file=media_file,
                     path=file_path,
@@ -1072,12 +1118,15 @@ def run_scan(
             media_file.size_bytes = stat.st_size
             media_file.mtime = stat.st_mtime
             media_file.last_seen_at = utc_now()
-            if changed or scan_type == "full" or analysis_incomplete:
+            needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
+            needs_analysis = changed or scan_type == "full" or analysis_incomplete
+            if needs_analysis or needs_duplicate_processing:
                 if changed:
                     modified_files.add(relative_path)
                     media_file.content_hash = None
                 elif analysis_incomplete:
                     reanalyzed_incomplete_files += 1
+<<<<<<< HEAD
                 media_file.scan_status = ScanStatus.pending
                 work_queue.append(
                     QueuedMediaWork(
@@ -1094,6 +1143,18 @@ def run_scan(
                         path=file_path,
                         needs_analysis=False,
                         needs_duplicate_processing=True,
+=======
+                if needs_analysis:
+                    media_file.scan_status = ScanStatus.pending
+                else:
+                    unchanged_files += 1
+                queued_work.append(
+                    QueuedMediaWork(
+                        media_file=media_file,
+                        path=file_path,
+                        needs_analysis=needs_analysis,
+                        needs_duplicate_processing=needs_duplicate_processing,
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
                     )
                 )
             else:
@@ -1113,6 +1174,11 @@ def run_scan(
     queued_for_analysis = sum(1 for work in work_queue if work.needs_analysis)
     queued_for_duplicate_processing = sum(1 for work in work_queue if work.needs_duplicate_processing)
     job.files_total = len(discovery.files)
+<<<<<<< HEAD
+=======
+    queued_for_analysis = sum(1 for work in queued_work if work.needs_analysis)
+    queued_for_duplicate_processing = sum(1 for work in queued_work if work.needs_duplicate_processing)
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     job.scan_summary = _build_scan_summary(discovery, queued_for_analysis, queued_for_duplicate_processing)
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
@@ -1134,6 +1200,7 @@ def run_scan(
     )
     db.commit()
 
+<<<<<<< HEAD
     def _safe_process(work: QueuedMediaWork) -> QueuedMediaWorkResult:
         relative_path = work.path.relative_to(root).as_posix()
         analysis_payload: dict | None = None
@@ -1141,6 +1208,40 @@ def run_scan(
         analysis_error: str | None = None
         duplicate_signature: dict[str, str] | None = None
         duplicate_error: str | None = None
+=======
+    def _safe_process_work(
+        work: QueuedMediaWork,
+    ) -> tuple[
+        str,
+        dict | None,
+        list[dict[str, str | None]],
+        str | None,
+        dict[str, str | None] | None,
+        str | None,
+    ]:
+        relative_path = work.path.relative_to(root).as_posix()
+        payload: dict | None = None
+        subtitles: list[dict[str, str | None]] = []
+        analysis_error: str | None = None
+        duplicate_payload: dict[str, str | None] | None = None
+        duplicate_error: str | None = None
+
+        if work.needs_analysis:
+            try:
+                payload, subtitles = _analyze_path(work.path, root, settings, ignore_patterns)
+            except Exception as exc:
+                logger.exception("Media analysis failed for %s", relative_path)
+                analysis_error = _short_error_reason(exc)
+
+        if work.needs_duplicate_processing:
+            try:
+                duplicate_payload = duplicate_strategy.build_payload(work.path)
+            except Exception as exc:
+                logger.exception("Duplicate processing failed for %s", relative_path)
+                duplicate_error = _short_error_reason(exc)
+
+        return relative_path, payload, subtitles, analysis_error, duplicate_payload, duplicate_error
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
         if work.needs_analysis:
             try:
@@ -1174,9 +1275,15 @@ def run_scan(
         max_in_flight = max(1, settings.ffprobe_worker_count * 2)
         analysis_last_commit_at = monotonic()
 
+<<<<<<< HEAD
         while next_index < len(work_queue) and len(pending) < max_in_flight:
             work = work_queue[next_index]
             pending[executor.submit(_safe_process, work)] = work
+=======
+        while next_index < len(queued_work) and len(pending) < max_in_flight:
+            work = queued_work[next_index]
+            pending[executor.submit(_safe_process_work, work)] = work
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
             next_index += 1
 
         while pending:
@@ -1213,6 +1320,7 @@ def run_scan(
                 continue
 
             for future in done:
+<<<<<<< HEAD
                 pending.pop(future)
                 result = future.result()
                 media_file = result.media_file
@@ -1250,11 +1358,53 @@ def run_scan(
                 elif result.duplicate_error is not None:
                     duplicate_processing_failed += 1
                     duplicate_failed_files.add(relative_path, result.duplicate_error)
+=======
+                work = pending.pop(future)
+                relative_path, payload, subtitles, analysis_error, duplicate_payload, duplicate_error = future.result()
+                if work.needs_analysis:
+                    if analysis_error is None and payload is not None:
+                        try:
+                            _apply_analysis_result(
+                                work.media_file,
+                                payload,
+                                subtitles,
+                                library,
+                                app_settings.resolution_categories,
+                            )
+                            analyzed_successfully += 1
+                        except Exception as exc:
+                            logger.exception("Media normalization failed for %s", relative_path)
+                            work.media_file.scan_status = ScanStatus.failed
+                            job.errors += 1
+                            failed_files.add(relative_path, _short_error_reason(exc))
+                    else:
+                        work.media_file.scan_status = ScanStatus.failed
+                        job.errors += 1
+                        failed_files.add(relative_path, analysis_error or "Unknown analysis failure")
+
+                if work.needs_duplicate_processing:
+                    if duplicate_error is None and duplicate_payload is not None:
+                        try:
+                            duplicate_strategy.apply_payload(work.media_file, duplicate_payload)
+                            duplicate_processed_successfully += 1
+                        except Exception as exc:
+                            logger.exception("Duplicate persistence failed for %s", relative_path)
+                            duplicate_processing_failed += 1
+                            job.errors += 1
+                            duplicate_failed_files.add(relative_path, _short_error_reason(exc))
+                    else:
+                        duplicate_processing_failed += 1
+                        job.errors += 1
+                        duplicate_failed_files.add(relative_path, duplicate_error or "Unknown duplicate processing failure")
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
                 job.files_scanned += 1
                 batch_counter += 1
                 if batch_counter >= settings.scan_commit_batch_size:
+<<<<<<< HEAD
                     _refresh_duplicate_counts()
+=======
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
                     job.scan_summary = _build_scan_summary(
                         discovery,
                         queued_for_analysis,
@@ -1265,6 +1415,7 @@ def run_scan(
                     batch_counter = 0
                     analysis_last_commit_at = monotonic()
 
+<<<<<<< HEAD
                 if next_index < len(work_queue):
                     work = work_queue[next_index]
                     pending[executor.submit(_safe_process, work)] = work
@@ -1277,6 +1428,15 @@ def run_scan(
                 queued_for_analysis,
                 queued_for_duplicate_processing,
             )
+=======
+                if next_index < len(queued_work):
+                    work = queued_work[next_index]
+                    pending[executor.submit(_safe_process_work, work)] = work
+                    next_index += 1
+
+        if batch_counter:
+            job.scan_summary = _build_scan_summary(discovery, queued_for_analysis, queued_for_duplicate_processing)
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
             db.commit()
             stats_cache.invalidate(cache_key, job.library_id)
     finally:
@@ -1295,7 +1455,10 @@ def run_scan(
     library.last_scan_at = utc_now()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()
+<<<<<<< HEAD
     _refresh_duplicate_counts()
+=======
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     job.scan_summary = _build_scan_summary(discovery, queued_for_analysis, queued_for_duplicate_processing)
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)

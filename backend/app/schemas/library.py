@@ -11,6 +11,7 @@ class LibraryCreate(BaseModel):
     path: str
     type: LibraryType
     scan_mode: ScanMode = ScanMode.manual
+    duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
     duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
@@ -19,6 +20,7 @@ class LibraryCreate(BaseModel):
 class LibraryUpdate(BaseModel):
     name: str | None = None
     scan_mode: ScanMode | None = None
+    duplicate_detection_mode: DuplicateDetectionMode | None = None
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile | None = None
     duplicate_detection_mode: DuplicateDetectionMode | None = None
@@ -33,6 +35,7 @@ class LibrarySummary(BaseModel):
     type: LibraryType
     last_scan_at: UtcDateTime | None
     scan_mode: ScanMode
+    duplicate_detection_mode: DuplicateDetectionMode
     scan_config: dict
     created_at: UtcDateTime
     updated_at: UtcDateTime

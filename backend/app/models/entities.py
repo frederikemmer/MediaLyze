@@ -74,6 +74,11 @@ class Library(TimestampMixin, Base):
         default=ScanMode.manual,
         nullable=False,
     )
+    duplicate_detection_mode: Mapped[DuplicateDetectionMode] = mapped_column(
+        SqlEnum(DuplicateDetectionMode, native_enum=False),
+        default=DuplicateDetectionMode.filename,
+        nullable=False,
+    )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     quality_profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
     duplicate_detection_mode: Mapped[DuplicateDetectionMode] = mapped_column(

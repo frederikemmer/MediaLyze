@@ -27,7 +27,11 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+<<<<<<< HEAD
 def test_recover_orphaned_jobs_cancels_queued_and_running_jobs(monkeypatch) -> None:
+=======
+def test_recover_orphaned_jobs_cancels_queued_and_running_jobs_without_resubmitting(monkeypatch) -> None:
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
 
@@ -110,6 +114,7 @@ def test_recover_orphaned_jobs_cancels_queued_and_running_jobs(monkeypatch) -> N
         jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
 
     assert jobs[0].status == JobStatus.canceled
+<<<<<<< HEAD
     assert jobs[0].started_at is not None
     assert jobs[0].finished_at is not None
     assert jobs[0].files_total == 0
@@ -136,6 +141,82 @@ def test_start_does_not_resume_existing_jobs(monkeypatch) -> None:
     runtime.stop()
 
     assert submitted == []
+=======
+    assert jobs[0].finished_at is not None
+    assert jobs[0].files_total == 120
+    assert jobs[0].files_scanned == 40
+    assert jobs[1].status == JobStatus.canceled
+    assert jobs[1].finished_at is not None
+    assert jobs[1].files_total == 10
+    assert jobs[1].files_scanned == 2
+    assert jobs[2].status == JobStatus.canceled
+    assert jobs[2].finished_at is not None
+
+
+def test_start_does_not_resume_preexisting_active_jobs(monkeypatch) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                ScanJob(library_id=library.id, status=JobStatus.queued, job_type="incremental"),
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.running,
+                    job_type="full",
+                    started_at=datetime.now(UTC),
+                ),
+            ]
+        )
+        db.commit()
+
+    submitted: list[tuple[int, int]] = []
+
+    class SchedulerStub:
+        running = False
+
+        def start(self) -> None:
+            self.running = True
+
+        def get_jobs(self):
+            return []
+
+        def get_job(self, job_id):
+            return None
+
+        def shutdown(self, wait=False) -> None:
+            self.running = False
+
+    class ExecutorStub:
+        def submit(self, fn, job_id: int, library_id: int) -> None:
+            submitted.append((job_id, library_id))
+
+        def shutdown(self, wait=False, cancel_futures=True) -> None:
+            return None
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+    runtime.executor = ExecutorStub()
+
+    runtime.start()
+
+    with session_factory() as db:
+        jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
+
+    assert submitted == []
+    assert all(job.status == JobStatus.canceled for job in jobs)
+    assert all(job.finished_at is not None for job in jobs)
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

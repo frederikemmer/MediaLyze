@@ -49,6 +49,13 @@
     "desktopPathMustExist": "Choose an existing directory.",
     "chooseFolder": "Choose folder",
     "scanMode": "Scan mode",
+    "duplicateDetectionMode": "Duplicate detection",
+    "duplicateDetectionModeTooltipAria": "Explain duplicate detection modes",
+    "duplicateDetectionModeHint": "Filename is fast and approximate. File hash is exact but significantly more expensive during scans.",
+    "duplicateDetectionModes": {
+      "filename": "Filename",
+      "filehash": "File hash"
+    },
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
     "duplicateDetection": "Duplicate detection",
@@ -243,6 +250,15 @@
     "loadingFiles": "Loading analyzed files…",
     "loadingMore": "Loading more entries…",
     "noAnalyzedFiles": "No analyzed files yet.",
+    "duplicates": {
+      "title": "Duplications",
+      "empty": "No duplicate groups found yet.",
+      "emptySearch": "No duplicate groups match the current search.",
+      "fileCount": "{{count}} files",
+      "searchPlaceholder": "Search duplicates",
+      "searchLabel": "Search duplicates",
+      "clearSearch": "Clear duplicate search"
+    },
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
     "statistics": {
@@ -301,7 +317,13 @@
     "changedFiles": "Changed files",
     "deletedFiles": "Deleted files",
     "failedFiles": "Files that could not be analyzed",
+<<<<<<< HEAD
     "duplicates": "Duplicate processing",
+=======
+    "duplicatesTitle": "Duplicate processing",
+    "duplicatesSummary": "{{groups}} groups across {{files}} files using {{mode}}",
+    "duplicatesMode": "Mode",
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     "duplicatesQueued": "Queued",
     "duplicatesProcessed": "Processed",
     "duplicatesFailed": "Failed",

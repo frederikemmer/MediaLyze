@@ -44,6 +44,10 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "libraries": {
         "last_scan_at": "ALTER TABLE libraries ADD COLUMN last_scan_at DATETIME",
         "scan_mode": "ALTER TABLE libraries ADD COLUMN scan_mode VARCHAR(16) NOT NULL DEFAULT 'manual'",
+        "duplicate_detection_mode": (
+            "ALTER TABLE libraries ADD COLUMN duplicate_detection_mode "
+            "VARCHAR(16) NOT NULL DEFAULT 'filename'"
+        ),
         "scan_config": "ALTER TABLE libraries ADD COLUMN scan_config JSON NOT NULL DEFAULT '{}'",
         "quality_profile": "ALTER TABLE libraries ADD COLUMN quality_profile JSON NOT NULL DEFAULT '{}'",
         "duplicate_detection_mode": "ALTER TABLE libraries ADD COLUMN duplicate_detection_mode VARCHAR(16) NOT NULL DEFAULT 'filename'",
@@ -111,7 +115,14 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_last_analyzed_at ON media_files (library_id, last_analyzed_at)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_quality_score ON media_files (library_id, quality_score)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_filename_signature ON media_files (library_id, filename_signature)",
+<<<<<<< HEAD
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_hash ON media_files (library_id, content_hash_algorithm, content_hash)",
+=======
+    (
+        "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_hash "
+        "ON media_files (library_id, content_hash_algorithm, content_hash)"
+    ),
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     "CREATE INDEX IF NOT EXISTS ix_video_streams_codec ON video_streams (codec)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_resolution ON video_streams (width, height)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_hdr_type ON video_streams (hdr_type)",
@@ -183,6 +194,12 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
                     "WHERE quality_profile IS NULL OR quality_profile = '{}' OR quality_profile = 'null'"
                 ),
                 {"quality_profile": json.dumps(default_quality_profile())},
+            )
+            connection.execute(
+                text(
+                    "UPDATE libraries SET duplicate_detection_mode = 'filename' "
+                    "WHERE duplicate_detection_mode IS NULL OR duplicate_detection_mode = ''"
+                )
             )
 
 

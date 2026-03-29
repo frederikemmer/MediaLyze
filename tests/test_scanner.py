@@ -10,8 +10,24 @@ os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
+<<<<<<< HEAD
 from backend.app.models.entities import AppSetting, AudioStream, DuplicateDetectionMode, ExternalSubtitle, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
+=======
+from backend.app.models.entities import (
+    AppSetting,
+    AudioStream,
+    DuplicateDetectionMode,
+    ExternalSubtitle,
+    Library,
+    LibraryType,
+    MediaFile,
+    ScanMode,
+    ScanStatus,
+    SubtitleStream,
+)
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 from backend.app.services import scanner as scanner_service
+from backend.app.services.duplicates import list_library_duplicate_groups
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import execute_scan_job
 from backend.app.services.scanner import queue_duplicate_refresh_job
@@ -609,10 +625,155 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
     ]
 
 
+<<<<<<< HEAD
 def test_incremental_scan_reuses_cached_filehash_for_unchanged_files(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
     (media_dir / "movie.mkv").write_text("video")
+=======
+def test_incremental_scan_backfills_missing_filehash_without_reanalyzing_unchanged_files(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.mkv"
+    video_path.write_text("video")
+    stat = video_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    ffprobe_calls: list[str] = []
+    monkeypatch.setattr(
+        "backend.app.services.scanner.run_ffprobe",
+        lambda file_path, ffprobe_path: ffprobe_calls.append(str(file_path)) or {},
+    )
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filehash,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            last_seen_at=utc_now(),
+            last_analyzed_at=utc_now(),
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+            raw_ffprobe_json={"format": {}},
+        )
+        db.add(media_file)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        refreshed = db.get(MediaFile, media_file.id)
+
+    assert ffprobe_calls == []
+    assert refreshed is not None
+    assert refreshed.content_hash is not None
+    assert refreshed.content_hash_algorithm == "sha256"
+    assert job.files_scanned == 1
+    assert job.scan_summary["changes"]["queued_for_analysis"] == 0
+    assert job.scan_summary["changes"]["unchanged_files"] == 1
+    assert job.scan_summary["analysis"]["analyzed_successfully"] == 0
+    assert job.scan_summary["duplicates"]["mode"] == "filehash"
+    assert job.scan_summary["duplicates"]["queued_for_processing"] == 1
+    assert job.scan_summary["duplicates"]["processed_successfully"] == 1
+    assert job.scan_summary["duplicates"]["processing_failed"] == 0
+
+
+def test_incremental_scan_does_not_rehash_unchanged_files_with_existing_hash(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.mkv"
+    video_path.write_text("video")
+    stat = video_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    def fail_if_called(file_path: Path) -> dict[str, str | None]:
+        raise AssertionError(f"Unexpected duplicate processing for {file_path}")
+
+    monkeypatch.setattr(
+        "backend.app.services.duplicates.FileHashDuplicateDetectionStrategy.build_payload",
+        lambda self, file_path: fail_if_called(file_path),
+    )
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: {})
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filehash,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie.mkv",
+                filename="movie.mkv",
+                extension="mkv",
+                size_bytes=stat.st_size,
+                mtime=stat.st_mtime,
+                last_seen_at=utc_now(),
+                last_analyzed_at=utc_now(),
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+                raw_ffprobe_json={"format": {}},
+                content_hash="abc123",
+                content_hash_algorithm="sha256",
+            )
+        )
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+
+    assert job.files_scanned == 0
+    assert job.scan_summary["changes"]["unchanged_files"] == 1
+    assert job.scan_summary["duplicates"]["queued_for_processing"] == 0
+    assert job.scan_summary["duplicates"]["processed_successfully"] == 0
+
+
+def test_incremental_scan_updates_content_hash_for_modified_files(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.mkv"
+    video_path.write_text("version-1")
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -637,6 +798,7 @@ def test_incremental_scan_reuses_cached_filehash_for_unchanged_files(tmp_path: P
         ],
     }
 
+<<<<<<< HEAD
     hash_calls: list[str] = []
 
     monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
@@ -645,6 +807,10 @@ def test_incremental_scan_reuses_cached_filehash_for_unchanged_files(tmp_path: P
         "backend.app.services.duplicates.service.compute_content_hash",
         lambda file_path: hash_calls.append(Path(file_path).name) or "hash-value",
     )
+=======
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -659,13 +825,19 @@ def test_incremental_scan_reuses_cached_filehash_for_unchanged_files(tmp_path: P
             path=str(media_dir),
             type=LibraryType.movies,
             scan_mode=ScanMode.manual,
+<<<<<<< HEAD
             scan_config={},
             duplicate_detection_mode=DuplicateDetectionMode.filehash,
+=======
+            duplicate_detection_mode=DuplicateDetectionMode.filehash,
+            scan_config={},
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
         )
         db.add(library)
         db.commit()
 
         first_job = run_scan(db, settings, library.id, "incremental")
+<<<<<<< HEAD
         second_job = run_scan(db, settings, library.id, "incremental")
         first_files_scanned = first_job.files_scanned
         second_files_scanned = second_job.files_scanned
@@ -685,11 +857,41 @@ def test_incremental_scan_processes_missing_filehash_without_reanalyzing(tmp_pat
     video_path = media_dir / "movie.mkv"
     video_path.write_text("video")
     stat = video_path.stat()
+=======
+        media_before = db.scalar(select(MediaFile).where(MediaFile.library_id == library.id))
+        assert media_before is not None
+        first_hash = media_before.content_hash
+        first_summary = first_job.scan_summary
+
+        video_path.write_text("version-2-with-more-bytes")
+
+        second_job = run_scan(db, settings, library.id, "incremental")
+        media_after = db.scalar(select(MediaFile).where(MediaFile.library_id == library.id))
+        second_summary = second_job.scan_summary
+
+    assert first_summary["duplicates"]["processed_successfully"] == 1
+    assert second_summary["changes"]["modified_files"]["count"] == 1
+    assert second_summary["duplicates"]["queued_for_processing"] == 1
+    assert second_summary["duplicates"]["processed_successfully"] == 1
+    assert media_after is not None
+    assert media_after.content_hash is not None
+    assert media_after.content_hash != first_hash
+
+
+def test_deleted_files_disappear_from_duplicate_groups_on_rescan(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    first_path = media_dir / "dup-a.mkv"
+    second_path = media_dir / "dup-b.mkv"
+    first_path.write_text("same-content")
+    second_path.write_text("same-content")
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
+<<<<<<< HEAD
     ffprobe_calls: list[str] = []
     hash_calls: list[str] = []
 
@@ -702,6 +904,29 @@ def test_incremental_scan_processes_missing_filehash_without_reanalyzing(tmp_pat
         "backend.app.services.duplicates.service.compute_content_hash",
         lambda file_path: hash_calls.append(Path(file_path).name) or "backfilled-hash",
     )
+=======
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -716,6 +941,7 @@ def test_incremental_scan_processes_missing_filehash_without_reanalyzing(tmp_pat
             path=str(media_dir),
             type=LibraryType.movies,
             scan_mode=ScanMode.manual,
+<<<<<<< HEAD
             scan_config={},
             duplicate_detection_mode=DuplicateDetectionMode.filehash,
         )
@@ -748,3 +974,26 @@ def test_incremental_scan_processes_missing_filehash_without_reanalyzing(tmp_pat
     assert refreshed.content_hash == "backfilled-hash"
     assert job.scan_summary["duplicates"]["queued_for_processing"] == 1
     assert job.scan_summary["duplicates"]["processed_successfully"] == 1
+=======
+            duplicate_detection_mode=DuplicateDetectionMode.filehash,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        first_job = run_scan(db, settings, library.id, "incremental")
+        first_summary = first_job.scan_summary
+        first_groups = list_library_duplicate_groups(db, library.id)
+        second_path.unlink()
+        second_job = run_scan(db, settings, library.id, "incremental")
+        second_summary = second_job.scan_summary
+        second_groups = list_library_duplicate_groups(db, library.id)
+
+    assert first_summary["duplicates"]["duplicate_groups"] == 1
+    assert first_summary["duplicates"]["duplicate_files"] == 2
+    assert first_groups.total_groups == 1
+    assert second_summary["changes"]["deleted_files"]["count"] == 1
+    assert second_summary["duplicates"]["duplicate_groups"] == 0
+    assert second_summary["duplicates"]["duplicate_files"] == 0
+    assert second_groups.total_groups == 0
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6

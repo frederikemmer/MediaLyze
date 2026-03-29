@@ -72,8 +72,22 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     scan_job_columns = {column["name"] for column in inspector.get_columns("scan_jobs")}
 
     assert "app_settings" in inspector.get_table_names()
+<<<<<<< HEAD
     assert {"last_scan_at", "scan_mode", "scan_config", "duplicate_detection_mode"}.issubset(library_columns)
     assert {"last_seen_at", "last_analyzed_at", "scan_status", "quality_score", "raw_ffprobe_json", "filename_signature", "content_hash", "content_hash_algorithm"}.issubset(
+=======
+    assert {"last_scan_at", "scan_mode", "duplicate_detection_mode", "scan_config"}.issubset(library_columns)
+    assert {
+        "last_seen_at",
+        "last_analyzed_at",
+        "scan_status",
+        "quality_score",
+        "raw_ffprobe_json",
+        "filename_signature",
+        "content_hash",
+        "content_hash_algorithm",
+    }.issubset(
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
         media_file_columns
     )
     assert {"codec", "language", "default_flag", "forced_flag", "subtitle_type"}.issubset(subtitle_columns)

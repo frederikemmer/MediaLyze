@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   startTransition,
@@ -90,7 +90,11 @@ const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
+<<<<<<< HEAD
 const ACTIVE_SCAN_DATA_REFRESH_INTERVAL_MS = 2000;
+=======
+const DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-duplicates-collapsed";
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
 const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
@@ -100,6 +104,7 @@ const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
+const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
 const libraryFileListCache = new Map<string, CachedFileList>();
 const duplicateGroupCache = new Map<string, DuplicateGroupPage>();
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
@@ -440,6 +445,25 @@ function hasSearchValueTokens(existingValue: string | undefined, candidateValue:
   return candidateTokens.length > 0 && candidateTokens.every((token) => existingTokens.has(token));
 }
 
+function matchesSearchTokens(candidate: string, tokens: string[]): boolean {
+  if (tokens.length === 0) {
+    return true;
+  }
+  const normalizedCandidate = candidate.toLowerCase();
+  return tokens.every((token) => normalizedCandidate.includes(token));
+}
+
+function readDuplicatePanelCollapsedPreference(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  const storedPreference = window.localStorage.getItem(DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY);
+  if (storedPreference === null) {
+    return true;
+  }
+  return storedPreference === "true";
+}
+
 function buildCsvFallbackFilename(libraryName: string): string {
   const safeLibraryName = libraryName.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Library";
   const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -452,15 +476,19 @@ export function LibraryDetailPage() {
   const { appSettings, libraries } = useAppData();
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
+  const [duplicateSearch, setDuplicateSearch] = useState("");
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
+  const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
+  const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
@@ -476,6 +504,9 @@ export function LibraryDetailPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
   const [exportError, setExportError] = useState<string | null>(null);
+  const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
+    readDuplicatePanelCollapsedPreference(),
+  );
   const [qualityScoreDetails, setQualityScoreDetails] = useState<Record<number, MediaFileQualityScoreDetail>>({});
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
   const { activeJobs } = useScanJobs();
@@ -555,6 +586,7 @@ export function LibraryDetailPage() {
     [appliedSearchFilters],
   );
   const deferredAppliedSearchFilterKey = useDeferredValue(appliedSearchFilterKey);
+  const deferredDuplicateSearch = useDeferredValue(duplicateSearch);
   const deferredAppliedSearchFilters = useMemo(
     () => deserializeLibraryFileSearchFilters(deferredAppliedSearchFilterKey),
     [deferredAppliedSearchFilterKey],
@@ -563,6 +595,33 @@ export function LibraryDetailPage() {
     () => hasActiveSearchFilters(deferredAppliedSearchFilters),
     [deferredAppliedSearchFilters],
   );
+  const duplicateSearchTokens = useMemo(
+    () => searchValueTokens(deferredDuplicateSearch),
+    [deferredDuplicateSearch],
+  );
+  const filteredDuplicateGroups = useMemo(() => {
+    if (!duplicateGroups) {
+      return [];
+    }
+    if (duplicateSearchTokens.length === 0) {
+      return duplicateGroups.items;
+    }
+    return duplicateGroups.items.flatMap((group) => {
+      const groupMatches = matchesSearchTokens(`${group.label} ${group.signature}`, duplicateSearchTokens);
+      if (groupMatches) {
+        return [group];
+      }
+
+      const matchingItems = group.items.filter((item) =>
+        matchesSearchTokens(`${item.filename} ${item.relative_path}`, duplicateSearchTokens),
+      );
+      if (matchingItems.length === 0) {
+        return [];
+      }
+
+      return [{ ...group, items: matchingItems }];
+    });
+  }, [duplicateGroups, duplicateSearchTokens]);
   const fileQueryKey = useMemo(
     () => buildFileCacheKey(libraryId, deferredAppliedSearchFilterKey, sortKey, sortDirection),
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
@@ -578,6 +637,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
@@ -711,18 +771,27 @@ export function LibraryDetailPage() {
     }
   });
 
+<<<<<<< HEAD
   const loadDuplicateGroups = useEffectEvent(async (offset = 0, append = false, showLoading = false) => {
+=======
+  const loadDuplicateGroups = useEffectEvent(async (showLoading = false) => {
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
     duplicateGroupsAbortRef.current?.abort();
     const controller = new AbortController();
     duplicateGroupsAbortRef.current = controller;
 
+<<<<<<< HEAD
     if (append) {
       setIsLoadingMoreDuplicateGroups(true);
     } else if (showLoading) {
+=======
+    if (showLoading) {
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
       setIsDuplicateGroupsLoading(true);
     }
 
     try {
+<<<<<<< HEAD
       const payload = await api.libraryDuplicates(libraryId, {
         offset,
         limit: DUPLICATE_GROUP_PAGE_SIZE,
@@ -736,6 +805,11 @@ export function LibraryDetailPage() {
         : payload;
       duplicateGroupCache.set(libraryId, nextPayload);
       setDuplicateGroups(nextPayload);
+=======
+      const payload = await api.libraryDuplicates(libraryId, { offset: 0, limit: 25, signal: controller.signal });
+      libraryDuplicateGroupsCache.set(libraryId, payload);
+      setDuplicateGroups(payload);
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
       setDuplicateGroupsError(null);
     } catch (reason) {
       if ((reason as Error).name === "AbortError") {
@@ -746,9 +820,13 @@ export function LibraryDetailPage() {
       if (duplicateGroupsAbortRef.current === controller) {
         duplicateGroupsAbortRef.current = null;
       }
+<<<<<<< HEAD
       if (append) {
         setIsLoadingMoreDuplicateGroups(false);
       } else if (showLoading) {
+=======
+      if (showLoading) {
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
         setIsDuplicateGroupsLoading(false);
       }
     }
@@ -869,6 +947,17 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY,
+      isDuplicatesPanelCollapsed ? "true" : "false",
+    );
+  }, [isDuplicatesPanelCollapsed]);
+
+  useEffect(() => {
+    setDuplicateSearch("");
+  }, [libraryId]);
+
+  useEffect(() => {
     if (hasInvalidSearchField) {
       return;
     }
@@ -933,7 +1022,11 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
+<<<<<<< HEAD
     const cachedDuplicateGroups = duplicateGroupCache.get(libraryId) ?? null;
+=======
+    const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     setLibrarySummary(cachedSummary);
     setLibraryStatistics(cachedStatistics);
@@ -947,7 +1040,11 @@ export function LibraryDetailPage() {
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryStatistics(cachedStatistics === null);
+<<<<<<< HEAD
     void loadDuplicateGroups(0, false, cachedDuplicateGroups === null);
+=======
+    void loadDuplicateGroups(cachedDuplicateGroups === null);
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
   }, [libraryId]);
 
   useEffect(() => {
@@ -1014,13 +1111,18 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
+      libraryDuplicateGroupsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
       duplicateGroupCache.delete(libraryId);
       setQualityScoreDetails({});
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
+<<<<<<< HEAD
       void loadDuplicateGroups(0, false, false);
+=======
+      void loadDuplicateGroups(false);
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
       void loadFilesPage(0, false, fileQueryKey);
     }
     hadActiveJobRef.current = Boolean(activeJob);
@@ -1049,6 +1151,7 @@ export function LibraryDetailPage() {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
+      duplicateGroupsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
       duplicateGroupsAbortRef.current?.abort();
       exportAbortRef.current?.abort();
@@ -1152,6 +1255,7 @@ export function LibraryDetailPage() {
 
       <AsyncPanel
         title={t("libraryDetail.duplicates.title")}
+<<<<<<< HEAD
         subtitle={t("libraryDetail.duplicates.subtitle")}
         loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
         error={duplicateGroupsError}
@@ -1181,10 +1285,77 @@ export function LibraryDetailPage() {
                     <Link key={item.id} to={`/files/${item.id}`} className="file-link">
                       {item.relative_path}
                     </Link>
+=======
+        loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
+        error={duplicateGroupsError}
+        titleAddon={
+          duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null
+        }
+        headerAddon={
+          !isDuplicatesPanelCollapsed ? (
+            <div className="data-table-search-layout duplicate-search-layout">
+              <div className="metadata-search-control duplicate-search-control">
+                <span className="metadata-search-icon-button" aria-hidden="true">
+                  <Search size={18} />
+                </span>
+                <input
+                  type="search"
+                  value={duplicateSearch}
+                  placeholder={t("libraryDetail.duplicates.searchPlaceholder")}
+                  aria-label={t("libraryDetail.duplicates.searchLabel")}
+                  autoComplete="off"
+                  className={duplicateSearch ? "has-trailing-action" : undefined}
+                  onChange={(event) => setDuplicateSearch(event.target.value)}
+                />
+                {duplicateSearch ? (
+                  <button
+                    type="button"
+                    className="metadata-search-remove"
+                    aria-label={t("libraryDetail.duplicates.clearSearch")}
+                    onClick={() => setDuplicateSearch("")}
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null
+        }
+        collapseState={{
+          collapsed: isDuplicatesPanelCollapsed,
+          onToggle: () => setIsDuplicatesPanelCollapsed((current) => !current),
+          bodyId: "library-duplicates-panel-body",
+        }}
+      >
+        {duplicateGroups && filteredDuplicateGroups.length > 0 ? (
+          <div className="duplicate-group-list">
+            {filteredDuplicateGroups.map((group) => (
+              <div key={group.signature} className="media-card duplicate-group-card">
+                <div className="duplicate-group-summary">
+                  <div className="meta-tags">
+                    <span className="badge">{t(`libraries.duplicateDetectionModes.${duplicateGroups.mode}`)}</span>
+                    <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
+                    <span className="badge">{formatBytes(group.total_size_bytes)}</span>
+                  </div>
+                  <code className="scan-log-path">{group.signature}</code>
+                </div>
+                <div className="scan-log-path-list">
+                  {group.items.map((item) => (
+                    <div key={item.id} className="scan-log-pattern-card">
+                      <div className="scan-log-detail-title">
+                        <Link to={`/files/${item.id}`} className="file-link">
+                          {item.filename}
+                        </Link>
+                        <span className="badge">{formatBytes(item.size_bytes)}</span>
+                      </div>
+                      <code className="scan-log-path">{item.relative_path}</code>
+                    </div>
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
                   ))}
                 </div>
               </div>
             ))}
+<<<<<<< HEAD
             {duplicateGroups.items.length < duplicateGroups.total_groups ? (
               <button
                 type="button"
@@ -1197,6 +1368,14 @@ export function LibraryDetailPage() {
                   : t("libraryDetail.duplicates.loadMore")}
               </button>
             ) : null}
+=======
+          </div>
+        ) : (
+          <div className="notice">
+            {duplicateSearchTokens.length > 0
+              ? t("libraryDetail.duplicates.emptySearch")
+              : t("libraryDetail.duplicates.empty")}
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
           </div>
         )}
       </AsyncPanel>

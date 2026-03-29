@@ -54,6 +54,7 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     type: "movies",
     last_scan_at: null,
     scan_mode: "manual",
+    duplicate_detection_mode: "filename",
     scan_config: {},
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
@@ -136,8 +137,13 @@ function createScanJobDetail(overrides: Partial<ScanJobDetail> = {}): ScanJobDet
         processing_failed: 0,
         failed_files: [],
         failed_files_truncated_count: 0,
+<<<<<<< HEAD
         duplicate_groups: 1,
         duplicate_files: 2,
+=======
+        duplicate_groups: 2,
+        duplicate_files: 4,
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
       },
     },
     ...overrides,
@@ -497,6 +503,7 @@ describe("LibrariesPage desktop mode", () => {
     expect(screen.getByText("Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.")).toBeInTheDocument();
   });
 
+<<<<<<< HEAD
   it("saves duplicate detection mode changes per library", async () => {
     const library = createLibrarySummary();
     const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue({
@@ -504,6 +511,13 @@ describe("LibrariesPage desktop mode", () => {
       duplicate_detection_mode: "filehash",
     });
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
+=======
+  it("shows duplicate detection settings and auto-saves the selected mode", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
+      createLibrarySummary({ duplicate_detection_mode: "filehash" }),
+    );
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
     renderPage();
 
@@ -512,11 +526,38 @@ describe("LibrariesPage desktop mode", () => {
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
+<<<<<<< HEAD
         library.id,
         expect.objectContaining({ duplicate_detection_mode: "filehash" }),
       ),
     );
   });
+=======
+        1,
+        expect.objectContaining({
+          duplicate_detection_mode: "filehash",
+        }),
+      ),
+    );
+  });
+
+  it("shows the duplicate detection hint in a tooltip instead of inline text", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    expect(
+      screen.queryByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans."),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain duplicate detection modes" }));
+
+    expect(
+      await screen.findByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans."),
+    ).toBeInTheDocument();
+  });
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 });
 
 describe("LibrariesPage settings panels", () => {
@@ -722,6 +763,7 @@ describe("LibrariesPage settings panels", () => {
 
     await waitFor(() => expect(detailSpy).toHaveBeenCalledWith(14));
     expect(await screen.findAllByText("Ignore patterns")).toHaveLength(2);
+    expect(await screen.findByText("Duplicate processing")).toBeInTheDocument();
     fireEvent.click(screen.getAllByText("Ignore patterns")[1]);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));

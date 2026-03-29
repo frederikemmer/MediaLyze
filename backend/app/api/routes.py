@@ -32,7 +32,11 @@ from backend.app.models.entities import Library, ScanJob, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
+<<<<<<< HEAD
 from backend.app.services.duplicates import list_duplicate_groups
+=======
+from backend.app.services.duplicates import list_library_duplicate_groups
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -236,6 +240,7 @@ def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -
 def library_duplicates(
     library_id: int,
     offset: int = Query(default=0, ge=0),
+<<<<<<< HEAD
     limit: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db_session),
 ) -> DuplicateGroupPageRead:
@@ -243,6 +248,15 @@ def library_duplicates(
     if library is None:
         raise HTTPException(status_code=404, detail="Library not found")
     return list_duplicate_groups(db, library, offset=offset, limit=limit)
+=======
+    limit: int = Query(default=25, ge=1, le=200),
+    db: Session = Depends(get_db_session),
+) -> DuplicateGroupPageRead:
+    try:
+        return list_library_duplicate_groups(db, library_id, offset=offset, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Library not found") from exc
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 
 @router.get("/libraries/{library_id}/scan-jobs", response_model=list[ScanJobRead])

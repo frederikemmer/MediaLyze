@@ -52,6 +52,7 @@ MediaLyze currently implements:
 * per-library duplicate detection with `filename` and `filehash` modes
 * configurable per-library quality profiles
 * per-file quality score breakdowns
+* per-library duplicate detection using filename signatures or exact file hashes
 * structured metadata search, filtering, sorting, and pagination
 * dashboard and per-library statistics
 * theme selection and feature flags
@@ -92,6 +93,7 @@ Each library currently stores:
 * absolute resolved path
 * library type
 * `scan_mode`
+* `duplicate_detection_mode`
 * `scan_config`
 * `quality_profile`
 * `duplicate_detection_mode`
@@ -154,10 +156,16 @@ Current scan execution behavior:
 2. apply ignore-pattern filtering during discovery
 3. compare discovered files against stored records
 4. detect new, modified, deleted, or newly ignored files
+<<<<<<< HEAD
 5. build a work queue for new, modified, and duplicate-backfill files
 6. reanalyze files with incomplete metadata when needed
 7. run duplicate-signature processing for queued files after optional media analysis
 8. persist detailed scan summaries and file-level failure samples
+=======
+5. reanalyze files with incomplete metadata when needed
+6. queue per-file work for analysis and duplicate-signature processing
+7. persist detailed scan summaries and file-level failure samples
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 Change detection uses:
 
@@ -179,7 +187,11 @@ Actual implementation:
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
 * quality recomputation runs as a distinct runtime-managed job type
+<<<<<<< HEAD
 * startup cleanup cancels previously queued or running scan jobs instead of resuming them automatically
+=======
+* old `queued` and `running` jobs from previous processes are canceled during startup instead of being resumed
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 ## 3.6 Scan Logs
 
@@ -194,7 +206,11 @@ Scan-job tracking now includes:
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled error reasons
+<<<<<<< HEAD
 * duplicate-processing summaries and duplicate-group counts
+=======
+* duplicate-processing summaries including mode, failure samples, and grouped duplicate counts
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 ---
 
@@ -284,6 +300,24 @@ Stored fields include:
 * relative sidecar path
 * language
 * format
+
+## 4.6 Duplicate Detection
+
+Duplicate detection is persisted per media file and configured per library.
+
+Current modes:
+
+```text
+filename
+filehash
+```
+
+Current behavior:
+
+* `filename` stores a normalized filename signature based on the lowercase stem with whitespace, dot, dash, and underscore runs collapsed to a single space
+* `filehash` stores a full-file `sha256` content hash plus its algorithm label
+* unchanged files can be queued for duplicate-only backfill when the active mode's persisted signature is missing
+* duplicate groups are aggregated on demand per library from stored signatures or hashes instead of being materialized as a dedicated table
 
 ---
 
@@ -433,6 +467,7 @@ Implemented UI behavior includes:
 * path browser for safe library creation
 * collapsible settings panels
 * recent scan-log browsing and detailed scan summaries
+* duplicate-group browsing per library
 * virtualized library file table for larger datasets
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
@@ -532,6 +567,7 @@ Important current payload concepts:
 Important library contract concepts:
 
 * `scan_mode`
+* `duplicate_detection_mode`
 * `scan_config`
 * `quality_profile`
 * `duplicate_detection_mode`
@@ -561,6 +597,7 @@ Important scan-job contract concepts:
 * `trigger_source`
 * `trigger_details`
 * `scan_summary`
+* `scan_summary.duplicates`
 
 Supported trigger sources currently include:
 
@@ -591,10 +628,14 @@ Current logical schema includes:
 Important post-`0.0.1` additions that must be treated as real schema surface:
 
 * library `scan_mode`
+* library `duplicate_detection_mode`
 * library `scan_config`
 * library `quality_profile`
 * library `duplicate_detection_mode`
 * app-level settings storage
+* media `filename_signature`
+* media `content_hash`
+* media `content_hash_algorithm`
 * media `quality_score_raw`
 * media `quality_score_breakdown`
 * media `raw_ffprobe_json`
@@ -626,7 +667,12 @@ Implemented backend structure:
 * `backend/app/api/routes.py` defines the public HTTP API
 * `backend/app/models/entities.py` defines the ORM schema
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
+<<<<<<< HEAD
 * `backend/app/services/scanner.py` performs discovery, change detection, work-queue construction, ffprobe analysis, duplicate-signature processing, normalization, and scan-summary generation
+=======
+* `backend/app/services/duplicates.py` provides duplicate-signature strategies and duplicate-group queries
+* `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 * `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
 * `backend/app/services/duplicates/service.py` provides duplicate-detection strategies and duplicate-group queries
 * `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics

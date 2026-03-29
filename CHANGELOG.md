@@ -5,10 +5,20 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 ### ✨ New
+<<<<<<< HEAD
 - add per-library duplicate detection with configurable `filename` and exact `filehash` modes, persisted duplicate signatures / content hashes, scan-integrated duplicate processing, a duplicate-groups API, and a duplicate-groups panel in the library detail view
 
 ### 🐛 Bug fixes
 - stop auto-resuming queued or interrupted scan jobs on startup; previous active jobs are now closed during runtime initialization and only future watchdog or scheduled triggers start new scans
+=======
+
+- add per-library duplicate detection with configurable `filename` and exact `filehash` modes, persistent duplicate signatures in SQLite, a new duplicate-groups API endpoint, and duplicate-group panels in the library detail view
+- make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
+
+### 🐛 Bug fixes
+
+- stop resuming stale `queued` and `running` scan jobs on app startup; previous-process leftovers are now marked `canceled` with a finish timestamp instead of becoming ghost resumes
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
 ## v0.3.0
 

@@ -354,15 +354,16 @@ class ScanRuntimeManager:
         observer.start()
         self.watch_observers[library.id] = (library_path, observer)
 
-    def _resume_active_jobs(self) -> None:
+    def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            active_jobs = db.scalars(
+            orphaned_jobs = db.scalars(
                 select(ScanJob)
                 .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
                 .order_by(ScanJob.id.asc())
             ).all()
 
+<<<<<<< HEAD
             chosen_job_ids: list[int] = []
             seen_libraries: set[int] = set()
 
@@ -398,6 +399,15 @@ class ScanRuntimeManager:
                 job.finished_at = utc_now()
                 job.files_total = 0
                 job.files_scanned = 0
+=======
+            if not orphaned_jobs:
+                return
+
+            finished_at = utc_now()
+            for job in orphaned_jobs:
+                job.status = JobStatus.canceled
+                job.finished_at = finished_at
+>>>>>>> e346af6e232e30a40b6c1803e7df43a77d8cf6c6
 
             db.commit()
         finally:
