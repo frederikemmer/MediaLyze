@@ -790,8 +790,6 @@ def _run_duplicate_detection(
         result = strategy.ensure_artifact(
             media_file,
             file_path,
-            ffmpeg_path=settings.ffmpeg_path,
-            ffmpeg_timeout_seconds=settings.ffmpeg_timeout_seconds,
         )
         if result.cache_hit:
             artifact_hits += 1
@@ -1017,8 +1015,6 @@ def run_scan(
                 if changed:
                     modified_files.add(relative_path)
                     media_file.content_hash = None
-                    media_file.perceptual_hash = None
-                    media_file.perceptual_hash_version = 1
                 elif analysis_incomplete:
                     reanalyzed_incomplete_files += 1
                 media_file.scan_status = ScanStatus.pending

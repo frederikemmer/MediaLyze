@@ -179,10 +179,10 @@ describe("LibraryDetailPage", () => {
     const refreshCallbacks: Array<() => void> = [];
     vi.spyOn(window, "setInterval").mockImplementation(((handler: TimerHandler) => {
       if (typeof handler === "function") {
-        refreshCallbacks.push(handler);
+        refreshCallbacks.push(handler as () => void);
       }
-      return 1 as unknown as ReturnType<typeof window.setInterval>;
-    }) as typeof window.setInterval);
+      return 1;
+    }) as unknown as typeof window.setInterval);
     vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
     vi.spyOn(api, "appSettings").mockResolvedValue({
       ignore_patterns: [],

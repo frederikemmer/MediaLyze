@@ -23,7 +23,6 @@ class DuplicateRecord:
     duration: float | None
     duplicate_filename_key: str | None
     content_hash: str | None
-    perceptual_hash: dict | None
 
 
 @dataclass(frozen=True)
@@ -40,9 +39,6 @@ class DuplicateStrategy(Protocol):
         self,
         media_file: MediaFile,
         file_path: Path,
-        *,
-        ffmpeg_path: str,
-        ffmpeg_timeout_seconds: int | None = None,
     ) -> ArtifactResult:
         ...
 

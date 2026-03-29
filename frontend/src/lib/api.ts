@@ -94,7 +94,7 @@ export type LibrarySummary = {
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
-  duplicate_detection_mode: "filename" | "content_hash" | "perceptual_hash";
+  duplicate_detection_mode: "filename" | "filehash";
   file_count: number;
   total_size_bytes: number;
   total_duration_seconds: number;
@@ -568,7 +568,7 @@ export const api = {
     scan_mode: string;
     scan_config?: Record<string, number>;
     quality_profile?: QualityProfile;
-    duplicate_detection_mode?: "filename" | "content_hash" | "perceptual_hash";
+    duplicate_detection_mode?: "filename" | "filehash";
   }) =>
     request<LibrarySummary>("/libraries", {
       method: "POST",
@@ -581,7 +581,7 @@ export const api = {
       scan_mode?: string;
       scan_config?: Record<string, number>;
       quality_profile?: QualityProfile;
-      duplicate_detection_mode?: "filename" | "content_hash" | "perceptual_hash";
+      duplicate_detection_mode?: "filename" | "filehash";
     },
   ) =>
     request<LibrarySummary>(`/libraries/${libraryId}`, {

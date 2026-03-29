@@ -14,10 +14,6 @@ export function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
 }
 
-export function bundledFfmpegName(platform = process.platform) {
-  return platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-}
-
 function commandLookupInvocation(platform = process.platform) {
   return platform === "win32"
     ? { command: "where", args: ["ffprobe"] }
@@ -90,78 +86,9 @@ export function resolveBundledFfprobeSource({
   };
 }
 
-export function resolveBundledFfmpegSource({
-  env = process.env,
-  platform = process.platform,
-  exists = existsSync,
-  stat = statSync,
-  lookup = (command, args) => spawnSync(command, args, { encoding: "utf8" }),
-} = {}) {
-  const executableName = bundledFfmpegName(platform);
-  const configuredPath = env.MEDIALYZE_FFMPEG_DIR?.trim();
-
-  if (configuredPath) {
-    if (!exists(configuredPath)) {
-      throw new Error(`MEDIALYZE_FFMPEG_DIR does not exist: ${configuredPath}`);
-    }
-    const configuredStat = stat(configuredPath);
-    if (configuredStat.isDirectory()) {
-      const bundledExecutable = path.join(configuredPath, executableName);
-      if (!exists(bundledExecutable)) {
-        throw new Error(`MEDIALYZE_FFMPEG_DIR does not contain ${executableName}: ${configuredPath}`);
-      }
-      return {
-        kind: "directory",
-        sourcePath: configuredPath,
-        executableName,
-      };
-    }
-    return {
-      kind: "file",
-      sourcePath: configuredPath,
-      executableName,
-    };
-  }
-
-  const lookupInvocation = platform === "win32"
-    ? { command: "where", args: ["ffmpeg"] }
-    : { command: "which", args: ["ffmpeg"] };
-  const lookupResult = lookup(lookupInvocation.command, lookupInvocation.args);
-  if (lookupResult.status !== 0) {
-    throw new Error("Unable to locate ffmpeg for desktop packaging. Set MEDIALYZE_FFMPEG_DIR or install ffmpeg on PATH.");
-  }
-
-  const detectedExecutable = firstExistingLine(lookupResult.stdout ?? "");
-  if (!detectedExecutable || !exists(detectedExecutable)) {
-    throw new Error("ffmpeg lookup did not return a usable executable path for desktop packaging.");
-  }
-
-  return {
-    kind: "file",
-    sourcePath: detectedExecutable,
-    executableName,
-  };
-}
-
 export function bundleFfprobe(outputPath, options = {}) {
   const source = resolveBundledFfprobeSource(options);
   const targetDir = path.join(outputPath, "ffprobe");
-  rmSync(targetDir, { recursive: true, force: true });
-  mkdirSync(targetDir, { recursive: true });
-
-  if (source.kind === "directory") {
-    cpSync(source.sourcePath, targetDir, { recursive: true, dereference: true });
-    return path.join(targetDir, source.executableName);
-  }
-
-  const targetExecutable = path.join(targetDir, source.executableName);
-  cpSync(realpathSync(source.sourcePath), targetExecutable);
-  return targetExecutable;
-}
-
-export function bundleFfmpeg(outputPath, options = {}) {
-  const source = resolveBundledFfmpegSource(options);
-  const targetDir = path.join(outputPath, "ffmpeg");
   rmSync(targetDir, { recursive: true, force: true });
   mkdirSync(targetDir, { recursive: true });
 
@@ -266,7 +193,6 @@ export function main() {
   }
 
   bundleFfprobe(outputDir);
-  bundleFfmpeg(outputDir);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

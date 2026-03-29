@@ -5,14 +5,13 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 ### ✨ New
-- add per-library duplicate detection modes for `filename`, `content_hash`, and `perceptual_hash` ([#16](https://github.com/frederikemmer/MediaLyze/issues/16))
+- add per-library duplicate detection modes for `filename` and `filehash` ([#16](https://github.com/frederikemmer/MediaLyze/issues/16))
 - persist duplicate artifacts and duplicate-group memberships in SQLite and surface duplicate groups through the library API, statistics panels, and analyzed-files filters
 
 ### 🐛 Bug fixes
-- bundle and resolve `ffmpeg` for desktop runtime so perceptual duplicate hashing can extract representative frames consistently in packaged builds
+- restrict filename duplicate detection to files with the same filename, rename `content_hash` mode to `filehash`, and remove the non-working `perceptual_hash` mode to simplify duplicate scanning
 - correct active scan progress details so analyzed-file counts use the actual queued-for-analysis total and unchanged-file count instead of implying that whole libraries were still being analyzed
-- include the desktop `ffmpeg`/`ffprobe` path helper modules in packaged Electron builds so macOS, Linux, and Windows app launches no longer fail with missing desktop helper modules
-- run `ffprobe` and perceptual-hash `ffmpeg` subprocesses with `-nostdin` and closed stdin so scans do not hang on the first file in non-interactive desktop/container environments
+- include the desktop `ffprobe` path helper module in packaged Electron builds so macOS, Linux, and Windows app launches no longer fail with missing desktop helper modules
 - reduce `dev` branch Docker publishing to `linux/amd64` only so development image builds finish faster while keeping official `main` release images multi-arch
 - refresh library summaries, statistics, and analyzed-files results continuously during active scans and show clearer discovery-versus-analysis progress details while scans run
 

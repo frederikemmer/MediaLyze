@@ -69,7 +69,7 @@ type LibrarySettingsForm = {
   interval_minutes: number;
   debounce_seconds: number;
   quality_profile: QualityProfile;
-  duplicate_detection_mode: "filename" | "content_hash" | "perceptual_hash";
+  duplicate_detection_mode: "filename" | "filehash";
 };
 
 type IgnorePatternGroup = "user" | "default";
@@ -2111,8 +2111,7 @@ export function LibrariesPage() {
                         }
                       >
                         <option value="filename">{t("duplicateDetectionModes.filename")}</option>
-                        <option value="content_hash">{t("duplicateDetectionModes.content_hash")}</option>
-                        <option value="perceptual_hash">{t("duplicateDetectionModes.perceptual_hash")}</option>
+                        <option value="filehash">{t("duplicateDetectionModes.filehash")}</option>
                       </select>
                     </div>
                     <div className="field field-span-full">

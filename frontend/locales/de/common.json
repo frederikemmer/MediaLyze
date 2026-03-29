@@ -19,8 +19,7 @@
   },
   "duplicateDetectionModes": {
     "filename": "Dateiname",
-    "content_hash": "Inhaltshash",
-    "perceptual_hash": "Perceptual Hash"
+    "filehash": "Filehash"
   },
   "dashboard": {
     "liveUpdates": "Live-Aktualisierungen sind aktiv, während Scans laufen. Die Dashboard-Metriken werden automatisch aktualisiert.",
@@ -54,7 +53,7 @@
     "debounceSeconds": "Debounce in Sekunden",
     "duplicateDetectionMode": "Duplikaterkennung",
     "duplicateDetectionModeTooltipAria": "Duplikaterkennungsmodi erklären",
-    "duplicateDetectionModeTooltip": "filename: Wahrscheinliche Duplikate anhand normalisierter Dateinamen und Fuzzy-Matching.\n\ncontent_hash: Exakte Duplikate anhand eines Hashes des vollständigen Dateiinhalts.\n\nperceptual_hash: Visuell ähnliche Videos anhand repräsentativer Videoframes. Rechenintensivster Modus.",
+    "duplicateDetectionModeTooltip": "filename: Erkennt nur Duplikate mit demselben Dateinamen.\n\nfilehash: Erkennt exakte Duplikate anhand eines Hashes des vollständigen Dateiinhalts.",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
     "qualityScoreTitle": "Qualitäts-Score",

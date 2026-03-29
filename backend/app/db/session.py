@@ -58,8 +58,6 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "raw_ffprobe_json": "ALTER TABLE media_files ADD COLUMN raw_ffprobe_json JSON",
         "duplicate_filename_key": "ALTER TABLE media_files ADD COLUMN duplicate_filename_key VARCHAR(512)",
         "content_hash": "ALTER TABLE media_files ADD COLUMN content_hash VARCHAR(128)",
-        "perceptual_hash": "ALTER TABLE media_files ADD COLUMN perceptual_hash JSON",
-        "perceptual_hash_version": "ALTER TABLE media_files ADD COLUMN perceptual_hash_version INTEGER NOT NULL DEFAULT 1",
         "duplicate_group_key": "ALTER TABLE media_files ADD COLUMN duplicate_group_key VARCHAR(128)",
         "duplicate_group_label": "ALTER TABLE media_files ADD COLUMN duplicate_group_label VARCHAR(512)",
         "duplicate_group_member_count": "ALTER TABLE media_files ADD COLUMN duplicate_group_member_count INTEGER NOT NULL DEFAULT 0",
@@ -170,6 +168,19 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
             connection.execute(text(statement))
 
         if _sqlite_has_table(connection, "libraries"):
+            connection.execute(
+                text(
+                    "UPDATE libraries SET duplicate_detection_mode = 'filehash' "
+                    "WHERE duplicate_detection_mode = 'content_hash'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE libraries SET duplicate_detection_mode = 'filename' "
+                    "WHERE duplicate_detection_mode = 'perceptual_hash' "
+                    "OR duplicate_detection_mode NOT IN ('filename', 'filehash')"
+                )
+            )
             connection.execute(
                 text(
                     "UPDATE libraries SET quality_profile = :quality_profile "

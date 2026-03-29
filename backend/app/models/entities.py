@@ -37,8 +37,7 @@ class ScanMode(str, Enum):
 
 class DuplicateDetectionMode(str, Enum):
     filename = "filename"
-    content_hash = "content_hash"
-    perceptual_hash = "perceptual_hash"
+    filehash = "filehash"
 
 
 class ScanStatus(str, Enum):
@@ -137,8 +136,6 @@ class MediaFile(Base):
     raw_ffprobe_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     duplicate_filename_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    perceptual_hash: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    perceptual_hash_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     duplicate_group_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duplicate_group_label: Mapped[str | None] = mapped_column(String(512), nullable=True)
     duplicate_group_member_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

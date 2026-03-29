@@ -506,6 +506,18 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("shows only filename and filehash duplicate detection modes", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    const duplicateModeSelect = await screen.findByLabelText("Duplicate detection", { selector: "select" });
+    expect(within(duplicateModeSelect).getByRole("option", { name: "Filename" })).toBeInTheDocument();
+    expect(within(duplicateModeSelect).getByRole("option", { name: "Filehash" })).toBeInTheDocument();
+    expect(within(duplicateModeSelect).queryByRole("option", { name: /content hash/i })).not.toBeInTheDocument();
+    expect(within(duplicateModeSelect).queryByRole("option", { name: /perceptual/i })).not.toBeInTheDocument();
+  });
+
   it("shows the main settings panels expanded by default", async () => {
     renderPage();
 

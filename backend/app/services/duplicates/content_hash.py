@@ -8,16 +8,13 @@ from backend.app.models.entities import DuplicateDetectionMode, MediaFile
 from backend.app.services.duplicates.base import ArtifactResult, DuplicateGroupAssignment, DuplicateRecord
 
 
-class ContentHashDuplicateStrategy:
-    mode = DuplicateDetectionMode.content_hash
+class FileHashDuplicateStrategy:
+    mode = DuplicateDetectionMode.filehash
 
     def ensure_artifact(
         self,
         media_file: MediaFile,
         file_path: Path,
-        *,
-        ffmpeg_path: str,
-        ffmpeg_timeout_seconds: int | None = None,
     ) -> ArtifactResult:
         if media_file.content_hash:
             return ArtifactResult(updated=False, cache_hit=True)

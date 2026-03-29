@@ -27,8 +27,7 @@
     "files": [
       "main.cjs",
       "preload.cjs",
-      "ffprobe-paths.cjs",
-      "ffmpeg-paths.cjs"
+      "ffprobe-paths.cjs"
     ],
     "extraResources": [
       {

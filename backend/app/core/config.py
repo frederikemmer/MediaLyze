@@ -50,9 +50,7 @@ class Settings(BaseSettings):
     frontend_dist_path: Path | None = None
     database_filename: str = "medialyze.db"
     ffprobe_path: str = "ffprobe"
-    ffmpeg_path: str = "ffmpeg"
     ffprobe_timeout_seconds: int = 60
-    ffmpeg_timeout_seconds: int = 30
     scan_discovery_batch_size: int = 500
     scan_commit_batch_size: int = 5
     ffprobe_worker_count: int = 4

@@ -10,14 +10,12 @@ from sqlalchemy.orm import Session, selectinload
 from backend.app.models.entities import DuplicateDetectionMode, Library, MediaFile, MediaFormat
 from backend.app.schemas.media import DuplicateGroupPageRead, DuplicateGroupRead, DuplicateSummaryRead
 from backend.app.services.duplicates.base import DuplicateGroupAssignment, DuplicateRecord, DuplicateStrategy
-from backend.app.services.duplicates.content_hash import ContentHashDuplicateStrategy
+from backend.app.services.duplicates.content_hash import FileHashDuplicateStrategy
 from backend.app.services.duplicates.filename import FilenameDuplicateStrategy
-from backend.app.services.duplicates.perceptual import PerceptualDuplicateStrategy
 
 STRATEGIES: dict[DuplicateDetectionMode, DuplicateStrategy] = {
     DuplicateDetectionMode.filename: FilenameDuplicateStrategy(),
-    DuplicateDetectionMode.content_hash: ContentHashDuplicateStrategy(),
-    DuplicateDetectionMode.perceptual_hash: PerceptualDuplicateStrategy(),
+    DuplicateDetectionMode.filehash: FileHashDuplicateStrategy(),
 }
 
 
@@ -48,7 +46,6 @@ def collect_duplicate_records(db: Session, library_id: int) -> list[DuplicateRec
             duration=media_file.media_format.duration if media_file.media_format else None,
             duplicate_filename_key=media_file.duplicate_filename_key,
             content_hash=media_file.content_hash,
-            perceptual_hash=media_file.perceptual_hash,
         )
         for media_file in media_files
     ]
