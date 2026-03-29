@@ -147,7 +147,7 @@ export function AppShell() {
                     <span>{describeActiveScanJob(t, job)}</span>
                   </div>
                   <div className="progress">
-                    <span style={{ width: `${job.progress_percent}%` }} />
+                    <span style={{ width: `${getDisplayedScanJobPercent(job)}%` }} />
                   </div>
                 </div>
               ))}

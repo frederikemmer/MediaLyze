@@ -2021,7 +2021,7 @@ export function LibrariesPage() {
                         <div className="progress">
                           <span
                             style={{
-                              width: `${activeJob.progress_percent ?? 0}%`,
+                              width: `${getDisplayedScanJobPercent(activeJob)}%`,
                             }}
                           />
                         </div>
