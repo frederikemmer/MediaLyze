@@ -27,7 +27,7 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monkeypatch) -> None:
+def test_recover_orphaned_jobs_cancels_queued_and_running_jobs(monkeypatch) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
 
@@ -50,6 +50,11 @@ def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monke
         db.flush()
         db.add_all(
             [
+                ScanJob(
+                    library_id=first_library.id,
+                    status=JobStatus.queued,
+                    job_type="incremental",
+                ),
                 ScanJob(
                     library_id=first_library.id,
                     status=JobStatus.running,
@@ -104,22 +109,33 @@ def test_recover_orphaned_jobs_requeues_scans_and_cancels_maintenance_jobs(monke
     with session_factory() as db:
         jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
 
-    assert jobs[0].status == JobStatus.queued
-    assert jobs[0].started_at is None
+    assert jobs[0].status == JobStatus.canceled
+    assert jobs[0].started_at is not None
+    assert jobs[0].finished_at is not None
     assert jobs[0].files_total == 0
     assert jobs[0].files_scanned == 0
-    assert jobs[0].errors == 0
-    assert jobs[0].scan_summary["runtime"]["phase_key"] == "queued"
-    assert jobs[0].scan_summary["runtime"]["phase_detail"] == "Waiting to start"
-    assert jobs[1].status == JobStatus.queued
-    assert jobs[1].started_at is None
+    assert jobs[1].status == JobStatus.canceled
+    assert jobs[1].started_at is not None
+    assert jobs[1].finished_at is not None
     assert jobs[1].files_total == 0
     assert jobs[1].files_scanned == 0
-    assert jobs[2].status == JobStatus.queued
+    assert jobs[2].status == JobStatus.canceled
     assert jobs[3].status == JobStatus.canceled
-    assert jobs[3].finished_at is not None
-    assert jobs[4].status == JobStatus.canceled
-    assert jobs[4].finished_at is not None
+
+
+def test_start_does_not_resume_existing_jobs(monkeypatch) -> None:
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    submitted: list[int] = []
+
+    monkeypatch.setattr(runtime, "_recover_orphaned_jobs", lambda: None)
+    monkeypatch.setattr(runtime, "_queue_quality_backfill_jobs", lambda: None)
+    monkeypatch.setattr(runtime, "sync_all_libraries", lambda: None)
+    monkeypatch.setattr(runtime, "submit_scan_job", lambda job_id: submitted.append(job_id))
+
+    runtime.start()
+    runtime.stop()
+
+    assert submitted == []
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

@@ -51,9 +51,8 @@
     "scanMode": "Scan mode",
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
-    "duplicateDetectionMode": "Duplicate detection",
-    "duplicateDetectionModeTooltipAria": "Explain duplicate detection modes",
-    "duplicateDetectionModeTooltip": "filename: Only detects duplicates with the same filename.\n\nfilehash: Detects exact duplicates based on a hash of the full file contents.",
+    "duplicateDetection": "Duplicate detection",
+    "duplicateDetectionHint": "Filename is faster and finds likely duplicates. File hash reads the full file to find exact duplicates.",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
     "qualityScoreTitle": "Quality score",
@@ -148,6 +147,10 @@
     "manual": "Manual",
     "scheduled": "Scheduled",
     "watch": "Watch"
+  },
+  "duplicateDetectionModes": {
+    "filename": "Filename",
+    "filehash": "File hash"
   },
   "sort": {
     "prefix": "Sort",
@@ -248,7 +251,16 @@
     },
     "recentScanJobs": "Recent scan jobs",
     "recentScanJobsSubtitle": "Latest queue and run history",
-    "jobLabel": "Job #{{id}}"
+    "jobLabel": "Job #{{id}}",
+    "duplicates": {
+      "title": "Duplicate groups",
+      "subtitle": "Potential or exact duplicates inside this library, based on the configured detection mode.",
+      "empty": "No duplicate groups detected.",
+      "summary": "{{groups}} groups across {{files}} files",
+      "filesBadge": "{{count}} files",
+      "loadMore": "Load more duplicate groups",
+      "loadingMore": "Loading more duplicate groups…"
+    }
   },
   "scanLogs": {
     "title": "Recent scan logs",
@@ -277,7 +289,8 @@
     "metricIgnored": "Ignored",
     "metricAnalyzed": "Analyzed",
     "metricFailed": "Failed",
-    "metricDuplicates": "Duplicates",
+    "metricDuplicateGroups": "Duplicate groups",
+    "metricDuplicateFiles": "Duplicate files",
     "metricNew": "New",
     "metricChanged": "Changed",
     "metricDeleted": "Deleted",
@@ -288,16 +301,10 @@
     "changedFiles": "Changed files",
     "deletedFiles": "Deleted files",
     "failedFiles": "Files that could not be analyzed",
-    "duplicateDetection": "Duplicate detection",
-    "executionFailure": "Execution failure",
-    "failureType": "Error type",
-    "failureAt": "Recorded",
-    "failureMessage": "Message",
-    "failureTraceback": "Traceback",
-    "duplicateArtifacts": "Artifacts computed",
-    "duplicateCacheHits": "Cache hits",
-    "duplicateGroups": "Groups found",
-    "duplicatePending": "Pending files",
+    "duplicates": "Duplicate processing",
+    "duplicatesQueued": "Queued",
+    "duplicatesProcessed": "Processed",
+    "duplicatesFailed": "Failed",
     "failedFileReasonTooltipAria": "Show analysis failure details for {{path}}",
     "watchEvents": "{{count}} filesystem events were aggregated.",
     "intervalMinutes": "Schedule interval: {{minutes}} minutes",

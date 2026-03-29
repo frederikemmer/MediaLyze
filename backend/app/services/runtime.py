@@ -59,7 +59,6 @@ class ScanRuntimeManager:
         self._recover_orphaned_jobs()
         self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
-        self._resume_active_jobs()
 
     def stop(self) -> None:
         with self.lock:
@@ -393,18 +392,12 @@ class ScanRuntimeManager:
                 return
 
             for job in active_jobs:
-                if job.job_type in {"quality_recompute", "duplicate_refresh"}:
-                    job.status = JobStatus.canceled
-                    job.finished_at = utc_now()
-                    continue
-                if job.status == JobStatus.running:
-                    job.status = JobStatus.queued
-                    job.started_at = None
-                    job.finished_at = None
-                    job.files_total = 0
-                    job.files_scanned = 0
-                    job.errors = 0
-                    job.scan_summary = _empty_scan_summary()
+                job.status = JobStatus.canceled
+                if job.started_at is None:
+                    job.started_at = utc_now()
+                job.finished_at = utc_now()
+                job.files_total = 0
+                job.files_scanned = 0
 
             db.commit()
         finally:

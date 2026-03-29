@@ -215,9 +215,8 @@ def update_library_settings(
         if next_quality_profile != current_quality_profile or library.quality_profile != current_quality_profile:
             library.quality_profile = next_quality_profile
             quality_profile_changed = True
-    if payload.duplicate_detection_mode is not None and payload.duplicate_detection_mode != library.duplicate_detection_mode:
+    if payload.duplicate_detection_mode is not None:
         library.duplicate_detection_mode = payload.duplicate_detection_mode
-        duplicate_detection_mode_changed = True
     db.commit()
     db.refresh(library)
     stats_cache.invalidate(cache_key, library.id)

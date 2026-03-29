@@ -1,15 +1,13 @@
 from backend.app.services.duplicates.service import (
-    collect_duplicate_records,
-    get_duplicate_strategy,
-    get_duplicate_summary,
+    DuplicateDetectionStrategy,
+    count_duplicate_groups,
+    get_duplicate_detection_strategy,
     list_duplicate_groups,
-    rebuild_duplicate_groups,
 )
 
 __all__ = [
-    "collect_duplicate_records",
-    "get_duplicate_strategy",
-    "get_duplicate_summary",
+    "DuplicateDetectionStrategy",
+    "count_duplicate_groups",
+    "get_duplicate_detection_strategy",
     "list_duplicate_groups",
-    "rebuild_duplicate_groups",
 ]

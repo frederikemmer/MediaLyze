@@ -111,9 +111,8 @@ class MediaFile(Base):
         Index("ix_media_files_library_mtime", "library_id", "mtime"),
         Index("ix_media_files_library_last_analyzed_at", "library_id", "last_analyzed_at"),
         Index("ix_media_files_library_quality_score", "library_id", "quality_score"),
-        Index("ix_media_files_library_content_hash", "library_id", "content_hash"),
-        Index("ix_media_files_library_duplicate_group_key", "library_id", "duplicate_group_key"),
-        Index("ix_media_files_library_duplicate_group_member_count", "library_id", "duplicate_group_member_count"),
+        Index("ix_media_files_library_filename_signature", "library_id", "filename_signature"),
+        Index("ix_media_files_library_content_hash", "library_id", "content_hash_algorithm", "content_hash"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -134,11 +133,9 @@ class MediaFile(Base):
     quality_score_raw: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     quality_score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     raw_ffprobe_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    duplicate_filename_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    filename_signature: Mapped[str | None] = mapped_column(String(512), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    duplicate_group_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    duplicate_group_label: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    duplicate_group_member_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_hash_algorithm: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     library: Mapped[Library] = relationship(back_populates="media_files")
     media_format: Mapped[MediaFormat | None] = relationship(

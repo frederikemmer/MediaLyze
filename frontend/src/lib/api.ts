@@ -42,6 +42,8 @@ export type QualityProfile = {
   language_preferences: QualityLanguagePreferencesConfig;
 };
 
+export type DuplicateDetectionMode = "filename" | "filehash";
+
 export type QualityCategoryBreakdown = {
   key: string;
   score: number;
@@ -94,7 +96,7 @@ export type LibrarySummary = {
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
-  duplicate_detection_mode: "filename" | "filehash";
+  duplicate_detection_mode: DuplicateDetectionMode;
   file_count: number;
   total_size_bytes: number;
   total_duration_seconds: number;
@@ -305,44 +307,40 @@ export type ScanSummary = {
     failed_files_truncated_count: number;
   };
   duplicates: {
-    mode: string | null;
-    status: string | null;
-    phase_started_at: string | null;
-    phase_finished_at: string | null;
-    artifacts_total: number;
-    artifacts_completed: number;
-    grouping_total: number;
-    grouping_completed: number;
-    groups_found: number;
+    mode: DuplicateDetectionMode;
+    queued_for_processing: number;
+    processed_successfully: number;
+    processing_failed: number;
+    failed_files: ScanFileIssue[];
+    failed_files_truncated_count: number;
+    duplicate_groups: number;
     duplicate_files: number;
-    pending_files: number;
-    artifact_cache_hits: number;
-    artifact_cache_misses: number;
-    eta_seconds: number | null;
   };
-  runtime?: Record<string, unknown>;
+};
+
+export type DuplicateGroupFile = {
+  id: number;
+  relative_path: string;
+  filename: string;
+  size_bytes: number;
+  last_analyzed_at: string | null;
 };
 
 export type DuplicateGroup = {
-  group_key: string;
+  signature: string;
   label: string;
   file_count: number;
-  file_ids: number[];
-  mode: string;
+  total_size_bytes: number;
+  items: DuplicateGroupFile[];
 };
 
 export type DuplicateGroupPage = {
-  total: number;
+  mode: DuplicateDetectionMode;
+  total_groups: number;
+  duplicate_file_count: number;
   offset: number;
   limit: number;
   items: DuplicateGroup[];
-};
-
-export type DuplicateSummary = {
-  mode: string;
-  groups_found: number;
-  duplicate_files: number;
-  pending_files: number;
 };
 
 export type RecentScanJob = {
@@ -520,6 +518,22 @@ export const api = {
     request<MediaFileTablePage>(buildLibraryFilesPath(id, params), {
       signal: params?.signal,
     }),
+  libraryDuplicates: (
+    id: string | number,
+    params?: { offset?: number; limit?: number; signal?: AbortSignal },
+  ) => {
+    const searchParams = new URLSearchParams();
+    if (params?.offset !== undefined) {
+      searchParams.set("offset", String(params.offset));
+    }
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    const query = searchParams.toString();
+    return request<DuplicateGroupPage>(`/libraries/${id}/duplicates${query ? `?${query}` : ""}`, {
+      signal: params?.signal,
+    });
+  },
   downloadLibraryFilesCsv: async (
     id: string | number,
     params?: Omit<LibraryFilesRequestParams, "offset" | "limit">,
@@ -569,7 +583,7 @@ export const api = {
     scan_mode: string;
     scan_config?: Record<string, number>;
     quality_profile?: QualityProfile;
-    duplicate_detection_mode?: "filename" | "filehash";
+    duplicate_detection_mode?: DuplicateDetectionMode;
   }) =>
     request<LibrarySummary>("/libraries", {
       method: "POST",
@@ -582,7 +596,7 @@ export const api = {
       scan_mode?: string;
       scan_config?: Record<string, number>;
       quality_profile?: QualityProfile;
-      duplicate_detection_mode?: "filename" | "filehash";
+      duplicate_detection_mode?: DuplicateDetectionMode;
     },
   ) =>
     request<LibrarySummary>(`/libraries/${libraryId}`, {

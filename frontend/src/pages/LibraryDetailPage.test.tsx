@@ -2,13 +2,14 @@ import "../i18n";
 
 import { StrictMode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileTablePage,
@@ -126,6 +127,40 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
+function createDuplicateGroupsPage(): DuplicateGroupPage {
+  return {
+    mode: "filename",
+    total_groups: 1,
+    duplicate_file_count: 2,
+    offset: 0,
+    limit: 25,
+    items: [
+      {
+        signature: "episode 01",
+        label: "episode 01",
+        file_count: 2,
+        total_size_bytes: 2048,
+        items: [
+          {
+            id: 1,
+            relative_path: "episode-01.mkv",
+            filename: "episode-01.mkv",
+            size_bytes: 1024,
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+          },
+          {
+            id: 2,
+            relative_path: "episode_01.mp4",
+            filename: "episode_01.mp4",
+            size_bytes: 1024,
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
@@ -143,6 +178,10 @@ function renderPage(libraryId: number, { strictMode = false }: { strictMode?: bo
     strictMode ? <StrictMode>{tree}</StrictMode> : tree,
   );
 }
+
+beforeEach(() => {
+  vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupsPage());
+});
 
 afterEach(() => {
   cleanup();
@@ -174,76 +213,23 @@ describe("LibraryDetailPage", () => {
     expect(libraryFilesSpy).toHaveBeenCalled();
   });
 
-  it("refreshes summary, statistics, and files while a scan is active", async () => {
-    const libraryId = 109;
-    const refreshCallbacks: Array<() => void> = [];
-    vi.spyOn(window, "setInterval").mockImplementation(((handler: TimerHandler) => {
-      if (typeof handler === "function") {
-        refreshCallbacks.push(handler as () => void);
-      }
-      return 1;
-    }) as unknown as typeof window.setInterval);
-    vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
+  it("renders duplicate groups in a dedicated panel", async () => {
+    const libraryId = 102;
     vi.spyOn(api, "appSettings").mockResolvedValue({
       ignore_patterns: [],
       user_ignore_patterns: [],
       default_ignore_patterns: [],
       feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
     });
-    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([
-      {
-        id: 1,
-        library_id: libraryId,
-        library_name: `Series ${libraryId}`,
-        status: "running",
-        job_type: "incremental",
-        files_total: 100,
-        files_scanned: 10,
-        errors: 0,
-        started_at: "2026-03-12T09:00:00Z",
-        finished_at: null,
-        progress_percent: 20,
-        phase_key: "analyzing",
-        phase_label: "Analyzing media",
-        phase_detail: "Analyzed 10 of 40 queued files, 60 unchanged of 100 discovered",
-        phase_progress_percent: 25,
-        phase_current: 10,
-        phase_total: 40,
-        eta_seconds: null,
-        scan_mode_label: "incremental",
-        duplicate_detection_mode: "filename",
-        queued_for_analysis: 40,
-        unchanged_files: 60,
-      },
-    ]);
-    const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
-    const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
-    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
     renderPage(libraryId);
 
-    await waitFor(() => {
-      expect(activeScanJobsSpy).toHaveBeenCalled();
-    });
-    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(refreshCallbacks.length).toBeGreaterThan(1);
-    });
-
-    const initialSummaryCalls = librarySummarySpy.mock.calls.length;
-    const initialStatisticsCalls = libraryStatisticsSpy.mock.calls.length;
-    const initialFilesCalls = libraryFilesSpy.mock.calls.length;
-
-    expect(refreshCallbacks.length).toBeGreaterThan(1);
-    for (const refreshCallback of refreshCallbacks) {
-      refreshCallback();
-    }
-
-    await waitFor(() => {
-      expect(librarySummarySpy.mock.calls.length).toBeGreaterThan(initialSummaryCalls);
-      expect(libraryStatisticsSpy.mock.calls.length).toBeGreaterThan(initialStatisticsCalls);
-      expect(libraryFilesSpy.mock.calls.length).toBeGreaterThan(initialFilesCalls);
-    });
+    expect(await screen.findByText("Duplicate groups")).toBeInTheDocument();
+    expect(screen.getByText("episode 01")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "episode-01.mkv" })).toBeInTheDocument();
   });
 
   it("still loads statistics and files under strict mode remounts", async () => {

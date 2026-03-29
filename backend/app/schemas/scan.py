@@ -80,20 +80,14 @@ class ScanAnalysisSummaryRead(BaseModel):
 
 
 class ScanDuplicatesSummaryRead(BaseModel):
-    mode: str | None = None
-    status: str | None = None
-    phase_started_at: UtcDateTime | None = None
-    phase_finished_at: UtcDateTime | None = None
-    artifacts_total: int = 0
-    artifacts_completed: int = 0
-    grouping_total: int = 0
-    grouping_completed: int = 0
-    groups_found: int = 0
+    mode: str = "filename"
+    queued_for_processing: int = 0
+    processed_successfully: int = 0
+    processing_failed: int = 0
+    failed_files: list[ScanFileIssueRead] = Field(default_factory=list)
+    failed_files_truncated_count: int = 0
+    duplicate_groups: int = 0
     duplicate_files: int = 0
-    pending_files: int = 0
-    artifact_cache_hits: int = 0
-    artifact_cache_misses: int = 0
-    eta_seconds: float | None = None
 
 
 class ScanSummaryRead(BaseModel):
@@ -102,7 +96,6 @@ class ScanSummaryRead(BaseModel):
     changes: ScanChangesSummaryRead = Field(default_factory=ScanChangesSummaryRead)
     analysis: ScanAnalysisSummaryRead = Field(default_factory=ScanAnalysisSummaryRead)
     duplicates: ScanDuplicatesSummaryRead = Field(default_factory=ScanDuplicatesSummaryRead)
-    runtime: dict = Field(default_factory=dict)
 
 
 class RecentScanJobRead(BaseModel):
