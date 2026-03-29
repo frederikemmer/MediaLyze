@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.base import Base
 from backend.app.models.entities import DuplicateDetectionMode, Library, LibraryType, MediaFile, ScanMode
 from backend.app.services.duplicates import (
+    CombinedDuplicateDetectionStrategy,
     FileHashDuplicateDetectionStrategy,
     FilenameDuplicateDetectionStrategy,
     get_duplicate_detection_strategy,
@@ -16,6 +17,7 @@ from backend.app.services.duplicates import (
 def test_duplicate_strategy_factory_returns_expected_strategy() -> None:
     assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.filename), FilenameDuplicateDetectionStrategy)
     assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.filehash), FileHashDuplicateDetectionStrategy)
+    assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.both), CombinedDuplicateDetectionStrategy)
 
 
 def test_filename_duplicate_detection_groups_normalized_stems(tmp_path: Path) -> None:
@@ -122,4 +124,64 @@ def test_filehash_duplicate_detection_groups_only_exact_content_duplicates(tmp_p
     assert groups.total_groups == 1
     assert groups.duplicate_file_count == 2
     assert groups.items[0].file_count == 2
+    assert groups.items[0].mode == DuplicateDetectionMode.filehash
     assert {item.filename for item in groups.items[0].items} == {"exact-a.mkv", "exact-b.mp4"}
+
+
+def test_combined_duplicate_detection_groups_include_filename_and_filehash_matches(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    filename_a = library_dir / "Movie.Name.2024.mkv"
+    filename_b = library_dir / "movie_name_2024.mp4"
+    hash_a = library_dir / "hash-a.mkv"
+    hash_b = library_dir / "totally-different-name.mp4"
+    filename_a.write_text("cut-a")
+    filename_b.write_text("cut-b")
+    hash_a.write_text("same-content")
+    hash_b.write_text("same-content")
+
+    strategy = get_duplicate_detection_strategy(DuplicateDetectionMode.both)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(library_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for file_path in (filename_a, filename_b, hash_a, hash_b):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=file_path.name,
+                filename=file_path.name,
+                extension=file_path.suffix.lstrip("."),
+                size_bytes=file_path.stat().st_size,
+                mtime=file_path.stat().st_mtime,
+            )
+            strategy.apply_payload(media_file, strategy.build_payload(file_path))
+            db.add(media_file)
+
+        db.commit()
+        groups = list_library_duplicate_groups(db, library.id)
+
+    assert groups.mode == DuplicateDetectionMode.both
+    assert groups.total_groups == 2
+    assert groups.duplicate_file_count == 4
+    assert [group.mode for group in groups.items] == [
+        DuplicateDetectionMode.filehash,
+        DuplicateDetectionMode.filename,
+    ]
+    assert groups.items[0].label == "hash-a.mkv"
+    assert groups.items[0].signature != groups.items[1].signature
+    assert groups.items[1].signature == "movie name 2024"
+    assert {item.filename for item in groups.items[0].items} == {"hash-a.mkv", "totally-different-name.mp4"}
+    assert {item.filename for item in groups.items[1].items} == {"Movie.Name.2024.mkv", "movie_name_2024.mp4"}

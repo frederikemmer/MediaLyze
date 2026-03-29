@@ -943,6 +943,13 @@
   flex-wrap: wrap;
 }
 
+.duplicate-group-items-scroll {
+  max-height: calc((5.25rem * 2.5) + (8px * 1.5));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
 .scan-log-pattern-card {
   display: grid;
   gap: 8px;

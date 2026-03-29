@@ -11,6 +11,7 @@ class DuplicateGroupFileRead(BaseModel):
 
 
 class DuplicateGroupRead(BaseModel):
+    mode: DuplicateDetectionMode
     signature: str
     label: str
     file_count: int

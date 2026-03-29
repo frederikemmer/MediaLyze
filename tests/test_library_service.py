@@ -185,6 +185,37 @@ def test_update_library_settings_can_change_duplicate_detection_mode() -> None:
     assert quality_profile_changed is False
 
 
+def test_update_library_settings_can_change_duplicate_detection_mode_to_both() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            Settings(),
+            library.id,
+            LibraryUpdate(duplicate_detection_mode=DuplicateDetectionMode.both),
+        )
+
+    assert updated is not None
+    assert updated.duplicate_detection_mode == DuplicateDetectionMode.both
+    assert quality_profile_changed is False
+
+
 def test_update_library_settings_backfills_visual_density_maximum_for_legacy_profiles() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

@@ -55,6 +55,7 @@ function createDuplicateGroupPage(overrides: Partial<DuplicateGroupPage> = {}): 
     limit: 25,
     items: [
       {
+        mode: "filename",
         signature: "episode 01",
         label: "episode 01",
         file_count: 2,
@@ -214,6 +215,46 @@ describe("LibraryDetailPage", () => {
     expect(libraryDuplicatesSpy).toHaveBeenCalledWith(String(libraryId), expect.objectContaining({ offset: 0, limit: 25 }));
   });
 
+  it("renders duplicate variants inside a scroll-limited list", async () => {
+    const libraryId = 122;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({
+        items: [
+          {
+            mode: "filename",
+            signature: "episode 01",
+            label: "episode 01",
+            file_count: 4,
+            total_size_bytes: 4096,
+            items: [
+              { id: 1, relative_path: "episode-01.mkv", filename: "episode-01.mkv", size_bytes: 1024 },
+              { id: 2, relative_path: "episode-01-copy.mkv", filename: "episode-01-copy.mkv", size_bytes: 1024 },
+              { id: 3, relative_path: "episode-01-alt.mkv", filename: "episode-01-alt.mkv", size_bytes: 1024 },
+              { id: 4, relative_path: "episode-01-remux.mkv", filename: "episode-01-remux.mkv", size_bytes: 1024 },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
+    fireEvent.click(duplicatesToggle);
+    const variantsList = container.querySelector(".duplicate-group-items-scroll");
+    expect(variantsList).not.toBeNull();
+    expect(variantsList).toHaveClass("scan-log-path-list");
+  });
+
   it("filters duplicate groups and collapses the duplicate panel", async () => {
     const libraryId = 121;
     vi.spyOn(api, "appSettings").mockResolvedValue({
@@ -230,6 +271,7 @@ describe("LibraryDetailPage", () => {
         duplicate_file_count: 4,
         items: [
           {
+            mode: "filename",
             signature: "episode 01",
             label: "episode 01",
             file_count: 2,
@@ -240,8 +282,9 @@ describe("LibraryDetailPage", () => {
             ],
           },
           {
-            signature: "bonus scene",
-            label: "bonus scene",
+            mode: "filehash",
+            signature: "deadbeef",
+            label: "bonus-scene.mkv",
             file_count: 2,
             total_size_bytes: 2048,
             items: [

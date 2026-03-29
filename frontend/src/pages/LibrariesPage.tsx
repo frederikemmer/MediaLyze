@@ -2102,6 +2102,7 @@ export function LibrariesPage() {
                       >
                         <option value="filename">{t("libraries.duplicateDetectionModes.filename")}</option>
                         <option value="filehash">{t("libraries.duplicateDetectionModes.filehash")}</option>
+                        <option value="both">{t("libraries.duplicateDetectionModes.both")}</option>
                       </select>
                     </div>
                     {networkWatchFallbackApplied(

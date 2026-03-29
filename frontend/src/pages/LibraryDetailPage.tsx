@@ -1223,16 +1223,16 @@ export function LibraryDetailPage() {
         {duplicateGroups && filteredDuplicateGroups.length > 0 ? (
           <div className="duplicate-group-list">
             {filteredDuplicateGroups.map((group) => (
-              <div key={group.signature} className="media-card duplicate-group-card">
+              <div key={`${group.mode}:${group.signature}`} className="media-card duplicate-group-card">
                 <div className="duplicate-group-summary">
                   <div className="meta-tags">
-                    <span className="badge">{t(`libraries.duplicateDetectionModes.${duplicateGroups.mode}`)}</span>
+                    <span className="badge">{t(`libraries.duplicateDetectionModes.${group.mode}`)}</span>
                     <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
                     <span className="badge">{formatBytes(group.total_size_bytes)}</span>
                   </div>
                   <code className="scan-log-path">{group.signature}</code>
                 </div>
-                <div className="scan-log-path-list">
+                <div className="scan-log-path-list duplicate-group-items-scroll">
                   {group.items.map((item) => (
                     <div key={item.id} className="scan-log-pattern-card">
                       <div className="scan-log-detail-title">

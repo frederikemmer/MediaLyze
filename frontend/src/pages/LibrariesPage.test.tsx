@@ -500,19 +500,19 @@ describe("LibrariesPage desktop mode", () => {
   it("shows duplicate detection settings and auto-saves the selected mode", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
     const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
-      createLibrarySummary({ duplicate_detection_mode: "filehash" }),
+      createLibrarySummary({ duplicate_detection_mode: "both" }),
     );
 
     renderPage();
 
     await screen.findByText("Movies");
-    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "filehash" } });
+    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
-          duplicate_detection_mode: "filehash",
+          duplicate_detection_mode: "both",
         }),
       ),
     );
@@ -525,13 +525,13 @@ describe("LibrariesPage desktop mode", () => {
 
     await screen.findByText("Movies");
     expect(
-      screen.queryByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans."),
+      screen.queryByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Explain duplicate detection modes" }));
 
     expect(
-      await screen.findByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans."),
+      await screen.findByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
     ).toBeInTheDocument();
   });
 });

@@ -38,6 +38,7 @@ class ScanMode(str, Enum):
 class DuplicateDetectionMode(str, Enum):
     filename = "filename"
     filehash = "filehash"
+    both = "both"
 
 
 class ScanStatus(str, Enum):

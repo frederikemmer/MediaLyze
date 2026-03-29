@@ -6,8 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add per-library duplicate detection with configurable `filename` and exact `filehash` modes, persistent duplicate signatures in SQLite, a new duplicate-groups API endpoint, and duplicate-group panels in the library detail view
+- add per-library duplicate detection with configurable `filename`, exact `filehash`, and combined `both` modes, persist both signatures in SQLite when needed, and expose duplicate groups with their originating detection method in the library detail view
 - make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
+- cap each duplicate group's visible variant list to roughly two and a half entries and keep the remaining matches available via internal scrolling
 
 ### 🐛 Bug fixes
 

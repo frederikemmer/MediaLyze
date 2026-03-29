@@ -792,6 +792,75 @@ def test_incremental_scan_updates_content_hash_for_modified_files(tmp_path: Path
     assert media_after.content_hash != first_hash
 
 
+def test_incremental_scan_backfills_missing_signatures_for_combined_duplicate_mode(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.name.mkv"
+    video_path.write_text("video")
+    stat = video_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    ffprobe_calls: list[str] = []
+    monkeypatch.setattr(
+        "backend.app.services.scanner.run_ffprobe",
+        lambda file_path, ffprobe_path: ffprobe_calls.append(str(file_path)) or {},
+    )
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.name.mkv",
+            filename="movie.name.mkv",
+            extension="mkv",
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            last_seen_at=utc_now(),
+            last_analyzed_at=utc_now(),
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+            raw_ffprobe_json={"format": {}},
+        )
+        db.add(media_file)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        refreshed = db.get(MediaFile, media_file.id)
+
+    assert ffprobe_calls == []
+    assert refreshed is not None
+    assert refreshed.filename_signature == "movie name"
+    assert refreshed.content_hash is not None
+    assert refreshed.content_hash_algorithm == "sha256"
+    assert job.files_scanned == 1
+    assert job.scan_summary["changes"]["queued_for_analysis"] == 0
+    assert job.scan_summary["changes"]["unchanged_files"] == 1
+    assert job.scan_summary["duplicates"]["mode"] == "both"
+    assert job.scan_summary["duplicates"]["queued_for_processing"] == 1
+    assert job.scan_summary["duplicates"]["processed_successfully"] == 1
+
+
 def test_deleted_files_disappear_from_duplicate_groups_on_rescan(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()

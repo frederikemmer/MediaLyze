@@ -50,7 +50,7 @@ MediaLyze currently implements:
 * internal and external subtitle detection
 * configurable per-library quality profiles
 * per-file quality score breakdowns
-* per-library duplicate detection using filename signatures or exact file hashes
+* per-library duplicate detection using filename signatures, exact file hashes, or both together
 * structured metadata search, filtering, sorting, and pagination
 * dashboard and per-library statistics
 * theme selection and feature flags
@@ -291,12 +291,14 @@ Current modes:
 ```text
 filename
 filehash
+both
 ```
 
 Current behavior:
 
 * `filename` stores a normalized filename signature based on the lowercase stem with whitespace, dot, dash, and underscore runs collapsed to a single space
 * `filehash` stores a full-file `sha256` content hash plus its algorithm label
+* `both` stores both the normalized filename signature and the `sha256` content hash, and duplicate-group responses expose which method each returned group came from
 * unchanged files can be queued for duplicate-only backfill when the active mode's persisted signature is missing
 * duplicate groups are aggregated on demand per library from stored signatures or hashes instead of being materialized as a dedicated table
 

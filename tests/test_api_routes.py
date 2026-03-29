@@ -310,3 +310,84 @@ def test_library_duplicates_route_returns_grouped_duplicates_for_active_mode() -
     assert filehash_payload["total_groups"] == 1
     assert filehash_payload["duplicate_file_count"] == 2
     assert filehash_payload["items"][0]["signature"] == "deadbeef"
+    assert filehash_payload["items"][0]["mode"] == "filehash"
+
+
+def test_library_duplicates_route_returns_both_group_types_for_combined_mode() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Combined Movies",
+            path="/tmp/combined-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="hash-a",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="hash-b",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="hash-a.mkv",
+                    filename="hash-a.mkv",
+                    extension="mkv",
+                    size_bytes=20,
+                    mtime=1.0,
+                    filename_signature="hash a",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="different-name.mp4",
+                    filename="different-name.mp4",
+                    extension="mp4",
+                    size_bytes=20,
+                    mtime=1.0,
+                    filename_signature="different name",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "both"
+    assert payload["total_groups"] == 2
+    assert payload["duplicate_file_count"] == 4
+    assert [item["mode"] for item in payload["items"]] == ["filehash", "filename"]
+    assert payload["items"][0]["signature"] == "deadbeef"
+    assert payload["items"][1]["signature"] == "movie name 2024"

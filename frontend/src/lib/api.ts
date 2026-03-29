@@ -62,7 +62,7 @@ export type QualityBreakdown = {
   categories: QualityCategoryBreakdown[];
 };
 
-export type DuplicateDetectionMode = "filename" | "filehash";
+export type DuplicateDetectionMode = "filename" | "filehash" | "both";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
@@ -340,6 +340,7 @@ export type DuplicateGroupFile = {
 };
 
 export type DuplicateGroup = {
+  mode: DuplicateDetectionMode;
   signature: string;
   label: string;
   file_count: number;
