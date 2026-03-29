@@ -57,7 +57,6 @@ class ScanRuntimeManager:
         self._recover_orphaned_jobs()
         self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
-        self._resume_active_jobs()
 
     def stop(self) -> None:
         with self.lock:
@@ -329,49 +328,22 @@ class ScanRuntimeManager:
         observer.start()
         self.watch_observers[library.id] = (library_path, observer)
 
-    def _resume_active_jobs(self) -> None:
+    def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            active_jobs = db.scalars(
+            orphaned_jobs = db.scalars(
                 select(ScanJob)
                 .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            chosen_job_ids: list[int] = []
-            seen_libraries: set[int] = set()
-
-            for job in active_jobs:
-                if job.library_id in seen_libraries:
-                    continue
-                seen_libraries.add(job.library_id)
-                chosen_job_ids.append(job.id)
-
-            db.commit()
-        finally:
-            db.close()
-
-        for job_id in chosen_job_ids:
-            self.submit_scan_job(job_id)
-
-    def _recover_orphaned_jobs(self) -> None:
-        db = SessionLocal()
-        try:
-            running_jobs = db.scalars(
-                select(ScanJob)
-                .where(ScanJob.status == JobStatus.running)
-                .order_by(ScanJob.id.asc())
-            ).all()
-
-            if not running_jobs:
+            if not orphaned_jobs:
                 return
 
-            for job in running_jobs:
-                job.status = JobStatus.queued
-                job.started_at = None
-                job.finished_at = None
-                job.files_total = 0
-                job.files_scanned = 0
+            finished_at = utc_now()
+            for job in orphaned_jobs:
+                job.status = JobStatus.canceled
+                job.finished_at = finished_at
 
             db.commit()
         finally:

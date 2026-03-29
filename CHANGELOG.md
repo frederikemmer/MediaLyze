@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add per-library duplicate detection with configurable `filename` and exact `filehash` modes, persistent duplicate signatures in SQLite, a new duplicate-groups API endpoint, and duplicate-group panels in the library detail view
+- make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
+
+### 🐛 Bug fixes
+
+- stop resuming stale `queued` and `running` scan jobs on app startup; previous-process leftovers are now marked `canceled` with a finish timestamp instead of becoming ghost resumes
+
 ## v0.3.0
 
 >2026-03-26

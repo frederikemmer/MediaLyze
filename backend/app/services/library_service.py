@@ -170,6 +170,7 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
         path=str(safe_path),
         type=payload.type,
         scan_mode=scan_mode,
+        duplicate_detection_mode=payload.duplicate_detection_mode,
         scan_config=scan_config,
         quality_profile=normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories),
     )
@@ -207,6 +208,8 @@ def update_library_settings(
             payload.scan_mode,
             payload.scan_config,
         )
+    if payload.duplicate_detection_mode is not None:
+        library.duplicate_detection_mode = payload.duplicate_detection_mode
     if payload.quality_profile is not None:
         next_quality_profile = normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories)
         current_quality_profile = normalize_quality_profile(library.quality_profile, app_settings.resolution_categories)

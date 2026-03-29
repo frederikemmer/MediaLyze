@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.models.entities import JobStatus, ScanTriggerSource
+from backend.app.models.entities import DuplicateDetectionMode, JobStatus, ScanTriggerSource
 from backend.app.schemas._time import UtcDateTime
 
 
@@ -69,11 +69,23 @@ class ScanAnalysisSummaryRead(BaseModel):
     failed_files_truncated_count: int = 0
 
 
+class ScanDuplicatesSummaryRead(BaseModel):
+    mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
+    queued_for_processing: int = 0
+    processed_successfully: int = 0
+    processing_failed: int = 0
+    failed_files: list[ScanFileIssueRead] = Field(default_factory=list)
+    failed_files_truncated_count: int = 0
+    duplicate_groups: int = 0
+    duplicate_files: int = 0
+
+
 class ScanSummaryRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     discovery: ScanDiscoverySummaryRead = Field(default_factory=ScanDiscoverySummaryRead)
     changes: ScanChangesSummaryRead = Field(default_factory=ScanChangesSummaryRead)
     analysis: ScanAnalysisSummaryRead = Field(default_factory=ScanAnalysisSummaryRead)
+    duplicates: ScanDuplicatesSummaryRead = Field(default_factory=ScanDuplicatesSummaryRead)
 
 
 class RecentScanJobRead(BaseModel):
