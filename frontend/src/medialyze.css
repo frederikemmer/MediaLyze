@@ -1239,6 +1239,7 @@
   align-items: center;
   gap: 8px;
   justify-content: space-between;
+  min-height: 22px;
 }
 
 .app-settings-flag-row {

@@ -2063,7 +2063,9 @@ export function LibrariesPage() {
                   ) : null}
                   <div className="library-settings-form">
                     <div className="field">
-                      <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>
+                      <div className="field-label-row">
+                        <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>
+                      </div>
                       <select
                         id={`scan-mode-${library.id}`}
                         value={settingsForms[library.id]?.scan_mode ?? library.scan_mode}
