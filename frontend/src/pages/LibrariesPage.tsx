@@ -2096,7 +2096,15 @@ export function LibrariesPage() {
                       </div>
                     ) : null}
                     <div className="field">
-                      <label htmlFor={`duplicate-detection-mode-${library.id}`}>{t("libraries.duplicateDetection")}</label>
+                      <div className="field-label-row">
+                        <label htmlFor={`duplicate-detection-mode-${library.id}`}>{t("libraries.duplicateDetection")}</label>
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.duplicateDetection")}
+                          content={t("libraries.duplicateDetectionHint")}
+                        >
+                          ?
+                        </TooltipTrigger>
+                      </div>
                       <select
                         id={`duplicate-detection-mode-${library.id}`}
                         value={settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode}
@@ -2109,7 +2117,6 @@ export function LibrariesPage() {
                         <option value="filename">{t("duplicateDetectionModes.filename")}</option>
                         <option value="filehash">{t("duplicateDetectionModes.filehash")}</option>
                       </select>
-                      <p className="field-hint">{t("libraries.duplicateDetectionHint")}</p>
                     </div>
                     <div className="field field-span-full">
                       <button
