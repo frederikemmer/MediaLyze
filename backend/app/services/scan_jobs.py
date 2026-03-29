@@ -34,64 +34,82 @@ def _scan_outcome(scan_job: ScanJob) -> str:
 def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
-    progress_percent = 0.0
-    if files_total > 0 and files_scanned > 0:
-        progress_percent = min(100.0, round((files_scanned / files_total) * 100, 1))
+    summary = _normalize_scan_summary(scan_job.scan_summary)
+    queued_for_analysis = max(summary.analysis.queued_for_analysis, summary.changes.queued_for_analysis)
+    unchanged_files = summary.changes.unchanged_files
+    runtime = dict(summary.runtime or {})
+    phase_key = str(runtime.get("phase_key") or "queued")
+    phase_label = str(runtime.get("phase_label") or "Queued")
+    phase_detail = runtime.get("phase_detail")
+    phase_progress_percent = float(runtime.get("phase_progress_percent") or 0.0)
+    phase_current = int(runtime.get("phase_current") or 0)
+    phase_total = int(runtime.get("phase_total") or 0)
+    eta_seconds = runtime.get("eta_seconds")
+    scan_mode_label = runtime.get("scan_mode_label")
+    duplicate_detection_mode = runtime.get("duplicate_detection_mode")
+    is_quality_recompute = scan_job.job_type == "quality_recompute" or scan_mode_label == "quality_recompute"
 
-    is_quality_recompute = scan_job.job_type == "quality_recompute"
-    if scan_job.status == JobStatus.queued and is_quality_recompute:
-        phase_label = "Queued"
-        phase_detail = "Waiting to recompute quality scores"
-    elif scan_job.status == JobStatus.queued:
-        phase_label = "Queued"
-        phase_detail = "Waiting to start"
-    elif scan_job.status == JobStatus.running and is_quality_recompute:
-        phase_label = "Recomputing quality scores"
-        phase_detail = (
-            f"{files_scanned} of {files_total} files updated"
-            if files_total > 0
-            else "Loading analyzed files"
-        )
-    elif scan_job.status == JobStatus.running and files_scanned == 0:
-        phase_label = "Discovering files"
-        phase_detail = f"{files_total} files found so far" if files_total > 0 else "Scanning directories"
-    elif scan_job.status == JobStatus.running:
-        phase_label = "Analyzing media"
-        phase_detail = f"{files_scanned} of {files_total} files analyzed"
-    elif scan_job.status == JobStatus.completed and is_quality_recompute:
-        phase_label = "Completed"
-        phase_detail = f"{files_scanned} of {files_total} quality scores updated"
-    elif scan_job.status == JobStatus.completed:
-        phase_label = "Completed"
-        phase_detail = f"{files_scanned} of {files_total} files analyzed"
-    elif scan_job.status == JobStatus.canceled and is_quality_recompute:
-        phase_label = "Canceled"
-        phase_detail = (
-            f"Stopped after {files_scanned} of {files_total} scores"
-            if files_total > 0
-            else "Stopped before recompute started"
-        )
-    elif scan_job.status == JobStatus.canceled:
-        phase_label = "Canceled"
-        phase_detail = (
-            f"Stopped after {files_scanned} of {files_total} files"
-            if files_total > 0
-            else "Stopped before analysis started"
-        )
-    elif is_quality_recompute:
-        phase_label = "Failed"
-        phase_detail = (
-            f"Failed after {files_scanned} of {files_total} scores"
-            if files_total > 0
-            else "Quality recompute failed before processing started"
-        )
-    else:
-        phase_label = "Failed"
-        phase_detail = (
-            f"Failed after {files_scanned} of {files_total} files"
-            if files_total > 0
-            else "Scan failed before analysis started"
-        )
+    if not runtime.get("phase_key"):
+        if scan_job.status == JobStatus.queued:
+            phase_key = "queued"
+            phase_label = "Queued"
+        elif files_total <= 0:
+            phase_key = "discovering"
+            phase_label = "Discovering files"
+            phase_detail = "Scanning directories"
+        else:
+            phase_key = "analyzing"
+            phase_label = "Recomputing quality scores" if is_quality_recompute else "Analyzing media"
+            phase_current = files_scanned
+            phase_total = files_total if is_quality_recompute else (queued_for_analysis or files_total)
+            phase_progress_percent = round((files_scanned / phase_total) * 100, 1) if phase_total > 0 else 0.0
+            phase_detail = (
+                f"{files_scanned} of {phase_total} files updated"
+                if is_quality_recompute
+                else f"{files_scanned} of {phase_total} files analyzed"
+            )
+
+    if phase_key == "analyzing" and not is_quality_recompute:
+        if queued_for_analysis > 0:
+            phase_total = queued_for_analysis
+        if phase_total <= 0 and files_total > 0:
+            phase_total = files_total
+        if phase_total > 0:
+            phase_current = min(phase_total, max(phase_current, files_scanned))
+        elif phase_current <= 0 and files_scanned > 0:
+            phase_current = files_scanned
+        phase_progress_percent = round((phase_current / phase_total) * 100, 1) if phase_total > 0 else 0.0
+        if phase_total > 0:
+            if unchanged_files > 0:
+                phase_detail = (
+                    f"{phase_current} of {phase_total} queued files analyzed, {unchanged_files} unchanged"
+                )
+            else:
+                phase_detail = f"{phase_current} of {phase_total} files analyzed"
+    elif phase_key == "analyzing" and is_quality_recompute:
+        if phase_total <= 0 and files_total > 0:
+            phase_total = files_total
+        if phase_total > 0:
+            phase_current = min(phase_total, max(phase_current, files_scanned))
+            phase_progress_percent = round((phase_current / phase_total) * 100, 1)
+        elif phase_current <= 0 and files_scanned > 0:
+            phase_current = files_scanned
+        if not phase_detail and phase_total > 0:
+            phase_detail = f"{phase_current} of {phase_total} files updated"
+
+    progress_percent = 0.0
+    if phase_key == "discovering":
+        progress_percent = min(15.0, phase_progress_percent * 0.15)
+    elif phase_key == "analyzing":
+        progress_percent = phase_progress_percent if is_quality_recompute else 15.0 + (phase_progress_percent * 0.55)
+    elif phase_key in {"detecting_duplicates_preparing", "detecting_duplicates_artifacts"}:
+        progress_percent = 70.0 + (phase_progress_percent * 0.20)
+    elif phase_key == "detecting_duplicates_grouping":
+        progress_percent = 90.0 + (phase_progress_percent * 0.10)
+    elif phase_key in {"completed", "failed", "canceled"}:
+        progress_percent = 100.0
+    elif files_total > 0 and files_scanned > 0:
+        progress_percent = min(100.0, round((files_scanned / files_total) * 100, 1))
 
     return ScanJobRead(
         id=scan_job.id,
@@ -104,9 +122,18 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         errors=scan_job.errors,
         started_at=scan_job.started_at,
         finished_at=scan_job.finished_at,
-        progress_percent=progress_percent,
+        progress_percent=round(progress_percent, 1),
+        phase_key=phase_key,
         phase_label=phase_label,
         phase_detail=phase_detail,
+        phase_progress_percent=phase_progress_percent,
+        phase_current=phase_current,
+        phase_total=phase_total,
+        eta_seconds=float(eta_seconds) if eta_seconds is not None else None,
+        scan_mode_label=str(scan_mode_label) if scan_mode_label is not None else None,
+        duplicate_detection_mode=str(duplicate_detection_mode) if duplicate_detection_mode is not None else None,
+        queued_for_analysis=queued_for_analysis,
+        unchanged_files=unchanged_files,
     )
 
 

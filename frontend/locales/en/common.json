@@ -13,8 +13,13 @@
     "running": "Scan running...",
     "searchingFound": "searching... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analyzed",
+    "analyzingQueuedProgress": "{{scanned}}/{{total}} queued files analyzed ~ {{percent}}% · {{unchanged}} unchanged of {{discovered}} discovered",
     "libraryFallback": "Library #{{id}}",
     "stopAria": "Stop active scans"
+  },
+  "duplicateDetectionModes": {
+    "filename": "Filename",
+    "filehash": "Filehash"
   },
   "dashboard": {
     "liveUpdates": "Live updates are active while scans run. Dashboard metrics refresh automatically.",
@@ -128,6 +133,7 @@
       "subtitleLanguages": "Subtitle languages",
       "subtitleCodecs": "Subtitle codecs",
       "subtitleSources": "Subtitle sources",
+      "duplicates": "Duplicates",
       "qualityScore": "Quality score"
     }
   },
@@ -167,6 +173,7 @@
     "subtitleLanguages": "Subtitle languages",
     "subtitleCodecs": "Subtitle codecs",
     "subtitleSources": "Subtitle sources",
+    "duplicates": "Duplicates",
     "analyzedFiles": "Analyzed files",
     "indexedEntries": "{{count}} indexed entries",
     "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
@@ -223,6 +230,9 @@
       },
       "subtitleSources": {
         "placeholder": "e.g. internal external"
+      },
+      "duplicates": {
+        "placeholder": "any or group:<id>"
       },
       "validation": {
         "size": "Use a comparison like >4GB or <=700MB.",

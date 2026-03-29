@@ -21,6 +21,7 @@ import {
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
+import { describeActiveScanJob, formatScanJobProgressPercent, getDisplayedScanJobPercent } from "../lib/scan-job-progress";
 import {
   getLibraryStatisticsSettings,
   getOrderedLibraryStatisticDefinitions,
@@ -79,6 +80,7 @@ type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 const VIDEO_CODEC_OPTIONS = ["h264", "hevc", "av1"];
 const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
+
 const AUDIO_CODEC_OPTIONS = ["aac", "ac3", "eac3", "dts", "dts_hd", "truehd", "flac"];
 const DYNAMIC_RANGE_OPTIONS = ["sdr", "hdr10", "hdr10_plus", "dolby_vision"];
 const LANGUAGE_OPTIONS = ["de", "en", "fr", "es", "it", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "zh", "cs", "nl"];
@@ -389,7 +391,7 @@ export function LibrariesPage() {
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const { preference: themePref, setPreference: setThemePref } = useTheme();
-  const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
+  const { activeJobs, hasActiveJobs, refresh } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
 
@@ -781,8 +783,8 @@ export function LibrariesPage() {
     }
 
     try {
-      const job = await api.scanLibrary(libraryId, "incremental");
-      trackJob(job);
+      await api.scanLibrary(libraryId, "incremental");
+      await refresh();
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
@@ -1353,6 +1355,41 @@ export function LibrariesPage() {
           <details className="scan-log-detail-block scan-log-collapsible-block">
             <summary className="scan-log-collapse-toggle">
               <span className="scan-log-collapse-copy">
+                <strong>{t("scanLogs.duplicateDetection")}</strong>
+                <span className="scan-log-collapse-summary">
+                  {detail.scan_summary.duplicates.mode ?? t("scanLogs.none")}
+                </span>
+              </span>
+              <span className="scan-log-collapse-meta">
+                <span className="badge">{detail.scan_summary.duplicates.groups_found}</span>
+                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
+              </span>
+            </summary>
+            <div className="scan-log-collapse-content">
+              <div className="scan-log-summary-grid">
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.artifacts_completed}</strong>
+                  <span>{t("scanLogs.duplicateArtifacts")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.artifact_cache_hits}</strong>
+                  <span>{t("scanLogs.duplicateCacheHits")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.groups_found}</strong>
+                  <span>{t("scanLogs.duplicateGroups")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.pending_files}</strong>
+                  <span>{t("scanLogs.duplicatePending")}</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details className="scan-log-detail-block scan-log-collapsible-block">
+            <summary className="scan-log-collapse-toggle">
+              <span className="scan-log-collapse-copy">
                 <strong>{t("scanLogs.failedFiles")}</strong>
               </span>
               <span className="scan-log-collapse-meta">
@@ -1368,7 +1405,7 @@ export function LibrariesPage() {
                       <TooltipTrigger
                         key={`${detail.id}-${entry.path}`}
                         ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
-                        content={entry.reason}
+                        content={entry.details ?? entry.reason}
                         preserveLineBreaks
                         align="start"
                         className="scan-log-path-tooltip-trigger"
@@ -1981,7 +2018,7 @@ export function LibrariesPage() {
                           .filter((job) => job.library_id === library.id)
                           .map((job) => (
                             <span className="badge scan-badge" key={job.id}>
-                              {job.files_total > 0 ? `${job.progress_percent}%` : t("libraries.active")}
+                              {job.phase_label}
                             </span>
                           ))}
                       </div>
@@ -2026,15 +2063,27 @@ export function LibrariesPage() {
                       <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
                     </div>
                   </div>
-                  {activeJobs.find((job) => job.library_id === library.id) ? (
-                    <div className="progress">
-                      <span
-                        style={{
-                          width: `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`,
-                        }}
-                      />
-                    </div>
-                  ) : null}
+                  {(() => {
+                    const activeJob = activeJobs.find((job) => job.library_id === library.id);
+                    if (!activeJob) {
+                      return null;
+                    }
+                    return (
+                      <>
+                        <div className="progress">
+                          <span
+                            style={{
+                              width: `${getDisplayedScanJobPercent(activeJob)}%`,
+                            }}
+                          />
+                        </div>
+                        <p className="media-meta">
+                          {activeJob.phase_label} · {formatScanJobProgressPercent(getDisplayedScanJobPercent(activeJob))}% ·{" "}
+                          {describeActiveScanJob(t, activeJob)}
+                        </p>
+                      </>
+                    );
+                  })()}
                   <div className="library-settings-form">
                     <div className="field">
                       <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>

@@ -13,8 +13,13 @@
     "running": "Scan läuft...",
     "searchingFound": "Suche... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analysiert",
+    "analyzingQueuedProgress": "{{scanned}}/{{total}} zu analysierende Dateien verarbeitet ~ {{percent}}% · {{unchanged}} unverändert von {{discovered}} gefundenen",
     "libraryFallback": "Bibliothek #{{id}}",
     "stopAria": "Aktive Scans stoppen"
+  },
+  "duplicateDetectionModes": {
+    "filename": "Dateiname",
+    "filehash": "Filehash"
   },
   "dashboard": {
     "liveUpdates": "Live-Aktualisierungen sind aktiv, während Scans laufen. Die Dashboard-Metriken werden automatisch aktualisiert.",
@@ -128,6 +133,7 @@
       "subtitleLanguages": "Untertitel-Sprachen",
       "subtitleCodecs": "Untertitel-Codecs",
       "subtitleSources": "Untertitel-Quellen",
+      "duplicates": "Duplikate",
       "qualityScore": "Qualitäts-Score"
     }
   },
@@ -167,6 +173,7 @@
     "subtitleLanguages": "Untertitel-Sprachen",
     "subtitleCodecs": "Untertitel-Codecs",
     "subtitleSources": "Untertitel-Quellen",
+    "duplicates": "Duplikate",
     "analyzedFiles": "Analysierte Dateien",
     "indexedEntries": "{{count}} indizierte Einträge",
     "indexedEntriesFiltered": "{{shown}} von {{total}} indizierten Einträgen",
@@ -223,6 +230,9 @@
       },
       "subtitleSources": {
         "placeholder": "z. B. internal external"
+      },
+      "duplicates": {
+        "placeholder": "any oder group:<id>"
       },
       "validation": {
         "size": "Verwende einen Vergleich wie >4GB oder <=700MB.",

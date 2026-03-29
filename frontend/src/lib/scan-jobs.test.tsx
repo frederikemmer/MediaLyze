@@ -2,7 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, type ScanJob } from "./api";
-import { ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS, ScanJobsProvider, useScanJobs } from "./scan-jobs";
+import {
+  ACTIVE_DUPLICATE_PHASE_POLL_INTERVAL_MS,
+  ACTIVE_SCAN_PROGRESS_POLL_INTERVAL_MS,
+  ScanJobsProvider,
+  useScanJobs,
+} from "./scan-jobs";
 
 function createJob(id: number): ScanJob {
   return {
@@ -17,8 +22,32 @@ function createJob(id: number): ScanJob {
     started_at: "2026-03-11T10:00:00Z",
     finished_at: null,
     progress_percent: 10,
+    phase_key: "analyzing",
     phase_label: "Analyzing media",
     phase_detail: null,
+    phase_progress_percent: 10,
+    phase_current: 10,
+    phase_total: 100,
+    eta_seconds: null,
+    scan_mode_label: "incremental",
+    duplicate_detection_mode: "filename",
+    queued_for_analysis: 100,
+    unchanged_files: 0,
+  };
+}
+
+function createQueuedJob(id: number): ScanJob {
+  return {
+    ...createJob(id),
+    status: "queued",
+    started_at: null,
+    progress_percent: 0,
+    phase_key: "queued",
+    phase_label: "Queued",
+    phase_detail: "Waiting to start",
+    phase_progress_percent: 0,
+    phase_current: 0,
+    phase_total: 0,
   };
 }
 
@@ -96,12 +125,45 @@ describe("ScanJobsProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "track" }));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS);
+      await vi.advanceTimersByTimeAsync(ACTIVE_SCAN_PROGRESS_POLL_INTERVAL_MS);
     });
 
     await flushEffects();
 
     expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
+  });
+
+  it("keeps a running job visible when a queued job for the same library is tracked", async () => {
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    function SameLibraryProbe() {
+      const { activeJobs, trackJob } = useScanJobs();
+      return (
+        <>
+          <div data-testid="job-status">{activeJobs[0]?.status ?? "none"}</div>
+          <button type="button" onClick={() => trackJob(createJob(1))}>
+            track-running
+          </button>
+          <button type="button" onClick={() => trackJob(createQueuedJob(1))}>
+            track-queued
+          </button>
+        </>
+      );
+    }
+
+    render(
+      <ScanJobsProvider>
+        <SameLibraryProbe />
+      </ScanJobsProvider>,
+    );
+
+    await flushEffects();
+
+    fireEvent.click(screen.getByRole("button", { name: "track-running" }));
+    expect(screen.getByTestId("job-status").textContent).toBe("running");
+
+    fireEvent.click(screen.getByRole("button", { name: "track-queued" }));
+    expect(screen.getByTestId("job-status").textContent).toBe("running");
   });
 
   it("refreshes again on focus only while a scan is tracked", async () => {
@@ -123,6 +185,26 @@ describe("ScanJobsProvider", () => {
     });
 
     await flushEffects();
+
+    expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
+  });
+
+  it("uses the faster polling cadence during duplicate phases", async () => {
+    const duplicateJob = { ...createJob(1), phase_key: "detecting_duplicates_artifacts", phase_label: "Detecting duplicates" };
+    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([duplicateJob]);
+
+    render(
+      <ScanJobsProvider>
+        <Probe />
+      </ScanJobsProvider>,
+    );
+
+    await flushEffects();
+    const initialCallCount = activeScanJobsSpy.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ACTIVE_DUPLICATE_PHASE_POLL_INTERVAL_MS);
+    });
 
     expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
   });

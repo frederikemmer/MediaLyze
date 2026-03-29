@@ -13,6 +13,8 @@ from backend.app.db.base import Base
 from backend.app.models.entities import AppSetting, AudioStream, DuplicateDetectionMode, ExternalSubtitle, Library, LibraryType, MediaFile, ScanMode, ScanStatus, SubtitleStream
 from backend.app.services import scanner as scanner_service
 from backend.app.services.scanner import _iter_media_files
+from backend.app.services.scanner import execute_scan_job
+from backend.app.services.scanner import queue_duplicate_refresh_job
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
 
@@ -85,7 +87,7 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -142,6 +144,38 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
     assert subtitle_streams[0].subtitle_type == "text"
 
 
+def test_queue_duplicate_refresh_job_reuses_running_job(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(tmp_path / "library"),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        running_job = ScanJob(
+            library_id=library.id,
+            status=JobStatus.running,
+            job_type="duplicate_refresh",
+            scan_summary=scanner_service._empty_scan_summary(),
+        )
+        db.add(running_job)
+        db.commit()
+        db.refresh(running_job)
+
+        job, created = queue_duplicate_refresh_job(db, library.id)
+
+    assert created is False
+    assert job.id == running_job.id
+
+
 def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
@@ -176,7 +210,7 @@ def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: P
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -253,7 +287,7 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -331,7 +365,7 @@ def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatc
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
 
     settings = Settings(
         config_path=tmp_path / "config",
@@ -398,7 +432,7 @@ def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     settings = Settings(
@@ -451,7 +485,7 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-    def fail_ffprobe(_file_path, _ffprobe_path):
+    def fail_ffprobe(_file_path, _ffprobe_path, _timeout_seconds=None):
         raise RuntimeError("ffprobe exploded\nwith internal details")
 
     monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", fail_ffprobe)
@@ -480,7 +514,11 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     assert job.status.value == "failed"
     assert job.scan_summary["analysis"]["analysis_failed"] == 1
     assert job.scan_summary["analysis"]["failed_files"] == [
-        {"path": "broken.mkv", "reason": "ffprobe exploded"}
+        {
+            "path": "broken.mkv",
+            "reason": "ffprobe exploded",
+            "details": "ffprobe exploded\nwith internal details",
+        }
     ]
 
 
@@ -513,7 +551,7 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
         ],
     }
 
-    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path, timeout_seconds=None: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
     original_normalize = scanner_service.normalize_ffprobe_payload
@@ -524,7 +562,7 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
             raise ValueError("bad payload")
         return original_normalize(raw_payload)
 
-    def run_ffprobe_with_one_bad_file(file_path, ffprobe_path):
+    def run_ffprobe_with_one_bad_file(file_path, ffprobe_path, timeout_seconds=None):
         if Path(file_path).name == "broken.mkv":
             return {
                 **payload,

@@ -54,3 +54,4 @@ class LibraryStatistics(BaseModel):
     subtitle_language_distribution: list[DistributionItem]
     subtitle_codec_distribution: list[DistributionItem]
     subtitle_source_distribution: list[DistributionItem]
+    duplicate_distribution: list[DistributionItem] = Field(default_factory=list)

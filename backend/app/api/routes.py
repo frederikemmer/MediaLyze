@@ -11,7 +11,14 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
-from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
+from backend.app.schemas.media import (
+    DashboardResponse,
+    DuplicateGroupPageRead,
+    DuplicateSummaryRead,
+    MediaFileDetail,
+    MediaFileQualityScoreDetail,
+    MediaFileTablePage,
+)
 from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
 from backend.app.schemas.scan import (
     RecentScanJobPageRead,
@@ -35,6 +42,7 @@ from backend.app.services.library_service import (
     list_libraries,
     update_library_settings,
 )
+from backend.app.services.duplicates import get_duplicate_summary, list_duplicate_groups
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import (
     generate_library_files_csv_export,
@@ -70,6 +78,7 @@ def _library_file_search_filters(
     search_subtitle_languages: str = "",
     search_subtitle_codecs: str = "",
     search_subtitle_sources: str = "",
+    search_duplicates: str = "",
 ) -> LibraryFileSearchFilters:
     return LibraryFileSearchFilters(
         file_search=file_search,
@@ -84,6 +93,7 @@ def _library_file_search_filters(
         search_subtitle_languages=search_subtitle_languages,
         search_subtitle_codecs=search_subtitle_codecs,
         search_subtitle_sources=search_subtitle_sources,
+        search_duplicates=search_duplicates,
     )
 
 
@@ -255,7 +265,12 @@ def library_update(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> LibrarySummary:
     try:
-        library, quality_profile_changed = update_library_settings(db, settings, library_id, payload)
+        library, quality_profile_changed, _duplicate_detection_mode_changed = update_library_settings(
+            db,
+            settings,
+            library_id,
+            payload,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if library is None:
@@ -304,6 +319,7 @@ def library_files(
     search_subtitle_languages: str = Query(default="", max_length=200),
     search_subtitle_codecs: str = Query(default="", max_length=200),
     search_subtitle_sources: str = Query(default="", max_length=64),
+    search_duplicates: str = Query(default="", max_length=128),
     sort_key: Literal[
         "file",
         "size",
@@ -345,6 +361,7 @@ def library_files(
                 search_subtitle_languages=search_subtitle_languages,
                 search_subtitle_codecs=search_subtitle_codecs,
                 search_subtitle_sources=search_subtitle_sources,
+                search_duplicates=search_duplicates,
             ),
             sort_key=sort_key,
             sort_direction=sort_direction,
@@ -369,6 +386,7 @@ def library_files_export_csv(
     search_subtitle_languages: str = Query(default="", max_length=200),
     search_subtitle_codecs: str = Query(default="", max_length=200),
     search_subtitle_sources: str = Query(default="", max_length=64),
+    search_duplicates: str = Query(default="", max_length=128),
     sort_key: Literal[
         "file",
         "size",
@@ -411,6 +429,7 @@ def library_files_export_csv(
                 search_subtitle_languages=search_subtitle_languages,
                 search_subtitle_codecs=search_subtitle_codecs,
                 search_subtitle_sources=search_subtitle_sources,
+                search_duplicates=search_duplicates,
             ),
             sort_key=sort_key,
             sort_direction=sort_direction,
@@ -423,6 +442,28 @@ def library_files_export_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/libraries/{library_id}/duplicates", response_model=DuplicateGroupPageRead)
+def library_duplicates(
+    library_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db_session),
+) -> DuplicateGroupPageRead:
+    if not library_exists(db, library_id):
+        raise HTTPException(status_code=404, detail="Library not found")
+    return list_duplicate_groups(db, library_id, offset=offset, limit=limit)
+
+
+@router.get("/libraries/{library_id}/duplicates/summary", response_model=DuplicateSummaryRead)
+def library_duplicates_summary(
+    library_id: int,
+    db: Session = Depends(get_db_session),
+) -> DuplicateSummaryRead:
+    if not library_exists(db, library_id):
+        raise HTTPException(status_code=404, detail="Library not found")
+    return get_duplicate_summary(db, library_id)
 
 
 @router.post("/libraries/{library_id}/scan", response_model=ScanJobRead, status_code=202)

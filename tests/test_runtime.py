@@ -62,6 +62,15 @@ def test_recover_orphaned_jobs_cancels_queued_and_running_jobs(monkeypatch) -> N
                     started_at=datetime.now(UTC),
                     files_total=120,
                     files_scanned=40,
+                    errors=3,
+                    scan_summary={
+                        "runtime": {
+                            "phase_key": "analyzing",
+                            "phase_current": 43,
+                            "phase_total": 8982,
+                            "phase_detail": "43/8982 ~ 1% analyzed",
+                        }
+                    },
                 ),
                 ScanJob(
                     library_id=first_library.id,
@@ -78,6 +87,17 @@ def test_recover_orphaned_jobs_cancels_queued_and_running_jobs(monkeypatch) -> N
                     started_at=datetime.now(UTC),
                     files_total=12,
                     files_scanned=1,
+                ),
+                ScanJob(
+                    library_id=second_library.id,
+                    status=JobStatus.running,
+                    job_type="duplicate_refresh",
+                    started_at=datetime.now(UTC),
+                ),
+                ScanJob(
+                    library_id=second_library.id,
+                    status=JobStatus.queued,
+                    job_type="quality_recompute",
                 ),
             ]
         )

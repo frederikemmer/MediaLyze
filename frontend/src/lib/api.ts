@@ -113,6 +113,7 @@ export type LibraryStatistics = {
   subtitle_language_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
   subtitle_source_distribution: DistributionItem[];
+  duplicate_distribution: DistributionItem[];
 };
 
 export type MediaFileRow = {
@@ -139,6 +140,9 @@ export type MediaFileRow = {
   subtitle_languages: string[];
   subtitle_codecs: string[];
   subtitle_sources: string[];
+  duplicate_group_key?: string | null;
+  duplicate_group_label?: string | null;
+  duplicate_group_member_count?: number;
 };
 
 export type MediaFileSortKey =
@@ -169,7 +173,8 @@ export type LibraryFileSearchField =
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
-  | "subtitle_sources";
+  | "subtitle_sources"
+  | "duplicates";
 
 export type MediaFileTablePage = {
   total: number;
@@ -242,8 +247,17 @@ export type ScanJob = {
   started_at: string | null;
   finished_at: string | null;
   progress_percent: number;
+  phase_key: string;
   phase_label: string;
   phase_detail: string | null;
+  phase_progress_percent: number;
+  phase_current: number;
+  phase_total: number;
+  eta_seconds: number | null;
+  scan_mode_label: string | null;
+  duplicate_detection_mode: string | null;
+  queued_for_analysis: number;
+  unchanged_files: number;
 };
 
 export type ScanTriggerSource = "manual" | "scheduled" | "watchdog";
@@ -258,6 +272,7 @@ export type ScanFileList = {
 export type ScanFileIssue = {
   path: string;
   reason: string;
+  details?: string | null;
 };
 
 export type ScanPatternHit = {
@@ -390,6 +405,7 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["subtitle_languages", "search_subtitle_languages"],
   ["subtitle_codecs", "search_subtitle_codecs"],
   ["subtitle_sources", "search_subtitle_sources"],
+  ["duplicates", "search_duplicates"],
 ];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -596,6 +612,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ scan_type: scanType }),
     }),
+  libraryDuplicates: (id: string | number, params?: { offset?: number; limit?: number; signal?: AbortSignal }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.offset !== undefined) {
+      searchParams.set("offset", String(params.offset));
+    }
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    const query = searchParams.toString();
+    return request<DuplicateGroupPage>(`/libraries/${id}/duplicates${query ? `?${query}` : ""}`, {
+      signal: params?.signal,
+    });
+  },
+  libraryDuplicatesSummary: (id: string | number, signal?: AbortSignal) =>
+    request<DuplicateSummary>(`/libraries/${id}/duplicates/summary`, { signal }),
   cancelActiveScanJobs: () =>
     request<ScanCancelResponse>("/scan-jobs/active/cancel", {
       method: "POST",

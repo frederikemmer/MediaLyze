@@ -16,8 +16,10 @@ from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, S
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
+    _empty_scan_summary,
     execute_scan_job,
     libraries_needing_quality_backfill,
+    queue_duplicate_refresh_job,
     queue_quality_recompute_job,
     queue_scan_job,
 )
@@ -178,6 +180,30 @@ class ScanRuntimeManager:
 
         if job_id is None:
             raise ValueError(f"Failed to request quality recompute for library {library_id}")
+        return job_id, created
+
+    def request_duplicate_refresh(self, library_id: int) -> tuple[int, bool]:
+        created = False
+        should_submit = False
+        job_id: int | None = None
+
+        with self.lock:
+            db = SessionLocal()
+            try:
+                job, created = queue_duplicate_refresh_job(db, library_id)
+                job_id = job.id
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                    self.active_library_ids.add(library_id)
+                    self.submitted_job_ids.add(job.id)
+                    should_submit = True
+            finally:
+                db.close()
+
+        if should_submit and job_id is not None:
+            self.executor.submit(self._run_job, job_id, library_id)
+
+        if job_id is None:
+            raise ValueError(f"Failed to request duplicate refresh for library {library_id}")
         return job_id, created
 
     def submit_scan_job(self, job_id: int) -> None:

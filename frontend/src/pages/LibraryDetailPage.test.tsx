@@ -18,11 +18,21 @@ import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibraryDetailPage } from "./LibraryDetailPage";
 
 const scrollIntoViewMock = vi.fn();
+const requestAnimationFrameMock = vi.fn((callback: FrameRequestCallback) => {
+  callback(0);
+  return 1;
+});
 
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
   writable: true,
   value: scrollIntoViewMock,
+});
+
+Object.defineProperty(window, "requestAnimationFrame", {
+  configurable: true,
+  writable: true,
+  value: requestAnimationFrameMock,
 });
 
 function createLibrarySummary(id: number): LibrarySummary {
@@ -56,6 +66,7 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
     subtitle_source_distribution: [{ label: "external", value: 2 }],
+    duplicate_distribution: [{ label: "All duplicates", value: 0, filter_value: "any" }],
     ...overrides,
   };
 }
@@ -174,8 +185,10 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   scrollIntoViewMock.mockClear();
+  requestAnimationFrameMock.mockClear();
   window.localStorage.clear();
 });
 
@@ -389,7 +402,9 @@ describe("LibraryDetailPage", () => {
         }),
       ),
     );
-    expect(scrollIntoViewMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
   });
 
   it("replaces existing statistic values in the same field", async () => {
@@ -607,6 +622,39 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
+    window.localStorage.setItem(
+      "medialyze-library-statistics-settings",
+      JSON.stringify({
+        order: [
+          "size",
+          "duplicates",
+          "quality_score",
+          "video_codec",
+          "resolution",
+          "hdr_type",
+          "duration",
+          "audio_codecs",
+          "audio_languages",
+          "subtitle_languages",
+          "subtitle_codecs",
+          "subtitle_sources",
+        ],
+        visibility: {
+          size: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          duplicates: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+          quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          video_codec: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          resolution: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          hdr_type: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          duration: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
+          audio_codecs: { panelEnabled: true, tableEnabled: false, dashboardEnabled: true },
+          audio_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          subtitle_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
+          subtitle_codecs: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+          subtitle_sources: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
+        },
+      }),
+    );
     vi.spyOn(api, "appSettings").mockResolvedValue({
       ignore_patterns: [],
       user_ignore_patterns: [],

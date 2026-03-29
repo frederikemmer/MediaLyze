@@ -190,3 +190,41 @@ def test_sqlite_utc_datetime_roundtrip_restores_utc_tzinfo() -> None:
         stored = db.execute(text("SELECT last_scan_at FROM libraries WHERE id = :library_id"), {"library_id": library.id}).scalar()
 
     assert stored == "2026-03-24 09:36:00.000000"
+
+
+def test_init_db_migrates_legacy_duplicate_detection_modes() -> None:
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE libraries (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    path VARCHAR(2048) NOT NULL UNIQUE,
+                    type VARCHAR(16) NOT NULL,
+                    duplicate_detection_mode VARCHAR(32) NOT NULL DEFAULT 'filename'
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO libraries (id, name, path, type, duplicate_detection_mode)
+                VALUES
+                  (1, 'Movies', '/tmp/movies', 'movies', 'content_hash'),
+                  (2, 'Series', '/tmp/series', 'series', 'perceptual_hash')
+                """
+            )
+        )
+
+    init_db(engine)
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT id, duplicate_detection_mode FROM libraries ORDER BY id ASC")
+        ).all()
+
+    assert rows == [(1, "filehash"), (2, "filename")]

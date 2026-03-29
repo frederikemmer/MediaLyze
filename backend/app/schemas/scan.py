@@ -22,8 +22,17 @@ class ScanJobRead(BaseModel):
     started_at: UtcDateTime | None
     finished_at: UtcDateTime | None
     progress_percent: float = 0.0
+    phase_key: str = "queued"
     phase_label: str = "queued"
     phase_detail: str | None = None
+    phase_progress_percent: float = 0.0
+    phase_current: int = 0
+    phase_total: int = 0
+    eta_seconds: float | None = None
+    scan_mode_label: str | None = None
+    duplicate_detection_mode: str | None = None
+    queued_for_analysis: int = 0
+    unchanged_files: int = 0
 
 
 class ScanFileListRead(BaseModel):
@@ -35,6 +44,7 @@ class ScanFileListRead(BaseModel):
 class ScanFileIssueRead(BaseModel):
     path: str
     reason: str
+    details: str | None = None
 
 
 class ScanPatternHitRead(BaseModel):

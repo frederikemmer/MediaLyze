@@ -186,13 +186,14 @@ def update_library_settings(
     settings: Settings,
     library_id: int,
     payload: LibraryUpdate,
-) -> tuple[Library | None, bool]:
+) -> tuple[Library | None, bool, bool]:
     cache_key = str(id(db.get_bind()))
     library = db.get(Library, library_id)
     if not library:
-        return None, False
+        return None, False, False
 
     quality_profile_changed = False
+    duplicate_detection_mode_changed = False
     app_settings = load_app_settings(db, settings)
 
     if payload.name is not None:
@@ -219,7 +220,7 @@ def update_library_settings(
     db.commit()
     db.refresh(library)
     stats_cache.invalidate(cache_key, library.id)
-    return library, quality_profile_changed
+    return library, quality_profile_changed, duplicate_detection_mode_changed
 
 
 def delete_library(db: Session, library_id: int) -> bool:
@@ -468,6 +469,26 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
             .order_by(func.count(distinct(subtitle_source_distinct_values.c.media_file_id)).desc())
         ).all()
     )
+    duplicate_group_rows = db.execute(
+        select(
+            MediaFile.duplicate_group_key,
+            MediaFile.duplicate_group_label,
+            func.max(MediaFile.duplicate_group_member_count),
+        )
+        .where(
+            MediaFile.library_id == library_id,
+            MediaFile.duplicate_group_member_count >= 2,
+            MediaFile.duplicate_group_key.is_not(None),
+        )
+        .group_by(MediaFile.duplicate_group_key, MediaFile.duplicate_group_label)
+        .order_by(func.max(MediaFile.duplicate_group_member_count).desc(), MediaFile.duplicate_group_label.asc())
+    ).all()
+    duplicate_file_count = db.scalar(
+        select(func.count(MediaFile.id)).where(
+            MediaFile.library_id == library_id,
+            MediaFile.duplicate_group_member_count >= 2,
+        )
+    ) or 0
 
     payload = LibraryStatistics(
         video_codec_distribution=_distribution_items(video_codec_distribution),
@@ -490,6 +511,18 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
             for key, value in _sorted_count_items(subtitle_codec_counts)
         ],
         subtitle_source_distribution=subtitle_source_distribution,
+        duplicate_distribution=[
+            DistributionItem(label="All duplicates", value=duplicate_file_count, filter_value="any"),
+            *[
+                DistributionItem(
+                    label=label or group_key or "duplicate-group",
+                    value=value,
+                    filter_value=f"group:{group_key}",
+                )
+                for group_key, label, value in duplicate_group_rows
+                if group_key
+            ],
+        ],
     )
     stats_cache.set_library_statistics(cache_key, library_id, payload)
     return payload

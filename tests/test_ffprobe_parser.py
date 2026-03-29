@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import backend.app.services.ffprobe_parser as ffprobe_parser
-from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload
+from backend.app.services.ffprobe_parser import _ffprobe_error_message, _ffprobe_input_path, normalize_ffprobe_payload, run_ffprobe
 
 
 def test_normalize_ffprobe_payload_extracts_streams() -> None:
@@ -156,6 +156,22 @@ def test_ffprobe_error_message_prefers_stderr() -> None:
     assert _ffprobe_error_message(exc) == "Invalid data found when processing input"
 
 
+def test_ffprobe_error_message_skips_version_banner_lines() -> None:
+    exc = subprocess.CalledProcessError(
+        1,
+        ["ffprobe", "movie.mkv"],
+        stderr=(
+            "ffprobe version 8.0 Copyright (c) 2007-2025 the FFmpeg developers\n"
+            "  built with gcc 14\n"
+            "  configuration: --enable-gpl\n"
+            "  libavutil      60.  8.100 / 60.  8.100\n"
+            "moov atom not found\n"
+        ),
+    )
+
+    assert _ffprobe_error_message(exc) == "moov atom not found"
+
+
 def test_ffprobe_input_path_preserves_non_windows_paths(tmp_path: Path) -> None:
     file_path = tmp_path / "movie.mkv"
 
@@ -172,3 +188,23 @@ def test_ffprobe_input_path_adds_extended_prefix_for_windows_drive_paths(monkeyp
     monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="nt"))
 
     assert _ffprobe_input_path(Path(r"C:\media\movie.mkv")) == r"\\?\C:\media\movie.mkv"
+
+
+def test_run_ffprobe_disables_stdin_without_using_nostdin(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class CompletedProcess:
+        stdout = "{}"
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return CompletedProcess()
+
+    monkeypatch.setattr(ffprobe_parser.subprocess, "run", fake_run)
+
+    result = run_ffprobe(tmp_path / "movie.mkv", "ffprobe")
+
+    assert result == {}
+    assert "-nostdin" not in captured["command"]
+    assert captured["kwargs"]["stdin"] is ffprobe_parser.subprocess.DEVNULL

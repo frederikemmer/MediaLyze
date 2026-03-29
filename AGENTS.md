@@ -43,6 +43,7 @@ MediaLyze currently implements:
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
 * full and incremental scans
+* per-library duplicate detection with `filename` and `filehash` modes
 * scan cancelation
 * recent scan logs and detailed scan-job summaries
 * deterministic change detection using path, file size, and modification time
@@ -189,6 +190,7 @@ Scan-job tracking now includes:
 * trigger source tracking
 * trigger details
 * progress state and phase labels
+* explicit duplicate-detection phase progress and duplicate-result summaries
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled error reasons
@@ -753,9 +755,9 @@ Release metadata is enforced through `.github/scripts/release_metadata.py`.
 
 Current release behavior:
 
-* dev images are pushed from `dev`
+* dev images are pushed from `dev` as `linux/amd64` only to keep the development image workflow faster
 * official images and GitHub releases are published from `main` only when a push increases the aligned repository version metadata
-* official images are published to GHCR
+* official images are published to GHCR as multi-arch images for `linux/amd64` and `linux/arm64`
 * the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
@@ -817,6 +819,11 @@ Repository-level test coverage areas include:
 
 When documenting or extending behavior, prefer tests and code over stale prose.
 
+Bug-fix expectation:
+
+* when fixing a bug, add or update an automated test that reproduces the failure mode and verifies the fix whenever reasonably possible
+* prefer regression tests that would have failed before the fix, so the bug remains reproducible in CI and future refactors cannot silently reintroduce it
+
 ---
 
 # 16. Working Rules For Agents
@@ -827,6 +834,7 @@ When updating documentation, code, or behavior in this repository:
 * describe backlog items as backlog
 * do not resurrect outdated architectural labels from early versions
 * verify claims against code, tests, workflows, or GitHub release metadata
+* when a user reports a bug or a runtime/build failure, treat a reproducing or regression test as part of the expected fix unless the issue cannot be meaningfully covered by automation
 * do not document unverified scale claims as benchmarked facts; treat large-library support as a design goal unless there is measured evidence
 * prefer concrete current file paths and interfaces over speculative future structure
 * if a larger change affects architecture, runtime behavior, public interfaces, release flow, repository structure, or other information relevant for future development, update `AGENTS.md` in the same work

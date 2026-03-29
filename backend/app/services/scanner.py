@@ -3,10 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from datetime import datetime
 from fnmatch import fnmatchcase
+from copy import deepcopy
 import logging
 import os
 from pathlib import Path
+from time import monotonic
+import traceback
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -43,6 +47,25 @@ logger = logging.getLogger(__name__)
 MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
+PROGRESS_COMMIT_INTERVAL_SECONDS = 0.75
+PHASE_WEIGHTS = {
+    "discovering": 15.0,
+    "analyzing": 55.0,
+    "detecting_duplicates_preparing": 0.0,
+    "detecting_duplicates_artifacts": 20.0,
+    "detecting_duplicates_grouping": 10.0,
+}
+PHASE_PREFIX_PROGRESS = {
+    "queued": 0.0,
+    "discovering": 0.0,
+    "analyzing": 15.0,
+    "detecting_duplicates_preparing": 70.0,
+    "detecting_duplicates_artifacts": 70.0,
+    "detecting_duplicates_grouping": 90.0,
+    "completed": 100.0,
+    "failed": 100.0,
+    "canceled": 100.0,
+}
 
 
 class ScanCanceled(Exception):
@@ -92,9 +115,12 @@ class FailedFileSamples:
     items: list[dict[str, str]] = field(default_factory=list)
     truncated_count: int = 0
 
-    def add(self, path: str, reason: str) -> None:
+    def add(self, path: str, reason: str, details: str | None = None) -> None:
+        payload = {"path": path, "reason": reason}
+        if details and details != reason:
+            payload["details"] = details
         if len(self.items) < MAX_FAILED_FILE_SAMPLE_SIZE:
-            self.items.append({"path": path, "reason": reason})
+            self.items.append(payload)
         else:
             self.truncated_count += 1
 
@@ -188,6 +214,32 @@ def _short_error_reason(exc: Exception) -> str:
         if first_line:
             return first_line[:300]
     return exc.__class__.__name__
+
+
+def _error_details(exc: Exception, *, limit: int = 4000) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    return message[:limit]
+
+
+def _error_traceback(exc: Exception, *, limit: int = 16000) -> str:
+    rendered = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).strip()
+    if not rendered:
+        rendered = exc.__class__.__name__
+    return rendered[:limit]
+
+
+def _record_runtime_failure(job: ScanJob, exc: Exception) -> None:
+    summary = _runtime_summary(job)
+    runtime = summary["runtime"]
+    runtime.update(
+        {
+            "fatal_error_type": exc.__class__.__name__,
+            "fatal_error_message": _error_details(exc),
+            "fatal_error_traceback": _error_traceback(exc),
+            "fatal_error_at": utc_now().isoformat(),
+        }
+    )
+    job.scan_summary = summary
 
 
 def _iter_media_files(
@@ -327,7 +379,7 @@ def _analyze_path(
     settings: Settings,
     ignore_patterns: tuple[str, ...],
 ) -> tuple[dict, list[dict[str, str | None]]]:
-    payload = run_ffprobe(file_path, settings.ffprobe_path)
+    payload = run_ffprobe(file_path, settings.ffprobe_path, settings.ffprobe_timeout_seconds)
     subtitles = [
         subtitle
         for subtitle in detect_external_subtitles(file_path, settings.subtitle_extensions)
@@ -375,6 +427,92 @@ def _empty_scan_summary(ignore_patterns: tuple[str, ...] = ()) -> dict:
             "duplicate_files": 0,
         },
     }
+
+
+def _runtime_summary(job: ScanJob) -> dict:
+    summary = deepcopy(job.scan_summary or _empty_scan_summary())
+    summary.setdefault("runtime", {})
+    summary["runtime"].setdefault("phase_history", [])
+    summary.setdefault("duplicates", {})
+    return summary
+
+
+def _estimate_eta_seconds(phase_started_at, current: int, total: int) -> float | None:
+    if phase_started_at is None or total <= 0 or current < 5 or current >= total:
+        return None
+    elapsed = max(0.0, (utc_now() - phase_started_at).total_seconds())
+    if elapsed < 3:
+        return None
+    rate = current / elapsed if elapsed > 0 else 0.0
+    if rate <= 0:
+        return None
+    return max(0.0, (total - current) / rate)
+
+
+def _set_job_phase(
+    job: ScanJob,
+    phase_key: str,
+    label: str,
+    detail: str,
+    *,
+    current: int = 0,
+    total: int = 0,
+    scan_mode_label: str | None = None,
+    duplicate_detection_mode: str | None = None,
+) -> None:
+    summary = _runtime_summary(job)
+    runtime = summary["runtime"]
+    previous_phase_key = runtime.get("phase_key")
+    if previous_phase_key and previous_phase_key != phase_key:
+        runtime["phase_history"].append(
+            {
+                "phase_key": previous_phase_key,
+                "phase_label": runtime.get("phase_label"),
+                "phase_finished_at": utc_now().isoformat(),
+            }
+        )
+    phase_started_at = utc_now()
+    phase_progress_percent = round((current / total) * 100, 1) if total > 0 and current > 0 else 0.0
+    runtime.update(
+        {
+            "phase_key": phase_key,
+            "phase_label": label,
+            "phase_detail": detail,
+            "phase_current": current,
+            "phase_total": total,
+            "phase_progress_percent": phase_progress_percent,
+            "phase_started_at": phase_started_at.isoformat(),
+            "eta_seconds": _estimate_eta_seconds(phase_started_at, current, total),
+            "scan_mode_label": scan_mode_label,
+            "duplicate_detection_mode": duplicate_detection_mode,
+        }
+    )
+    job.scan_summary = summary
+
+
+def _update_job_phase_progress(job: ScanJob, current: int, total: int, *, detail: str | None = None) -> None:
+    summary = _runtime_summary(job)
+    runtime = summary["runtime"]
+    phase_started_at_iso = runtime.get("phase_started_at")
+    phase_started_at = None
+    if phase_started_at_iso:
+        try:
+            phase_started_at = datetime.fromisoformat(phase_started_at_iso)
+        except Exception:
+            phase_started_at = utc_now()
+    runtime["phase_current"] = current
+    runtime["phase_total"] = total
+    runtime["phase_progress_percent"] = round((current / total) * 100, 1) if total > 0 and current > 0 else 0.0
+    runtime["eta_seconds"] = _estimate_eta_seconds(phase_started_at, current, total)
+    if detail is not None:
+        runtime["phase_detail"] = detail
+    job.scan_summary = summary
+
+
+def _clear_duplicate_runtime(summary: dict) -> None:
+    duplicates = summary.setdefault("duplicates", {})
+    duplicates.setdefault("mode", None)
+    duplicates.setdefault("status", None)
 
 
 def queue_scan_job(
@@ -429,10 +567,39 @@ def queue_quality_recompute_job(db: Session, library_id: int) -> tuple[ScanJob, 
         return queued_job, False
 
     running_job = next((job for job in active_jobs if job.status == JobStatus.running), None)
-    if running_job is None and active_jobs:
+    if running_job is not None:
+        return running_job, False
+    if active_jobs:
         return active_jobs[0], False
 
     job = ScanJob(library_id=library_id, status=JobStatus.queued, job_type="quality_recompute")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job, True
+
+
+def queue_duplicate_refresh_job(db: Session, library_id: int) -> tuple[ScanJob, bool]:
+    active_jobs = db.scalars(
+        select(ScanJob)
+        .where(
+            ScanJob.library_id == library_id,
+            ScanJob.job_type == "duplicate_refresh",
+            ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
+        )
+        .order_by(ScanJob.id.asc())
+    ).all()
+    queued_job = next((job for job in active_jobs if job.status == JobStatus.queued), None)
+    if queued_job is not None:
+        return queued_job, False
+
+    running_job = next((job for job in active_jobs if job.status == JobStatus.running), None)
+    if running_job is not None:
+        return running_job, False
+    if active_jobs:
+        return active_jobs[0], False
+
+    job = ScanJob(library_id=library_id, status=JobStatus.queued, job_type="duplicate_refresh")
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -504,12 +671,13 @@ def execute_scan_job(job_id: int, settings: Settings) -> None:
             job.status = JobStatus.canceled
             job.finished_at = utc_now()
             db.commit()
-    except Exception:
+    except Exception as exc:
         job = db.get(ScanJob, job_id)
         if job:
             job.status = JobStatus.failed
             job.finished_at = utc_now()
             job.errors += 1
+            _record_runtime_failure(job, exc)
             db.commit()
     finally:
         db.close()
@@ -532,7 +700,189 @@ def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
 
     if job.job_type == "quality_recompute":
         return run_quality_recompute(db, job.library_id, job)
+    if job.job_type == "duplicate_refresh":
+        return run_duplicate_refresh(db, settings, job.library_id, job)
     return run_scan(db, settings, job.library_id, job.job_type, job)
+
+
+def _duplicate_phase_detail(label: str, current: int, total: int, eta_seconds: float | None) -> str:
+    detail = f"{label}: {current} of {total}"
+    if eta_seconds is not None:
+        detail += f", about {int(round(eta_seconds))}s left"
+    return detail
+
+
+def _discovery_phase_detail(current: int, total: int, queued_for_analysis: int) -> str:
+    return f"Discovered {current} of {total} files, {queued_for_analysis} queued for analysis"
+
+
+def _analysis_phase_detail(
+    current: int,
+    total: int,
+    *,
+    discovered_files: int,
+    unchanged_files: int,
+    pending_in_progress: int = 0,
+) -> str:
+    detail = (
+        f"Analyzed {current} of {total} queued files, "
+        f"{unchanged_files} unchanged of {discovered_files} discovered"
+    )
+    if pending_in_progress > 0:
+        detail += f", {pending_in_progress} in progress"
+    return detail
+
+
+def _should_commit_progress(last_commit_at: float, *, processed: int, total: int, batch_size: int) -> bool:
+    if processed >= total:
+        return True
+    if batch_size > 0 and processed > 0 and processed % batch_size == 0:
+        return True
+    return (monotonic() - last_commit_at) >= PROGRESS_COMMIT_INTERVAL_SECONDS
+
+
+def _run_duplicate_detection(
+    db: Session,
+    settings: Settings,
+    library: Library,
+    job: ScanJob,
+    *,
+    changed_file_paths: dict[int, Path] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> dict[str, int]:
+    strategy = get_duplicate_strategy(library.duplicate_detection_mode)
+    media_files = db.scalars(
+        select(MediaFile)
+        .where(MediaFile.library_id == library.id, MediaFile.scan_status == ScanStatus.ready)
+        .options(selectinload(MediaFile.media_format))
+        .order_by(MediaFile.id.asc())
+    ).all()
+
+    _set_job_phase(
+        job,
+        "detecting_duplicates_preparing",
+        "Detecting duplicates",
+        f"Preparing {library.duplicate_detection_mode.value} duplicate detection",
+        scan_mode_label=job.job_type,
+        duplicate_detection_mode=library.duplicate_detection_mode.value,
+    )
+    summary = _runtime_summary(job)
+    summary["duplicates"].update(
+        {
+            "mode": library.duplicate_detection_mode.value,
+            "status": "preparing",
+            "phase_started_at": utc_now().isoformat(),
+            "phase_finished_at": None,
+            "artifacts_total": len(media_files),
+            "artifacts_completed": 0,
+            "grouping_total": len(media_files),
+            "grouping_completed": 0,
+            "groups_found": 0,
+            "duplicate_files": 0,
+            "pending_files": 0,
+            "artifact_cache_hits": 0,
+            "artifact_cache_misses": 0,
+            "eta_seconds": None,
+        }
+    )
+    job.scan_summary = summary
+    db.commit()
+
+    _set_job_phase(
+        job,
+        "detecting_duplicates_artifacts",
+        f"Detecting duplicates by {library.duplicate_detection_mode.value}",
+        _duplicate_phase_detail("Preparing duplicate artifacts", 0, len(media_files), None),
+        total=len(media_files),
+        scan_mode_label=job.job_type,
+        duplicate_detection_mode=library.duplicate_detection_mode.value,
+    )
+    job.scan_summary = _runtime_summary(job)
+    db.commit()
+
+    artifact_hits = 0
+    artifact_misses = 0
+    changed_file_paths = changed_file_paths or {}
+    artifact_last_commit_at = monotonic()
+    for index, media_file in enumerate(media_files, start=1):
+        if should_cancel and should_cancel():
+            raise ScanCanceled()
+        file_path = changed_file_paths.get(media_file.id)
+        if file_path is None:
+            file_path = _library_root(library) / media_file.relative_path
+        if not file_path.exists():
+            continue
+        current_detail = (
+            f"Computing {library.duplicate_detection_mode.value} artifacts for "
+            f"{media_file.filename} ({index} of {len(media_files)})"
+        )
+        _update_job_phase_progress(job, index - 1, len(media_files), detail=current_detail)
+        db.commit()
+        result = strategy.ensure_artifact(
+            media_file,
+            file_path,
+        )
+        if result.cache_hit:
+            artifact_hits += 1
+        else:
+            artifact_misses += 1
+        summary = _runtime_summary(job)
+        summary["duplicates"]["artifacts_completed"] = index
+        summary["duplicates"]["artifact_cache_hits"] = artifact_hits
+        summary["duplicates"]["artifact_cache_misses"] = artifact_misses
+        job.scan_summary = summary
+        detail = _duplicate_phase_detail(
+            f"Computing {library.duplicate_detection_mode.value} artifacts",
+            index,
+            len(media_files),
+            _estimate_eta_seconds(datetime.fromisoformat(_runtime_summary(job)["runtime"]["phase_started_at"]), index, len(media_files)),
+        )
+        _update_job_phase_progress(job, index, len(media_files), detail=detail)
+        if _should_commit_progress(
+            artifact_last_commit_at,
+            processed=index,
+            total=max(1, len(media_files)),
+            batch_size=10,
+        ):
+            db.commit()
+            artifact_last_commit_at = monotonic()
+
+    _set_job_phase(
+        job,
+        "detecting_duplicates_grouping",
+        "Grouping duplicate candidates",
+        _duplicate_phase_detail("Grouping duplicate candidates", 0, len(media_files), None),
+        total=max(1, len(media_files)),
+        scan_mode_label=job.job_type,
+        duplicate_detection_mode=library.duplicate_detection_mode.value,
+    )
+    summary = _runtime_summary(job)
+    summary["duplicates"]["status"] = "grouping"
+    job.scan_summary = summary
+    db.commit()
+
+    group_stats = rebuild_duplicate_groups(db, library)
+    _update_job_phase_progress(
+        job,
+        len(media_files),
+        max(1, len(media_files)),
+        detail=_duplicate_phase_detail("Grouping duplicate candidates", len(media_files), max(1, len(media_files)), 0.0),
+    )
+    summary = _runtime_summary(job)
+    summary["duplicates"].update(
+        {
+            "status": "completed",
+            "phase_finished_at": utc_now().isoformat(),
+            "grouping_completed": len(media_files),
+            "groups_found": group_stats["groups_found"],
+            "duplicate_files": group_stats["duplicate_files"],
+            "pending_files": group_stats["pending_files"],
+            "eta_seconds": 0.0,
+        }
+    )
+    job.scan_summary = summary
+    db.commit()
+    return group_stats
 
 
 def run_scan(
@@ -558,6 +908,10 @@ def run_scan(
         db.add(job)
         db.commit()
         db.refresh(job)
+    if not job.scan_summary:
+        job.scan_summary = _empty_scan_summary()
+    _set_job_phase(job, "discovering", "Discovering files", "Scanning directories", scan_mode_label=scan_type)
+    db.commit()
 
     def _should_cancel() -> bool:
         db.refresh(job)
@@ -643,9 +997,20 @@ def run_scan(
         ignore_patterns=ignore_patterns,
         should_cancel=_should_cancel,
     )
+    discovery_total = max(1, len(discovery.files))
+    _set_job_phase(
+        job,
+        "discovering",
+        "Discovering files",
+        _discovery_phase_detail(0, discovery_total, 0),
+        total=discovery_total,
+        scan_mode_label=scan_type,
+    )
+    db.commit()
     seen_relative_paths: set[str] = set()
     work_queue: list[QueuedMediaWork] = []
     discovery_counter = 0
+    discovery_last_commit_at = monotonic()
 
     for file_path in discovery.files:
         relative_path = file_path.relative_to(root).as_posix()
@@ -654,14 +1019,25 @@ def run_scan(
         stat = file_path.stat()
         media_file = existing_by_path.get(relative_path)
 
-        if discovery_counter >= settings.scan_discovery_batch_size:
+        _update_job_phase_progress(
+            job,
+            discovery_counter,
+            discovery_total,
+            detail=_discovery_phase_detail(discovery_counter, discovery_total, len(to_analyze)),
+        )
+        if _should_commit_progress(
+            discovery_last_commit_at,
+            processed=discovery_counter,
+            total=discovery_total,
+            batch_size=settings.scan_discovery_batch_size,
+        ):
             job.files_total = len(seen_relative_paths)
             queued_for_analysis = sum(1 for work in work_queue if work.needs_analysis)
             queued_for_duplicate_processing = sum(1 for work in work_queue if work.needs_duplicate_processing)
             job.scan_summary = _build_scan_summary(discovery, queued_for_analysis, queued_for_duplicate_processing)
             db.commit()
             stats_cache.invalidate(cache_key, job.library_id)
-            discovery_counter = 0
+            discovery_last_commit_at = monotonic()
             if _should_cancel():
                 raise ScanCanceled()
 
@@ -699,6 +1075,7 @@ def run_scan(
             if changed or scan_type == "full" or analysis_incomplete:
                 if changed:
                     modified_files.add(relative_path)
+                    media_file.content_hash = None
                 elif analysis_incomplete:
                     reanalyzed_incomplete_files += 1
                 media_file.scan_status = ScanStatus.pending
@@ -741,6 +1118,21 @@ def run_scan(
     stats_cache.invalidate(cache_key, job.library_id)
     if _should_cancel():
         raise ScanCanceled()
+    _set_job_phase(
+        job,
+        "analyzing",
+        "Analyzing media",
+        _analysis_phase_detail(
+            0,
+            len(to_analyze),
+            discovered_files=len(discovery.files),
+            unchanged_files=unchanged_files,
+        ),
+        total=max(1, len(to_analyze)),
+        scan_mode_label=scan_type,
+        duplicate_detection_mode=library.duplicate_detection_mode.value,
+    )
+    db.commit()
 
     def _safe_process(work: QueuedMediaWork) -> QueuedMediaWorkResult:
         relative_path = work.path.relative_to(root).as_posix()
@@ -774,11 +1166,13 @@ def run_scan(
             duplicate_error=duplicate_error,
         )
 
-    with ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count) as executor:
+    executor = ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count)
+    try:
         batch_counter = 0
         next_index = 0
         pending: dict[Future, QueuedMediaWork] = {}
         max_in_flight = max(1, settings.ffprobe_worker_count * 2)
+        analysis_last_commit_at = monotonic()
 
         while next_index < len(work_queue) and len(pending) < max_in_flight:
             work = work_queue[next_index]
@@ -789,9 +1183,35 @@ def run_scan(
             if _should_cancel():
                 for future in pending:
                     future.cancel()
+                executor.shutdown(wait=False, cancel_futures=True)
                 raise ScanCanceled()
 
-            done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+            done, _ = wait(pending.keys(), timeout=0.5, return_when=FIRST_COMPLETED)
+            if not done:
+                if _should_commit_progress(
+                    analysis_last_commit_at,
+                    processed=job.files_scanned,
+                    total=max(1, len(to_analyze)),
+                    batch_size=0,
+                ):
+                    _update_job_phase_progress(
+                        job,
+                        job.files_scanned,
+                        max(1, len(to_analyze)),
+                        detail=_analysis_phase_detail(
+                            job.files_scanned,
+                            len(to_analyze),
+                            discovered_files=len(discovery.files),
+                            unchanged_files=unchanged_files,
+                            pending_in_progress=len(pending),
+                        ),
+                    )
+                    job.scan_summary = _build_scan_summary(discovery, len(to_analyze))
+                    db.commit()
+                    stats_cache.invalidate(cache_key, job.library_id)
+                    analysis_last_commit_at = monotonic()
+                continue
+
             for future in done:
                 pending.pop(future)
                 result = future.result()
@@ -812,7 +1232,7 @@ def run_scan(
                         logger.exception("Media normalization failed for %s", relative_path)
                         media_file.scan_status = ScanStatus.failed
                         job.errors += 1
-                        failed_files.add(relative_path, _short_error_reason(exc))
+                        failed_files.add(relative_path, _short_error_reason(exc), _error_details(exc))
                 else:
                     if result.analysis_error is not None:
                         media_file.scan_status = ScanStatus.failed
@@ -843,6 +1263,7 @@ def run_scan(
                     db.commit()
                     stats_cache.invalidate(cache_key, job.library_id)
                     batch_counter = 0
+                    analysis_last_commit_at = monotonic()
 
                 if next_index < len(work_queue):
                     work = work_queue[next_index]
@@ -858,9 +1279,19 @@ def run_scan(
             )
             db.commit()
             stats_cache.invalidate(cache_key, job.library_id)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     if _should_cancel():
         raise ScanCanceled()
+    duplicate_stats = _run_duplicate_detection(
+        db,
+        settings,
+        library,
+        job,
+        changed_file_paths=changed_file_paths,
+        should_cancel=_should_cancel,
+    )
     library.last_scan_at = utc_now()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()
@@ -913,6 +1344,16 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
 
     job.files_total = len(media_files)
     job.files_scanned = 0
+    if not job.scan_summary:
+        job.scan_summary = _empty_scan_summary()
+    _set_job_phase(
+        job,
+        "analyzing",
+        "Recomputing quality scores",
+        f"0 of {len(media_files)} files updated",
+        total=max(1, len(media_files)),
+        scan_mode_label="quality_recompute",
+    )
     db.commit()
     stats_cache.invalidate(cache_key, library_id)
 
@@ -929,6 +1370,12 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
         _persist_quality_breakdown(media_file, breakdown)
         job.files_scanned += 1
         batch_counter += 1
+        _update_job_phase_progress(
+            job,
+            job.files_scanned,
+            max(1, len(media_files)),
+            detail=f"{job.files_scanned} of {len(media_files)} files updated",
+        )
         if batch_counter >= 200:
             db.commit()
             stats_cache.invalidate(cache_key, library_id)
@@ -940,6 +1387,88 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
 
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()
+    summary = _runtime_summary(job)
+    summary["runtime"].update(
+        {
+            "phase_key": "completed" if job.status == JobStatus.completed else "failed",
+            "phase_label": "Completed" if job.status == JobStatus.completed else "Failed",
+            "phase_detail": f"{job.files_scanned} of {job.files_total} quality scores updated",
+            "phase_current": job.files_total,
+            "phase_total": job.files_total,
+            "phase_progress_percent": 100.0,
+            "eta_seconds": 0.0,
+            "scan_mode_label": "quality_recompute",
+        }
+    )
+    job.scan_summary = summary
+    db.commit()
+    stats_cache.invalidate(cache_key, library_id)
+    db.refresh(job)
+    return job
+
+
+def run_duplicate_refresh(
+    db: Session,
+    settings: Settings,
+    library_id: int,
+    existing_job: ScanJob | None = None,
+) -> ScanJob:
+    cache_key = str(id(db.get_bind()))
+    library = db.get(Library, library_id)
+    if not library:
+        raise ValueError(f"Library {library_id} not found")
+
+    job = existing_job or ScanJob(
+        library_id=library_id,
+        status=JobStatus.running,
+        job_type="duplicate_refresh",
+        started_at=utc_now(),
+        scan_summary=_empty_scan_summary(),
+    )
+    if existing_job is None:
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+    def _should_cancel() -> bool:
+        db.refresh(job)
+        return job.status == JobStatus.canceled
+
+    media_files = db.scalars(
+        select(MediaFile)
+        .where(MediaFile.library_id == library_id, MediaFile.scan_status == ScanStatus.ready)
+        .options(selectinload(MediaFile.media_format))
+        .order_by(MediaFile.id.asc())
+    ).all()
+    job.files_total = len(media_files)
+    job.files_scanned = len(media_files)
+    if not job.scan_summary:
+        job.scan_summary = _empty_scan_summary()
+    db.commit()
+    stats_cache.invalidate(cache_key, library_id)
+
+    duplicate_stats = _run_duplicate_detection(db, settings, library, job, should_cancel=_should_cancel)
+    if _should_cancel():
+        raise ScanCanceled()
+
+    job.status = JobStatus.failed if job.errors else JobStatus.completed
+    job.finished_at = utc_now()
+    summary = _runtime_summary(job)
+    summary["duplicates"].update(duplicate_stats)
+    summary["runtime"].update(
+        {
+            "phase_key": "completed" if job.status == JobStatus.completed else "failed",
+            "phase_label": "Completed" if job.status == JobStatus.completed else "Failed",
+            "phase_detail": f"{duplicate_stats['duplicate_files']} duplicate files across {duplicate_stats['groups_found']} groups",
+            "phase_current": job.files_total,
+            "phase_total": job.files_total,
+            "phase_progress_percent": 100.0,
+            "eta_seconds": 0.0,
+            "scan_mode_label": "duplicate_refresh",
+            "duplicate_detection_mode": library.duplicate_detection_mode.value,
+        }
+    )
+    job.scan_summary = summary
     db.commit()
     stats_cache.invalidate(cache_key, library_id)
     db.refresh(job)

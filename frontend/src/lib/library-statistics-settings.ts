@@ -11,6 +11,7 @@ export type LibraryStatisticId =
   | "subtitle_languages"
   | "subtitle_codecs"
   | "subtitle_sources"
+  | "duplicates"
   | "quality_score";
 
 type LibraryStatisticPanelDataKey =
@@ -21,7 +22,8 @@ type LibraryStatisticPanelDataKey =
   | "audio_language_distribution"
   | "subtitle_language_distribution"
   | "subtitle_codec_distribution"
-  | "subtitle_source_distribution";
+  | "subtitle_source_distribution"
+  | "duplicate_distribution";
 
 type DashboardStatisticPanelDataKey =
   | "video_codec_distribution"
@@ -75,6 +77,18 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultTableEnabled: true,
     defaultDashboardEnabled: false,
     tableColumnKey: "size",
+  },
+  {
+    id: "duplicates",
+    nameKey: "libraryStatistics.items.duplicates",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsDashboard: false,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.duplicates",
+    panelDataKey: "duplicate_distribution",
   },
   {
     id: "quality_score",
@@ -212,7 +226,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsPanel: true,
     supportsTable: true,
     supportsDashboard: false,
-    defaultPanelEnabled: true,
+    defaultPanelEnabled: false,
     defaultTableEnabled: false,
     defaultDashboardEnabled: false,
     panelTitleKey: "libraryDetail.subtitleSources",
@@ -237,6 +251,7 @@ const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
     "subtitle_languages",
     "subtitle_codecs",
     "subtitle_sources",
+    "duplicates",
     "quality_score",
   ],
   visibility: {
@@ -249,7 +264,8 @@ const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
     audio_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
     subtitle_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
     subtitle_codecs: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
-    subtitle_sources: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
+    subtitle_sources: { panelEnabled: false, tableEnabled: false, dashboardEnabled: false },
+    duplicates: { panelEnabled: true, tableEnabled: false, dashboardEnabled: false },
     quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
   },
 };

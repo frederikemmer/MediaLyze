@@ -166,6 +166,19 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
         if _sqlite_has_table(connection, "libraries"):
             connection.execute(
                 text(
+                    "UPDATE libraries SET duplicate_detection_mode = 'filehash' "
+                    "WHERE duplicate_detection_mode = 'content_hash'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE libraries SET duplicate_detection_mode = 'filename' "
+                    "WHERE duplicate_detection_mode = 'perceptual_hash' "
+                    "OR duplicate_detection_mode NOT IN ('filename', 'filehash')"
+                )
+            )
+            connection.execute(
+                text(
                     "UPDATE libraries SET quality_profile = :quality_profile "
                     "WHERE quality_profile IS NULL OR quality_profile = '{}' OR quality_profile = 'null'"
                 ),

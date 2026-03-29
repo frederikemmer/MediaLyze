@@ -112,7 +112,7 @@ def test_update_library_settings_can_rename_library() -> None:
         db.add(library)
         db.commit()
 
-        updated, quality_profile_changed = update_library_settings(
+        updated, quality_profile_changed, duplicate_detection_mode_changed = update_library_settings(
             db,
             Settings(),
             library.id,
@@ -122,6 +122,7 @@ def test_update_library_settings_can_rename_library() -> None:
         assert updated is not None
         assert updated.name == "Films"
         assert quality_profile_changed is False
+        assert duplicate_detection_mode_changed is False
 
 
 def test_create_library_defaults_duplicate_detection_mode_to_filename(tmp_path) -> None:
@@ -207,7 +208,7 @@ def test_update_library_settings_backfills_visual_density_maximum_for_legacy_pro
         db.add(library)
         db.commit()
 
-        updated, quality_profile_changed = update_library_settings(
+        updated, quality_profile_changed, duplicate_detection_mode_changed = update_library_settings(
             db,
             Settings(),
             library.id,
@@ -217,6 +218,7 @@ def test_update_library_settings_backfills_visual_density_maximum_for_legacy_pro
     assert updated is not None
     assert updated.quality_profile["visual_density"]["maximum"] == 0.08
     assert quality_profile_changed is True
+    assert duplicate_detection_mode_changed is False
 
 
 def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:
@@ -278,7 +280,7 @@ def test_update_library_settings_falls_back_to_scheduled_for_desktop_network_pat
             lambda active_settings, path_value: False,
         )
 
-        updated, quality_profile_changed = update_library_settings(
+        updated, quality_profile_changed, duplicate_detection_mode_changed = update_library_settings(
             db,
             settings,
             library.id,
@@ -289,6 +291,7 @@ def test_update_library_settings_falls_back_to_scheduled_for_desktop_network_pat
     assert updated.scan_mode == ScanMode.scheduled
     assert updated.scan_config == {"interval_minutes": 60}
     assert quality_profile_changed is False
+    assert duplicate_detection_mode_changed is False
 
 
 def test_library_exists_checks_library_presence() -> None:

@@ -46,7 +46,7 @@ jobs:
         run: npm ci
         working-directory: desktop
 
-      - name: Install ffmpeg on Linux
+      - name: Install ffprobe on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
@@ -54,14 +54,14 @@ jobs:
           mkdir -p dist/ffprobe-bundle
           cp "$(command -v ffprobe)" dist/ffprobe-bundle/ffprobe
 
-      - name: Install ffmpeg on macOS
+      - name: Install ffprobe on macOS
         if: matrix.os == 'macos-latest'
         run: |
           brew install ffmpeg
           mkdir -p dist/ffprobe-bundle
           cp "$(command -v ffprobe)" dist/ffprobe-bundle/ffprobe
 
-      - name: Install ffmpeg on Windows
+      - name: Install ffprobe on Windows
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |

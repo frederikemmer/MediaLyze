@@ -24,6 +24,7 @@ def _build_test_app(db: Session) -> TestClient:
         {
             "sync_library": lambda self, library_id: None,
             "request_quality_recompute": lambda self, library_id: None,
+            "request_duplicate_refresh": lambda self, library_id: None,
             "cancel_active_jobs": lambda self: [],
         },
     )()
