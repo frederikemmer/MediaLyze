@@ -4,24 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.4.0
+
+>2026-03-30
+
+First "rough" implementation for detecting duplicate files. May break desktop install use v0.3.0 if it's not working properly.
+
 ### ✨ New
 
-- add per-library duplicate detection with configurable `off`, `filename`, exact `filehash`, and combined `both` modes, default new libraries to `off`, persist both signatures in SQLite when needed, and expose duplicate groups with their originating detection method in the library detail view
-- make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
-- cap each duplicate group's visible variant list to roughly two and a half entries and keep the remaining matches available via internal scrolling
-- move scan worker tuning into App Settings with separate limits for per-scan analysis workers and parallel library scans, including UI tooltips about RAM impact and enforced maximum values
-- reorganize the App Settings layout into separated language, theme, scan-settings, and feature-flag sections, switch scan worker controls to dropdowns, and default parallel library scans to `2`
+- add per-library duplicate detection with `off` (default), `filename`, `filehash`, `both` modes ([#16](https://github.com/frederikemmer/MediaLyze/issues/16))
+- view and search through duplicates on library page
+- scan performance tuning in `App settings` with separate controls for per-scan analysis workers and parallel library scans
 
 ### 🐛 Bug fixes
 
-- align the scheduled interval field vertically with the scan-mode and duplicate-detection controls in library settings
-- stop resuming stale `queued` and `running` scan jobs on app startup; previous-process leftovers are now marked `canceled` with a finish timestamp instead of becoming ghost resumes
-- stop auto-queuing startup quality-recompute jobs in server mode so containers no longer begin with a stuck queued scan banner before the user explicitly triggers work
-- clear pending watchdog debounce requests when active scans are canceled so stop actions do not immediately requeue replacement scans
-- include per-file detailed failure diagnostics in scan logs and add a copyable troubleshooting payload for failed analysis or duplicate-processing entries
-- make scan worker tuning actually drive scan throughput by applying the persisted App Settings limits to both per-library job concurrency and in-scan `ffprobe` worker pools
-- stop auto-running the `dev` desktop artifact workflow on every push; desktop dev builds are now manual-only via `workflow_dispatch`
-- stream discovered files directly into the analysis / duplicate worker queue so scans no longer wait for full discovery before processing, and report live discovery counts separately from worker progress in the active scan UI
+- rework scan execution so discovery streams files directly into analysis and duplicate workers, live progress reflects worker completion, and configured worker counts now affect real throughput
+- stop auto-resuming or auto-queuing stale startup jobs, clear pending watchdog debounce requests on cancel, and improve failed scan diagnostics with copyable detailed error payloads
+- tighten the duplicate and library-settings UI by capping visible duplicate variants with internal scrolling, aligning scan controls consistently, and making the `dev` desktop artifact build manual-only
 
 ## v0.3.0
 
