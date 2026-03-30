@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - add per-library duplicate detection with configurable `filename`, exact `filehash`, and combined `both` modes, persist both signatures in SQLite when needed, and expose duplicate groups with their originating detection method in the library detail view
 - make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
 - cap each duplicate group's visible variant list to roughly two and a half entries and keep the remaining matches available via internal scrolling
+- move scan worker tuning into App Settings with separate limits for per-scan analysis workers and parallel library scans, including UI tooltips about RAM impact and enforced maximum values
 
 ### 🐛 Bug fixes
 
@@ -16,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - stop auto-queuing startup quality-recompute jobs in server mode so containers no longer begin with a stuck queued scan banner before the user explicitly triggers work
 - clear pending watchdog debounce requests when active scans are canceled so stop actions do not immediately requeue replacement scans
 - include per-file detailed failure diagnostics in scan logs and add a copyable troubleshooting payload for failed analysis or duplicate-processing entries
+- make scan worker tuning actually drive scan throughput by applying the persisted App Settings limits to both per-library job concurrency and in-scan `ffprobe` worker pools
 
 ## v0.3.0
 

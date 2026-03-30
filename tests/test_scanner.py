@@ -1,5 +1,6 @@
 import os
 import tempfile
+from concurrent.futures import Future
 from pathlib import Path
 
 from sqlalchemy import create_engine, select
@@ -48,6 +49,91 @@ def test_iter_media_files_skips_symlink_directories(tmp_path: Path) -> None:
 
     assert discovery.files == [nested_dir / "movie.mkv"]
     assert discovery.ignored_total == 0
+
+
+def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "movie.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    created_executor_sizes: list[int] = []
+
+    class ExecutorStub:
+        def __init__(self, *, max_workers: int) -> None:
+            self.max_workers = max_workers
+            created_executor_sizes.append(max_workers)
+
+        def __enter__(self) -> "ExecutorStub":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def submit(self, fn, work):
+            future: Future = Future()
+            future.set_result(fn(work))
+            return future
+
+    monkeypatch.setattr(scanner_service, "ThreadPoolExecutor", ExecutorStub)
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "scan_performance": {
+                        "scan_worker_count": 5,
+                        "parallel_scan_jobs": 2,
+                    }
+                },
+            )
+        )
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+
+    assert created_executor_sizes == [5]
 
 
 def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Path, monkeypatch) -> None:

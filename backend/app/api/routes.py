@@ -170,6 +170,7 @@ def app_settings_update(
         updated_settings, recompute_library_ids = update_app_settings(db, payload, settings, include_effects=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    runtime.refresh_worker_settings()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings

@@ -13,6 +13,7 @@ from watchdog.observers import Observer
 from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, ScanTriggerSource
+from backend.app.services.app_settings import get_app_settings
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
@@ -35,10 +36,8 @@ class ScanRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.executor = ThreadPoolExecutor(
-            max_workers=max(1, settings.scan_runtime_worker_count),
-            thread_name_prefix="medialyze-runtime",
-        )
+        self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
+        self.executor = self._build_executor(self.executor_max_workers)
         self.lock = Lock()
         self.watch_observers: dict[int, tuple[str, Observer]] = {}
         self.debounce_timers: dict[int, Timer] = {}
@@ -48,6 +47,7 @@ class ScanRuntimeManager:
         self.started = False
 
     def start(self) -> None:
+        self.refresh_worker_settings()
         with self.lock:
             if self.started:
                 return
@@ -74,7 +74,26 @@ class ScanRuntimeManager:
 
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
-        self.executor.shutdown(wait=False, cancel_futures=True)
+        self._shutdown_executor(self.executor, cancel_futures=True)
+
+    def refresh_worker_settings(self) -> bool:
+        db = SessionLocal()
+        try:
+            next_workers = max(1, get_app_settings(db, self.settings).scan_performance.parallel_scan_jobs)
+        finally:
+            db.close()
+
+        previous_executor: ThreadPoolExecutor | None = None
+        with self.lock:
+            if next_workers == self.executor_max_workers:
+                return False
+            previous_executor = self.executor
+            self.executor = self._build_executor(next_workers)
+            self.executor_max_workers = next_workers
+
+        if previous_executor is not None:
+            self._shutdown_executor(previous_executor, cancel_futures=False)
+        return True
 
     def sync_all_libraries(self) -> None:
         db = SessionLocal()
@@ -459,3 +478,17 @@ class ScanRuntimeManager:
         if relative_path.startswith(".."):
             return None
         return Path(relative_path).as_posix()
+
+    @staticmethod
+    def _shutdown_executor(executor: ThreadPoolExecutor, *, cancel_futures: bool) -> None:
+        try:
+            executor.shutdown(wait=False, cancel_futures=cancel_futures)
+        except TypeError:
+            executor.shutdown(wait=False)
+
+    @staticmethod
+    def _build_executor(max_workers: int) -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=max(1, max_workers),
+            thread_name_prefix="medialyze-runtime",
+        )

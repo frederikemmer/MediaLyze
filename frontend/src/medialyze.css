@@ -1285,6 +1285,16 @@
   background: rgba(255, 255, 255, 0.55);
 }
 
+.app-settings-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.app-settings-performance-grid .field {
+  margin: 0;
+}
+
 .app-settings-flag-toggle {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -224,6 +224,10 @@ export type AppSettings = {
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
   resolution_categories?: ResolutionCategory[];
+  scan_performance?: {
+    scan_worker_count: number;
+    parallel_scan_jobs: number;
+  };
   feature_flags: {
     show_dolby_vision_profiles: boolean;
     show_analyzed_files_csv_export: boolean;
@@ -552,6 +556,10 @@ export const api = {
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
     resolution_categories?: ResolutionCategory[];
+    scan_performance?: {
+      scan_worker_count?: number;
+      parallel_scan_jobs?: number;
+    };
     feature_flags?: {
       show_dolby_vision_profiles?: boolean;
       show_analyzed_files_csv_export?: boolean;

@@ -531,6 +531,8 @@ Important current payload concepts:
 * `user_ignore_patterns`
 * `default_ignore_patterns`
 * `resolution_categories`
+* `scan_performance.scan_worker_count`
+* `scan_performance.parallel_scan_jobs`
 * `feature_flags.show_dolby_vision_profiles`
 
 ## 9.4 Libraries
@@ -729,7 +731,6 @@ Current documented runtime configuration includes:
 * `HOST_PORT`
 * `TZ`
 * `FFPROBE_PATH`
-* `SCAN_RUNTIME_WORKER_COUNT`
 * `DISABLE_DEFAULT_IGNORE_PATTERNS`
 * `PUID`
 * `PGID`
@@ -739,6 +740,7 @@ Additional behavior:
 * the backend defaults to serving on port `8080`
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
+* scan concurrency is configured through the UI under App Settings and persisted in `app_settings`, including both per-scan analysis workers and parallel-library job limits
 * `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage
 * `FRONTEND_DIST_PATH` can point the backend at an explicit built frontend bundle, which is used by desktop packaging
 

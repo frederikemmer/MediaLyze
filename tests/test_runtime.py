@@ -15,6 +15,8 @@ from watchdog.events import FileModifiedEvent
 
 from backend.app.models.entities import JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, ScanTriggerSource
 from backend.app.services import runtime as runtime_module
+from backend.app.schemas.app_settings import AppSettingsUpdate
+from backend.app.services.app_settings import update_app_settings
 
 
 def _session_factory():
@@ -223,6 +225,44 @@ def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
         jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
 
     assert jobs == []
+
+
+def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch, tmp_path) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    created_worker_counts: list[int] = []
+    shutdown_calls: list[tuple[int, bool, bool]] = []
+
+    class ExecutorStub:
+        def __init__(self, *, max_workers: int, thread_name_prefix: str) -> None:
+            self.max_workers = max_workers
+            created_worker_counts.append(max_workers)
+
+        def submit(self, fn, job_id: int, library_id: int) -> None:
+            return None
+
+        def shutdown(self, wait=False, cancel_futures=False) -> None:
+            shutdown_calls.append((self.max_workers, wait, cancel_futures))
+
+    monkeypatch.setattr(runtime_module, "ThreadPoolExecutor", ExecutorStub)
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path / "media")
+    runtime = runtime_module.ScanRuntimeManager(settings)
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(scan_performance={"parallel_scan_jobs": 6}),
+            settings,
+        )
+
+    refreshed = runtime.refresh_worker_settings()
+
+    assert refreshed is True
+    assert runtime.executor_max_workers == 6
+    assert created_worker_counts == [4, 6]
+    assert shutdown_calls == [(4, False, False)]
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

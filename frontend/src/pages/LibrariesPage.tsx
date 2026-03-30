@@ -144,6 +144,15 @@ const EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT: NewResolutionCategoryDraft = {
   min_height: "",
 };
 
+const SCAN_WORKER_COUNT_MIN = 1;
+const SCAN_WORKER_COUNT_MAX = 16;
+const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
+const PARALLEL_SCAN_JOB_COUNT_MAX = 8;
+const DEFAULT_SCAN_PERFORMANCE = {
+  scan_worker_count: 4,
+  parallel_scan_jobs: 4,
+};
+
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
 }
@@ -240,6 +249,23 @@ function normalizeIgnorePatterns(patterns: string[]): string[] {
   return patterns
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function clampInteger(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, Math.round(value)));
+}
+
+function normalizeScanPerformanceInput(
+  value: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return clampInteger(parsed, minimum, maximum);
 }
 
 function toPersistedIgnorePatterns(payload: {
@@ -399,16 +425,22 @@ export function LibrariesPage() {
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
+  const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
+  const [parallelScanJobsInput, setParallelScanJobsInput] = useState("4");
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
     EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
   );
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
+  const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
+  const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
+  const scanWorkerCountInputRef = useRef("4");
+  const parallelScanJobsInputRef = useRef("4");
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -416,6 +448,7 @@ export function LibrariesPage() {
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
+  const appScanPerformance = appSettings.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
@@ -693,7 +726,11 @@ export function LibrariesPage() {
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
-  }, [appSettings, appSettingsLoaded]);
+    scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
+    parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+    setScanWorkerCountInput(scanWorkerCountInputRef.current);
+    setParallelScanJobsInput(parallelScanJobsInputRef.current);
+  }, [appScanPerformance, appSettings, appSettingsLoaded]);
 
   useEffect(() => {
     return () => {
@@ -916,11 +953,26 @@ export function LibrariesPage() {
     nextShowDolbyVisionProfiles: boolean,
     nextShowAnalyzedFilesCsvExport: boolean,
     nextResolutionCategories?: ResolutionCategory[],
+    nextScanPerformance = {
+      scan_worker_count: normalizeScanPerformanceInput(
+        scanWorkerCountInputRef.current,
+        appScanPerformance.scan_worker_count,
+        SCAN_WORKER_COUNT_MIN,
+        SCAN_WORKER_COUNT_MAX,
+      ),
+      parallel_scan_jobs: normalizeScanPerformanceInput(
+        parallelScanJobsInputRef.current,
+        appScanPerformance.parallel_scan_jobs,
+        PARALLEL_SCAN_JOB_COUNT_MIN,
+        PARALLEL_SCAN_JOB_COUNT_MAX,
+      ),
+    },
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
       default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
+      scan_performance: nextScanPerformance,
       feature_flags: {
         show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
@@ -956,10 +1008,16 @@ export function LibrariesPage() {
         setDefaultIgnorePatternInputs(persisted.default);
         setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+        const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+        scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
+        parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+        setScanWorkerCountInput(scanWorkerCountInputRef.current);
+        setParallelScanJobsInput(parallelScanJobsInputRef.current);
         persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
         setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
+        setScanPerformanceStatus(null);
         setResolutionCategoriesStatus(null);
       }
       setAppSettings(updated);
@@ -994,6 +1052,7 @@ export function LibrariesPage() {
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowDolbyVisionProfiles(previousValue);
@@ -1019,6 +1078,7 @@ export function LibrariesPage() {
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
@@ -1026,6 +1086,18 @@ export function LibrariesPage() {
     } finally {
       setIsSavingFeatureFlags(false);
     }
+  }
+
+  function updateScanWorkerCountInput(value: string) {
+    scanWorkerCountInputRef.current = value;
+    setScanWorkerCountInput(value);
+    setScanPerformanceStatus(null);
+  }
+
+  function updateParallelScanJobsInput(value: string) {
+    parallelScanJobsInputRef.current = value;
+    setParallelScanJobsInput(value);
+    setScanPerformanceStatus(null);
   }
 
   function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
@@ -1063,11 +1135,64 @@ export function LibrariesPage() {
       setResolutionCategoriesStatus(null);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setResolutionCategoriesStatus((reason as Error).message);
     } finally {
       setIsSavingResolutionCategories(false);
+    }
+  }
+
+  async function saveScanPerformance(
+    nextScanWorkerInput = scanWorkerCountInputRef.current,
+    nextParallelScanJobsInput = parallelScanJobsInputRef.current,
+  ) {
+    const nextScanWorkerCount = normalizeScanPerformanceInput(
+      nextScanWorkerInput,
+      appScanPerformance.scan_worker_count,
+      SCAN_WORKER_COUNT_MIN,
+      SCAN_WORKER_COUNT_MAX,
+    );
+    const nextParallelScanJobs = normalizeScanPerformanceInput(
+      nextParallelScanJobsInput,
+      appScanPerformance.parallel_scan_jobs,
+      PARALLEL_SCAN_JOB_COUNT_MIN,
+      PARALLEL_SCAN_JOB_COUNT_MAX,
+    );
+
+    setIsSavingScanPerformance(true);
+    setScanPerformanceStatus(null);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        showAnalyzedFilesCsvExport,
+        undefined,
+        {
+          scan_worker_count: nextScanWorkerCount,
+          parallel_scan_jobs: nextParallelScanJobs,
+        },
+      );
+      const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+      scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
+      parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+      setScanWorkerCountInput(scanWorkerCountInputRef.current);
+      setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setIgnorePatternsStatus(null);
+      setFeatureFlagsStatus(null);
+      setResolutionCategoriesStatus(null);
+      setScanPerformanceStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
+      parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+      setScanWorkerCountInput(scanWorkerCountInputRef.current);
+      setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setScanPerformanceStatus((reason as Error).message);
+    } finally {
+      setIsSavingScanPerformance(false);
     }
   }
 
@@ -2702,6 +2827,84 @@ export function LibrariesPage() {
                 </select>
                 <p className="field-hint">{t("libraries.themeHint")}</p>
               </div>
+              <div className="field">
+                <div className="field-label-row">
+                  <label>{t("libraries.scanPerformanceTitle")}</label>
+                </div>
+                <div className="app-settings-performance-grid">
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label htmlFor="scan-worker-count">{t("libraries.scanWorkerCount")}</label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.scanWorkerCountTooltipAria")}
+                        content={t("libraries.scanWorkerCountTooltip", { max: SCAN_WORKER_COUNT_MAX })}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                    <input
+                      id="scan-worker-count"
+                      type="number"
+                      min={SCAN_WORKER_COUNT_MIN}
+                      max={SCAN_WORKER_COUNT_MAX}
+                      step={1}
+                      inputMode="numeric"
+                      value={scanWorkerCountInput}
+                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      onChange={(event) => updateScanWorkerCountInput(event.target.value)}
+                      onBlur={(event) => void saveScanPerformance(event.target.value, parallelScanJobsInputRef.current)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void saveScanPerformance(
+                            (event.target as HTMLInputElement).value,
+                            parallelScanJobsInputRef.current,
+                          );
+                        }
+                      }}
+                    />
+                    <p className="field-hint">{t("libraries.scanWorkerCountHint", { max: SCAN_WORKER_COUNT_MAX })}</p>
+                  </div>
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label htmlFor="parallel-scan-jobs">{t("libraries.parallelScanJobs")}</label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.parallelScanJobsTooltipAria")}
+                        content={t("libraries.parallelScanJobsTooltip", { max: PARALLEL_SCAN_JOB_COUNT_MAX })}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                    <input
+                      id="parallel-scan-jobs"
+                      type="number"
+                      min={PARALLEL_SCAN_JOB_COUNT_MIN}
+                      max={PARALLEL_SCAN_JOB_COUNT_MAX}
+                      step={1}
+                      inputMode="numeric"
+                      value={parallelScanJobsInput}
+                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      onChange={(event) => updateParallelScanJobsInput(event.target.value)}
+                      onBlur={(event) => void saveScanPerformance(scanWorkerCountInputRef.current, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void saveScanPerformance(
+                            scanWorkerCountInputRef.current,
+                            (event.target as HTMLInputElement).value,
+                          );
+                        }
+                      }}
+                    />
+                    <p className="field-hint">
+                      {t("libraries.parallelScanJobsHint", { max: PARALLEL_SCAN_JOB_COUNT_MAX })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {scanPerformanceStatus ? <div className="alert">{scanPerformanceStatus}</div> : null}
               <div className="field">
                 <div className="field-label-row">
                   <label>{t("libraries.featureFlagsTitle")}</label>

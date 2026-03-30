@@ -50,6 +50,8 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
         (1216, 506),
         (0, 0),
     ]
+    assert loaded.scan_performance.scan_worker_count == 4
+    assert loaded.scan_performance.parallel_scan_jobs == 4
     assert loaded.feature_flags.show_dolby_vision_profiles is False
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
@@ -68,6 +70,8 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.user_ignore_patterns == []
     assert loaded.default_ignore_patterns == []
     assert loaded.ignore_patterns == []
+    assert loaded.scan_performance.scan_worker_count == 4
+    assert loaded.scan_performance.parallel_scan_jobs == 4
     assert loaded.feature_flags.show_dolby_vision_profiles is False
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
@@ -85,6 +89,8 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.user_ignore_patterns == ["*.nfo", "*/Extras/*"]
     assert loaded.default_ignore_patterns == []
     assert loaded.ignore_patterns == ["*.nfo", "*/Extras/*"]
+    assert loaded.scan_performance.scan_worker_count == 4
+    assert loaded.scan_performance.parallel_scan_jobs == 4
     assert loaded.feature_flags.show_dolby_vision_profiles is False
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
 
@@ -99,6 +105,10 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             AppSettingsUpdate(
                 user_ignore_patterns=["  *.tmp  ", "*/cache/*", "*.tmp"],
                 default_ignore_patterns=["*/.DS_Store", "*.tmp", "*/@eaDir/*"],
+                scan_performance={
+                    "scan_worker_count": 6,
+                    "parallel_scan_jobs": 3,
+                },
                 feature_flags={
                     "show_dolby_vision_profiles": True,
                     "show_analyzed_files_csv_export": True,
@@ -112,6 +122,8 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.user_ignore_patterns == ["*.tmp", "*/cache/*"]
     assert updated.default_ignore_patterns == ["*/.DS_Store", "*.tmp", "*/@eaDir/*"]
     assert updated.ignore_patterns == ["*.tmp", "*/cache/*", "*/.DS_Store", "*/@eaDir/*"]
+    assert updated.scan_performance.scan_worker_count == 6
+    assert updated.scan_performance.parallel_scan_jobs == 3
     assert updated.feature_flags.show_dolby_vision_profiles is True
     assert updated.feature_flags.show_analyzed_files_csv_export is True
     assert loaded == updated
@@ -120,6 +132,10 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
         "user_ignore_patterns": ["*.tmp", "*/cache/*"],
         "default_ignore_patterns": ["*/.DS_Store", "*.tmp", "*/@eaDir/*"],
         "resolution_categories": [item.model_dump(mode="json") for item in updated.resolution_categories],
+        "scan_performance": {
+            "scan_worker_count": 6,
+            "parallel_scan_jobs": 3,
+        },
         "feature_flags": {
             "show_dolby_vision_profiles": True,
             "show_analyzed_files_csv_export": True,
@@ -141,6 +157,8 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.user_ignore_patterns == ["[sample]", "*thumbs.db"]
     assert updated.default_ignore_patterns == list(BUILT_IN_DEFAULT_IGNORE_PATTERNS)
     assert updated.ignore_patterns == ["[sample]", "*thumbs.db", *BUILT_IN_DEFAULT_IGNORE_PATTERNS[:-1]]
+    assert updated.scan_performance.scan_worker_count == 4
+    assert updated.scan_performance.parallel_scan_jobs == 4
     assert updated.feature_flags.show_dolby_vision_profiles is False
     assert updated.feature_flags.show_analyzed_files_csv_export is False
 
@@ -164,3 +182,30 @@ def test_update_app_settings_supports_resolution_category_renames_and_remaps_qua
 
     assert [item.id for item in updated.resolution_categories] == ["4k", "1080p", "sd"]
     assert [item.label for item in updated.resolution_categories] == ["UHD", "Full HD", "SD"]
+
+
+def test_update_app_settings_merges_partial_scan_performance_updates(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        first = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                scan_performance={
+                    "scan_worker_count": 7,
+                    "parallel_scan_jobs": 2,
+                }
+            ),
+            settings,
+        )
+        second = update_app_settings(
+            db,
+            AppSettingsUpdate(scan_performance={"parallel_scan_jobs": 5}),
+            settings,
+        )
+
+    assert first.scan_performance.scan_worker_count == 7
+    assert first.scan_performance.parallel_scan_jobs == 2
+    assert second.scan_performance.scan_worker_count == 7
+    assert second.scan_performance.parallel_scan_jobs == 5

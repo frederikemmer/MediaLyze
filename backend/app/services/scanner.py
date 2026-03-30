@@ -791,11 +791,12 @@ def run_scan(
             duplicate_error_detail,
         )
 
-    with ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count) as executor:
+    scan_worker_count = max(1, app_settings.scan_performance.scan_worker_count)
+    with ThreadPoolExecutor(max_workers=scan_worker_count) as executor:
         batch_counter = 0
         next_index = 0
         pending: dict[Future, QueuedMediaWork] = {}
-        max_in_flight = max(1, settings.ffprobe_worker_count * 2)
+        max_in_flight = max(1, scan_worker_count * 2)
 
         while next_index < len(queued_work) and len(pending) < max_in_flight:
             work = queued_work[next_index]

@@ -31,11 +31,17 @@ type AppDataContextValue = {
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
+const DEFAULT_SCAN_PERFORMANCE = {
+  scan_worker_count: 4,
+  parallel_scan_jobs: 4,
+};
+
 const DEFAULT_APP_SETTINGS: AppSettings = {
   ignore_patterns: [],
   user_ignore_patterns: [],
   default_ignore_patterns: [],
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
+  scan_performance: DEFAULT_SCAN_PERFORMANCE,
   feature_flags: {
     show_dolby_vision_profiles: false,
     show_analyzed_files_csv_export: false,
@@ -48,6 +54,10 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     user_ignore_patterns: payload?.user_ignore_patterns ?? [],
     default_ignore_patterns: payload?.default_ignore_patterns ?? [],
     resolution_categories: normalizeResolutionCategories(payload?.resolution_categories),
+    scan_performance: {
+      scan_worker_count: payload?.scan_performance?.scan_worker_count ?? DEFAULT_SCAN_PERFORMANCE.scan_worker_count,
+      parallel_scan_jobs: payload?.scan_performance?.parallel_scan_jobs ?? DEFAULT_SCAN_PERFORMANCE.parallel_scan_jobs,
+    },
     feature_flags: {
       show_dolby_vision_profiles: payload?.feature_flags?.show_dolby_vision_profiles ?? false,
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
