@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add per-library duplicate detection with configurable `filename`, exact `filehash`, and combined `both` modes, persist both signatures in SQLite when needed, and expose duplicate groups with their originating detection method in the library detail view
+- add per-library duplicate detection with configurable `off`, `filename`, exact `filehash`, and combined `both` modes, default new libraries to `off`, persist both signatures in SQLite when needed, and expose duplicate groups with their originating detection method in the library detail view
 - make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
 - cap each duplicate group's visible variant list to roughly two and a half entries and keep the remaining matches available via internal scrolling
 - move scan worker tuning into App Settings with separate limits for per-scan analysis workers and parallel library scans, including UI tooltips about RAM impact and enforced maximum values
@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- align the scheduled interval field vertically with the scan-mode and duplicate-detection controls in library settings
 - stop resuming stale `queued` and `running` scan jobs on app startup; previous-process leftovers are now marked `canceled` with a finish timestamp instead of becoming ghost resumes
 - stop auto-queuing startup quality-recompute jobs in server mode so containers no longer begin with a stuck queued scan banner before the user explicitly triggers work
 - clear pending watchdog debounce requests when active scans are canceled so stop actions do not immediately requeue replacement scans

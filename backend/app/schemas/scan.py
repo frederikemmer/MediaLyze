@@ -72,7 +72,7 @@ class ScanAnalysisSummaryRead(BaseModel):
 
 
 class ScanDuplicatesSummaryRead(BaseModel):
-    mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
+    mode: DuplicateDetectionMode = DuplicateDetectionMode.off
     queued_for_processing: int = 0
     processed_successfully: int = 0
     processing_failed: int = 0

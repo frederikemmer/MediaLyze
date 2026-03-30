@@ -391,7 +391,7 @@ def _empty_scan_summary(ignore_patterns: tuple[str, ...] = ()) -> dict:
             "failed_files_truncated_count": 0,
         },
         "duplicates": {
-            "mode": "filename",
+            "mode": "off",
             "queued_for_processing": 0,
             "processed_successfully": 0,
             "processing_failed": 0,

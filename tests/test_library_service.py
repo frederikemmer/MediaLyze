@@ -124,7 +124,7 @@ def test_update_library_settings_can_rename_library() -> None:
         assert quality_profile_changed is False
 
 
-def test_create_library_defaults_duplicate_detection_mode_to_filename(tmp_path) -> None:
+def test_create_library_defaults_duplicate_detection_mode_to_off(tmp_path) -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
@@ -151,7 +151,7 @@ def test_create_library_defaults_duplicate_detection_mode_to_filename(tmp_path) 
             ),
         )
 
-    assert library.duplicate_detection_mode == DuplicateDetectionMode.filename
+    assert library.duplicate_detection_mode == DuplicateDetectionMode.off
 
 
 def test_update_library_settings_can_change_duplicate_detection_mode() -> None:
@@ -391,7 +391,7 @@ def test_get_library_summary_includes_totals() -> None:
     assert summary.total_duration_seconds == 120.0
     assert summary.ready_files == 1
     assert summary.pending_files == 0
-    assert summary.duplicate_detection_mode == DuplicateDetectionMode.filename
+    assert summary.duplicate_detection_mode == DuplicateDetectionMode.off
 
 
 def test_get_library_statistics_includes_subtitle_languages_codecs_and_sources() -> None:

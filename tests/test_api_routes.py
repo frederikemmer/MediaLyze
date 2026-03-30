@@ -314,6 +314,64 @@ def test_library_duplicates_route_returns_grouped_duplicates_for_active_mode() -
     assert filehash_payload["items"][0]["mode"] == "filehash"
 
 
+def test_library_duplicates_route_returns_empty_page_when_detection_is_off() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Disabled Movies",
+            path="/tmp/disabled-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.off,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "off",
+        "total_groups": 0,
+        "duplicate_file_count": 0,
+        "offset": 0,
+        "limit": 25,
+        "items": [],
+    }
+
+
 def test_library_duplicates_route_returns_both_group_types_for_combined_mode() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

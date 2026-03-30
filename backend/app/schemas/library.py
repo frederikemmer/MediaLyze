@@ -11,7 +11,7 @@ class LibraryCreate(BaseModel):
     path: str
     type: LibraryType
     scan_mode: ScanMode = ScanMode.manual
-    duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.filename
+    duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.off
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
 

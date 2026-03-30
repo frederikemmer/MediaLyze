@@ -46,7 +46,7 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "scan_mode": "ALTER TABLE libraries ADD COLUMN scan_mode VARCHAR(16) NOT NULL DEFAULT 'manual'",
         "duplicate_detection_mode": (
             "ALTER TABLE libraries ADD COLUMN duplicate_detection_mode "
-            "VARCHAR(16) NOT NULL DEFAULT 'filename'"
+            "VARCHAR(16) NOT NULL DEFAULT 'off'"
         ),
         "scan_config": "ALTER TABLE libraries ADD COLUMN scan_config JSON NOT NULL DEFAULT '{}'",
         "quality_profile": "ALTER TABLE libraries ADD COLUMN quality_profile JSON NOT NULL DEFAULT '{}'",
@@ -179,7 +179,7 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
             )
             connection.execute(
                 text(
-                    "UPDATE libraries SET duplicate_detection_mode = 'filename' "
+                    "UPDATE libraries SET duplicate_detection_mode = 'off' "
                     "WHERE duplicate_detection_mode IS NULL OR duplicate_detection_mode = ''"
                 )
             )

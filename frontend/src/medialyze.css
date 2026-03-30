@@ -1275,6 +1275,13 @@
   min-height: 22px;
 }
 
+.field-label-spacer {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  visibility: hidden;
+}
+
 .app-settings-section {
   display: grid;
   gap: 14px;

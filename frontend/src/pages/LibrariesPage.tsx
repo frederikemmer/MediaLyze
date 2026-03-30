@@ -56,7 +56,7 @@ const EMPTY_FORM: CreateLibraryForm = {
   path: ".",
   type: "mixed",
   scan_mode: "manual",
-  duplicate_detection_mode: "filename",
+  duplicate_detection_mode: "off",
 };
 
 function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
@@ -777,7 +777,7 @@ export function LibrariesPage() {
   ) {
     const current = settingsForms[libraryId] ?? {
       scan_mode: "manual",
-      duplicate_detection_mode: "filename",
+      duplicate_detection_mode: "off",
       interval_minutes: 60,
       debounce_seconds: 15,
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
@@ -2287,6 +2287,7 @@ export function LibrariesPage() {
                           })
                         }
                       >
+                        <option value="off">{t("libraries.duplicateDetectionModes.off")}</option>
                         <option value="filename">{t("libraries.duplicateDetectionModes.filename")}</option>
                         <option value="filehash">{t("libraries.duplicateDetectionModes.filehash")}</option>
                         <option value="both">{t("libraries.duplicateDetectionModes.both")}</option>
@@ -2302,7 +2303,10 @@ export function LibrariesPage() {
                     ) : null}
                     {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "scheduled" ? (
                       <div className="field">
-                        <label htmlFor={`interval-minutes-${library.id}`}>{t("libraries.intervalMinutes")}</label>
+                        <div className="field-label-row">
+                          <label htmlFor={`interval-minutes-${library.id}`}>{t("libraries.intervalMinutes")}</label>
+                          <span className="field-label-spacer" aria-hidden="true" />
+                        </div>
                         <input
                           id={`interval-minutes-${library.id}`}
                           type="number"
@@ -2318,7 +2322,10 @@ export function LibrariesPage() {
                     ) : null}
                     {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "watch" ? (
                       <div className="field">
-                        <label htmlFor={`debounce-seconds-${library.id}`}>{t("libraries.debounceSeconds")}</label>
+                        <div className="field-label-row">
+                          <label htmlFor={`debounce-seconds-${library.id}`}>{t("libraries.debounceSeconds")}</label>
+                          <span className="field-label-spacer" aria-hidden="true" />
+                        </div>
                         <input
                           id={`debounce-seconds-${library.id}`}
                           type="number"

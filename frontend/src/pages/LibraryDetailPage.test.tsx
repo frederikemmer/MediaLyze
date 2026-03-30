@@ -33,7 +33,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     type: "series",
     last_scan_at: "2026-03-12T09:00:00Z",
     scan_mode: "manual",
-    duplicate_detection_mode: "filename",
+    duplicate_detection_mode: "off",
     scan_config: {},
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",

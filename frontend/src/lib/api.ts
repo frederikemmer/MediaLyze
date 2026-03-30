@@ -62,7 +62,7 @@ export type QualityBreakdown = {
   categories: QualityCategoryBreakdown[];
 };
 
-export type DuplicateDetectionMode = "filename" | "filehash" | "both";
+export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,

@@ -46,8 +46,9 @@
     "scanMode": "Scan-Modus",
     "duplicateDetectionMode": "Duplikat-Erkennung",
     "duplicateDetectionModeTooltipAria": "Duplikat-Erkennungsmodi erklaeren",
-    "duplicateDetectionModeHint": "Dateiname ist schnell und nur naehherungsweise. Dateihash ist exakt, aber waehrend Scans deutlich teurer. Der Modus Beide speichert und zeigt beide Duplikat-Sichten an.",
+    "duplicateDetectionModeHint": "Aus deaktiviert die Duplikat-Erkennung. Dateiname ist schnell und nur naehherungsweise. Dateihash ist exakt, aber waehrend Scans deutlich teurer. Der Modus Beide speichert und zeigt beide Duplikat-Sichten an.",
     "duplicateDetectionModes": {
+      "off": "Aus",
       "filename": "Dateiname",
       "filehash": "Dateihash",
       "both": "Beide"

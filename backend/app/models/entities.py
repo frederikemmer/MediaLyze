@@ -36,6 +36,7 @@ class ScanMode(str, Enum):
 
 
 class DuplicateDetectionMode(str, Enum):
+    off = "off"
     filename = "filename"
     filehash = "filehash"
     both = "both"
@@ -77,7 +78,7 @@ class Library(TimestampMixin, Base):
     )
     duplicate_detection_mode: Mapped[DuplicateDetectionMode] = mapped_column(
         SqlEnum(DuplicateDetectionMode, native_enum=False),
-        default=DuplicateDetectionMode.filename,
+        default=DuplicateDetectionMode.off,
         nullable=False,
     )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

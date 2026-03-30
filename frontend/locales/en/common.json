@@ -46,8 +46,9 @@
     "scanMode": "Scan mode",
     "duplicateDetectionMode": "Duplicate detection",
     "duplicateDetectionModeTooltipAria": "Explain duplicate detection modes",
-    "duplicateDetectionModeHint": "Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views.",
+    "duplicateDetectionModeHint": "Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views.",
     "duplicateDetectionModes": {
+      "off": "Off",
       "filename": "Filename",
       "filehash": "File hash",
       "both": "Both"

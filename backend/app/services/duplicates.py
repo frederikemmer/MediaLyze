@@ -93,8 +93,23 @@ class CombinedDuplicateDetectionStrategy:
             strategy.apply_payload(media_file, payload)
 
 
+class DisabledDuplicateDetectionStrategy:
+    mode = DuplicateDetectionMode.off
+
+    def needs_processing(self, media_file: MediaFile) -> bool:
+        return False
+
+    def build_payload(self, file_path: Path) -> dict[str, str | None]:
+        return {}
+
+    def apply_payload(self, media_file: MediaFile, payload: dict[str, str | None]) -> None:
+        return None
+
+
 def get_active_duplicate_detection_modes(mode: DuplicateDetectionMode | str) -> tuple[DuplicateDetectionMode, ...]:
     normalized_mode = DuplicateDetectionMode(mode)
+    if normalized_mode == DuplicateDetectionMode.off:
+        return ()
     if normalized_mode == DuplicateDetectionMode.both:
         return (DuplicateDetectionMode.filehash, DuplicateDetectionMode.filename)
     return (normalized_mode,)
@@ -102,6 +117,8 @@ def get_active_duplicate_detection_modes(mode: DuplicateDetectionMode | str) -> 
 
 def get_duplicate_detection_strategy(mode: DuplicateDetectionMode | str) -> DuplicateDetectionStrategy:
     normalized_mode = DuplicateDetectionMode(mode)
+    if normalized_mode == DuplicateDetectionMode.off:
+        return DisabledDuplicateDetectionStrategy()
     if normalized_mode == DuplicateDetectionMode.both:
         return CombinedDuplicateDetectionStrategy()
     if normalized_mode == DuplicateDetectionMode.filehash:

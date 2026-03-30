@@ -7,6 +7,7 @@ from backend.app.db.base import Base
 from backend.app.models.entities import DuplicateDetectionMode, Library, LibraryType, MediaFile, ScanMode
 from backend.app.services.duplicates import (
     CombinedDuplicateDetectionStrategy,
+    DisabledDuplicateDetectionStrategy,
     FileHashDuplicateDetectionStrategy,
     FilenameDuplicateDetectionStrategy,
     get_duplicate_detection_strategy,
@@ -15,9 +16,69 @@ from backend.app.services.duplicates import (
 
 
 def test_duplicate_strategy_factory_returns_expected_strategy() -> None:
+    assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.off), DisabledDuplicateDetectionStrategy)
     assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.filename), FilenameDuplicateDetectionStrategy)
     assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.filehash), FileHashDuplicateDetectionStrategy)
     assert isinstance(get_duplicate_detection_strategy(DuplicateDetectionMode.both), CombinedDuplicateDetectionStrategy)
+
+
+def test_disabled_duplicate_detection_returns_no_groups(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    duplicate_a = library_dir / "Movie.Name.2024.mkv"
+    duplicate_b = library_dir / "movie_name_2024.mp4"
+    duplicate_a.write_text("same")
+    duplicate_b.write_text("same")
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(library_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.off,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path=duplicate_a.name,
+                    filename=duplicate_a.name,
+                    extension=duplicate_a.suffix.lstrip("."),
+                    size_bytes=duplicate_a.stat().st_size,
+                    mtime=duplicate_a.stat().st_mtime,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path=duplicate_b.name,
+                    filename=duplicate_b.name,
+                    extension=duplicate_b.suffix.lstrip("."),
+                    size_bytes=duplicate_b.stat().st_size,
+                    mtime=duplicate_b.stat().st_mtime,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+        groups = list_library_duplicate_groups(db, library.id)
+
+    assert groups.mode == DuplicateDetectionMode.off
+    assert groups.total_groups == 0
+    assert groups.duplicate_file_count == 0
+    assert groups.items == []
 
 
 def test_filename_duplicate_detection_groups_normalized_stems(tmp_path: Path) -> None:

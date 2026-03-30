@@ -292,6 +292,7 @@ Duplicate detection is persisted per media file and configured per library.
 Current modes:
 
 ```text
+off
 filename
 filehash
 both
@@ -299,9 +300,11 @@ both
 
 Current behavior:
 
+* `off` disables duplicate detection for the library and duplicate-group queries return an empty result
 * `filename` stores a normalized filename signature based on the lowercase stem with whitespace, dot, dash, and underscore runs collapsed to a single space
 * `filehash` stores a full-file `sha256` content hash plus its algorithm label
 * `both` stores both the normalized filename signature and the `sha256` content hash, and duplicate-group responses expose which method each returned group came from
+* new libraries default to `off`
 * unchanged files can be queued for duplicate-only backfill when the active mode's persisted signature is missing
 * duplicate groups are aggregated on demand per library from stored signatures or hashes instead of being materialized as a dedicated table
 

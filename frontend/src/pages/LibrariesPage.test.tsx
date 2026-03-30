@@ -58,7 +58,7 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     type: "movies",
     last_scan_at: null,
     scan_mode: "manual",
-    duplicate_detection_mode: "filename",
+    duplicate_detection_mode: "off",
     scan_config: {},
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
@@ -581,13 +581,13 @@ describe("LibrariesPage desktop mode", () => {
 
     await screen.findByText("Movies");
     expect(
-      screen.queryByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
+      screen.queryByText("Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Explain duplicate detection modes" }));
 
     expect(
-      await screen.findByText("Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
+      await screen.findByText("Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
     ).toBeInTheDocument();
   });
 });
