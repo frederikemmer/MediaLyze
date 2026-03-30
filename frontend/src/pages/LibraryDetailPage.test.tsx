@@ -255,6 +255,28 @@ describe("LibraryDetailPage", () => {
     expect(variantsList).toHaveClass("scan-log-path-list");
   });
 
+  it("hides the score meter when the feature flag is enabled", async () => {
+    const libraryId = 123;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: {
+        show_dolby_vision_profiles: false,
+        show_analyzed_files_csv_export: true,
+        hide_quality_score_meter: true,
+      },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(container.querySelector(".score-meter")).toBeNull();
+  });
+
   it("filters duplicate groups and collapses the duplicate panel", async () => {
     const libraryId = 121;
     vi.spyOn(api, "appSettings").mockResolvedValue({

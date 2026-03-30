@@ -427,6 +427,8 @@ export function LibrariesPage() {
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
+  const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
+  const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
   const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
@@ -728,6 +730,8 @@ export function LibrariesPage() {
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
+    setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
+    setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
     parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
     setScanWorkerCountInput(scanWorkerCountInputRef.current);
@@ -954,6 +958,8 @@ export function LibrariesPage() {
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles: boolean,
     nextShowAnalyzedFilesCsvExport: boolean,
+    nextShowFullWidthAppShell: boolean,
+    nextHideQualityScoreMeter: boolean,
     nextResolutionCategories?: ResolutionCategory[],
     nextScanPerformance = {
       scan_worker_count: normalizeScanPerformanceInput(
@@ -978,6 +984,8 @@ export function LibrariesPage() {
       feature_flags: {
         show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
+        show_full_width_app_shell: nextShowFullWidthAppShell,
+        hide_quality_score_meter: nextHideQualityScoreMeter,
       },
     });
   }
@@ -987,6 +995,8 @@ export function LibrariesPage() {
     nextDefaultPatterns: string[],
     nextShowDolbyVisionProfiles = showDolbyVisionProfiles,
     nextShowAnalyzedFilesCsvExport = showAnalyzedFilesCsvExport,
+    nextShowFullWidthAppShell = showFullWidthAppShell,
+    nextHideQualityScoreMeter = hideQualityScoreMeter,
     nextResolutionCategories?: ResolutionCategory[],
   ) {
     const requestId = ignorePatternsRequestId.current + 1;
@@ -998,6 +1008,8 @@ export function LibrariesPage() {
         nextDefaultPatterns,
         nextShowDolbyVisionProfiles,
         nextShowAnalyzedFilesCsvExport,
+        nextShowFullWidthAppShell,
+        nextHideQualityScoreMeter,
         nextResolutionCategories,
       );
       const persisted = toPersistedIgnorePatterns(updated);
@@ -1010,6 +1022,8 @@ export function LibrariesPage() {
         setDefaultIgnorePatternInputs(persisted.default);
         setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+        setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+        setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
         const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
         scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
         parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
@@ -1049,9 +1063,13 @@ export function LibrariesPage() {
         defaultIgnorePatternInputs,
         enabled,
         showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
       );
       setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
@@ -1075,15 +1093,79 @@ export function LibrariesPage() {
         defaultIgnorePatternInputs,
         showDolbyVisionProfiles,
         enabled,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
       );
       setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
+  async function toggleFullWidthAppShell(enabled: boolean) {
+    const previousValue = showFullWidthAppShell;
+    setShowFullWidthAppShell(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        showAnalyzedFilesCsvExport,
+        enabled,
+        hideQualityScoreMeter,
+      );
+      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setShowFullWidthAppShell(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
+  async function toggleHideQualityScoreMeter(enabled: boolean) {
+    const previousValue = hideQualityScoreMeter;
+    setHideQualityScoreMeter(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        enabled,
+      );
+      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
+      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setHideQualityScoreMeter(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
     } finally {
       setIsSavingFeatureFlags(false);
@@ -1129,6 +1211,8 @@ export function LibrariesPage() {
         defaultIgnorePatternInputs,
         showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
         nextCategories,
       );
       const normalized = normalizeResolutionCategories(updated.resolution_categories);
@@ -1171,6 +1255,8 @@ export function LibrariesPage() {
         defaultIgnorePatternInputs,
         showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
         undefined,
         {
           scan_worker_count: nextScanWorkerCount,
@@ -2932,6 +3018,44 @@ export function LibrariesPage() {
                   <TooltipTrigger
                     ariaLabel={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltipAria")}
                     content={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="show-full-width-app-shell">
+                    <input
+                      id="show-full-width-app-shell"
+                      type="checkbox"
+                      checked={showFullWidthAppShell}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleFullWidthAppShell(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.showFullWidthAppShell")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showFullWidthAppShellTooltipAria")}
+                    content={t("libraries.featureFlags.showFullWidthAppShellTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="hide-quality-score-meter">
+                    <input
+                      id="hide-quality-score-meter"
+                      type="checkbox"
+                      checked={hideQualityScoreMeter}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleHideQualityScoreMeter(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.hideQualityScoreMeter")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
+                    content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
                     preserveLineBreaks
                   >
                     ?

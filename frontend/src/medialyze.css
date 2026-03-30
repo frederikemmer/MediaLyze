@@ -3,6 +3,10 @@
   margin: 0 auto;
 }
 
+.media-app-shell.media-app-shell-full-width {
+  max-width: 100%;
+}
+
 .hero-panel {
   position: sticky;
   top: 12px;

@@ -496,11 +496,15 @@ Current app feature flags include:
 
 * `show_dolby_vision_profiles`
 * `show_analyzed_files_csv_export`
+* `show_full_width_app_shell`
+* `hide_quality_score_meter`
 
 These flags currently control:
 
 * whether Dolby Vision profile variants are displayed separately in statistics and metadata views
 * whether the analyzed-files CSV export button is shown in the library detail view
+* whether the main `.media-app-shell` container expands to the full available page width
+* whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
 
 ---
 
@@ -541,6 +545,9 @@ Important current payload concepts:
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
 * `feature_flags.show_dolby_vision_profiles`
+* `feature_flags.show_analyzed_files_csv_export`
+* `feature_flags.show_full_width_app_shell`
+* `feature_flags.hide_quality_score_meter`
 
 ## 9.4 Libraries
 

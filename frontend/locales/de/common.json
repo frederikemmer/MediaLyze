@@ -90,10 +90,16 @@
     "featureFlags": {
       "showDolbyVisionProfiles": "Dolby-Vision-Profile anzeigen",
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
+      "showFullWidthAppShell": "App-Shell auf volle Breite erweitern",
+      "hideQualityScoreMeter": "Qualitäts-Score-Meter ausblenden",
       "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
       "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben.",
       "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
-      "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an."
+      "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an.",
+      "showFullWidthAppShellTooltipAria": "Feature Flag fuer die volle App-Shell-Breite erklaeren",
+      "showFullWidthAppShellTooltip": "Erweitert den Hauptcontainer .media-app-shell von seiner Standard-Maximalbreite auf die volle verfuegbare Seitenbreite.",
+      "hideQualityScoreMeterTooltipAria": "Feature Flag fuer die Sichtbarkeit des Qualitäts-Score-Meters erklaeren",
+      "hideQualityScoreMeterTooltip": "Blendet das balkenartige Score-Meter in der Tabelle der analysierten Dateien aus, laesst den numerischen Qualitäts-Score aber sichtbar."
     },
     "pathKinds": {
       "local": "Lokaler Pfad",

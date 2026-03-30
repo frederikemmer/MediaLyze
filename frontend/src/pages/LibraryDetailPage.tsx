@@ -244,6 +244,7 @@ function buildFileColumns(
   detailLoading: Record<number, boolean>,
   loadDetail: (fileId: number) => void,
   showDolbyVisionProfiles: boolean,
+  hideQualityScoreMeter: boolean,
 ): FileColumnDefinition[] {
   return [
     {
@@ -360,12 +361,14 @@ function buildFileColumns(
         >
           <div className="score-cell">
             <strong>{file.quality_score}/10</strong>
-            <div className="score-meter" aria-hidden="true">
-              <span
-                className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
-                style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
-              />
-            </div>
+            {hideQualityScoreMeter ? null : (
+              <div className="score-meter" aria-hidden="true">
+                <span
+                  className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+                  style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+                />
+              </div>
+            )}
           </div>
         </TooltipTrigger>
       ),
@@ -507,6 +510,7 @@ export function LibraryDetailPage() {
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
+  const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -526,8 +530,16 @@ export function LibraryDetailPage() {
     }
   });
   const fileColumns = useMemo(
-    () => buildFileColumns(t, qualityScoreDetails, qualityScoreLoading, loadQualityScoreDetail, showDolbyVisionProfiles),
-    [loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, showDolbyVisionProfiles, t],
+    () =>
+      buildFileColumns(
+        t,
+        qualityScoreDetails,
+        qualityScoreLoading,
+        loadQualityScoreDetail,
+        showDolbyVisionProfiles,
+        hideQualityScoreMeter,
+      ),
+    [hideQualityScoreMeter, loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, showDolbyVisionProfiles, t],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
