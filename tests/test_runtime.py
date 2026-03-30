@@ -261,8 +261,8 @@ def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch,
 
     assert refreshed is True
     assert runtime.executor_max_workers == 6
-    assert created_worker_counts == [4, 6]
-    assert shutdown_calls == [(4, False, False)]
+    assert created_worker_counts == [2, 6]
+    assert shutdown_calls == [(2, False, False)]
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

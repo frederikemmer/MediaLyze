@@ -150,8 +150,10 @@ const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
 const PARALLEL_SCAN_JOB_COUNT_MAX = 8;
 const DEFAULT_SCAN_PERFORMANCE = {
   scan_worker_count: 4,
-  parallel_scan_jobs: 4,
+  parallel_scan_jobs: 2,
 };
+const SCAN_WORKER_OPTIONS = Array.from({ length: SCAN_WORKER_COUNT_MAX }, (_, index) => index + 1);
+const PARALLEL_SCAN_JOB_OPTIONS = Array.from({ length: PARALLEL_SCAN_JOB_COUNT_MAX }, (_, index) => index + 1);
 
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
@@ -426,7 +428,7 @@ export function LibrariesPage() {
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
-  const [parallelScanJobsInput, setParallelScanJobsInput] = useState("4");
+  const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
     EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
@@ -440,7 +442,7 @@ export function LibrariesPage() {
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
-  const parallelScanJobsInputRef = useRef("4");
+  const parallelScanJobsInputRef = useRef("2");
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -2812,8 +2814,8 @@ export function LibrariesPage() {
                   <option value="en">{t("language.en")}</option>
                   <option value="de">{t("language.de")}</option>
                 </select>
-                <p className="field-hint">{t("libraries.languageHint")}</p>
               </div>
+              <div className="app-settings-divider" aria-hidden="true" />
               <div className="field">
                 <label htmlFor="app-theme">{t("libraries.theme")}</label>
                 <select
@@ -2825,12 +2827,10 @@ export function LibrariesPage() {
                   <option value="light">{t("theme.light")}</option>
                   <option value="dark">{t("theme.dark")}</option>
                 </select>
-                <p className="field-hint">{t("libraries.themeHint")}</p>
               </div>
-              <div className="field">
-                <div className="field-label-row">
-                  <label>{t("libraries.scanPerformanceTitle")}</label>
-                </div>
+              <div className="app-settings-divider" aria-hidden="true" />
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("libraries.scanSettingsTitle")}</p>
                 <div className="app-settings-performance-grid">
                   <div className="field">
                     <div className="field-label-row">
@@ -2843,28 +2843,21 @@ export function LibrariesPage() {
                         ?
                       </TooltipTrigger>
                     </div>
-                    <input
+                    <select
                       id="scan-worker-count"
-                      type="number"
-                      min={SCAN_WORKER_COUNT_MIN}
-                      max={SCAN_WORKER_COUNT_MAX}
-                      step={1}
-                      inputMode="numeric"
                       value={scanWorkerCountInput}
                       disabled={isSavingScanPerformance || !appSettingsLoaded}
-                      onChange={(event) => updateScanWorkerCountInput(event.target.value)}
-                      onBlur={(event) => void saveScanPerformance(event.target.value, parallelScanJobsInputRef.current)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void saveScanPerformance(
-                            (event.target as HTMLInputElement).value,
-                            parallelScanJobsInputRef.current,
-                          );
-                        }
+                      onChange={(event) => {
+                        updateScanWorkerCountInput(event.target.value);
+                        void saveScanPerformance(event.target.value, parallelScanJobsInputRef.current);
                       }}
-                    />
-                    <p className="field-hint">{t("libraries.scanWorkerCountHint", { max: SCAN_WORKER_COUNT_MAX })}</p>
+                    >
+                      {SCAN_WORKER_OPTIONS.map((workerCount) => (
+                        <option key={workerCount} value={workerCount}>
+                          {workerCount}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="field">
                     <div className="field-label-row">
@@ -2877,38 +2870,28 @@ export function LibrariesPage() {
                         ?
                       </TooltipTrigger>
                     </div>
-                    <input
+                    <select
                       id="parallel-scan-jobs"
-                      type="number"
-                      min={PARALLEL_SCAN_JOB_COUNT_MIN}
-                      max={PARALLEL_SCAN_JOB_COUNT_MAX}
-                      step={1}
-                      inputMode="numeric"
                       value={parallelScanJobsInput}
                       disabled={isSavingScanPerformance || !appSettingsLoaded}
-                      onChange={(event) => updateParallelScanJobsInput(event.target.value)}
-                      onBlur={(event) => void saveScanPerformance(scanWorkerCountInputRef.current, event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void saveScanPerformance(
-                            scanWorkerCountInputRef.current,
-                            (event.target as HTMLInputElement).value,
-                          );
-                        }
+                      onChange={(event) => {
+                        updateParallelScanJobsInput(event.target.value);
+                        void saveScanPerformance(scanWorkerCountInputRef.current, event.target.value);
                       }}
-                    />
-                    <p className="field-hint">
-                      {t("libraries.parallelScanJobsHint", { max: PARALLEL_SCAN_JOB_COUNT_MAX })}
-                    </p>
+                    >
+                      {PARALLEL_SCAN_JOB_OPTIONS.map((workerCount) => (
+                        <option key={workerCount} value={workerCount}>
+                          {workerCount}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
               {scanPerformanceStatus ? <div className="alert">{scanPerformanceStatus}</div> : null}
-              <div className="field">
-                <div className="field-label-row">
-                  <label>{t("libraries.featureFlagsTitle")}</label>
-                </div>
+              <div className="app-settings-divider" aria-hidden="true" />
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("libraries.featureFlagsTitle")}</p>
                 <div className="app-settings-flag-row">
                   <label className="app-settings-flag-toggle" htmlFor="show-dolby-vision-profiles">
                     <input
@@ -2939,6 +2922,13 @@ export function LibrariesPage() {
                     />
                     <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
                   </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltipAria")}
+                    content={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
                 </div>
               </div>
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}

@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - make the library duplicate panel collapsible, add inline duplicate search in the panel header, and tighten duplicate-group rendering to use less vertical space
 - cap each duplicate group's visible variant list to roughly two and a half entries and keep the remaining matches available via internal scrolling
 - move scan worker tuning into App Settings with separate limits for per-scan analysis workers and parallel library scans, including UI tooltips about RAM impact and enforced maximum values
+- reorganize the App Settings layout into separated language, theme, scan-settings, and feature-flag sections, switch scan worker controls to dropdowns, and default parallel library scans to `2`
 
 ### 🐛 Bug fixes
 

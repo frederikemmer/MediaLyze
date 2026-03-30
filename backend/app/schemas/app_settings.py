@@ -26,7 +26,7 @@ class FeatureFlagsUpdate(BaseModel):
 
 class ScanPerformanceRead(BaseModel):
     scan_worker_count: int = Field(default=4, ge=SCAN_WORKER_COUNT_MIN, le=SCAN_WORKER_COUNT_MAX)
-    parallel_scan_jobs: int = Field(default=4, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
+    parallel_scan_jobs: int = Field(default=2, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
 
 
 class ScanPerformanceUpdate(BaseModel):

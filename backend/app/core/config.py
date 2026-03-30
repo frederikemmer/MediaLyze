@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     scan_discovery_batch_size: int = 500
     scan_commit_batch_size: int = 5
     ffprobe_worker_count: int = 4
-    scan_runtime_worker_count: int = 4
+    scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False
     allowed_media_extensions: tuple[str, ...] = (
         ".mkv",

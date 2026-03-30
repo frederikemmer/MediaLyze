@@ -76,21 +76,23 @@
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "appSettings": "App-Einstellungen",
     "language": "Sprache der Oberfläche",
+    "theme": "Farbschema",
+    "scanSettingsTitle": "Scan-Einstellungen",
     "scanPerformanceTitle": "Scan-Performance",
     "scanWorkerCount": "Analyse-Worker pro Scan",
-    "scanWorkerCountHint": "Beschleunigt einen einzelnen Bibliotheks-Scan. Minimum 1, Maximum {{max}}.",
     "scanWorkerCountTooltipAria": "Speicherbedarf pro Scan-Worker erklaeren",
-    "scanWorkerCountTooltip": "Jeder zusaetzliche Scan-Worker kann durch ffprobe-Payloads, Metadaten-Normalisierung und SQLite-Schreiblast grob 200-350 MB mehr RAM brauchen.\n\nErhoehe das, wenn ein grosser einzelner Scan schneller fertig werden soll.\nMaximum: {{max}}.",
+    "scanWorkerCountTooltip": "Erhoehe das, wenn ein grosser einzelner Scan schneller fertig werden soll.\n\nHoehere Werte koennen CPU-, Datentraeger- und Speicherlast merklich erhoehen. Passe das daher vorsichtig an dein System an.\nMaximum: {{max}}.",
     "parallelScanJobs": "Parallele Bibliotheks-Scans",
-    "parallelScanJobsHint": "Erlaubt mehrere Bibliotheken gleichzeitig. Minimum 1, Maximum {{max}}.",
     "parallelScanJobsTooltipAria": "Speicherbedarf paralleler Scans erklaeren",
-    "parallelScanJobsTooltip": "Das steuert, wie viele Bibliotheken MediaLyze gleichzeitig scannen darf.\n\nRAM- und I/O-Last skalieren mit beiden Werten zusammen: parallele Scans x Worker pro Scan.\nMaximum: {{max}}.",
+    "parallelScanJobsTooltip": "Das steuert, wie viele Bibliotheken MediaLyze gleichzeitig scannen darf.\n\nHoehere Werte erhoehen die gesamte Ressourcenlast. Behalte CPU-, Datentraeger- und Speicherverbrauch im Blick.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showDolbyVisionProfiles": "Dolby-Vision-Profile anzeigen",
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
-      "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben."
+      "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben.",
+      "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
+      "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an."
     },
     "pathKinds": {
       "local": "Lokaler Pfad",
@@ -118,7 +120,6 @@
       "languageCodeInvalid": "Bitte einen gueltigen ISO 639-1 Sprachcode mit zwei Buchstaben eingeben, z. B. de oder en."
     },
     "languageHint": "Wirkt sofort und wird im Browser gespeichert.",
-    "theme": "Farbschema",
     "themeHint": "Wirkt sofort und wird im Browser gespeichert."
   },
   "libraryStatistics": {

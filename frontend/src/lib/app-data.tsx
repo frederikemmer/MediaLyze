@@ -33,7 +33,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 const DEFAULT_SCAN_PERFORMANCE = {
   scan_worker_count: 4,
-  parallel_scan_jobs: 4,
+  parallel_scan_jobs: 2,
 };
 
 const DEFAULT_APP_SETTINGS: AppSettings = {

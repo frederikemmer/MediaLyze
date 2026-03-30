@@ -1275,6 +1275,25 @@
   min-height: 22px;
 }
 
+.app-settings-section {
+  display: grid;
+  gap: 14px;
+}
+
+.app-settings-section-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.app-settings-divider {
+  height: 1px;
+  background: rgba(31, 28, 22, 0.08);
+}
+
 .app-settings-flag-row {
   display: flex;
   align-items: center;

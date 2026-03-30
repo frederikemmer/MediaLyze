@@ -76,21 +76,23 @@
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",
     "language": "Interface language",
+    "theme": "Color Theme",
+    "scanSettingsTitle": "Scan Settings",
     "scanPerformanceTitle": "Scan performance",
     "scanWorkerCount": "Per-scan analysis workers",
-    "scanWorkerCountHint": "Speeds up one library scan. Minimum 1, maximum {{max}}.",
     "scanWorkerCountTooltipAria": "Explain per-scan worker memory impact",
-    "scanWorkerCountTooltip": "Each additional scan worker can easily add roughly 200-350 MB of RAM usage for ffprobe payloads, metadata normalization, and SQLite writes.\n\nIncrease this if one large scan should finish faster.\nMaximum: {{max}}.",
+    "scanWorkerCountTooltip": "Increase this if one large scan should finish faster.\n\nHigher values can noticeably increase CPU, disk, and memory usage. Adjust it carefully to match your system.\nMaximum: {{max}}.",
     "parallelScanJobs": "Parallel library scans",
-    "parallelScanJobsHint": "Lets multiple libraries run at once. Minimum 1, maximum {{max}}.",
     "parallelScanJobsTooltipAria": "Explain parallel scan memory impact",
-    "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nRAM and I/O pressure scale with both settings together: parallel scans x per-scan workers.\nMaximum: {{max}}.",
+    "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nHigher values increase overall resource usage. Keep an eye on CPU, disk, and memory pressure.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature flags",
     "featureFlags": {
       "showDolbyVisionProfiles": "Show Dolby Vision Profiles",
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
       "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
-      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\"."
+      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\".",
+      "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
+      "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set."
     },
     "pathKinds": {
       "local": "Local path",
@@ -118,7 +120,6 @@
       "languageCodeInvalid": "Enter a valid two-letter ISO 639-1 language code, for example de or en."
     },
     "languageHint": "Applies immediately and is stored in the browser.",
-    "theme": "Color theme",
     "themeHint": "Applies immediately and is stored in the browser."
   },
   "libraryStatistics": {

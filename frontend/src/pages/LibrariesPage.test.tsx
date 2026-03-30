@@ -26,7 +26,7 @@ function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     default_ignore_patterns: ["*/@eaDir/*"],
     scan_performance: {
       scan_worker_count: 4,
-      parallel_scan_jobs: 4,
+      parallel_scan_jobs: 2,
     },
     feature_flags: {
       show_dolby_vision_profiles: false,
@@ -240,7 +240,7 @@ describe("LibrariesPage ignore patterns", () => {
         default_ignore_patterns: ["*/#recycle/*"],
         scan_performance: {
           scan_worker_count: 4,
-          parallel_scan_jobs: 4,
+          parallel_scan_jobs: 2,
         },
         feature_flags: {
           show_dolby_vision_profiles: false,
@@ -273,7 +273,7 @@ describe("LibrariesPage ignore patterns", () => {
         default_ignore_patterns: ["*/@eaDir/*"],
         scan_performance: {
           scan_worker_count: 4,
-          parallel_scan_jobs: 4,
+          parallel_scan_jobs: 2,
         },
         feature_flags: {
           show_dolby_vision_profiles: true,
@@ -306,7 +306,7 @@ describe("LibrariesPage ignore patterns", () => {
         default_ignore_patterns: ["*/@eaDir/*"],
         scan_performance: {
           scan_worker_count: 4,
-          parallel_scan_jobs: 4,
+          parallel_scan_jobs: 2,
         },
         feature_flags: {
           show_dolby_vision_profiles: false,
@@ -328,15 +328,13 @@ describe("LibrariesPage ignore patterns", () => {
 
     renderPage();
 
-    const scanWorkerInput = (await screen.findByLabelText("Per-scan analysis workers")) as HTMLInputElement;
-    const parallelScanInput = screen.getByLabelText("Parallel library scans") as HTMLInputElement;
-
-    expect(scanWorkerInput).toHaveAttribute("max", "16");
-    expect(parallelScanInput).toHaveAttribute("max", "8");
+    const scanWorkerInput = (await screen.findByLabelText("Per-scan analysis workers")) as HTMLSelectElement;
+    const parallelScanInput = screen.getByLabelText("Parallel library scans") as HTMLSelectElement;
     await waitFor(() => {
       expect(scanWorkerInput).toBeEnabled();
       expect(parallelScanInput).toBeEnabled();
     });
+    expect(parallelScanInput.value).toBe("2");
 
     fireEvent.change(scanWorkerInput, { target: { value: "6" } });
     fireEvent.change(parallelScanInput, { target: { value: "3" } });
