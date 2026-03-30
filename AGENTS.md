@@ -428,6 +428,8 @@ The backend supports:
 
 * legacy broad search
 * field-specific search intersections
+* negated text terms in field-specific filters via a leading `!`
+* comma-separated field-specific text terms, with each term intersected as an `AND`
 * structured numeric expressions such as size, duration, and quality score comparisons
 * sorting across supported table columns
 

@@ -197,6 +197,9 @@
       "activeMetadata": "Aktive Metadaten-Suchfelder",
       "removeAria": "Suchfeld für {{field}} entfernen",
       "tooltipAria": "Unterstützte Suchsyntax anzeigen",
+      "textMatch": {
+        "tooltip": "Textfelder unterstützen komma-getrennte UND-Begriffe. Mit ! vor einem Begriff werden Treffer ausgeschlossen, zum Beispiel !en, external."
+      },
       "file": {
         "label": "Datei und Pfad",
         "placeholder": "Datei und Pfad durchsuchen"

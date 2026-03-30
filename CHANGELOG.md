@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- support `!` negation and comma-separated `AND` terms in analyzed-files metadata search filters ([#85](https://github.com/frederikemmer/MediaLyze/issues/85))
+
 ## v0.4.0
 
 >2026-03-30

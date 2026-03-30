@@ -197,6 +197,9 @@
       "activeMetadata": "Active metadata search fields",
       "removeAria": "Remove {{field}} search field",
       "tooltipAria": "Show supported search syntax",
+      "textMatch": {
+        "tooltip": "Text fields support comma-separated AND terms. Prefix a term with ! to exclude matches, for example !en, external."
+      },
       "file": {
         "label": "File and path",
         "placeholder": "Search file and path"

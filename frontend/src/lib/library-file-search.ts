@@ -84,6 +84,7 @@ function isValidQualityScoreValue(value: string): boolean {
 }
 
 export const LIBRARY_FILE_SEARCH_PICKER_ICON = SlidersHorizontal;
+const TEXT_FILTER_TOOLTIP_KEY = "libraryDetail.searchFields.textMatch.tooltip";
 
 export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
   {
@@ -91,6 +92,7 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     icon: FolderSearch,
     labelKey: "libraryDetail.searchFields.file.label",
     placeholderKey: "libraryDetail.searchFields.file.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "size",
@@ -113,18 +115,21 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     icon: Film,
     labelKey: "libraryStatistics.items.videoCodec",
     placeholderKey: "libraryDetail.searchFields.videoCodec.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "resolution",
     icon: Frame,
     labelKey: "libraryStatistics.items.resolution",
     placeholderKey: "libraryDetail.searchFields.resolution.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "hdr_type",
     icon: SunMedium,
     labelKey: "libraryStatistics.items.dynamicRange",
     placeholderKey: "libraryDetail.searchFields.hdr.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "duration",
@@ -139,30 +144,35 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     icon: AudioLines,
     labelKey: "libraryStatistics.items.audioCodecs",
     placeholderKey: "libraryDetail.searchFields.audioCodecs.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "audio_languages",
     icon: Languages,
     labelKey: "libraryStatistics.items.audioLanguages",
     placeholderKey: "libraryDetail.searchFields.audioLanguages.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "subtitle_languages",
     icon: Captions,
     labelKey: "libraryStatistics.items.subtitleLanguages",
     placeholderKey: "libraryDetail.searchFields.subtitleLanguages.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "subtitle_codecs",
     icon: FileText,
     labelKey: "libraryStatistics.items.subtitleCodecs",
     placeholderKey: "libraryDetail.searchFields.subtitleCodecs.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "subtitle_sources",
     icon: Waypoints,
     labelKey: "libraryStatistics.items.subtitleSources",
     placeholderKey: "libraryDetail.searchFields.subtitleSources.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
 ];
 

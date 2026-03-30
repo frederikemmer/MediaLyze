@@ -502,6 +502,121 @@ def test_list_library_files_supports_structured_numeric_field_searches() -> None
     assert [item.filename for item in high_scores.items] == ["feature.mkv"]
 
 
+def test_list_library_files_supports_negated_field_search_terms_and_comma_intersections() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Negated metadata search",
+            path="/tmp/negated-metadata-search",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        bilingual_internal = MediaFile(
+            library_id=library.id,
+            relative_path="movie-a.mkv",
+            filename="movie-a.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        german_external = MediaFile(
+            library_id=library.id,
+            relative_path="movie-b.mkv",
+            filename="movie-b.mkv",
+            extension="mkv",
+            size_bytes=2,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        four_k_external = MediaFile(
+            library_id=library.id,
+            relative_path="movie-c.mkv",
+            filename="movie-c.mkv",
+            extension="mkv",
+            size_bytes=3,
+            mtime=3.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add_all([bilingual_internal, german_external, four_k_external])
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(
+                    media_file_id=bilingual_internal.id,
+                    stream_index=0,
+                    codec="hevc",
+                    width=3840,
+                    height=2160,
+                    hdr_type="HDR10",
+                ),
+                VideoStream(
+                    media_file_id=german_external.id,
+                    stream_index=0,
+                    codec="h264",
+                    width=1920,
+                    height=1080,
+                ),
+                VideoStream(
+                    media_file_id=four_k_external.id,
+                    stream_index=0,
+                    codec="hevc",
+                    width=3840,
+                    height=2160,
+                ),
+                AudioStream(media_file_id=bilingual_internal.id, stream_index=1, codec="aac", language="eng"),
+                AudioStream(media_file_id=bilingual_internal.id, stream_index=2, codec="aac", language="deu"),
+                AudioStream(media_file_id=german_external.id, stream_index=1, codec="aac", language="deu"),
+                AudioStream(media_file_id=four_k_external.id, stream_index=1, codec="dts", language="jpn"),
+                SubtitleStream(
+                    media_file_id=bilingual_internal.id,
+                    stream_index=3,
+                    codec="subrip",
+                    language="eng",
+                    default_flag=False,
+                    forced_flag=False,
+                ),
+                ExternalSubtitle(media_file_id=bilingual_internal.id, path="movie-a.en.srt", language="eng", format="srt"),
+                ExternalSubtitle(media_file_id=german_external.id, path="movie-b.de.srt", language="deu", format="srt"),
+                ExternalSubtitle(media_file_id=four_k_external.id, path="movie-c.en.srt", language="eng", format="srt"),
+            ]
+        )
+        db.commit()
+
+        without_english_audio = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_audio_languages="!en"),
+        )
+        external_without_internal = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_subtitle_sources="external, !internal"),
+        )
+        non_4k_titles = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_resolution="!4k"),
+        )
+
+    assert [item.filename for item in without_english_audio.items] == ["movie-b.mkv", "movie-c.mkv"]
+    assert [item.filename for item in external_without_internal.items] == ["movie-b.mkv", "movie-c.mkv"]
+    assert [item.filename for item in non_4k_titles.items] == ["movie-b.mkv"]
+
+
 def test_list_library_files_supports_resolution_aliases_and_sdr_filter() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

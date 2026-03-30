@@ -58,6 +58,12 @@ class LibraryFileSearchFilters:
         }
 
 
+@dataclass(frozen=True)
+class SearchTerm:
+    value: str
+    negated: bool = False
+
+
 _COMPARATOR_RE = re.compile(r"^\s*(>=|<=|>|<|=)?\s*(.*?)\s*$")
 _SIZE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([kmgt]?i?b|b)?\s*$", re.IGNORECASE)
 _DURATION_PART_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([smhd])", re.IGNORECASE)
@@ -86,7 +92,38 @@ _NUMERIC_FIELD_LABELS = {
 
 
 def search_tokens(search: str) -> list[str]:
-    return [token.strip().lower() for token in search.split() if token.strip()]
+    return [token.strip().lower() for token in re.split(r"[\s,]+", search) if token.strip()]
+
+
+def search_terms(search: str) -> list[SearchTerm]:
+    terms: list[SearchTerm] = []
+
+    for segment in search.split(","):
+        candidate = segment.strip()
+        if not candidate:
+            continue
+
+        segment_negated = candidate.startswith("!")
+        if segment_negated:
+            candidate = candidate[1:].strip()
+        if not candidate:
+            continue
+
+        for raw_token in candidate.split():
+            token = raw_token.strip().lower()
+            if not token:
+                continue
+
+            negated = segment_negated
+            if token.startswith("!"):
+                negated = True
+                token = token[1:].strip()
+            if not token:
+                continue
+
+            terms.append(SearchTerm(value=token, negated=negated))
+
+    return terms
 
 
 def resolution_label_expr(primary_video_streams):
@@ -109,6 +146,10 @@ def resolution_min_edge_expr(primary_video_streams):
 
 def match_patterns(expression, patterns: list[str]):
     return or_(*(func.lower(func.coalesce(expression, "")).like(pattern) for pattern in patterns))
+
+
+def _apply_clause(query, clause, *, negated: bool = False):
+    return query.where(~clause if negated else clause)
 
 
 def token_matches_source(token: str, source_label: str) -> bool:
@@ -236,20 +277,22 @@ def _hdr_token_patterns(token: str) -> list[str]:
 
 
 def _apply_text_filter(query, expression, raw_value: str, token_builder=_text_token_patterns):
-    for token in search_tokens(raw_value):
-        query = query.where(match_patterns(expression, token_builder(token)))
+    for term in search_terms(raw_value):
+        query = _apply_clause(query, match_patterns(expression, token_builder(term.value)), negated=term.negated)
     return query
 
 
 def _apply_file_search_filter(query, raw_value: str):
-    for token in search_tokens(raw_value):
-        patterns = _text_token_patterns(token)
-        query = query.where(
+    for term in search_terms(raw_value):
+        patterns = _text_token_patterns(term.value)
+        query = _apply_clause(
+            query,
             or_(
                 match_patterns(MediaFile.filename, patterns),
                 match_patterns(MediaFile.relative_path, patterns),
                 match_patterns(MediaFile.extension, patterns),
-            )
+            ),
+            negated=term.negated,
         )
     return query
 
@@ -260,8 +303,8 @@ def _resolution_category_clause(primary_video_streams, category_id: str, resolut
     if target_index is None:
         return literal(False)
 
-    max_edge = resolution_max_edge_expr(primary_video_streams)
-    min_edge = resolution_min_edge_expr(primary_video_streams)
+    max_edge = func.coalesce(resolution_max_edge_expr(primary_video_streams), -1)
+    min_edge = func.coalesce(resolution_min_edge_expr(primary_video_streams), -1)
     target = categories[target_index]
     clause = and_(max_edge >= target.min_width, min_edge >= target.min_height)
     higher_categories = categories[:target_index]
@@ -282,47 +325,65 @@ def _apply_resolution_filter(query, primary_video_streams, raw_value: str, resol
     resolution_label = resolution_label_expr(primary_video_streams)
     category_terms = resolution_category_search_terms(resolution_categories)
 
-    for token in search_tokens(raw_value):
-        resolution_match = _RESOLUTION_RE.match(token)
+    for term in search_terms(raw_value):
+        resolution_match = _RESOLUTION_RE.match(term.value)
         if resolution_match:
             width = int(resolution_match.group(1))
             height = int(resolution_match.group(2))
-            query = query.where(
+            query = _apply_clause(
+                query,
                 and_(
-                    primary_video_streams.c.width == width,
-                    primary_video_streams.c.height == height,
-                )
+                    func.coalesce(primary_video_streams.c.width, -1) == width,
+                    func.coalesce(primary_video_streams.c.height, -1) == height,
+                ),
+                negated=term.negated,
             )
             continue
 
-        category_id = category_terms.get(token)
+        category_id = category_terms.get(term.value)
         if category_id is not None:
-            query = query.where(_resolution_category_clause(primary_video_streams, category_id, resolution_categories))
+            query = _apply_clause(
+                query,
+                _resolution_category_clause(primary_video_streams, category_id, resolution_categories),
+                negated=term.negated,
+            )
             continue
 
-        query = query.where(match_patterns(resolution_label, _text_token_patterns(token)))
+        query = _apply_clause(
+            query,
+            match_patterns(resolution_label, _text_token_patterns(term.value)),
+            negated=term.negated,
+        )
 
     return query
 
 
 def _apply_hdr_filter(query, primary_video_streams, raw_value: str):
-    for token in search_tokens(raw_value):
-        if token == "sdr":
-            query = query.where(func.length(func.trim(func.coalesce(primary_video_streams.c.hdr_type, ""))) == 0)
+    for term in search_terms(raw_value):
+        if term.value == "sdr":
+            query = _apply_clause(
+                query,
+                func.length(func.trim(func.coalesce(primary_video_streams.c.hdr_type, ""))) == 0,
+                negated=term.negated,
+            )
             continue
-        query = query.where(match_patterns(primary_video_streams.c.hdr_type, _hdr_token_patterns(token)))
+        query = _apply_clause(
+            query,
+            match_patterns(primary_video_streams.c.hdr_type, _hdr_token_patterns(term.value)),
+            negated=term.negated,
+        )
     return query
 
 
 def _apply_subtitle_source_filter(query, subtitle_aggregates, raw_value: str):
-    for token in search_tokens(raw_value):
+    for term in search_terms(raw_value):
         source_matches = []
-        if token_matches_source(token, "internal"):
+        if token_matches_source(term.value, "internal"):
             source_matches.append(func.coalesce(subtitle_aggregates.c.has_internal_subtitles, 0) == 1)
-        if token_matches_source(token, "external"):
+        if token_matches_source(term.value, "external"):
             source_matches.append(func.coalesce(subtitle_aggregates.c.has_external_subtitles, 0) == 1)
 
-        query = query.where(or_(*source_matches) if source_matches else literal(False))
+        query = _apply_clause(query, or_(*source_matches) if source_matches else literal(False), negated=term.negated)
 
     return query
 
