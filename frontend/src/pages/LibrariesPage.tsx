@@ -10,6 +10,7 @@ import { useAppData } from "../lib/app-data";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type DuplicateDetectionMode,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -47,6 +48,7 @@ type CreateLibraryForm = {
   path: string;
   type: string;
   scan_mode: string;
+  duplicate_detection_mode: DuplicateDetectionMode;
 };
 
 const EMPTY_FORM: CreateLibraryForm = {
@@ -54,6 +56,7 @@ const EMPTY_FORM: CreateLibraryForm = {
   path: ".",
   type: "mixed",
   scan_mode: "manual",
+  duplicate_detection_mode: "off",
 };
 
 function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
@@ -65,6 +68,7 @@ function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
 
 type LibrarySettingsForm = {
   scan_mode: string;
+  duplicate_detection_mode: DuplicateDetectionMode;
   interval_minutes: number;
   debounce_seconds: number;
   quality_profile: QualityProfile;
@@ -140,6 +144,17 @@ const EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT: NewResolutionCategoryDraft = {
   min_height: "",
 };
 
+const SCAN_WORKER_COUNT_MIN = 1;
+const SCAN_WORKER_COUNT_MAX = 16;
+const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
+const PARALLEL_SCAN_JOB_COUNT_MAX = 8;
+const DEFAULT_SCAN_PERFORMANCE = {
+  scan_worker_count: 4,
+  parallel_scan_jobs: 2,
+};
+const SCAN_WORKER_OPTIONS = Array.from({ length: SCAN_WORKER_COUNT_MAX }, (_, index) => index + 1);
+const PARALLEL_SCAN_JOB_OPTIONS = Array.from({ length: PARALLEL_SCAN_JOB_COUNT_MAX }, (_, index) => index + 1);
+
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
 }
@@ -201,6 +216,7 @@ function weightFieldStyle(weight: number) {
 function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
   return {
     scan_mode: library.scan_mode,
+    duplicate_detection_mode: library.duplicate_detection_mode,
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
@@ -224,6 +240,7 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
   const current = toLibrarySettingsForm(library);
   return (
     current.scan_mode === settings.scan_mode &&
+    current.duplicate_detection_mode === settings.duplicate_detection_mode &&
     current.interval_minutes === settings.interval_minutes &&
     current.debounce_seconds === settings.debounce_seconds &&
     JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
@@ -234,6 +251,23 @@ function normalizeIgnorePatterns(patterns: string[]): string[] {
   return patterns
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function clampInteger(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, Math.round(value)));
+}
+
+function normalizeScanPerformanceInput(
+  value: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return clampInteger(parsed, minimum, maximum);
 }
 
 function toPersistedIgnorePatterns(payload: {
@@ -307,6 +341,30 @@ function compactScanValues(values: string[], limit = 2): string {
   return values.length > limit ? `${visible.join(", ")}, ...` : visible.join(", ");
 }
 
+function buildScanFailureDiagnostic(
+  job: ScanJobDetail,
+  section: "analysis" | "duplicates",
+  entry: { path: string; reason: string; detail?: string | null },
+): string {
+  return JSON.stringify(
+    {
+      job_id: job.id,
+      library_id: job.library_id,
+      library_name: job.library_name,
+      outcome: job.outcome,
+      trigger_source: job.trigger_source,
+      started_at: job.started_at,
+      finished_at: job.finished_at,
+      section,
+      path: entry.path,
+      reason: entry.reason,
+      detail: entry.detail ?? entry.reason,
+    },
+    null,
+    2,
+  );
+}
+
 function scanLogTitle(job: RecentScanJob) {
   return formatDate(job.finished_at ?? job.started_at);
 }
@@ -352,6 +410,7 @@ export function LibrariesPage() {
   const [scanJobDetails, setScanJobDetails] = useState<Record<number, ScanJobDetail>>({});
   const [scanJobDetailLoading, setScanJobDetailLoading] = useState<Record<number, boolean>>({});
   const [scanJobDetailErrors, setScanJobDetailErrors] = useState<Record<number, string | null>>({});
+  const [copiedScanDiagnosticKey, setCopiedScanDiagnosticKey] = useState<string | null>(null);
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState<CreateLibraryForm>(() => createEmptyForm(desktopApp));
@@ -368,15 +427,22 @@ export function LibrariesPage() {
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
   const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
+  const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
+  const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
     EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
   );
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
+  const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
+  const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
+  const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
+  const scanWorkerCountInputRef = useRef("4");
+  const parallelScanJobsInputRef = useRef("2");
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -384,10 +450,19 @@ export function LibrariesPage() {
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
+  const appScanPerformance = appSettings.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
+
+  useEffect(() => {
+    return () => {
+      if (copiedScanDiagnosticResetTimer.current !== null) {
+        window.clearTimeout(copiedScanDiagnosticResetTimer.current);
+      }
+    };
+  }, []);
 
   const refreshRecentScanJobs = (showLoading = false) => {
     if (showLoading) {
@@ -653,7 +728,11 @@ export function LibrariesPage() {
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
-  }, [appSettings, appSettingsLoaded]);
+    scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
+    parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+    setScanWorkerCountInput(scanWorkerCountInputRef.current);
+    setParallelScanJobsInput(parallelScanJobsInputRef.current);
+  }, [appScanPerformance, appSettings, appSettingsLoaded]);
 
   useEffect(() => {
     return () => {
@@ -698,6 +777,7 @@ export function LibrariesPage() {
   ) {
     const current = settingsForms[libraryId] ?? {
       scan_mode: "manual",
+      duplicate_detection_mode: "off",
       interval_minutes: 60,
       debounce_seconds: 15,
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
@@ -728,6 +808,7 @@ export function LibrariesPage() {
       try {
         const updated = await api.updateLibrarySettings(libraryId, {
           scan_mode: next.scan_mode,
+          duplicate_detection_mode: next.duplicate_detection_mode,
           scan_config: buildScanConfig(next),
           quality_profile: next.quality_profile,
         });
@@ -763,6 +844,7 @@ export function LibrariesPage() {
       try {
         const updated = await api.updateLibrarySettings(libraryId, {
           scan_mode: current.scan_mode,
+          duplicate_detection_mode: current.duplicate_detection_mode,
           scan_config: buildScanConfig(current),
           quality_profile: current.quality_profile,
         });
@@ -873,11 +955,26 @@ export function LibrariesPage() {
     nextShowDolbyVisionProfiles: boolean,
     nextShowAnalyzedFilesCsvExport: boolean,
     nextResolutionCategories?: ResolutionCategory[],
+    nextScanPerformance = {
+      scan_worker_count: normalizeScanPerformanceInput(
+        scanWorkerCountInputRef.current,
+        appScanPerformance.scan_worker_count,
+        SCAN_WORKER_COUNT_MIN,
+        SCAN_WORKER_COUNT_MAX,
+      ),
+      parallel_scan_jobs: normalizeScanPerformanceInput(
+        parallelScanJobsInputRef.current,
+        appScanPerformance.parallel_scan_jobs,
+        PARALLEL_SCAN_JOB_COUNT_MIN,
+        PARALLEL_SCAN_JOB_COUNT_MAX,
+      ),
+    },
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
       default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
+      scan_performance: nextScanPerformance,
       feature_flags: {
         show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
@@ -913,10 +1010,16 @@ export function LibrariesPage() {
         setDefaultIgnorePatternInputs(persisted.default);
         setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+        const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+        scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
+        parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+        setScanWorkerCountInput(scanWorkerCountInputRef.current);
+        setParallelScanJobsInput(parallelScanJobsInputRef.current);
         persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
         setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
+        setScanPerformanceStatus(null);
         setResolutionCategoriesStatus(null);
       }
       setAppSettings(updated);
@@ -951,6 +1054,7 @@ export function LibrariesPage() {
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowDolbyVisionProfiles(previousValue);
@@ -976,6 +1080,7 @@ export function LibrariesPage() {
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
@@ -983,6 +1088,18 @@ export function LibrariesPage() {
     } finally {
       setIsSavingFeatureFlags(false);
     }
+  }
+
+  function updateScanWorkerCountInput(value: string) {
+    scanWorkerCountInputRef.current = value;
+    setScanWorkerCountInput(value);
+    setScanPerformanceStatus(null);
+  }
+
+  function updateParallelScanJobsInput(value: string) {
+    parallelScanJobsInputRef.current = value;
+    setParallelScanJobsInput(value);
+    setScanPerformanceStatus(null);
   }
 
   function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
@@ -1020,11 +1137,64 @@ export function LibrariesPage() {
       setResolutionCategoriesStatus(null);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
+      setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setResolutionCategoriesStatus((reason as Error).message);
     } finally {
       setIsSavingResolutionCategories(false);
+    }
+  }
+
+  async function saveScanPerformance(
+    nextScanWorkerInput = scanWorkerCountInputRef.current,
+    nextParallelScanJobsInput = parallelScanJobsInputRef.current,
+  ) {
+    const nextScanWorkerCount = normalizeScanPerformanceInput(
+      nextScanWorkerInput,
+      appScanPerformance.scan_worker_count,
+      SCAN_WORKER_COUNT_MIN,
+      SCAN_WORKER_COUNT_MAX,
+    );
+    const nextParallelScanJobs = normalizeScanPerformanceInput(
+      nextParallelScanJobsInput,
+      appScanPerformance.parallel_scan_jobs,
+      PARALLEL_SCAN_JOB_COUNT_MIN,
+      PARALLEL_SCAN_JOB_COUNT_MAX,
+    );
+
+    setIsSavingScanPerformance(true);
+    setScanPerformanceStatus(null);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showDolbyVisionProfiles,
+        showAnalyzedFilesCsvExport,
+        undefined,
+        {
+          scan_worker_count: nextScanWorkerCount,
+          parallel_scan_jobs: nextParallelScanJobs,
+        },
+      );
+      const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+      scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
+      parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+      setScanWorkerCountInput(scanWorkerCountInputRef.current);
+      setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setIgnorePatternsStatus(null);
+      setFeatureFlagsStatus(null);
+      setResolutionCategoriesStatus(null);
+      setScanPerformanceStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
+      parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+      setScanWorkerCountInput(scanWorkerCountInputRef.current);
+      setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setScanPerformanceStatus((reason as Error).message);
+    } finally {
+      setIsSavingScanPerformance(false);
     }
   }
 
@@ -1199,6 +1369,64 @@ export function LibrariesPage() {
     );
   }
 
+  async function copyScanFailureDiagnostic(
+    job: ScanJobDetail,
+    section: "analysis" | "duplicates",
+    entry: { path: string; reason: string; detail?: string | null },
+  ) {
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(buildScanFailureDiagnostic(job, section, entry));
+    const diagnosticKey = `${job.id}:${section}:${entry.path}`;
+    setCopiedScanDiagnosticKey(diagnosticKey);
+    if (copiedScanDiagnosticResetTimer.current !== null) {
+      window.clearTimeout(copiedScanDiagnosticResetTimer.current);
+    }
+    copiedScanDiagnosticResetTimer.current = window.setTimeout(() => {
+      setCopiedScanDiagnosticKey((current) => (current === diagnosticKey ? null : current));
+      copiedScanDiagnosticResetTimer.current = null;
+    }, 2000);
+  }
+
+  function renderFailureList(
+    detail: ScanJobDetail,
+    section: "analysis" | "duplicates",
+    entries: Array<{ path: string; reason: string; detail?: string | null }>,
+  ) {
+    if (entries.length === 0) {
+      return <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>;
+    }
+
+    return (
+      <div className="scan-log-scroll-area">
+        <div className="scan-log-pattern-list">
+          {entries.map((entry) => {
+            const diagnosticKey = `${detail.id}:${section}:${entry.path}`;
+            const copied = copiedScanDiagnosticKey === diagnosticKey;
+            return (
+              <div className="scan-log-pattern-card" key={`${detail.id}-${section}-${entry.path}`}>
+                <div className="scan-log-detail-title">
+                  <code>{entry.path}</code>
+                  <button
+                    type="button"
+                    className="scan-log-copy-button"
+                    aria-label={t("scanLogs.copyDiagnosticsAria", { path: entry.path })}
+                    onClick={() => void copyScanFailureDiagnostic(detail, section, entry)}
+                  >
+                    {copied ? t("scanLogs.copiedDiagnostics") : t("scanLogs.copyDiagnostics")}
+                  </button>
+                </div>
+                <p className="scan-log-failure-reason">{entry.reason}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   function renderScanJobDetail(job: RecentScanJob) {
     const detail = scanJobDetails[job.id];
     if (scanJobDetailLoading[job.id]) {
@@ -1214,6 +1442,7 @@ export function LibrariesPage() {
     const patternHits = detail.scan_summary.discovery.ignored_pattern_hits;
     const ignorePatternsSummary = compactScanValues(detail.scan_summary.ignore_patterns);
     const patternHitsSummary = compactScanValues(patternHits.map((hit) => hit.pattern));
+    const duplicateFailureSummary = compactScanValues(detail.scan_summary.duplicates.failed_files.map((entry) => entry.path));
     return (
       <div className="scan-log-detail">
         <div className="scan-log-summary-meta scan-log-summary-meta-detail">
@@ -1238,6 +1467,14 @@ export function LibrariesPage() {
           <div className="scan-log-stat">
             <strong>{detail.scan_summary.analysis.analysis_failed}</strong>
             <span>{t("scanLogs.metricFailed")}</span>
+          </div>
+          <div className="scan-log-stat">
+            <strong>{detail.scan_summary.duplicates.duplicate_groups}</strong>
+            <span>{t("scanLogs.metricDuplicateGroups")}</span>
+          </div>
+          <div className="scan-log-stat">
+            <strong>{detail.scan_summary.duplicates.duplicate_files}</strong>
+            <span>{t("scanLogs.metricDuplicateFiles")}</span>
           </div>
         </div>
 
@@ -1346,29 +1583,65 @@ export function LibrariesPage() {
               </span>
             </summary>
             <div className="scan-log-collapse-content">
-              {detail.scan_summary.analysis.failed_files.length > 0 ? (
-                <div className="scan-log-scroll-area">
-                  <div className="scan-log-path-list">
-                    {detail.scan_summary.analysis.failed_files.map((entry) => (
-                      <TooltipTrigger
-                        key={`${detail.id}-${entry.path}`}
-                        ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
-                        content={entry.reason}
-                        preserveLineBreaks
-                        align="start"
-                        className="scan-log-path-tooltip-trigger"
-                      >
-                        <code className="scan-log-path">{entry.path}</code>
-                      </TooltipTrigger>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>
-              )}
+              {renderFailureList(detail, "analysis", detail.scan_summary.analysis.failed_files)}
               {detail.scan_summary.analysis.failed_files_truncated_count > 0 ? (
                 <div className="subtitle">
                   {t("scanLogs.moreEntries", { count: detail.scan_summary.analysis.failed_files_truncated_count })}
+                </div>
+              ) : null}
+            </div>
+          </details>
+
+          <details className="scan-log-detail-block scan-log-collapsible-block">
+            <summary className="scan-log-collapse-toggle">
+              <span className="scan-log-collapse-copy">
+                <strong>{t("scanLogs.duplicatesTitle")}</strong>
+                <span className="scan-log-collapse-summary">
+                  {t("scanLogs.duplicatesSummary", {
+                    mode: t(`libraries.duplicateDetectionModes.${detail.scan_summary.duplicates.mode}`),
+                    groups: detail.scan_summary.duplicates.duplicate_groups,
+                    files: detail.scan_summary.duplicates.duplicate_files,
+                  })}
+                </span>
+              </span>
+              <span className="scan-log-collapse-meta">
+                <span className="badge">
+                  {detail.scan_summary.duplicates.processing_failed > 0
+                    ? detail.scan_summary.duplicates.processing_failed
+                    : detail.scan_summary.duplicates.processed_successfully}
+                </span>
+                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
+              </span>
+            </summary>
+            <div className="scan-log-collapse-content">
+              <div className="scan-log-summary-grid">
+                <div className="scan-log-stat">
+                  <strong>{t(`libraries.duplicateDetectionModes.${detail.scan_summary.duplicates.mode}`)}</strong>
+                  <span>{t("scanLogs.duplicatesMode")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.queued_for_processing}</strong>
+                  <span>{t("scanLogs.duplicatesQueued")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.processed_successfully}</strong>
+                  <span>{t("scanLogs.duplicatesProcessed")}</span>
+                </div>
+                <div className="scan-log-stat">
+                  <strong>{detail.scan_summary.duplicates.processing_failed}</strong>
+                  <span>{t("scanLogs.duplicatesFailed")}</span>
+                </div>
+              </div>
+              {detail.scan_summary.duplicates.failed_files.length > 0 ? (
+                renderFailureList(detail, "duplicates", detail.scan_summary.duplicates.failed_files)
+              ) : (
+                <div className="notice scan-log-empty-detail">
+                  {duplicateFailureSummary ? duplicateFailureSummary : t("scanLogs.none")}
+                </div>
+              )}
+              {detail.scan_summary.duplicates.failed_files_truncated_count > 0 ? (
+                <div className="subtitle">
+                  {t("scanLogs.moreEntries", { count: detail.scan_summary.duplicates.failed_files_truncated_count })}
                 </div>
               ) : null}
             </div>
@@ -1975,7 +2248,9 @@ export function LibrariesPage() {
                   ) : null}
                   <div className="library-settings-form">
                     <div className="field">
-                      <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>
+                      <div className="field-label-row">
+                        <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>
+                      </div>
                       <select
                         id={`scan-mode-${library.id}`}
                         value={settingsForms[library.id]?.scan_mode ?? library.scan_mode}
@@ -1993,6 +2268,31 @@ export function LibrariesPage() {
                         </option>
                       </select>
                     </div>
+                    <div className="field">
+                      <div className="field-label-row">
+                        <label htmlFor={`duplicate-detection-mode-${library.id}`}>{t("libraries.duplicateDetectionMode")}</label>
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.duplicateDetectionModeTooltipAria")}
+                          content={t("libraries.duplicateDetectionModeHint")}
+                        >
+                          ?
+                        </TooltipTrigger>
+                      </div>
+                      <select
+                        id={`duplicate-detection-mode-${library.id}`}
+                        value={settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode}
+                        onChange={(event) =>
+                          updateLibraryForm(library.id, {
+                            duplicate_detection_mode: event.target.value as DuplicateDetectionMode,
+                          })
+                        }
+                      >
+                        <option value="off">{t("libraries.duplicateDetectionModes.off")}</option>
+                        <option value="filename">{t("libraries.duplicateDetectionModes.filename")}</option>
+                        <option value="filehash">{t("libraries.duplicateDetectionModes.filehash")}</option>
+                        <option value="both">{t("libraries.duplicateDetectionModes.both")}</option>
+                      </select>
+                    </div>
                     {networkWatchFallbackApplied(
                       libraryPathInspections[library.id],
                       settingsForms[library.id]?.scan_mode ?? library.scan_mode,
@@ -2003,7 +2303,10 @@ export function LibrariesPage() {
                     ) : null}
                     {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "scheduled" ? (
                       <div className="field">
-                        <label htmlFor={`interval-minutes-${library.id}`}>{t("libraries.intervalMinutes")}</label>
+                        <div className="field-label-row">
+                          <label htmlFor={`interval-minutes-${library.id}`}>{t("libraries.intervalMinutes")}</label>
+                          <span className="field-label-spacer" aria-hidden="true" />
+                        </div>
                         <input
                           id={`interval-minutes-${library.id}`}
                           type="number"
@@ -2019,7 +2322,10 @@ export function LibrariesPage() {
                     ) : null}
                     {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "watch" ? (
                       <div className="field">
-                        <label htmlFor={`debounce-seconds-${library.id}`}>{t("libraries.debounceSeconds")}</label>
+                        <div className="field-label-row">
+                          <label htmlFor={`debounce-seconds-${library.id}`}>{t("libraries.debounceSeconds")}</label>
+                          <span className="field-label-spacer" aria-hidden="true" />
+                        </div>
                         <input
                           id={`debounce-seconds-${library.id}`}
                           type="number"
@@ -2515,8 +2821,8 @@ export function LibrariesPage() {
                   <option value="en">{t("language.en")}</option>
                   <option value="de">{t("language.de")}</option>
                 </select>
-                <p className="field-hint">{t("libraries.languageHint")}</p>
               </div>
+              <div className="app-settings-divider" aria-hidden="true" />
               <div className="field">
                 <label htmlFor="app-theme">{t("libraries.theme")}</label>
                 <select
@@ -2528,12 +2834,71 @@ export function LibrariesPage() {
                   <option value="light">{t("theme.light")}</option>
                   <option value="dark">{t("theme.dark")}</option>
                 </select>
-                <p className="field-hint">{t("libraries.themeHint")}</p>
               </div>
-              <div className="field">
-                <div className="field-label-row">
-                  <label>{t("libraries.featureFlagsTitle")}</label>
+              <div className="app-settings-divider" aria-hidden="true" />
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("libraries.scanSettingsTitle")}</p>
+                <div className="app-settings-performance-grid">
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label htmlFor="scan-worker-count">{t("libraries.scanWorkerCount")}</label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.scanWorkerCountTooltipAria")}
+                        content={t("libraries.scanWorkerCountTooltip", { max: SCAN_WORKER_COUNT_MAX })}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                    <select
+                      id="scan-worker-count"
+                      value={scanWorkerCountInput}
+                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      onChange={(event) => {
+                        updateScanWorkerCountInput(event.target.value);
+                        void saveScanPerformance(event.target.value, parallelScanJobsInputRef.current);
+                      }}
+                    >
+                      {SCAN_WORKER_OPTIONS.map((workerCount) => (
+                        <option key={workerCount} value={workerCount}>
+                          {workerCount}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label htmlFor="parallel-scan-jobs">{t("libraries.parallelScanJobs")}</label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.parallelScanJobsTooltipAria")}
+                        content={t("libraries.parallelScanJobsTooltip", { max: PARALLEL_SCAN_JOB_COUNT_MAX })}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                    <select
+                      id="parallel-scan-jobs"
+                      value={parallelScanJobsInput}
+                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      onChange={(event) => {
+                        updateParallelScanJobsInput(event.target.value);
+                        void saveScanPerformance(scanWorkerCountInputRef.current, event.target.value);
+                      }}
+                    >
+                      {PARALLEL_SCAN_JOB_OPTIONS.map((workerCount) => (
+                        <option key={workerCount} value={workerCount}>
+                          {workerCount}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+              </div>
+              {scanPerformanceStatus ? <div className="alert">{scanPerformanceStatus}</div> : null}
+              <div className="app-settings-divider" aria-hidden="true" />
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("libraries.featureFlagsTitle")}</p>
                 <div className="app-settings-flag-row">
                   <label className="app-settings-flag-toggle" htmlFor="show-dolby-vision-profiles">
                     <input
@@ -2564,6 +2929,13 @@ export function LibrariesPage() {
                     />
                     <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
                   </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltipAria")}
+                    content={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
                 </div>
               </div>
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}

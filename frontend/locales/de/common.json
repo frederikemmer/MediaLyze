@@ -44,6 +44,15 @@
     "desktopPathMustExist": "Bitte ein vorhandenes Verzeichnis auswaehlen.",
     "chooseFolder": "Ordner auswaehlen",
     "scanMode": "Scan-Modus",
+    "duplicateDetectionMode": "Duplikat-Erkennung",
+    "duplicateDetectionModeTooltipAria": "Duplikat-Erkennungsmodi erklaeren",
+    "duplicateDetectionModeHint": "Aus deaktiviert die Duplikat-Erkennung. Dateiname ist schnell und nur naehherungsweise. Dateihash ist exakt, aber waehrend Scans deutlich teurer. Der Modus Beide speichert und zeigt beide Duplikat-Sichten an.",
+    "duplicateDetectionModes": {
+      "off": "Aus",
+      "filename": "Dateiname",
+      "filehash": "Dateihash",
+      "both": "Beide"
+    },
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
@@ -68,12 +77,23 @@
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "appSettings": "App-Einstellungen",
     "language": "Sprache der Oberfläche",
+    "theme": "Farbschema",
+    "scanSettingsTitle": "Scan-Einstellungen",
+    "scanPerformanceTitle": "Scan-Performance",
+    "scanWorkerCount": "Analyse-Worker pro Scan",
+    "scanWorkerCountTooltipAria": "Speicherbedarf pro Scan-Worker erklaeren",
+    "scanWorkerCountTooltip": "Erhoehe das, wenn ein grosser einzelner Scan schneller fertig werden soll.\n\nHoehere Werte koennen CPU-, Datentraeger- und Speicherlast merklich erhoehen. Passe das daher vorsichtig an dein System an.\nMaximum: {{max}}.",
+    "parallelScanJobs": "Parallele Bibliotheks-Scans",
+    "parallelScanJobsTooltipAria": "Speicherbedarf paralleler Scans erklaeren",
+    "parallelScanJobsTooltip": "Das steuert, wie viele Bibliotheken MediaLyze gleichzeitig scannen darf.\n\nHoehere Werte erhoehen die gesamte Ressourcenlast. Behalte CPU-, Datentraeger- und Speicherverbrauch im Blick.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showDolbyVisionProfiles": "Dolby-Vision-Profile anzeigen",
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
-      "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben."
+      "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben.",
+      "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
+      "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an."
     },
     "pathKinds": {
       "local": "Lokaler Pfad",
@@ -101,7 +121,6 @@
       "languageCodeInvalid": "Bitte einen gueltigen ISO 639-1 Sprachcode mit zwei Buchstaben eingeben, z. B. de oder en."
     },
     "languageHint": "Wirkt sofort und wird im Browser gespeichert.",
-    "theme": "Farbschema",
     "themeHint": "Wirkt sofort und wird im Browser gespeichert."
   },
   "libraryStatistics": {
@@ -227,6 +246,15 @@
     "loadingFiles": "Analysierte Dateien werden geladen…",
     "loadingMore": "Weitere Einträge werden geladen…",
     "noAnalyzedFiles": "Noch keine analysierten Dateien.",
+    "duplicates": {
+      "title": "Duplikate",
+      "empty": "Noch keine Duplikat-Gruppen gefunden.",
+      "emptySearch": "Keine passenden Duplikat-Gruppen fuer die aktuelle Suche gefunden.",
+      "fileCount": "{{count}} Dateien",
+      "searchPlaceholder": "Duplikate durchsuchen",
+      "searchLabel": "Duplikate durchsuchen",
+      "clearSearch": "Duplikat-Suche loeschen"
+    },
     "renderedEntries": "{{rendered}} von {{total}} Einträgen gerendert",
     "loadMore": "{{count}} weitere laden",
     "statistics": {
@@ -264,6 +292,8 @@
     "metricIgnored": "Ignoriert",
     "metricAnalyzed": "Analysiert",
     "metricFailed": "Fehler",
+    "metricDuplicateGroups": "Duplikat-Gruppen",
+    "metricDuplicateFiles": "Duplikat-Dateien",
     "metricNew": "Neu",
     "metricChanged": "Geändert",
     "metricDeleted": "Gelöscht",
@@ -274,7 +304,16 @@
     "changedFiles": "Geänderte Dateien",
     "deletedFiles": "Gelöschte Dateien",
     "failedFiles": "Nicht analysierbare Dateien",
+    "duplicatesTitle": "Duplikat-Verarbeitung",
+    "duplicatesSummary": "{{groups}} Gruppen ueber {{files}} Dateien mit {{mode}}",
+    "duplicatesMode": "Modus",
+    "duplicatesQueued": "Eingereiht",
+    "duplicatesProcessed": "Verarbeitet",
+    "duplicatesFailed": "Fehlgeschlagen",
     "failedFileReasonTooltipAria": "Analysedetails für {{path}} anzeigen",
+    "copyDiagnostics": "Details kopieren",
+    "copiedDiagnostics": "Kopiert",
+    "copyDiagnosticsAria": "Fehlerdetails für {{path}} kopieren",
     "watchEvents": "{{count}} Dateisystemereignisse wurden zusammengefasst.",
     "intervalMinutes": "Geplantes Intervall: {{minutes}} Minuten",
     "coalescedTriggers": "{{count}} zusätzliche Auslöser wurden diesem Scan zugeschlagen.",

@@ -24,6 +24,10 @@ function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     ignore_patterns: ["movie.tmp", "*/@eaDir/*"],
     user_ignore_patterns: ["movie.tmp"],
     default_ignore_patterns: ["*/@eaDir/*"],
+    scan_performance: {
+      scan_worker_count: 4,
+      parallel_scan_jobs: 2,
+    },
     feature_flags: {
       show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
@@ -54,6 +58,7 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     type: "movies",
     last_scan_at: null,
     scan_mode: "manual",
+    duplicate_detection_mode: "off",
     scan_config: {},
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
@@ -127,6 +132,16 @@ function createScanJobDetail(overrides: Partial<ScanJobDetail> = {}): ScanJobDet
         analysis_failed: 0,
         failed_files: [],
         failed_files_truncated_count: 0,
+      },
+      duplicates: {
+        mode: "filename",
+        queued_for_processing: 4,
+        processed_successfully: 4,
+        processing_failed: 0,
+        failed_files: [],
+        failed_files_truncated_count: 0,
+        duplicate_groups: 2,
+        duplicate_files: 4,
       },
     },
     ...overrides,
@@ -223,6 +238,10 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith({
         user_ignore_patterns: ["movie.tmp"],
         default_ignore_patterns: ["*/#recycle/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+        },
         feature_flags: {
           show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
@@ -252,6 +271,10 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith({
         user_ignore_patterns: ["movie.tmp"],
         default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+        },
         feature_flags: {
           show_dolby_vision_profiles: true,
           show_analyzed_files_csv_export: false,
@@ -281,9 +304,53 @@ describe("LibrariesPage ignore patterns", () => {
       expect(updateSpy).toHaveBeenCalledWith({
         user_ignore_patterns: ["movie.tmp"],
         default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+        },
         feature_flags: {
           show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: true,
+        },
+      }),
+    );
+  });
+
+  it("persists scan performance limits from app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        scan_performance: {
+          scan_worker_count: 6,
+          parallel_scan_jobs: 3,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const scanWorkerInput = (await screen.findByLabelText("Per-scan analysis workers")) as HTMLSelectElement;
+    const parallelScanInput = screen.getByLabelText("Parallel library scans") as HTMLSelectElement;
+    await waitFor(() => {
+      expect(scanWorkerInput).toBeEnabled();
+      expect(parallelScanInput).toBeEnabled();
+    });
+    expect(parallelScanInput.value).toBe("2");
+
+    fireEvent.change(scanWorkerInput, { target: { value: "6" } });
+    fireEvent.change(parallelScanInput, { target: { value: "3" } });
+    fireEvent.blur(parallelScanInput);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 6,
+          parallel_scan_jobs: 3,
+        },
+        feature_flags: {
+          show_dolby_vision_profiles: false,
+          show_analyzed_files_csv_export: false,
         },
       }),
     );
@@ -485,6 +552,44 @@ describe("LibrariesPage desktop mode", () => {
     await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveValue("scheduled"));
     expect(screen.getByText("Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.")).toBeInTheDocument();
   });
+
+  it("shows duplicate detection settings and auto-saves the selected mode", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
+      createLibrarySummary({ duplicate_detection_mode: "both" }),
+    );
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          duplicate_detection_mode: "both",
+        }),
+      ),
+    );
+  });
+
+  it("shows the duplicate detection hint in a tooltip instead of inline text", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    expect(
+      screen.queryByText("Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain duplicate detection modes" }));
+
+    expect(
+      await screen.findByText("Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("LibrariesPage settings panels", () => {
@@ -577,7 +682,7 @@ describe("LibrariesPage settings panels", () => {
             queued_for_analysis: 4,
             analyzed_successfully: 3,
             analysis_failed: 1,
-            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded" }],
+            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded", detail: "Traceback line 1\nTraceback line 2" }],
             failed_files_truncated_count: 0,
           },
         },
@@ -596,19 +701,14 @@ describe("LibrariesPage settings panels", () => {
 
     await waitFor(() => expect(detailSpy).toHaveBeenCalledWith(14));
     expect(await screen.findAllByText("Ignore patterns")).toHaveLength(2);
+    expect(await screen.findByText("Duplicate processing")).toBeInTheDocument();
     fireEvent.click(screen.getAllByText("Ignore patterns")[1]);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));
-    expect(screen.queryByText("ffprobe exploded")).not.toBeInTheDocument();
-
-    const failedFileTrigger = await screen.findByRole("button", {
-      name: "Show analysis failure details for broken.mkv",
-    });
-    expect(screen.queryByText("broken.mkv, ...")).not.toBeInTheDocument();
-    expect(failedFileTrigger).toHaveTextContent("broken.mkv");
-
-    fireEvent.click(failedFileTrigger);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("ffprobe exploded");
+    expect(await screen.findByText("ffprobe exploded")).toBeInTheDocument();
+    expect(await screen.findByRole("button", {
+      name: "Copy troubleshooting details for broken.mkv",
+    })).toBeInTheDocument();
   });
 
   it("loads older scans when clicking load more", async () => {

@@ -12,6 +12,7 @@ from backend.app.schemas.app_settings import (
     AppSettingsUpdate,
     FeatureFlagsRead,
     ResolutionCategory,
+    ScanPerformanceRead,
 )
 from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.resolution_categories import (
@@ -65,11 +66,27 @@ def _default_feature_flags() -> FeatureFlagsRead:
     return FeatureFlagsRead()
 
 
+def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
+    return ScanPerformanceRead(
+        scan_worker_count=settings.ffprobe_worker_count,
+        parallel_scan_jobs=settings.scan_runtime_worker_count,
+    )
+
+
 def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
     candidate = payload if isinstance(payload, dict) else {}
     return FeatureFlagsRead(
         show_dolby_vision_profiles=bool(candidate.get("show_dolby_vision_profiles", False)),
         show_analyzed_files_csv_export=bool(candidate.get("show_analyzed_files_csv_export", False)),
+    )
+
+
+def _deserialize_scan_performance(payload: Any, settings: Settings) -> ScanPerformanceRead:
+    candidate = payload if isinstance(payload, dict) else {}
+    defaults = _default_scan_performance(settings)
+    return ScanPerformanceRead(
+        scan_worker_count=int(candidate.get("scan_worker_count", defaults.scan_worker_count)),
+        parallel_scan_jobs=int(candidate.get("parallel_scan_jobs", defaults.parallel_scan_jobs)),
     )
 
 
@@ -91,6 +108,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         normalized_user = []
         normalized_default = _seeded_default_ignore_patterns(settings)
     feature_flags = _deserialize_feature_flags(payload.get("feature_flags"))
+    scan_performance = _deserialize_scan_performance(payload.get("scan_performance"), settings)
     resolution_categories_payload = payload.get("resolution_categories")
     normalized_resolution_categories = normalize_resolution_categories(
         resolution_categories_payload if isinstance(resolution_categories_payload, list) else None
@@ -102,6 +120,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         default_ignore_patterns=normalized_default,
         resolution_categories=normalized_resolution_categories,
         feature_flags=feature_flags,
+        scan_performance=scan_performance,
     )
 
 
@@ -115,6 +134,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
             resolution_categories=default_resolution_categories(),
             feature_flags=_default_feature_flags(),
+            scan_performance=_default_scan_performance(resolved_settings),
         )
     return _deserialize_app_settings(setting.value, resolved_settings)
 
@@ -190,6 +210,9 @@ def update_app_settings(
     next_feature_flags = current.feature_flags.model_copy(
         update=payload.feature_flags.model_dump(exclude_none=True) if payload.feature_flags is not None else {}
     )
+    next_scan_performance = current.scan_performance.model_copy(
+        update=payload.scan_performance.model_dump(exclude_none=True) if payload.scan_performance is not None else {}
+    )
 
     affected_library_ids: list[int] = []
     if resolution_update.changed:
@@ -209,6 +232,7 @@ def update_app_settings(
         "default_ignore_patterns": next_default_ignore_patterns,
         "resolution_categories": [item.model_dump(mode="json") for item in next_resolution_categories],
         "feature_flags": next_feature_flags.model_dump(mode="json"),
+        "scan_performance": next_scan_performance.model_dump(mode="json"),
     }
     db.commit()
     db.refresh(setting)

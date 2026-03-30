@@ -44,6 +44,15 @@
     "desktopPathMustExist": "Choose an existing directory.",
     "chooseFolder": "Choose folder",
     "scanMode": "Scan mode",
+    "duplicateDetectionMode": "Duplicate detection",
+    "duplicateDetectionModeTooltipAria": "Explain duplicate detection modes",
+    "duplicateDetectionModeHint": "Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views.",
+    "duplicateDetectionModes": {
+      "off": "Off",
+      "filename": "Filename",
+      "filehash": "File hash",
+      "both": "Both"
+    },
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
@@ -68,12 +77,23 @@
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "appSettings": "App settings",
     "language": "Interface language",
+    "theme": "Color Theme",
+    "scanSettingsTitle": "Scan Settings",
+    "scanPerformanceTitle": "Scan performance",
+    "scanWorkerCount": "Per-scan analysis workers",
+    "scanWorkerCountTooltipAria": "Explain per-scan worker memory impact",
+    "scanWorkerCountTooltip": "Increase this if one large scan should finish faster.\n\nHigher values can noticeably increase CPU, disk, and memory usage. Adjust it carefully to match your system.\nMaximum: {{max}}.",
+    "parallelScanJobs": "Parallel library scans",
+    "parallelScanJobsTooltipAria": "Explain parallel scan memory impact",
+    "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nHigher values increase overall resource usage. Keep an eye on CPU, disk, and memory pressure.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature flags",
     "featureFlags": {
       "showDolbyVisionProfiles": "Show Dolby Vision Profiles",
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
       "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
-      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\"."
+      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\".",
+      "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
+      "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set."
     },
     "pathKinds": {
       "local": "Local path",
@@ -101,7 +121,6 @@
       "languageCodeInvalid": "Enter a valid two-letter ISO 639-1 language code, for example de or en."
     },
     "languageHint": "Applies immediately and is stored in the browser.",
-    "theme": "Color theme",
     "themeHint": "Applies immediately and is stored in the browser."
   },
   "libraryStatistics": {
@@ -227,6 +246,15 @@
     "loadingFiles": "Loading analyzed files…",
     "loadingMore": "Loading more entries…",
     "noAnalyzedFiles": "No analyzed files yet.",
+    "duplicates": {
+      "title": "Duplications",
+      "empty": "No duplicate groups found yet.",
+      "emptySearch": "No duplicate groups match the current search.",
+      "fileCount": "{{count}} files",
+      "searchPlaceholder": "Search duplicates",
+      "searchLabel": "Search duplicates",
+      "clearSearch": "Clear duplicate search"
+    },
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
     "statistics": {
@@ -264,6 +292,8 @@
     "metricIgnored": "Ignored",
     "metricAnalyzed": "Analyzed",
     "metricFailed": "Failed",
+    "metricDuplicateGroups": "Duplicate groups",
+    "metricDuplicateFiles": "Duplicate files",
     "metricNew": "New",
     "metricChanged": "Changed",
     "metricDeleted": "Deleted",
@@ -274,7 +304,16 @@
     "changedFiles": "Changed files",
     "deletedFiles": "Deleted files",
     "failedFiles": "Files that could not be analyzed",
+    "duplicatesTitle": "Duplicate processing",
+    "duplicatesSummary": "{{groups}} groups across {{files}} files using {{mode}}",
+    "duplicatesMode": "Mode",
+    "duplicatesQueued": "Queued",
+    "duplicatesProcessed": "Processed",
+    "duplicatesFailed": "Failed",
     "failedFileReasonTooltipAria": "Show analysis failure details for {{path}}",
+    "copyDiagnostics": "Copy details",
+    "copiedDiagnostics": "Copied",
+    "copyDiagnosticsAria": "Copy troubleshooting details for {{path}}",
     "watchEvents": "{{count}} filesystem events were aggregated.",
     "intervalMinutes": "Schedule interval: {{minutes}} minutes",
     "coalescedTriggers": "{{count}} additional triggers were merged into this scan.",

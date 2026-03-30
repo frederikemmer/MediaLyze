@@ -1,14 +1,15 @@
 import "../i18n";
 
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileTablePage,
@@ -32,6 +33,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     type: "series",
     last_scan_at: "2026-03-12T09:00:00Z",
     scan_mode: "manual",
+    duplicate_detection_mode: "off",
     scan_config: {},
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
@@ -41,6 +43,30 @@ function createLibrarySummary(id: number): LibrarySummary {
     total_duration_seconds: 7200,
     ready_files: 2,
     pending_files: 0,
+  };
+}
+
+function createDuplicateGroupPage(overrides: Partial<DuplicateGroupPage> = {}): DuplicateGroupPage {
+  return {
+    mode: "filename",
+    total_groups: 1,
+    duplicate_file_count: 2,
+    offset: 0,
+    limit: 25,
+    items: [
+      {
+        mode: "filename",
+        signature: "episode 01",
+        label: "episode 01",
+        file_count: 2,
+        total_size_bytes: 2048,
+        items: [
+          { id: 1, relative_path: "episode-01.mkv", filename: "episode-01.mkv", size_bytes: 1024 },
+          { id: 2, relative_path: "episode-01-copy.mkv", filename: "episode-01-copy.mkv", size_bytes: 1024 },
+        ],
+      },
+    ],
+    ...overrides,
   };
 }
 
@@ -139,6 +165,11 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+beforeEach(() => {
+  vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+});
+
 describe("LibraryDetailPage", () => {
   it("loads summary, statistics, and files separately", async () => {
     const libraryId = 101;
@@ -150,6 +181,7 @@ describe("LibraryDetailPage", () => {
     });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
     renderPage(libraryId);
@@ -157,7 +189,133 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
+    expect(libraryDuplicatesSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("loads duplicate groups separately and renders matching files", async () => {
+    const libraryId = 120;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("button", { name: "Duplications" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
+    expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { level: 3, name: "episode 01" })).not.toBeInTheDocument();
+    expect(libraryDuplicatesSpy).toHaveBeenCalledWith(String(libraryId), expect.objectContaining({ offset: 0, limit: 25 }));
+  });
+
+  it("renders duplicate variants inside a scroll-limited list", async () => {
+    const libraryId = 122;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({
+        items: [
+          {
+            mode: "filename",
+            signature: "episode 01",
+            label: "episode 01",
+            file_count: 4,
+            total_size_bytes: 4096,
+            items: [
+              { id: 1, relative_path: "episode-01.mkv", filename: "episode-01.mkv", size_bytes: 1024 },
+              { id: 2, relative_path: "episode-01-copy.mkv", filename: "episode-01-copy.mkv", size_bytes: 1024 },
+              { id: 3, relative_path: "episode-01-alt.mkv", filename: "episode-01-alt.mkv", size_bytes: 1024 },
+              { id: 4, relative_path: "episode-01-remux.mkv", filename: "episode-01-remux.mkv", size_bytes: 1024 },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
+    fireEvent.click(duplicatesToggle);
+    const variantsList = container.querySelector(".duplicate-group-items-scroll");
+    expect(variantsList).not.toBeNull();
+    expect(variantsList).toHaveClass("scan-log-path-list");
+  });
+
+  it("filters duplicate groups and collapses the duplicate panel", async () => {
+    const libraryId = 121;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({
+        total_groups: 2,
+        duplicate_file_count: 4,
+        items: [
+          {
+            mode: "filename",
+            signature: "episode 01",
+            label: "episode 01",
+            file_count: 2,
+            total_size_bytes: 2048,
+            items: [
+              { id: 1, relative_path: "episode-01.mkv", filename: "episode-01.mkv", size_bytes: 1024 },
+              { id: 2, relative_path: "episode-01-copy.mkv", filename: "episode-01-copy.mkv", size_bytes: 1024 },
+            ],
+          },
+          {
+            mode: "filehash",
+            signature: "deadbeef",
+            label: "bonus-scene.mkv",
+            file_count: 2,
+            total_size_bytes: 2048,
+            items: [
+              { id: 3, relative_path: "bonus-scene.mkv", filename: "bonus-scene.mkv", size_bytes: 1024 },
+              { id: 4, relative_path: "bonus-scene-copy.mkv", filename: "bonus-scene-copy.mkv", size_bytes: 1024 },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("button", { name: "Duplications" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search duplicates" }), {
+      target: { value: "bonus" },
+    });
+
+    expect((await screen.findAllByText("bonus-scene-copy.mkv")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("episode-01-copy.mkv")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
+
+    const collapsedToggle = await screen.findByRole("button", { name: "Duplications" });
+    expect(collapsedToggle).toBeInTheDocument();
+    expect(within(collapsedToggle.closest("section") ?? document.body).getAllByText(/^2$/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
+    expect(screen.queryByText("bonus-scene-copy.mkv")).not.toBeInTheDocument();
   });
 
   it("still loads statistics and files under strict mode remounts", async () => {
@@ -228,6 +386,55 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(await screen.findAllByText("statistics unavailable")).not.toHaveLength(0);
+  });
+
+  it("reloads duplicate groups after an active scan finishes", async () => {
+    const libraryId = 203;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryDuplicatesSpy = vi
+      .spyOn(api, "libraryDuplicates")
+      .mockResolvedValueOnce(createDuplicateGroupPage({ total_groups: 0, duplicate_file_count: 0, items: [] }))
+      .mockResolvedValueOnce(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    vi.spyOn(api, "activeScanJobs")
+      .mockResolvedValueOnce([
+        {
+          id: 50,
+          library_id: libraryId,
+          library_name: "Series 203",
+          status: "running",
+          job_type: "incremental",
+          files_total: 2,
+          files_scanned: 1,
+          errors: 0,
+          started_at: "2026-03-12T09:10:00Z",
+          finished_at: null,
+          progress_percent: 50,
+          phase_label: "Analyzing media",
+          phase_detail: "1 of 2 files analyzed",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("button", { name: "Duplications" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
+    expect(await screen.findByText("No duplicate groups found yet.")).toBeInTheDocument();
+    await waitFor(() => expect(api.activeScanJobs).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(libraryDuplicatesSpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.focus(window);
+
+    await waitFor(() => expect(libraryDuplicatesSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
   });
 
   it("refetches only files when sorting changes", async () => {

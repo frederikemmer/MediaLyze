@@ -72,8 +72,17 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     scan_job_columns = {column["name"] for column in inspector.get_columns("scan_jobs")}
 
     assert "app_settings" in inspector.get_table_names()
-    assert {"last_scan_at", "scan_mode", "scan_config"}.issubset(library_columns)
-    assert {"last_seen_at", "last_analyzed_at", "scan_status", "quality_score", "raw_ffprobe_json"}.issubset(
+    assert {"last_scan_at", "scan_mode", "duplicate_detection_mode", "scan_config"}.issubset(library_columns)
+    assert {
+        "last_seen_at",
+        "last_analyzed_at",
+        "scan_status",
+        "quality_score",
+        "raw_ffprobe_json",
+        "filename_signature",
+        "content_hash",
+        "content_hash_algorithm",
+    }.issubset(
         media_file_columns
     )
     assert {"codec", "language", "default_flag", "forced_flag", "subtitle_type"}.issubset(subtitle_columns)
@@ -153,6 +162,8 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     assert "ix_media_files_library_mtime" in index_names
     assert "ix_media_files_library_last_analyzed_at" in index_names
     assert "ix_media_files_library_quality_score" in index_names
+    assert "ix_media_files_library_filename_signature" in index_names
+    assert "ix_media_files_library_content_hash" in index_names
     assert "ix_subtitle_streams_codec" in subtitle_index_names
     assert "ix_subtitle_streams_language" in subtitle_index_names
     assert "ix_subtitle_streams_media_file_id" in subtitle_index_names

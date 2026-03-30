@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.4.0
+
+>2026-03-30
+
+First "rough" implementation for detecting duplicate files. May break desktop install use v0.3.0 if it's not working properly.
+
+### ✨ New
+
+- add per-library duplicate detection with `off` (default), `filename`, `filehash`, `both` modes ([#16](https://github.com/frederikemmer/MediaLyze/issues/16))
+- view and search through duplicates on library page
+- scan performance tuning in `App settings` with separate controls for per-scan analysis workers and parallel library scans
+
+### 🐛 Bug fixes
+
+- rework scan execution so discovery streams files directly into analysis and duplicate workers, live progress reflects worker completion, and configured worker counts now affect real throughput
+- stop auto-resuming or auto-queuing stale startup jobs, clear pending watchdog debounce requests on cancel, and improve failed scan diagnostics with copyable detailed error payloads
+- tighten the duplicate and library-settings UI by capping visible duplicate variants with internal scrolling, aligning scan controls consistently, and making the `dev` desktop artifact build manual-only
+
 ## v0.3.0
 
 >2026-03-26

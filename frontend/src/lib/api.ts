@@ -62,6 +62,8 @@ export type QualityBreakdown = {
   categories: QualityCategoryBreakdown[];
 };
 
+export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
+
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
   resolution: { weight: 8, minimum: "1080p", ideal: "4k" },
@@ -90,6 +92,7 @@ export type LibrarySummary = {
   type: "movies" | "series" | "mixed" | "other";
   last_scan_at: string | null;
   scan_mode: "manual" | "scheduled" | "watch";
+  duplicate_detection_mode: DuplicateDetectionMode;
   scan_config: Record<string, number>;
   created_at: string;
   updated_at: string;
@@ -221,6 +224,10 @@ export type AppSettings = {
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
   resolution_categories?: ResolutionCategory[];
+  scan_performance?: {
+    scan_worker_count: number;
+    parallel_scan_jobs: number;
+  };
   feature_flags: {
     show_dolby_vision_profiles: boolean;
     show_analyzed_files_csv_export: boolean;
@@ -233,6 +240,7 @@ export type ScanJob = {
   library_name: string | null;
   status: string;
   job_type: string;
+  discovered_files?: number;
   files_total: number;
   files_scanned: number;
   errors: number;
@@ -255,6 +263,7 @@ export type ScanFileList = {
 export type ScanFileIssue = {
   path: string;
   reason: string;
+  detail?: string | null;
 };
 
 export type ScanPatternHit = {
@@ -288,6 +297,16 @@ export type ScanSummary = {
     failed_files: ScanFileIssue[];
     failed_files_truncated_count: number;
   };
+  duplicates: {
+    mode: DuplicateDetectionMode;
+    queued_for_processing: number;
+    processed_successfully: number;
+    processing_failed: number;
+    failed_files: ScanFileIssue[];
+    failed_files_truncated_count: number;
+    duplicate_groups: number;
+    duplicate_files: number;
+  };
 };
 
 export type RecentScanJob = {
@@ -317,6 +336,31 @@ export type ScanJobDetail = RecentScanJob & {
 export type RecentScanJobPage = {
   items: RecentScanJob[];
   has_more: boolean;
+};
+
+export type DuplicateGroupFile = {
+  id: number;
+  relative_path: string;
+  filename: string;
+  size_bytes: number;
+};
+
+export type DuplicateGroup = {
+  mode: DuplicateDetectionMode;
+  signature: string;
+  label: string;
+  file_count: number;
+  total_size_bytes: number;
+  items: DuplicateGroupFile[];
+};
+
+export type DuplicateGroupPage = {
+  mode: DuplicateDetectionMode;
+  total_groups: number;
+  duplicate_file_count: number;
+  offset: number;
+  limit: number;
+  items: DuplicateGroup[];
 };
 
 export type ScanCancelResponse = {
@@ -460,6 +504,22 @@ export const api = {
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
   libraryStatistics: (id: string | number, signal?: AbortSignal) =>
     request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
+  libraryDuplicates: (
+    id: string | number,
+    params?: { offset?: number; limit?: number; signal?: AbortSignal },
+  ) => {
+    const searchParams = new URLSearchParams();
+    if (params?.offset !== undefined) {
+      searchParams.set("offset", String(params.offset));
+    }
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    const query = searchParams.toString();
+    return request<DuplicateGroupPage>(`/libraries/${id}/duplicates${query ? `?${query}` : ""}`, {
+      signal: params?.signal,
+    });
+  },
   libraryFiles: (id: string | number, params?: LibraryFilesRequestParams) =>
     request<MediaFileTablePage>(buildLibraryFilesPath(id, params), {
       signal: params?.signal,
@@ -497,6 +557,10 @@ export const api = {
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
     resolution_categories?: ResolutionCategory[];
+    scan_performance?: {
+      scan_worker_count?: number;
+      parallel_scan_jobs?: number;
+    };
     feature_flags?: {
       show_dolby_vision_profiles?: boolean;
       show_analyzed_files_csv_export?: boolean;
@@ -511,6 +575,7 @@ export const api = {
     path: string;
     type: string;
     scan_mode: string;
+    duplicate_detection_mode?: DuplicateDetectionMode;
     scan_config?: Record<string, number>;
     quality_profile?: QualityProfile;
   }) =>
@@ -523,6 +588,7 @@ export const api = {
     payload: {
       name?: string;
       scan_mode?: string;
+      duplicate_detection_mode?: DuplicateDetectionMode;
       scan_config?: Record<string, number>;
       quality_profile?: QualityProfile;
     },

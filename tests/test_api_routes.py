@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
-from backend.app.models.entities import JobStatus, Library, LibraryType, ScanJob, ScanMode
+from backend.app.models.entities import DuplicateDetectionMode, JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode
 from backend.app.core.config import Settings
 from pathlib import Path
 
@@ -23,6 +23,7 @@ def _build_test_app(db: Session) -> TestClient:
         (),
         {
             "sync_library": lambda self, library_id: None,
+            "refresh_worker_settings": lambda self: None,
             "request_quality_recompute": lambda self, library_id: None,
             "cancel_active_jobs": lambda self: [],
         },
@@ -205,3 +206,247 @@ def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None
     payload = response.json()[0]
     assert payload["started_at"] == "2026-03-24T04:06:00Z"
     assert payload["finished_at"] == "2026-03-24T04:10:00Z"
+
+
+def test_library_duplicates_route_returns_404_for_unknown_library() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/libraries/999/duplicates")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Library not found"}
+
+
+def test_library_duplicates_route_returns_grouped_duplicates_for_active_mode() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        filename_library = Library(
+            name="Filename Movies",
+            path="/tmp/filename-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+            scan_config={},
+        )
+        filehash_library = Library(
+            name="Filehash Movies",
+            path="/tmp/filehash-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filehash,
+            scan_config={},
+        )
+        db.add_all([filename_library, filehash_library])
+        db.flush()
+
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=filename_library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                ),
+                MediaFile(
+                    library_id=filename_library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                ),
+                MediaFile(
+                    library_id=filehash_library.id,
+                    relative_path="dup-a.mkv",
+                    filename="dup-a.mkv",
+                    extension="mkv",
+                    size_bytes=20,
+                    mtime=1.0,
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=filehash_library.id,
+                    relative_path="dup-b.mp4",
+                    filename="dup-b.mp4",
+                    extension="mp4",
+                    size_bytes=20,
+                    mtime=1.0,
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        filename_response = client.get(f"/api/libraries/{filename_library.id}/duplicates")
+        filehash_response = client.get(f"/api/libraries/{filehash_library.id}/duplicates")
+
+    assert filename_response.status_code == 200
+    filename_payload = filename_response.json()
+    assert filename_payload["mode"] == "filename"
+    assert filename_payload["total_groups"] == 1
+    assert filename_payload["duplicate_file_count"] == 2
+    assert filename_payload["items"][0]["signature"] == "movie name 2024"
+    assert [item["relative_path"] for item in filename_payload["items"][0]["items"]] == [
+        "Movie.Name.2024.mkv",
+        "movie_name_2024.mp4",
+    ]
+
+    assert filehash_response.status_code == 200
+    filehash_payload = filehash_response.json()
+    assert filehash_payload["mode"] == "filehash"
+    assert filehash_payload["total_groups"] == 1
+    assert filehash_payload["duplicate_file_count"] == 2
+    assert filehash_payload["items"][0]["signature"] == "deadbeef"
+    assert filehash_payload["items"][0]["mode"] == "filehash"
+
+
+def test_library_duplicates_route_returns_empty_page_when_detection_is_off() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Disabled Movies",
+            path="/tmp/disabled-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.off,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "off",
+        "total_groups": 0,
+        "duplicate_file_count": 0,
+        "offset": 0,
+        "limit": 25,
+        "items": [],
+    }
+
+
+def test_library_duplicates_route_returns_both_group_types_for_combined_mode() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Combined Movies",
+            path="/tmp/combined-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="hash-a",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                    content_hash="hash-b",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="hash-a.mkv",
+                    filename="hash-a.mkv",
+                    extension="mkv",
+                    size_bytes=20,
+                    mtime=1.0,
+                    filename_signature="hash a",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="different-name.mp4",
+                    filename="different-name.mp4",
+                    extension="mp4",
+                    size_bytes=20,
+                    mtime=1.0,
+                    filename_signature="different name",
+                    content_hash="deadbeef",
+                    content_hash_algorithm="sha256",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "both"
+    assert payload["total_groups"] == 2
+    assert payload["duplicate_file_count"] == 4
+    assert [item["mode"] for item in payload["items"]] == ["filehash", "filename"]
+    assert payload["items"][0]["signature"] == "deadbeef"
+    assert payload["items"][1]["signature"] == "movie name 2024"

@@ -90,6 +90,48 @@ def test_list_active_scan_jobs_deduplicates_per_library() -> None:
     assert jobs[0].library_name == "Movies"
 
 
+def test_list_active_scan_jobs_prefers_running_scan_over_queued_quality_recompute() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.queued,
+                    job_type="quality_recompute",
+                ),
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.running,
+                    job_type="incremental",
+                    files_total=100,
+                    files_scanned=10,
+                    errors=0,
+                    started_at=datetime.now(UTC),
+                ),
+            ]
+        )
+        db.commit()
+
+        jobs = list_active_scan_jobs(db)
+
+    assert len(jobs) == 1
+    assert jobs[0].job_type == "incremental"
+    assert jobs[0].phase_label == "Analyzing media"
+
+
 def test_list_recent_scan_jobs_filters_quality_recompute_and_serializes_summary() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -220,7 +262,7 @@ def test_get_scan_job_detail_returns_trigger_and_summary() -> None:
                 "ignore_patterns": ["sample.*"],
                 "analysis": {
                     "analysis_failed": 1,
-                    "failed_files": [{"path": "broken.mkv", "reason": "ffprobe exploded"}],
+                    "failed_files": [{"path": "broken.mkv", "reason": "ffprobe exploded", "detail": "traceback"}],
                 },
             },
         )
@@ -233,3 +275,4 @@ def test_get_scan_job_detail_returns_trigger_and_summary() -> None:
     assert payload.trigger_details == {"reason": "user_requested"}
     assert payload.scan_summary.ignore_patterns == ["sample.*"]
     assert payload.scan_summary.analysis.failed_files[0].path == "broken.mkv"
+    assert payload.scan_summary.analysis.failed_files[0].detail == "traceback"

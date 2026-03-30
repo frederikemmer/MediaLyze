@@ -32,6 +32,8 @@ def _scan_outcome(scan_job: ScanJob) -> str:
 
 
 def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
+    summary = _normalize_scan_summary(scan_job.scan_summary)
+    discovered_files = summary.discovery.discovered_files
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
     progress_percent = 0.0
@@ -54,7 +56,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         )
     elif scan_job.status == JobStatus.running and files_scanned == 0:
         phase_label = "Discovering files"
-        phase_detail = f"{files_total} files found so far" if files_total > 0 else "Scanning directories"
+        phase_detail = f"{discovered_files} files found so far" if discovered_files > 0 else "Scanning directories"
     elif scan_job.status == JobStatus.running:
         phase_label = "Analyzing media"
         phase_detail = f"{files_scanned} of {files_total} files analyzed"
@@ -99,6 +101,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         library_name=scan_job.library.name if scan_job.library else None,
         status=scan_job.status,
         job_type=scan_job.job_type,
+        discovered_files=discovered_files,
         files_total=files_total,
         files_scanned=files_scanned,
         errors=scan_job.errors,
@@ -147,8 +150,16 @@ def list_active_scan_jobs(db: Session) -> list[ScanJobRead]:
         select(ScanJob)
         .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
         .options(selectinload(ScanJob.library))
-        .order_by(ScanJob.started_at.desc(), ScanJob.id.desc())
     ).all()
+    jobs = sorted(
+        jobs,
+        key=lambda job: (
+            0 if job.status == JobStatus.running else 1,
+            0 if job.job_type in {"incremental", "full"} else 1,
+            -(job.started_at.timestamp() if job.started_at else 0.0),
+            -job.id,
+        ),
+    )
     seen_libraries: set[int] = set()
     deduplicated: list[ScanJobRead] = []
     for job in jobs:

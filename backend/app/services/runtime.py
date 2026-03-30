@@ -13,11 +13,11 @@ from watchdog.observers import Observer
 from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, ScanTriggerSource
+from backend.app.services.app_settings import get_app_settings
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
     execute_scan_job,
-    libraries_needing_quality_backfill,
     queue_quality_recompute_job,
     queue_scan_job,
 )
@@ -36,10 +36,8 @@ class ScanRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.executor = ThreadPoolExecutor(
-            max_workers=max(1, settings.scan_runtime_worker_count),
-            thread_name_prefix="medialyze-runtime",
-        )
+        self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
+        self.executor = self._build_executor(self.executor_max_workers)
         self.lock = Lock()
         self.watch_observers: dict[int, tuple[str, Observer]] = {}
         self.debounce_timers: dict[int, Timer] = {}
@@ -49,15 +47,14 @@ class ScanRuntimeManager:
         self.started = False
 
     def start(self) -> None:
+        self.refresh_worker_settings()
         with self.lock:
             if self.started:
                 return
             self.scheduler.start()
             self.started = True
         self._recover_orphaned_jobs()
-        self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
-        self._resume_active_jobs()
 
     def stop(self) -> None:
         with self.lock:
@@ -77,7 +74,26 @@ class ScanRuntimeManager:
 
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
-        self.executor.shutdown(wait=False, cancel_futures=True)
+        self._shutdown_executor(self.executor, cancel_futures=True)
+
+    def refresh_worker_settings(self) -> bool:
+        db = SessionLocal()
+        try:
+            next_workers = max(1, get_app_settings(db, self.settings).scan_performance.parallel_scan_jobs)
+        finally:
+            db.close()
+
+        previous_executor: ThreadPoolExecutor | None = None
+        with self.lock:
+            if next_workers == self.executor_max_workers:
+                return False
+            previous_executor = self.executor
+            self.executor = self._build_executor(next_workers)
+            self.executor_max_workers = next_workers
+
+        if previous_executor is not None:
+            self._shutdown_executor(previous_executor, cancel_futures=False)
+        return True
 
     def sync_all_libraries(self) -> None:
         db = SessionLocal()
@@ -228,6 +244,13 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
+        with self.lock:
+            for library_id in {job.library_id for job in jobs}:
+                pending_timer = self.debounce_timers.pop(library_id, None)
+                if pending_timer is not None:
+                    pending_timer.cancel()
+                self.watch_trigger_buffers.pop(library_id, None)
+
         return canceled_ids
 
     def cancel_library_jobs(self, library_id: int) -> list[int]:
@@ -252,6 +275,12 @@ class ScanRuntimeManager:
                 db.commit()
         finally:
             db.close()
+
+        with self.lock:
+            pending_timer = self.debounce_timers.pop(library_id, None)
+            if pending_timer is not None:
+                pending_timer.cancel()
+            self.watch_trigger_buffers.pop(library_id, None)
 
         return canceled_ids
 
@@ -329,49 +358,22 @@ class ScanRuntimeManager:
         observer.start()
         self.watch_observers[library.id] = (library_path, observer)
 
-    def _resume_active_jobs(self) -> None:
+    def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            active_jobs = db.scalars(
+            orphaned_jobs = db.scalars(
                 select(ScanJob)
                 .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            chosen_job_ids: list[int] = []
-            seen_libraries: set[int] = set()
-
-            for job in active_jobs:
-                if job.library_id in seen_libraries:
-                    continue
-                seen_libraries.add(job.library_id)
-                chosen_job_ids.append(job.id)
-
-            db.commit()
-        finally:
-            db.close()
-
-        for job_id in chosen_job_ids:
-            self.submit_scan_job(job_id)
-
-    def _recover_orphaned_jobs(self) -> None:
-        db = SessionLocal()
-        try:
-            running_jobs = db.scalars(
-                select(ScanJob)
-                .where(ScanJob.status == JobStatus.running)
-                .order_by(ScanJob.id.asc())
-            ).all()
-
-            if not running_jobs:
+            if not orphaned_jobs:
                 return
 
-            for job in running_jobs:
-                job.status = JobStatus.queued
-                job.started_at = None
-                job.finished_at = None
-                job.files_total = 0
-                job.files_scanned = 0
+            finished_at = utc_now()
+            for job in orphaned_jobs:
+                job.status = JobStatus.canceled
+                job.finished_at = finished_at
 
             db.commit()
         finally:
@@ -393,14 +395,6 @@ class ScanRuntimeManager:
 
         if next_job is not None:
             self.submit_scan_job(next_job.id)
-
-    def _queue_quality_backfill_jobs(self) -> None:
-        db = SessionLocal()
-        try:
-            for library_id in libraries_needing_quality_backfill(db):
-                queue_quality_recompute_job(db, library_id)
-        finally:
-            db.close()
 
     def _remove_scheduled_job(self, library_id: int) -> None:
         job_id = self._scheduled_job_id(library_id)
@@ -484,3 +478,17 @@ class ScanRuntimeManager:
         if relative_path.startswith(".."):
             return None
         return Path(relative_path).as_posix()
+
+    @staticmethod
+    def _shutdown_executor(executor: ThreadPoolExecutor, *, cancel_futures: bool) -> None:
+        try:
+            executor.shutdown(wait=False, cancel_futures=cancel_futures)
+        except TypeError:
+            executor.shutdown(wait=False)
+
+    @staticmethod
+    def _build_executor(max_workers: int) -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=max(1, max_workers),
+            thread_name_prefix="medialyze-runtime",
+        )
