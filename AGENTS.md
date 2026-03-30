@@ -463,9 +463,10 @@ Implemented UI behavior includes:
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
+* user-resizable analyzed-files table columns with persisted widths in browser storage
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics and some panel/section visibility
+* persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility
 
 ## 8.3 Internationalization
 

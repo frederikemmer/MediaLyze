@@ -266,6 +266,7 @@
     },
     "renderedEntries": "{{rendered}} von {{total}} Einträgen gerendert",
     "loadMore": "{{count}} weitere laden",
+    "resizeColumnAria": "Spaltenbreite für {{column}} anpassen",
     "statistics": {
       "filterByValue": "Analysierte Dateien nach {{field}} filtern: {{value}}",
       "filterAlreadyApplied": "Bereits zum Filter für analysierte Dateien unter {{field}} hinzugefügt: {{value}}"

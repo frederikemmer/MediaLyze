@@ -266,6 +266,7 @@
     },
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
+    "resizeColumnAria": "Resize column {{column}}",
     "statistics": {
       "filterByValue": "Filter analyzed files by {{field}}: {{value}}",
       "filterAlreadyApplied": "Already added to analyzed files filter for {{field}}: {{value}}"

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - support `!` negation and comma-separated `AND` terms in analyzed-files metadata search filters ([#85](https://github.com/frederikemmer/MediaLyze/issues/85))
 - add feature flags for a full-width `.media-app-shell` layout and hiding the analyzed-files quality score meter ([#91](https://github.com/frederikemmer/MediaLyze/issues/91))
+- add Excel-like drag resizing for analyzed-files table columns, with widths persisted in browser storage
 
 ## v0.4.0
 

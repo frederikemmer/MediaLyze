@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
+import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
@@ -275,6 +276,68 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(container.querySelector(".score-meter")).toBeNull();
+  });
+
+  it("restores persisted analyzed-file column widths", async () => {
+    const libraryId = 124;
+    window.localStorage.setItem(
+      LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify({ video_codec: 333 }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect((container.querySelector(".media-data-head-row") as HTMLElement).style.gridTemplateColumns).toContain("333px");
+  });
+
+  it("persists resized analyzed-file column widths", async () => {
+    const libraryId = 125;
+    vi.spyOn(api, "appSettings").mockResolvedValue({
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
+      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    const resizeHandle = screen.getByRole("button", { name: "Resize column Codec" });
+    const headerCell = resizeHandle.closest(".media-data-header-cell") as HTMLDivElement | null;
+    expect(headerCell).not.toBeNull();
+    headerCell!.getBoundingClientRect = () =>
+      ({
+        x: 0,
+        y: 0,
+        width: 220,
+        height: 42,
+        top: 0,
+        right: 220,
+        bottom: 42,
+        left: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    fireEvent.pointerDown(resizeHandle, { clientX: 220 });
+    fireEvent.pointerMove(window, { clientX: 300 });
+    fireEvent.pointerUp(window);
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem(LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY)).toContain("\"video_codec\":300"),
+    );
   });
 
   it("filters duplicate groups and collapses the duplicate panel", async () => {
