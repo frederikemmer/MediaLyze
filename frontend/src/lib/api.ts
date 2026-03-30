@@ -240,6 +240,7 @@ export type ScanJob = {
   library_name: string | null;
   status: string;
   job_type: string;
+  discovered_files?: number;
   files_total: number;
   files_scanned: number;
   errors: number;

@@ -154,7 +154,7 @@ Current scan execution behavior:
 3. compare discovered files against stored records
 4. detect new, modified, deleted, or newly ignored files
 5. reanalyze files with incomplete metadata when needed
-6. queue per-file work for analysis and duplicate-signature processing
+6. stream discovered files into a runtime work queue for analysis and duplicate-signature processing instead of waiting for full discovery to finish first
 7. persist detailed scan summaries and file-level failure samples
 
 Change detection uses:
@@ -173,6 +173,7 @@ Actual implementation:
 * the runtime is managed by `ScanRuntimeManager`
 * jobs are queued and deduplicated per library
 * execution is backed by a `ThreadPoolExecutor`
+* file discovery stays single-threaded, while worker threads are used for per-file analysis and duplicate processing only
 * APScheduler manages scheduled work
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
@@ -189,6 +190,7 @@ Scan-job tracking now includes:
 * trigger source tracking
 * trigger details
 * progress state and phase labels
+* separate live discovery counts and worker-queue progress counts for active scans
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file
@@ -754,7 +756,7 @@ Current workflows include:
 
 * dev image publishing
 * official release publishing
-* dev desktop artifact builds
+* manually triggered dev desktop artifact builds
 * desktop release artifact publishing
 * release metadata validation for pull requests
 

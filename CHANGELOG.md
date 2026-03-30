@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - clear pending watchdog debounce requests when active scans are canceled so stop actions do not immediately requeue replacement scans
 - include per-file detailed failure diagnostics in scan logs and add a copyable troubleshooting payload for failed analysis or duplicate-processing entries
 - make scan worker tuning actually drive scan throughput by applying the persisted App Settings limits to both per-library job concurrency and in-scan `ffprobe` worker pools
+- stop auto-running the `dev` desktop artifact workflow on every push; desktop dev builds are now manual-only via `workflow_dispatch`
+- stream discovered files directly into the analysis / duplicate worker queue so scans no longer wait for full discovery before processing, and report live discovery counts separately from worker progress in the active scan UI
 
 ## v0.3.0
 

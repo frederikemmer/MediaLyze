@@ -16,6 +16,7 @@ class ScanJobRead(BaseModel):
     library_name: str | None = None
     status: JobStatus
     job_type: str
+    discovered_files: int = 0
     files_total: int
     files_scanned: int
     errors: int

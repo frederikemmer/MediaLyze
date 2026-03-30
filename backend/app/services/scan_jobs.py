@@ -32,6 +32,8 @@ def _scan_outcome(scan_job: ScanJob) -> str:
 
 
 def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
+    summary = _normalize_scan_summary(scan_job.scan_summary)
+    discovered_files = summary.discovery.discovered_files
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
     progress_percent = 0.0
@@ -54,7 +56,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         )
     elif scan_job.status == JobStatus.running and files_scanned == 0:
         phase_label = "Discovering files"
-        phase_detail = f"{files_total} files found so far" if files_total > 0 else "Scanning directories"
+        phase_detail = f"{discovered_files} files found so far" if discovered_files > 0 else "Scanning directories"
     elif scan_job.status == JobStatus.running:
         phase_label = "Analyzing media"
         phase_detail = f"{files_scanned} of {files_total} files analyzed"
@@ -99,6 +101,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         library_name=scan_job.library.name if scan_job.library else None,
         status=scan_job.status,
         job_type=scan_job.job_type,
+        discovered_files=discovered_files,
         files_total=files_total,
         files_scanned=files_scanned,
         errors=scan_job.errors,

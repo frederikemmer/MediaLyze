@@ -12,7 +12,7 @@ import { useScanJobs } from "../lib/scan-jobs";
 
 function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
   if (job.phase_label === "Discovering files") {
-    return t("scanBanner.searchingFound", { count: job.files_total });
+    return t("scanBanner.searchingFound", { count: job.discovered_files ?? job.files_total });
   }
   if (job.phase_label === "Analyzing media" && job.files_total > 0) {
     return t("scanBanner.analyzingProgress", {
