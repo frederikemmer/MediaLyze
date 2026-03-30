@@ -258,6 +258,7 @@ export type ScanFileList = {
 export type ScanFileIssue = {
   path: string;
   reason: string;
+  detail?: string | null;
 };
 
 export type ScanPatternHit = {

@@ -968,6 +968,39 @@
   overflow-wrap: anywhere;
 }
 
+.scan-log-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+}
+
+.scan-log-copy-button:hover,
+.scan-log-copy-button:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+  transform: none;
+}
+
+.scan-log-failure-reason {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .scan-log-path-tooltip-trigger,
 .scan-log-path-tooltip-trigger.tooltip-trigger {
   width: fit-content;

@@ -147,8 +147,16 @@ def list_active_scan_jobs(db: Session) -> list[ScanJobRead]:
         select(ScanJob)
         .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
         .options(selectinload(ScanJob.library))
-        .order_by(ScanJob.started_at.desc(), ScanJob.id.desc())
     ).all()
+    jobs = sorted(
+        jobs,
+        key=lambda job: (
+            0 if job.status == JobStatus.running else 1,
+            0 if job.job_type in {"incremental", "full"} else 1,
+            -(job.started_at.timestamp() if job.started_at else 0.0),
+            -job.id,
+        ),
+    )
     seen_libraries: set[int] = set()
     deduplicated: list[ScanJobRead] = []
     for job in jobs:

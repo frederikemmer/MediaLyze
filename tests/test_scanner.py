@@ -491,9 +491,9 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
 
     assert job.status.value == "failed"
     assert job.scan_summary["analysis"]["analysis_failed"] == 1
-    assert job.scan_summary["analysis"]["failed_files"] == [
-        {"path": "broken.mkv", "reason": "ffprobe exploded"}
-    ]
+    assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
+    assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "ffprobe exploded"
+    assert "RuntimeError: ffprobe exploded" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
 
 
 def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, monkeypatch) -> None:
@@ -578,9 +578,9 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
         ("broken.mkv", "failed"),
         ("good.mkv", "ready"),
     ]
-    assert job.scan_summary["analysis"]["failed_files"] == [
-        {"path": "broken.mkv", "reason": "bad payload"}
-    ]
+    assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
+    assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "bad payload"
+    assert "ValueError: bad payload" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
 
 
 def test_incremental_scan_backfills_missing_filehash_without_reanalyzing_unchanged_files(tmp_path: Path, monkeypatch) -> None:

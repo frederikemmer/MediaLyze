@@ -177,6 +177,7 @@ Actual implementation:
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
 * quality recomputation runs as a distinct runtime-managed job type
+* startup no longer auto-queues quality-recompute backfill jobs; recomputation is queued only from explicit follow-up actions such as library profile updates
 * old `queued` and `running` jobs from previous processes are canceled during startup instead of being resumed
 
 ## 3.6 Scan Logs
@@ -190,7 +191,7 @@ Scan-job tracking now includes:
 * progress state and phase labels
 * discovery summaries
 * change summaries
-* analysis failure summaries with sampled error reasons
+* analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file
 * duplicate-processing summaries including mode, failure samples, and grouped duplicate counts
 
 ---

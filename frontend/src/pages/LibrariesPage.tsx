@@ -313,6 +313,30 @@ function compactScanValues(values: string[], limit = 2): string {
   return values.length > limit ? `${visible.join(", ")}, ...` : visible.join(", ");
 }
 
+function buildScanFailureDiagnostic(
+  job: ScanJobDetail,
+  section: "analysis" | "duplicates",
+  entry: { path: string; reason: string; detail?: string | null },
+): string {
+  return JSON.stringify(
+    {
+      job_id: job.id,
+      library_id: job.library_id,
+      library_name: job.library_name,
+      outcome: job.outcome,
+      trigger_source: job.trigger_source,
+      started_at: job.started_at,
+      finished_at: job.finished_at,
+      section,
+      path: entry.path,
+      reason: entry.reason,
+      detail: entry.detail ?? entry.reason,
+    },
+    null,
+    2,
+  );
+}
+
 function scanLogTitle(job: RecentScanJob) {
   return formatDate(job.finished_at ?? job.started_at);
 }
@@ -358,6 +382,7 @@ export function LibrariesPage() {
   const [scanJobDetails, setScanJobDetails] = useState<Record<number, ScanJobDetail>>({});
   const [scanJobDetailLoading, setScanJobDetailLoading] = useState<Record<number, boolean>>({});
   const [scanJobDetailErrors, setScanJobDetailErrors] = useState<Record<number, string | null>>({});
+  const [copiedScanDiagnosticKey, setCopiedScanDiagnosticKey] = useState<string | null>(null);
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState<CreateLibraryForm>(() => createEmptyForm(desktopApp));
@@ -383,6 +408,7 @@ export function LibrariesPage() {
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
+  const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -394,6 +420,14 @@ export function LibrariesPage() {
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
+
+  useEffect(() => {
+    return () => {
+      if (copiedScanDiagnosticResetTimer.current !== null) {
+        window.clearTimeout(copiedScanDiagnosticResetTimer.current);
+      }
+    };
+  }, []);
 
   const refreshRecentScanJobs = (showLoading = false) => {
     if (showLoading) {
@@ -1208,6 +1242,64 @@ export function LibrariesPage() {
     );
   }
 
+  async function copyScanFailureDiagnostic(
+    job: ScanJobDetail,
+    section: "analysis" | "duplicates",
+    entry: { path: string; reason: string; detail?: string | null },
+  ) {
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(buildScanFailureDiagnostic(job, section, entry));
+    const diagnosticKey = `${job.id}:${section}:${entry.path}`;
+    setCopiedScanDiagnosticKey(diagnosticKey);
+    if (copiedScanDiagnosticResetTimer.current !== null) {
+      window.clearTimeout(copiedScanDiagnosticResetTimer.current);
+    }
+    copiedScanDiagnosticResetTimer.current = window.setTimeout(() => {
+      setCopiedScanDiagnosticKey((current) => (current === diagnosticKey ? null : current));
+      copiedScanDiagnosticResetTimer.current = null;
+    }, 2000);
+  }
+
+  function renderFailureList(
+    detail: ScanJobDetail,
+    section: "analysis" | "duplicates",
+    entries: Array<{ path: string; reason: string; detail?: string | null }>,
+  ) {
+    if (entries.length === 0) {
+      return <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>;
+    }
+
+    return (
+      <div className="scan-log-scroll-area">
+        <div className="scan-log-pattern-list">
+          {entries.map((entry) => {
+            const diagnosticKey = `${detail.id}:${section}:${entry.path}`;
+            const copied = copiedScanDiagnosticKey === diagnosticKey;
+            return (
+              <div className="scan-log-pattern-card" key={`${detail.id}-${section}-${entry.path}`}>
+                <div className="scan-log-detail-title">
+                  <code>{entry.path}</code>
+                  <button
+                    type="button"
+                    className="scan-log-copy-button"
+                    aria-label={t("scanLogs.copyDiagnosticsAria", { path: entry.path })}
+                    onClick={() => void copyScanFailureDiagnostic(detail, section, entry)}
+                  >
+                    {copied ? t("scanLogs.copiedDiagnostics") : t("scanLogs.copyDiagnostics")}
+                  </button>
+                </div>
+                <p className="scan-log-failure-reason">{entry.reason}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   function renderScanJobDetail(job: RecentScanJob) {
     const detail = scanJobDetails[job.id];
     if (scanJobDetailLoading[job.id]) {
@@ -1364,26 +1456,7 @@ export function LibrariesPage() {
               </span>
             </summary>
             <div className="scan-log-collapse-content">
-              {detail.scan_summary.analysis.failed_files.length > 0 ? (
-                <div className="scan-log-scroll-area">
-                  <div className="scan-log-path-list">
-                    {detail.scan_summary.analysis.failed_files.map((entry) => (
-                      <TooltipTrigger
-                        key={`${detail.id}-${entry.path}`}
-                        ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
-                        content={entry.reason}
-                        preserveLineBreaks
-                        align="start"
-                        className="scan-log-path-tooltip-trigger"
-                      >
-                        <code className="scan-log-path">{entry.path}</code>
-                      </TooltipTrigger>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>
-              )}
+              {renderFailureList(detail, "analysis", detail.scan_summary.analysis.failed_files)}
               {detail.scan_summary.analysis.failed_files_truncated_count > 0 ? (
                 <div className="subtitle">
                   {t("scanLogs.moreEntries", { count: detail.scan_summary.analysis.failed_files_truncated_count })}
@@ -1433,22 +1506,7 @@ export function LibrariesPage() {
                 </div>
               </div>
               {detail.scan_summary.duplicates.failed_files.length > 0 ? (
-                <div className="scan-log-scroll-area">
-                  <div className="scan-log-path-list">
-                    {detail.scan_summary.duplicates.failed_files.map((entry) => (
-                      <TooltipTrigger
-                        key={`${detail.id}-duplicate-${entry.path}`}
-                        ariaLabel={t("scanLogs.failedFileReasonTooltipAria", { path: entry.path })}
-                        content={entry.reason}
-                        preserveLineBreaks
-                        align="start"
-                        className="scan-log-path-tooltip-trigger"
-                      >
-                        <code className="scan-log-path">{entry.path}</code>
-                      </TooltipTrigger>
-                    ))}
-                  </div>
-                </div>
+                renderFailureList(detail, "duplicates", detail.scan_summary.duplicates.failed_files)
               ) : (
                 <div className="notice scan-log-empty-detail">
                   {duplicateFailureSummary ? duplicateFailureSummary : t("scanLogs.none")}

@@ -7,6 +7,7 @@ from fnmatch import fnmatchcase
 import logging
 import os
 from pathlib import Path
+import traceback
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
+MAX_FAILURE_DETAIL_LENGTH = 12000
 
 
 class ScanCanceled(Exception):
@@ -92,12 +94,12 @@ class SampledPathList:
 
 @dataclass
 class FailedFileSamples:
-    items: list[dict[str, str]] = field(default_factory=list)
+    items: list[dict[str, str | None]] = field(default_factory=list)
     truncated_count: int = 0
 
-    def add(self, path: str, reason: str) -> None:
+    def add(self, path: str, reason: str, detail: str | None = None) -> None:
         if len(self.items) < MAX_FAILED_FILE_SAMPLE_SIZE:
-            self.items.append({"path": path, "reason": reason})
+            self.items.append({"path": path, "reason": reason, "detail": detail})
         else:
             self.truncated_count += 1
 
@@ -180,6 +182,20 @@ def _short_error_reason(exc: Exception) -> str:
         if first_line:
             return first_line[:300]
     return exc.__class__.__name__
+
+
+def _detailed_error_reason(exc: Exception) -> str:
+    detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).strip()
+    if not detail:
+        detail = f"{exc.__class__.__name__}: {str(exc).strip() or 'No additional details available.'}"
+    if len(detail) <= MAX_FAILURE_DETAIL_LENGTH:
+        return detail
+    suffix = "\n... [truncated]"
+    return f"{detail[: MAX_FAILURE_DETAIL_LENGTH - len(suffix)]}{suffix}"
+
+
+def _error_details(exc: Exception) -> tuple[str, str]:
+    return _short_error_reason(exc), _detailed_error_reason(exc)
 
 
 def _iter_media_files(
@@ -736,31 +752,44 @@ def run_scan(
         dict | None,
         list[dict[str, str | None]],
         str | None,
+        str | None,
         dict[str, str | None] | None,
+        str | None,
         str | None,
     ]:
         relative_path = work.path.relative_to(root).as_posix()
         payload: dict | None = None
         subtitles: list[dict[str, str | None]] = []
         analysis_error: str | None = None
+        analysis_error_detail: str | None = None
         duplicate_payload: dict[str, str | None] | None = None
         duplicate_error: str | None = None
+        duplicate_error_detail: str | None = None
 
         if work.needs_analysis:
             try:
                 payload, subtitles = _analyze_path(work.path, root, settings, ignore_patterns)
             except Exception as exc:
                 logger.exception("Media analysis failed for %s", relative_path)
-                analysis_error = _short_error_reason(exc)
+                analysis_error, analysis_error_detail = _error_details(exc)
 
         if work.needs_duplicate_processing:
             try:
                 duplicate_payload = duplicate_strategy.build_payload(work.path)
             except Exception as exc:
                 logger.exception("Duplicate processing failed for %s", relative_path)
-                duplicate_error = _short_error_reason(exc)
+                duplicate_error, duplicate_error_detail = _error_details(exc)
 
-        return relative_path, payload, subtitles, analysis_error, duplicate_payload, duplicate_error
+        return (
+            relative_path,
+            payload,
+            subtitles,
+            analysis_error,
+            analysis_error_detail,
+            duplicate_payload,
+            duplicate_error,
+            duplicate_error_detail,
+        )
 
     with ThreadPoolExecutor(max_workers=settings.ffprobe_worker_count) as executor:
         batch_counter = 0
@@ -782,7 +811,16 @@ def run_scan(
             done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
             for future in done:
                 work = pending.pop(future)
-                relative_path, payload, subtitles, analysis_error, duplicate_payload, duplicate_error = future.result()
+                (
+                    relative_path,
+                    payload,
+                    subtitles,
+                    analysis_error,
+                    analysis_error_detail,
+                    duplicate_payload,
+                    duplicate_error,
+                    duplicate_error_detail,
+                ) = future.result()
                 if work.needs_analysis:
                     if analysis_error is None and payload is not None:
                         try:
@@ -798,11 +836,16 @@ def run_scan(
                             logger.exception("Media normalization failed for %s", relative_path)
                             work.media_file.scan_status = ScanStatus.failed
                             job.errors += 1
-                            failed_files.add(relative_path, _short_error_reason(exc))
+                            reason, detail = _error_details(exc)
+                            failed_files.add(relative_path, reason, detail)
                     else:
                         work.media_file.scan_status = ScanStatus.failed
                         job.errors += 1
-                        failed_files.add(relative_path, analysis_error or "Unknown analysis failure")
+                        failed_files.add(
+                            relative_path,
+                            analysis_error or "Unknown analysis failure",
+                            analysis_error_detail or analysis_error or "Unknown analysis failure",
+                        )
 
                 if work.needs_duplicate_processing:
                     if duplicate_error is None and duplicate_payload is not None:
@@ -813,11 +856,16 @@ def run_scan(
                             logger.exception("Duplicate persistence failed for %s", relative_path)
                             duplicate_processing_failed += 1
                             job.errors += 1
-                            duplicate_failed_files.add(relative_path, _short_error_reason(exc))
+                            reason, detail = _error_details(exc)
+                            duplicate_failed_files.add(relative_path, reason, detail)
                     else:
                         duplicate_processing_failed += 1
                         job.errors += 1
-                        duplicate_failed_files.add(relative_path, duplicate_error or "Unknown duplicate processing failure")
+                        duplicate_failed_files.add(
+                            relative_path,
+                            duplicate_error or "Unknown duplicate processing failure",
+                            duplicate_error_detail or duplicate_error or "Unknown duplicate processing failure",
+                        )
 
                 job.files_scanned += 1
                 batch_counter += 1

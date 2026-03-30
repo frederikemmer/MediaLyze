@@ -17,7 +17,6 @@ from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
     execute_scan_job,
-    libraries_needing_quality_backfill,
     queue_quality_recompute_job,
     queue_scan_job,
 )
@@ -55,7 +54,6 @@ class ScanRuntimeManager:
             self.scheduler.start()
             self.started = True
         self._recover_orphaned_jobs()
-        self._queue_quality_backfill_jobs()
         self.sync_all_libraries()
 
     def stop(self) -> None:
@@ -227,6 +225,13 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
+        with self.lock:
+            for library_id in {job.library_id for job in jobs}:
+                pending_timer = self.debounce_timers.pop(library_id, None)
+                if pending_timer is not None:
+                    pending_timer.cancel()
+                self.watch_trigger_buffers.pop(library_id, None)
+
         return canceled_ids
 
     def cancel_library_jobs(self, library_id: int) -> list[int]:
@@ -251,6 +256,12 @@ class ScanRuntimeManager:
                 db.commit()
         finally:
             db.close()
+
+        with self.lock:
+            pending_timer = self.debounce_timers.pop(library_id, None)
+            if pending_timer is not None:
+                pending_timer.cancel()
+            self.watch_trigger_buffers.pop(library_id, None)
 
         return canceled_ids
 
@@ -365,14 +376,6 @@ class ScanRuntimeManager:
 
         if next_job is not None:
             self.submit_scan_job(next_job.id)
-
-    def _queue_quality_backfill_jobs(self) -> None:
-        db = SessionLocal()
-        try:
-            for library_id in libraries_needing_quality_backfill(db):
-                queue_quality_recompute_job(db, library_id)
-        finally:
-            db.close()
 
     def _remove_scheduled_job(self, library_id: int) -> None:
         job_id = self._scheduled_job_id(library_id)

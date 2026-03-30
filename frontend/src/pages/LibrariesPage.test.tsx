@@ -626,7 +626,7 @@ describe("LibrariesPage settings panels", () => {
             queued_for_analysis: 4,
             analyzed_successfully: 3,
             analysis_failed: 1,
-            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded" }],
+            failed_files: [{ path: "broken.mkv", reason: "ffprobe exploded", detail: "Traceback line 1\nTraceback line 2" }],
             failed_files_truncated_count: 0,
           },
         },
@@ -649,16 +649,10 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(screen.getAllByText("Ignore patterns")[1]);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));
-    expect(screen.queryByText("ffprobe exploded")).not.toBeInTheDocument();
-
-    const failedFileTrigger = await screen.findByRole("button", {
-      name: "Show analysis failure details for broken.mkv",
-    });
-    expect(screen.queryByText("broken.mkv, ...")).not.toBeInTheDocument();
-    expect(failedFileTrigger).toHaveTextContent("broken.mkv");
-
-    fireEvent.click(failedFileTrigger);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("ffprobe exploded");
+    expect(await screen.findByText("ffprobe exploded")).toBeInTheDocument();
+    expect(await screen.findByRole("button", {
+      name: "Copy troubleshooting details for broken.mkv",
+    })).toBeInTheDocument();
   });
 
   it("loads older scans when clicking load more", async () => {

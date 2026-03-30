@@ -13,7 +13,7 @@ from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from watchdog.events import FileModifiedEvent
 
-from backend.app.models.entities import JobStatus, Library, LibraryType, ScanJob, ScanMode, ScanTriggerSource
+from backend.app.models.entities import JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, ScanTriggerSource
 from backend.app.services import runtime as runtime_module
 
 
@@ -161,6 +161,70 @@ def test_start_does_not_resume_preexisting_active_jobs(monkeypatch) -> None:
     assert all(job.finished_at is not None for job in jobs)
 
 
+def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie.mkv",
+                filename="movie.mkv",
+                extension="mkv",
+                size_bytes=1024,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+                quality_score_raw=0.0,
+                raw_ffprobe_json={"format": {}},
+            )
+        )
+        db.commit()
+
+    class SchedulerStub:
+        running = False
+
+        def start(self) -> None:
+            self.running = True
+
+        def get_jobs(self):
+            return []
+
+        def get_job(self, job_id):
+            return None
+
+        def shutdown(self, wait=False) -> None:
+            self.running = False
+
+    class ExecutorStub:
+        def submit(self, fn, job_id: int, library_id: int) -> None:
+            return None
+
+        def shutdown(self, wait=False, cancel_futures=True) -> None:
+            return None
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+    runtime.executor = ExecutorStub()
+
+    runtime.start()
+
+    with session_factory() as db:
+        jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
+
+    assert jobs == []
+
+
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
@@ -283,6 +347,52 @@ def test_cancel_active_jobs_marks_running_and_queued_jobs_canceled(monkeypatch) 
     assert len(canceled_ids) == 2
     assert all(job.status == JobStatus.canceled for job in jobs)
     assert all(job.finished_at is not None for job in jobs)
+
+
+def test_cancel_active_jobs_clears_pending_watch_timers_and_buffers(monkeypatch) -> None:
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+
+    class TimerStub:
+        def __init__(self) -> None:
+            self.canceled = False
+
+        def cancel(self) -> None:
+            self.canceled = True
+
+    timer = TimerStub()
+
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.running,
+                job_type="incremental",
+                started_at=datetime.now(UTC),
+            )
+        )
+        db.commit()
+
+    runtime.watch_observers = {}
+    runtime.debounce_timers[library.id] = timer  # type: ignore[assignment]
+    runtime.watch_trigger_buffers[library.id] = {"event_count": 2}
+
+    runtime.cancel_active_jobs()
+
+    assert timer.canceled is True
+    assert runtime.debounce_timers == {}
+    assert runtime.watch_trigger_buffers == {}
 
 
 def test_request_scan_merges_trigger_details_into_existing_active_job(monkeypatch) -> None:

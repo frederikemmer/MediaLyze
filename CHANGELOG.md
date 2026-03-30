@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - stop resuming stale `queued` and `running` scan jobs on app startup; previous-process leftovers are now marked `canceled` with a finish timestamp instead of becoming ghost resumes
+- stop auto-queuing startup quality-recompute jobs in server mode so containers no longer begin with a stuck queued scan banner before the user explicitly triggers work
+- clear pending watchdog debounce requests when active scans are canceled so stop actions do not immediately requeue replacement scans
+- include per-file detailed failure diagnostics in scan logs and add a copyable troubleshooting payload for failed analysis or duplicate-processing entries
 
 ## v0.3.0
 
