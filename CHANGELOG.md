@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - add feature flags for a full-width `.media-app-shell` layout and hiding the analyzed-files quality score meter ([#91](https://github.com/frederikemmer/MediaLyze/issues/91))
 - add Excel-like drag resizing for analyzed-files table columns, with widths persisted in browser storage
 
+### 🐛 Bug fixes
+
+- show complete audio and subtitle language lists in analyzed-files table cells and truncate them visually with ellipses when a resized column becomes too narrow
+
 ## v0.4.0
 
 >2026-03-30

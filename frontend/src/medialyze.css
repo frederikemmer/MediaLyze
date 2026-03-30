@@ -2086,6 +2086,15 @@ body.is-column-resizing {
   white-space: nowrap;
 }
 
+.media-data-text-ellipsis {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .file-link:hover {
   color: #0e6b62;
 }

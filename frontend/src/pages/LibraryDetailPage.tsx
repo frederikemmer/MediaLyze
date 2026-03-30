@@ -124,6 +124,10 @@ function compactValues(values: string[], limit = 4): string {
   return values.length > limit ? `${visible.join(", ")}, ...` : visible.join(", ");
 }
 
+function listValues(values: string[]): string {
+  return values.length === 0 ? "n/a" : values.join(", ");
+}
+
 function scoreMeterLabel(score: number): string {
   if (score <= 3) {
     return "low";
@@ -332,15 +336,29 @@ function buildFileColumns(
       key: "audio_languages",
       labelKey: "fileTable.audioLanguages",
       sizing: { mode: "content", minPx: 112, maxPx: 176 },
-      measureValue: (file) => compactValues(file.audio_languages),
-      render: (file) => compactValues(file.audio_languages),
+      measureValue: (file) => listValues(file.audio_languages),
+      render: (file) => {
+        const value = listValues(file.audio_languages);
+        return (
+          <span className="media-data-text-ellipsis" title={value}>
+            {value}
+          </span>
+        );
+      },
     },
     {
       key: "subtitle_languages",
       labelKey: "fileTable.subtitleLanguages",
       sizing: { mode: "content", minPx: 112, maxPx: 176 },
-      measureValue: (file) => compactValues(file.subtitle_languages),
-      render: (file) => compactValues(file.subtitle_languages),
+      measureValue: (file) => listValues(file.subtitle_languages),
+      render: (file) => {
+        const value = listValues(file.subtitle_languages);
+        return (
+          <span className="media-data-text-ellipsis" title={value}>
+            {value}
+          </span>
+        );
+      },
     },
     {
       key: "subtitle_codecs",
