@@ -72,14 +72,41 @@ jobs:
           mkdir -p dist/ffprobe-bundle
           cp "$(command -v ffprobe)" dist/ffprobe-bundle/ffprobe
 
-      - name: Install ffmpeg on Windows
+      - name: Bundle ffprobe on Windows
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          choco install ffmpeg -y
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path dist/ffprobe-bundle | Out-Null
-          $ffprobe = (Get-Command ffprobe).Source
-          Copy-Item $ffprobe dist/ffprobe-bundle/ffprobe.exe
+          $ffprobeTarget = Join-Path $PWD "dist/ffprobe-bundle/ffprobe.exe"
+
+          $existingFfprobe = Get-Command ffprobe -ErrorAction SilentlyContinue
+          if ($null -ne $existingFfprobe) {
+            Copy-Item $existingFfprobe.Source $ffprobeTarget -Force
+            exit 0
+          }
+
+          $archivePath = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials.zip"
+          $extractPath = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials"
+
+          Invoke-WebRequest `
+            -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" `
+            -OutFile $archivePath `
+            -MaximumRetryCount 3 `
+            -RetryIntervalSec 5
+
+          if (Test-Path $extractPath) {
+            Remove-Item $extractPath -Recurse -Force
+          }
+
+          Expand-Archive -Path $archivePath -DestinationPath $extractPath -Force
+
+          $downloadedFfprobe = Get-ChildItem -Path $extractPath -Filter ffprobe.exe -Recurse | Select-Object -First 1
+          if ($null -eq $downloadedFfprobe) {
+            throw "Unable to locate ffprobe.exe in downloaded FFmpeg archive."
+          }
+
+          Copy-Item $downloadedFfprobe.FullName $ffprobeTarget -Force
 
       - name: Build backend sidecar
         run: node ./scripts/build-backend.mjs

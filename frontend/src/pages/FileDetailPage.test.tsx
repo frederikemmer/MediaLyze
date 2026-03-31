@@ -5,8 +5,45 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
-import { api, type MediaFileDetail, type MediaFileQualityScoreDetail } from "../lib/api";
+import {
+  api,
+  type AppSettings,
+  type MediaFileDetail,
+  type MediaFileQualityScoreDetail,
+} from "../lib/api";
 import { FileDetailPage } from "./FileDetailPage";
+
+type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
+  scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
+  feature_flags?: Partial<AppSettings["feature_flags"]>;
+};
+
+function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
+  const {
+    feature_flags: overrideFeatureFlags = {},
+    scan_performance: overrideScanPerformance = {},
+    ...restOverrides
+  } = overrides;
+
+  return {
+    ignore_patterns: [],
+    user_ignore_patterns: [],
+    default_ignore_patterns: [],
+    scan_performance: {
+      scan_worker_count: 4,
+      parallel_scan_jobs: 2,
+      ...overrideScanPerformance,
+    },
+    feature_flags: {
+      show_dolby_vision_profiles: false,
+      show_analyzed_files_csv_export: false,
+      show_full_width_app_shell: false,
+      hide_quality_score_meter: false,
+      ...overrideFeatureFlags,
+    },
+    ...restOverrides,
+  };
+}
 
 function createFileDetail(): MediaFileDetail {
   return {
@@ -82,12 +119,7 @@ afterEach(() => {
 describe("FileDetailPage", () => {
   it("renders long paths as segmented chips with full-path and filename tooltips", async () => {
     const file = createFileDetail();
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
-    });
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
 
@@ -113,12 +145,7 @@ describe("FileDetailPage", () => {
 
   it("stays stable when the quality detail request fails", async () => {
     const file = createFileDetail();
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
-    });
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockRejectedValue(new Error("quality unavailable"));
 

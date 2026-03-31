@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- fix the desktop release build after `v0.4.1` by completing strict frontend test app-settings mocks for the new feature flags and replacing the Windows `ffprobe` bundle step's brittle Chocolatey install with a direct archive download plus retries
+
 ## v0.4.1
 
 >2026-03-30

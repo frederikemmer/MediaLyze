@@ -9,8 +9,17 @@ import { api, type AppSettings } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { AppShell } from "./AppShell";
 
-function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
-  const { feature_flags: overrideFeatureFlags = {}, ...restOverrides } = overrides;
+type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
+  scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
+  feature_flags?: Partial<AppSettings["feature_flags"]>;
+};
+
+function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
+  const {
+    feature_flags: overrideFeatureFlags = {},
+    scan_performance: overrideScanPerformance = {},
+    ...restOverrides
+  } = overrides;
 
   return {
     ignore_patterns: [],
@@ -19,6 +28,7 @@ function createAppSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      ...overrideScanPerformance,
     },
     feature_flags: {
       show_dolby_vision_profiles: false,
