@@ -90,10 +90,16 @@
     "featureFlags": {
       "showDolbyVisionProfiles": "Show Dolby Vision Profiles",
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
+      "showFullWidthAppShell": "Use full-width app shell",
+      "hideQualityScoreMeter": "Hide quality score meter",
       "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
       "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\".",
       "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
-      "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set."
+      "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set.",
+      "showFullWidthAppShellTooltipAria": "Explain full-width app shell feature flag",
+      "showFullWidthAppShellTooltip": "Expands the main .media-app-shell container from its default max-width to the full available page width.",
+      "hideQualityScoreMeterTooltipAria": "Explain quality score meter visibility feature flag",
+      "hideQualityScoreMeterTooltip": "Hides the bar-style score meter in the analyzed-files table while keeping the numeric quality score visible."
     },
     "pathKinds": {
       "local": "Local path",
@@ -197,6 +203,9 @@
       "activeMetadata": "Active metadata search fields",
       "removeAria": "Remove {{field}} search field",
       "tooltipAria": "Show supported search syntax",
+      "textMatch": {
+        "tooltip": "Text fields support comma-separated AND terms. Prefix a term with ! to exclude matches, for example !en, external."
+      },
       "file": {
         "label": "File and path",
         "placeholder": "Search file and path"
@@ -257,6 +266,7 @@
     },
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
+    "resizeColumnAria": "Resize column {{column}}",
     "statistics": {
       "filterByValue": "Filter analyzed files by {{field}}: {{value}}",
       "filterAlreadyApplied": "Already added to analyzed files filter for {{field}}: {{value}}"

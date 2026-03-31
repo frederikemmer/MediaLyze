@@ -27,11 +27,12 @@ function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown
 export function AppShell() {
   const { t } = useTranslation();
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
-  const { libraries, librariesLoaded, loadDashboard, loadLibraries } = useAppData();
+  const { appSettings, libraries, librariesLoaded, loadDashboard, loadLibraries } = useAppData();
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
+  const showFullWidthAppShell = appSettings.feature_flags.show_full_width_app_shell;
 
   useEffect(() => {
     if (librariesLoaded) {
@@ -52,7 +53,7 @@ export function AppShell() {
   }, [hasActiveJobs, loadDashboard, loadLibraries]);
 
   return (
-    <div className="layout media-app-shell">
+    <div className={`layout media-app-shell${showFullWidthAppShell ? " media-app-shell-full-width" : ""}`.trim()}>
       <div className="bg-shapes" />
       <header className="panel hero-panel">
         <div className="app-header media-header">

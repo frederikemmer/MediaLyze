@@ -428,6 +428,8 @@ The backend supports:
 
 * legacy broad search
 * field-specific search intersections
+* negated text terms in field-specific filters via a leading `!`
+* comma-separated field-specific text terms, with each term intersected as an `AND`
 * structured numeric expressions such as size, duration, and quality score comparisons
 * sorting across supported table columns
 
@@ -461,9 +463,10 @@ Implemented UI behavior includes:
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
+* user-resizable analyzed-files table columns with persisted widths in browser storage
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics and some panel/section visibility
+* persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility
 
 ## 8.3 Internationalization
 
@@ -494,11 +497,15 @@ Current app feature flags include:
 
 * `show_dolby_vision_profiles`
 * `show_analyzed_files_csv_export`
+* `show_full_width_app_shell`
+* `hide_quality_score_meter`
 
 These flags currently control:
 
 * whether Dolby Vision profile variants are displayed separately in statistics and metadata views
 * whether the analyzed-files CSV export button is shown in the library detail view
+* whether the main `.media-app-shell` container expands to the full available page width
+* whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
 
 ---
 
@@ -539,6 +546,9 @@ Important current payload concepts:
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
 * `feature_flags.show_dolby_vision_profiles`
+* `feature_flags.show_analyzed_files_csv_export`
+* `feature_flags.show_full_width_app_shell`
+* `feature_flags.hide_quality_score_meter`
 
 ## 9.4 Libraries
 

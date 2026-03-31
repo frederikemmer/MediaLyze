@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Search, Trash2, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   startTransition,
   useDeferredValue,
@@ -38,6 +38,11 @@ import {
   validateLibraryFileSearchField,
   type LibraryFileMetadataSearchField,
 } from "../lib/library-file-search";
+import {
+  getLibraryFileColumnWidths,
+  saveLibraryFileColumnWidths,
+  type LibraryFileColumnWidths,
+} from "../lib/library-file-column-widths";
 import {
   LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticPanelItems,
@@ -108,6 +113,8 @@ const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
   "file",
   ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings()),
 ];
+const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
+const DEFAULT_COLUMN_RESIZE_MAX_PX = 960;
 
 function compactValues(values: string[], limit = 4): string {
   if (values.length === 0) {
@@ -115,6 +122,10 @@ function compactValues(values: string[], limit = 4): string {
   }
   const visible = values.slice(0, limit);
   return values.length > limit ? `${visible.join(", ")}, ...` : visible.join(", ");
+}
+
+function listValues(values: string[]): string {
+  return values.length === 0 ? "n/a" : values.join(", ");
 }
 
 function scoreMeterLabel(score: number): string {
@@ -183,9 +194,15 @@ function buildColumnTemplate(
   columns: FileColumnDefinition[],
   files: MediaFileRow[],
   t: (key: string, options?: Record<string, unknown>) => string,
+  widthOverrides: LibraryFileColumnWidths,
 ): string {
   return columns
     .map((column) => {
+      const overrideWidth = widthOverrides[column.key];
+      if (overrideWidth !== undefined) {
+        return `${Math.ceil(clampWidth(overrideWidth, columnResizeBounds(column).minPx, columnResizeBounds(column).maxPx))}px`;
+      }
+
       const headerWidth =
         measureTextWidth(t(column.labelKey).toUpperCase(), HEADER_FONT, HEADER_LETTER_SPACING_PX) +
         SORT_INDICATOR_WIDTH_PX +
@@ -204,6 +221,16 @@ function buildColumnTemplate(
       return `minmax(${Math.ceil(flexibleMinWidth)}px, ${column.sizing.fr}fr)`;
     })
     .join(" ");
+}
+
+function columnResizeBounds(column: FileColumnDefinition): { minPx: number; maxPx: number } {
+  const minPx =
+    column.sizing.mode === "flex"
+      ? Math.max(column.sizing.minPx, 180)
+      : Math.max(column.sizing.minPx ?? DEFAULT_COLUMN_RESIZE_MIN_PX, DEFAULT_COLUMN_RESIZE_MIN_PX);
+  const maxPx = column.key === "file" ? 1400 : DEFAULT_COLUMN_RESIZE_MAX_PX;
+
+  return { minPx, maxPx };
 }
 
 function buildQualityTooltipContent(
@@ -244,6 +271,7 @@ function buildFileColumns(
   detailLoading: Record<number, boolean>,
   loadDetail: (fileId: number) => void,
   showDolbyVisionProfiles: boolean,
+  hideQualityScoreMeter: boolean,
 ): FileColumnDefinition[] {
   return [
     {
@@ -308,15 +336,29 @@ function buildFileColumns(
       key: "audio_languages",
       labelKey: "fileTable.audioLanguages",
       sizing: { mode: "content", minPx: 112, maxPx: 176 },
-      measureValue: (file) => compactValues(file.audio_languages),
-      render: (file) => compactValues(file.audio_languages),
+      measureValue: (file) => listValues(file.audio_languages),
+      render: (file) => {
+        const value = listValues(file.audio_languages);
+        return (
+          <span className="media-data-text-ellipsis" title={value}>
+            {value}
+          </span>
+        );
+      },
     },
     {
       key: "subtitle_languages",
       labelKey: "fileTable.subtitleLanguages",
       sizing: { mode: "content", minPx: 112, maxPx: 176 },
-      measureValue: (file) => compactValues(file.subtitle_languages),
-      render: (file) => compactValues(file.subtitle_languages),
+      measureValue: (file) => listValues(file.subtitle_languages),
+      render: (file) => {
+        const value = listValues(file.subtitle_languages);
+        return (
+          <span className="media-data-text-ellipsis" title={value}>
+            {value}
+          </span>
+        );
+      },
     },
     {
       key: "subtitle_codecs",
@@ -360,12 +402,14 @@ function buildFileColumns(
         >
           <div className="score-cell">
             <strong>{file.quality_score}/10</strong>
-            <div className="score-meter" aria-hidden="true">
-              <span
-                className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
-                style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
-              />
-            </div>
+            {hideQualityScoreMeter ? null : (
+              <div className="score-meter" aria-hidden="true">
+                <span
+                  className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+                  style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+                />
+              </div>
+            )}
           </div>
         </TooltipTrigger>
       ),
@@ -486,6 +530,9 @@ export function LibraryDetailPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [columnWidthOverrides, setColumnWidthOverrides] = useState<LibraryFileColumnWidths>(() =>
+    getLibraryFileColumnWidths(),
+  );
   const [sortKey, setSortKey] = useState<FileColumnKey>("file");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [baseSearch, setBaseSearch] = useState("");
@@ -507,6 +554,7 @@ export function LibraryDetailPage() {
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
+  const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -526,8 +574,16 @@ export function LibraryDetailPage() {
     }
   });
   const fileColumns = useMemo(
-    () => buildFileColumns(t, qualityScoreDetails, qualityScoreLoading, loadQualityScoreDetail, showDolbyVisionProfiles),
-    [loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, showDolbyVisionProfiles, t],
+    () =>
+      buildFileColumns(
+        t,
+        qualityScoreDetails,
+        qualityScoreLoading,
+        loadQualityScoreDetail,
+        showDolbyVisionProfiles,
+        hideQualityScoreMeter,
+      ),
+    [hideQualityScoreMeter, loadQualityScoreDetail, qualityScoreDetails, qualityScoreLoading, showDolbyVisionProfiles, t],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
@@ -543,13 +599,17 @@ export function LibraryDetailPage() {
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
     [fileColumns, visibleColumns],
   );
+  const activeColumnMap = useMemo(
+    () => new Map(activeColumns.map((column) => [column.key, column] as const)),
+    [activeColumns],
+  );
   const activeColumnSignature = useMemo(
     () => activeColumns.map((column) => column.key).join("|"),
     [activeColumns],
   );
   const columnTemplate = useMemo(
-    () => buildColumnTemplate(activeColumns, files, t),
-    [activeColumns, files, t],
+    () => buildColumnTemplate(activeColumns, files, t, columnWidthOverrides),
+    [activeColumns, columnWidthOverrides, files, t],
   );
   const orderedMetadataFieldDefinitions = useMemo(
     () => LIBRARY_STATISTIC_DEFINITIONS.filter((definition) => LIBRARY_METADATA_SEARCH_FIELDS.includes(definition.id)),
@@ -621,9 +681,17 @@ export function LibraryDetailPage() {
   const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
   const pendingStatisticFocusFieldRef = useRef<LibraryFileMetadataSearchField | null>(null);
   const dataTableShellRef = useRef<HTMLDivElement | null>(null);
+  const headerCellRefs = useRef<Partial<Record<FileColumnKey, HTMLDivElement | null>>>({});
   const searchToolsHeaderRef = useRef<HTMLDivElement | null>(null);
   const searchToolsBodyRef = useRef<HTMLDivElement | null>(null);
   const inflightRequestGateRef = useRef(new InflightPageRequestGate());
+  const resizeStateRef = useRef<{
+    columnKey: FileColumnKey;
+    startX: number;
+    startWidth: number;
+    minPx: number;
+    maxPx: number;
+  } | null>(null);
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
@@ -673,6 +741,38 @@ export function LibraryDetailPage() {
   const updateMetadataFieldValue = useEffectEvent((field: LibraryFileMetadataSearchField, value: string) => {
     startTransition(() => {
       setFieldValues((current) => ({ ...current, [field]: value }));
+    });
+  });
+
+  const beginColumnResize = useEffectEvent((columnKey: FileColumnKey, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const column = activeColumnMap.get(columnKey);
+    const headerCell = headerCellRefs.current[columnKey];
+    if (!column || !headerCell) {
+      return;
+    }
+
+    const bounds = columnResizeBounds(column);
+    resizeStateRef.current = {
+      columnKey,
+      startX: event.clientX,
+      startWidth: headerCell.getBoundingClientRect().width,
+      minPx: bounds.minPx,
+      maxPx: bounds.maxPx,
+    };
+    document.body.classList.add("is-column-resizing");
+  });
+
+  const resetColumnWidth = useEffectEvent((columnKey: FileColumnKey) => {
+    setColumnWidthOverrides((current) => {
+      if (!(columnKey in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[columnKey];
+      return saveLibraryFileColumnWidths(next);
     });
   });
 
@@ -911,6 +1011,50 @@ export function LibraryDetailPage() {
   }, [isDuplicatesPanelCollapsed]);
 
   useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState) {
+        return;
+      }
+
+      const nextWidth = clampWidth(
+        resizeState.startWidth + (event.clientX - resizeState.startX),
+        resizeState.minPx,
+        resizeState.maxPx,
+      );
+
+      setColumnWidthOverrides((current) => {
+        if (current[resizeState.columnKey] === nextWidth) {
+          return current;
+        }
+        return saveLibraryFileColumnWidths({
+          ...current,
+          [resizeState.columnKey]: nextWidth,
+        });
+      });
+    }
+
+    function handlePointerUp() {
+      if (!resizeStateRef.current) {
+        return;
+      }
+      resizeStateRef.current = null;
+      document.body.classList.remove("is-column-resizing");
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      document.body.classList.remove("is-column-resizing");
+    };
+  }, []);
+
+  useEffect(() => {
     setDuplicateSearch("");
   }, [libraryId]);
 
@@ -1043,7 +1187,7 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     rowVirtualizer.measure();
-  }, [activeColumnSignature, rowVirtualizer]);
+  }, [activeColumnSignature, columnTemplate, rowVirtualizer]);
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
@@ -1409,6 +1553,9 @@ export function LibraryDetailPage() {
                         className={`media-data-cell media-data-header-cell${column.sticky ? " is-sticky" : ""}`}
                         role="columnheader"
                         aria-sort={ariaSortValue(isActiveSort, sortDirection)}
+                        ref={(element) => {
+                          headerCellRefs.current[column.key] = element;
+                        }}
                       >
                         <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
                           <span>{t(column.labelKey)}</span>
@@ -1417,6 +1564,13 @@ export function LibraryDetailPage() {
                           </span>
                           {isActiveSort ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
                         </button>
+                        <button
+                          type="button"
+                          className="column-resize-handle"
+                          aria-label={t("libraryDetail.resizeColumnAria", { column: t(column.labelKey) })}
+                          onPointerDown={(event) => beginColumnResize(column.key, event)}
+                          onDoubleClick={() => resetColumnWidth(column.key)}
+                        />
                       </div>
                     );
                   })}
