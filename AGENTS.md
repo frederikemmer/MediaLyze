@@ -770,7 +770,7 @@ Current workflows include:
 * dev image publishing
 * official release publishing
 * manually triggered dev desktop artifact builds
-* desktop release artifact publishing
+* desktop release artifact publishing, including manual rebuilds for an existing release tag from an alternate code ref when only build logic needs to be corrected
 * release metadata validation for pull requests
 
 ## 13.2 Release Metadata Rules
@@ -792,6 +792,7 @@ Current release behavior:
 * official images and GitHub releases are published from `main` only when a push increases the aligned repository version metadata
 * official images are published to GHCR
 * the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
+* the desktop-release workflow can also be dispatched manually for an existing release tag, optionally building from a different git ref while still uploading assets to the original release tag
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
 * when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch
