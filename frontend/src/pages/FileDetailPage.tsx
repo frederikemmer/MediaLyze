@@ -4,8 +4,8 @@ import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { PathSegmentTrail } from "../components/PathSegmentTrail";
+import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
-import { useAppData } from "../lib/app-data";
 import { api, type MediaFileDetail, type MediaFileQualityScoreDetail } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
@@ -119,18 +119,13 @@ export function FileDetailPage() {
           <JsonPreview value={file?.media_format ?? {}} />
         </AsyncPanel>
         <AsyncPanel title={t("fileDetail.videoStreams")} loading={!file && !error} error={error}>
-          <JsonPreview value={file?.video_streams ?? []} />
+          <StreamDetailsList kind="video" detail={file ?? undefined} t={t} surface="panel" />
         </AsyncPanel>
         <AsyncPanel title={t("fileDetail.audioStreams")} loading={!file && !error} error={error}>
-          <JsonPreview value={file?.audio_streams ?? []} />
+          <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" />
         </AsyncPanel>
         <AsyncPanel title={t("fileDetail.subtitles")} loading={!file && !error} error={error}>
-          <JsonPreview
-            value={{
-              internal: file?.subtitle_streams ?? [],
-              external: file?.external_subtitles ?? [],
-            }}
-          />
+          <StreamDetailsList kind="subtitle" detail={file ?? undefined} t={t} surface="panel" />
         </AsyncPanel>
       </div>
 

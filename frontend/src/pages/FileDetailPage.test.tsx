@@ -176,6 +176,12 @@ describe("FileDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
+
+    expect(screen.getByText("Main 10")).toBeInTheDocument();
+    expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
+    expect(screen.getByText("5.1")).toBeInTheDocument();
+    expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
+    expect(screen.getByText("External")).toBeInTheDocument();
   });
 
   it("stays stable when the quality detail request fails", async () => {

@@ -17,6 +17,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
+import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
@@ -62,7 +63,6 @@ import { useScanJobs } from "../lib/scan-jobs";
 
 type FileColumnKey = MediaFileSortKey;
 type SortDirection = "asc" | "desc";
-type StreamTooltipKind = "video" | "audio" | "subtitle";
 
 type FileColumnSizing =
   | {
@@ -268,173 +268,6 @@ function buildQualityTooltipContent(
   );
 }
 
-function formatTooltipLanguage(value: string | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
-  const normalized = value?.trim();
-  return normalized ? normalized : t("streamDetails.unknownLanguage");
-}
-
-function formatTooltipResolution(
-  width: number | null | undefined,
-  height: number | null | undefined,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (width && height) {
-    return `${width}x${height}`;
-  }
-  return t("fileTable.na");
-}
-
-function formatAudioChannelLabel(
-  channelLayout: string | null | undefined,
-  channels: number | null | undefined,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  const normalized = channelLayout?.trim().toLowerCase();
-  const knownLayouts: Record<string, string> = {
-    mono: t("streamDetails.mono"),
-    "1.0": t("streamDetails.mono"),
-    stereo: t("streamDetails.stereo"),
-    "2.0": t("streamDetails.stereo"),
-    "2.1": t("streamDetails.stereo"),
-    "5.1": "5.1",
-    "5.1(side)": "5.1",
-    "5.1(back)": "5.1",
-    "6.1": "5.1",
-    "7.1": "7.1",
-    "7.1(wide)": "7.1",
-    "7.1(wide-side)": "7.1",
-  };
-  if (normalized && knownLayouts[normalized]) {
-    return knownLayouts[normalized];
-  }
-  if (channels && channels > 0) {
-    return t("streamDetails.channels", { count: channels });
-  }
-  return t("fileTable.na");
-}
-
-function formatSubtitleType(
-  subtitleType: string | null | undefined,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  const normalized = subtitleType?.trim().toLowerCase();
-  if (normalized === "text") {
-    return t("streamDetails.text");
-  }
-  if (normalized === "image") {
-    return t("streamDetails.image");
-  }
-  return t("streamDetails.unknownType");
-}
-
-function buildStreamTooltipRows(
-  title: string,
-  count: number,
-  rows: Array<{
-    key: string;
-    lead: string;
-    trail?: string;
-    meta: string[];
-  }>,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): ReactNode {
-  if (rows.length === 0) {
-    return t("streamDetails.none");
-  }
-
-  return (
-    <div className="stream-tooltip-content">
-      <div className="stream-tooltip-summary">
-        <strong>{title}</strong>
-        <span>{count}</span>
-      </div>
-      {rows.map((row) => (
-        <div className="stream-tooltip-row" key={row.key}>
-          <div className="stream-tooltip-head">
-            <strong>{row.lead}</strong>
-            {row.trail ? <span>{row.trail}</span> : null}
-          </div>
-          <div className="stream-tooltip-meta">
-            {row.meta.map((item) => (
-              <span className="stream-tooltip-pill" key={`${row.key}-${item}`}>
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function buildStreamTooltipContent(
-  kind: StreamTooltipKind,
-  detail: MediaFileStreamDetails | undefined,
-  isLoading: boolean,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): ReactNode {
-  if (isLoading) {
-    return t("streamDetails.loading");
-  }
-  if (!detail) {
-    return t("streamDetails.unavailable");
-  }
-
-  if (kind === "video") {
-    return buildStreamTooltipRows(
-      t("fileDetail.videoStreams"),
-      detail.video_streams.length,
-      detail.video_streams.map((stream) => ({
-        key: `video-${stream.stream_index}`,
-        lead: stream.codec ? formatCodecLabel(stream.codec, "video") : t("fileTable.na"),
-        trail: formatTooltipResolution(stream.width, stream.height, t),
-        meta: [formatHdrType(stream.hdr_type) ?? t("fileTable.sdr"), ...(stream.profile ? [stream.profile] : [])],
-      })),
-      t,
-    );
-  }
-
-  if (kind === "audio") {
-    return buildStreamTooltipRows(
-      t("fileDetail.audioStreams"),
-      detail.audio_streams.length,
-      detail.audio_streams.map((stream) => ({
-        key: `audio-${stream.stream_index}`,
-        lead: formatTooltipLanguage(stream.language, t),
-        trail: stream.codec ? formatCodecLabel(stream.codec, "audio") : t("fileTable.na"),
-        meta: [
-          formatAudioChannelLabel(stream.channel_layout, stream.channels, t),
-          ...(stream.default_flag ? [t("streamDetails.default")] : []),
-          ...(stream.forced_flag ? [t("streamDetails.forced")] : []),
-        ],
-      })),
-      t,
-    );
-  }
-
-  const subtitleRows = [
-    ...detail.subtitle_streams.map((stream) => ({
-      key: `subtitle-${stream.stream_index}`,
-      lead: formatTooltipLanguage(stream.language, t),
-      trail: stream.codec ? formatCodecLabel(stream.codec, "subtitle") : t("fileTable.na"),
-      meta: [
-        t("streamDetails.internal"),
-        formatSubtitleType(stream.subtitle_type, t),
-        ...(stream.default_flag ? [t("streamDetails.default")] : []),
-        ...(stream.forced_flag ? [t("streamDetails.forced")] : []),
-      ],
-    })),
-    ...detail.external_subtitles.map((subtitle) => ({
-      key: `external-${subtitle.path}`,
-      lead: formatTooltipLanguage(subtitle.language, t),
-      trail: subtitle.format ? formatCodecLabel(subtitle.format, "subtitle") : t("fileTable.na"),
-      meta: [t("streamDetails.external")],
-    })),
-  ];
-
-  return buildStreamTooltipRows(t("fileDetail.subtitles"), subtitleRows.length, subtitleRows, t);
-}
-
 export function buildFileColumns(
   t: (key: string, options?: Record<string, unknown>) => string,
   qualityDetailCache: Record<number, MediaFileQualityScoreDetail>,
@@ -480,12 +313,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.videoTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "video",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="video"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{formatCodecLabel(file.video_codec, "video")}</span>
@@ -528,12 +365,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.audioTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "audio",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="audio"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{value}</span>
@@ -554,12 +395,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.audioTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "audio",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="audio"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{value}</span>
@@ -582,12 +427,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "subtitle",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="subtitle"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{value}</span>
@@ -610,12 +459,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "subtitle",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="subtitle"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{value}</span>
@@ -636,12 +489,16 @@ export function buildFileColumns(
           <TooltipTrigger
             ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
-            content={buildStreamTooltipContent(
-              "subtitle",
-              streamDetailCache[file.id],
-              Boolean(streamDetailLoading[file.id]),
-              t,
-            )}
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="subtitle"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
             onOpen={() => loadStreamDetail(file.id)}
           >
             <span className="media-data-text-ellipsis">{value}</span>

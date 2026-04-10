@@ -16,6 +16,8 @@ type TooltipTriggerProps = {
   ariaLabel: string;
   align?: TooltipAlign;
   className?: string;
+  tooltipClassName?: string;
+  maxWidth?: number;
   preserveLineBreaks?: boolean;
   onOpen?: () => void;
   children?: ReactNode;
@@ -31,6 +33,8 @@ export function TooltipTrigger({
   ariaLabel,
   align = "center",
   className,
+  tooltipClassName,
+  maxWidth = TOOLTIP_MAX_WIDTH,
   preserveLineBreaks = false,
   onOpen,
   children = "?",
@@ -75,7 +79,8 @@ export function TooltipTrigger({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const availableWidth = Math.max(0, viewportWidth - TOOLTIP_VIEWPORT_MARGIN * 2);
-    const tooltipWidth = Math.min(tooltip.offsetWidth, TOOLTIP_MAX_WIDTH, availableWidth);
+    const resolvedWidth = Math.min(maxWidth, availableWidth);
+    const tooltipWidth = Math.min(tooltip.offsetWidth || resolvedWidth, resolvedWidth);
     const idealLeft =
       align === "center"
         ? triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2
@@ -91,6 +96,7 @@ export function TooltipTrigger({
       if (
         current?.left === left &&
         current.top === top &&
+        current.width === resolvedWidth &&
         current.maxHeight === maxHeight &&
         current.visibility === "visible"
       ) {
@@ -99,6 +105,7 @@ export function TooltipTrigger({
       return {
         left,
         top,
+        width: resolvedWidth,
         maxHeight,
         visibility: "visible",
       };
@@ -217,9 +224,10 @@ export function TooltipTrigger({
     triggerRef.current?.focus();
   };
 
-  const tooltipClassName = [
+  const tooltipPortalClassName = [
     "tooltip-portal",
     preserveLineBreaks ? "tooltip-portal-preline" : "",
+    tooltipClassName ?? "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -263,7 +271,7 @@ export function TooltipTrigger({
               ref={tooltipRef}
               id={tooltipId}
               role="tooltip"
-              className={tooltipClassName}
+              className={tooltipPortalClassName}
               style={tooltipStyle ?? { left: TOOLTIP_VIEWPORT_MARGIN, top: 0, visibility: "hidden" }}
               onMouseEnter={() => {
                 clearCloseTimer();

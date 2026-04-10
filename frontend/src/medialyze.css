@@ -1639,7 +1639,7 @@
 
 .stream-tooltip-row {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding-top: 8px;
   border-top: 1px solid rgba(243, 239, 232, 0.14);
 }
@@ -1648,6 +1648,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  align-items: baseline;
 }
 
 .stream-tooltip-head span {
@@ -1656,19 +1657,44 @@
 
 .stream-tooltip-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .stream-tooltip-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
   background: rgba(243, 239, 232, 0.12);
   color: #f3efe8;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.stream-tooltip-content-panel .stream-tooltip-summary span {
+  color: var(--muted);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-row {
+  border-top-color: rgba(31, 28, 22, 0.08);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-head span {
+  color: var(--muted);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-pill {
+  background: rgba(31, 28, 22, 0.08);
+  color: var(--ink);
+}
+
+.stream-details-tooltip-portal {
+  padding: 12px 14px;
 }
 
 .tooltip-trigger-below::after {
