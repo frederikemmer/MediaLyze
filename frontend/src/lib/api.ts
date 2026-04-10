@@ -77,12 +77,16 @@ export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
 
 export type DashboardResponse = {
   totals: Record<string, number>;
+  container_distribution: DistributionItem[];
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
+  audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_distribution: DistributionItem[];
+  subtitle_codec_distribution: DistributionItem[];
+  subtitle_source_distribution: DistributionItem[];
 };
 
 export type LibrarySummary = {

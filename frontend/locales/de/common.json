@@ -26,9 +26,12 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "containers": "Container",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
-    "subtitleSources": "Untertitel-Sprachen"
+    "subtitleLanguages": "Untertitel-Sprachen",
+    "subtitleCodecs": "Untertitel-Codecs",
+    "subtitleSources": "Untertitel-Quellen"
   },
   "libraries": {
     "configured": "Konfigurierte Bibliotheken",

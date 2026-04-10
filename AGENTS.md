@@ -387,6 +387,7 @@ Current behavior:
 Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
+* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories

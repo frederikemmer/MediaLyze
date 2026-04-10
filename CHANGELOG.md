@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - add first-class spatial-audio support for `Dolby Atmos` and `DTS:X`, including ffprobe profile detection, analyzed-files filtering and sorting, library statistics, CSV export, and audio tooltip/detail rendering ([#94](https://github.com/frederikemmer/MediaLyze/issues/94))
 - add container statistics and analyzed-files container filtering, sorting, CSV export, and configurable table/panel visibility for library views ([#97](https://github.com/frederikemmer/MediaLyze/issues/97))
 - rework the file-detail page so the `Format` panel renders structured metadata rows instead of raw format JSON, and make all detail panels globally collapsible and reorderable with browser-persisted state
+- allow `Container`, `Spatial audio`, `Subtitle codecs`, and `Subtitle sources` to be enabled as optional dashboard statistic panels through the existing statistics settings
 
 ### 🐛 Bug fixes
 

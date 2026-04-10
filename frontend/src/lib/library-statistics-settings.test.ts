@@ -24,6 +24,9 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
+    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
+    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
     expect(settings.visibility.container.panelEnabled).toBe(true);
     expect(settings.visibility.container.tableEnabled).toBe(false);
@@ -83,6 +86,10 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.panelEnabled).toBe(false);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(false);
+    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
+    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
+    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
   });
 
   it("migrates the previous default preset to the new standard preset", () => {
@@ -127,6 +134,10 @@ describe("library statistics settings", () => {
     expect(settings.visibility.audio_codecs.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.subtitle_sources.tableEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.dashboardEnabled).toBe(true);
+    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
+    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
+    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
   });
 
   it("persists reordered settings", () => {

@@ -5,7 +5,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { DistributionList } from "../components/DistributionList";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
-import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
 import {
   getDashboardStatisticPanelItems,
@@ -13,6 +13,28 @@ import {
   getVisibleDashboardStatisticPanels,
 } from "../lib/library-statistics-settings";
 import { useScanJobs } from "../lib/scan-jobs";
+
+function formatDashboardDistributionLabel(
+  panelId: string,
+  label: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (panelId === "container") {
+    return formatContainerLabel(label);
+  }
+  if (panelId === "audio_spatial_profiles") {
+    return formatSpatialAudioProfileLabel(label);
+  }
+  if (panelId === "subtitle_sources") {
+    if (label === "internal") {
+      return t("streamDetails.internal");
+    }
+    if (label === "external") {
+      return t("streamDetails.external");
+    }
+  }
+  return label;
+}
 
 export function DashboardPage() {
   const { t } = useTranslation();
@@ -69,7 +91,10 @@ export function DashboardPage() {
                   ...item,
                   label: formatCodecLabel(item.label, dashboardFormatKind),
                 }))
-              : items;
+              : items.map((item) => ({
+                  ...item,
+                  label: formatDashboardDistributionLabel(panel.id, item.label, t),
+                }));
 
             return (
               <AsyncPanel

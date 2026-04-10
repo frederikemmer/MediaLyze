@@ -26,9 +26,12 @@
     "resolutions": "Resolutions",
     "hdrCoverage": "HDR coverage",
     "audioCodecs": "Audio codecs",
+    "containers": "Containers",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
-    "subtitleSources": "Subtitle languages"
+    "subtitleLanguages": "Subtitle languages",
+    "subtitleCodecs": "Subtitle codecs",
+    "subtitleSources": "Subtitle sources"
   },
   "libraries": {
     "configured": "Configured libraries",

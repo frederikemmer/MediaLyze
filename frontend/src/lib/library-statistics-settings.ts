@@ -28,12 +28,16 @@ type LibraryStatisticPanelDataKey =
   | "subtitle_source_distribution";
 
 type DashboardStatisticPanelDataKey =
+  | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
   | "audio_codec_distribution"
+  | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
-  | "subtitle_distribution";
+  | "subtitle_distribution"
+  | "subtitle_codec_distribution"
+  | "subtitle_source_distribution";
 
 type DistributionFormatKind = "video" | "audio" | "subtitle";
 
@@ -170,7 +174,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
-    supportsDashboard: false,
+    supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: false,
@@ -178,6 +182,8 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.containers",
     panelDataKey: "container_distribution",
     tableColumnKey: "container",
+    dashboardTitleKey: "dashboard.containers",
+    dashboardDataKey: "container_distribution",
   },
   {
     id: "audio_codecs",
@@ -204,7 +210,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: true,
-    supportsDashboard: false,
+    supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
@@ -212,6 +218,8 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.audioSpatialProfiles",
     panelDataKey: "audio_spatial_profile_distribution",
     tableColumnKey: "audio_spatial_profiles",
+    dashboardTitleKey: "dashboard.audioSpatialProfiles",
+    dashboardDataKey: "audio_spatial_profile_distribution",
   },
   {
     id: "audio_languages",
@@ -244,7 +252,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.subtitleLanguages",
     panelDataKey: "subtitle_language_distribution",
     tableColumnKey: "subtitle_languages",
-    dashboardTitleKey: "dashboard.subtitleSources",
+    dashboardTitleKey: "dashboard.subtitleLanguages",
     dashboardDataKey: "subtitle_distribution",
   },
   {
@@ -253,7 +261,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: true,
-    supportsDashboard: false,
+    supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
@@ -262,6 +270,9 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelDataKey: "subtitle_codec_distribution",
     panelFormatKind: "subtitle",
     tableColumnKey: "subtitle_codecs",
+    dashboardTitleKey: "dashboard.subtitleCodecs",
+    dashboardDataKey: "subtitle_codec_distribution",
+    dashboardFormatKind: "subtitle",
   },
   {
     id: "subtitle_sources",
@@ -269,7 +280,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: true,
-    supportsDashboard: false,
+    supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
@@ -277,6 +288,8 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.subtitleSources",
     panelDataKey: "subtitle_source_distribution",
     tableColumnKey: "subtitle_sources",
+    dashboardTitleKey: "dashboard.subtitleSources",
+    dashboardDataKey: "subtitle_source_distribution",
   },
 ];
 
