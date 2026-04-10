@@ -466,6 +466,7 @@ Implemented UI behavior includes:
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * user-resizable analyzed-files table columns with persisted widths in browser storage
+* lightweight hover tooltips on analyzed-files codec and subtitle-source cells that lazy-load per-file stream details such as language, codec, audio channel layout, and subtitle source
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
 * persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility
@@ -577,6 +578,7 @@ Important library contract concepts:
 ## 9.5 Files
 
 * `GET /api/files/{file_id}`
+* `GET /api/files/{file_id}/streams`
 * `GET /api/files/{file_id}/quality-score`
 
 Important file contract concepts:
@@ -587,6 +589,7 @@ Important file contract concepts:
 * `resolution_category_id`
 * `resolution_category_label`
 * `subtitle_type`
+* lightweight stream-detail responses expose `video_streams`, `audio_streams`, `subtitle_streams`, and `external_subtitles` without the full raw ffprobe payload
 
 ## 9.6 Scan Job Contract
 

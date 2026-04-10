@@ -9,7 +9,19 @@ from sqlalchemy.pool import StaticPool
 from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
-from backend.app.models.entities import DuplicateDetectionMode, JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode
+from backend.app.models.entities import (
+    AudioStream,
+    DuplicateDetectionMode,
+    ExternalSubtitle,
+    JobStatus,
+    Library,
+    LibraryType,
+    MediaFile,
+    ScanJob,
+    ScanMode,
+    SubtitleStream,
+    VideoStream,
+)
 from backend.app.core.config import Settings
 from pathlib import Path
 
@@ -219,6 +231,91 @@ def test_library_duplicates_route_returns_404_for_unknown_library() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Library not found"}
+
+
+def test_file_stream_details_route_returns_lightweight_stream_payload() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=1024,
+            mtime=1,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(
+                    media_file_id=media_file.id,
+                    stream_index=0,
+                    codec="hevc",
+                    width=3840,
+                    height=2160,
+                    hdr_type="HDR10",
+                ),
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=2,
+                    codec="truehd",
+                    channels=8,
+                    channel_layout="7.1",
+                    language="en",
+                    default_flag=True,
+                ),
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=1,
+                    codec="aac",
+                    channels=2,
+                    channel_layout="stereo",
+                    language="ja",
+                ),
+                SubtitleStream(
+                    media_file_id=media_file.id,
+                    stream_index=4,
+                    codec="subrip",
+                    language="de",
+                    subtitle_type="text",
+                    forced_flag=True,
+                ),
+                ExternalSubtitle(
+                    media_file_id=media_file.id,
+                    path="movie.en.srt",
+                    language="en",
+                    format="srt",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/files/{media_file.id}/streams")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == media_file.id
+    assert payload["audio_streams"][0]["stream_index"] == 1
+    assert payload["audio_streams"][1]["stream_index"] == 2
+    assert payload["video_streams"][0]["codec"] == "hevc"
+    assert payload["subtitle_streams"][0]["subtitle_type"] == "text"
+    assert payload["external_subtitles"][0]["path"] == "movie.en.srt"
+    assert "raw_ffprobe_json" not in payload
 
 
 def test_library_duplicates_route_returns_grouped_duplicates_for_active_mode() -> None:

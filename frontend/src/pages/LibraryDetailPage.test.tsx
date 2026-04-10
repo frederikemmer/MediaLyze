@@ -1,6 +1,7 @@
 import "../i18n";
 
 import { StrictMode } from "react";
+import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -14,10 +15,11 @@ import {
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
+  type MediaFileStreamDetails,
   type MediaFileTablePage,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
-import { LibraryDetailPage } from "./LibraryDetailPage";
+import { buildFileColumns, LibraryDetailPage } from "./LibraryDetailPage";
 
 const scrollIntoViewMock = vi.fn();
 
@@ -174,6 +176,69 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
   };
 }
 
+function createStreamDetails(fileId: number): MediaFileStreamDetails {
+  return {
+    id: fileId,
+    video_streams: [
+      {
+        stream_index: 0,
+        codec: "h264",
+        profile: "High",
+        width: 1920,
+        height: 1080,
+        pix_fmt: "yuv420p",
+        color_space: "bt709",
+        color_transfer: "bt709",
+        color_primaries: "bt709",
+        frame_rate: 23.976,
+        bit_rate: 10_000_000,
+        hdr_type: null,
+      },
+    ],
+    audio_streams: [
+      {
+        stream_index: 1,
+        codec: "aac",
+        channels: 2,
+        channel_layout: "stereo",
+        sample_rate: 48_000,
+        bit_rate: 192_000,
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+      },
+      {
+        stream_index: 2,
+        codec: "truehd",
+        channels: 8,
+        channel_layout: "7.1",
+        sample_rate: 48_000,
+        bit_rate: 4_000_000,
+        language: "ja",
+        default_flag: false,
+        forced_flag: false,
+      },
+    ],
+    subtitle_streams: [
+      {
+        stream_index: 3,
+        codec: "subrip",
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+        subtitle_type: "text",
+      },
+    ],
+    external_subtitles: [
+      {
+        path: "episode-01.de.srt",
+        language: "de",
+        format: "srt",
+      },
+    ],
+  };
+}
+
 function mockAppSettings(overrides: AppSettingsOverrides = {}) {
   return vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings(overrides));
 }
@@ -294,6 +359,37 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(container.querySelector(".score-meter")).toBeNull();
+  });
+
+  it("loads and shows detailed audio stream info from the codec tooltip", async () => {
+    const loadStreamDetail = vi.fn();
+    const columns = buildFileColumns(
+      i18next.t.bind(i18next),
+      {},
+      {},
+      { 1: createStreamDetails(1) },
+      {},
+      vi.fn(),
+      loadStreamDetail,
+      false,
+      false,
+    );
+    const file = createFilesPage(126).items[0];
+    const audioLanguagesColumn = columns.find((column) => column.key === "audio_languages");
+
+    expect(audioLanguagesColumn).toBeDefined();
+    render(<MemoryRouter>{audioLanguagesColumn!.render(file)}</MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show audio stream details for episode-01.mkv" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Audio streams");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("en");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("AAC");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Stereo");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("ja");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("TrueHD");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("7.1");
+    expect(loadStreamDetail).toHaveBeenCalledWith(1);
   });
 
   it("restores persisted analyzed-file column widths", async () => {

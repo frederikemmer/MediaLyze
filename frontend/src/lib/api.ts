@@ -141,6 +141,56 @@ export type MediaFileRow = {
   subtitle_sources: string[];
 };
 
+export type VideoStream = {
+  stream_index: number;
+  codec: string | null;
+  profile: string | null;
+  width: number | null;
+  height: number | null;
+  pix_fmt: string | null;
+  color_space: string | null;
+  color_transfer: string | null;
+  color_primaries: string | null;
+  frame_rate: number | null;
+  bit_rate: number | null;
+  hdr_type: string | null;
+};
+
+export type AudioStream = {
+  stream_index: number;
+  codec: string | null;
+  channels: number | null;
+  channel_layout: string | null;
+  sample_rate: number | null;
+  bit_rate: number | null;
+  language: string | null;
+  default_flag: boolean;
+  forced_flag: boolean;
+};
+
+export type SubtitleStream = {
+  stream_index: number;
+  codec: string | null;
+  language: string | null;
+  default_flag: boolean;
+  forced_flag: boolean;
+  subtitle_type: string | null;
+};
+
+export type ExternalSubtitle = {
+  path: string;
+  language: string | null;
+  format: string | null;
+};
+
+export type MediaFileStreamDetails = {
+  id: number;
+  video_streams: VideoStream[];
+  audio_streams: AudioStream[];
+  subtitle_streams: SubtitleStream[];
+  external_subtitles: ExternalSubtitle[];
+};
+
 export type MediaFileSortKey =
   | "file"
   | "size"
@@ -178,17 +228,14 @@ export type MediaFileTablePage = {
   items: MediaFileRow[];
 };
 
-export type MediaFileDetail = MediaFileRow & {
+export type MediaFileDetail = MediaFileRow &
+  MediaFileStreamDetails & {
   media_format: {
     container_format: string | null;
     duration: number | null;
     bit_rate: number | null;
     probe_score: number | null;
   } | null;
-  video_streams: Array<Record<string, string | number | null>>;
-  audio_streams: Array<Record<string, string | number | boolean | null>>;
-  subtitle_streams: Array<Record<string, string | number | boolean | null>>;
-  external_subtitles: Array<Record<string, string | null>>;
   raw_ffprobe_json: Record<string, unknown> | null;
 };
 
@@ -547,6 +594,7 @@ export const api = {
   },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
+  fileStreams: (id: string | number) => request<MediaFileStreamDetails>(`/files/${id}/streams`),
   fileQualityScore: (id: string | number) => request<MediaFileQualityScoreDetail>(`/files/${id}/quality-score`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
   inspectPath: (path: string) =>

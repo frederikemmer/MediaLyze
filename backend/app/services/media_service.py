@@ -10,7 +10,13 @@ from sqlalchemy import String, and_, case, cast, func, literal, select, union_al
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
-from backend.app.schemas.media import MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage, MediaFileTableRow
+from backend.app.schemas.media import (
+    MediaFileDetail,
+    MediaFileQualityScoreDetail,
+    MediaFileStreamDetails,
+    MediaFileTablePage,
+    MediaFileTableRow,
+)
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.languages import normalize_language_code
@@ -584,6 +590,29 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
         subtitle_streams=media_file.subtitle_streams,
         external_subtitles=media_file.external_subtitles,
         raw_ffprobe_json=media_file.raw_ffprobe_json,
+    )
+
+
+def get_media_file_stream_details(db: Session, file_id: int) -> MediaFileStreamDetails | None:
+    media_file = db.scalar(
+        select(MediaFile)
+        .where(MediaFile.id == file_id)
+        .options(
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+        )
+    )
+    if not media_file:
+        return None
+
+    return MediaFileStreamDetails(
+        id=media_file.id,
+        video_streams=sorted(media_file.video_streams, key=lambda stream: stream.stream_index),
+        audio_streams=sorted(media_file.audio_streams, key=lambda stream: stream.stream_index),
+        subtitle_streams=sorted(media_file.subtitle_streams, key=lambda stream: stream.stream_index),
+        external_subtitles=sorted(media_file.external_subtitles, key=lambda subtitle: subtitle.path.lower()),
     )
 
 

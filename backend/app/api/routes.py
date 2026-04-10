@@ -11,7 +11,13 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
-from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
+from backend.app.schemas.media import (
+    DashboardResponse,
+    MediaFileDetail,
+    MediaFileQualityScoreDetail,
+    MediaFileStreamDetails,
+    MediaFileTablePage,
+)
 from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
 from backend.app.schemas.scan import (
     RecentScanJobPageRead,
@@ -40,6 +46,7 @@ from backend.app.services.media_service import (
     generate_library_files_csv_export,
     get_media_file_detail,
     get_media_file_quality_score_detail,
+    get_media_file_stream_details,
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
@@ -454,6 +461,14 @@ def file_detail(file_id: int, db: Session = Depends(get_db_session)) -> MediaFil
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
     return media_file
+
+
+@router.get("/files/{file_id}/streams", response_model=MediaFileStreamDetails)
+def file_stream_details(file_id: int, db: Session = Depends(get_db_session)) -> MediaFileStreamDetails:
+    payload = get_media_file_stream_details(db, file_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return payload
 
 
 @router.get("/files/{file_id}/quality-score", response_model=MediaFileQualityScoreDetail)

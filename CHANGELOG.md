@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add lightweight analyzed-files codec tooltips that lazy-load per-file video, audio, and subtitle stream details, including language, codec, channel layout, and subtitle source metadata ([#93](https://github.com/frederikemmer/MediaLyze/issues/93))
+
 ### 🐛 Bug fixes
 
 - fix the desktop release build after `v0.4.1` by completing strict frontend test app-settings mocks for the new feature flags and replacing the Windows `ffprobe` bundle step's brittle Chocolatey install with a direct archive download plus retries

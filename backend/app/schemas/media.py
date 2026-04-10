@@ -107,6 +107,14 @@ class MediaFileDetail(MediaFileTableRow):
     raw_ffprobe_json: dict[str, Any] | None
 
 
+class MediaFileStreamDetails(BaseModel):
+    id: int
+    video_streams: list[VideoStreamRead]
+    audio_streams: list[AudioStreamRead]
+    subtitle_streams: list[SubtitleStreamRead]
+    external_subtitles: list[ExternalSubtitleRead]
+
+
 class MediaFileTablePage(BaseModel):
     total: int
     offset: int

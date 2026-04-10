@@ -11,6 +11,7 @@ const COMMON_CODEC_LABELS: Record<string, string> = {
   eac3: "Dolby Digital Plus",
   dts: "DTS",
   dca: "DTS",
+  truehd: "TrueHD",
   flac: "FLAC",
   mp3: "MP3",
   opus: "Opus",

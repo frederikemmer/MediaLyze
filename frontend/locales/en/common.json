@@ -401,5 +401,24 @@
       "dynamic_range": "Dynamic range",
       "language_preferences": "Language preferences"
     }
+  },
+  "streamDetails": {
+    "videoTooltipAria": "Show video stream details for {{file}}",
+    "audioTooltipAria": "Show audio stream details for {{file}}",
+    "subtitleTooltipAria": "Show subtitle details for {{file}}",
+    "loading": "Loading stream details…",
+    "unavailable": "Stream details unavailable.",
+    "none": "No stream details available.",
+    "unknownLanguage": "Unknown language",
+    "unknownType": "Unknown type",
+    "mono": "Mono",
+    "stereo": "Stereo",
+    "channels": "{{count}} ch",
+    "default": "Default",
+    "forced": "Forced",
+    "internal": "Internal",
+    "external": "External",
+    "text": "Text",
+    "image": "Image"
   }
 }
