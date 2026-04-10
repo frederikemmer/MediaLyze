@@ -201,6 +201,23 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.file-detail-panels-grid {
+  align-items: start;
+}
+
+.file-detail-panel-shell {
+  min-width: 0;
+}
+
+.file-detail-panel-shell.is-wide {
+  grid-column: 1 / -1;
+}
+
+.file-detail-panel-shell.is-drop-target .async-panel {
+  border-color: rgba(39, 148, 107, 0.42);
+  box-shadow: 0 14px 28px rgba(39, 148, 107, 0.12);
+}
+
 .settings-layout {
   display: grid;
   gap: 10px;
@@ -287,6 +304,10 @@
 
 .statistics-drag-handle:active {
   cursor: grabbing;
+}
+
+.file-detail-panel-drag-handle {
+  align-self: center;
 }
 
 .settings-checkbox-cell input {
@@ -1386,7 +1407,7 @@
   position: fixed;
   z-index: 1000;
   box-sizing: border-box;
-  width: min(320px, calc(100vw - 32px));
+  width: 320px;
   max-width: calc(100vw - 32px);
   padding: 10px 12px;
   border-radius: 12px;
@@ -1421,6 +1442,9 @@
   border-radius: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   box-shadow: none;
   appearance: none;
 }
@@ -1429,6 +1453,38 @@
 .quality-score-tooltip-trigger:focus-visible,
 .quality-score-tooltip-trigger.tooltip-trigger:hover,
 .quality-score-tooltip-trigger.tooltip-trigger:focus-visible {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  outline: none;
+  transform: none;
+}
+
+.stream-details-tooltip-trigger,
+.stream-details-tooltip-trigger.tooltip-trigger {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  box-shadow: none;
+  text-align: left;
+  appearance: none;
+}
+
+.stream-details-tooltip-trigger:hover,
+.stream-details-tooltip-trigger:focus-visible,
+.stream-details-tooltip-trigger.tooltip-trigger:hover,
+.stream-details-tooltip-trigger.tooltip-trigger:focus-visible {
   background: transparent;
   color: inherit;
   box-shadow: none;
@@ -1595,6 +1651,100 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
+}
+
+.stream-tooltip-content {
+  display: grid;
+  gap: 10px;
+}
+
+.stream-tooltip-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stream-tooltip-row {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(243, 239, 232, 0.14);
+}
+
+.stream-tooltip-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.stream-tooltip-head span {
+  color: rgba(243, 239, 232, 0.76);
+}
+
+.stream-tooltip-inline {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.stream-tooltip-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.stream-tooltip-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(243, 239, 232, 0.12);
+  color: #f3efe8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.stream-tooltip-content-panel .stream-tooltip-summary span {
+  color: var(--muted);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-row {
+  border-top-color: rgba(31, 28, 22, 0.08);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-head span {
+  color: var(--muted);
+}
+
+.stream-tooltip-content-panel .stream-tooltip-pill {
+  background: rgba(31, 28, 22, 0.08);
+  color: var(--ink);
+}
+
+.format-details-row {
+  align-items: center;
+  gap: 16px;
+}
+
+.format-details-label {
+  color: var(--muted);
+}
+
+.format-details-value {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.stream-details-tooltip-portal {
+  padding: 12px 14px;
 }
 
 .tooltip-trigger-below::after {
@@ -2471,7 +2621,9 @@ html[data-theme="dark"] {
   }
 
   .quality-score-tooltip-trigger,
-  .quality-score-tooltip-trigger.tooltip-trigger {
+  .quality-score-tooltip-trigger.tooltip-trigger,
+  .stream-details-tooltip-trigger,
+  .stream-details-tooltip-trigger.tooltip-trigger {
     background: transparent;
   }
 

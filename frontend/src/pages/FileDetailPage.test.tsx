@@ -11,6 +11,7 @@ import {
   type MediaFileDetail,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
+import { FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, getFileDetailPanelSettings } from "../lib/file-detail-panels";
 import { FileDetailPage } from "./FileDetailPage";
 
 type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
@@ -35,7 +36,6 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     feature_flags: {
-      show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
@@ -61,6 +61,7 @@ function createFileDetail(): MediaFileDetail {
     scan_status: "ready",
     quality_score: 9,
     quality_score_raw: 91.2,
+    container: "mkv",
     duration: 3360,
     video_codec: "hevc",
     resolution: "3840x1606",
@@ -68,6 +69,7 @@ function createFileDetail(): MediaFileDetail {
     resolution_category_label: "UHD",
     hdr_type: "Dolby Vision",
     audio_codecs: ["eac3"],
+    audio_spatial_profiles: ["Dolby Atmos"],
     audio_languages: ["en"],
     subtitle_languages: ["en", "de"],
     subtitle_codecs: ["srt"],
@@ -78,9 +80,47 @@ function createFileDetail(): MediaFileDetail {
       bit_rate: 25_000_000,
       probe_score: 100,
     },
-    video_streams: [{ codec: "hevc", width: 3840, height: 1606 }],
-    audio_streams: [{ codec: "eac3", channels: 6, language: "en" }],
-    subtitle_streams: [{ codec: "srt", language: "en", default_flag: true }],
+    video_streams: [
+      {
+        stream_index: 0,
+        codec: "hevc",
+        profile: "Main 10",
+        width: 3840,
+        height: 1606,
+        pix_fmt: "yuv420p10le",
+        color_space: "bt2020nc",
+        color_transfer: "smpte2084",
+        color_primaries: "bt2020",
+        frame_rate: 23.976,
+        bit_rate: 20_000_000,
+        hdr_type: "Dolby Vision",
+      },
+    ],
+    audio_streams: [
+      {
+        stream_index: 1,
+        codec: "eac3",
+        profile: "Dolby Digital Plus + Dolby Atmos",
+        spatial_audio_profile: "dolby_atmos",
+        channels: 6,
+        channel_layout: "5.1",
+        sample_rate: 48_000,
+        bit_rate: 768_000,
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+      },
+    ],
+    subtitle_streams: [
+      {
+        stream_index: 2,
+        codec: "srt",
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+        subtitle_type: "text",
+      },
+    ],
     external_subtitles: [{ path: "Shows/Season01/file.en.srt", language: "en", format: "srt" }],
     raw_ffprobe_json: { streams: [] },
   };
@@ -111,8 +151,24 @@ function renderPage(fileId: number) {
   );
 }
 
+function getPanelShell(title: string): HTMLElement {
+  const titleButton = screen.getByRole("button", { name: title });
+  const shell = titleButton.closest(".file-detail-panel-shell");
+  if (!(shell instanceof HTMLElement)) {
+    throw new Error(`Panel shell for "${title}" not found`);
+  }
+  return shell;
+}
+
+function getPanelOrder(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll(".file-detail-panel-shell .panel-header h2")).map((heading) =>
+    heading.textContent?.trim() ?? "",
+  );
+}
+
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -141,6 +197,17 @@ describe("FileDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
+
+    expect(screen.getByText("Container")).toBeInTheDocument();
+    expect(screen.getByText("Matroska")).toBeInTheDocument();
+    expect(screen.getByText("25 Mbps")).toBeInTheDocument();
+    expect(screen.getByText("100/100")).toBeInTheDocument();
+    expect(screen.getByText("Main 10")).toBeInTheDocument();
+    expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
+    expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
+    expect(screen.getByText("5.1")).toBeInTheDocument();
+    expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
+    expect(screen.getByText("External")).toBeInTheDocument();
   });
 
   it("stays stable when the quality detail request fails", async () => {
@@ -155,5 +222,57 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
     expect(container.querySelectorAll(".path-segment")).toHaveLength(3);
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();
+  });
+
+  it("persists collapsed panel state across file detail pages", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByText("Matroska")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
+    await waitFor(() => expect(screen.queryByText("Matroska")).not.toBeInTheDocument());
+
+    cleanup();
+    renderPage(file.id + 1);
+
+    expect(await screen.findByRole("button", { name: "Format" })).toBeInTheDocument();
+    expect(screen.queryByText("Matroska")).not.toBeInTheDocument();
+    expect(getFileDetailPanelSettings().collapsed.format).toBe(true);
+  });
+
+  it("persists reordered panels across file detail pages", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await screen.findByText("Matroska");
+
+    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
+    const qualityShell = getPanelShell("Quality breakdown");
+    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
+    expect(rawJsonHandle).toBeTruthy();
+
+    fireEvent.dragStart(rawJsonHandle as Element);
+    fireEvent.dragOver(qualityShell);
+    fireEvent.drop(qualityShell);
+    fireEvent.dragEnd(rawJsonHandle as Element);
+
+    await waitFor(() =>
+      expect(getPanelOrder(container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]),
+    );
+
+    cleanup();
+    const rerendered = renderPage(file.id + 1);
+    await screen.findByText("Matroska");
+
+    expect(getPanelOrder(rerendered.container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]);
+    expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain("\"rawJson\",\"qualityBreakdown\"");
   });
 });

@@ -44,6 +44,8 @@ class AudioStreamRead(BaseModel):
 
     stream_index: int
     codec: str | None
+    profile: str | None
+    spatial_audio_profile: str | None
     channels: int | None
     channel_layout: str | None
     sample_rate: int | None
@@ -85,6 +87,7 @@ class MediaFileTableRow(BaseModel):
     scan_status: ScanStatus
     quality_score: int
     quality_score_raw: float = 0.0
+    container: str | None = None
     duration: float | None = None
     video_codec: str | None = None
     resolution: str | None = None
@@ -92,6 +95,7 @@ class MediaFileTableRow(BaseModel):
     resolution_category_label: str | None = None
     hdr_type: str | None = None
     audio_codecs: list[str] = Field(default_factory=list)
+    audio_spatial_profiles: list[str] = Field(default_factory=list)
     audio_languages: list[str] = Field(default_factory=list)
     subtitle_languages: list[str] = Field(default_factory=list)
     subtitle_codecs: list[str] = Field(default_factory=list)
@@ -105,6 +109,14 @@ class MediaFileDetail(MediaFileTableRow):
     subtitle_streams: list[SubtitleStreamRead]
     external_subtitles: list[ExternalSubtitleRead]
     raw_ffprobe_json: dict[str, Any] | None
+
+
+class MediaFileStreamDetails(BaseModel):
+    id: int
+    video_streams: list[VideoStreamRead]
+    audio_streams: list[AudioStreamRead]
+    subtitle_streams: list[SubtitleStreamRead]
+    external_subtitles: list[ExternalSubtitleRead]
 
 
 class MediaFileTablePage(BaseModel):
@@ -123,9 +135,13 @@ class MediaFileQualityScoreDetail(BaseModel):
 
 class DashboardResponse(BaseModel):
     totals: dict[str, int | float]
+    container_distribution: list[DistributionItem]
     video_codec_distribution: list[DistributionItem]
     resolution_distribution: list[DistributionItem]
     hdr_distribution: list[DistributionItem]
     audio_codec_distribution: list[DistributionItem]
+    audio_spatial_profile_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]
     subtitle_distribution: list[DistributionItem]
+    subtitle_codec_distribution: list[DistributionItem]
+    subtitle_source_distribution: list[DistributionItem]

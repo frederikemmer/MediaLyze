@@ -46,10 +46,12 @@ class LibrarySummary(BaseModel):
 
 
 class LibraryStatistics(BaseModel):
+    container_distribution: list[DistributionItem]
     video_codec_distribution: list[DistributionItem]
     resolution_distribution: list[DistributionItem]
     hdr_distribution: list[DistributionItem]
     audio_codec_distribution: list[DistributionItem]
+    audio_spatial_profile_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]
     subtitle_language_distribution: list[DistributionItem]
     subtitle_codec_distribution: list[DistributionItem]

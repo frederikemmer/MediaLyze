@@ -76,7 +76,6 @@ def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
 def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
     candidate = payload if isinstance(payload, dict) else {}
     return FeatureFlagsRead(
-        show_dolby_vision_profiles=bool(candidate.get("show_dolby_vision_profiles", False)),
         show_analyzed_files_csv_export=bool(candidate.get("show_analyzed_files_csv_export", False)),
         show_full_width_app_shell=bool(candidate.get("show_full_width_app_shell", False)),
         hide_quality_score_meter=bool(candidate.get("hide_quality_score_meter", False)),

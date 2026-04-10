@@ -303,6 +303,8 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
         AudioStream(
             stream_index=stream.stream_index,
             codec=stream.codec,
+            profile=stream.profile,
+            spatial_audio_profile=stream.spatial_audio_profile,
             channels=stream.channels,
             channel_layout=stream.channel_layout,
             sample_rate=stream.sample_rate,

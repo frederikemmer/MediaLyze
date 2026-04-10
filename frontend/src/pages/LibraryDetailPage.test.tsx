@@ -1,12 +1,14 @@
 import "../i18n";
 
 import { StrictMode } from "react";
+import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
+import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
@@ -14,10 +16,11 @@ import {
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
+  type MediaFileStreamDetails,
   type MediaFileTablePage,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
-import { LibraryDetailPage } from "./LibraryDetailPage";
+import { buildFileColumns, LibraryDetailPage } from "./LibraryDetailPage";
 
 const scrollIntoViewMock = vi.fn();
 
@@ -79,10 +82,12 @@ function createDuplicateGroupPage(overrides: Partial<DuplicateGroupPage> = {}): 
 
 function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): LibraryStatistics {
   return {
+    container_distribution: [{ label: "MKV", value: 2, filter_value: "mkv" }],
     video_codec_distribution: [{ label: "h264", value: 2 }],
     resolution_distribution: [{ label: "1920x1080", value: 2 }],
     hdr_distribution: [{ label: "SDR", value: 2 }],
     audio_codec_distribution: [{ label: "aac", value: 2 }],
+    audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 1 }],
     audio_language_distribution: [{ label: "en", value: 2 }],
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
@@ -110,11 +115,13 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         scan_status: "ready",
         quality_score: 8,
         quality_score_raw: 82.4,
+        container: "mkv",
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
         audio_codecs: ["aac"],
+        audio_spatial_profiles: ["Dolby Atmos"],
         audio_languages: ["en"],
         subtitle_languages: ["en"],
         subtitle_codecs: ["srt"],
@@ -133,11 +140,13 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         scan_status: "ready",
         quality_score: 7,
         quality_score_raw: 74.1,
+        container: "mkv",
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
         audio_codecs: ["aac"],
+        audio_spatial_profiles: [],
         audio_languages: ["en"],
         subtitle_languages: ["en"],
         subtitle_codecs: ["srt"],
@@ -164,13 +173,79 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     feature_flags: {
-      show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
+  };
+}
+
+function createStreamDetails(fileId: number): MediaFileStreamDetails {
+  return {
+    id: fileId,
+    video_streams: [
+      {
+        stream_index: 0,
+        codec: "h264",
+        profile: "High",
+        width: 1920,
+        height: 1080,
+        pix_fmt: "yuv420p",
+        color_space: "bt709",
+        color_transfer: "bt709",
+        color_primaries: "bt709",
+        frame_rate: 23.976,
+        bit_rate: 10_000_000,
+        hdr_type: null,
+      },
+    ],
+    audio_streams: [
+      {
+        stream_index: 1,
+        codec: "aac",
+        profile: "Dolby Digital Plus + Dolby Atmos",
+        spatial_audio_profile: "dolby_atmos",
+        channels: 2,
+        channel_layout: "stereo",
+        sample_rate: 48_000,
+        bit_rate: 192_000,
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+      },
+      {
+        stream_index: 2,
+        codec: "truehd",
+        profile: "TrueHD",
+        spatial_audio_profile: null,
+        channels: 8,
+        channel_layout: "7.1",
+        sample_rate: 48_000,
+        bit_rate: 4_000_000,
+        language: "ja",
+        default_flag: false,
+        forced_flag: false,
+      },
+    ],
+    subtitle_streams: [
+      {
+        stream_index: 3,
+        codec: "subrip",
+        language: "en",
+        default_flag: true,
+        forced_flag: false,
+        subtitle_type: "text",
+      },
+    ],
+    external_subtitles: [
+      {
+        path: "episode-01.de.srt",
+        language: "de",
+        format: "srt",
+      },
+    ],
   };
 }
 
@@ -294,6 +369,62 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(container.querySelector(".score-meter")).toBeNull();
+  });
+
+  it("loads and shows detailed audio stream info from the codec tooltip", async () => {
+    const loadStreamDetail = vi.fn();
+    const columns = buildFileColumns(
+      i18next.t.bind(i18next),
+      {},
+      {},
+      { 1: createStreamDetails(1) },
+      {},
+      vi.fn(),
+      loadStreamDetail,
+      new Set(["audio_languages"]),
+      false,
+    );
+    const file = createFilesPage(126).items[0];
+    const audioLanguagesColumn = columns.find((column) => column.key === "audio_languages");
+
+    expect(audioLanguagesColumn).toBeDefined();
+    render(<MemoryRouter>{audioLanguagesColumn!.render(file)}</MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show audio stream details for episode-01.mkv" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Audio streams");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("en");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("AAC");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Stereo");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Dolby Atmos");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("ja");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("TrueHD");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("7.1");
+    expect(loadStreamDetail).toHaveBeenCalledWith(1);
+  });
+
+  it("renders an audio spatial profiles column that reuses the audio tooltip", async () => {
+    const columns = buildFileColumns(
+      i18next.t.bind(i18next),
+      {},
+      {},
+      { 1: createStreamDetails(1) },
+      {},
+      vi.fn(),
+      vi.fn(),
+      new Set(["audio_spatial_profiles"]),
+      false,
+    );
+    const file = createFilesPage(126).items[0];
+    const spatialColumn = columns.find((column) => column.key === "audio_spatial_profiles");
+
+    expect(spatialColumn).toBeDefined();
+    render(<MemoryRouter>{spatialColumn!.render(file)}</MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show audio stream details for episode-01.mkv" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Dolby Atmos");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("AAC");
   });
 
   it("restores persisted analyzed-file column widths", async () => {
@@ -747,6 +878,34 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("uses the container statistic filter value when clicking a container panel entry", async () => {
+    const libraryId = 779;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(
+      createLibraryStatistics({
+        container_distribution: [{ label: "MKV", value: 2, filter_value: "mkv" }],
+      }),
+    );
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by container: mkv/i }));
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            container: "mkv",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("combines file/path and metadata filters in the same request", async () => {
     const libraryId = 505;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -778,6 +937,9 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
+    const statisticsSettings = getLibraryStatisticsSettings();
+    statisticsSettings.visibility.subtitle_sources.panelEnabled = true;
+    saveLibraryStatisticsSettings(statisticsSettings);
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
@@ -802,7 +964,7 @@ describe("LibraryDetailPage", () => {
     );
   });
 
-  it("uses collapsed hdr labels as the filter value", async () => {
+  it("uses the exact hdr profile label as the filter value", async () => {
     const libraryId = 507;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
@@ -823,15 +985,15 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by dynamic range: dolby vision/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision 8.1" }));
 
-    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision");
+    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision 8.1");
     await waitFor(() =>
       expect(libraryFilesSpy).toHaveBeenLastCalledWith(
         String(libraryId),
         expect.objectContaining({
           filters: expect.objectContaining({
-            hdr_type: "Dolby Vision",
+            hdr_type: "Dolby Vision 8.1",
           }),
         }),
       ),

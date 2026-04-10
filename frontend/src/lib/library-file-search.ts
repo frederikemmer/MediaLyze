@@ -10,6 +10,7 @@ import {
   Gauge,
   HardDrive,
   Languages,
+  Package,
   SlidersHorizontal,
   SunMedium,
   Waypoints,
@@ -103,6 +104,13 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     validate: isValidSizeValue,
   },
   {
+    field: "container",
+    icon: Package,
+    labelKey: "libraryStatistics.items.container",
+    placeholderKey: "libraryDetail.searchFields.container.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
+  },
+  {
     field: "quality_score",
     icon: Gauge,
     labelKey: "libraryStatistics.items.qualityScore",
@@ -144,6 +152,13 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     icon: AudioLines,
     labelKey: "libraryStatistics.items.audioCodecs",
     placeholderKey: "libraryDetail.searchFields.audioCodecs.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
+  },
+  {
+    field: "audio_spatial_profiles",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.audioSpatialProfiles",
+    placeholderKey: "libraryDetail.searchFields.audioSpatialProfiles.placeholder",
     tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {

@@ -10,9 +10,16 @@ from sqlalchemy import String, and_, case, cast, func, literal, select, union_al
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
-from backend.app.schemas.media import MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage, MediaFileTableRow
+from backend.app.schemas.media import (
+    MediaFileDetail,
+    MediaFileQualityScoreDetail,
+    MediaFileStreamDetails,
+    MediaFileTablePage,
+    MediaFileTableRow,
+)
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services.app_settings import get_app_settings
+from backend.app.services.container_formats import normalize_container
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.media_search import (
     LibraryFileSearchFilters,
@@ -20,16 +27,19 @@ from backend.app.services.media_search import (
     apply_legacy_search,
 )
 from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.video_queries import primary_video_streams_subquery
 
 FileSortKey = Literal[
     "file",
+    "container",
     "size",
     "video_codec",
     "resolution",
     "hdr_type",
     "duration",
     "audio_codecs",
+    "audio_spatial_profiles",
     "audio_languages",
     "subtitle_languages",
     "subtitle_codecs",
@@ -44,12 +54,14 @@ CSV_EXPORT_BATCH_SIZE = 500
 CSV_EXPORT_HEADERS = [
     "relative_path",
     "filename",
+    "container",
     "size_bytes",
     "video_codec",
     "resolution",
     "hdr_type",
     "duration_seconds",
     "audio_codecs",
+    "audio_spatial_profiles",
     "audio_languages",
     "subtitle_languages",
     "subtitle_codecs",
@@ -60,6 +72,7 @@ CSV_EXPORT_HEADERS = [
 ]
 CSV_EXPORT_FILTER_LABELS = {
     "file_search": "file",
+    "search_container": "container",
     "search_size": "size",
     "search_quality_score": "quality_score",
     "search_video_codec": "video_codec",
@@ -67,6 +80,7 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_hdr_type": "hdr_type",
     "search_duration": "duration",
     "search_audio_codecs": "audio_codecs",
+    "search_audio_spatial_profiles": "audio_spatial_profiles",
     "search_audio_languages": "audio_languages",
     "search_subtitle_languages": "subtitle_languages",
     "search_subtitle_codecs": "subtitle_codecs",
@@ -82,6 +96,23 @@ def _normalize_subtitle_codec(value: str | None) -> str:
 def _normalize_audio_codec(value: str | None) -> str:
     candidate = (value or "").strip().lower()
     return candidate or "unknown"
+
+
+def _container_value(media_file: MediaFile) -> str | None:
+    return normalize_container(media_file.extension)
+
+
+def _audio_spatial_profiles(media_file: MediaFile) -> list[str]:
+    return sorted(
+        {
+            label
+            for label in (
+                format_spatial_audio_profile(stream.spatial_audio_profile)
+                for stream in media_file.audio_streams
+            )
+            if label
+        }
+    )
 
 
 def _subtitle_sources(media_file: MediaFile) -> list[str]:
@@ -116,6 +147,7 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         scan_status=media_file.scan_status,
         quality_score=media_file.quality_score,
         quality_score_raw=media_file.quality_score_raw,
+        container=_container_value(media_file),
         duration=duration,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
@@ -123,6 +155,7 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         resolution_category_label=resolution_category.label if resolution_category else None,
         hdr_type=primary_video.hdr_type if primary_video else None,
         audio_codecs=sorted({_normalize_audio_codec(stream.codec) for stream in media_file.audio_streams}),
+        audio_spatial_profiles=_audio_spatial_profiles(media_file),
         audio_languages=sorted({normalize_language_code(stream.language) or "und" for stream in media_file.audio_streams}),
         subtitle_languages=sorted(
             {normalize_language_code(stream.language) or "und" for stream in media_file.subtitle_streams}
@@ -147,11 +180,17 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
         (func.length(normalized_codec) == 0, "unknown"),
         else_=normalized_codec,
     )
+    normalized_spatial_audio_profile = func.lower(func.trim(func.coalesce(AudioStream.spatial_audio_profile, "")))
+    normalized_spatial_audio_profile = case(
+        (func.length(normalized_spatial_audio_profile) == 0, ""),
+        else_=normalized_spatial_audio_profile,
+    )
     distinct_values = (
         select(
             AudioStream.media_file_id.label("media_file_id"),
             normalized_language.label("language"),
             normalized_codec.label("codec"),
+            normalized_spatial_audio_profile.label("spatial_audio_profile"),
         )
         .distinct()
         .subquery(f"{name}_distinct_values")
@@ -161,12 +200,20 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
             distinct_values.c.media_file_id.label("media_file_id"),
             func.coalesce(func.min(distinct_values.c.language), "").label("min_audio_language"),
             func.coalesce(func.min(distinct_values.c.codec), "").label("min_audio_codec"),
+            func.coalesce(func.min(distinct_values.c.spatial_audio_profile), "").label("min_audio_spatial_profile"),
             func.coalesce(func.group_concat(distinct_values.c.language, " "), "").label(
                 "audio_languages_search"
             ),
             func.coalesce(func.group_concat(distinct_values.c.codec, " "), "").label(
                 "audio_codecs_search"
             ),
+            func.coalesce(
+                func.group_concat(
+                    case((distinct_values.c.spatial_audio_profile == "", None), else_=distinct_values.c.spatial_audio_profile),
+                    " ",
+                ),
+                "",
+            ).label("audio_spatial_profiles_search"),
         )
         .group_by(distinct_values.c.media_file_id)
         .subquery(name)
@@ -310,12 +357,14 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
 
     sort_map = {
         "file": func.lower(MediaFile.relative_path),
+        "container": func.lower(func.coalesce(MediaFile.extension, "")),
         "size": MediaFile.size_bytes,
         "video_codec": func.lower(func.coalesce(primary_video_streams.c.codec, "")),
         "resolution": resolution_pixels,
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
         "duration": func.coalesce(MediaFormat.duration, 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
+        "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
         "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
         "subtitle_languages": func.coalesce(subtitle_aggregates.c.min_subtitle_language, ""),
         "subtitle_codecs": func.coalesce(subtitle_aggregates.c.min_subtitle_codec, ""),
@@ -452,12 +501,14 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
     return [
         row.relative_path,
         row.filename,
+        row.container or "",
         row.size_bytes,
         row.video_codec or "",
         row.resolution or "",
         row.hdr_type or "",
         _stringify_export_scalar(row.duration),
         " | ".join(row.audio_codecs),
+        " | ".join(row.audio_spatial_profiles),
         " | ".join(row.audio_languages),
         " | ".join(row.subtitle_languages),
         " | ".join(row.subtitle_codecs),
@@ -584,6 +635,29 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
         subtitle_streams=media_file.subtitle_streams,
         external_subtitles=media_file.external_subtitles,
         raw_ffprobe_json=media_file.raw_ffprobe_json,
+    )
+
+
+def get_media_file_stream_details(db: Session, file_id: int) -> MediaFileStreamDetails | None:
+    media_file = db.scalar(
+        select(MediaFile)
+        .where(MediaFile.id == file_id)
+        .options(
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+        )
+    )
+    if not media_file:
+        return None
+
+    return MediaFileStreamDetails(
+        id=media_file.id,
+        video_streams=sorted(media_file.video_streams, key=lambda stream: stream.stream_index),
+        audio_streams=sorted(media_file.audio_streams, key=lambda stream: stream.stream_index),
+        subtitle_streams=sorted(media_file.subtitle_streams, key=lambda stream: stream.stream_index),
+        external_subtitles=sorted(media_file.external_subtitles, key=lambda subtitle: subtitle.path.lower()),
     )
 
 

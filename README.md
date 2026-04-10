@@ -96,7 +96,7 @@ Desktop behavior:
 
 Release artifacts are packaged as:
 
-- Windows: NSIS `.exe`
+- Windows: `.exe`
 - macOS: `.dmg`
 - Linux: `AppImage`
 

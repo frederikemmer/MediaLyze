@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import distinct, func, select, union_all
+from sqlalchemy import distinct, func, literal, select, union_all
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
@@ -14,8 +14,10 @@ from backend.app.models.entities import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.schemas.media import DashboardResponse, DistributionItem
+from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import merge_language_counts, normalize_language_code
 from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
 
@@ -91,6 +93,19 @@ def build_dashboard(db: Session) -> DashboardResponse:
         "duration_seconds": db.scalar(select(func.coalesce(func.sum(MediaFormat.duration), 0.0))) or 0.0,
     }
 
+    container_distribution = [
+        DistributionItem(label=label, value=value, filter_value=raw_value)
+        for raw_value, value in db.execute(
+            select(
+                _normalized_text_expr(MediaFile.extension, "unknown"),
+                func.count(MediaFile.id),
+            )
+            .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
+            .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
+        ).all()
+        for label in [format_container_label(raw_value)]
+        if label
+    ]
     video_codec_rows = db.execute(
         select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
         .group_by(primary_video_streams.c.codec)
@@ -141,6 +156,30 @@ def build_dashboard(db: Session) -> DashboardResponse:
         db.execute(select(audio_language_values.c.media_file_id, audio_language_values.c.value)).all(),
         fallback="und",
     )
+    audio_spatial_profile_values = (
+        select(
+            AudioStream.media_file_id.label("media_file_id"),
+            _normalized_text_expr(AudioStream.spatial_audio_profile, "").label("value"),
+        )
+        .where(func.length(func.trim(func.coalesce(AudioStream.spatial_audio_profile, ""))) > 0)
+        .distinct()
+        .subquery("dashboard_audio_spatial_profile_values")
+    )
+    audio_spatial_profile_rows = db.execute(
+        select(
+            audio_spatial_profile_values.c.value,
+            func.count(distinct(audio_spatial_profile_values.c.media_file_id)),
+        )
+        .group_by(audio_spatial_profile_values.c.value)
+        .order_by(func.count(distinct(audio_spatial_profile_values.c.media_file_id)).desc())
+    ).all()
+    audio_spatial_profile_distribution = [
+        DistributionItem(label=label, value=value)
+        for raw_label, value in audio_spatial_profile_rows
+        if value > 0
+        for label in [format_spatial_audio_profile(raw_label)]
+        if label
+    ]
 
     subtitle_language_values = union_all(
         select(
@@ -156,9 +195,50 @@ def build_dashboard(db: Session) -> DashboardResponse:
         db.execute(select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)).all(),
         fallback="und",
     )
+    subtitle_codec_values = union_all(
+        select(
+            SubtitleStream.media_file_id.label("media_file_id"),
+            _normalized_text_expr(SubtitleStream.codec, "unknown").label("value"),
+        ),
+        select(
+            ExternalSubtitle.media_file_id.label("media_file_id"),
+            _normalized_text_expr(ExternalSubtitle.format, "unknown").label("value"),
+        ),
+    ).subquery("dashboard_subtitle_codec_values")
+    subtitle_codec_rows = db.execute(
+        select(
+            subtitle_codec_values.c.value,
+            func.count(distinct(subtitle_codec_values.c.media_file_id)),
+        )
+        .group_by(subtitle_codec_values.c.value)
+        .order_by(func.count(distinct(subtitle_codec_values.c.media_file_id)).desc())
+    ).all()
+    subtitle_source_values = union_all(
+        select(SubtitleStream.media_file_id.label("media_file_id"), literal("internal").label("value")),
+        select(ExternalSubtitle.media_file_id.label("media_file_id"), literal("external").label("value")),
+    ).subquery("dashboard_subtitle_source_values")
+    subtitle_source_distinct_values = (
+        select(
+            subtitle_source_values.c.media_file_id,
+            subtitle_source_values.c.value,
+        )
+        .distinct()
+        .subquery("dashboard_subtitle_source_distinct_values")
+    )
+    subtitle_source_distribution = _distribution(
+        db.execute(
+            select(
+                subtitle_source_distinct_values.c.value,
+                func.count(distinct(subtitle_source_distinct_values.c.media_file_id)),
+            )
+            .group_by(subtitle_source_distinct_values.c.value)
+            .order_by(func.count(distinct(subtitle_source_distinct_values.c.media_file_id)).desc())
+        ).all()
+    )
 
     payload = DashboardResponse(
         totals=totals,
+        container_distribution=container_distribution,
         video_codec_distribution=_distribution(video_codec_rows),
         resolution_distribution=_group_resolution_distribution(
             resolution_rows,
@@ -166,6 +246,7 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ),
         hdr_distribution=_distribution(hdr_rows, fallback="SDR"),
         audio_codec_distribution=_distribution(audio_codec_rows),
+        audio_spatial_profile_distribution=audio_spatial_profile_distribution,
         audio_language_distribution=[
             DistributionItem(label=label, value=value)
             for label, value in merge_language_counts(audio_language_rows, fallback="und")
@@ -174,6 +255,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             DistributionItem(label=label, value=value)
             for label, value in subtitle_language_rows
         ],
+        subtitle_codec_distribution=_distribution(subtitle_codec_rows),
+        subtitle_source_distribution=subtitle_source_distribution,
     )
     stats_cache.set_dashboard(cache_key, payload)
     return payload

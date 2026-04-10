@@ -116,6 +116,17 @@ def _subtitle_type(codec_name: str | None) -> str | None:
     return None
 
 
+def _spatial_audio_profile(profile: str | None) -> str | None:
+    normalized = (profile or "").strip().lower()
+    if not normalized:
+        return None
+    if "dolby atmos" in normalized:
+        return "dolby_atmos"
+    if "dts:x" in normalized or "dts x" in normalized:
+        return "dts_x"
+    return None
+
+
 def _is_attached_picture(stream: dict[str, Any]) -> bool:
     disposition = stream.get("disposition") or {}
     return bool(disposition.get("attached_pic"))
@@ -175,6 +186,8 @@ class NormalizedVideoStream:
 class NormalizedAudioStream:
     stream_index: int
     codec: str | None
+    profile: str | None
+    spatial_audio_profile: str | None
     channels: int | None
     channel_layout: str | None
     sample_rate: int | None
@@ -274,6 +287,8 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                 NormalizedAudioStream(
                     stream_index=int(stream.get("index", 0)),
                     codec=stream.get("codec_name"),
+                    profile=stream.get("profile"),
+                    spatial_audio_profile=_spatial_audio_profile(stream.get("profile")),
                     channels=_safe_int(stream.get("channels")),
                     channel_layout=stream.get("channel_layout"),
                     sample_rate=_safe_int(stream.get("sample_rate")),

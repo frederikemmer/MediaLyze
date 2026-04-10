@@ -16,6 +16,8 @@ type TooltipTriggerProps = {
   ariaLabel: string;
   align?: TooltipAlign;
   className?: string;
+  tooltipClassName?: string;
+  maxWidth?: number;
   preserveLineBreaks?: boolean;
   onOpen?: () => void;
   children?: ReactNode;
@@ -24,12 +26,15 @@ type TooltipTriggerProps = {
 const TOOLTIP_GAP = 10;
 const TOOLTIP_VIEWPORT_MARGIN = 16;
 const TOOLTIP_MAX_WIDTH = 320;
+const TOOLTIP_OPEN_EVENT = "medialyze-tooltip-open";
 
 export function TooltipTrigger({
   content,
   ariaLabel,
   align = "center",
   className,
+  tooltipClassName,
+  maxWidth = TOOLTIP_MAX_WIDTH,
   preserveLineBreaks = false,
   onOpen,
   children = "?",
@@ -45,12 +50,6 @@ export function TooltipTrigger({
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
 
   const isOpen = isHovered || isTooltipHovered || isFocused || isPinned;
-
-  useEffect(() => {
-    if (isOpen) {
-      onOpen?.();
-    }
-  }, [isOpen, onOpen]);
 
   const clearCloseTimer = useEffectEvent(() => {
     if (closeTimerRef.current === null) {
@@ -80,7 +79,8 @@ export function TooltipTrigger({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const availableWidth = Math.max(0, viewportWidth - TOOLTIP_VIEWPORT_MARGIN * 2);
-    const tooltipWidth = Math.min(tooltip.offsetWidth, TOOLTIP_MAX_WIDTH, availableWidth);
+    const resolvedWidth = Math.min(maxWidth, availableWidth);
+    const tooltipWidth = Math.min(tooltip.offsetWidth || resolvedWidth, resolvedWidth);
     const idealLeft =
       align === "center"
         ? triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2
@@ -96,6 +96,7 @@ export function TooltipTrigger({
       if (
         current?.left === left &&
         current.top === top &&
+        current.width === resolvedWidth &&
         current.maxHeight === maxHeight &&
         current.visibility === "visible"
       ) {
@@ -104,6 +105,7 @@ export function TooltipTrigger({
       return {
         left,
         top,
+        width: resolvedWidth,
         maxHeight,
         visibility: "visible",
       };
@@ -127,21 +129,6 @@ export function TooltipTrigger({
     updatePosition();
   }, [content, isOpen, updatePosition]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleViewportChange = () => updatePosition();
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
-
-    return () => {
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
-    };
-  }, [isOpen, updatePosition]);
-
   const closeTooltip = useEffectEvent(() => {
     clearCloseTimer();
     setIsHovered(false);
@@ -151,6 +138,63 @@ export function TooltipTrigger({
   });
 
   useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+
+  useEffect(() => {
+    const handleTooltipOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: string }>).detail;
+      if (!detail?.id || detail.id === tooltipId) {
+        return;
+      }
+      closeTooltip();
+    };
+
+    window.addEventListener(TOOLTIP_OPEN_EVENT, handleTooltipOpen as EventListener);
+    return () => window.removeEventListener(TOOLTIP_OPEN_EVENT, handleTooltipOpen as EventListener);
+  }, [closeTooltip, tooltipId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: { id: tooltipId } }));
+    onOpen?.();
+  }, [isOpen, onOpen, tooltipId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleResize = () => updatePosition();
+    const handleScrollLikeInteraction = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        closeTooltip();
+        return;
+      }
+
+      const trigger = triggerRef.current;
+      const tooltip = tooltipRef.current;
+      if (trigger?.contains(target) || tooltip?.contains(target)) {
+        return;
+      }
+
+      closeTooltip();
+    };
+
+    window.addEventListener("resize", handleResize);
+    document.addEventListener("scroll", handleScrollLikeInteraction, true);
+    document.addEventListener("wheel", handleScrollLikeInteraction, { capture: true, passive: true });
+    document.addEventListener("touchmove", handleScrollLikeInteraction, { capture: true, passive: true });
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("scroll", handleScrollLikeInteraction, true);
+      document.removeEventListener("wheel", handleScrollLikeInteraction, true);
+      document.removeEventListener("touchmove", handleScrollLikeInteraction, true);
+    };
+  }, [closeTooltip, isOpen, updatePosition]);
 
   useEffect(() => {
     if (!isPinned) {
@@ -180,9 +224,10 @@ export function TooltipTrigger({
     triggerRef.current?.focus();
   };
 
-  const tooltipClassName = [
+  const tooltipPortalClassName = [
     "tooltip-portal",
     preserveLineBreaks ? "tooltip-portal-preline" : "",
+    tooltipClassName ?? "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -226,7 +271,7 @@ export function TooltipTrigger({
               ref={tooltipRef}
               id={tooltipId}
               role="tooltip"
-              className={tooltipClassName}
+              className={tooltipPortalClassName}
               style={tooltipStyle ?? { left: TOOLTIP_VIEWPORT_MARGIN, top: 0, visibility: "hidden" }}
               onMouseEnter={() => {
                 clearCloseTimer();

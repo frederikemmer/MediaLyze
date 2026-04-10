@@ -40,7 +40,6 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     feature_flags: {
-      show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
@@ -257,44 +256,6 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
         },
         feature_flags: {
-          show_dolby_vision_profiles: false,
-          show_analyzed_files_csv_export: false,
-          show_full_width_app_shell: false,
-          hide_quality_score_meter: false,
-        },
-      }),
-    );
-  });
-
-  it("persists the dolby vision profile feature flag", async () => {
-    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
-      createAppSettings({
-        feature_flags: {
-          show_dolby_vision_profiles: true,
-          show_analyzed_files_csv_export: false,
-          show_full_width_app_shell: false,
-          hide_quality_score_meter: false,
-        },
-      }),
-    );
-
-    renderPage();
-
-    const checkbox = await screen.findByLabelText("Show Dolby Vision Profiles");
-    await screen.findByDisplayValue("movie.tmp");
-    await waitFor(() => expect(checkbox).toBeEnabled());
-    fireEvent.click(checkbox);
-
-    await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith({
-        user_ignore_patterns: ["movie.tmp"],
-        default_ignore_patterns: ["*/@eaDir/*"],
-        scan_performance: {
-          scan_worker_count: 4,
-          parallel_scan_jobs: 2,
-        },
-        feature_flags: {
-          show_dolby_vision_profiles: true,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
@@ -307,7 +268,6 @@ describe("LibrariesPage ignore patterns", () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: true,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
@@ -331,7 +291,6 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
         },
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: true,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
@@ -344,7 +303,6 @@ describe("LibrariesPage ignore patterns", () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
@@ -368,7 +326,6 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
         },
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
@@ -381,7 +338,6 @@ describe("LibrariesPage ignore patterns", () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
@@ -405,7 +361,6 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
         },
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
@@ -447,7 +402,6 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 3,
         },
         feature_flags: {
-          show_dolby_vision_profiles: false,
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
@@ -611,6 +565,33 @@ describe("LibrariesPage ignore patterns", () => {
     fireEvent.change(idealInput, { target: { value: "0.09" } });
 
     await waitFor(() => expect(maximumInput).toHaveValue(0.09));
+  });
+});
+
+describe("LibrariesPage statistics settings", () => {
+  it("shows a dedicated tooltip column and stores tooltip visibility choices", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    expect(await screen.findByText("Tooltips")).toBeInTheDocument();
+
+    const audioLanguagesRow = screen.getByText("Audio languages").closest("tr");
+    expect(audioLanguagesRow).not.toBeNull();
+    const audioLanguagesCheckboxes = within(audioLanguagesRow!).getAllByRole("checkbox");
+    expect(audioLanguagesCheckboxes).toHaveLength(4);
+    expect(audioLanguagesCheckboxes[2]).toBeEnabled();
+
+    fireEvent.click(audioLanguagesCheckboxes[2]);
+
+    expect(window.localStorage.getItem("medialyze-library-statistics-settings")).toContain(
+      '"audio_languages":{"panelEnabled":true,"tableEnabled":true,"tableTooltipEnabled":false,"dashboardEnabled":true}',
+    );
+
+    const fileSizeRow = screen.getByText("File size").closest("tr");
+    expect(fileSizeRow).not.toBeNull();
+    const fileSizeCheckboxes = within(fileSizeRow!).getAllByRole("checkbox");
+    expect(fileSizeCheckboxes[2]).toBeDisabled();
   });
 });
 

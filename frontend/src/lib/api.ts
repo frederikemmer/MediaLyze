@@ -77,12 +77,16 @@ export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
 
 export type DashboardResponse = {
   totals: Record<string, number>;
+  container_distribution: DistributionItem[];
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
+  audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_distribution: DistributionItem[];
+  subtitle_codec_distribution: DistributionItem[];
+  subtitle_source_distribution: DistributionItem[];
 };
 
 export type LibrarySummary = {
@@ -105,10 +109,12 @@ export type LibrarySummary = {
 };
 
 export type LibraryStatistics = {
+  container_distribution: DistributionItem[];
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
+  audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_language_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
@@ -128,6 +134,7 @@ export type MediaFileRow = {
   scan_status: string;
   quality_score: number;
   quality_score_raw: number;
+  container: string | null;
   duration: number | null;
   video_codec: string | null;
   resolution: string | null;
@@ -135,20 +142,75 @@ export type MediaFileRow = {
   resolution_category_label?: string | null;
   hdr_type: string | null;
   audio_codecs: string[];
+  audio_spatial_profiles: string[];
   audio_languages: string[];
   subtitle_languages: string[];
   subtitle_codecs: string[];
   subtitle_sources: string[];
 };
 
+export type VideoStream = {
+  stream_index: number;
+  codec: string | null;
+  profile: string | null;
+  width: number | null;
+  height: number | null;
+  pix_fmt: string | null;
+  color_space: string | null;
+  color_transfer: string | null;
+  color_primaries: string | null;
+  frame_rate: number | null;
+  bit_rate: number | null;
+  hdr_type: string | null;
+};
+
+export type AudioStream = {
+  stream_index: number;
+  codec: string | null;
+  profile: string | null;
+  spatial_audio_profile: string | null;
+  channels: number | null;
+  channel_layout: string | null;
+  sample_rate: number | null;
+  bit_rate: number | null;
+  language: string | null;
+  default_flag: boolean;
+  forced_flag: boolean;
+};
+
+export type SubtitleStream = {
+  stream_index: number;
+  codec: string | null;
+  language: string | null;
+  default_flag: boolean;
+  forced_flag: boolean;
+  subtitle_type: string | null;
+};
+
+export type ExternalSubtitle = {
+  path: string;
+  language: string | null;
+  format: string | null;
+};
+
+export type MediaFileStreamDetails = {
+  id: number;
+  video_streams: VideoStream[];
+  audio_streams: AudioStream[];
+  subtitle_streams: SubtitleStream[];
+  external_subtitles: ExternalSubtitle[];
+};
+
 export type MediaFileSortKey =
   | "file"
+  | "container"
   | "size"
   | "video_codec"
   | "resolution"
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -159,6 +221,7 @@ export type MediaFileSortKey =
 
 export type LibraryFileSearchField =
   | "file"
+  | "container"
   | "size"
   | "quality_score"
   | "video_codec"
@@ -166,6 +229,7 @@ export type LibraryFileSearchField =
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -178,17 +242,14 @@ export type MediaFileTablePage = {
   items: MediaFileRow[];
 };
 
-export type MediaFileDetail = MediaFileRow & {
+export type MediaFileDetail = MediaFileRow &
+  MediaFileStreamDetails & {
   media_format: {
     container_format: string | null;
     duration: number | null;
     bit_rate: number | null;
     probe_score: number | null;
   } | null;
-  video_streams: Array<Record<string, string | number | null>>;
-  audio_streams: Array<Record<string, string | number | boolean | null>>;
-  subtitle_streams: Array<Record<string, string | number | boolean | null>>;
-  external_subtitles: Array<Record<string, string | null>>;
   raw_ffprobe_json: Record<string, unknown> | null;
 };
 
@@ -229,7 +290,6 @@ export type AppSettings = {
     parallel_scan_jobs: number;
   };
   feature_flags: {
-    show_dolby_vision_profiles: boolean;
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
@@ -387,6 +447,7 @@ type DownloadedCsv = {
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? "/api";
 const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = [
   ["file", "file_search"],
+  ["container", "search_container"],
   ["size", "search_size"],
   ["quality_score", "search_quality_score"],
   ["video_codec", "search_video_codec"],
@@ -394,6 +455,7 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["hdr_type", "search_hdr_type"],
   ["duration", "search_duration"],
   ["audio_codecs", "search_audio_codecs"],
+  ["audio_spatial_profiles", "search_audio_spatial_profiles"],
   ["audio_languages", "search_audio_languages"],
   ["subtitle_languages", "search_subtitle_languages"],
   ["subtitle_codecs", "search_subtitle_codecs"],
@@ -547,6 +609,7 @@ export const api = {
   },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
+  fileStreams: (id: string | number) => request<MediaFileStreamDetails>(`/files/${id}/streams`),
   fileQualityScore: (id: string | number) => request<MediaFileQualityScoreDetail>(`/files/${id}/quality-score`),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
   inspectPath: (path: string) =>
@@ -564,7 +627,6 @@ export const api = {
       parallel_scan_jobs?: number;
     };
     feature_flags?: {
-      show_dolby_vision_profiles?: boolean;
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;

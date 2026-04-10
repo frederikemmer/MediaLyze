@@ -239,13 +239,15 @@ Current HDR handling includes:
 * HDR10+
 * HLG
 * Dolby Vision
-* Dolby Vision profile variants when the feature flag is enabled in the UI
+* Dolby Vision profile variants as stored values, without a separate UI feature flag
 
 ## 4.3 Audio Streams
 
 Current normalized audio stream fields include:
 
 * codec
+* profile
+* spatial audio profile for supported immersive formats such as Dolby Atmos and DTS:X
 * channels
 * channel layout
 * sample rate
@@ -385,10 +387,13 @@ Current behavior:
 Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
+* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
+* container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
 * HDR / dynamic range distribution
 * audio codec distribution
+* audio spatial profile distribution
 * audio language distribution
 * subtitle language distribution
 * subtitle codec distribution
@@ -412,6 +417,7 @@ Library file browsing now supports structured search and field-specific filterin
 Current searchable/filterable dimensions include:
 
 * file / path
+* container
 * size
 * duration
 * quality score
@@ -419,6 +425,7 @@ Current searchable/filterable dimensions include:
 * resolution
 * HDR type
 * audio codecs
+* audio spatial profiles
 * audio languages
 * subtitle languages
 * subtitle codecs
@@ -434,6 +441,8 @@ The backend supports:
 * comma-separated field-specific text terms, with each term intersected as an `AND`
 * structured numeric expressions such as size, duration, and quality score comparisons
 * sorting across supported table columns
+
+The analyzed-files table and library statistics settings can also expose container as a separate configurable column / panel dimension, using the normalized file extension as the user-facing container key.
 
 ---
 
@@ -466,9 +475,11 @@ Implemented UI behavior includes:
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * user-resizable analyzed-files table columns with persisted widths in browser storage
+* lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
+* globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility
+* persistent local UI state for selected statistics, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
 ## 8.3 Internationalization
 
@@ -497,14 +508,13 @@ Theme behavior:
 
 Current app feature flags include:
 
-* `show_dolby_vision_profiles`
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
 
 These flags currently control:
 
-* whether Dolby Vision profile variants are displayed separately in statistics and metadata views
+* Dolby Vision profile variants are displayed directly in statistics and metadata views when they are present in stored analysis data
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
@@ -547,7 +557,6 @@ Important current payload concepts:
 * `resolution_categories`
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
-* `feature_flags.show_dolby_vision_profiles`
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
@@ -577,6 +586,7 @@ Important library contract concepts:
 ## 9.5 Files
 
 * `GET /api/files/{file_id}`
+* `GET /api/files/{file_id}/streams`
 * `GET /api/files/{file_id}/quality-score`
 
 Important file contract concepts:
@@ -586,7 +596,9 @@ Important file contract concepts:
 * `raw_ffprobe_json`
 * `resolution_category_id`
 * `resolution_category_label`
+* `audio_spatial_profiles`
 * `subtitle_type`
+* lightweight stream-detail responses expose `video_streams`, `audio_streams`, `subtitle_streams`, and `external_subtitles` without the full raw ffprobe payload
 
 ## 9.6 Scan Job Contract
 

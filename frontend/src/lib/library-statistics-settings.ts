@@ -2,11 +2,13 @@ import type { DashboardResponse, LibraryStatistics, MediaFileSortKey } from "./a
 
 export type LibraryStatisticId =
   | "size"
+  | "container"
   | "video_codec"
   | "resolution"
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -14,22 +16,28 @@ export type LibraryStatisticId =
   | "quality_score";
 
 type LibraryStatisticPanelDataKey =
+  | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
   | "audio_codec_distribution"
+  | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
   | "subtitle_language_distribution"
   | "subtitle_codec_distribution"
   | "subtitle_source_distribution";
 
 type DashboardStatisticPanelDataKey =
+  | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
   | "audio_codec_distribution"
+  | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
-  | "subtitle_distribution";
+  | "subtitle_distribution"
+  | "subtitle_codec_distribution"
+  | "subtitle_source_distribution";
 
 type DistributionFormatKind = "video" | "audio" | "subtitle";
 
@@ -38,9 +46,11 @@ export type LibraryStatisticDefinition = {
   nameKey: string;
   supportsPanel: boolean;
   supportsTable: boolean;
+  supportsTableTooltip: boolean;
   supportsDashboard: boolean;
   defaultPanelEnabled: boolean;
   defaultTableEnabled: boolean;
+  defaultTableTooltipEnabled: boolean;
   defaultDashboardEnabled: boolean;
   panelTitleKey?: string;
   panelDataKey?: LibraryStatisticPanelDataKey;
@@ -54,6 +64,7 @@ export type LibraryStatisticDefinition = {
 export type LibraryStatisticVisibility = {
   panelEnabled: boolean;
   tableEnabled: boolean;
+  tableTooltipEnabled: boolean;
   dashboardEnabled: boolean;
 };
 
@@ -70,9 +81,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.size",
     supportsPanel: false,
     supportsTable: true,
+    supportsTableTooltip: false,
     supportsDashboard: false,
     defaultPanelEnabled: false,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
     tableColumnKey: "size",
   },
@@ -81,9 +94,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.qualityScore",
     supportsPanel: false,
     supportsTable: true,
+    supportsTableTooltip: true,
     supportsDashboard: false,
     defaultPanelEnabled: false,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: false,
     tableColumnKey: "quality_score",
   },
@@ -92,9 +107,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.videoCodec",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.videoCodecs",
     panelDataKey: "video_codec_distribution",
@@ -109,9 +126,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.resolution",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: false,
     supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.resolutions",
     panelDataKey: "resolution_distribution",
@@ -124,9 +143,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.dynamicRange",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: false,
     supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.hdrCoverage",
     panelDataKey: "hdr_distribution",
@@ -139,20 +160,41 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.duration",
     supportsPanel: false,
     supportsTable: true,
+    supportsTableTooltip: false,
     supportsDashboard: false,
     defaultPanelEnabled: false,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
     tableColumnKey: "duration",
+  },
+  {
+    id: "container",
+    nameKey: "libraryStatistics.items.container",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: true,
+    panelTitleKey: "libraryDetail.containers",
+    panelDataKey: "container_distribution",
+    tableColumnKey: "container",
+    dashboardTitleKey: "dashboard.containers",
+    dashboardDataKey: "container_distribution",
   },
   {
     id: "audio_codecs",
     nameKey: "libraryStatistics.items.audioCodecs",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
-    defaultTableEnabled: false,
+    defaultTableEnabled: true,
+    defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.audioCodecs",
     panelDataKey: "audio_codec_distribution",
@@ -163,13 +205,32 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     dashboardFormatKind: "audio",
   },
   {
+    id: "audio_spatial_profiles",
+    nameKey: "libraryStatistics.items.audioSpatialProfiles",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: true,
+    supportsDashboard: true,
+    defaultPanelEnabled: false,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: true,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.audioSpatialProfiles",
+    panelDataKey: "audio_spatial_profile_distribution",
+    tableColumnKey: "audio_spatial_profiles",
+    dashboardTitleKey: "dashboard.audioSpatialProfiles",
+    dashboardDataKey: "audio_spatial_profile_distribution",
+  },
+  {
     id: "audio_languages",
     nameKey: "libraryStatistics.items.audioLanguages",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: true,
+    defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.audioLanguages",
     panelDataKey: "audio_language_distribution",
@@ -182,14 +243,16 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.subtitleLanguages",
     supportsPanel: true,
     supportsTable: true,
+    supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
-    defaultTableEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleLanguages",
     panelDataKey: "subtitle_language_distribution",
     tableColumnKey: "subtitle_languages",
-    dashboardTitleKey: "dashboard.subtitleSources",
+    dashboardTitleKey: "dashboard.subtitleLanguages",
     dashboardDataKey: "subtitle_distribution",
   },
   {
@@ -197,27 +260,36 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     nameKey: "libraryStatistics.items.subtitleCodecs",
     supportsPanel: true,
     supportsTable: true,
-    supportsDashboard: false,
+    supportsTableTooltip: true,
+    supportsDashboard: true,
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
-    defaultDashboardEnabled: false,
+    defaultTableTooltipEnabled: true,
+    defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleCodecs",
     panelDataKey: "subtitle_codec_distribution",
     panelFormatKind: "subtitle",
     tableColumnKey: "subtitle_codecs",
+    dashboardTitleKey: "dashboard.subtitleCodecs",
+    dashboardDataKey: "subtitle_codec_distribution",
+    dashboardFormatKind: "subtitle",
   },
   {
     id: "subtitle_sources",
     nameKey: "libraryStatistics.items.subtitleSources",
     supportsPanel: true,
     supportsTable: true,
-    supportsDashboard: false,
-    defaultPanelEnabled: true,
+    supportsTableTooltip: true,
+    supportsDashboard: true,
+    defaultPanelEnabled: false,
     defaultTableEnabled: false,
-    defaultDashboardEnabled: false,
+    defaultTableTooltipEnabled: true,
+    defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleSources",
     panelDataKey: "subtitle_source_distribution",
     tableColumnKey: "subtitle_sources",
+    dashboardTitleKey: "dashboard.subtitleSources",
+    dashboardDataKey: "subtitle_source_distribution",
   },
 ];
 
@@ -225,41 +297,13 @@ const STATISTIC_DEFINITION_MAP = new Map(
   LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
 
-const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
-  order: [
-    "size",
-    "video_codec",
-    "resolution",
-    "hdr_type",
-    "duration",
-    "audio_codecs",
-    "audio_languages",
-    "subtitle_languages",
-    "subtitle_codecs",
-    "subtitle_sources",
-    "quality_score",
-  ],
-  visibility: {
-    size: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
-    video_codec: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
-    resolution: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
-    hdr_type: { panelEnabled: true, tableEnabled: false, dashboardEnabled: true },
-    duration: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
-    audio_codecs: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
-    audio_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
-    subtitle_languages: { panelEnabled: true, tableEnabled: true, dashboardEnabled: true },
-    subtitle_codecs: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
-    subtitle_sources: { panelEnabled: true, tableEnabled: true, dashboardEnabled: false },
-    quality_score: { panelEnabled: false, tableEnabled: true, dashboardEnabled: false },
-  },
-};
-
 function buildDefaultSettings(): LibraryStatisticsSettings {
   const visibility = {} as Record<LibraryStatisticId, LibraryStatisticVisibility>;
   for (const definition of LIBRARY_STATISTIC_DEFINITIONS) {
     visibility[definition.id] = {
       panelEnabled: definition.supportsPanel ? definition.defaultPanelEnabled : false,
       tableEnabled: definition.supportsTable ? definition.defaultTableEnabled : false,
+      tableTooltipEnabled: definition.supportsTableTooltip ? definition.defaultTableTooltipEnabled : false,
       dashboardEnabled: definition.supportsDashboard ? definition.defaultDashboardEnabled : false,
     };
   }
@@ -305,6 +349,10 @@ function normalizeSettings(value: unknown): LibraryStatisticsSettings {
         definition.supportsTable && typeof stored?.tableEnabled === "boolean"
           ? stored.tableEnabled
           : defaults.visibility[definition.id].tableEnabled,
+      tableTooltipEnabled:
+        definition.supportsTableTooltip && typeof stored?.tableTooltipEnabled === "boolean"
+          ? stored.tableTooltipEnabled
+          : defaults.visibility[definition.id].tableTooltipEnabled,
       dashboardEnabled:
         definition.supportsDashboard && typeof stored?.dashboardEnabled === "boolean"
           ? stored.dashboardEnabled
@@ -313,32 +361,6 @@ function normalizeSettings(value: unknown): LibraryStatisticsSettings {
   }
 
   return { order, visibility };
-}
-
-function settingsEqual(left: LibraryStatisticsSettings, right: LibraryStatisticsSettings): boolean {
-  if (left.order.length !== right.order.length) {
-    return false;
-  }
-
-  for (let index = 0; index < left.order.length; index += 1) {
-    if (left.order[index] !== right.order[index]) {
-      return false;
-    }
-  }
-
-  for (const definition of LIBRARY_STATISTIC_DEFINITIONS) {
-    if (left.visibility[definition.id].panelEnabled !== right.visibility[definition.id].panelEnabled) {
-      return false;
-    }
-    if (left.visibility[definition.id].tableEnabled !== right.visibility[definition.id].tableEnabled) {
-      return false;
-    }
-    if (left.visibility[definition.id].dashboardEnabled !== right.visibility[definition.id].dashboardEnabled) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
@@ -352,13 +374,7 @@ export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
   }
 
   try {
-    const normalized = normalizeSettings(JSON.parse(raw));
-    if (settingsEqual(normalized, LEGACY_DEFAULT_SETTINGS)) {
-      const defaults = buildDefaultSettings();
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-      return defaults;
-    }
-    return normalized;
+    return normalizeSettings(JSON.parse(raw));
   } catch {
     return buildDefaultSettings();
   }
@@ -442,6 +458,15 @@ export function getVisibleLibraryStatisticTableColumns(
 ): MediaFileSortKey[] {
   return getOrderedLibraryStatisticDefinitions(settings)
     .filter((definition) => definition.supportsTable && settings.visibility[definition.id].tableEnabled)
+    .map((definition) => definition.tableColumnKey)
+    .filter((column): column is MediaFileSortKey => typeof column === "string");
+}
+
+export function getEnabledLibraryStatisticTableTooltipColumns(
+  settings: LibraryStatisticsSettings,
+): MediaFileSortKey[] {
+  return getOrderedLibraryStatisticDefinitions(settings)
+    .filter((definition) => definition.supportsTableTooltip && settings.visibility[definition.id].tableTooltipEnabled)
     .map((definition) => definition.tableColumnKey)
     .filter((column): column is MediaFileSortKey => typeof column === "string");
 }

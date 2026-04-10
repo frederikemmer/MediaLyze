@@ -216,6 +216,7 @@ class AudioStream(Base):
     __tablename__ = "audio_streams"
     __table_args__ = (
         Index("ix_audio_streams_codec", "codec"),
+        Index("ix_audio_streams_spatial_audio_profile", "spatial_audio_profile"),
         Index("ix_audio_streams_layout", "channel_layout"),
         Index("ix_audio_streams_language", "language"),
         Index("ix_audio_streams_media_file_id", "media_file_id"),
@@ -225,6 +226,8 @@ class AudioStream(Base):
     media_file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), nullable=False)
     stream_index: Mapped[int] = mapped_column(Integer, nullable=False)
     codec: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    profile: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    spatial_audio_profile: Mapped[str | None] = mapped_column(String(32), nullable=True)
     channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
     channel_layout: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)

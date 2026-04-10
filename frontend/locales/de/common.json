@@ -26,8 +26,12 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "containers": "Container",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
-    "subtitleSources": "Untertitel-Sprachen"
+    "subtitleLanguages": "Untertitel-Sprachen",
+    "subtitleCodecs": "Untertitel-Codecs",
+    "subtitleSources": "Untertitel-Quellen"
   },
   "libraries": {
     "configured": "Konfigurierte Bibliotheken",
@@ -88,12 +92,9 @@
     "parallelScanJobsTooltip": "Das steuert, wie viele Bibliotheken MediaLyze gleichzeitig scannen darf.\n\nHoehere Werte erhoehen die gesamte Ressourcenlast. Behalte CPU-, Datentraeger- und Speicherverbrauch im Blick.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
-      "showDolbyVisionProfiles": "Dolby-Vision-Profile anzeigen",
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showFullWidthAppShell": "App-Shell auf volle Breite erweitern",
       "hideQualityScoreMeter": "Qualitäts-Score-Meter ausblenden",
-      "showDolbyVisionProfilesTooltipAria": "Hinweis zum Dolby-Vision-Rescan anzeigen",
-      "showDolbyVisionProfilesTooltip": "Wenn du MediaLyze schon vor v0.1.1 verwendet hast, fuehre am besten zuerst einen neuen Scan aus. Aeltere Scans koennen Dolby Vision noch nur als \"Dolby Vision\" gespeichert haben.",
       "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
       "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an.",
       "showFullWidthAppShellTooltipAria": "Feature Flag fuer die volle App-Shell-Breite erklaeren",
@@ -135,6 +136,7 @@
     "name": "Name",
     "statistics": "Statistiken",
     "table": "Tabelle",
+    "tooltips": "Tooltips",
     "dashboard": "Dashboard",
     "dragHint": "Zum Umordnen ziehen",
     "unavailable": "Nicht verfügbar",
@@ -142,11 +144,13 @@
     "noDashboardSelected": "Es sind keine Dashboard-Statistik-Panels ausgewählt.",
     "items": {
       "size": "Dateigröße",
+      "container": "Container",
       "videoCodec": "Video-Codec",
       "resolution": "Auflösung",
       "dynamicRange": "Dynamic Range",
       "duration": "Dauer",
       "audioCodecs": "Audio-Codecs",
+      "audioSpatialProfiles": "Raumklang",
       "audioLanguages": "Audio-Sprachen",
       "subtitleLanguages": "Untertitel-Sprachen",
       "subtitleCodecs": "Untertitel-Codecs",
@@ -178,10 +182,12 @@
     "storage": "Speicher",
     "duration": "Dauer",
     "lastScan": "Letzter Scan",
+    "containers": "Container",
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
     "subtitleCodecs": "Untertitel-Codecs",
@@ -214,6 +220,9 @@
         "placeholder": "z. B. >4GB",
         "tooltip": "Unterstützt: >4GB, >=700MB, <1.5GiB, =800MB"
       },
+      "container": {
+        "placeholder": "z. B. mkv mp4"
+      },
       "qualityScore": {
         "placeholder": "z. B. >=8",
         "tooltip": "Unterstützt: >=8, =10, <5"
@@ -233,6 +242,9 @@
       },
       "audioCodecs": {
         "placeholder": "z. B. dts aac"
+      },
+      "audioSpatialProfiles": {
+        "placeholder": "z. B. atmos dts:x"
       },
       "audioLanguages": {
         "placeholder": "z. B. en german"
@@ -332,12 +344,14 @@
   },
   "fileTable": {
     "file": "Datei",
+    "container": "Container",
     "size": "Größe",
     "codec": "Codec",
     "resolution": "Auflösung",
     "hdr": "DynR",
     "duration": "Dauer",
     "audioCodecs": "Audio-Codecs",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "UT-Sprachen",
     "subtitleCodecs": "UT-Codecs",
@@ -362,6 +376,10 @@
     "quality": "Qualität",
     "qualityBreakdown": "Qualitätsaufschlüsselung",
     "format": "Format",
+    "containerLabel": "Container",
+    "containerFormat": "Formatname",
+    "bitRate": "Bitrate",
+    "probeScore": "Probe-Score",
     "videoStreams": "Video-Streams",
     "audioStreams": "Audio-Streams",
     "subtitles": "Untertitel",
@@ -400,6 +418,30 @@
       "audio_codec": "Audio-Codec",
       "dynamic_range": "Dynamikumfang",
       "language_preferences": "Sprachpräferenzen"
+    }
+  },
+  "streamDetails": {
+    "videoTooltipAria": "Video-Stream-Details für {{file}} anzeigen",
+    "audioTooltipAria": "Audio-Stream-Details für {{file}} anzeigen",
+    "subtitleTooltipAria": "Untertitel-Details für {{file}} anzeigen",
+    "loading": "Stream-Details werden geladen…",
+    "unavailable": "Keine Stream-Details verfügbar.",
+    "none": "Keine Stream-Details verfügbar.",
+    "audioSpatial": "Raumklang",
+    "unknownLanguage": "Unbekannte Sprache",
+    "unknownType": "Unbekannter Typ",
+    "mono": "Mono",
+    "stereo": "Stereo",
+    "channels": "{{count}} Kanäle",
+    "default": "Standard",
+    "forced": "Erzwungen",
+    "internal": "Intern",
+    "external": "Extern",
+    "text": "Text",
+    "image": "Bild",
+    "spatialAudio": {
+      "dolbyAtmos": "Dolby Atmos",
+      "dtsX": "DTS:X"
     }
   }
 }

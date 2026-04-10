@@ -15,14 +15,12 @@ class ResolutionCategory(BaseModel):
 
 
 class FeatureFlagsRead(BaseModel):
-    show_dolby_vision_profiles: bool = False
     show_analyzed_files_csv_export: bool = False
     show_full_width_app_shell: bool = False
     hide_quality_score_meter: bool = False
 
 
 class FeatureFlagsUpdate(BaseModel):
-    show_dolby_vision_profiles: bool | None = None
     show_analyzed_files_csv_export: bool | None = None
     show_full_width_app_shell: bool | None = None
     hide_quality_score_meter: bool | None = None

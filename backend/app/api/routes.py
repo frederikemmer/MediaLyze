@@ -11,7 +11,13 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
-from backend.app.schemas.media import DashboardResponse, MediaFileDetail, MediaFileQualityScoreDetail, MediaFileTablePage
+from backend.app.schemas.media import (
+    DashboardResponse,
+    MediaFileDetail,
+    MediaFileQualityScoreDetail,
+    MediaFileStreamDetails,
+    MediaFileTablePage,
+)
 from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
 from backend.app.schemas.scan import (
     RecentScanJobPageRead,
@@ -40,6 +46,7 @@ from backend.app.services.media_service import (
     generate_library_files_csv_export,
     get_media_file_detail,
     get_media_file_quality_score_detail,
+    get_media_file_stream_details,
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
@@ -59,6 +66,7 @@ router = APIRouter()
 def _library_file_search_filters(
     *,
     file_search: str = "",
+    search_container: str = "",
     search_size: str = "",
     search_quality_score: str = "",
     search_video_codec: str = "",
@@ -66,6 +74,7 @@ def _library_file_search_filters(
     search_hdr_type: str = "",
     search_duration: str = "",
     search_audio_codecs: str = "",
+    search_audio_spatial_profiles: str = "",
     search_audio_languages: str = "",
     search_subtitle_languages: str = "",
     search_subtitle_codecs: str = "",
@@ -73,6 +82,7 @@ def _library_file_search_filters(
 ) -> LibraryFileSearchFilters:
     return LibraryFileSearchFilters(
         file_search=file_search,
+        search_container=search_container,
         search_size=search_size,
         search_quality_score=search_quality_score,
         search_video_codec=search_video_codec,
@@ -80,6 +90,7 @@ def _library_file_search_filters(
         search_hdr_type=search_hdr_type,
         search_duration=search_duration,
         search_audio_codecs=search_audio_codecs,
+        search_audio_spatial_profiles=search_audio_spatial_profiles,
         search_audio_languages=search_audio_languages,
         search_subtitle_languages=search_subtitle_languages,
         search_subtitle_codecs=search_subtitle_codecs,
@@ -294,6 +305,7 @@ def library_files(
     limit: int = Query(default=50, ge=1, le=200),
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
+    search_container: str = Query(default="", max_length=64),
     search_size: str = Query(default="", max_length=64),
     search_quality_score: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
@@ -301,18 +313,21 @@ def library_files(
     search_hdr_type: str = Query(default="", max_length=200),
     search_duration: str = Query(default="", max_length=64),
     search_audio_codecs: str = Query(default="", max_length=200),
+    search_audio_spatial_profiles: str = Query(default="", max_length=200),
     search_audio_languages: str = Query(default="", max_length=200),
     search_subtitle_languages: str = Query(default="", max_length=200),
     search_subtitle_codecs: str = Query(default="", max_length=200),
     search_subtitle_sources: str = Query(default="", max_length=64),
     sort_key: Literal[
         "file",
+        "container",
         "size",
         "video_codec",
         "resolution",
         "hdr_type",
         "duration",
         "audio_codecs",
+        "audio_spatial_profiles",
         "audio_languages",
         "subtitle_languages",
         "subtitle_codecs",
@@ -335,6 +350,7 @@ def library_files(
             search=search,
             search_filters=_library_file_search_filters(
                 file_search=file_search,
+                search_container=search_container,
                 search_size=search_size,
                 search_quality_score=search_quality_score,
                 search_video_codec=search_video_codec,
@@ -342,6 +358,7 @@ def library_files(
                 search_hdr_type=search_hdr_type,
                 search_duration=search_duration,
                 search_audio_codecs=search_audio_codecs,
+                search_audio_spatial_profiles=search_audio_spatial_profiles,
                 search_audio_languages=search_audio_languages,
                 search_subtitle_languages=search_subtitle_languages,
                 search_subtitle_codecs=search_subtitle_codecs,
@@ -359,6 +376,7 @@ def library_files_export_csv(
     library_id: int,
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
+    search_container: str = Query(default="", max_length=64),
     search_size: str = Query(default="", max_length=64),
     search_quality_score: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
@@ -366,18 +384,21 @@ def library_files_export_csv(
     search_hdr_type: str = Query(default="", max_length=200),
     search_duration: str = Query(default="", max_length=64),
     search_audio_codecs: str = Query(default="", max_length=200),
+    search_audio_spatial_profiles: str = Query(default="", max_length=200),
     search_audio_languages: str = Query(default="", max_length=200),
     search_subtitle_languages: str = Query(default="", max_length=200),
     search_subtitle_codecs: str = Query(default="", max_length=200),
     search_subtitle_sources: str = Query(default="", max_length=64),
     sort_key: Literal[
         "file",
+        "container",
         "size",
         "video_codec",
         "resolution",
         "hdr_type",
         "duration",
         "audio_codecs",
+        "audio_spatial_profiles",
         "audio_languages",
         "subtitle_languages",
         "subtitle_codecs",
@@ -401,6 +422,7 @@ def library_files_export_csv(
             search=search,
             search_filters=_library_file_search_filters(
                 file_search=file_search,
+                search_container=search_container,
                 search_size=search_size,
                 search_quality_score=search_quality_score,
                 search_video_codec=search_video_codec,
@@ -408,6 +430,7 @@ def library_files_export_csv(
                 search_hdr_type=search_hdr_type,
                 search_duration=search_duration,
                 search_audio_codecs=search_audio_codecs,
+                search_audio_spatial_profiles=search_audio_spatial_profiles,
                 search_audio_languages=search_audio_languages,
                 search_subtitle_languages=search_subtitle_languages,
                 search_subtitle_codecs=search_subtitle_codecs,
@@ -454,6 +477,14 @@ def file_detail(file_id: int, db: Session = Depends(get_db_session)) -> MediaFil
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
     return media_file
+
+
+@router.get("/files/{file_id}/streams", response_model=MediaFileStreamDetails)
+def file_stream_details(file_id: int, db: Session = Depends(get_db_session)) -> MediaFileStreamDetails:
+    payload = get_media_file_stream_details(db, file_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return payload
 
 
 @router.get("/files/{file_id}/quality-score", response_model=MediaFileQualityScoreDetail)

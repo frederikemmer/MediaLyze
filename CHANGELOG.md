@@ -4,8 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.5.0
+
+>2026-04-10
+
+### ✨ New
+
+- add lightweight analyzed-files codec tooltips that lazy-load per-file video, audio, and subtitle stream details, including language, codec, channel layout, and subtitle source metadata, and make table tooltip visibility configurable per statistic column in App Settings ([#93](https://github.com/frederikemmer/MediaLyze/issues/93))
+- add first-class spatial-audio support for `Dolby Atmos` and `DTS:X`, including ffprobe profile detection, analyzed-files filtering and sorting, library statistics, CSV export, and audio tooltip/detail rendering ([#94](https://github.com/frederikemmer/MediaLyze/issues/94))
+- add container statistics and analyzed-files container filtering, sorting, CSV export, and configurable table/panel visibility for library views ([#97](https://github.com/frederikemmer/MediaLyze/issues/97))
+- rework the file-detail page so the `Format` panel renders structured metadata rows instead of raw format JSON, and make all detail panels globally collapsible and reorderable with browser-persisted state
+- allow `Container`, `Spatial audio`, `Subtitle codecs`, and `Subtitle sources` to be enabled as optional dashboard statistic panels through the existing statistics settings
+- update the default statistics preset for fresh installs to match the expanded dashboard/table layout while preserving already stored statistic settings on upgrades and only appending newly introduced options
+
 ### 🐛 Bug fixes
 
+- keep analyzed-files tooltips exclusive so opening or scrolling to another table area closes stale codec and score tooltips instead of leaving multiple overlays on screen
 - fix the desktop release build after `v0.4.1` by completing strict frontend test app-settings mocks for the new feature flags and replacing the Windows `ffprobe` bundle step's brittle Chocolatey install with a direct archive download plus retries
 - reanalyze unchanged media files when external subtitle sidecars are added or removed so subtitle statistics and quality scoring stay in sync with internal subtitles ([#95](https://github.com/frederikemmer/MediaLyze/issues/95))
 

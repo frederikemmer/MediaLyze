@@ -21,6 +21,7 @@ class SearchValidationError(ValueError):
 @dataclass(frozen=True)
 class LibraryFileSearchFilters:
     file_search: str = ""
+    search_container: str = ""
     search_size: str = ""
     search_quality_score: str = ""
     search_video_codec: str = ""
@@ -28,6 +29,7 @@ class LibraryFileSearchFilters:
     search_hdr_type: str = ""
     search_duration: str = ""
     search_audio_codecs: str = ""
+    search_audio_spatial_profiles: str = ""
     search_audio_languages: str = ""
     search_subtitle_languages: str = ""
     search_subtitle_codecs: str = ""
@@ -36,6 +38,7 @@ class LibraryFileSearchFilters:
     def normalized(self) -> LibraryFileSearchFilters:
         return LibraryFileSearchFilters(
             file_search=self.file_search.strip(),
+            search_container=self.search_container.strip(),
             search_size=self.search_size.strip(),
             search_quality_score=self.search_quality_score.strip(),
             search_video_codec=self.search_video_codec.strip(),
@@ -43,6 +46,7 @@ class LibraryFileSearchFilters:
             search_hdr_type=self.search_hdr_type.strip(),
             search_duration=self.search_duration.strip(),
             search_audio_codecs=self.search_audio_codecs.strip(),
+            search_audio_spatial_profiles=self.search_audio_spatial_profiles.strip(),
             search_audio_languages=self.search_audio_languages.strip(),
             search_subtitle_languages=self.search_subtitle_languages.strip(),
             search_subtitle_codecs=self.search_subtitle_codecs.strip(),
@@ -180,6 +184,7 @@ def apply_legacy_search(query, primary_video_streams, audio_aggregates, subtitle
                 match_patterns(primary_video_streams.c.hdr_type, pattern_list),
                 match_patterns(resolution_label, pattern_list),
                 match_patterns(audio_aggregates.c.audio_codecs_search, pattern_list),
+                match_patterns(audio_aggregates.c.audio_spatial_profiles_search, pattern_list),
                 match_patterns(audio_aggregates.c.audio_languages_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_languages_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_codecs_search, pattern_list),
@@ -410,6 +415,8 @@ def apply_field_search_filters(
     normalized = filters.normalized()
     if normalized.file_search:
         query = _apply_file_search_filter(query, normalized.file_search)
+    if normalized.search_container:
+        query = _apply_text_filter(query, MediaFile.extension, normalized.search_container)
     if normalized.search_size:
         query = _apply_numeric_filter(query, MediaFile.size_bytes, normalized.search_size, _parse_size_value, "size")
     if normalized.search_quality_score:
@@ -441,6 +448,12 @@ def apply_field_search_filters(
         )
     if normalized.search_audio_codecs:
         query = _apply_text_filter(query, audio_aggregates.c.audio_codecs_search, normalized.search_audio_codecs)
+    if normalized.search_audio_spatial_profiles:
+        query = _apply_text_filter(
+            query,
+            audio_aggregates.c.audio_spatial_profiles_search,
+            normalized.search_audio_spatial_profiles,
+        )
     if normalized.search_audio_languages:
         query = _apply_text_filter(
             query,
