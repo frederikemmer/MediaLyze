@@ -154,8 +154,9 @@ Current scan execution behavior:
 3. compare discovered files against stored records
 4. detect new, modified, deleted, or newly ignored files
 5. reanalyze files with incomplete metadata when needed
-6. stream discovered files into a runtime work queue for analysis and duplicate-signature processing instead of waiting for full discovery to finish first
-7. persist detailed scan summaries and file-level failure samples
+6. reanalyze unchanged media files when detected external subtitle sidecars were added or removed
+7. stream discovered files into a runtime work queue for analysis and duplicate-signature processing instead of waiting for full discovery to finish first
+8. persist detailed scan summaries and file-level failure samples
 
 Change detection uses:
 
@@ -284,6 +285,7 @@ Stored fields include:
 * relative sidecar path
 * language
 * format
+* sidecar additions or removals trigger media reanalysis on the next scan even when the video file itself is unchanged
 
 ## 4.6 Duplicate Detection
 
@@ -770,7 +772,7 @@ Current workflows include:
 * dev image publishing
 * official release publishing
 * manually triggered dev desktop artifact builds
-* desktop release artifact publishing
+* desktop release artifact publishing, including manual rebuilds for an existing release tag from an alternate code ref when only build logic needs to be corrected
 * release metadata validation for pull requests
 
 ## 13.2 Release Metadata Rules
@@ -792,6 +794,7 @@ Current release behavior:
 * official images and GitHub releases are published from `main` only when a push increases the aligned repository version metadata
 * official images are published to GHCR
 * the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
+* the desktop-release workflow can also be dispatched manually for an existing release tag, optionally building from a different git ref while still uploading assets to the original release tag
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
 * when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch

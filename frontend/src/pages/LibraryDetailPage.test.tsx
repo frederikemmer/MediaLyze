@@ -10,6 +10,7 @@ import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-colu
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
+  type AppSettings,
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
@@ -19,6 +20,11 @@ import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibraryDetailPage } from "./LibraryDetailPage";
 
 const scrollIntoViewMock = vi.fn();
+
+type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
+  scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
+  feature_flags?: Partial<AppSettings["feature_flags"]>;
+};
 
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
@@ -141,6 +147,37 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
+function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
+  const {
+    feature_flags: overrideFeatureFlags = {},
+    scan_performance: overrideScanPerformance = {},
+    ...restOverrides
+  } = overrides;
+
+  return {
+    ignore_patterns: [],
+    user_ignore_patterns: [],
+    default_ignore_patterns: [],
+    scan_performance: {
+      scan_worker_count: 4,
+      parallel_scan_jobs: 2,
+      ...overrideScanPerformance,
+    },
+    feature_flags: {
+      show_dolby_vision_profiles: false,
+      show_analyzed_files_csv_export: false,
+      show_full_width_app_shell: false,
+      hide_quality_score_meter: false,
+      ...overrideFeatureFlags,
+    },
+    ...restOverrides,
+  };
+}
+
+function mockAppSettings(overrides: AppSettingsOverrides = {}) {
+  return vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings(overrides));
+}
+
 function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
@@ -174,12 +211,7 @@ beforeEach(() => {
 describe("LibraryDetailPage", () => {
   it("loads summary, statistics, and files separately", async () => {
     const libraryId = 101;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
@@ -196,12 +228,7 @@ describe("LibraryDetailPage", () => {
 
   it("loads duplicate groups separately and renders matching files", async () => {
     const libraryId = 120;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
@@ -218,12 +245,7 @@ describe("LibraryDetailPage", () => {
 
   it("renders duplicate variants inside a scroll-limited list", async () => {
     const libraryId = 122;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
@@ -258,12 +280,8 @@ describe("LibraryDetailPage", () => {
 
   it("hides the score meter when the feature flag is enabled", async () => {
     const libraryId = 123;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
+    mockAppSettings({
       feature_flags: {
-        show_dolby_vision_profiles: false,
         show_analyzed_files_csv_export: true,
         hide_quality_score_meter: true,
       },
@@ -284,12 +302,7 @@ describe("LibraryDetailPage", () => {
       LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY,
       JSON.stringify({ video_codec: 333 }),
     );
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -302,12 +315,7 @@ describe("LibraryDetailPage", () => {
 
   it("persists resized analyzed-file column widths", async () => {
     const libraryId = 125;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -342,12 +350,7 @@ describe("LibraryDetailPage", () => {
 
   it("filters duplicate groups and collapses the duplicate panel", async () => {
     const libraryId = 121;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
@@ -405,12 +408,7 @@ describe("LibraryDetailPage", () => {
 
   it("still loads statistics and files under strict mode remounts", async () => {
     const libraryId = 111;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -427,12 +425,7 @@ describe("LibraryDetailPage", () => {
 
   it("retries file loading after a strict mode abort cycle", async () => {
     const libraryId = 112;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
 
@@ -457,12 +450,7 @@ describe("LibraryDetailPage", () => {
 
   it("keeps files usable when statistics loading fails", async () => {
     const libraryId = 202;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockRejectedValue(new Error("statistics unavailable"));
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -475,12 +463,7 @@ describe("LibraryDetailPage", () => {
 
   it("reloads duplicate groups after an active scan finishes", async () => {
     const libraryId = 203;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryDuplicatesSpy = vi
@@ -524,12 +507,7 @@ describe("LibraryDetailPage", () => {
 
   it("refetches only files when sorting changes", async () => {
     const libraryId = 303;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -548,12 +526,7 @@ describe("LibraryDetailPage", () => {
 
   it("adds and removes metadata search fields and sends field-specific filters", async () => {
     const libraryId = 404;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -595,12 +568,7 @@ describe("LibraryDetailPage", () => {
 
   it("filters files when clicking a statistic count", async () => {
     const libraryId = 410;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -627,12 +595,7 @@ describe("LibraryDetailPage", () => {
 
   it("replaces existing statistic values in the same field", async () => {
     const libraryId = 411;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(
       api,
@@ -671,12 +634,7 @@ describe("LibraryDetailPage", () => {
 
   it("disables already-applied statistic values without duplicating the filter", async () => {
     const libraryId = 412;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -700,12 +658,7 @@ describe("LibraryDetailPage", () => {
 
   it("keeps statistic filters from different categories combined", async () => {
     const libraryId = 413;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(
       api,
@@ -740,12 +693,7 @@ describe("LibraryDetailPage", () => {
 
   it("uses stable resolution filter values when statistics provide them", async () => {
     const libraryId = 777;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(
       createLibraryStatistics({
@@ -773,12 +721,7 @@ describe("LibraryDetailPage", () => {
 
   it("passes through und statistic filters unchanged", async () => {
     const libraryId = 778;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(
       createLibraryStatistics({
@@ -806,12 +749,7 @@ describe("LibraryDetailPage", () => {
 
   it("combines file/path and metadata filters in the same request", async () => {
     const libraryId = 505;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -840,12 +778,7 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -871,12 +804,7 @@ describe("LibraryDetailPage", () => {
 
   it("uses collapsed hdr labels as the filter value", async () => {
     const libraryId = 507;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(
       api,
@@ -912,12 +840,7 @@ describe("LibraryDetailPage", () => {
 
   it("blocks invalid structured search values and shows an inline validation error", async () => {
     const libraryId = 606;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -940,12 +863,7 @@ describe("LibraryDetailPage", () => {
 
   it("exports the current filtered and sorted result set as CSV", async () => {
     const libraryId = 707;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: true },
-    });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -1007,12 +925,7 @@ describe("LibraryDetailPage", () => {
 
   it("hides the CSV export button when the feature flag is disabled", async () => {
     const libraryId = 708;
-    vi.spyOn(api, "appSettings").mockResolvedValue({
-      ignore_patterns: [],
-      user_ignore_patterns: [],
-      default_ignore_patterns: [],
-      feature_flags: { show_dolby_vision_profiles: false, show_analyzed_files_csv_export: false },
-    });
+    mockAppSettings();
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
