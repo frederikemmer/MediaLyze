@@ -2571,7 +2571,9 @@ html[data-theme="dark"] {
   }
 
   .quality-score-tooltip-trigger,
-  .quality-score-tooltip-trigger.tooltip-trigger {
+  .quality-score-tooltip-trigger.tooltip-trigger,
+  .stream-details-tooltip-trigger,
+  .stream-details-tooltip-trigger.tooltip-trigger {
     background: transparent;
   }
 
