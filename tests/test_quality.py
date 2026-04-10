@@ -36,6 +36,8 @@ def test_quality_score_rewards_modern_high_quality_media() -> None:
             NormalizedAudioStream(
                 stream_index=1,
                 codec="truehd",
+                profile=None,
+                spatial_audio_profile=None,
                 channels=8,
                 channel_layout="7.1",
                 sample_rate=48000,

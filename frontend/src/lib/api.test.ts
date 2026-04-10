@@ -31,6 +31,7 @@ describe("api.libraryFiles", () => {
       filters: {
         file: "episode",
         video_codec: "hevc",
+        audio_spatial_profiles: "atmos",
         subtitle_sources: "external",
       },
       sortKey: "quality_score",
@@ -41,6 +42,7 @@ describe("api.libraryFiles", () => {
     expect(String(requestPath)).toContain("/libraries/42/files?");
     expect(String(requestPath)).toContain("file_search=episode");
     expect(String(requestPath)).toContain("search_video_codec=hevc");
+    expect(String(requestPath)).toContain("search_audio_spatial_profiles=atmos");
     expect(String(requestPath)).toContain("search_subtitle_sources=external");
     expect(String(requestPath)).toContain("sort_key=quality_score");
     expect(String(requestPath)).toContain("sort_direction=desc");
@@ -60,6 +62,7 @@ describe("api.libraryFiles", () => {
       filters: {
         file: "episode",
         video_codec: "hevc",
+        audio_spatial_profiles: "atmos",
         subtitle_sources: "external",
       },
       sortKey: "quality_score",
@@ -70,6 +73,7 @@ describe("api.libraryFiles", () => {
     expect(String(requestPath)).toContain("/libraries/42/files/export.csv?");
     expect(String(requestPath)).toContain("file_search=episode");
     expect(String(requestPath)).toContain("search_video_codec=hevc");
+    expect(String(requestPath)).toContain("search_audio_spatial_profiles=atmos");
     expect(String(requestPath)).toContain("search_subtitle_sources=external");
     expect(String(requestPath)).toContain("sort_key=quality_score");
     expect(String(requestPath)).toContain("sort_direction=desc");

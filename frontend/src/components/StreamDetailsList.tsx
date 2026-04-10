@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { MediaFileStreamDetails } from "../lib/api";
-import { formatCodecLabel } from "../lib/format";
+import { formatCodecLabel, formatSpatialAudioProfileLabel } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
 export type StreamDetailsKind = "video" | "audio" | "subtitle";
@@ -113,6 +113,7 @@ function buildStreamRows(
         trail: stream.codec ? formatCodecLabel(stream.codec, "audio") : t("fileTable.na"),
         meta: [
           formatAudioChannelLabel(stream.channel_layout, stream.channels, t),
+          ...(stream.spatial_audio_profile ? [formatSpatialAudioProfileLabel(stream.spatial_audio_profile)] : []),
           ...(stream.default_flag ? [t("streamDetails.default")] : []),
           ...(stream.forced_flag ? [t("streamDetails.forced")] : []),
         ],

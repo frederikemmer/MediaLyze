@@ -26,6 +26,7 @@ from backend.app.services.media_search import (
     apply_legacy_search,
 )
 from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.video_queries import primary_video_streams_subquery
 
 FileSortKey = Literal[
@@ -36,6 +37,7 @@ FileSortKey = Literal[
     "hdr_type",
     "duration",
     "audio_codecs",
+    "audio_spatial_profiles",
     "audio_languages",
     "subtitle_languages",
     "subtitle_codecs",
@@ -56,6 +58,7 @@ CSV_EXPORT_HEADERS = [
     "hdr_type",
     "duration_seconds",
     "audio_codecs",
+    "audio_spatial_profiles",
     "audio_languages",
     "subtitle_languages",
     "subtitle_codecs",
@@ -73,6 +76,7 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_hdr_type": "hdr_type",
     "search_duration": "duration",
     "search_audio_codecs": "audio_codecs",
+    "search_audio_spatial_profiles": "audio_spatial_profiles",
     "search_audio_languages": "audio_languages",
     "search_subtitle_languages": "subtitle_languages",
     "search_subtitle_codecs": "subtitle_codecs",
@@ -88,6 +92,19 @@ def _normalize_subtitle_codec(value: str | None) -> str:
 def _normalize_audio_codec(value: str | None) -> str:
     candidate = (value or "").strip().lower()
     return candidate or "unknown"
+
+
+def _audio_spatial_profiles(media_file: MediaFile) -> list[str]:
+    return sorted(
+        {
+            label
+            for label in (
+                format_spatial_audio_profile(stream.spatial_audio_profile)
+                for stream in media_file.audio_streams
+            )
+            if label
+        }
+    )
 
 
 def _subtitle_sources(media_file: MediaFile) -> list[str]:
@@ -129,6 +146,7 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         resolution_category_label=resolution_category.label if resolution_category else None,
         hdr_type=primary_video.hdr_type if primary_video else None,
         audio_codecs=sorted({_normalize_audio_codec(stream.codec) for stream in media_file.audio_streams}),
+        audio_spatial_profiles=_audio_spatial_profiles(media_file),
         audio_languages=sorted({normalize_language_code(stream.language) or "und" for stream in media_file.audio_streams}),
         subtitle_languages=sorted(
             {normalize_language_code(stream.language) or "und" for stream in media_file.subtitle_streams}
@@ -153,11 +171,17 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
         (func.length(normalized_codec) == 0, "unknown"),
         else_=normalized_codec,
     )
+    normalized_spatial_audio_profile = func.lower(func.trim(func.coalesce(AudioStream.spatial_audio_profile, "")))
+    normalized_spatial_audio_profile = case(
+        (func.length(normalized_spatial_audio_profile) == 0, ""),
+        else_=normalized_spatial_audio_profile,
+    )
     distinct_values = (
         select(
             AudioStream.media_file_id.label("media_file_id"),
             normalized_language.label("language"),
             normalized_codec.label("codec"),
+            normalized_spatial_audio_profile.label("spatial_audio_profile"),
         )
         .distinct()
         .subquery(f"{name}_distinct_values")
@@ -167,12 +191,20 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
             distinct_values.c.media_file_id.label("media_file_id"),
             func.coalesce(func.min(distinct_values.c.language), "").label("min_audio_language"),
             func.coalesce(func.min(distinct_values.c.codec), "").label("min_audio_codec"),
+            func.coalesce(func.min(distinct_values.c.spatial_audio_profile), "").label("min_audio_spatial_profile"),
             func.coalesce(func.group_concat(distinct_values.c.language, " "), "").label(
                 "audio_languages_search"
             ),
             func.coalesce(func.group_concat(distinct_values.c.codec, " "), "").label(
                 "audio_codecs_search"
             ),
+            func.coalesce(
+                func.group_concat(
+                    case((distinct_values.c.spatial_audio_profile == "", None), else_=distinct_values.c.spatial_audio_profile),
+                    " ",
+                ),
+                "",
+            ).label("audio_spatial_profiles_search"),
         )
         .group_by(distinct_values.c.media_file_id)
         .subquery(name)
@@ -322,6 +354,7 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
         "duration": func.coalesce(MediaFormat.duration, 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
+        "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
         "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
         "subtitle_languages": func.coalesce(subtitle_aggregates.c.min_subtitle_language, ""),
         "subtitle_codecs": func.coalesce(subtitle_aggregates.c.min_subtitle_codec, ""),
@@ -464,6 +497,7 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
         row.hdr_type or "",
         _stringify_export_scalar(row.duration),
         " | ".join(row.audio_codecs),
+        " | ".join(row.audio_spatial_profiles),
         " | ".join(row.audio_languages),
         " | ".join(row.subtitle_languages),
         " | ".join(row.subtitle_codecs),

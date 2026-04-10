@@ -256,6 +256,65 @@ def test_update_library_settings_backfills_visual_density_maximum_for_legacy_pro
     assert quality_profile_changed is True
 
 
+def test_get_library_statistics_exposes_audio_spatial_profile_distribution() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Spatial Stats",
+            path="/tmp/spatial-stats",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add_all(
+            [
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=1,
+                    codec="eac3",
+                    profile="Dolby Digital Plus + Dolby Atmos",
+                    spatial_audio_profile="dolby_atmos",
+                ),
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=2,
+                    codec="dts",
+                    profile="DTS-HD MA + DTS:X",
+                    spatial_audio_profile="dts_x",
+                ),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+
+    assert statistics is not None
+    assert {item.label: item.value for item in statistics.audio_spatial_profile_distribution} == {
+        "DTS:X": 1,
+        "Dolby Atmos": 1,
+    }
+
+
 def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

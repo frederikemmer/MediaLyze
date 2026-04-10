@@ -79,6 +79,8 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     },
     "audio_streams": {
         "codec": "ALTER TABLE audio_streams ADD COLUMN codec VARCHAR(64)",
+        "profile": "ALTER TABLE audio_streams ADD COLUMN profile VARCHAR(128)",
+        "spatial_audio_profile": "ALTER TABLE audio_streams ADD COLUMN spatial_audio_profile VARCHAR(32)",
         "channels": "ALTER TABLE audio_streams ADD COLUMN channels INTEGER",
         "channel_layout": "ALTER TABLE audio_streams ADD COLUMN channel_layout VARCHAR(64)",
         "sample_rate": "ALTER TABLE audio_streams ADD COLUMN sample_rate INTEGER",
@@ -123,6 +125,7 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_video_streams_hdr_type ON video_streams (hdr_type)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_media_file_stream_index ON video_streams (media_file_id, stream_index)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_codec ON audio_streams (codec)",
+    "CREATE INDEX IF NOT EXISTS ix_audio_streams_spatial_audio_profile ON audio_streams (spatial_audio_profile)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_layout ON audio_streams (channel_layout)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_language ON audio_streams (language)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_media_file_id ON audio_streams (media_file_id)",

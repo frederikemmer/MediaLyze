@@ -385,6 +385,38 @@ export function buildFileColumns(
       },
     },
     {
+      key: "audio_spatial_profiles",
+      labelKey: "fileTable.audioSpatialProfiles",
+      sizing: { mode: "content", minPx: 138, maxPx: 204 },
+      measureValue: (file) => compactValues(file.audio_spatial_profiles),
+      render: (file) => {
+        const value = compactValues(file.audio_spatial_profiles);
+        return file.audio_spatial_profiles.length > 0 && tooltipEnabledColumns.has("audio_spatial_profiles") ? (
+          <TooltipTrigger
+            ariaLabel={t("streamDetails.audioTooltipAria", { file: file.filename })}
+            className="stream-details-tooltip-trigger"
+            tooltipClassName="stream-details-tooltip-portal"
+            maxWidth={420}
+            content={
+              <StreamDetailsList
+                kind="audio"
+                detail={streamDetailCache[file.id]}
+                isLoading={Boolean(streamDetailLoading[file.id])}
+                t={t}
+              />
+            }
+            onOpen={() => loadStreamDetail(file.id)}
+          >
+            <span className="media-data-text-ellipsis">{value}</span>
+          </TooltipTrigger>
+        ) : (
+          <span className="media-data-text-ellipsis" title={value}>
+            {value}
+          </span>
+        );
+      },
+    },
+    {
       key: "audio_languages",
       labelKey: "fileTable.audioLanguages",
       sizing: { mode: "content", minPx: 112, maxPx: 176 },

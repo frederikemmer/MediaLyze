@@ -28,6 +28,7 @@ function createFile(id: number): MediaFileRow {
     resolution: "1920x1080",
     hdr_type: null,
     audio_codecs: ["aac"],
+    audio_spatial_profiles: [],
     audio_languages: ["en"],
     subtitle_languages: ["en"],
     subtitle_codecs: ["srt"],

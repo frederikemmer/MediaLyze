@@ -239,13 +239,15 @@ Current HDR handling includes:
 * HDR10+
 * HLG
 * Dolby Vision
-* Dolby Vision profile variants when the feature flag is enabled in the UI
+* Dolby Vision profile variants as stored values, without a separate UI feature flag
 
 ## 4.3 Audio Streams
 
 Current normalized audio stream fields include:
 
 * codec
+* profile
+* spatial audio profile for supported immersive formats such as Dolby Atmos and DTS:X
 * channels
 * channel layout
 * sample rate
@@ -389,6 +391,7 @@ Current aggregated statistics include:
 * resolution distribution grouped by global resolution categories
 * HDR / dynamic range distribution
 * audio codec distribution
+* audio spatial profile distribution
 * audio language distribution
 * subtitle language distribution
 * subtitle codec distribution
@@ -419,6 +422,7 @@ Current searchable/filterable dimensions include:
 * resolution
 * HDR type
 * audio codecs
+* audio spatial profiles
 * audio languages
 * subtitle languages
 * subtitle codecs
@@ -586,6 +590,7 @@ Important file contract concepts:
 * `raw_ffprobe_json`
 * `resolution_category_id`
 * `resolution_category_label`
+* `audio_spatial_profiles`
 * `subtitle_type`
 * lightweight stream-detail responses expose `video_streams`, `audio_streams`, `subtitle_streams`, and `external_subtitles` without the full raw ffprobe payload
 

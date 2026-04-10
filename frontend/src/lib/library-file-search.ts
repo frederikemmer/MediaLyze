@@ -147,6 +147,13 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
+    field: "audio_spatial_profiles",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.audioSpatialProfiles",
+    placeholderKey: "libraryDetail.searchFields.audioSpatialProfiles.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
+  },
+  {
     field: "audio_languages",
     icon: Languages,
     labelKey: "libraryStatistics.items.audioLanguages",

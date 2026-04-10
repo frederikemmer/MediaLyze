@@ -44,6 +44,8 @@ class AudioStreamRead(BaseModel):
 
     stream_index: int
     codec: str | None
+    profile: str | None
+    spatial_audio_profile: str | None
     channels: int | None
     channel_layout: str | None
     sample_rate: int | None
@@ -92,6 +94,7 @@ class MediaFileTableRow(BaseModel):
     resolution_category_label: str | None = None
     hdr_type: str | None = None
     audio_codecs: list[str] = Field(default_factory=list)
+    audio_spatial_profiles: list[str] = Field(default_factory=list)
     audio_languages: list[str] = Field(default_factory=list)
     subtitle_languages: list[str] = Field(default_factory=list)
     subtitle_codecs: list[str] = Field(default_factory=list)

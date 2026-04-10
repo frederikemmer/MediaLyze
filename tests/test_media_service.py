@@ -218,6 +218,62 @@ def test_list_library_files_exposes_subtitle_languages_codecs_and_sources() -> N
     assert page.items[0].subtitle_sources == ["external", "internal"]
 
 
+def test_list_library_files_exposes_audio_spatial_profiles() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Spatial",
+            path="/tmp/spatial",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="file-01.mkv",
+            filename="file-01.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add_all(
+            [
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=1,
+                    codec="eac3",
+                    profile="Dolby Digital Plus + Dolby Atmos",
+                    spatial_audio_profile="dolby_atmos",
+                    language="eng",
+                ),
+                AudioStream(
+                    media_file_id=media_file.id,
+                    stream_index=2,
+                    codec="dts",
+                    profile="DTS-HD MA + DTS:X",
+                    spatial_audio_profile="dts_x",
+                    language="eng",
+                ),
+            ]
+        )
+        db.commit()
+
+        page = list_library_files(db, library.id, limit=50)
+
+    assert page.total == 1
+    assert page.items[0].audio_spatial_profiles == ["DTS:X", "Dolby Atmos"]
+
+
 def test_list_library_files_sorts_by_audio_and_subtitle_aggregates() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -277,6 +333,134 @@ def test_list_library_files_sorts_by_audio_and_subtitle_aggregates() -> None:
 
     assert [item.filename for item in audio_sorted.items] == ["alpha.mkv", "beta.mkv"]
     assert [item.filename for item in subtitle_sorted.items] == ["alpha.mkv", "beta.mkv"]
+
+
+def test_list_library_files_sorts_and_filters_by_audio_spatial_profiles() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Spatial Sorted",
+            path="/tmp/spatial-sorted",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        atmos = MediaFile(
+            library_id=library.id,
+            relative_path="atmos.mkv",
+            filename="atmos.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=4,
+        )
+        dtsx = MediaFile(
+            library_id=library.id,
+            relative_path="dtsx.mkv",
+            filename="dtsx.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=4,
+        )
+        db.add_all([atmos, dtsx])
+        db.flush()
+        db.add_all(
+            [
+                AudioStream(
+                    media_file_id=atmos.id,
+                    stream_index=1,
+                    codec="eac3",
+                    profile="Dolby Digital Plus + Dolby Atmos",
+                    spatial_audio_profile="dolby_atmos",
+                    language="eng",
+                ),
+                AudioStream(
+                    media_file_id=dtsx.id,
+                    stream_index=1,
+                    codec="dts",
+                    profile="DTS-HD MA + DTS:X",
+                    spatial_audio_profile="dts_x",
+                    language="eng",
+                ),
+            ]
+        )
+        db.commit()
+
+        sorted_page = list_library_files(db, library.id, limit=50, sort_key="audio_spatial_profiles", sort_direction="asc")
+        filtered_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_audio_spatial_profiles="atmos"),
+        )
+        legacy_page = list_library_files(db, library.id, limit=50, search="dts")
+
+    assert [item.filename for item in sorted_page.items] == ["atmos.mkv", "dtsx.mkv"]
+    assert [item.filename for item in filtered_page.items] == ["atmos.mkv"]
+    assert [item.filename for item in legacy_page.items] == ["dtsx.mkv"]
+
+
+def test_generate_library_files_csv_export_includes_audio_spatial_profiles() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Spatial Export",
+            path="/tmp/spatial-export",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="atmos.mkv",
+            filename="atmos.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=4,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(
+            AudioStream(
+                media_file_id=media_file.id,
+                stream_index=1,
+                codec="eac3",
+                profile="Dolby Digital Plus + Dolby Atmos",
+                spatial_audio_profile="dolby_atmos",
+                language="eng",
+            )
+        )
+        db.commit()
+
+        _filename, chunks = generate_library_files_csv_export(
+            db,
+            library.id,
+            library_name=library.name,
+            search_filters=LibraryFileSearchFilters(search_audio_spatial_profiles="atmos"),
+        )
+
+    comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
+
+    assert "# search.audio_spatial_profiles: atmos" in comment_lines
+    assert rows[0][7:10] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
+    assert rows[1][8] == "Dolby Atmos"
 
 
 def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
@@ -942,6 +1126,7 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "hdr_type",
         "duration_seconds",
         "audio_codecs",
+        "audio_spatial_profiles",
         "audio_languages",
         "subtitle_languages",
         "subtitle_codecs",
@@ -956,8 +1141,8 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert data_rows[0][4] == "3840x2160"
     assert data_rows[0][5] == "HDR10"
     assert data_rows[0][7] == "aac"
-    assert data_rows[0][10] == "srt"
-    assert data_rows[0][11] == "external | internal"
+    assert data_rows[0][11] == "srt"
+    assert data_rows[0][12] == "external | internal"
     assert data_rows[-1][0] == "episode-504.mkv"
 
 

@@ -85,6 +85,7 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     resolution_distribution: [{ label: "1920x1080", value: 2 }],
     hdr_distribution: [{ label: "SDR", value: 2 }],
     audio_codec_distribution: [{ label: "aac", value: 2 }],
+    audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 1 }],
     audio_language_distribution: [{ label: "en", value: 2 }],
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
@@ -117,6 +118,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         resolution: "1920x1080",
         hdr_type: null,
         audio_codecs: ["aac"],
+        audio_spatial_profiles: ["Dolby Atmos"],
         audio_languages: ["en"],
         subtitle_languages: ["en"],
         subtitle_codecs: ["srt"],
@@ -140,6 +142,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         resolution: "1920x1080",
         hdr_type: null,
         audio_codecs: ["aac"],
+        audio_spatial_profiles: [],
         audio_languages: ["en"],
         subtitle_languages: ["en"],
         subtitle_codecs: ["srt"],
@@ -198,6 +201,8 @@ function createStreamDetails(fileId: number): MediaFileStreamDetails {
       {
         stream_index: 1,
         codec: "aac",
+        profile: "Dolby Digital Plus + Dolby Atmos",
+        spatial_audio_profile: "dolby_atmos",
         channels: 2,
         channel_layout: "stereo",
         sample_rate: 48_000,
@@ -209,6 +214,8 @@ function createStreamDetails(fileId: number): MediaFileStreamDetails {
       {
         stream_index: 2,
         codec: "truehd",
+        profile: "TrueHD",
+        spatial_audio_profile: null,
         channels: 8,
         channel_layout: "7.1",
         sample_rate: 48_000,
@@ -385,10 +392,35 @@ describe("LibraryDetailPage", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("en");
     expect(screen.getByRole("tooltip")).toHaveTextContent("AAC");
     expect(screen.getByRole("tooltip")).toHaveTextContent("Stereo");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Dolby Atmos");
     expect(screen.getByRole("tooltip")).toHaveTextContent("ja");
     expect(screen.getByRole("tooltip")).toHaveTextContent("TrueHD");
     expect(screen.getByRole("tooltip")).toHaveTextContent("7.1");
     expect(loadStreamDetail).toHaveBeenCalledWith(1);
+  });
+
+  it("renders an audio spatial profiles column that reuses the audio tooltip", async () => {
+    const columns = buildFileColumns(
+      i18next.t.bind(i18next),
+      {},
+      {},
+      { 1: createStreamDetails(1) },
+      {},
+      vi.fn(),
+      vi.fn(),
+      new Set(["audio_spatial_profiles"]),
+      false,
+    );
+    const file = createFilesPage(126).items[0];
+    const spatialColumn = columns.find((column) => column.key === "audio_spatial_profiles");
+
+    expect(spatialColumn).toBeDefined();
+    render(<MemoryRouter>{spatialColumn!.render(file)}</MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show audio stream details for episode-01.mkv" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Dolby Atmos");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("AAC");
   });
 
   it("restores persisted analyzed-file column widths", async () => {

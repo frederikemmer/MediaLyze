@@ -26,6 +26,7 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.tableEnabled).toBe(false);
     expect(getVisibleLibraryStatisticTableColumns(settings)).toEqual([
       "size",
       "quality_score",
@@ -40,6 +41,7 @@ describe("library statistics settings", () => {
       "quality_score",
       "video_codec",
       "audio_codecs",
+      "audio_spatial_profiles",
       "audio_languages",
       "subtitle_languages",
       "subtitle_codecs",
@@ -118,6 +120,7 @@ describe("library statistics settings", () => {
     expect(settings.order[1]).toBe("quality_score");
     expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
     expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.tableEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.subtitle_sources.tableEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.dashboardEnabled).toBe(true);

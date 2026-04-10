@@ -7,6 +7,7 @@ export type LibraryStatisticId =
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -18,6 +19,7 @@ type LibraryStatisticPanelDataKey =
   | "resolution_distribution"
   | "hdr_distribution"
   | "audio_codec_distribution"
+  | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
   | "subtitle_language_distribution"
   | "subtitle_codec_distribution"
@@ -180,6 +182,21 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     dashboardFormatKind: "audio",
   },
   {
+    id: "audio_spatial_profiles",
+    nameKey: "libraryStatistics.items.audioSpatialProfiles",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: true,
+    supportsDashboard: false,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: true,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.audioSpatialProfiles",
+    panelDataKey: "audio_spatial_profile_distribution",
+    tableColumnKey: "audio_spatial_profiles",
+  },
+  {
     id: "audio_languages",
     nameKey: "libraryStatistics.items.audioLanguages",
     supportsPanel: true,
@@ -263,6 +280,7 @@ const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
     "subtitle_codecs",
     "subtitle_sources",
     "quality_score",
+    "audio_spatial_profiles",
   ],
   visibility: {
     size: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: false },
@@ -271,6 +289,7 @@ const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
     hdr_type: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: false, dashboardEnabled: true },
     duration: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: false },
     audio_codecs: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
+    audio_spatial_profiles: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: true, dashboardEnabled: false },
     audio_languages: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
     subtitle_languages: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
     subtitle_codecs: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: false },

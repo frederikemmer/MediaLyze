@@ -31,6 +31,7 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
                 "index": 1,
                 "codec_type": "audio",
                 "codec_name": "eac3",
+                "profile": "Dolby Digital Plus + Dolby Atmos",
                 "channels": 6,
                 "channel_layout": "5.1(side)",
                 "sample_rate": "48000",
@@ -54,9 +55,45 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
     assert normalized.media_format.duration == 5423.21
     assert normalized.video_streams[0].hdr_type == "HDR10"
     assert normalized.video_streams[0].frame_rate == 24000 / 1001
+    assert normalized.audio_streams[0].profile == "Dolby Digital Plus + Dolby Atmos"
+    assert normalized.audio_streams[0].spatial_audio_profile == "dolby_atmos"
     assert normalized.audio_streams[0].language == "en"
     assert normalized.subtitle_streams[0].language == "de"
     assert normalized.subtitle_streams[0].subtitle_type == "text"
+
+
+def test_normalize_ffprobe_payload_extracts_spatial_audio_profiles() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "truehd",
+                "profile": "Dolby TrueHD + Dolby Atmos",
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "dts",
+                "profile": "DTS-HD MA + DTS:X",
+            },
+            {
+                "index": 2,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "profile": "LC",
+            },
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert [stream.spatial_audio_profile for stream in normalized.audio_streams] == [
+        "dolby_atmos",
+        "dts_x",
+        None,
+    ]
 
 
 def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:

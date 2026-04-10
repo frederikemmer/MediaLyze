@@ -109,6 +109,7 @@ export type LibraryStatistics = {
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
+  audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_language_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
@@ -135,6 +136,7 @@ export type MediaFileRow = {
   resolution_category_label?: string | null;
   hdr_type: string | null;
   audio_codecs: string[];
+  audio_spatial_profiles: string[];
   audio_languages: string[];
   subtitle_languages: string[];
   subtitle_codecs: string[];
@@ -159,6 +161,8 @@ export type VideoStream = {
 export type AudioStream = {
   stream_index: number;
   codec: string | null;
+  profile: string | null;
+  spatial_audio_profile: string | null;
   channels: number | null;
   channel_layout: string | null;
   sample_rate: number | null;
@@ -199,6 +203,7 @@ export type MediaFileSortKey =
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -216,6 +221,7 @@ export type LibraryFileSearchField =
   | "hdr_type"
   | "duration"
   | "audio_codecs"
+  | "audio_spatial_profiles"
   | "audio_languages"
   | "subtitle_languages"
   | "subtitle_codecs"
@@ -440,6 +446,7 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["hdr_type", "search_hdr_type"],
   ["duration", "search_duration"],
   ["audio_codecs", "search_audio_codecs"],
+  ["audio_spatial_profiles", "search_audio_spatial_profiles"],
   ["audio_languages", "search_audio_languages"],
   ["subtitle_languages", "search_subtitle_languages"],
   ["subtitle_codecs", "search_subtitle_codecs"],

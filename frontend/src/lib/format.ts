@@ -1,5 +1,10 @@
 export type CodecKind = "video" | "audio" | "subtitle";
 
+const SPATIAL_AUDIO_LABELS: Record<string, string> = {
+  dolby_atmos: "Dolby Atmos",
+  dts_x: "DTS:X",
+};
+
 const COMMON_CODEC_LABELS: Record<string, string> = {
   av1: "AV1",
   h264: "H.264 / AVC",
@@ -70,6 +75,19 @@ export function formatCodecLabel(value: string | null | undefined, kind: CodecKi
 
   const kindSpecific = kind === "video" ? VIDEO_CODEC_LABELS[normalized] : undefined;
   return kindSpecific ?? COMMON_CODEC_LABELS[normalized] ?? humanizeCodecLabel(normalized);
+}
+
+export function formatSpatialAudioProfileLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return "Unknown";
+  }
+
+  return SPATIAL_AUDIO_LABELS[normalized] ?? humanizeCodecLabel(normalized);
 }
 
 export function formatBytes(bytes: number): string {

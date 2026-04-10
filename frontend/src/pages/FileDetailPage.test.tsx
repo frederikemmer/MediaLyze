@@ -67,6 +67,7 @@ function createFileDetail(): MediaFileDetail {
     resolution_category_label: "UHD",
     hdr_type: "Dolby Vision",
     audio_codecs: ["eac3"],
+    audio_spatial_profiles: ["Dolby Atmos"],
     audio_languages: ["en"],
     subtitle_languages: ["en", "de"],
     subtitle_codecs: ["srt"],
@@ -97,6 +98,8 @@ function createFileDetail(): MediaFileDetail {
       {
         stream_index: 1,
         codec: "eac3",
+        profile: "Dolby Digital Plus + Dolby Atmos",
+        spatial_audio_profile: "dolby_atmos",
         channels: 6,
         channel_layout: "5.1",
         sample_rate: 48_000,
@@ -179,6 +182,7 @@ describe("FileDetailPage", () => {
 
     expect(screen.getByText("Main 10")).toBeInTheDocument();
     expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
+    expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
     expect(screen.getByText("5.1")).toBeInTheDocument();
     expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
     expect(screen.getByText("External")).toBeInTheDocument();

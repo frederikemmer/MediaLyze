@@ -28,6 +28,7 @@ class LibraryFileSearchFilters:
     search_hdr_type: str = ""
     search_duration: str = ""
     search_audio_codecs: str = ""
+    search_audio_spatial_profiles: str = ""
     search_audio_languages: str = ""
     search_subtitle_languages: str = ""
     search_subtitle_codecs: str = ""
@@ -43,6 +44,7 @@ class LibraryFileSearchFilters:
             search_hdr_type=self.search_hdr_type.strip(),
             search_duration=self.search_duration.strip(),
             search_audio_codecs=self.search_audio_codecs.strip(),
+            search_audio_spatial_profiles=self.search_audio_spatial_profiles.strip(),
             search_audio_languages=self.search_audio_languages.strip(),
             search_subtitle_languages=self.search_subtitle_languages.strip(),
             search_subtitle_codecs=self.search_subtitle_codecs.strip(),
@@ -180,6 +182,7 @@ def apply_legacy_search(query, primary_video_streams, audio_aggregates, subtitle
                 match_patterns(primary_video_streams.c.hdr_type, pattern_list),
                 match_patterns(resolution_label, pattern_list),
                 match_patterns(audio_aggregates.c.audio_codecs_search, pattern_list),
+                match_patterns(audio_aggregates.c.audio_spatial_profiles_search, pattern_list),
                 match_patterns(audio_aggregates.c.audio_languages_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_languages_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_codecs_search, pattern_list),
@@ -441,6 +444,12 @@ def apply_field_search_filters(
         )
     if normalized.search_audio_codecs:
         query = _apply_text_filter(query, audio_aggregates.c.audio_codecs_search, normalized.search_audio_codecs)
+    if normalized.search_audio_spatial_profiles:
+        query = _apply_text_filter(
+            query,
+            audio_aggregates.c.audio_spatial_profiles_search,
+            normalized.search_audio_spatial_profiles,
+        )
     if normalized.search_audio_languages:
         query = _apply_text_filter(
             query,

@@ -26,6 +26,7 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleSources": "Untertitel-Sprachen"
   },
@@ -145,6 +146,7 @@
       "dynamicRange": "Dynamic Range",
       "duration": "Dauer",
       "audioCodecs": "Audio-Codecs",
+      "audioSpatialProfiles": "Raumklang",
       "audioLanguages": "Audio-Sprachen",
       "subtitleLanguages": "Untertitel-Sprachen",
       "subtitleCodecs": "Untertitel-Codecs",
@@ -180,6 +182,7 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
     "subtitleCodecs": "Untertitel-Codecs",
@@ -231,6 +234,9 @@
       },
       "audioCodecs": {
         "placeholder": "z. B. dts aac"
+      },
+      "audioSpatialProfiles": {
+        "placeholder": "z. B. atmos dts:x"
       },
       "audioLanguages": {
         "placeholder": "z. B. en german"
@@ -336,6 +342,7 @@
     "hdr": "DynR",
     "duration": "Dauer",
     "audioCodecs": "Audio-Codecs",
+    "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "UT-Sprachen",
     "subtitleCodecs": "UT-Codecs",
@@ -407,6 +414,7 @@
     "loading": "Stream-Details werden geladen…",
     "unavailable": "Keine Stream-Details verfügbar.",
     "none": "Keine Stream-Details verfügbar.",
+    "audioSpatial": "Raumklang",
     "unknownLanguage": "Unbekannte Sprache",
     "unknownType": "Unbekannter Typ",
     "mono": "Mono",
@@ -417,6 +425,10 @@
     "internal": "Intern",
     "external": "Extern",
     "text": "Text",
-    "image": "Bild"
+    "image": "Bild",
+    "spatialAudio": {
+      "dolbyAtmos": "Dolby Atmos",
+      "dtsX": "DTS:X"
+    }
   }
 }
