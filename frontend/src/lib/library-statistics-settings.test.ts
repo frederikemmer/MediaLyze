@@ -24,14 +24,17 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
-    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.container.dashboardEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
-    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
-    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.panelEnabled).toBe(false);
+    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(true);
+    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(true);
+    expect(settings.visibility.subtitle_sources.panelEnabled).toBe(false);
     expect(settings.visibility.container.panelEnabled).toBe(true);
     expect(settings.visibility.container.tableEnabled).toBe(false);
-    expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
+    expect(settings.visibility.audio_codecs.tableEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.tableEnabled).toBe(false);
+    expect(settings.visibility.subtitle_languages.tableEnabled).toBe(false);
     expect(getVisibleLibraryStatisticTableColumns(settings)).toEqual([
       "size",
       "quality_score",
@@ -39,8 +42,8 @@ describe("library statistics settings", () => {
       "resolution",
       "hdr_type",
       "duration",
+      "audio_codecs",
       "audio_languages",
-      "subtitle_languages",
     ]);
     expect(getEnabledLibraryStatisticTableTooltipColumns(settings)).toEqual([
       "quality_score",
@@ -56,9 +59,12 @@ describe("library statistics settings", () => {
       "video_codec",
       "resolution",
       "hdr_type",
+      "container",
       "audio_codecs",
       "audio_languages",
       "subtitle_languages",
+      "subtitle_codecs",
+      "subtitle_sources",
     ]);
   });
 
@@ -86,13 +92,15 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.panelEnabled).toBe(false);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(false);
-    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.container.dashboardEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
-    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
-    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_spatial_profiles.panelEnabled).toBe(false);
+    expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(true);
+    expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(true);
+    expect(settings.visibility.subtitle_sources.panelEnabled).toBe(false);
   });
 
-  it("migrates the previous default preset to the new standard preset", () => {
+  it("preserves an existing stored preset instead of overwriting it with the new defaults", () => {
     window.localStorage.setItem(
       "medialyze-library-statistics-settings",
       JSON.stringify({
@@ -127,14 +135,15 @@ describe("library statistics settings", () => {
 
     const settings = getLibraryStatisticsSettings();
 
-    expect(settings.order[1]).toBe("quality_score");
-    expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
-    expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
+    expect(settings.order[1]).toBe("video_codec");
+    expect(settings.visibility.hdr_type.tableEnabled).toBe(false);
+    expect(settings.visibility.audio_codecs.tableEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.tableEnabled).toBe(false);
+    expect(settings.visibility.subtitle_languages.tableEnabled).toBe(true);
     expect(settings.visibility.audio_codecs.tableTooltipEnabled).toBe(true);
-    expect(settings.visibility.subtitle_sources.tableEnabled).toBe(false);
+    expect(settings.visibility.subtitle_sources.tableEnabled).toBe(true);
     expect(settings.visibility.audio_codecs.dashboardEnabled).toBe(true);
-    expect(settings.visibility.container.dashboardEnabled).toBe(false);
+    expect(settings.visibility.container.dashboardEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
     expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);

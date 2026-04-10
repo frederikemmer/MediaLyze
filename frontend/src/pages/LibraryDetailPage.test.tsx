@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
+import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
@@ -936,6 +937,9 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
+    const statisticsSettings = getLibraryStatisticsSettings();
+    statisticsSettings.visibility.subtitle_sources.panelEnabled = true;
+    saveLibraryStatisticsSettings(statisticsSettings);
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());

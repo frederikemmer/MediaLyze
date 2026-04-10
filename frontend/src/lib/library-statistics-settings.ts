@@ -178,7 +178,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: false,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.containers",
     panelDataKey: "container_distribution",
     tableColumnKey: "container",
@@ -193,7 +193,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
-    defaultTableEnabled: false,
+    defaultTableEnabled: true,
     defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.audioCodecs",
@@ -211,7 +211,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTable: true,
     supportsTableTooltip: true,
     supportsDashboard: true,
-    defaultPanelEnabled: true,
+    defaultPanelEnabled: false,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: false,
@@ -246,7 +246,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTableTooltip: true,
     supportsDashboard: true,
     defaultPanelEnabled: true,
-    defaultTableEnabled: true,
+    defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
     defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleLanguages",
@@ -265,7 +265,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultPanelEnabled: true,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleCodecs",
     panelDataKey: "subtitle_codec_distribution",
     panelFormatKind: "subtitle",
@@ -281,10 +281,10 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTable: true,
     supportsTableTooltip: true,
     supportsDashboard: true,
-    defaultPanelEnabled: true,
+    defaultPanelEnabled: false,
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: true,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
     panelTitleKey: "libraryDetail.subtitleSources",
     panelDataKey: "subtitle_source_distribution",
     tableColumnKey: "subtitle_sources",
@@ -296,39 +296,6 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
 const STATISTIC_DEFINITION_MAP = new Map(
   LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
-
-const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
-  order: [
-    "size",
-    "video_codec",
-    "resolution",
-    "hdr_type",
-    "duration",
-    "audio_codecs",
-    "audio_languages",
-    "subtitle_languages",
-    "subtitle_codecs",
-    "subtitle_sources",
-    "quality_score",
-    "container",
-    "audio_spatial_profiles",
-  ],
-  visibility: {
-    size: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: false },
-    container: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: false, dashboardEnabled: false },
-    video_codec: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
-    resolution: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: true },
-    hdr_type: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: false, dashboardEnabled: true },
-    duration: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: false },
-    audio_codecs: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
-    audio_spatial_profiles: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: true, dashboardEnabled: false },
-    audio_languages: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
-    subtitle_languages: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
-    subtitle_codecs: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: false },
-    subtitle_sources: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: false },
-    quality_score: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: false },
-  },
-};
 
 function buildDefaultSettings(): LibraryStatisticsSettings {
   const visibility = {} as Record<LibraryStatisticId, LibraryStatisticVisibility>;
@@ -396,35 +363,6 @@ function normalizeSettings(value: unknown): LibraryStatisticsSettings {
   return { order, visibility };
 }
 
-function settingsEqual(left: LibraryStatisticsSettings, right: LibraryStatisticsSettings): boolean {
-  if (left.order.length !== right.order.length) {
-    return false;
-  }
-
-  for (let index = 0; index < left.order.length; index += 1) {
-    if (left.order[index] !== right.order[index]) {
-      return false;
-    }
-  }
-
-  for (const definition of LIBRARY_STATISTIC_DEFINITIONS) {
-    if (left.visibility[definition.id].panelEnabled !== right.visibility[definition.id].panelEnabled) {
-      return false;
-    }
-    if (left.visibility[definition.id].tableEnabled !== right.visibility[definition.id].tableEnabled) {
-      return false;
-    }
-    if (left.visibility[definition.id].tableTooltipEnabled !== right.visibility[definition.id].tableTooltipEnabled) {
-      return false;
-    }
-    if (left.visibility[definition.id].dashboardEnabled !== right.visibility[definition.id].dashboardEnabled) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
   if (typeof window === "undefined") {
     return buildDefaultSettings();
@@ -436,13 +374,7 @@ export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
   }
 
   try {
-    const normalized = normalizeSettings(JSON.parse(raw));
-    if (settingsEqual(normalized, LEGACY_DEFAULT_SETTINGS)) {
-      const defaults = buildDefaultSettings();
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-      return defaults;
-    }
-    return normalized;
+    return normalizeSettings(JSON.parse(raw));
   } catch {
     return buildDefaultSettings();
   }
