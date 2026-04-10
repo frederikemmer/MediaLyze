@@ -475,9 +475,10 @@ Implemented UI behavior includes:
 * statistic-panel and table-column visibility customization
 * user-resizable analyzed-files table columns with persisted widths in browser storage
 * lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
+* globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility
+* persistent local UI state for selected statistics, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
 ## 8.3 Internationalization
 

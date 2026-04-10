@@ -201,6 +201,23 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.file-detail-panels-grid {
+  align-items: start;
+}
+
+.file-detail-panel-shell {
+  min-width: 0;
+}
+
+.file-detail-panel-shell.is-wide {
+  grid-column: 1 / -1;
+}
+
+.file-detail-panel-shell.is-drop-target .async-panel {
+  border-color: rgba(39, 148, 107, 0.42);
+  box-shadow: 0 14px 28px rgba(39, 148, 107, 0.12);
+}
+
 .settings-layout {
   display: grid;
   gap: 10px;
@@ -287,6 +304,10 @@
 
 .statistics-drag-handle:active {
   cursor: grabbing;
+}
+
+.file-detail-panel-drag-handle {
+  align-self: center;
 }
 
 .settings-checkbox-cell input {
@@ -1705,6 +1726,21 @@
 .stream-tooltip-content-panel .stream-tooltip-pill {
   background: rgba(31, 28, 22, 0.08);
   color: var(--ink);
+}
+
+.format-details-row {
+  align-items: center;
+  gap: 16px;
+}
+
+.format-details-label {
+  color: var(--muted);
+}
+
+.format-details-value {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .stream-details-tooltip-portal {

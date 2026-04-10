@@ -11,6 +11,7 @@ import {
   type MediaFileDetail,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
+import { FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, getFileDetailPanelSettings } from "../lib/file-detail-panels";
 import { FileDetailPage } from "./FileDetailPage";
 
 type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
@@ -150,8 +151,24 @@ function renderPage(fileId: number) {
   );
 }
 
+function getPanelShell(title: string): HTMLElement {
+  const titleButton = screen.getByRole("button", { name: title });
+  const shell = titleButton.closest(".file-detail-panel-shell");
+  if (!(shell instanceof HTMLElement)) {
+    throw new Error(`Panel shell for "${title}" not found`);
+  }
+  return shell;
+}
+
+function getPanelOrder(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll(".file-detail-panel-shell .panel-header h2")).map((heading) =>
+    heading.textContent?.trim() ?? "",
+  );
+}
+
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -181,6 +198,10 @@ describe("FileDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
 
+    expect(screen.getByText("Container")).toBeInTheDocument();
+    expect(screen.getByText("Matroska")).toBeInTheDocument();
+    expect(screen.getByText("25 Mbps")).toBeInTheDocument();
+    expect(screen.getByText("100/100")).toBeInTheDocument();
     expect(screen.getByText("Main 10")).toBeInTheDocument();
     expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
     expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
@@ -201,5 +222,57 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
     expect(container.querySelectorAll(".path-segment")).toHaveLength(3);
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();
+  });
+
+  it("persists collapsed panel state across file detail pages", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByText("Matroska")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
+    await waitFor(() => expect(screen.queryByText("Matroska")).not.toBeInTheDocument());
+
+    cleanup();
+    renderPage(file.id + 1);
+
+    expect(await screen.findByRole("button", { name: "Format" })).toBeInTheDocument();
+    expect(screen.queryByText("Matroska")).not.toBeInTheDocument();
+    expect(getFileDetailPanelSettings().collapsed.format).toBe(true);
+  });
+
+  it("persists reordered panels across file detail pages", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await screen.findByText("Matroska");
+
+    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
+    const qualityShell = getPanelShell("Quality breakdown");
+    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
+    expect(rawJsonHandle).toBeTruthy();
+
+    fireEvent.dragStart(rawJsonHandle as Element);
+    fireEvent.dragOver(qualityShell);
+    fireEvent.drop(qualityShell);
+    fireEvent.dragEnd(rawJsonHandle as Element);
+
+    await waitFor(() =>
+      expect(getPanelOrder(container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]),
+    );
+
+    cleanup();
+    const rerendered = renderPage(file.id + 1);
+    await screen.findByText("Matroska");
+
+    expect(getPanelOrder(rerendered.container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]);
+    expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain("\"rawJson\",\"qualityBreakdown\"");
   });
 });
