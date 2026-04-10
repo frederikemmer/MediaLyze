@@ -176,15 +176,19 @@ export function StreamDetailsList({
       {rows.map((row) => (
         <div className="stream-tooltip-row" key={row.key}>
           <div className="stream-tooltip-head">
-            <strong>{row.lead}</strong>
+            <div className="stream-tooltip-inline">
+              <strong>{row.lead}</strong>
+              {row.meta.length > 0 ? (
+                <div className="stream-tooltip-meta">
+                  {row.meta.map((item) => (
+                    <span className="stream-tooltip-pill" key={`${row.key}-${item}`}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             {row.trail ? <span>{row.trail}</span> : null}
-          </div>
-          <div className="stream-tooltip-meta">
-            {row.meta.map((item) => (
-              <span className="stream-tooltip-pill" key={`${row.key}-${item}`}>
-                {item}
-              </span>
-            ))}
           </div>
         </div>
       ))}
