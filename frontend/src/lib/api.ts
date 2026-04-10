@@ -276,7 +276,6 @@ export type AppSettings = {
     parallel_scan_jobs: number;
   };
   feature_flags: {
-    show_dolby_vision_profiles: boolean;
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
@@ -612,7 +611,6 @@ export const api = {
       parallel_scan_jobs?: number;
     };
     feature_flags?: {
-      show_dolby_vision_profiles?: boolean;
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;

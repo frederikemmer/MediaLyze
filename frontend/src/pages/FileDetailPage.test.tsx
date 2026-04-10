@@ -35,7 +35,6 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     feature_flags: {
-      show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,

@@ -43,7 +43,6 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   scan_performance: DEFAULT_SCAN_PERFORMANCE,
   feature_flags: {
-    show_dolby_vision_profiles: false,
     show_analyzed_files_csv_export: false,
     show_full_width_app_shell: false,
     hide_quality_score_meter: false,
@@ -61,7 +60,6 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       parallel_scan_jobs: payload?.scan_performance?.parallel_scan_jobs ?? DEFAULT_SCAN_PERFORMANCE.parallel_scan_jobs,
     },
     feature_flags: {
-      show_dolby_vision_profiles: payload?.feature_flags?.show_dolby_vision_profiles ?? false,
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
       show_full_width_app_shell: payload?.feature_flags?.show_full_width_app_shell ?? false,
       hide_quality_score_meter: payload?.feature_flags?.hide_quality_score_meter ?? false,

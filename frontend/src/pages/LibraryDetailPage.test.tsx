@@ -166,7 +166,6 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     feature_flags: {
-      show_dolby_vision_profiles: false,
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
@@ -372,7 +371,6 @@ describe("LibraryDetailPage", () => {
       vi.fn(),
       loadStreamDetail,
       new Set(["audio_languages"]),
-      false,
       false,
     );
     const file = createFilesPage(126).items[0];
@@ -899,7 +897,7 @@ describe("LibraryDetailPage", () => {
     );
   });
 
-  it("uses collapsed hdr labels as the filter value", async () => {
+  it("uses the exact hdr profile label as the filter value", async () => {
     const libraryId = 507;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
@@ -920,15 +918,15 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by dynamic range: dolby vision/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision 8.1" }));
 
-    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision");
+    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision 8.1");
     await waitFor(() =>
       expect(libraryFilesSpy).toHaveBeenLastCalledWith(
         String(libraryId),
         expect.objectContaining({
           filters: expect.objectContaining({
-            hdr_type: "Dolby Vision",
+            hdr_type: "Dolby Vision 8.1",
           }),
         }),
       ),

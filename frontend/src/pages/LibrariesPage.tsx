@@ -425,7 +425,6 @@ export function LibrariesPage() {
   const [ignorePatternsStatus, setIgnorePatternsStatus] = useState<string | null>(null);
   const [isLoadingIgnorePatterns, setIsLoadingIgnorePatterns] = useState(true);
   const [isSavingIgnorePatterns, setIsSavingIgnorePatterns] = useState(false);
-  const [showDolbyVisionProfiles, setShowDolbyVisionProfiles] = useState(false);
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
@@ -728,7 +727,6 @@ export function LibrariesPage() {
     setUserIgnorePatternInputs(persisted.user);
     setDefaultIgnorePatternInputs(persisted.default);
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
-    setShowDolbyVisionProfiles(appSettings.feature_flags.show_dolby_vision_profiles);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
@@ -956,7 +954,6 @@ export function LibrariesPage() {
   async function persistAppSettingsSnapshot(
     nextUserPatterns: string[],
     nextDefaultPatterns: string[],
-    nextShowDolbyVisionProfiles: boolean,
     nextShowAnalyzedFilesCsvExport: boolean,
     nextShowFullWidthAppShell: boolean,
     nextHideQualityScoreMeter: boolean,
@@ -982,7 +979,6 @@ export function LibrariesPage() {
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
       scan_performance: nextScanPerformance,
       feature_flags: {
-        show_dolby_vision_profiles: nextShowDolbyVisionProfiles,
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
         show_full_width_app_shell: nextShowFullWidthAppShell,
         hide_quality_score_meter: nextHideQualityScoreMeter,
@@ -993,7 +989,6 @@ export function LibrariesPage() {
   async function persistIgnorePatterns(
     nextUserPatterns: string[],
     nextDefaultPatterns: string[],
-    nextShowDolbyVisionProfiles = showDolbyVisionProfiles,
     nextShowAnalyzedFilesCsvExport = showAnalyzedFilesCsvExport,
     nextShowFullWidthAppShell = showFullWidthAppShell,
     nextHideQualityScoreMeter = hideQualityScoreMeter,
@@ -1006,7 +1001,6 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         nextUserPatterns,
         nextDefaultPatterns,
-        nextShowDolbyVisionProfiles,
         nextShowAnalyzedFilesCsvExport,
         nextShowFullWidthAppShell,
         nextHideQualityScoreMeter,
@@ -1020,7 +1014,6 @@ export function LibrariesPage() {
       if (requestId === ignorePatternsRequestId.current) {
         setUserIgnorePatternInputs(persisted.user);
         setDefaultIgnorePatternInputs(persisted.default);
-        setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
         setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
         setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
@@ -1052,36 +1045,6 @@ export function LibrariesPage() {
     }
   }
 
-  async function toggleDolbyVisionProfiles(enabled: boolean) {
-    const previousValue = showDolbyVisionProfiles;
-    setShowDolbyVisionProfiles(enabled);
-    setFeatureFlagsStatus(null);
-    setIsSavingFeatureFlags(true);
-    try {
-      const updated = await persistAppSettingsSnapshot(
-        userIgnorePatternInputs,
-        defaultIgnorePatternInputs,
-        enabled,
-        showAnalyzedFilesCsvExport,
-        showFullWidthAppShell,
-        hideQualityScoreMeter,
-      );
-      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
-      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-      setFeatureFlagsStatus(null);
-      setIgnorePatternsStatus(null);
-      setScanPerformanceStatus(null);
-      setAppSettings(updated);
-    } catch (reason) {
-      setShowDolbyVisionProfiles(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
-    } finally {
-      setIsSavingFeatureFlags(false);
-    }
-  }
-
   async function toggleAnalyzedFilesCsvExport(enabled: boolean) {
     const previousValue = showAnalyzedFilesCsvExport;
     setShowAnalyzedFilesCsvExport(enabled);
@@ -1091,12 +1054,10 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
         defaultIgnorePatternInputs,
-        showDolbyVisionProfiles,
         enabled,
         showFullWidthAppShell,
         hideQualityScoreMeter,
       );
-      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
@@ -1121,12 +1082,10 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
         defaultIgnorePatternInputs,
-        showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
         enabled,
         hideQualityScoreMeter,
       );
-      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
@@ -1151,12 +1110,10 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
         defaultIgnorePatternInputs,
-        showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         enabled,
       );
-      setShowDolbyVisionProfiles(updated.feature_flags.show_dolby_vision_profiles);
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
@@ -1209,7 +1166,6 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
         defaultIgnorePatternInputs,
-        showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         hideQualityScoreMeter,
@@ -1253,7 +1209,6 @@ export function LibrariesPage() {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
         defaultIgnorePatternInputs,
-        showDolbyVisionProfiles,
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         hideQualityScoreMeter,
@@ -2994,25 +2949,6 @@ export function LibrariesPage() {
               <div className="app-settings-divider" aria-hidden="true" />
               <div className="app-settings-section">
                 <p className="app-settings-section-title">{t("libraries.featureFlagsTitle")}</p>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="show-dolby-vision-profiles">
-                    <input
-                      id="show-dolby-vision-profiles"
-                      type="checkbox"
-                      checked={showDolbyVisionProfiles}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleDolbyVisionProfiles(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.showDolbyVisionProfiles")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.showDolbyVisionProfilesTooltipAria")}
-                    content={t("libraries.featureFlags.showDolbyVisionProfilesTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
                 <div className="app-settings-flag-row">
                   <label className="app-settings-flag-toggle" htmlFor="show-analyzed-files-csv-export">
                     <input

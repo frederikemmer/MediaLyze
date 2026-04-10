@@ -16,13 +16,12 @@ import { useScanJobs } from "../lib/scan-jobs";
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const { appSettings, dashboard, dashboardLoaded, loadDashboard } = useAppData();
+  const { dashboard, dashboardLoaded, loadDashboard } = useAppData();
   const [error, setError] = useState<string | null>(null);
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const visibleDashboardPanels = getVisibleDashboardStatisticPanels(statisticsSettings);
-  const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
 
   useEffect(() => {
     if (dashboardLoaded) {
@@ -62,7 +61,7 @@ export function DashboardPage() {
         {visibleDashboardPanels.length > 0 ? (
           visibleDashboardPanels.map((panel) => {
             const items = panel.id === "hdr_type"
-              ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel), showDolbyVisionProfiles)
+              ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel))
               : getDashboardStatisticPanelItems(dashboard, panel);
             const dashboardFormatKind = panel.dashboardFormatKind;
             const formattedItems = dashboardFormatKind

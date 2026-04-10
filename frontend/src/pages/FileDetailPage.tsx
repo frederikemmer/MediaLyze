@@ -17,11 +17,9 @@ function JsonPreview({ value }: { value: unknown }) {
 export function FileDetailPage() {
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
-  const { appSettings } = useAppData();
   const [file, setFile] = useState<MediaFileDetail | null>(null);
   const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
 
   useEffect(() => {
     api
@@ -66,7 +64,7 @@ export function FileDetailPage() {
           ) : (
             <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
           )}
-          <span className="badge">{formatHdrType(file?.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr")}</span>
+          <span className="badge">{formatHdrType(file?.hdr_type) ?? t("fileTable.sdr")}</span>
         </div>
         <div className="card-grid grid">
           <article className="media-card metric-card file-detail-path-card">

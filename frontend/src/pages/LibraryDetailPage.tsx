@@ -371,7 +371,6 @@ function buildStreamTooltipContent(
   kind: StreamTooltipKind,
   detail: MediaFileStreamDetails | undefined,
   isLoading: boolean,
-  showDolbyVisionProfiles: boolean,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): ReactNode {
   if (isLoading) {
@@ -389,10 +388,7 @@ function buildStreamTooltipContent(
         key: `video-${stream.stream_index}`,
         lead: stream.codec ? formatCodecLabel(stream.codec, "video") : t("fileTable.na"),
         trail: formatTooltipResolution(stream.width, stream.height, t),
-        meta: [
-          formatHdrType(stream.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr"),
-          ...(stream.profile ? [stream.profile] : []),
-        ],
+        meta: [formatHdrType(stream.hdr_type) ?? t("fileTable.sdr"), ...(stream.profile ? [stream.profile] : [])],
       })),
       t,
     );
@@ -448,7 +444,6 @@ export function buildFileColumns(
   loadQualityDetail: (fileId: number) => void,
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
-  showDolbyVisionProfiles: boolean,
   hideQualityScoreMeter: boolean,
 ): FileColumnDefinition[] {
   return [
@@ -489,7 +484,6 @@ export function buildFileColumns(
               "video",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -513,8 +507,8 @@ export function buildFileColumns(
       key: "hdr_type",
       labelKey: "fileTable.hdr",
       sizing: { mode: "content", minPx: 72, maxPx: 92 },
-      measureValue: (file) => formatHdrType(file.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr"),
-      render: (file) => formatHdrType(file.hdr_type, showDolbyVisionProfiles) ?? t("fileTable.sdr"),
+      measureValue: (file) => formatHdrType(file.hdr_type) ?? t("fileTable.sdr"),
+      render: (file) => formatHdrType(file.hdr_type) ?? t("fileTable.sdr"),
     },
     {
       key: "duration",
@@ -538,7 +532,6 @@ export function buildFileColumns(
               "audio",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -565,7 +558,6 @@ export function buildFileColumns(
               "audio",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -594,7 +586,6 @@ export function buildFileColumns(
               "subtitle",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -623,7 +614,6 @@ export function buildFileColumns(
               "subtitle",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -650,7 +640,6 @@ export function buildFileColumns(
               "subtitle",
               streamDetailCache[file.id],
               Boolean(streamDetailLoading[file.id]),
-              showDolbyVisionProfiles,
               t,
             )}
             onOpen={() => loadStreamDetail(file.id)}
@@ -856,7 +845,6 @@ export function LibraryDetailPage() {
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
-  const showDolbyVisionProfiles = appSettings.feature_flags.show_dolby_vision_profiles;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
@@ -910,7 +898,6 @@ export function LibraryDetailPage() {
         loadQualityScoreDetail,
         loadStreamDetail,
         tooltipEnabledColumns,
-        showDolbyVisionProfiles,
         hideQualityScoreMeter,
       ),
     [
@@ -919,7 +906,6 @@ export function LibraryDetailPage() {
       loadStreamDetail,
       qualityScoreDetails,
       qualityScoreLoading,
-      showDolbyVisionProfiles,
       streamDetails,
       streamDetailsLoading,
       t,
@@ -1621,7 +1607,7 @@ export function LibraryDetailPage() {
           visibleStatisticPanels.map((panel) => {
             const items =
               panel.id === "hdr_type"
-                ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel), showDolbyVisionProfiles)
+                ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel))
                 : getLibraryStatisticPanelItems(libraryStatistics, panel);
             const formattedItems: DistributionListEntry[] = items.map((item) => {
               const rawLabel = item.label;

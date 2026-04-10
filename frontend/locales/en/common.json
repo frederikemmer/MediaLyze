@@ -88,12 +88,9 @@
     "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nHigher values increase overall resource usage. Keep an eye on CPU, disk, and memory pressure.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature flags",
     "featureFlags": {
-      "showDolbyVisionProfiles": "Show Dolby Vision Profiles",
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
       "showFullWidthAppShell": "Use full-width app shell",
       "hideQualityScoreMeter": "Hide quality score meter",
-      "showDolbyVisionProfilesTooltipAria": "Show Dolby Vision profile rescan notice",
-      "showDolbyVisionProfilesTooltip": "If you used MediaLyze before v0.1.1, run a new scan first. Older scans may still store Dolby Vision entries only as \"Dolby Vision\".",
       "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
       "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set.",
       "showFullWidthAppShellTooltipAria": "Explain full-width app shell feature flag",
