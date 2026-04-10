@@ -1421,6 +1421,9 @@
   border-radius: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   box-shadow: none;
   appearance: none;
 }
@@ -1449,6 +1452,9 @@
   border-radius: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   box-shadow: none;
   text-align: left;
   appearance: none;
