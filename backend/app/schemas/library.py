@@ -46,6 +46,7 @@ class LibrarySummary(BaseModel):
 
 
 class LibraryStatistics(BaseModel):
+    container_distribution: list[DistributionItem]
     video_codec_distribution: list[DistributionItem]
     resolution_distribution: list[DistributionItem]
     hdr_distribution: list[DistributionItem]

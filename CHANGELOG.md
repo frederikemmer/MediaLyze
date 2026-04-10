@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - add lightweight analyzed-files codec tooltips that lazy-load per-file video, audio, and subtitle stream details, including language, codec, channel layout, and subtitle source metadata, and make table tooltip visibility configurable per statistic column in App Settings ([#93](https://github.com/frederikemmer/MediaLyze/issues/93))
 - add first-class spatial-audio support for `Dolby Atmos` and `DTS:X`, including ffprobe profile detection, analyzed-files filtering and sorting, library statistics, CSV export, and audio tooltip/detail rendering ([#94](https://github.com/frederikemmer/MediaLyze/issues/94))
+- add container statistics and analyzed-files container filtering, sorting, CSV export, and configurable table/panel visibility for library views ([#97](https://github.com/frederikemmer/MediaLyze/issues/97))
 
 ### 🐛 Bug fixes
 

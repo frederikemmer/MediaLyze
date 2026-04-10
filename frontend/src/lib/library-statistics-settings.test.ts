@@ -25,6 +25,8 @@ describe("library statistics settings", () => {
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);
+    expect(settings.visibility.container.panelEnabled).toBe(true);
+    expect(settings.visibility.container.tableEnabled).toBe(false);
     expect(settings.visibility.audio_codecs.tableEnabled).toBe(false);
     expect(settings.visibility.audio_spatial_profiles.tableEnabled).toBe(false);
     expect(getVisibleLibraryStatisticTableColumns(settings)).toEqual([
@@ -72,6 +74,7 @@ describe("library statistics settings", () => {
     const settings = getLibraryStatisticsSettings();
 
     expect(settings.order[0]).toBe("quality_score");
+    expect(settings.order).toContain("container");
     expect(settings.order).toContain("subtitle_sources");
     expect(settings.visibility.quality_score.panelEnabled).toBe(false);
     expect(settings.visibility.quality_score.tableEnabled).toBe(false);

@@ -105,6 +105,7 @@ export type LibrarySummary = {
 };
 
 export type LibraryStatistics = {
+  container_distribution: DistributionItem[];
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
@@ -129,6 +130,7 @@ export type MediaFileRow = {
   scan_status: string;
   quality_score: number;
   quality_score_raw: number;
+  container: string | null;
   duration: number | null;
   video_codec: string | null;
   resolution: string | null;
@@ -197,6 +199,7 @@ export type MediaFileStreamDetails = {
 
 export type MediaFileSortKey =
   | "file"
+  | "container"
   | "size"
   | "video_codec"
   | "resolution"
@@ -214,6 +217,7 @@ export type MediaFileSortKey =
 
 export type LibraryFileSearchField =
   | "file"
+  | "container"
   | "size"
   | "quality_score"
   | "video_codec"
@@ -439,6 +443,7 @@ type DownloadedCsv = {
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? "/api";
 const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = [
   ["file", "file_search"],
+  ["container", "search_container"],
   ["size", "search_size"],
   ["quality_score", "search_quality_score"],
   ["video_codec", "search_video_codec"],

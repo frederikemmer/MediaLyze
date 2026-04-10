@@ -19,6 +19,7 @@ from backend.app.schemas.media import (
 )
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services.app_settings import get_app_settings
+from backend.app.services.container_formats import normalize_container
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.media_search import (
     LibraryFileSearchFilters,
@@ -31,6 +32,7 @@ from backend.app.services.video_queries import primary_video_streams_subquery
 
 FileSortKey = Literal[
     "file",
+    "container",
     "size",
     "video_codec",
     "resolution",
@@ -52,6 +54,7 @@ CSV_EXPORT_BATCH_SIZE = 500
 CSV_EXPORT_HEADERS = [
     "relative_path",
     "filename",
+    "container",
     "size_bytes",
     "video_codec",
     "resolution",
@@ -69,6 +72,7 @@ CSV_EXPORT_HEADERS = [
 ]
 CSV_EXPORT_FILTER_LABELS = {
     "file_search": "file",
+    "search_container": "container",
     "search_size": "size",
     "search_quality_score": "quality_score",
     "search_video_codec": "video_codec",
@@ -92,6 +96,10 @@ def _normalize_subtitle_codec(value: str | None) -> str:
 def _normalize_audio_codec(value: str | None) -> str:
     candidate = (value or "").strip().lower()
     return candidate or "unknown"
+
+
+def _container_value(media_file: MediaFile) -> str | None:
+    return normalize_container(media_file.extension)
 
 
 def _audio_spatial_profiles(media_file: MediaFile) -> list[str]:
@@ -139,6 +147,7 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         scan_status=media_file.scan_status,
         quality_score=media_file.quality_score,
         quality_score_raw=media_file.quality_score_raw,
+        container=_container_value(media_file),
         duration=duration,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
@@ -348,6 +357,7 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
 
     sort_map = {
         "file": func.lower(MediaFile.relative_path),
+        "container": func.lower(func.coalesce(MediaFile.extension, "")),
         "size": MediaFile.size_bytes,
         "video_codec": func.lower(func.coalesce(primary_video_streams.c.codec, "")),
         "resolution": resolution_pixels,
@@ -491,6 +501,7 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
     return [
         row.relative_path,
         row.filename,
+        row.container or "",
         row.size_bytes,
         row.video_codec or "",
         row.resolution or "",

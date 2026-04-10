@@ -141,6 +141,7 @@
     "noDashboardSelected": "Es sind keine Dashboard-Statistik-Panels ausgewählt.",
     "items": {
       "size": "Dateigröße",
+      "container": "Container",
       "videoCodec": "Video-Codec",
       "resolution": "Auflösung",
       "dynamicRange": "Dynamic Range",
@@ -178,6 +179,7 @@
     "storage": "Speicher",
     "duration": "Dauer",
     "lastScan": "Letzter Scan",
+    "containers": "Container",
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
@@ -214,6 +216,9 @@
       "size": {
         "placeholder": "z. B. >4GB",
         "tooltip": "Unterstützt: >4GB, >=700MB, <1.5GiB, =800MB"
+      },
+      "container": {
+        "placeholder": "z. B. mkv mp4"
       },
       "qualityScore": {
         "placeholder": "z. B. >=8",
@@ -336,6 +341,7 @@
   },
   "fileTable": {
     "file": "Datei",
+    "container": "Container",
     "size": "Größe",
     "codec": "Codec",
     "resolution": "Auflösung",

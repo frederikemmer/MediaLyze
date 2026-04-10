@@ -30,7 +30,7 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
-import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
@@ -301,6 +301,13 @@ export function buildFileColumns(
       sizing: { mode: "content", minPx: 82, maxPx: 110 },
       measureValue: (file) => formatBytes(file.size_bytes),
       render: (file) => formatBytes(file.size_bytes),
+    },
+    {
+      key: "container",
+      labelKey: "fileTable.container",
+      sizing: { mode: "content", minPx: 86, maxPx: 108 },
+      measureValue: (file) => formatContainerLabel(file.container),
+      render: (file) => formatContainerLabel(file.container),
     },
     {
       key: "video_codec",

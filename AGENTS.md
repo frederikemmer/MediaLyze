@@ -387,6 +387,7 @@ Current behavior:
 Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
+* container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
 * HDR / dynamic range distribution
@@ -415,6 +416,7 @@ Library file browsing now supports structured search and field-specific filterin
 Current searchable/filterable dimensions include:
 
 * file / path
+* container
 * size
 * duration
 * quality score
@@ -438,6 +440,8 @@ The backend supports:
 * comma-separated field-specific text terms, with each term intersected as an `AND`
 * structured numeric expressions such as size, duration, and quality score comparisons
 * sorting across supported table columns
+
+The analyzed-files table and library statistics settings can also expose container as a separate configurable column / panel dimension, using the normalized file extension as the user-facing container key.
 
 ---
 

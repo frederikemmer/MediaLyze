@@ -2,6 +2,7 @@ import type { DashboardResponse, LibraryStatistics, MediaFileSortKey } from "./a
 
 export type LibraryStatisticId =
   | "size"
+  | "container"
   | "video_codec"
   | "resolution"
   | "hdr_type"
@@ -15,6 +16,7 @@ export type LibraryStatisticId =
   | "quality_score";
 
 type LibraryStatisticPanelDataKey =
+  | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
@@ -163,6 +165,21 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     tableColumnKey: "duration",
   },
   {
+    id: "container",
+    nameKey: "libraryStatistics.items.container",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: false,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.containers",
+    panelDataKey: "container_distribution",
+    tableColumnKey: "container",
+  },
+  {
     id: "audio_codecs",
     nameKey: "libraryStatistics.items.audioCodecs",
     supportsPanel: true,
@@ -280,10 +297,12 @@ const LEGACY_DEFAULT_SETTINGS: LibraryStatisticsSettings = {
     "subtitle_codecs",
     "subtitle_sources",
     "quality_score",
+    "container",
     "audio_spatial_profiles",
   ],
   visibility: {
     size: { panelEnabled: false, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: false },
+    container: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: false, dashboardEnabled: false },
     video_codec: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: true, dashboardEnabled: true },
     resolution: { panelEnabled: true, tableEnabled: true, tableTooltipEnabled: false, dashboardEnabled: true },
     hdr_type: { panelEnabled: true, tableEnabled: false, tableTooltipEnabled: false, dashboardEnabled: true },

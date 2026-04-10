@@ -23,6 +23,7 @@ function createFile(id: number): MediaFileRow {
     scan_status: "ready",
     quality_score: 5,
     quality_score_raw: 50,
+    container: "mkv",
     duration: 1200,
     video_codec: "h264",
     resolution: "1920x1080",

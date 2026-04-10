@@ -21,6 +21,7 @@ from backend.app.models.entities import (
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DistributionItem
 from backend.app.services.app_settings import get_app_settings as load_app_settings
+from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path
 from backend.app.services.quality import normalize_quality_profile
@@ -336,6 +337,20 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
 
     app_settings = load_app_settings(db)
     primary_video_streams = primary_video_streams_subquery("library_primary_video_streams")
+    container_distribution = [
+        DistributionItem(label=label, value=value, filter_value=raw_value)
+        for raw_value, value in db.execute(
+            select(
+                _normalized_text_expr(MediaFile.extension, "unknown"),
+                func.count(MediaFile.id),
+            )
+            .where(MediaFile.library_id == library_id)
+            .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
+            .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
+        ).all()
+        for label in [format_container_label(raw_value)]
+        if label
+    ]
 
     video_codec_distribution = db.execute(
         select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
@@ -497,6 +512,7 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
     )
 
     payload = LibraryStatistics(
+        container_distribution=container_distribution,
         video_codec_distribution=_distribution_items(video_codec_distribution),
         resolution_distribution=_group_resolution_distribution(
             resolution_distribution,

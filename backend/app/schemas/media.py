@@ -87,6 +87,7 @@ class MediaFileTableRow(BaseModel):
     scan_status: ScanStatus
     quality_score: int
     quality_score_raw: float = 0.0
+    container: str | None = None
     duration: float | None = None
     video_codec: str | None = None
     resolution: str | None = None

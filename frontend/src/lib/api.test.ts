@@ -30,6 +30,7 @@ describe("api.libraryFiles", () => {
       limit: 200,
       filters: {
         file: "episode",
+        container: "mkv",
         video_codec: "hevc",
         audio_spatial_profiles: "atmos",
         subtitle_sources: "external",
@@ -41,6 +42,7 @@ describe("api.libraryFiles", () => {
     const [requestPath] = fetchSpy.mock.calls[0] ?? [];
     expect(String(requestPath)).toContain("/libraries/42/files?");
     expect(String(requestPath)).toContain("file_search=episode");
+    expect(String(requestPath)).toContain("search_container=mkv");
     expect(String(requestPath)).toContain("search_video_codec=hevc");
     expect(String(requestPath)).toContain("search_audio_spatial_profiles=atmos");
     expect(String(requestPath)).toContain("search_subtitle_sources=external");
@@ -61,6 +63,7 @@ describe("api.libraryFiles", () => {
     await api.downloadLibraryFilesCsv(42, {
       filters: {
         file: "episode",
+        container: "mkv",
         video_codec: "hevc",
         audio_spatial_profiles: "atmos",
         subtitle_sources: "external",
@@ -72,6 +75,7 @@ describe("api.libraryFiles", () => {
     const [requestPath] = fetchSpy.mock.calls[0] ?? [];
     expect(String(requestPath)).toContain("/libraries/42/files/export.csv?");
     expect(String(requestPath)).toContain("file_search=episode");
+    expect(String(requestPath)).toContain("search_container=mkv");
     expect(String(requestPath)).toContain("search_video_codec=hevc");
     expect(String(requestPath)).toContain("search_audio_spatial_profiles=atmos");
     expect(String(requestPath)).toContain("search_subtitle_sources=external");

@@ -10,6 +10,7 @@ import {
   Gauge,
   HardDrive,
   Languages,
+  Package,
   SlidersHorizontal,
   SunMedium,
   Waypoints,
@@ -101,6 +102,13 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     placeholderKey: "libraryDetail.searchFields.size.placeholder",
     tooltipKey: "libraryDetail.searchFields.size.tooltip",
     validate: isValidSizeValue,
+  },
+  {
+    field: "container",
+    icon: Package,
+    labelKey: "libraryStatistics.items.container",
+    placeholderKey: "libraryDetail.searchFields.container.placeholder",
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },
   {
     field: "quality_score",

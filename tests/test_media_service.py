@@ -218,6 +218,41 @@ def test_list_library_files_exposes_subtitle_languages_codecs_and_sources() -> N
     assert page.items[0].subtitle_sources == ["external", "internal"]
 
 
+def test_list_library_files_exposes_container() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Containers",
+            path="/tmp/containers",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="file-01.mkv",
+            filename="file-01.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add(media_file)
+        db.commit()
+
+        page = list_library_files(db, library.id, limit=50)
+
+    assert page.total == 1
+    assert page.items[0].container == "mkv"
+
+
 def test_list_library_files_exposes_audio_spatial_profiles() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -459,8 +494,8 @@ def test_generate_library_files_csv_export_includes_audio_spatial_profiles() -> 
     comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
 
     assert "# search.audio_spatial_profiles: atmos" in comment_lines
-    assert rows[0][7:10] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
-    assert rows[1][8] == "Dolby Atmos"
+    assert rows[0][8:11] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
+    assert rows[1][9] == "Dolby Atmos"
 
 
 def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
@@ -543,6 +578,57 @@ def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
     ]
     assert [item.filename for item in internal_search.items] == ["02-internal.mkv", "03-both.mkv"]
     assert [item.filename for item in external_search.items] == ["01-external.mkv", "03-both.mkv"]
+
+
+def test_list_library_files_sorts_and_filters_by_container() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Container Filter",
+            path="/tmp/container-filter",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        alpha = MediaFile(
+            library_id=library.id,
+            relative_path="alpha.mkv",
+            filename="alpha.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=4,
+        )
+        beta = MediaFile(
+            library_id=library.id,
+            relative_path="beta.mp4",
+            filename="beta.mp4",
+            extension="mp4",
+            size_bytes=1,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=4,
+        )
+        db.add_all([alpha, beta])
+        db.commit()
+
+        sorted_page = list_library_files(db, library.id, limit=50, sort_key="container", sort_direction="asc")
+        filtered_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_container="mp4"),
+        )
+
+    assert [item.filename for item in sorted_page.items] == ["alpha.mkv", "beta.mp4"]
+    assert [item.filename for item in filtered_page.items] == ["beta.mp4"]
 
 
 def test_list_library_files_filters_by_field_specific_search_intersection() -> None:
@@ -1120,6 +1206,7 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert header == [
         "relative_path",
         "filename",
+        "container",
         "size_bytes",
         "video_codec",
         "resolution",
@@ -1137,12 +1224,13 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     ]
     assert len(data_rows) == 252
     assert data_rows[0][0] == "episode-002.mkv"
-    assert data_rows[0][3] == "hevc"
-    assert data_rows[0][4] == "3840x2160"
-    assert data_rows[0][5] == "HDR10"
-    assert data_rows[0][7] == "aac"
-    assert data_rows[0][11] == "srt"
-    assert data_rows[0][12] == "external | internal"
+    assert data_rows[0][2] == "mkv"
+    assert data_rows[0][4] == "hevc"
+    assert data_rows[0][5] == "3840x2160"
+    assert data_rows[0][6] == "HDR10"
+    assert data_rows[0][8] == "aac"
+    assert data_rows[0][12] == "srt"
+    assert data_rows[0][13] == "external | internal"
     assert data_rows[-1][0] == "episode-504.mkv"
 
 
@@ -1181,7 +1269,7 @@ def test_generate_library_files_csv_export_reports_no_search_when_unfiltered() -
 
     assert "# search: none" in comment_lines
     assert rows[1][0] == "sample.mkv"
-    assert rows[1][3] == ""
+    assert rows[1][4] == ""
     assert rows[1][7] == ""
 
 

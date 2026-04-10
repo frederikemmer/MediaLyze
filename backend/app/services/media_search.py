@@ -21,6 +21,7 @@ class SearchValidationError(ValueError):
 @dataclass(frozen=True)
 class LibraryFileSearchFilters:
     file_search: str = ""
+    search_container: str = ""
     search_size: str = ""
     search_quality_score: str = ""
     search_video_codec: str = ""
@@ -37,6 +38,7 @@ class LibraryFileSearchFilters:
     def normalized(self) -> LibraryFileSearchFilters:
         return LibraryFileSearchFilters(
             file_search=self.file_search.strip(),
+            search_container=self.search_container.strip(),
             search_size=self.search_size.strip(),
             search_quality_score=self.search_quality_score.strip(),
             search_video_codec=self.search_video_codec.strip(),
@@ -413,6 +415,8 @@ def apply_field_search_filters(
     normalized = filters.normalized()
     if normalized.file_search:
         query = _apply_file_search_filter(query, normalized.file_search)
+    if normalized.search_container:
+        query = _apply_text_filter(query, MediaFile.extension, normalized.search_container)
     if normalized.search_size:
         query = _apply_numeric_filter(query, MediaFile.size_bytes, normalized.search_size, _parse_size_value, "size")
     if normalized.search_quality_score:

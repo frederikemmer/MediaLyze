@@ -315,6 +315,59 @@ def test_get_library_statistics_exposes_audio_spatial_profile_distribution() -> 
     }
 
 
+def test_get_library_statistics_exposes_container_distribution() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Container Stats",
+            path="/tmp/container-stats",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie-a.mkv",
+                    filename="movie-a.mkv",
+                    extension="mkv",
+                    size_bytes=123,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie-b.mp4",
+                    filename="movie-b.mp4",
+                    extension="mp4",
+                    size_bytes=456,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                ),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+
+    assert statistics is not None
+    assert [item.model_dump(exclude_none=True) for item in statistics.container_distribution] == [
+        {"label": "MKV", "value": 1, "filter_value": "mkv"},
+        {"label": "MP4", "value": 1, "filter_value": "mp4"},
+    ]
+
+
 def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

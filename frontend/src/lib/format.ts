@@ -5,6 +5,22 @@ const SPATIAL_AUDIO_LABELS: Record<string, string> = {
   dts_x: "DTS:X",
 };
 
+const CONTAINER_LABELS: Record<string, string> = {
+  mkv: "MKV",
+  mp4: "MP4",
+  avi: "AVI",
+  mov: "MOV",
+  webm: "WebM",
+  ts: "TS",
+  m2ts: "M2TS",
+  wmv: "WMV",
+  flv: "FLV",
+  mpeg: "MPEG",
+  mpg: "MPG",
+  ogm: "OGM",
+  asf: "ASF",
+};
+
 const COMMON_CODEC_LABELS: Record<string, string> = {
   av1: "AV1",
   h264: "H.264 / AVC",
@@ -88,6 +104,19 @@ export function formatSpatialAudioProfileLabel(value: string | null | undefined)
   }
 
   return SPATIAL_AUDIO_LABELS[normalized] ?? humanizeCodecLabel(normalized);
+}
+
+export function formatContainerLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/^\./, "");
+  if (!normalized) {
+    return "Unknown";
+  }
+
+  return CONTAINER_LABELS[normalized] ?? (normalized.length <= 4 ? normalized.toUpperCase() : humanizeCodecLabel(normalized));
 }
 
 export function formatBytes(bytes: number): string {

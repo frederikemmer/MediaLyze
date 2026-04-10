@@ -60,6 +60,7 @@ function createFileDetail(): MediaFileDetail {
     scan_status: "ready",
     quality_score: 9,
     quality_score_raw: 91.2,
+    container: "mkv",
     duration: 3360,
     video_codec: "hevc",
     resolution: "3840x1606",

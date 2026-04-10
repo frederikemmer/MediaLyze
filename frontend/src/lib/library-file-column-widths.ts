@@ -4,6 +4,7 @@ export const LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY = "medialyze-library-file-co
 
 const LIBRARY_FILE_COLUMN_WIDTH_KEYS: MediaFileSortKey[] = [
   "file",
+  "container",
   "size",
   "video_codec",
   "resolution",

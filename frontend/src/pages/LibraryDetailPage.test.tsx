@@ -81,6 +81,7 @@ function createDuplicateGroupPage(overrides: Partial<DuplicateGroupPage> = {}): 
 
 function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): LibraryStatistics {
   return {
+    container_distribution: [{ label: "MKV", value: 2, filter_value: "mkv" }],
     video_codec_distribution: [{ label: "h264", value: 2 }],
     resolution_distribution: [{ label: "1920x1080", value: 2 }],
     hdr_distribution: [{ label: "SDR", value: 2 }],
@@ -113,6 +114,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         scan_status: "ready",
         quality_score: 8,
         quality_score_raw: 82.4,
+        container: "mkv",
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",
@@ -137,6 +139,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         scan_status: "ready",
         quality_score: 7,
         quality_score_raw: 74.1,
+        container: "mkv",
         duration: 3600,
         video_codec: "h264",
         resolution: "1920x1080",
@@ -868,6 +871,34 @@ describe("LibraryDetailPage", () => {
         expect.objectContaining({
           filters: expect.objectContaining({
             audio_languages: "und",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("uses the container statistic filter value when clicking a container panel entry", async () => {
+    const libraryId = 779;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(
+      createLibraryStatistics({
+        container_distribution: [{ label: "MKV", value: 2, filter_value: "mkv" }],
+      }),
+    );
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by container: mkv/i }));
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            container: "mkv",
           }),
         }),
       ),

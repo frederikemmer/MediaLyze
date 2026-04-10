@@ -66,6 +66,7 @@ router = APIRouter()
 def _library_file_search_filters(
     *,
     file_search: str = "",
+    search_container: str = "",
     search_size: str = "",
     search_quality_score: str = "",
     search_video_codec: str = "",
@@ -81,6 +82,7 @@ def _library_file_search_filters(
 ) -> LibraryFileSearchFilters:
     return LibraryFileSearchFilters(
         file_search=file_search,
+        search_container=search_container,
         search_size=search_size,
         search_quality_score=search_quality_score,
         search_video_codec=search_video_codec,
@@ -303,6 +305,7 @@ def library_files(
     limit: int = Query(default=50, ge=1, le=200),
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
+    search_container: str = Query(default="", max_length=64),
     search_size: str = Query(default="", max_length=64),
     search_quality_score: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
@@ -317,6 +320,7 @@ def library_files(
     search_subtitle_sources: str = Query(default="", max_length=64),
     sort_key: Literal[
         "file",
+        "container",
         "size",
         "video_codec",
         "resolution",
@@ -346,6 +350,7 @@ def library_files(
             search=search,
             search_filters=_library_file_search_filters(
                 file_search=file_search,
+                search_container=search_container,
                 search_size=search_size,
                 search_quality_score=search_quality_score,
                 search_video_codec=search_video_codec,
@@ -371,6 +376,7 @@ def library_files_export_csv(
     library_id: int,
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
+    search_container: str = Query(default="", max_length=64),
     search_size: str = Query(default="", max_length=64),
     search_quality_score: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
@@ -385,6 +391,7 @@ def library_files_export_csv(
     search_subtitle_sources: str = Query(default="", max_length=64),
     sort_key: Literal[
         "file",
+        "container",
         "size",
         "video_codec",
         "resolution",
@@ -415,6 +422,7 @@ def library_files_export_csv(
             search=search,
             search_filters=_library_file_search_filters(
                 file_search=file_search,
+                search_container=search_container,
                 search_size=search_size,
                 search_quality_score=search_quality_score,
                 search_video_codec=search_video_codec,
