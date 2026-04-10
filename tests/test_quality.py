@@ -113,6 +113,65 @@ def test_quality_score_treats_dolby_vision_profiles_as_dolby_vision() -> None:
     assert dynamic_range.actual == "dolby_vision"
 
 
+def test_quality_score_counts_external_subtitles_for_language_preferences() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=8000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="h264",
+                profile="High",
+                width=1920,
+                height=1080,
+                pix_fmt="yuv420p",
+                color_space=None,
+                color_transfer=None,
+                color_primaries=None,
+                frame_rate=24.0,
+                bit_rate=7000000,
+                hdr_type=None,
+            )
+        ],
+    )
+    profile = {
+        "language_preferences": {
+            "weight": 10,
+            "mode": "partial",
+            "audio_languages": [],
+            "subtitle_languages": ["en"],
+        }
+    }
+
+    without_external = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile=profile,
+    )
+    with_external = calculate_quality_score(
+        build_quality_score_input(
+            probe,
+            external_subtitles=[{"path": "movie.en.srt", "language": "en", "format": "srt"}],
+        ),
+        quality_profile=profile,
+    )
+
+    without_language_preferences = next(
+        category for category in without_external.categories if category.key == "language_preferences"
+    )
+    with_language_preferences = next(
+        category for category in with_external.categories if category.key == "language_preferences"
+    )
+
+    assert without_language_preferences.score == 0.0
+    assert with_language_preferences.score == 100.0
+    assert with_language_preferences.actual == ["en"]
+
+
 def test_visual_density_rewards_the_ideal_and_penalizes_bloated_media() -> None:
     ideal_probe = ProbeResult(
         raw={},

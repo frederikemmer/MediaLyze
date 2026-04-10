@@ -154,8 +154,9 @@ Current scan execution behavior:
 3. compare discovered files against stored records
 4. detect new, modified, deleted, or newly ignored files
 5. reanalyze files with incomplete metadata when needed
-6. stream discovered files into a runtime work queue for analysis and duplicate-signature processing instead of waiting for full discovery to finish first
-7. persist detailed scan summaries and file-level failure samples
+6. reanalyze unchanged media files when detected external subtitle sidecars were added or removed
+7. stream discovered files into a runtime work queue for analysis and duplicate-signature processing instead of waiting for full discovery to finish first
+8. persist detailed scan summaries and file-level failure samples
 
 Change detection uses:
 
@@ -284,6 +285,7 @@ Stored fields include:
 * relative sidecar path
 * language
 * format
+* sidecar additions or removals trigger media reanalysis on the next scan even when the video file itself is unchanged
 
 ## 4.6 Duplicate Detection
 

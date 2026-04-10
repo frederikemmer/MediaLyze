@@ -39,7 +39,10 @@ from backend.app.services.quality import (
     calculate_quality_score,
 )
 from backend.app.services.stats_cache import stats_cache
-from backend.app.services.subtitles import detect_external_subtitles
+from backend.app.services.subtitles import (
+    detect_external_subtitles,
+    detect_external_subtitles_from_names,
+)
 from backend.app.utils.glob_patterns import matches_ignore_pattern
 from backend.app.utils.time import utc_now
 
@@ -68,6 +71,12 @@ class DiscoveryResult:
     ignored_dir_total: int = 0
     ignored_file_total: int = 0
     ignored_pattern_hits: dict[str, PatternHit] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DiscoveredMediaFile:
+    path: Path
+    sibling_filenames: tuple[str, ...]
 
 
 @dataclass
@@ -247,8 +256,9 @@ def _stream_media_files(
             visible_dirnames.append(dirname)
 
         dirnames[:] = sorted(visible_dirnames, key=str.lower)
+        sorted_filenames = sorted(filenames, key=str.lower)
 
-        for filename in sorted(filenames, key=str.lower):
+        for filename in sorted_filenames:
             file_path = current_root_path / filename
             if file_path.is_symlink():
                 continue
@@ -261,7 +271,7 @@ def _stream_media_files(
                 continue
             if file_path.suffix.lower() in suffixes:
                 discovery.files.append(file_path)
-                yield file_path
+                yield DiscoveredMediaFile(path=file_path, sibling_filenames=tuple(sorted_filenames))
 
 
 def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: list[dict[str, str | None]]) -> None:
@@ -354,15 +364,65 @@ def _analyze_path(
     ignore_patterns: tuple[str, ...],
 ) -> tuple[dict, list[dict[str, str | None]]]:
     payload = run_ffprobe(file_path, settings.ffprobe_path)
-    subtitles = [
+    subtitles = _visible_external_subtitles(
+        file_path,
+        library_root,
+        settings.subtitle_extensions,
+        ignore_patterns,
+    )
+    return payload, subtitles
+
+
+def _visible_external_subtitles(
+    file_path: Path,
+    library_root: Path,
+    allowed_extensions: tuple[str, ...],
+    ignore_patterns: tuple[str, ...],
+    *,
+    sibling_filenames: tuple[str, ...] | None = None,
+) -> list[dict[str, str | None]]:
+    detected = (
+        detect_external_subtitles(file_path, allowed_extensions)
+        if sibling_filenames is None
+        else detect_external_subtitles_from_names(
+            file_path,
+            sibling_filenames,
+            allowed_extensions,
+        )
+    )
+    return [
         subtitle
-        for subtitle in detect_external_subtitles(file_path, settings.subtitle_extensions)
+        for subtitle in detected
         if not matches_ignore_pattern(
             (file_path.parent / str(subtitle["path"])).relative_to(library_root).as_posix(),
             ignore_patterns,
         )
     ]
-    return payload, subtitles
+
+
+def _external_subtitle_signature(
+    subtitles: list[ExternalSubtitle] | list[dict[str, str | None]],
+) -> tuple[tuple[str, str | None, str | None], ...]:
+    signature: list[tuple[str, str | None, str | None]] = []
+    for subtitle in subtitles:
+        if isinstance(subtitle, dict):
+            path = str(subtitle.get("path") or "").strip()
+            language = (
+                str(subtitle.get("language")).strip() or None
+                if subtitle.get("language")
+                else None
+            )
+            format_name = (
+                str(subtitle.get("format")).strip().lower() or None
+                if subtitle.get("format")
+                else None
+            )
+        else:
+            path = str(subtitle.path or "").strip()
+            language = str(subtitle.language).strip() or None if subtitle.language else None
+            format_name = str(subtitle.format).strip().lower() or None if subtitle.format else None
+        signature.append((path, language, format_name))
+    return tuple(sorted(signature))
 
 
 def _empty_scan_summary(ignore_patterns: tuple[str, ...] = ()) -> dict:
@@ -596,7 +656,11 @@ def run_scan(
 
     existing_by_path = {
         media_file.relative_path: media_file
-        for media_file in db.scalars(select(MediaFile).where(MediaFile.library_id == library_id)).all()
+        for media_file in db.scalars(
+            select(MediaFile)
+            .where(MediaFile.library_id == library_id)
+            .options(selectinload(MediaFile.external_subtitles))
+        ).all()
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
     app_settings = get_app_settings(db, settings)
@@ -840,13 +904,14 @@ def run_scan(
                 _poll_completed_work(wait_for_completion=True)
             pending[executor.submit(_safe_process_work, work)] = work
 
-        for file_path in _stream_media_files(
+        for discovered_media_file in _stream_media_files(
             root,
             settings.allowed_media_extensions,
             discovery=discovery,
             ignore_patterns=ignore_patterns,
             should_cancel=_should_cancel,
         ):
+            file_path = discovered_media_file.path
             relative_path = file_path.relative_to(root).as_posix()
             seen_relative_paths.add(relative_path)
             discovery_progress_counter += 1
@@ -881,15 +946,33 @@ def run_scan(
             else:
                 changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
                 analysis_incomplete = media_file.id in incomplete_analysis_ids
+                external_subtitles_changed = False
+                if not changed and scan_type != "full" and not analysis_incomplete:
+                    current_external_subtitles = _visible_external_subtitles(
+                        file_path,
+                        root,
+                        settings.subtitle_extensions,
+                        ignore_patterns,
+                        sibling_filenames=discovered_media_file.sibling_filenames,
+                    )
+                    external_subtitles_changed = (
+                        _external_subtitle_signature(current_external_subtitles)
+                        != _external_subtitle_signature(media_file.external_subtitles)
+                    )
                 media_file.filename = file_path.name
                 media_file.extension = file_path.suffix.lower().lstrip(".")
                 media_file.size_bytes = stat.st_size
                 media_file.mtime = stat.st_mtime
                 media_file.last_seen_at = utc_now()
                 needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
-                needs_analysis = changed or scan_type == "full" or analysis_incomplete
+                needs_analysis = (
+                    changed
+                    or scan_type == "full"
+                    or analysis_incomplete
+                    or external_subtitles_changed
+                )
                 if needs_analysis or needs_duplicate_processing:
-                    if changed:
+                    if changed or external_subtitles_changed:
                         modified_files.add(relative_path)
                     elif analysis_incomplete:
                         reanalyzed_incomplete_files += 1
