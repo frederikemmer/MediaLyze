@@ -371,6 +371,7 @@ describe("LibraryDetailPage", () => {
       {},
       vi.fn(),
       loadStreamDetail,
+      new Set(["audio_languages"]),
       false,
       false,
     );

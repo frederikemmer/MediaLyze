@@ -1399,7 +1399,7 @@ export function LibrariesPage() {
 
   function toggleStatisticVisibility(
     statisticId: LibraryStatisticId,
-    area: "panelEnabled" | "tableEnabled" | "dashboardEnabled",
+    area: "panelEnabled" | "tableEnabled" | "tableTooltipEnabled" | "dashboardEnabled",
   ) {
     updateStatisticsSettings((current) =>
       updateLibraryStatisticVisibility(current, statisticId, {
@@ -2467,6 +2467,7 @@ export function LibrariesPage() {
                       <th scope="col">{t("libraryStatistics.name")}</th>
                       <th scope="col">{t("libraryStatistics.statistics")}</th>
                       <th scope="col">{t("libraryStatistics.table")}</th>
+                      <th scope="col">{t("libraryStatistics.tooltips")}</th>
                       <th scope="col">{t("libraryStatistics.dashboard")}</th>
                     </tr>
                   </thead>
@@ -2524,6 +2525,14 @@ export function LibrariesPage() {
                               checked={visibility.tableEnabled}
                               disabled={!statistic.supportsTable}
                               onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
+                            />
+                          </td>
+                          <td className="settings-checkbox-cell">
+                            <input
+                              type="checkbox"
+                              checked={visibility.tableTooltipEnabled}
+                              disabled={!statistic.supportsTableTooltip || !visibility.tableEnabled}
+                              onChange={() => toggleStatisticVisibility(statistic.id, "tableTooltipEnabled")}
                             />
                           </td>
                           <td className="settings-checkbox-cell">

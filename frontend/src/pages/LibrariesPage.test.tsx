@@ -614,6 +614,33 @@ describe("LibrariesPage ignore patterns", () => {
   });
 });
 
+describe("LibrariesPage statistics settings", () => {
+  it("shows a dedicated tooltip column and stores tooltip visibility choices", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    expect(await screen.findByText("Tooltips")).toBeInTheDocument();
+
+    const audioLanguagesRow = screen.getByText("Audio languages").closest("tr");
+    expect(audioLanguagesRow).not.toBeNull();
+    const audioLanguagesCheckboxes = within(audioLanguagesRow!).getAllByRole("checkbox");
+    expect(audioLanguagesCheckboxes).toHaveLength(4);
+    expect(audioLanguagesCheckboxes[2]).toBeEnabled();
+
+    fireEvent.click(audioLanguagesCheckboxes[2]);
+
+    expect(window.localStorage.getItem("medialyze-library-statistics-settings")).toContain(
+      '"audio_languages":{"panelEnabled":true,"tableEnabled":true,"tableTooltipEnabled":false,"dashboardEnabled":true}',
+    );
+
+    const fileSizeRow = screen.getByText("File size").closest("tr");
+    expect(fileSizeRow).not.toBeNull();
+    const fileSizeCheckboxes = within(fileSizeRow!).getAllByRole("checkbox");
+    expect(fileSizeCheckboxes[2]).toBeDisabled();
+  });
+});
+
 describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {

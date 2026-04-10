@@ -135,6 +135,7 @@
     "name": "Name",
     "statistics": "Statistics",
     "table": "Table",
+    "tooltips": "Tooltips",
     "dashboard": "Dashboard",
     "dragHint": "Drag to reorder",
     "unavailable": "Unavailable",

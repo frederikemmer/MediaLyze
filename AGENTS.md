@@ -466,7 +466,7 @@ Implemented UI behavior includes:
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
 * user-resizable analyzed-files table columns with persisted widths in browser storage
-* lightweight hover tooltips on analyzed-files codec and subtitle-source cells that lazy-load per-file stream details such as language, codec, audio channel layout, and subtitle source
+* lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
 * persistent local UI state for selected statistics, analyzed-files column widths, and some panel/section visibility

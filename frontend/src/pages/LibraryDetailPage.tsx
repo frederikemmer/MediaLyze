@@ -45,6 +45,7 @@ import {
   type LibraryFileColumnWidths,
 } from "../lib/library-file-column-widths";
 import {
+  getEnabledLibraryStatisticTableTooltipColumns,
   LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
@@ -446,6 +447,7 @@ export function buildFileColumns(
   streamDetailLoading: Record<number, boolean>,
   loadQualityDetail: (fileId: number) => void,
   loadStreamDetail: (fileId: number) => void,
+  tooltipEnabledColumns: Set<FileColumnKey>,
   showDolbyVisionProfiles: boolean,
   hideQualityScoreMeter: boolean,
 ): FileColumnDefinition[] {
@@ -479,7 +481,7 @@ export function buildFileColumns(
       measureValue: (file) =>
         file.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileTable.na"),
       render: (file) =>
-        file.video_codec ? (
+        file.video_codec && tooltipEnabledColumns.has("video_codec") ? (
           <TooltipTrigger
             ariaLabel={t("streamDetails.videoTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
@@ -494,6 +496,8 @@ export function buildFileColumns(
           >
             <span className="media-data-text-ellipsis">{formatCodecLabel(file.video_codec, "video")}</span>
           </TooltipTrigger>
+        ) : file.video_codec ? (
+          formatCodecLabel(file.video_codec, "video")
         ) : (
           t("fileTable.na")
         ),
@@ -526,7 +530,7 @@ export function buildFileColumns(
       measureValue: (file) => compactValues(file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio"))),
       render: (file) => {
         const value = compactValues(file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio")));
-        return file.audio_codecs.length > 0 ? (
+        return file.audio_codecs.length > 0 && tooltipEnabledColumns.has("audio_codecs") ? (
           <TooltipTrigger
             ariaLabel={t("streamDetails.audioTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
@@ -553,7 +557,7 @@ export function buildFileColumns(
       measureValue: (file) => listValues(file.audio_languages),
       render: (file) => {
         const value = listValues(file.audio_languages);
-        return file.audio_languages.length > 0 ? (
+        return file.audio_languages.length > 0 && tooltipEnabledColumns.has("audio_languages") ? (
           <TooltipTrigger
             ariaLabel={t("streamDetails.audioTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
@@ -582,7 +586,22 @@ export function buildFileColumns(
       measureValue: (file) => listValues(file.subtitle_languages),
       render: (file) => {
         const value = listValues(file.subtitle_languages);
-        return (
+        return file.subtitle_languages.length > 0 && tooltipEnabledColumns.has("subtitle_languages") ? (
+          <TooltipTrigger
+            ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
+            className="stream-details-tooltip-trigger"
+            content={buildStreamTooltipContent(
+              "subtitle",
+              streamDetailCache[file.id],
+              Boolean(streamDetailLoading[file.id]),
+              showDolbyVisionProfiles,
+              t,
+            )}
+            onOpen={() => loadStreamDetail(file.id)}
+          >
+            <span className="media-data-text-ellipsis">{value}</span>
+          </TooltipTrigger>
+        ) : (
           <span className="media-data-text-ellipsis" title={value}>
             {value}
           </span>
@@ -596,7 +615,7 @@ export function buildFileColumns(
       measureValue: (file) => compactValues(file.subtitle_codecs.map((codec) => formatCodecLabel(codec, "subtitle"))),
       render: (file) => {
         const value = compactValues(file.subtitle_codecs.map((codec) => formatCodecLabel(codec, "subtitle")));
-        return file.subtitle_codecs.length > 0 ? (
+        return file.subtitle_codecs.length > 0 && tooltipEnabledColumns.has("subtitle_codecs") ? (
           <TooltipTrigger
             ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
@@ -623,7 +642,7 @@ export function buildFileColumns(
       measureValue: (file) => compactValues(file.subtitle_sources, 2),
       render: (file) => {
         const value = compactValues(file.subtitle_sources, 2);
-        return file.subtitle_sources.length > 0 ? (
+        return file.subtitle_sources.length > 0 && tooltipEnabledColumns.has("subtitle_sources") ? (
           <TooltipTrigger
             ariaLabel={t("streamDetails.subtitleTooltipAria", { file: file.filename })}
             className="stream-details-tooltip-trigger"
@@ -663,12 +682,26 @@ export function buildFileColumns(
       sizing: { mode: "content", minPx: 120, maxPx: 120 },
       measureValue: (file) => `${file.quality_score}/10`,
       render: (file) => (
-        <TooltipTrigger
-          ariaLabel={t("quality.tooltipAria")}
-          className="quality-score-tooltip-trigger"
-          content={buildQualityTooltipContent(qualityDetailCache[file.id], Boolean(qualityDetailLoading[file.id]), t)}
-          onOpen={() => loadQualityDetail(file.id)}
-        >
+        tooltipEnabledColumns.has("quality_score") ? (
+          <TooltipTrigger
+            ariaLabel={t("quality.tooltipAria")}
+            className="quality-score-tooltip-trigger"
+            content={buildQualityTooltipContent(qualityDetailCache[file.id], Boolean(qualityDetailLoading[file.id]), t)}
+            onOpen={() => loadQualityDetail(file.id)}
+          >
+            <div className="score-cell">
+              <strong>{file.quality_score}/10</strong>
+              {hideQualityScoreMeter ? null : (
+                <div className="score-meter" aria-hidden="true">
+                  <span
+                    className={`score-meter-fill score-meter-fill-${scoreMeterLabel(file.quality_score)}`}
+                    style={{ width: `${Math.max(0, Math.min(10, file.quality_score)) * 10}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </TooltipTrigger>
+        ) : (
           <div className="score-cell">
             <strong>{file.quality_score}/10</strong>
             {hideQualityScoreMeter ? null : (
@@ -680,7 +713,7 @@ export function buildFileColumns(
               </div>
             )}
           </div>
-        </TooltipTrigger>
+        )
       ),
     },
   ];
@@ -862,6 +895,10 @@ export function LibraryDetailPage() {
       });
     }
   });
+  const tooltipEnabledColumns = useMemo(
+    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(statisticsSettings)),
+    [statisticsSettings],
+  );
   const fileColumns = useMemo(
     () =>
       buildFileColumns(
@@ -872,6 +909,7 @@ export function LibraryDetailPage() {
         streamDetailsLoading,
         loadQualityScoreDetail,
         loadStreamDetail,
+        tooltipEnabledColumns,
         showDolbyVisionProfiles,
         hideQualityScoreMeter,
       ),
@@ -885,6 +923,7 @@ export function LibraryDetailPage() {
       streamDetails,
       streamDetailsLoading,
       t,
+      tooltipEnabledColumns,
     ],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
