@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,6 +11,27 @@ class DistributionItem(BaseModel):
     label: str
     value: int
     filter_value: str | None = None
+
+
+NumericDistributionMetricId = Literal[
+    "quality_score",
+    "duration",
+    "size",
+    "bitrate",
+    "audio_bitrate",
+]
+
+
+class NumericDistributionBin(BaseModel):
+    lower: float | None = None
+    upper: float | None = None
+    count: int
+    percentage: float
+
+
+class NumericDistribution(BaseModel):
+    total: int
+    bins: list[NumericDistributionBin]
 
 
 class MediaFormatRead(BaseModel):
@@ -145,3 +166,4 @@ class DashboardResponse(BaseModel):
     subtitle_distribution: list[DistributionItem]
     subtitle_codec_distribution: list[DistributionItem]
     subtitle_source_distribution: list[DistributionItem]
+    numeric_distributions: dict[NumericDistributionMetricId, NumericDistribution]

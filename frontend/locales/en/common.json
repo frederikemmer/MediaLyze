@@ -27,6 +27,11 @@
     "hdrCoverage": "HDR coverage",
     "audioCodecs": "Audio codecs",
     "containers": "Containers",
+    "sizeDistribution": "File size",
+    "durationDistribution": "Runtime",
+    "qualityScoreDistribution": "Quality score",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Audio bitrate",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
     "subtitleLanguages": "Subtitle languages",
@@ -149,6 +154,8 @@
       "resolution": "Resolution",
       "dynamicRange": "Dynamic Range",
       "duration": "Duration",
+      "bitrate": "Bitrate",
+      "audioBitrate": "Audio bitrate",
       "audioCodecs": "Audio codecs",
       "audioSpatialProfiles": "Spatial audio",
       "audioLanguages": "Audio languages",
@@ -186,6 +193,11 @@
     "videoCodecs": "Video codecs",
     "resolutions": "Resolutions",
     "hdrCoverage": "HDR coverage",
+    "sizeDistribution": "File size",
+    "durationDistribution": "Runtime",
+    "qualityScoreDistribution": "Quality score",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Audio bitrate",
     "audioCodecs": "Audio codecs",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
@@ -227,6 +239,14 @@
         "placeholder": "e.g. >=8",
         "tooltip": "Supported: >=8, =10, <5"
       },
+      "bitrate": {
+        "placeholder": "e.g. >=8Mb/s",
+        "tooltip": "Supported: >4Mb/s, >=256kb/s, <12Mb/s"
+      },
+      "audioBitrate": {
+        "placeholder": "e.g. >=512kb/s",
+        "tooltip": "Supported: >256kb/s, >=1Mb/s, <2Mb/s"
+      },
       "videoCodec": {
         "placeholder": "e.g. hevc av1"
       },
@@ -261,6 +281,8 @@
       "validation": {
         "size": "Use a comparison like >4GB or <=700MB.",
         "quality_score": "Use a score from 1 to 10, for example >=8.",
+        "bitrate": "Use a bitrate like >8Mb/s or >=256kb/s.",
+        "audio_bitrate": "Use an audio bitrate like >512kb/s or >=1Mb/s.",
         "duration": "Use a duration like >90m or >=1h 30m."
       }
     },
@@ -286,6 +308,24 @@
     "recentScanJobs": "Recent scan jobs",
     "recentScanJobsSubtitle": "Latest queue and run history",
     "jobLabel": "Job #{{id}}"
+  },
+  "distributionChart": {
+    "loading": "Loading chart…",
+    "empty": "No analyzed data yet.",
+    "displayMode": "Chart display mode",
+    "countMode": "Count",
+    "percentMode": "Percent",
+    "total": "{{total}} files with {{metric}} data",
+    "binRange": "Range",
+    "count": "Count",
+    "percentage": "Percentage",
+    "metrics": {
+      "quality_score": "quality score",
+      "duration": "runtime",
+      "size": "file size",
+      "bitrate": "bitrate",
+      "audio_bitrate": "audio bitrate"
+    }
   },
   "scanLogs": {
     "title": "Recent scan logs",

@@ -10,6 +10,9 @@
   --accent: #ff6b3d;
   --accent-2: #1b998b;
   --accent-3: #3f51b5;
+  --distribution-chart-fill: #1b998b;
+  --distribution-chart-fill-hover: #ff6b3d;
+  --distribution-chart-interactive: #1b998b;
   --shadow: 0 18px 45px rgba(31, 28, 22, 0.12);
   --radius: 18px;
   --page-gutter: clamp(8px, 2.6vw, 24px);

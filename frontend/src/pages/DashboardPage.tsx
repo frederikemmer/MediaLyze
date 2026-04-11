@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
 import { StatCard } from "../components/StatCard";
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
 import {
+  getDashboardStatisticNumericDistribution,
   getDashboardStatisticPanelItems,
   getLibraryStatisticsSettings,
   getVisibleDashboardStatisticPanels,
@@ -82,6 +84,24 @@ export function DashboardPage() {
       <div className="media-grid">
         {visibleDashboardPanels.length > 0 ? (
           visibleDashboardPanels.map((panel) => {
+            if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
+              const distribution = getDashboardStatisticNumericDistribution(dashboard, panel);
+              return (
+                <AsyncPanel
+                  key={panel.id}
+                  title={t(panel.dashboardTitleKey ?? panel.nameKey)}
+                  loading={!dashboard && !error}
+                  error={error}
+                  bodyClassName="async-panel-body-scroll"
+                >
+                  <DistributionChartPanel
+                    distribution={distribution}
+                    metricId={panel.numericMetricId}
+                  />
+                </AsyncPanel>
+              );
+            }
+
             const items = panel.id === "hdr_type"
               ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel))
               : getDashboardStatisticPanelItems(dashboard, panel);

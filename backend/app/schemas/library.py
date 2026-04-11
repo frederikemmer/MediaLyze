@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import DuplicateDetectionMode, LibraryType, ScanMode
-from backend.app.schemas.media import DistributionItem
+from backend.app.schemas.media import DistributionItem, NumericDistribution, NumericDistributionMetricId
 from backend.app.schemas.quality import QualityProfile
 from backend.app.schemas._time import UtcDateTime
 
@@ -56,3 +56,4 @@ class LibraryStatistics(BaseModel):
     subtitle_language_distribution: list[DistributionItem]
     subtitle_codec_distribution: list[DistributionItem]
     subtitle_source_distribution: list[DistributionItem]
+    numeric_distributions: dict[NumericDistributionMetricId, NumericDistribution]

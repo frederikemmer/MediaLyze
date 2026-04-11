@@ -742,8 +742,11 @@ def test_list_library_files_supports_structured_numeric_field_searches() -> None
         db.flush()
         db.add_all(
             [
-                MediaFormat(media_file_id=short.id, duration=1800.0),
-                MediaFormat(media_file_id=feature.id, duration=7200.0),
+                MediaFormat(media_file_id=short.id, duration=1800.0, bit_rate=2_000_000),
+                MediaFormat(media_file_id=feature.id, duration=7200.0, bit_rate=10_000_000),
+                AudioStream(media_file_id=short.id, stream_index=1, codec="aac", bit_rate=192_000),
+                AudioStream(media_file_id=feature.id, stream_index=1, codec="eac3", bit_rate=256_000),
+                AudioStream(media_file_id=feature.id, stream_index=2, codec="ac3", bit_rate=512_000),
             ]
         )
         db.commit()
@@ -766,10 +769,31 @@ def test_list_library_files_supports_structured_numeric_field_searches() -> None
             limit=50,
             search_filters=LibraryFileSearchFilters(search_quality_score=">=8"),
         )
+        mid_sized_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_size=">=4GB,<8GB"),
+        )
+        bitrate_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_bitrate=">=8Mb/s,<12Mb/s"),
+        )
+        audio_bitrate_files = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_audio_bitrate=">=512kb/s,<1Mb/s"),
+        )
 
     assert [item.filename for item in large_files.items] == ["feature.mkv"]
     assert [item.filename for item in long_files.items] == ["feature.mkv"]
     assert [item.filename for item in high_scores.items] == ["feature.mkv"]
+    assert [item.filename for item in mid_sized_files.items] == ["feature.mkv"]
+    assert [item.filename for item in bitrate_files.items] == ["feature.mkv"]
+    assert [item.filename for item in audio_bitrate_files.items] == ["feature.mkv"]
 
 
 def test_list_library_files_supports_negated_field_search_terms_and_comma_intersections() -> None:

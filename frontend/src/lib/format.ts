@@ -129,6 +129,17 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 100 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
+export function formatBitrate(bitsPerSecond: number | null): string {
+  if (bitsPerSecond === null || !Number.isFinite(bitsPerSecond) || bitsPerSecond <= 0) {
+    return "n/a";
+  }
+
+  const units = ["b/s", "kb/s", "Mb/s", "Gb/s", "Tb/s"];
+  const exponent = Math.min(Math.floor(Math.log(bitsPerSecond) / Math.log(1000)), units.length - 1);
+  const value = bitsPerSecond / 1000 ** exponent;
+  return `${value.toFixed(value >= 100 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
 export function formatDuration(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) {
     return "n/a";

@@ -1,4 +1,10 @@
-import type { DashboardResponse, LibraryStatistics, MediaFileSortKey } from "./api";
+import type {
+  DashboardResponse,
+  LibraryStatistics,
+  MediaFileSortKey,
+  NumericDistribution,
+  NumericDistributionMetricId,
+} from "./api";
 
 export type LibraryStatisticId =
   | "size"
@@ -13,7 +19,9 @@ export type LibraryStatisticId =
   | "subtitle_languages"
   | "subtitle_codecs"
   | "subtitle_sources"
-  | "quality_score";
+  | "quality_score"
+  | "bitrate"
+  | "audio_bitrate";
 
 type LibraryStatisticPanelDataKey =
   | "container_distribution"
@@ -40,6 +48,7 @@ type DashboardStatisticPanelDataKey =
   | "subtitle_source_distribution";
 
 type DistributionFormatKind = "video" | "audio" | "subtitle";
+type StatisticPanelKind = "list" | "numeric-chart";
 
 export type LibraryStatisticDefinition = {
   id: LibraryStatisticId;
@@ -52,8 +61,10 @@ export type LibraryStatisticDefinition = {
   defaultTableEnabled: boolean;
   defaultTableTooltipEnabled: boolean;
   defaultDashboardEnabled: boolean;
+  panelKind?: StatisticPanelKind;
   panelTitleKey?: string;
   panelDataKey?: LibraryStatisticPanelDataKey;
+  numericMetricId?: NumericDistributionMetricId;
   panelFormatKind?: DistributionFormatKind;
   tableColumnKey?: MediaFileSortKey;
   dashboardTitleKey?: string;
@@ -79,28 +90,36 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   {
     id: "size",
     nameKey: "libraryStatistics.items.size",
-    supportsPanel: false,
+    supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
-    supportsDashboard: false,
-    defaultPanelEnabled: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
     defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
+    panelKind: "numeric-chart",
+    numericMetricId: "size",
+    panelTitleKey: "libraryDetail.sizeDistribution",
     tableColumnKey: "size",
+    dashboardTitleKey: "dashboard.sizeDistribution",
   },
   {
     id: "quality_score",
     nameKey: "libraryStatistics.items.qualityScore",
-    supportsPanel: false,
+    supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: true,
-    supportsDashboard: false,
-    defaultPanelEnabled: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
     defaultTableEnabled: true,
     defaultTableTooltipEnabled: true,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
+    panelKind: "numeric-chart",
+    numericMetricId: "quality_score",
+    panelTitleKey: "libraryDetail.qualityScoreDistribution",
     tableColumnKey: "quality_score",
+    dashboardTitleKey: "dashboard.qualityScoreDistribution",
   },
   {
     id: "video_codec",
@@ -158,15 +177,51 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   {
     id: "duration",
     nameKey: "libraryStatistics.items.duration",
-    supportsPanel: false,
+    supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
-    supportsDashboard: false,
-    defaultPanelEnabled: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
     defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
-    defaultDashboardEnabled: false,
+    defaultDashboardEnabled: true,
+    panelKind: "numeric-chart",
+    numericMetricId: "duration",
+    panelTitleKey: "libraryDetail.durationDistribution",
     tableColumnKey: "duration",
+    dashboardTitleKey: "dashboard.durationDistribution",
+  },
+  {
+    id: "bitrate",
+    nameKey: "libraryStatistics.items.bitrate",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelKind: "numeric-chart",
+    numericMetricId: "bitrate",
+    panelTitleKey: "libraryDetail.bitrateDistribution",
+    dashboardTitleKey: "dashboard.bitrateDistribution",
+  },
+  {
+    id: "audio_bitrate",
+    nameKey: "libraryStatistics.items.audioBitrate",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelKind: "numeric-chart",
+    numericMetricId: "audio_bitrate",
+    panelTitleKey: "libraryDetail.audioBitrateDistribution",
+    dashboardTitleKey: "dashboard.audioBitrateDistribution",
   },
   {
     id: "container",
@@ -475,7 +530,7 @@ export function getLibraryStatisticPanelItems(
   library: LibraryStatistics | null,
   definition: LibraryStatisticDefinition,
 ) {
-  if (!library || !definition.panelDataKey) {
+  if (!library || (definition.panelKind && definition.panelKind !== "list") || !definition.panelDataKey) {
     return [];
   }
   return library[definition.panelDataKey];
@@ -485,8 +540,28 @@ export function getDashboardStatisticPanelItems(
   dashboard: DashboardResponse | null,
   definition: LibraryStatisticDefinition,
 ) {
-  if (!dashboard || !definition.dashboardDataKey) {
+  if (!dashboard || (definition.panelKind && definition.panelKind !== "list") || !definition.dashboardDataKey) {
     return [];
   }
   return dashboard[definition.dashboardDataKey];
+}
+
+export function getLibraryStatisticNumericDistribution(
+  library: LibraryStatistics | null,
+  definition: LibraryStatisticDefinition,
+): NumericDistribution | null {
+  if (!library || definition.panelKind !== "numeric-chart" || !definition.numericMetricId) {
+    return null;
+  }
+  return library.numeric_distributions[definition.numericMetricId] ?? null;
+}
+
+export function getDashboardStatisticNumericDistribution(
+  dashboard: DashboardResponse | null,
+  definition: LibraryStatisticDefinition,
+): NumericDistribution | null {
+  if (!dashboard || definition.panelKind !== "numeric-chart" || !definition.numericMetricId) {
+    return null;
+  }
+  return dashboard.numeric_distributions[definition.numericMetricId] ?? null;
 }

@@ -24,6 +24,8 @@ class LibraryFileSearchFilters:
     search_container: str = ""
     search_size: str = ""
     search_quality_score: str = ""
+    search_bitrate: str = ""
+    search_audio_bitrate: str = ""
     search_video_codec: str = ""
     search_resolution: str = ""
     search_hdr_type: str = ""
@@ -41,6 +43,8 @@ class LibraryFileSearchFilters:
             search_container=self.search_container.strip(),
             search_size=self.search_size.strip(),
             search_quality_score=self.search_quality_score.strip(),
+            search_bitrate=self.search_bitrate.strip(),
+            search_audio_bitrate=self.search_audio_bitrate.strip(),
             search_video_codec=self.search_video_codec.strip(),
             search_resolution=self.search_resolution.strip(),
             search_hdr_type=self.search_hdr_type.strip(),
@@ -70,6 +74,10 @@ class SearchTerm:
 
 _COMPARATOR_RE = re.compile(r"^\s*(>=|<=|>|<|=)?\s*(.*?)\s*$")
 _SIZE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([kmgt]?i?b|b)?\s*$", re.IGNORECASE)
+_BITRATE_RE = re.compile(
+    r"^\s*(\d+(?:\.\d+)?)\s*(bps|bit/s|[kmgt]?bps|[kmgt]?b/s|[kmgt]?bit/s)?\s*$",
+    re.IGNORECASE,
+)
 _DURATION_PART_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([smhd])", re.IGNORECASE)
 _RESOLUTION_RE = re.compile(r"^\s*(\d{2,5})\s*x\s*(\d{2,5})\s*$", re.IGNORECASE)
 
@@ -84,6 +92,23 @@ _SIZE_UNITS = {
     "gib": 1024**3,
     "tib": 1024**4,
 }
+_BITRATE_UNITS = {
+    "bps": 1,
+    "bit/s": 1,
+    "b/s": 1,
+    "kbps": 1000,
+    "kbit/s": 1000,
+    "kb/s": 1000,
+    "mbps": 1000**2,
+    "mbit/s": 1000**2,
+    "mb/s": 1000**2,
+    "gbps": 1000**3,
+    "gbit/s": 1000**3,
+    "gb/s": 1000**3,
+    "tbps": 1000**4,
+    "tbit/s": 1000**4,
+    "tb/s": 1000**4,
+}
 _HDR_TOKEN_ALIASES = {
     "dv": {"dv", "dolby vision"},
     "dovi": {"dovi", "dolby vision"},
@@ -91,6 +116,8 @@ _HDR_TOKEN_ALIASES = {
 _NUMERIC_FIELD_LABELS = {
     "size": "size",
     "quality_score": "quality score",
+    "bitrate": "bitrate",
+    "audio_bitrate": "audio bitrate",
     "duration": "duration",
 }
 
@@ -218,6 +245,16 @@ def _parse_comparison(raw_value: str, field_key: str) -> tuple[str, str]:
     return operator, value
 
 
+def _parse_numeric_comparisons(raw_value: str, field_key: str) -> list[tuple[str, str]]:
+    comparisons: list[tuple[str, str]] = []
+    for segment in raw_value.split(","):
+        candidate = segment.strip()
+        if not candidate:
+            raise SearchValidationError(f"Invalid search expression for {_NUMERIC_FIELD_LABELS[field_key]}")
+        comparisons.append(_parse_comparison(candidate, field_key))
+    return comparisons
+
+
 def _parse_size_value(raw_value: str) -> int:
     match = _SIZE_RE.match(raw_value)
     if not match:
@@ -253,6 +290,19 @@ def _parse_duration_value(raw_value: str) -> float:
     if not consumed or normalized_source != normalized_consumed:
         raise SearchValidationError("Invalid search expression for duration")
     return total_seconds
+
+
+def _parse_bitrate_value(raw_value: str) -> int:
+    match = _BITRATE_RE.match(raw_value)
+    if not match:
+        raise SearchValidationError("Invalid search expression for bitrate")
+
+    amount = float(match.group(1))
+    unit = (match.group(2) or "bps").lower()
+    multiplier = _BITRATE_UNITS.get(unit)
+    if multiplier is None:
+        raise SearchValidationError("Invalid search expression for bitrate")
+    return int(amount * multiplier)
 
 
 def _parse_quality_score_value(raw_value: str) -> int:
@@ -394,10 +444,10 @@ def _apply_subtitle_source_filter(query, subtitle_aggregates, raw_value: str):
 
 
 def _apply_numeric_filter(query, expression, raw_value: str, parser, field_key: str):
-    operator, value = _parse_comparison(raw_value, field_key)
-    parsed_value = parser(value)
     query = query.where(expression.is_not(None))
-    query = query.where(_comparison_clause(expression, operator, parsed_value))
+    for operator, value in _parse_numeric_comparisons(raw_value, field_key):
+        parsed_value = parser(value)
+        query = query.where(_comparison_clause(expression, operator, parsed_value))
     return query
 
 
@@ -407,6 +457,8 @@ def apply_field_search_filters(
     audio_aggregates,
     subtitle_aggregates,
     filters: LibraryFileSearchFilters | None,
+    bitrate_expression=None,
+    audio_bitrate_expression=None,
     resolution_categories: list[ResolutionCategory] | None = None,
 ):
     if filters is None:
@@ -426,6 +478,22 @@ def apply_field_search_filters(
             normalized.search_quality_score,
             _parse_quality_score_value,
             "quality_score",
+        )
+    if normalized.search_bitrate:
+        query = _apply_numeric_filter(
+            query,
+            bitrate_expression,
+            normalized.search_bitrate,
+            _parse_bitrate_value,
+            "bitrate",
+        )
+    if normalized.search_audio_bitrate:
+        query = _apply_numeric_filter(
+            query,
+            audio_bitrate_expression,
+            normalized.search_audio_bitrate,
+            _parse_bitrate_value,
+            "audio_bitrate",
         )
     if normalized.search_video_codec:
         query = _apply_text_filter(query, primary_video_streams.c.codec, normalized.search_video_codec)

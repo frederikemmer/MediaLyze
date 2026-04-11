@@ -27,6 +27,11 @@
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
     "containers": "Container",
+    "sizeDistribution": "Dateigroesse",
+    "durationDistribution": "Laufzeit",
+    "qualityScoreDistribution": "Qualitaets-Score",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Audio-Bitrate",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
@@ -149,6 +154,8 @@
       "resolution": "Auflösung",
       "dynamicRange": "Dynamic Range",
       "duration": "Dauer",
+      "bitrate": "Bitrate",
+      "audioBitrate": "Audio-Bitrate",
       "audioCodecs": "Audio-Codecs",
       "audioSpatialProfiles": "Raumklang",
       "audioLanguages": "Audio-Sprachen",
@@ -186,6 +193,11 @@
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
+    "sizeDistribution": "Dateigroesse",
+    "durationDistribution": "Laufzeit",
+    "qualityScoreDistribution": "Qualitaets-Score",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Audio-Bitrate",
     "audioCodecs": "Audio-Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
@@ -227,6 +239,14 @@
         "placeholder": "z. B. >=8",
         "tooltip": "Unterstützt: >=8, =10, <5"
       },
+      "bitrate": {
+        "placeholder": "z. B. >=8Mb/s",
+        "tooltip": "Unterstuetzt: >4Mb/s, >=256kb/s, <12Mb/s"
+      },
+      "audioBitrate": {
+        "placeholder": "z. B. >=512kb/s",
+        "tooltip": "Unterstuetzt: >256kb/s, >=1Mb/s, <2Mb/s"
+      },
       "videoCodec": {
         "placeholder": "z. B. hevc av1"
       },
@@ -261,6 +281,8 @@
       "validation": {
         "size": "Verwende einen Vergleich wie >4GB oder <=700MB.",
         "quality_score": "Verwende einen Score von 1 bis 10, zum Beispiel >=8.",
+        "bitrate": "Verwende eine Bitrate wie >8Mb/s oder >=256kb/s.",
+        "audio_bitrate": "Verwende eine Audio-Bitrate wie >512kb/s oder >=1Mb/s.",
         "duration": "Verwende eine Dauer wie >90m oder >=1h 30m."
       }
     },
@@ -286,6 +308,24 @@
     "recentScanJobs": "Letzte Scan-Jobs",
     "recentScanJobsSubtitle": "Neueste Queue- und Laufhistorie",
     "jobLabel": "Job #{{id}}"
+  },
+  "distributionChart": {
+    "loading": "Diagramm wird geladen…",
+    "empty": "Noch keine analysierten Daten.",
+    "displayMode": "Diagramm-Anzeige",
+    "countMode": "Anzahl",
+    "percentMode": "Prozent",
+    "total": "{{total}} Dateien mit {{metric}}-Daten",
+    "binRange": "Bereich",
+    "count": "Anzahl",
+    "percentage": "Prozent",
+    "metrics": {
+      "quality_score": "Qualitaets-Score",
+      "duration": "Laufzeit",
+      "size": "Dateigroesse",
+      "bitrate": "Bitrate",
+      "audio_bitrate": "Audio-Bitrate"
+    }
   },
   "scanLogs": {
     "title": "Letzte Scan-Logs",
