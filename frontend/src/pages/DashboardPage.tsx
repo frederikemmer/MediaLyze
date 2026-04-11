@@ -87,18 +87,14 @@ export function DashboardPage() {
             if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
               const distribution = getDashboardStatisticNumericDistribution(dashboard, panel);
               return (
-                <AsyncPanel
+                <DistributionChartPanel
                   key={panel.id}
                   title={t(panel.dashboardTitleKey ?? panel.nameKey)}
+                  distribution={distribution}
+                  metricId={panel.numericMetricId}
                   loading={!dashboard && !error}
                   error={error}
-                  bodyClassName="async-panel-body-scroll"
-                >
-                  <DistributionChartPanel
-                    distribution={distribution}
-                    metricId={panel.numericMetricId}
-                  />
-                </AsyncPanel>
+                />
               );
             }
 

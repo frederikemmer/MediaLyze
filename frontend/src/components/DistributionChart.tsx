@@ -42,10 +42,10 @@ export function DistributionChart({
     () => ({
       animation: false,
       grid: {
-        top: 8,
-        right: 8,
-        bottom: 28,
-        left: 42,
+        top: 6,
+        right: 4,
+        bottom: 8,
+        left: 6,
         containLabel: true,
       },
       tooltip: {
@@ -81,6 +81,8 @@ export function DistributionChart({
           color: axisColor,
           fontSize: 11,
           interval: 0,
+          hideOverlap: true,
+          margin: 10,
         },
       },
       yAxis: {
@@ -98,6 +100,7 @@ export function DistributionChart({
         axisLabel: {
           color: axisColor,
           formatter: (value: number) => formatNumericDistributionYAxisValue(value, mode),
+          margin: 10,
         },
       },
       series: [

@@ -597,21 +597,65 @@
   font-size: 0.9rem;
 }
 
-.distribution-chart-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .distribution-chart-mode-toggle {
-  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 28, 22, 0.09);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 2px rgba(31, 28, 22, 0.03);
 }
 
-.distribution-chart-mode-toggle .tab-button {
-  min-height: 32px;
-  padding: 6px 12px;
+.distribution-chart-header-addon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.distribution-chart-mode-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+  transition: color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.distribution-chart-mode-button:hover {
+  color: var(--ink);
+}
+
+.distribution-chart-mode-button.active {
+  color: var(--ink);
+}
+
+.distribution-chart-mode-button-content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.distribution-chart-mode-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.distribution-chart-mode-pill {
+  inset: 1px;
 }
 
 .distribution-chart-total {

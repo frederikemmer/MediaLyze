@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - extend structured numeric analyzed-files filters to support comma-separated `AND` ranges such as `>=4GB,<8GB`, including the new bitrate-based search fields used by the histogram panels
+- include `desktop/ffprobe-paths.cjs` in packaged Electron app builds and add desktop packaging regression tests so macOS startup no longer fails with `Cannot find module './ffprobe-paths.cjs'` ([#99](https://github.com/frederikemmer/MediaLyze/issues/99))
 
 ## v0.5.0
 

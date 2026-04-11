@@ -1507,24 +1507,20 @@ export function LibraryDetailPage() {
             if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
               const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel);
               return (
-                <AsyncPanel
+                <DistributionChartPanel
                   key={panel.id}
                   title={t(panel.panelTitleKey ?? panel.nameKey)}
+                  distribution={distribution}
+                  metricId={panel.numericMetricId}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
-                  bodyClassName="async-panel-body-scroll"
-                >
-                  <DistributionChartPanel
-                    distribution={distribution}
-                    metricId={panel.numericMetricId}
-                    interactive={!statisticsError && !libraryStatistics ? false : true}
-                    onSelectBin={
-                      statisticsError || !libraryStatistics
-                        ? undefined
-                        : (bin) => applyStatisticFilter(panel.id, buildNumericDistributionFilterExpression(panel.numericMetricId!, bin))
-                    }
-                  />
-                </AsyncPanel>
+                  interactive={!statisticsError && !libraryStatistics ? false : true}
+                  onSelectBin={
+                    statisticsError || !libraryStatistics
+                      ? undefined
+                      : (bin) => applyStatisticFilter(panel.id, buildNumericDistributionFilterExpression(panel.numericMetricId!, bin))
+                  }
+                />
               );
             }
 
