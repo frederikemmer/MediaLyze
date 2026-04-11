@@ -600,8 +600,8 @@
 .distribution-chart-mode-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px;
+  gap: 4px;
+  padding: 3px;
   border-radius: 999px;
   border: 1px solid rgba(31, 28, 22, 0.09);
   background: rgba(255, 255, 255, 0.64);
@@ -615,6 +615,7 @@
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
+  align-self: center;
 }
 
 .distribution-chart-mode-button {
@@ -623,8 +624,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 999px;
   color: var(--muted);
@@ -650,8 +651,8 @@
 }
 
 .distribution-chart-mode-icon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .distribution-chart-mode-pill {
@@ -2471,6 +2472,14 @@ html[data-theme="dark"] {
 
   .media-nav-icons,
   .media-nav-libraries {
+    background: rgba(38, 35, 31, 0.64);
+    border-color: rgba(240, 236, 228, 0.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.20);
+  }
+
+  .distribution-chart-mode-toggle {
     background: rgba(38, 35, 31, 0.64);
     border-color: rgba(240, 236, 228, 0.09);
     box-shadow:
