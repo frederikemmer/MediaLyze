@@ -139,7 +139,7 @@
     "title": "Library statistics",
     "subtitle": "Choose which metrics appear above the media table, inside the table, and on the dashboard. Drag rows to change the order.",
     "name": "Name",
-    "statistics": "Statistics",
+    "statistics": "Library",
     "table": "Table",
     "tooltips": "Tooltips",
     "dashboard": "Dashboard",
