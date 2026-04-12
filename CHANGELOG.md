@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.6.0
+
+>2026-04-12
+
 ### ✨ New
 
 - add reusable Apache ECharts histogram panels for `Quality score`, `Runtime`, `File size`, `Bitrate`, and `Audio bitrate` in both the dashboard and library statistics, with local count/percent toggles and clickable library bins that apply matching analyzed-files range filters
