@@ -34,6 +34,7 @@ export type LibraryFileSearchConfig = {
 
 const COMPARATOR_RE = /^\s*(>=|<=|>|<|=)?\s*(.*?)\s*$/;
 const SIZE_RE = /^\s*(\d+(?:\.\d+)?)\s*([kmgt]?i?b|b)?\s*$/i;
+const BITRATE_RE = /^\s*(\d+(?:\.\d+)?)\s*(bps|bit\/s|[kmgt]?bps|[kmgt]?b\/s|[kmgt]?bit\/s)?\s*$/i;
 const DURATION_PART_RE = /(\d+(?:\.\d+)?)\s*([smhd])/gi;
 const SCORE_RE = /^\d+$/;
 
@@ -43,17 +44,24 @@ function isValidStructuredValue(value: string, checker: (rawValue: string) => bo
     return true;
   }
 
-  const match = COMPARATOR_RE.exec(trimmed);
-  if (!match) {
-    return false;
-  }
+  return trimmed.split(",").every((segment) => {
+    const candidate = segment.trim();
+    if (!candidate) {
+      return false;
+    }
 
-  const rawValue = match[2].trim();
-  if (!rawValue) {
-    return false;
-  }
+    const match = COMPARATOR_RE.exec(candidate);
+    if (!match) {
+      return false;
+    }
 
-  return checker(rawValue);
+    const rawValue = match[2].trim();
+    if (!rawValue) {
+      return false;
+    }
+
+    return checker(rawValue);
+  });
 }
 
 function isValidSizeValue(value: string): boolean {
@@ -82,6 +90,10 @@ function isValidQualityScoreValue(value: string): boolean {
     const score = Number(rawValue);
     return Number.isInteger(score) && score >= 1 && score <= 10;
   });
+}
+
+function isValidBitrateValue(value: string): boolean {
+  return isValidStructuredValue(value, (rawValue) => BITRATE_RE.test(rawValue));
 }
 
 export const LIBRARY_FILE_SEARCH_PICKER_ICON = SlidersHorizontal;
@@ -117,6 +129,22 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     placeholderKey: "libraryDetail.searchFields.qualityScore.placeholder",
     tooltipKey: "libraryDetail.searchFields.qualityScore.tooltip",
     validate: isValidQualityScoreValue,
+  },
+  {
+    field: "bitrate",
+    icon: Gauge,
+    labelKey: "libraryStatistics.items.bitrate",
+    placeholderKey: "libraryDetail.searchFields.bitrate.placeholder",
+    tooltipKey: "libraryDetail.searchFields.bitrate.tooltip",
+    validate: isValidBitrateValue,
+  },
+  {
+    field: "audio_bitrate",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.audioBitrate",
+    placeholderKey: "libraryDetail.searchFields.audioBitrate.placeholder",
+    tooltipKey: "libraryDetail.searchFields.audioBitrate.tooltip",
+    validate: isValidBitrateValue,
   },
   {
     field: "video_codec",

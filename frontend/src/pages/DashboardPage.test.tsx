@@ -48,6 +48,64 @@ function createDashboard(): DashboardResponse {
     subtitle_distribution: [{ label: "en", value: 6 }],
     subtitle_codec_distribution: [{ label: "subrip", value: 5 }],
     subtitle_source_distribution: [{ label: "internal", value: 4 }],
+    numeric_distributions: {
+      quality_score: {
+        total: 10,
+        bins: Array.from({ length: 10 }, (_, index) => ({
+          lower: index + 1,
+          upper: index + 2,
+          count: index === 7 ? 4 : 0,
+          percentage: index === 7 ? 40 : 0,
+        })),
+      },
+      duration: {
+        total: 10,
+        bins: [
+          { lower: 0, upper: 1800, count: 2, percentage: 20 },
+          { lower: 1800, upper: 3600, count: 3, percentage: 30 },
+          { lower: 3600, upper: 5400, count: 2, percentage: 20 },
+          { lower: 5400, upper: 7200, count: 2, percentage: 20 },
+          { lower: 7200, upper: 9000, count: 1, percentage: 10 },
+          { lower: 9000, upper: 10800, count: 0, percentage: 0 },
+          { lower: 10800, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      size: {
+        total: 10,
+        bins: [
+          { lower: 0, upper: 500000000, count: 1, percentage: 10 },
+          { lower: 500000000, upper: 1000000000, count: 2, percentage: 20 },
+          { lower: 1000000000, upper: 2000000000, count: 3, percentage: 30 },
+          { lower: 2000000000, upper: 4000000000, count: 2, percentage: 20 },
+          { lower: 4000000000, upper: 8000000000, count: 1, percentage: 10 },
+          { lower: 8000000000, upper: 16000000000, count: 1, percentage: 10 },
+          { lower: 16000000000, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      bitrate: {
+        total: 10,
+        bins: [
+          { lower: 0, upper: 2000000, count: 1, percentage: 10 },
+          { lower: 2000000, upper: 4000000, count: 2, percentage: 20 },
+          { lower: 4000000, upper: 8000000, count: 3, percentage: 30 },
+          { lower: 8000000, upper: 12000000, count: 2, percentage: 20 },
+          { lower: 12000000, upper: 20000000, count: 1, percentage: 10 },
+          { lower: 20000000, upper: 40000000, count: 1, percentage: 10 },
+          { lower: 40000000, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      audio_bitrate: {
+        total: 10,
+        bins: [
+          { lower: 0, upper: 128000, count: 1, percentage: 10 },
+          { lower: 128000, upper: 256000, count: 2, percentage: 20 },
+          { lower: 256000, upper: 512000, count: 3, percentage: 30 },
+          { lower: 512000, upper: 1024000, count: 2, percentage: 20 },
+          { lower: 1024000, upper: 2048000, count: 1, percentage: 10 },
+          { lower: 2048000, upper: null, count: 1, percentage: 10 },
+        ],
+      },
+    },
   };
 }
 
@@ -90,5 +148,23 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
     expect(screen.getByText("SubRip (SRT)")).toBeInTheDocument();
     expect(screen.getByText("Internal")).toBeInTheDocument();
+  });
+
+  it("renders numeric dashboard charts when enabled in settings", async () => {
+    const settings = getLibraryStatisticsSettings();
+    settings.visibility.size.dashboardEnabled = true;
+    settings.visibility.quality_score.dashboardEnabled = true;
+    settings.visibility.duration.dashboardEnabled = true;
+    saveLibraryStatisticsSettings(settings);
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("File size")).toBeInTheDocument();
+    expect(screen.getByText("Quality score")).toBeInTheDocument();
+    expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
   });
 });

@@ -388,6 +388,7 @@ Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
 * optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
+* optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
@@ -398,6 +399,7 @@ Current aggregated statistics include:
 * subtitle language distribution
 * subtitle codec distribution
 * subtitle source distribution
+* histogram-based numeric distributions in library statistics for quality score, runtime, file size, bitrate, and audio bitrate
 
 ## 7.2 Statistics Caching
 
@@ -421,6 +423,8 @@ Current searchable/filterable dimensions include:
 * size
 * duration
 * quality score
+* bitrate
+* audio bitrate
 * video codec
 * resolution
 * HDR type
@@ -439,7 +443,8 @@ The backend supports:
 * field-specific search intersections
 * negated text terms in field-specific filters via a leading `!`
 * comma-separated field-specific text terms, with each term intersected as an `AND`
-* structured numeric expressions such as size, duration, and quality score comparisons
+* structured numeric expressions such as size, duration, quality score, bitrate, and audio bitrate comparisons
+* comma-separated `AND` ranges for numeric filters, for example `>=4GB,<8GB` or `>=8Mb/s,<12Mb/s`
 * sorting across supported table columns
 
 The analyzed-files table and library statistics settings can also expose container as a separate configurable column / panel dimension, using the normalized file extension as the user-facing container key.
@@ -474,6 +479,9 @@ Implemented UI behavior includes:
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
+* reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, runtime, file size, bitrate, and audio bitrate
+* local count / percent toggles on numeric statistic charts
+* clickable numeric histogram bins in the library detail view that apply matching analyzed-files range filters
 * user-resizable analyzed-files table columns with persisted widths in browser storage
 * lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
 * globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
@@ -581,6 +589,7 @@ Important library contract concepts:
 * `duplicate_detection_mode`
 * `scan_config`
 * `quality_profile`
+* `numeric_distributions`
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
 ## 9.5 Files
@@ -674,6 +683,7 @@ Implemented backend structure:
 * `backend/app/models/entities.py` defines the ORM schema
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
 * `backend/app/services/duplicates.py` provides duplicate-signature strategies and duplicate-group queries
+* `backend/app/services/numeric_distributions.py` builds histogram-ready numeric statistics for dashboard and library payloads
 * `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
 * `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
 * `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics

@@ -1,6 +1,6 @@
 {
   "name": "medialyze-frontend",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.21",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.2",
     "i18next": "^25.0.1",
     "lucide-react": "^0.577.0",
     "motion": "^12.35.2",

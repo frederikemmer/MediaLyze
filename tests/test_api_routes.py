@@ -17,8 +17,10 @@ from backend.app.models.entities import (
     Library,
     LibraryType,
     MediaFile,
+    MediaFormat,
     ScanJob,
     ScanMode,
+    ScanStatus,
     SubtitleStream,
     VideoStream,
 )
@@ -77,6 +79,49 @@ def test_library_files_export_csv_returns_422_for_invalid_search_expression() ->
 
     assert response.status_code == 422
     assert response.json() == {"detail": "Invalid search expression for duration"}
+
+
+def test_library_statistics_route_includes_numeric_distributions() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Numeric",
+            path="/tmp/numeric-routes",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=6_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(MediaFormat(media_file_id=media_file.id, duration=5400.0, bit_rate=None))
+        db.add(AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", bit_rate=256_000))
+        db.add(AudioStream(media_file_id=media_file.id, stream_index=2, codec="ac3", bit_rate=512_000))
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/statistics")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["numeric_distributions"]["quality_score"]["bins"][7]["count"] == 1
+    assert payload["numeric_distributions"]["bitrate"]["bins"][3]["count"] == 1
+    assert payload["numeric_distributions"]["audio_bitrate"]["bins"][3]["count"] == 1
 
 
 def test_paths_inspect_returns_404_outside_desktop_mode() -> None:

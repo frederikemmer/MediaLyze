@@ -1,12 +1,13 @@
 {
   "name": "medialyze-desktop",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Desktop packaging for the MediaLyze local media analysis app.",
   "author": "Frederik Emmer",
   "main": "main.cjs",
   "scripts": {
     "dev": "electron .",
+    "test": "node --test ./ffprobe-paths.test.cjs ./package.test.cjs ./scripts/build-backend.test.mjs",
     "generate:icons": "node ./scripts/generate-icons.mjs",
     "dist": "npm run generate:icons && electron-builder",
     "dist:dir": "npm run generate:icons && electron-builder --dir",
@@ -26,7 +27,8 @@
     },
     "files": [
       "main.cjs",
-      "preload.cjs"
+      "preload.cjs",
+      "ffprobe-paths.cjs"
     ],
     "extraResources": [
       {

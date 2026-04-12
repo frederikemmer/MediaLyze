@@ -4,6 +4,25 @@ export type DistributionItem = {
   filter_value?: string | null;
 };
 
+export type NumericDistributionMetricId =
+  | "quality_score"
+  | "duration"
+  | "size"
+  | "bitrate"
+  | "audio_bitrate";
+
+export type NumericDistributionBin = {
+  lower: number | null;
+  upper: number | null;
+  count: number;
+  percentage: number;
+};
+
+export type NumericDistribution = {
+  total: number;
+  bins: NumericDistributionBin[];
+};
+
 export type ResolutionCategory = {
   id: string;
   label: string;
@@ -87,6 +106,7 @@ export type DashboardResponse = {
   subtitle_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
   subtitle_source_distribution: DistributionItem[];
+  numeric_distributions: Record<NumericDistributionMetricId, NumericDistribution>;
 };
 
 export type LibrarySummary = {
@@ -119,6 +139,7 @@ export type LibraryStatistics = {
   subtitle_language_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
   subtitle_source_distribution: DistributionItem[];
+  numeric_distributions: Record<NumericDistributionMetricId, NumericDistribution>;
 };
 
 export type MediaFileRow = {
@@ -224,6 +245,8 @@ export type LibraryFileSearchField =
   | "container"
   | "size"
   | "quality_score"
+  | "bitrate"
+  | "audio_bitrate"
   | "video_codec"
   | "resolution"
   | "hdr_type"
@@ -450,6 +473,8 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["container", "search_container"],
   ["size", "search_size"],
   ["quality_score", "search_quality_score"],
+  ["bitrate", "search_bitrate"],
+  ["audio_bitrate", "search_audio_bitrate"],
   ["video_codec", "search_video_codec"],
   ["resolution", "search_resolution"],
   ["hdr_type", "search_hdr_type"],

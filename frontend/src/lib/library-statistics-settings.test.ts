@@ -19,11 +19,23 @@ describe("library statistics settings", () => {
 
     expect(settings.order[0]).toBe("size");
     expect(settings.order[1]).toBe("quality_score");
+    expect(settings.order).toContain("bitrate");
+    expect(settings.order).toContain("audio_bitrate");
+    expect(settings.visibility.size.panelEnabled).toBe(true);
+    expect(settings.visibility.quality_score.panelEnabled).toBe(true);
+    expect(settings.visibility.duration.panelEnabled).toBe(true);
+    expect(settings.visibility.bitrate.panelEnabled).toBe(true);
+    expect(settings.visibility.audio_bitrate.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
+    expect(settings.visibility.size.dashboardEnabled).toBe(true);
+    expect(settings.visibility.quality_score.dashboardEnabled).toBe(true);
+    expect(settings.visibility.duration.dashboardEnabled).toBe(true);
+    expect(settings.visibility.bitrate.dashboardEnabled).toBe(false);
+    expect(settings.visibility.audio_bitrate.dashboardEnabled).toBe(false);
     expect(settings.visibility.container.dashboardEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
     expect(settings.visibility.audio_spatial_profiles.panelEnabled).toBe(false);
@@ -56,9 +68,12 @@ describe("library statistics settings", () => {
       "subtitle_sources",
     ]);
     expect(getVisibleDashboardStatisticPanels(settings).map((entry) => entry.id)).toEqual([
+      "size",
+      "quality_score",
       "video_codec",
       "resolution",
       "hdr_type",
+      "duration",
       "container",
       "audio_codecs",
       "audio_languages",
@@ -85,13 +100,15 @@ describe("library statistics settings", () => {
     expect(settings.order[0]).toBe("quality_score");
     expect(settings.order).toContain("container");
     expect(settings.order).toContain("subtitle_sources");
-    expect(settings.visibility.quality_score.panelEnabled).toBe(false);
+    expect(settings.visibility.quality_score.panelEnabled).toBe(true);
     expect(settings.visibility.quality_score.tableEnabled).toBe(false);
     expect(settings.visibility.quality_score.tableTooltipEnabled).toBe(false);
-    expect(settings.visibility.quality_score.dashboardEnabled).toBe(false);
+    expect(settings.visibility.quality_score.dashboardEnabled).toBe(true);
     expect(settings.visibility.video_codec.panelEnabled).toBe(false);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(false);
+    expect(settings.visibility.bitrate.panelEnabled).toBe(true);
+    expect(settings.visibility.audio_bitrate.panelEnabled).toBe(true);
     expect(settings.visibility.container.dashboardEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
     expect(settings.visibility.audio_spatial_profiles.panelEnabled).toBe(false);
@@ -144,6 +161,8 @@ describe("library statistics settings", () => {
     expect(settings.visibility.subtitle_sources.tableEnabled).toBe(true);
     expect(settings.visibility.audio_codecs.dashboardEnabled).toBe(true);
     expect(settings.visibility.container.dashboardEnabled).toBe(true);
+    expect(settings.visibility.bitrate.panelEnabled).toBe(true);
+    expect(settings.visibility.audio_bitrate.panelEnabled).toBe(true);
     expect(settings.visibility.audio_spatial_profiles.dashboardEnabled).toBe(false);
     expect(settings.visibility.subtitle_codecs.dashboardEnabled).toBe(false);
     expect(settings.visibility.subtitle_sources.dashboardEnabled).toBe(false);

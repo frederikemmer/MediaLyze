@@ -26,6 +26,11 @@ from backend.app.services.media_search import (
     apply_field_search_filters,
     apply_legacy_search,
 )
+from backend.app.services.numeric_distributions import (
+    audio_bitrate_value_expression,
+    bitrate_value_expression,
+    build_audio_bitrate_subquery,
+)
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.video_queries import primary_video_streams_subquery
@@ -75,6 +80,8 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_container": "container",
     "search_size": "size",
     "search_quality_score": "quality_score",
+    "search_bitrate": "bitrate",
+    "search_audio_bitrate": "audio_bitrate",
     "search_video_codec": "video_codec",
     "search_resolution": "resolution",
     "search_hdr_type": "hdr_type",
@@ -195,6 +202,7 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
         .distinct()
         .subquery(f"{name}_distinct_values")
     )
+    audio_bitrate_totals = build_audio_bitrate_subquery(f"{name}_bitrate_totals")
     return (
         select(
             distinct_values.c.media_file_id.label("media_file_id"),
@@ -214,7 +222,9 @@ def _audio_aggregate_subquery(name: str = "audio_aggregates"):
                 ),
                 "",
             ).label("audio_spatial_profiles_search"),
+            func.coalesce(func.max(audio_bitrate_totals.c.total_audio_bitrate), 0).label("total_audio_bitrate"),
         )
+        .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == distinct_values.c.media_file_id)
         .group_by(distinct_values.c.media_file_id)
         .subquery(name)
     )
@@ -420,13 +430,17 @@ def _build_library_file_id_query(
         .where(MediaFile.library_id == library_id)
     )
     filtered_query = apply_legacy_search(base_query, primary_video_streams, audio_aggregates, subtitle_aggregates, search)
+    bitrate_expression = bitrate_value_expression()
+    audio_bitrate_expression = audio_bitrate_value_expression(audio_aggregates)
     filtered_query = apply_field_search_filters(
         filtered_query,
         primary_video_streams,
         audio_aggregates,
         subtitle_aggregates,
         search_filters,
-        get_app_settings(db).resolution_categories,
+        bitrate_expression=bitrate_expression,
+        audio_bitrate_expression=audio_bitrate_expression,
+        resolution_categories=get_app_settings(db).resolution_categories,
     )
     sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
     return filtered_query.order_by(

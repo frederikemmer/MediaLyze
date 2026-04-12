@@ -16,6 +16,7 @@ from backend.app.services.app_settings import get_app_settings
 from backend.app.schemas.media import DashboardResponse, DistributionItem
 from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import merge_language_counts, normalize_language_code
+from backend.app.services.numeric_distributions import build_numeric_distributions
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
@@ -257,6 +258,7 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ],
         subtitle_codec_distribution=_distribution(subtitle_codec_rows),
         subtitle_source_distribution=subtitle_source_distribution,
+        numeric_distributions=build_numeric_distributions(db),
     )
     stats_cache.set_dashboard(cache_key, payload)
     return payload

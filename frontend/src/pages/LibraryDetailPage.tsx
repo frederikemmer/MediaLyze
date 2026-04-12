@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
@@ -48,11 +49,13 @@ import {
 import {
   getEnabledLibraryStatisticTableTooltipColumns,
   LIBRARY_STATISTIC_DEFINITIONS,
+  getLibraryStatisticNumericDistribution,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
   getVisibleLibraryStatisticPanels,
   getVisibleLibraryStatisticTableColumns,
 } from "../lib/library-statistics-settings";
+import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
 import {
   InflightPageRequestGate,
   buildFilePageRequestKey,
@@ -1501,6 +1504,26 @@ export function LibraryDetailPage() {
       <div className="media-grid">
         {visibleStatisticPanels.length > 0 ? (
           visibleStatisticPanels.map((panel) => {
+            if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
+              const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel);
+              return (
+                <DistributionChartPanel
+                  key={panel.id}
+                  title={t(panel.panelTitleKey ?? panel.nameKey)}
+                  distribution={distribution}
+                  metricId={panel.numericMetricId}
+                  loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
+                  error={statisticsError}
+                  interactive={!statisticsError && !libraryStatistics ? false : true}
+                  onSelectBin={
+                    statisticsError || !libraryStatistics
+                      ? undefined
+                      : (bin) => applyStatisticFilter(panel.id, buildNumericDistributionFilterExpression(panel.numericMetricId!, bin))
+                  }
+                />
+              );
+            }
+
             const items =
               panel.id === "hdr_type"
                 ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel))

@@ -62,6 +62,10 @@ jobs:
         run: npm ci
         working-directory: desktop
 
+      - name: Run desktop packaging regression tests
+        run: npm test
+        working-directory: desktop
+
       - name: Install ffmpeg on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |

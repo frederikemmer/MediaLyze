@@ -23,6 +23,7 @@ from backend.app.schemas.media import DistributionItem
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import normalize_language_code
+from backend.app.services.numeric_distributions import build_numeric_distributions
 from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path
 from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.resolution_categories import classify_resolution_category
@@ -534,6 +535,7 @@ def get_library_statistics(db: Session, library_id: int) -> LibraryStatistics | 
             for key, value in _sorted_count_items(subtitle_codec_counts)
         ],
         subtitle_source_distribution=subtitle_source_distribution,
+        numeric_distributions=build_numeric_distributions(db, library_id=library_id),
     )
     stats_cache.set_library_statistics(cache_key, library_id, payload)
     return payload

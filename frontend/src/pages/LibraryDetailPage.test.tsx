@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
+import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
@@ -92,6 +93,64 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
     subtitle_source_distribution: [{ label: "external", value: 2 }],
+    numeric_distributions: {
+      quality_score: {
+        total: 2,
+        bins: Array.from({ length: 10 }, (_, index) => ({
+          lower: index + 1,
+          upper: index + 2,
+          count: index === 6 || index === 7 ? 1 : 0,
+          percentage: index === 6 || index === 7 ? 50 : 0,
+        })),
+      },
+      duration: {
+        total: 2,
+        bins: [
+          { lower: 0, upper: 1800, count: 0, percentage: 0 },
+          { lower: 1800, upper: 3600, count: 0, percentage: 0 },
+          { lower: 3600, upper: 5400, count: 2, percentage: 100 },
+          { lower: 5400, upper: 7200, count: 0, percentage: 0 },
+          { lower: 7200, upper: 9000, count: 0, percentage: 0 },
+          { lower: 9000, upper: 10800, count: 0, percentage: 0 },
+          { lower: 10800, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      size: {
+        total: 2,
+        bins: [
+          { lower: 0, upper: 500000000, count: 2, percentage: 100 },
+          { lower: 500000000, upper: 1000000000, count: 0, percentage: 0 },
+          { lower: 1000000000, upper: 2000000000, count: 0, percentage: 0 },
+          { lower: 2000000000, upper: 4000000000, count: 0, percentage: 0 },
+          { lower: 4000000000, upper: 8000000000, count: 0, percentage: 0 },
+          { lower: 8000000000, upper: 16000000000, count: 0, percentage: 0 },
+          { lower: 16000000000, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      bitrate: {
+        total: 2,
+        bins: [
+          { lower: 0, upper: 2000000, count: 0, percentage: 0 },
+          { lower: 2000000, upper: 4000000, count: 1, percentage: 50 },
+          { lower: 4000000, upper: 8000000, count: 1, percentage: 50 },
+          { lower: 8000000, upper: 12000000, count: 0, percentage: 0 },
+          { lower: 12000000, upper: 20000000, count: 0, percentage: 0 },
+          { lower: 20000000, upper: 40000000, count: 0, percentage: 0 },
+          { lower: 40000000, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+      audio_bitrate: {
+        total: 2,
+        bins: [
+          { lower: 0, upper: 128000, count: 0, percentage: 0 },
+          { lower: 128000, upper: 256000, count: 1, percentage: 50 },
+          { lower: 256000, upper: 512000, count: 1, percentage: 50 },
+          { lower: 512000, upper: 1024000, count: 0, percentage: 0 },
+          { lower: 1024000, upper: 2048000, count: 0, percentage: 0 },
+          { lower: 2048000, upper: null, count: 0, percentage: 0 },
+        ],
+      },
+    },
     ...overrides,
   };
 }
@@ -722,6 +781,55 @@ describe("LibraryDetailPage", () => {
       ),
     );
     expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
+
+  it("renders numeric statistic charts for enabled panels", async () => {
+    const libraryId = 414;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("File size")).toBeInTheDocument();
+    expect(screen.getByText("Quality score")).toBeInTheDocument();
+    expect(screen.getAllByTestId("echarts-react").length).toBeGreaterThan(0);
+  });
+
+  it("builds range filters from numeric histogram bins", () => {
+    expect(
+      buildNumericDistributionFilterExpression("duration", {
+        lower: 5400,
+        upper: 7200,
+        count: 2,
+        percentage: 100,
+      }),
+    ).toBe(">=1h 30m,<2h");
+  });
+
+  it("applies numeric histogram bin filters in the library view", async () => {
+    const libraryId = 415;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId("echarts-react")[0]);
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            size: ">=0B,<500MB",
+          }),
+        }),
+      ),
+    );
   });
 
   it("replaces existing statistic values in the same field", async () => {
