@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as LucideIcons from "lucide-react";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts/core";
@@ -80,6 +80,8 @@ export function ComparisonChartPanel({
   onSelectFilters,
 }: ComparisonChartPanelProps) {
   const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rendererMenuRef = useRef<HTMLDivElement | null>(null);
   const availableRenderers = comparison?.available_renderers ?? getAvailableComparisonRenderers(selection.xField, selection.yField);
   const selectedRenderer = availableRenderers.includes(selection.renderer)
     ? selection.renderer
@@ -139,7 +141,7 @@ export function ComparisonChartPanel({
           axisLabel: {
             color: axisColor,
             fontSize: 12,
-            margin: 6,
+            margin: 4,
             formatter: (value: number) => formatNumericValue(comparison.x_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -149,7 +151,7 @@ export function ComparisonChartPanel({
           axisLabel: {
             color: axisColor,
             fontSize: 12,
-            margin: 6,
+            margin: 4,
             formatter: (value: number) => formatNumericValue(comparison.y_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -198,7 +200,7 @@ export function ComparisonChartPanel({
           type: "category",
           data: comparison.bar_entries.map((entry) => labelsByKey.get(entry.x_key) ?? entry.x_label),
           axisTick: { show: false },
-          axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 6 },
+          axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 4 },
           axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
         },
         yAxis: {
@@ -206,7 +208,7 @@ export function ComparisonChartPanel({
           axisLabel: {
             color: axisColor,
             fontSize: 12,
-            margin: 6,
+            margin: 4,
             formatter: (value: number) => formatNumericValue(comparison.y_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -251,14 +253,14 @@ export function ComparisonChartPanel({
         type: "category",
         data: xLabels,
         axisTick: { show: false },
-        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 6 },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 4 },
         axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
       },
       yAxis: {
         type: "category",
         data: yLabels,
         axisTick: { show: false },
-        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 6 },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, fontSize: 12, margin: 4 },
         axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
       },
       visualMap: {
@@ -348,6 +350,32 @@ export function ComparisonChartPanel({
     };
   }, [comparison, onOpenFile, onSelectFilters, selectedRenderer]);
 
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rendererMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
   return (
     <AsyncPanel
       title=""
@@ -355,61 +383,92 @@ export function ComparisonChartPanel({
       error={error}
       bodyClassName="async-panel-body-scroll"
       headerAddon={
-        <div className="comparison-chart-toolbar">
-          <label className="comparison-chart-select-shell">
-            <select
-              className="comparison-chart-select"
-              aria-label={t("comparisonChart.controls.yField")}
-              value={selection.yField}
-              onChange={(event) => onChangeYField(event.target.value as ComparisonFieldId)}
+        <div className="comparison-chart-toolbar-shell" ref={rendererMenuRef}>
+          <div className="comparison-chart-toolbar">
+            <label className="comparison-chart-select-shell">
+              <select
+                className="comparison-chart-select"
+                aria-label={t("comparisonChart.controls.yField")}
+                value={selection.yField}
+                onChange={(event) => onChangeYField(event.target.value as ComparisonFieldId)}
+              >
+                {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                  <option key={field.id} value={field.id} disabled={field.id === selection.xField}>
+                    {t(field.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="comparison-chart-swap-button"
+              onClick={onSwapAxes}
+              aria-label={t("comparisonChart.controls.swapAxes")}
+              title={t("comparisonChart.controls.swapAxes")}
             >
-              {COMPARISON_FIELD_DEFINITIONS.map((field) => (
-                <option key={field.id} value={field.id} disabled={field.id === selection.xField}>
-                  {t(field.labelKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="comparison-chart-swap-button"
-            onClick={onSwapAxes}
-            aria-label={t("comparisonChart.controls.swapAxes")}
-            title={t("comparisonChart.controls.swapAxes")}
-          >
-            <LucideIcons.ArrowLeftRight className="distribution-chart-mode-icon" aria-hidden="true" />
-          </button>
-          <label className="comparison-chart-select-shell">
-            <select
-              className="comparison-chart-select"
-              aria-label={t("comparisonChart.controls.xField")}
-              value={selection.xField}
-              onChange={(event) => onChangeXField(event.target.value as ComparisonFieldId)}
+              <LucideIcons.ArrowLeftRight className="distribution-chart-mode-icon" aria-hidden="true" />
+            </button>
+            <label className="comparison-chart-select-shell">
+              <select
+                className="comparison-chart-select"
+                aria-label={t("comparisonChart.controls.xField")}
+                value={selection.xField}
+                onChange={(event) => onChangeXField(event.target.value as ComparisonFieldId)}
+              >
+                {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                  <option key={field.id} value={field.id} disabled={field.id === selection.yField}>
+                    {t(field.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="comparison-chart-renderer-button"
+              aria-label={t("comparisonChart.controls.renderer")}
+              aria-expanded={menuOpen}
+              title={t("comparisonChart.controls.renderer")}
+              onClick={() => setMenuOpen((current) => !current)}
             >
-              {COMPARISON_FIELD_DEFINITIONS.map((field) => (
-                <option key={field.id} value={field.id} disabled={field.id === selection.yField}>
-                  {t(field.labelKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="comparison-chart-renderer-strip" role="group" aria-label={t("comparisonChart.controls.renderer")}>
-            {RENDERER_DEFINITIONS.filter((definition) => availableRenderers.includes(definition.id)).map((definition) => {
-              const Icon = definition.icon;
-              return (
-                <button
-                  key={definition.id}
-                  type="button"
-                  className={`comparison-chart-renderer-chip${definition.id === selectedRenderer ? " active" : ""}`}
-                  aria-label={t(definition.labelKey)}
-                  title={t(definition.labelKey)}
-                  onClick={() => onChangeRenderer(definition.id)}
-                >
-                  <Icon className="distribution-chart-mode-icon" aria-hidden="true" />
-                </button>
-              );
-            })}
+              {(() => {
+                const definition = RENDERER_DEFINITIONS.find((entry) => entry.id === selectedRenderer) ?? RENDERER_DEFINITIONS[0];
+                const Icon = definition.icon;
+                return (
+                  <>
+                    <Icon className="distribution-chart-mode-icon" aria-hidden="true" />
+                    <LucideIcons.ChevronDown className="comparison-chart-renderer-caret" aria-hidden="true" />
+                  </>
+                );
+              })()}
+            </button>
           </div>
+          {menuOpen ? (
+            <div className="comparison-chart-renderer-popover" role="menu">
+              {RENDERER_DEFINITIONS.map((definition) => {
+                const Icon = definition.icon;
+                const supported = availableRenderers.includes(definition.id);
+                return (
+                  <button
+                    key={definition.id}
+                    type="button"
+                    role="menuitem"
+                    className={`comparison-chart-renderer-option${definition.id === selectedRenderer ? " active" : ""}`}
+                    disabled={!supported}
+                    onClick={() => {
+                      if (!supported) {
+                        return;
+                      }
+                      onChangeRenderer(definition.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Icon className="distribution-chart-mode-icon" aria-hidden="true" />
+                    <span>{t(definition.labelKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       }
     >
