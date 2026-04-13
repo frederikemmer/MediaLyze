@@ -94,9 +94,11 @@ export function ComparisonChartPanel({
   const lineColor = cssVars?.getPropertyValue("--ink").trim() || "#1f1c16";
   const tooltipBase = {
     triggerOn: "mousemove|click",
+    showDelay: 0,
     hideDelay: 260,
     transitionDuration: 0,
     confine: true,
+    enterable: true,
     backgroundColor: "rgba(31, 28, 22, 0.94)",
     borderWidth: 0,
     textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
@@ -110,10 +112,21 @@ export function ComparisonChartPanel({
     if (selectedRenderer === "scatter" && comparison.scatter_points) {
       return {
         animation: false,
-        grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+        grid: { top: 2, right: 2, bottom: 4, left: 4, containLabel: true },
         tooltip: {
           ...tooltipBase,
           trigger: "item",
+          position: (point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {
+            contentSize: [number, number];
+            viewSize: [number, number];
+          }) => {
+            const [mouseX, mouseY] = point;
+            const [contentWidth, contentHeight] = size.contentSize;
+            const [viewWidth, viewHeight] = size.viewSize;
+            const x = Math.min(Math.max(mouseX + 18, 8), Math.max(8, viewWidth - contentWidth - 8));
+            const y = Math.min(Math.max(mouseY - contentHeight - 18, 8), Math.max(8, viewHeight - contentHeight - 8));
+            return [x, y];
+          },
           formatter: (params: { data?: [number, number] }) => {
             const point = params.data ?? [0, 0];
             return [
@@ -126,6 +139,7 @@ export function ComparisonChartPanel({
           type: "value",
           axisLabel: {
             color: axisColor,
+            margin: 8,
             formatter: (value: number) => formatNumericValue(comparison.x_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -134,6 +148,7 @@ export function ComparisonChartPanel({
           type: "value",
           axisLabel: {
             color: axisColor,
+            margin: 8,
             formatter: (value: number) => formatNumericValue(comparison.y_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -141,12 +156,15 @@ export function ComparisonChartPanel({
         series: [
           {
             type: "scatter",
-            symbolSize: 10,
+            symbolSize: 11,
+            hoverAnimation: false,
+            progressive: 0,
             itemStyle: {
               color: fillColor,
               opacity: 0.72,
             },
             emphasis: {
+              scale: false,
               itemStyle: {
                 color: highlightColor,
                 opacity: 0.95,
@@ -165,7 +183,7 @@ export function ComparisonChartPanel({
       );
       return {
         animation: false,
-        grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+        grid: { top: 2, right: 2, bottom: 4, left: 4, containLabel: true },
         tooltip: {
           ...tooltipBase,
           trigger: "item",
@@ -185,13 +203,14 @@ export function ComparisonChartPanel({
           type: "category",
           data: comparison.bar_entries.map((entry) => labelsByKey.get(entry.x_key) ?? entry.x_label),
           axisTick: { show: false },
-          axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+          axisLabel: { color: axisColor, interval: 0, hideOverlap: true, margin: 8 },
           axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
         },
         yAxis: {
           type: "value",
           axisLabel: {
             color: axisColor,
+            margin: 8,
             formatter: (value: number) => formatNumericValue(comparison.y_field, value),
           },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
@@ -217,7 +236,7 @@ export function ComparisonChartPanel({
     const maxCount = Math.max(0, ...comparison.heatmap_cells.map((cell) => cell.count));
     return {
       animation: false,
-      grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+      grid: { top: 2, right: 2, bottom: 4, left: 4, containLabel: true },
       tooltip: {
         ...tooltipBase,
         trigger: "item",
@@ -236,14 +255,14 @@ export function ComparisonChartPanel({
         type: "category",
         data: xLabels,
         axisTick: { show: false },
-        axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, margin: 8 },
         axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
       },
       yAxis: {
         type: "category",
         data: yLabels,
         axisTick: { show: false },
-        axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true, margin: 8 },
         axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
       },
       visualMap: {
@@ -342,7 +361,6 @@ export function ComparisonChartPanel({
       headerAddon={
         <div className="comparison-chart-controls">
           <label className="comparison-chart-select-shell">
-            <span className="comparison-chart-select-label">{t("comparisonChart.axes.x")}</span>
             <select
               className="comparison-chart-select"
               aria-label={t("comparisonChart.controls.xField")}
@@ -366,7 +384,6 @@ export function ComparisonChartPanel({
             <LucideIcons.ArrowLeftRight className="distribution-chart-mode-icon" aria-hidden="true" />
           </button>
           <label className="comparison-chart-select-shell">
-            <span className="comparison-chart-select-label">{t("comparisonChart.axes.y")}</span>
             <select
               className="comparison-chart-select"
               aria-label={t("comparisonChart.controls.yField")}
@@ -422,7 +439,7 @@ export function ComparisonChartPanel({
       {!comparison || comparison.included_files <= 0 ? (
         <div className="notice">{t("comparisonChart.empty")}</div>
       ) : (
-        <div className="stack">
+        <div className="stack comparison-chart-content">
           <div className="comparison-chart-summary">
             <span className="distribution-chart-total">
               {t("comparisonChart.summary", {

@@ -338,6 +338,7 @@
   width: 100%;
   align-items: start;
   min-width: 0;
+  overflow: visible;
 }
 
 .async-panel.is-collapsed .panel-header {
@@ -668,34 +669,29 @@
   position: relative;
   display: flex;
   flex-wrap: nowrap;
-  align-items: end;
+  align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
+  padding-right: 2px;
   padding-bottom: 2px;
   scrollbar-width: thin;
 }
 
 .comparison-chart-select-shell {
-  display: grid;
-  gap: 3px;
+  display: block;
   min-width: 0;
-  flex: 0 0 112px;
-}
-
-.comparison-chart-select-label {
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 600;
+  flex: 0 0 106px;
 }
 
 .comparison-chart-select {
-  width: 112px;
-  min-width: 112px;
-  max-width: 112px;
+  width: 106px;
+  min-width: 106px;
+  max-width: 106px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 7px;
   border: 1px solid rgba(31, 28, 22, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.78);
@@ -720,6 +716,7 @@
 
 .comparison-chart-renderer-menu {
   position: relative;
+  z-index: 2;
 }
 
 .comparison-chart-renderer-trigger {
@@ -821,6 +818,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   white-space: nowrap;
 }
 
+.comparison-chart-content {
+  gap: 8px;
+}
+
 .comparison-chart-summary {
   gap: 4px 12px;
 }
@@ -845,8 +846,8 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
+  justify-content: flex-end;
+  gap: 2px 12px;
 }
 
 .distribution-value-button {
