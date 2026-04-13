@@ -14,6 +14,7 @@ import type {
 } from "../lib/api";
 import { formatBitrate, formatBytes, formatDuration } from "../lib/format";
 import {
+  buildComparisonFieldFilterValue,
   COMPARISON_FIELD_DEFINITIONS,
   formatComparisonBucketLabel,
   getAvailableComparisonRenderers,
@@ -24,7 +25,6 @@ import { AsyncPanel } from "./AsyncPanel";
 echarts.use([BarChart, GridComponent, HeatmapChart, ScatterChart, TooltipComponent, VisualMapComponent, CanvasRenderer]);
 
 type ComparisonChartPanelProps = {
-  title: string;
   comparison: ComparisonResponse | null;
   selection: ComparisonSelection;
   loading?: boolean;
@@ -33,6 +33,8 @@ type ComparisonChartPanelProps = {
   onChangeYField: (fieldId: ComparisonFieldId) => void;
   onSwapAxes: () => void;
   onChangeRenderer: (renderer: ComparisonRendererId) => void;
+  onOpenFile?: (fileId: number) => void;
+  onSelectFilters?: (filters: Partial<Record<ComparisonFieldId, string>>) => void;
 };
 
 type RendererDefinition = {
@@ -66,7 +68,6 @@ function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
 }
 
 export function ComparisonChartPanel({
-  title,
   comparison,
   selection,
   loading = false,
@@ -75,6 +76,8 @@ export function ComparisonChartPanel({
   onChangeYField,
   onSwapAxes,
   onChangeRenderer,
+  onOpenFile,
+  onSelectFilters,
 }: ComparisonChartPanelProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -89,6 +92,15 @@ export function ComparisonChartPanel({
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
   const highlightColor = cssVars?.getPropertyValue("--accent").trim() || "#ff6b3d";
   const lineColor = cssVars?.getPropertyValue("--ink").trim() || "#1f1c16";
+  const tooltipBase = {
+    triggerOn: "mousemove|click",
+    hideDelay: 260,
+    transitionDuration: 0,
+    confine: true,
+    backgroundColor: "rgba(31, 28, 22, 0.94)",
+    borderWidth: 0,
+    textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
+  };
 
   const option = useMemo(() => {
     if (!comparison || comparison.included_files <= 0) {
@@ -100,10 +112,8 @@ export function ComparisonChartPanel({
         animation: false,
         grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
         tooltip: {
+          ...tooltipBase,
           trigger: "item",
-          backgroundColor: "rgba(31, 28, 22, 0.94)",
-          borderWidth: 0,
-          textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
           formatter: (params: { data?: [number, number] }) => {
             const point = params.data ?? [0, 0];
             return [
@@ -142,6 +152,7 @@ export function ComparisonChartPanel({
                 opacity: 0.95,
               },
             },
+            cursor: onOpenFile ? "pointer" : "default",
             data: comparison.scatter_points.map((point) => [point.x_value, point.y_value]),
           },
         ],
@@ -156,13 +167,10 @@ export function ComparisonChartPanel({
         animation: false,
         grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
         tooltip: {
-          trigger: "axis",
-          axisPointer: { type: "shadow" },
-          backgroundColor: "rgba(31, 28, 22, 0.94)",
-          borderWidth: 0,
-          textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
-          formatter: (params: Array<{ dataIndex: number }>) => {
-            const entry = comparison.bar_entries?.[params[0]?.dataIndex ?? 0];
+          ...tooltipBase,
+          trigger: "item",
+          formatter: (params: { dataIndex?: number }) => {
+            const entry = comparison.bar_entries?.[params.dataIndex ?? 0];
             if (!entry) {
               return "";
             }
@@ -193,6 +201,7 @@ export function ComparisonChartPanel({
             type: "bar",
             barGap: "0%",
             barCategoryGap: "18%",
+            cursor: onSelectFilters ? "pointer" : "default",
             data: comparison.bar_entries.map((entry) => entry.value),
             itemStyle: { color: fillColor, borderRadius: [8, 8, 0, 0] },
             emphasis: { itemStyle: { color: highlightColor } },
@@ -210,10 +219,8 @@ export function ComparisonChartPanel({
       animation: false,
       grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
       tooltip: {
+        ...tooltipBase,
         trigger: "item",
-        backgroundColor: "rgba(31, 28, 22, 0.94)",
-        borderWidth: 0,
-        textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
         formatter: (params: { data?: [number, number, number] }) => {
           const point = params.data ?? [0, 0, 0];
           const xLabel = xLabels[point[0]] ?? "";
@@ -250,6 +257,7 @@ export function ComparisonChartPanel({
       series: [
         {
           type: "heatmap",
+          cursor: onSelectFilters ? "pointer" : "default",
           data: comparison.heatmap_cells.map((cell) => [
             xIndexByKey.get(cell.x_key) ?? 0,
             yIndexByKey.get(cell.y_key) ?? 0,
@@ -265,11 +273,69 @@ export function ComparisonChartPanel({
         },
       ],
     };
-  }, [axisColor, comparison, fillColor, highlightColor, lineColor, selectedRenderer, t]);
+  }, [axisColor, comparison, fillColor, highlightColor, lineColor, onOpenFile, onSelectFilters, selectedRenderer, t, tooltipBase]);
+
+  const onChartClick = useMemo(() => {
+    if (!comparison) {
+      return undefined;
+    }
+    if (selectedRenderer === "scatter" && !onOpenFile) {
+      return undefined;
+    }
+    if ((selectedRenderer === "bar" || selectedRenderer === "heatmap") && !onSelectFilters) {
+      return undefined;
+    }
+
+    return (params: { dataIndex?: number }) => {
+      const dataIndex = params.dataIndex ?? -1;
+      if (dataIndex < 0) {
+        return;
+      }
+
+      if (selectedRenderer === "scatter") {
+        const point = comparison.scatter_points?.[dataIndex];
+        if (point && onOpenFile) {
+          onOpenFile(point.media_file_id);
+        }
+        return;
+      }
+
+      if (selectedRenderer === "bar") {
+        const entry = comparison.bar_entries?.[dataIndex];
+        if (!entry || !onSelectFilters) {
+          return;
+        }
+        const xBucket = comparison.x_buckets.find((bucket) => bucket.key === entry.x_key);
+        if (!xBucket) {
+          return;
+        }
+        onSelectFilters({
+          [comparison.x_field]: buildComparisonFieldFilterValue(comparison.x_field, xBucket),
+        });
+        return;
+      }
+
+      const cell = comparison.heatmap_cells[dataIndex];
+      if (!cell || !onSelectFilters) {
+        return;
+      }
+
+      const xBucket = comparison.x_buckets.find((bucket) => bucket.key === cell.x_key);
+      const yBucket = comparison.y_buckets.find((bucket) => bucket.key === cell.y_key);
+      if (!xBucket || !yBucket) {
+        return;
+      }
+
+      onSelectFilters({
+        [comparison.x_field]: buildComparisonFieldFilterValue(comparison.x_field, xBucket),
+        [comparison.y_field]: buildComparisonFieldFilterValue(comparison.y_field, yBucket),
+      });
+    };
+  }, [comparison, onOpenFile, onSelectFilters, selectedRenderer]);
 
   return (
     <AsyncPanel
-      title={title}
+      title=""
       loading={loading}
       error={error}
       bodyClassName="async-panel-body-scroll"
@@ -317,8 +383,9 @@ export function ComparisonChartPanel({
           <div className="comparison-chart-renderer-menu">
             <button
               type="button"
-              className="distribution-chart-mode-button active comparison-chart-renderer-trigger"
+              className="distribution-chart-mode-button comparison-chart-renderer-trigger"
               aria-label={t("comparisonChart.controls.renderer")}
+              aria-expanded={menuOpen}
               title={t("comparisonChart.controls.renderer")}
               onClick={() => setMenuOpen((current) => !current)}
             >
@@ -373,6 +440,7 @@ export function ComparisonChartPanel({
             <ReactECharts
               echarts={echarts}
               option={option}
+              onEvents={onChartClick ? { click: onChartClick } : undefined}
               notMerge
               lazyUpdate
               style={{ height: 280, width: "100%" }}

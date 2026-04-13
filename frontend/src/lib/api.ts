@@ -51,6 +51,7 @@ export type ComparisonHeatmapCell = {
 };
 
 export type ComparisonScatterPoint = {
+  media_file_id: number;
   x_value: number;
   y_value: number;
 };

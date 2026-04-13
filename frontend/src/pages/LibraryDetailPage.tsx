@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
@@ -710,6 +710,7 @@ function buildCsvFallbackFilename(libraryName: string): string {
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
+  const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
@@ -1020,30 +1021,56 @@ export function LibraryDetailPage() {
     });
   });
 
+  const applyMetadataFilters = useEffectEvent((nextFilters: Partial<Record<LibraryFileMetadataSearchField, string>>) => {
+    const filterEntries = Object.entries(nextFilters)
+      .map(([field, value]) => [field as LibraryFileMetadataSearchField, value?.trim() ?? ""] as const)
+      .filter(([, value]) => Boolean(value));
+
+    if (filterEntries.length === 0) {
+      return;
+    }
+
+    const firstNewField = filterEntries.find(([field]) => !selectedMetadataFields.includes(field))?.[0] ?? null;
+
+    startTransition(() => {
+      setSelectedMetadataFields((current) => {
+        const next = new Set(current);
+        for (const [field] of filterEntries) {
+          next.add(field);
+        }
+        return LIBRARY_METADATA_SEARCH_FIELDS.filter((field) => next.has(field));
+      });
+      setFieldValues((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const [field, value] of filterEntries) {
+          if ((current[field]?.trim() ?? "") === value) {
+            continue;
+          }
+          next[field] = value;
+          changed = true;
+        }
+        if (!changed) {
+          return current;
+        }
+        return next;
+      });
+    });
+
+    if (firstNewField) {
+      pendingStatisticFocusFieldRef.current = firstNewField;
+    }
+    requestAnimationFrame(() => {
+      analyzedFilesPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+  });
+
   const applyStatisticFilter = useEffectEvent((field: LibraryFileMetadataSearchField, rawValue: string) => {
     const normalizedValue = rawValue.trim();
     if (!normalizedValue) {
       return;
     }
-
-    const shouldFocusField = !selectedMetadataFields.includes(field);
-
-    startTransition(() => {
-      setSelectedMetadataFields((current) => (current.includes(field) ? current : [...current, field]));
-      setFieldValues((current) => {
-        if ((current[field]?.trim() ?? "") === normalizedValue) {
-          return current;
-        }
-        return { ...current, [field]: normalizedValue };
-      });
-    });
-
-    if (shouldFocusField) {
-      pendingStatisticFocusFieldRef.current = field;
-    }
-    requestAnimationFrame(() => {
-      analyzedFilesPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-    });
+    applyMetadataFilters({ [field]: normalizedValue });
   });
 
   const loadLibrarySummary = useEffectEvent(async (showLoading = false) => {
@@ -1578,7 +1605,6 @@ export function LibraryDetailPage() {
               return (
                 <ComparisonChartPanel
                   key={panel.id}
-                  title={t(panel.panelTitleKey ?? panel.nameKey)}
                   comparison={comparison}
                   selection={comparisonSelection}
                   loading={isComparisonLoading && !comparison && !comparisonError}
@@ -1598,6 +1624,10 @@ export function LibraryDetailPage() {
                   }
                   onChangeRenderer={(renderer) =>
                     updateComparisonSelection({ ...comparisonSelection, renderer })
+                  }
+                  onOpenFile={(fileId) => navigate(`/files/${fileId}`)}
+                  onSelectFilters={(filters) =>
+                    applyMetadataFilters(filters as Partial<Record<LibraryFileMetadataSearchField, string>>)
                   }
                 />
               );

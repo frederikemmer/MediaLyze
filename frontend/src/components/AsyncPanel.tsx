@@ -34,33 +34,36 @@ export function AsyncPanel({
   const bodyId = collapseState?.bodyId ?? `async-panel-body-${generatedBodyId}`;
   const isCollapsed = collapseState?.collapsed ?? false;
   const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
+  const hasHeaderLead = Boolean(collapseState || title || titleAddon || subtitle || subtitleAddon);
 
   return (
     <section className={`panel async-panel${isCollapsed ? " is-collapsed" : ""}`}>
       <div className="panel-header">
-        <div>
-          <div className="panel-title-row">
-            {collapseState ? (
-              <h2 className="async-panel-toggle-heading">
-                <button
-                  type="button"
-                  className="async-panel-toggle"
-                  aria-expanded={!isCollapsed}
-                  aria-controls={bodyId}
-                  onClick={collapseState.onToggle}
-                >
-                  <span>{title}</span>
-                  <ToggleIcon aria-hidden="true" className="nav-icon" />
-                </button>
-              </h2>
-            ) : (
-              <h2>{title}</h2>
-            )}
-            {titleAddon}
+        {hasHeaderLead ? (
+          <div>
+            <div className="panel-title-row">
+              {collapseState ? (
+                <h2 className="async-panel-toggle-heading">
+                  <button
+                    type="button"
+                    className="async-panel-toggle"
+                    aria-expanded={!isCollapsed}
+                    aria-controls={bodyId}
+                    onClick={collapseState.onToggle}
+                  >
+                    <span>{title}</span>
+                    <ToggleIcon aria-hidden="true" className="nav-icon" />
+                  </button>
+                </h2>
+              ) : title ? (
+                <h2>{title}</h2>
+              ) : null}
+              {titleAddon}
+            </div>
+            {subtitleAddon}
+            {subtitle && !isCollapsed ? <p className="subtitle">{subtitle}</p> : null}
           </div>
-          {subtitleAddon}
-          {subtitle && !isCollapsed ? <p className="subtitle">{subtitle}</p> : null}
-        </div>
+        ) : null}
         {headerAddon}
       </div>
       {!isCollapsed ? (

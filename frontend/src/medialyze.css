@@ -667,28 +667,35 @@
 .comparison-chart-controls {
   position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: end;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
 }
 
 .comparison-chart-select-shell {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  flex: 0 0 112px;
 }
 
 .comparison-chart-select-label {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 
 .comparison-chart-select {
-  min-width: 148px;
+  width: 112px;
+  min-width: 112px;
+  max-width: 112px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid rgba(31, 28, 22, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.78);
@@ -721,6 +728,11 @@
   border-radius: 12px;
   border: 1px solid rgba(31, 28, 22, 0.09);
   background: rgba(255, 255, 255, 0.78);
+}
+
+.comparison-chart-renderer-trigger:hover,
+.comparison-chart-renderer-trigger:focus-visible {
+  color: var(--ink);
 }
 
 .comparison-chart-renderer-trigger-content {
@@ -758,12 +770,75 @@
   min-height: 34px;
   padding: 0 10px;
   border-radius: 10px;
+  color: var(--muted);
+  background: transparent;
   box-shadow: none;
 }
 
-.comparison-chart-renderer-option.active {
-  background: rgba(27, 153, 139, 0.12);
+.comparison-chart-renderer-option:hover,
+.comparison-chart-renderer-option:focus-visible {
   color: var(--ink);
+  background: rgba(255, 107, 61, 0.08);
+}
+
+.comparison-chart-renderer-option.active {
+  background: rgba(255, 107, 61, 0.16);
+  color: #8d3511;
+}
+
+html[data-theme="dark"] .comparison-chart-renderer-option.active {
+  color: #ffd6c5;
+  background: rgba(255, 107, 61, 0.22);
+}
+
+.comparison-chart-controls::-webkit-scrollbar {
+  height: 6px;
+}
+
+.comparison-chart-controls::-webkit-scrollbar-thumb {
+  background: rgba(31, 28, 22, 0.18);
+  border-radius: 999px;
+}
+
+.comparison-chart-controls::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.comparison-chart-renderer-menu {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.comparison-chart-swap-button,
+.comparison-chart-renderer-trigger {
+  flex: 0 0 auto;
+}
+
+.comparison-chart-select-shell,
+.comparison-chart-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-chart-summary {
+  gap: 4px 12px;
+}
+
+.comparison-chart-summary .distribution-chart-total:last-child {
+  margin-left: auto;
+}
+
+.comparison-chart-swap-button:hover,
+.comparison-chart-swap-button:focus-visible {
+  transform: none;
+  color: var(--ink);
+  background: rgba(255, 107, 61, 0.08);
+}
+
+.comparison-chart-renderer-trigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: rgba(255, 107, 61, 0.12);
 }
 
 .comparison-chart-summary {
@@ -771,7 +846,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: 4px 12px;
 }
 
 .distribution-value-button {
@@ -2559,19 +2634,7 @@ body.is-column-resizing {
 
   .comparison-chart-controls {
     width: 100%;
-    justify-content: stretch;
-  }
-
-  .comparison-chart-select-shell {
-    flex: 1 1 180px;
-  }
-
-  .comparison-chart-select {
-    width: 100%;
-  }
-
-  .comparison-chart-renderer-menu {
-    margin-left: auto;
+    justify-content: flex-start;
   }
 }
 

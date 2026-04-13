@@ -152,6 +152,7 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
         )
         db.add(media_file)
         db.flush()
+        media_file_id = media_file.id
         db.add(MediaFormat(media_file_id=media_file.id, duration=5400.0))
         db.add(AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", bit_rate=512_000))
         db.commit()
@@ -163,6 +164,7 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
     payload = response.json()
     assert payload["available_renderers"] == ["heatmap", "scatter", "bar"]
     assert payload["included_files"] == 1
+    assert payload["scatter_points"][0]["media_file_id"] == media_file_id
     assert payload["scatter_points"][0]["x_value"] == 5400.0
 
 

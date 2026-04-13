@@ -7,7 +7,7 @@ import type {
 } from "./api";
 import { formatCodecLabel, formatContainerLabel } from "./format";
 import { formatHdrType } from "./hdr";
-import { formatNumericDistributionBinLabel } from "./numeric-distributions";
+import { buildNumericDistributionFilterExpression, formatNumericDistributionBinLabel } from "./numeric-distributions";
 
 type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -115,6 +115,18 @@ export function sanitizeComparisonRenderer(
 ): ComparisonRendererId {
   const available = getAvailableComparisonRenderers(xField, yField);
   return available.includes(renderer) ? renderer : available[0];
+}
+
+export function buildComparisonFieldFilterValue(fieldId: ComparisonFieldId, bucket: ComparisonBucket): string {
+  if (getComparisonFieldDefinition(fieldId).kind === "numeric") {
+    return buildNumericDistributionFilterExpression(fieldId as NumericDistributionMetricId, {
+      lower: bucket.lower,
+      upper: bucket.upper,
+      count: 0,
+      percentage: 0,
+    });
+  }
+  return bucket.key;
 }
 
 export function formatComparisonBucketLabel(

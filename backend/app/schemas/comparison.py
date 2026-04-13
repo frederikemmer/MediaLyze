@@ -33,6 +33,7 @@ class ComparisonHeatmapCell(BaseModel):
 
 
 class ComparisonScatterPoint(BaseModel):
+    media_file_id: int
     x_value: float
     y_value: float
 

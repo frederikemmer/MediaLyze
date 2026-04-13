@@ -50,6 +50,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
         )
         db.add_all([first_file, second_file])
         db.flush()
+        first_file_id = first_file.id
         db.add(MediaFormat(media_file_id=first_file.id, duration=3600.0))
         db.add(MediaFormat(media_file_id=second_file.id, duration=4000.0))
         db.commit()
@@ -63,6 +64,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
     assert sum(cell.count for cell in payload.heatmap_cells) == 2
     assert payload.scatter_points is not None
     assert len(payload.scatter_points) == 2
+    assert payload.scatter_points[0].media_file_id == first_file_id
     assert payload.bar_entries is not None
     assert len(payload.bar_entries) == 1
     assert payload.bar_entries[0].value == 6_000_000_000

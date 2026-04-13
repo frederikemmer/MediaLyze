@@ -4,11 +4,12 @@ import { StrictMode } from "react";
 import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
+import { buildComparisonFieldFilterValue } from "../lib/statistic-comparisons";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
@@ -177,14 +178,16 @@ function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): 
       { key: "500000000:1000000000", label: "500000000:1000000000", lower: 500000000, upper: 1000000000 },
     ],
     heatmap_cells: [
-      { x_key: "3600:5400", y_key: "0:500000000", count: 2 },
+      { x_key: "1800:3600", y_key: "0:500000000", count: 1 },
+      { x_key: "3600:5400", y_key: "500000000:1000000000", count: 1 },
     ],
     scatter_points: [
-      { x_value: 3600, y_value: 1024 },
-      { x_value: 3600, y_value: 1024 },
+      { media_file_id: 1, x_value: 3600, y_value: 1024 },
+      { media_file_id: 2, x_value: 4200, y_value: 1024 },
     ],
     bar_entries: [
-      { x_key: "3600:5400", x_label: "3600:5400", value: 1024, count: 2 },
+      { x_key: "1800:3600", x_label: "1800:3600", value: 1024, count: 1 },
+      { x_key: "3600:5400", x_label: "3600:5400", value: 1024, count: 1 },
     ],
     ...overrides,
   };
@@ -348,12 +351,18 @@ function mockAppSettings(overrides: AppSettingsOverrides = {}) {
 }
 
 function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
+  const FileRoute = () => {
+    const { fileId = "" } = useParams();
+    return <div>{`File detail ${fileId}`}</div>;
+  };
+
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
       <AppDataProvider>
         <ScanJobsProvider>
           <Routes>
             <Route path="/libraries/:libraryId" element={<LibraryDetailPage />} />
+            <Route path="/files/:fileId" element={<FileRoute />} />
           </Routes>
         </ScanJobsProvider>
       </AppDataProvider>
@@ -408,13 +417,69 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("Metric comparison")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Metric comparison" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Select Y-axis metric")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Select Y-axis metric"), { target: { value: "quality_score" } });
 
     expect(comparisonSpy).toHaveBeenLastCalledWith(
       String(libraryId),
       expect.objectContaining({ xField: "duration", yField: "quality_score" }),
     );
+  });
+
+  it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
+    const libraryId = 123;
+    window.localStorage.setItem(
+      "medialyze-comparison-selection-library",
+      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[3600,1024],[4200,1024]]",
+    );
+    expect(chart).toBeDefined();
+    fireEvent.click(chart!);
+
+    expect(await screen.findByText("File detail 1")).toBeInTheDocument();
+  });
+
+  it("filters the analyzed files table when a comparison heatmap cell is clicked", async () => {
+    const libraryId = 124;
+    const comparison = createComparisonResponse();
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryComparison").mockResolvedValue(comparison);
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[0,0,1],[1,1,1]]",
+    );
+    expect(chart).toBeDefined();
+    fireEvent.click(chart!);
+
+    expect(await screen.findByDisplayValue(buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]))).toBeInTheDocument();
+    expect(screen.getByDisplayValue(buildComparisonFieldFilterValue("size", comparison.y_buckets[0]))).toBeInTheDocument();
+    await waitFor(() => {
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            duration: buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]),
+            size: buildComparisonFieldFilterValue("size", comparison.y_buckets[0]),
+          }),
+        }),
+      );
+    });
   });
 
   it("loads duplicate groups separately and renders matching files", async () => {

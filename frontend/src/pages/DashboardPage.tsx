@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
@@ -50,6 +51,7 @@ function formatDashboardDistributionLabel(
 
 export function DashboardPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { dashboard, dashboardLoaded, loadDashboard } = useAppData();
   const [error, setError] = useState<string | null>(null);
   const [comparisonSelection, setComparisonSelection] = useState<ComparisonSelection>(() => getComparisonSelection("dashboard"));
@@ -186,7 +188,6 @@ export function DashboardPage() {
               return (
                 <ComparisonChartPanel
                   key={panel.id}
-                  title={t(panel.dashboardTitleKey ?? panel.nameKey)}
                   comparison={comparison}
                   selection={comparisonSelection}
                   loading={isComparisonLoading && !comparison && !comparisonError}
@@ -207,6 +208,7 @@ export function DashboardPage() {
                   onChangeRenderer={(renderer) =>
                     updateComparisonSelection({ ...comparisonSelection, renderer })
                   }
+                  onOpenFile={(fileId) => navigate(`/files/${fileId}`)}
                 />
               );
             }

@@ -2,6 +2,7 @@ import "../i18n";
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { api, type AppSettings, type ComparisonResponse, type DashboardResponse } from "../lib/api";
@@ -135,8 +136,8 @@ function createComparisonResponse(): ComparisonResponse {
       { x_key: "3600:5400", y_key: "500000000:1000000000", count: 6 },
     ],
     scatter_points: [
-      { x_value: 2400, y_value: 400000000 },
-      { x_value: 4200, y_value: 900000000 },
+      { media_file_id: 1, x_value: 2400, y_value: 400000000 },
+      { media_file_id: 2, x_value: 4200, y_value: 900000000 },
     ],
     bar_entries: [
       { x_key: "1800:3600", x_label: "1800:3600", value: 400000000, count: 4 },
@@ -146,12 +147,22 @@ function createComparisonResponse(): ComparisonResponse {
 }
 
 function renderPage() {
+  const FileRoute = () => {
+    const { fileId = "" } = useParams();
+    return <div>{`File detail ${fileId}`}</div>;
+  };
+
   return render(
-    <AppDataProvider>
-      <ScanJobsProvider>
-        <DashboardPage />
-      </ScanJobsProvider>
-    </AppDataProvider>,
+    <MemoryRouter initialEntries={["/"]}>
+      <AppDataProvider>
+        <ScanJobsProvider>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/files/:fileId" element={<FileRoute />} />
+          </Routes>
+        </ScanJobsProvider>
+      </AppDataProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -218,11 +229,37 @@ describe("DashboardPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Metric comparison")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Metric comparison" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Select Y-axis metric")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Select Y-axis metric"), { target: { value: "quality_score" } });
 
     expect(comparisonSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ xField: "duration", yField: "quality_score" }),
     );
+  });
+
+  it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
+    const settings = getLibraryStatisticsSettings();
+    settings.visibility.comparison.dashboardEnabled = true;
+    saveLibraryStatisticsSettings(settings);
+    window.localStorage.setItem(
+      "medialyze-comparison-selection-dashboard",
+      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+    );
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[2400,400000000],[4200,900000000]]",
+    );
+    expect(chart).toBeDefined();
+    fireEvent.click(chart!);
+
+    expect(await screen.findByText("File detail 1")).toBeInTheDocument();
   });
 });

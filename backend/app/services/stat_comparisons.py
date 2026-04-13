@@ -284,7 +284,13 @@ def _build_comparison(
         heatmap_counts[(x_key, y_key)] = heatmap_counts.get((x_key, y_key), 0) + 1
 
         if x_definition.kind == "numeric" and y_definition.kind == "numeric":
-            scatter_points.append(ComparisonScatterPoint(x_value=float(x_value), y_value=float(y_value)))
+            scatter_points.append(
+                ComparisonScatterPoint(
+                    media_file_id=_media_file_id,
+                    x_value=float(x_value),
+                    y_value=float(y_value),
+                )
+            )
 
         if y_definition.kind == "numeric":
             total, count = 0.0, 0
