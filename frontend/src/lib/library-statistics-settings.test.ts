@@ -19,6 +19,7 @@ describe("library statistics settings", () => {
 
     expect(settings.order[0]).toBe("size");
     expect(settings.order[1]).toBe("quality_score");
+    expect(settings.order).toContain("comparison");
     expect(settings.order).toContain("bitrate");
     expect(settings.order).toContain("audio_bitrate");
     expect(settings.visibility.size.panelEnabled).toBe(true);
@@ -33,6 +34,9 @@ describe("library statistics settings", () => {
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
     expect(settings.visibility.size.dashboardEnabled).toBe(true);
     expect(settings.visibility.quality_score.dashboardEnabled).toBe(true);
+    expect(settings.visibility.comparison.panelEnabled).toBe(true);
+    expect(settings.visibility.comparison.dashboardEnabled).toBe(true);
+    expect(settings.visibility.comparison.tableEnabled).toBe(false);
     expect(settings.visibility.duration.dashboardEnabled).toBe(true);
     expect(settings.visibility.bitrate.dashboardEnabled).toBe(false);
     expect(settings.visibility.audio_bitrate.dashboardEnabled).toBe(false);
@@ -70,6 +74,7 @@ describe("library statistics settings", () => {
     expect(getVisibleDashboardStatisticPanels(settings).map((entry) => entry.id)).toEqual([
       "size",
       "quality_score",
+      "comparison",
       "video_codec",
       "resolution",
       "hdr_type",
@@ -99,11 +104,14 @@ describe("library statistics settings", () => {
 
     expect(settings.order[0]).toBe("quality_score");
     expect(settings.order).toContain("container");
+    expect(settings.order).toContain("comparison");
     expect(settings.order).toContain("subtitle_sources");
     expect(settings.visibility.quality_score.panelEnabled).toBe(true);
     expect(settings.visibility.quality_score.tableEnabled).toBe(false);
     expect(settings.visibility.quality_score.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.quality_score.dashboardEnabled).toBe(true);
+    expect(settings.visibility.comparison.panelEnabled).toBe(true);
+    expect(settings.visibility.comparison.dashboardEnabled).toBe(true);
     expect(settings.visibility.video_codec.panelEnabled).toBe(false);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(false);

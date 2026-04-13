@@ -32,6 +32,7 @@
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "comparisonPanel": "Metrikvergleich",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
@@ -162,7 +163,8 @@
       "subtitleLanguages": "Untertitel-Sprachen",
       "subtitleCodecs": "Untertitel-Codecs",
       "subtitleSources": "Untertitel-Quellen",
-      "qualityScore": "Qualitäts-Score"
+      "qualityScore": "Qualitäts-Score",
+      "comparison": "Metrikvergleich"
     }
   },
   "libraryTypes": {
@@ -198,6 +200,7 @@
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "comparisonPanel": "Metrikvergleich",
     "audioCodecs": "Audio-Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
@@ -325,6 +328,30 @@
       "size": "Dateigroesse",
       "bitrate": "Bitrate",
       "audio_bitrate": "Audio-Bitrate"
+    }
+  },
+  "comparisonChart": {
+    "empty": "Noch keine vergleichbaren Analysedaten vorhanden.",
+    "summary": "{{included}} von {{total}} Dateien einbezogen",
+    "sampled": "Die Scatter-Ansicht wurde auf {{limit}} Punkte gesampelt",
+    "count": "Anzahl",
+    "axes": {
+      "x": "X-Achse",
+      "y": "Y-Achse"
+    },
+    "controls": {
+      "xField": "Metrik fuer die X-Achse auswaehlen",
+      "yField": "Metrik fuer die Y-Achse auswaehlen",
+      "renderer": "Diagrammtyp auswaehlen",
+      "swapAxes": "Vergleichsachsen tauschen"
+    },
+    "renderers": {
+      "heatmap": "Heatmap",
+      "scatter": "Scatter-Plot",
+      "bar": "Balkendiagramm"
+    },
+    "bar": {
+      "average": "Durchschnitt"
     }
   },
   "scanLogs": {

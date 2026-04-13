@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add configurable metric-comparison statistic panels on the dashboard and library detail pages, with two-axis selection, heatmap / scatter / bar renderers, and dedicated comparison API endpoints for direct context such as `size` versus `duration` ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
+
 ## v0.6.0
 
 >2026-04-12

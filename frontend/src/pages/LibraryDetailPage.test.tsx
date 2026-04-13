@@ -14,6 +14,7 @@ import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
+  type ComparisonResponse,
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
@@ -151,6 +152,40 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
         ],
       },
     },
+    ...overrides,
+  };
+}
+
+function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): ComparisonResponse {
+  return {
+    x_field: "duration",
+    y_field: "size",
+    x_field_kind: "numeric",
+    y_field_kind: "numeric",
+    available_renderers: ["heatmap", "scatter", "bar"],
+    total_files: 2,
+    included_files: 2,
+    excluded_files: 0,
+    sampled_points: false,
+    sample_limit: 5000,
+    x_buckets: [
+      { key: "1800:3600", label: "1800:3600", lower: 1800, upper: 3600 },
+      { key: "3600:5400", label: "3600:5400", lower: 3600, upper: 5400 },
+    ],
+    y_buckets: [
+      { key: "0:500000000", label: "0:500000000", lower: 0, upper: 500000000 },
+      { key: "500000000:1000000000", label: "500000000:1000000000", lower: 500000000, upper: 1000000000 },
+    ],
+    heatmap_cells: [
+      { x_key: "3600:5400", y_key: "0:500000000", count: 2 },
+    ],
+    scatter_points: [
+      { x_value: 3600, y_value: 1024 },
+      { x_value: 3600, y_value: 1024 },
+    ],
+    bar_entries: [
+      { x_key: "3600:5400", x_label: "3600:5400", value: 1024, count: 2 },
+    ],
     ...overrides,
   };
 }
@@ -339,6 +374,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
   vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
 });
 
@@ -348,6 +384,7 @@ describe("LibraryDetailPage", () => {
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryComparisonSpy = vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
     const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
@@ -356,8 +393,28 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
+    expect(libraryComparisonSpy).toHaveBeenCalled();
     expect(libraryDuplicatesSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("renders the comparison panel and reloads it when the axis selection changes", async () => {
+    const libraryId = 121;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const comparisonSpy = vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("Metric comparison")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Select Y-axis metric"), { target: { value: "quality_score" } });
+
+    expect(comparisonSpy).toHaveBeenLastCalledWith(
+      String(libraryId),
+      expect.objectContaining({ xField: "duration", yField: "quality_score" }),
+    );
   });
 
   it("loads duplicate groups separately and renders matching files", async () => {
@@ -792,8 +849,8 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("File size")).toBeInTheDocument();
-    expect(screen.getByText("Quality score")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
     expect(screen.getAllByTestId("echarts-react").length).toBeGreaterThan(0);
   });
 

@@ -32,6 +32,7 @@
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "comparisonPanel": "Metric comparison",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
     "subtitleLanguages": "Subtitle languages",
@@ -162,7 +163,8 @@
       "subtitleLanguages": "Subtitle languages",
       "subtitleCodecs": "Subtitle codecs",
       "subtitleSources": "Subtitle sources",
-      "qualityScore": "Quality score"
+      "qualityScore": "Quality score",
+      "comparison": "Metric comparison"
     }
   },
   "libraryTypes": {
@@ -198,6 +200,7 @@
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "comparisonPanel": "Metric comparison",
     "audioCodecs": "Audio codecs",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
@@ -325,6 +328,30 @@
       "size": "file size",
       "bitrate": "bitrate",
       "audio_bitrate": "audio bitrate"
+    }
+  },
+  "comparisonChart": {
+    "empty": "No comparable analyzed data yet.",
+    "summary": "{{included}} of {{total}} files included",
+    "sampled": "Scatter view sampled to {{limit}} points",
+    "count": "Count",
+    "axes": {
+      "x": "X axis",
+      "y": "Y axis"
+    },
+    "controls": {
+      "xField": "Select X-axis metric",
+      "yField": "Select Y-axis metric",
+      "renderer": "Select chart renderer",
+      "swapAxes": "Swap comparison axes"
+    },
+    "renderers": {
+      "heatmap": "Heatmap",
+      "scatter": "Scatter plot",
+      "bar": "Bar chart"
+    },
+    "bar": {
+      "average": "Average"
     }
   },
   "scanLogs": {

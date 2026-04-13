@@ -8,6 +8,7 @@ import type {
 
 export type LibraryStatisticId =
   | "size"
+  | "comparison"
   | "container"
   | "video_codec"
   | "resolution"
@@ -48,7 +49,7 @@ type DashboardStatisticPanelDataKey =
   | "subtitle_source_distribution";
 
 type DistributionFormatKind = "video" | "audio" | "subtitle";
-type StatisticPanelKind = "list" | "numeric-chart";
+type StatisticPanelKind = "list" | "numeric-chart" | "comparison";
 
 export type LibraryStatisticDefinition = {
   id: LibraryStatisticId;
@@ -120,6 +121,21 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.qualityScoreDistribution",
     tableColumnKey: "quality_score",
     dashboardTitleKey: "dashboard.qualityScoreDistribution",
+  },
+  {
+    id: "comparison",
+    nameKey: "libraryStatistics.items.comparison",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: true,
+    panelKind: "comparison",
+    panelTitleKey: "libraryDetail.comparisonPanel",
+    dashboardTitleKey: "dashboard.comparisonPanel",
   },
   {
     id: "video_codec",

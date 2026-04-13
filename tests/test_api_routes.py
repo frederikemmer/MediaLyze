@@ -124,6 +124,71 @@ def test_library_statistics_route_includes_numeric_distributions() -> None:
     assert payload["numeric_distributions"]["audio_bitrate"]["bins"][3]["count"] == 1
 
 
+def test_dashboard_comparison_route_returns_comparison_payload() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Comparison",
+            path="/tmp/comparison-route",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=6_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(MediaFormat(media_file_id=media_file.id, duration=5400.0))
+        db.add(AudioStream(media_file_id=media_file.id, stream_index=1, codec="aac", bit_rate=512_000))
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/dashboard/comparison?x_field=duration&y_field=size")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available_renderers"] == ["heatmap", "scatter", "bar"]
+    assert payload["included_files"] == 1
+    assert payload["scatter_points"][0]["x_value"] == 5400.0
+
+
+def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Comparison",
+            path="/tmp/comparison-route-library",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/statistics/comparison?x_field=size&y_field=size")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Comparison axes must use different fields"}
+
+
 def test_paths_inspect_returns_404_outside_desktop_mode() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

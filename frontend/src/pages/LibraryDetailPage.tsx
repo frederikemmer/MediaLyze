@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
@@ -23,6 +24,7 @@ import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
   api,
+  type ComparisonResponse,
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
@@ -56,6 +58,12 @@ import {
   getVisibleLibraryStatisticTableColumns,
 } from "../lib/library-statistics-settings";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
+import {
+  getComparisonSelection,
+  sanitizeComparisonRenderer,
+  saveComparisonSelection,
+  type ComparisonSelection,
+} from "../lib/statistic-comparisons";
 import {
   InflightPageRequestGate,
   buildFilePageRequestKey,
@@ -111,6 +119,7 @@ const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
+const libraryComparisonCache = new Map<string, ComparisonResponse>();
 const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
 const libraryFileListCache = new Map<string, CachedFileList>();
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
@@ -706,14 +715,18 @@ export function LibraryDetailPage() {
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
+  const [comparisonSelection, setComparisonSelection] = useState<ComparisonSelection>(() => getComparisonSelection("library"));
+  const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
+  const [isComparisonLoading, setIsComparisonLoading] = useState(true);
   const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
@@ -902,6 +915,10 @@ export function LibraryDetailPage() {
     () => buildFileCacheKey(libraryId, deferredAppliedSearchFilterKey, sortKey, sortDirection),
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
   );
+  const comparisonQueryKey = useMemo(
+    () => `${libraryId}:${comparisonSelection.xField}:${comparisonSelection.yField}`,
+    [comparisonSelection.xField, comparisonSelection.yField, libraryId],
+  );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
   const filesRef = useRef<MediaFileRow[]>([]);
   const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
@@ -921,6 +938,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const comparisonAbortRef = useRef<AbortController | null>(null);
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
@@ -1082,6 +1100,39 @@ export function LibraryDetailPage() {
       }
       if (showLoading) {
         setIsStatisticsLoading(false);
+      }
+    }
+  });
+
+  const loadLibraryComparison = useEffectEvent(async (showLoading = false) => {
+    comparisonAbortRef.current?.abort();
+    const controller = new AbortController();
+    comparisonAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsComparisonLoading(true);
+    }
+
+    try {
+      const payload = await api.libraryComparison(libraryId, {
+        xField: comparisonSelection.xField,
+        yField: comparisonSelection.yField,
+        signal: controller.signal,
+      });
+      libraryComparisonCache.set(comparisonQueryKey, payload);
+      setComparison(payload);
+      setComparisonError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setComparisonError((reason as Error).message);
+    } finally {
+      if (comparisonAbortRef.current === controller) {
+        comparisonAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsComparisonLoading(false);
       }
     }
   });
@@ -1367,6 +1418,14 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
+    const cachedComparison = libraryComparisonCache.get(comparisonQueryKey) ?? null;
+    setComparison(cachedComparison);
+    setComparisonError(null);
+    setIsComparisonLoading(cachedComparison === null);
+    void loadLibraryComparison(cachedComparison === null);
+  }, [comparisonQueryKey, loadLibraryComparison]);
+
+  useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
     const currentFilesLength = filesRef.current.length;
@@ -1430,22 +1489,25 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
+      libraryComparisonCache.delete(comparisonQueryKey);
       libraryDuplicateGroupsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
       setQualityScoreDetails({});
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
+      void loadLibraryComparison(false);
       void loadDuplicateGroups(false);
       void loadFilesPage(0, false, fileQueryKey);
     }
     hadActiveJobRef.current = Boolean(activeJob);
-  }, [activeJob, fileQueryKey, libraryId]);
+  }, [activeJob, comparisonQueryKey, fileQueryKey, libraryId, loadLibraryComparison]);
 
   useEffect(() => {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
+      comparisonAbortRef.current?.abort();
       duplicateGroupsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
       exportAbortRef.current?.abort();
@@ -1465,6 +1527,14 @@ export function LibraryDetailPage() {
         <span>export CSV</span>
       </button>
     );
+  }
+
+  function updateComparisonSelection(nextSelection: ComparisonSelection) {
+    const normalized = saveComparisonSelection("library", {
+      ...nextSelection,
+      renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
+    });
+    setComparisonSelection(normalized);
   }
 
   return (
@@ -1504,6 +1574,34 @@ export function LibraryDetailPage() {
       <div className="media-grid">
         {visibleStatisticPanels.length > 0 ? (
           visibleStatisticPanels.map((panel) => {
+            if (panel.panelKind === "comparison") {
+              return (
+                <ComparisonChartPanel
+                  key={panel.id}
+                  title={t(panel.panelTitleKey ?? panel.nameKey)}
+                  comparison={comparison}
+                  selection={comparisonSelection}
+                  loading={isComparisonLoading && !comparison && !comparisonError}
+                  error={comparisonError}
+                  onChangeXField={(xField) =>
+                    updateComparisonSelection({ ...comparisonSelection, xField })
+                  }
+                  onChangeYField={(yField) =>
+                    updateComparisonSelection({ ...comparisonSelection, yField })
+                  }
+                  onSwapAxes={() =>
+                    updateComparisonSelection({
+                      ...comparisonSelection,
+                      xField: comparisonSelection.yField,
+                      yField: comparisonSelection.xField,
+                    })
+                  }
+                  onChangeRenderer={(renderer) =>
+                    updateComparisonSelection({ ...comparisonSelection, renderer })
+                  }
+                />
+              );
+            }
             if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
               const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel);
               return (

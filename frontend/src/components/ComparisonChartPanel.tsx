@@ -1,0 +1,387 @@
+import { useMemo, useState } from "react";
+import * as LucideIcons from "lucide-react";
+import ReactECharts from "echarts-for-react";
+import * as echarts from "echarts/core";
+import { BarChart, HeatmapChart, ScatterChart } from "echarts/charts";
+import { GridComponent, TooltipComponent, VisualMapComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import { useTranslation } from "react-i18next";
+
+import type {
+  ComparisonFieldId,
+  ComparisonRendererId,
+  ComparisonResponse,
+} from "../lib/api";
+import { formatBitrate, formatBytes, formatDuration } from "../lib/format";
+import {
+  COMPARISON_FIELD_DEFINITIONS,
+  formatComparisonBucketLabel,
+  getAvailableComparisonRenderers,
+  type ComparisonSelection,
+} from "../lib/statistic-comparisons";
+import { AsyncPanel } from "./AsyncPanel";
+
+echarts.use([BarChart, GridComponent, HeatmapChart, ScatterChart, TooltipComponent, VisualMapComponent, CanvasRenderer]);
+
+type ComparisonChartPanelProps = {
+  title: string;
+  comparison: ComparisonResponse | null;
+  selection: ComparisonSelection;
+  loading?: boolean;
+  error?: string | null;
+  onChangeXField: (fieldId: ComparisonFieldId) => void;
+  onChangeYField: (fieldId: ComparisonFieldId) => void;
+  onSwapAxes: () => void;
+  onChangeRenderer: (renderer: ComparisonRendererId) => void;
+};
+
+type RendererDefinition = {
+  id: ComparisonRendererId;
+  labelKey: string;
+  icon: LucideIcons.LucideIcon;
+};
+
+const lucideIconMap = LucideIcons as unknown as Record<string, LucideIcons.LucideIcon | undefined>;
+const HeatmapIcon = LucideIcons.Grid2x2;
+const BarIcon = lucideIconMap.ChartNoAxesColumn ?? LucideIcons.Hash;
+const ScatterIcon = lucideIconMap.ChartScatter ?? LucideIcons.Percent;
+
+const RENDERER_DEFINITIONS: RendererDefinition[] = [
+  { id: "heatmap", labelKey: "comparisonChart.renderers.heatmap", icon: HeatmapIcon },
+  { id: "scatter", labelKey: "comparisonChart.renderers.scatter", icon: ScatterIcon },
+  { id: "bar", labelKey: "comparisonChart.renderers.bar", icon: BarIcon },
+];
+
+function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
+  if (fieldId === "size") {
+    return formatBytes(value);
+  }
+  if (fieldId === "duration") {
+    return formatDuration(value);
+  }
+  if (fieldId === "bitrate" || fieldId === "audio_bitrate") {
+    return formatBitrate(value);
+  }
+  return String(Math.round(value * 10) / 10);
+}
+
+export function ComparisonChartPanel({
+  title,
+  comparison,
+  selection,
+  loading = false,
+  error = null,
+  onChangeXField,
+  onChangeYField,
+  onSwapAxes,
+  onChangeRenderer,
+}: ComparisonChartPanelProps) {
+  const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const availableRenderers = comparison?.available_renderers ?? getAvailableComparisonRenderers(selection.xField, selection.yField);
+  const selectedRenderer = availableRenderers.includes(selection.renderer)
+    ? selection.renderer
+    : availableRenderers[0];
+  const currentRendererDefinition = RENDERER_DEFINITIONS.find((definition) => definition.id === selectedRenderer) ?? RENDERER_DEFINITIONS[0];
+  const CurrentRendererIcon = currentRendererDefinition.icon;
+  const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
+  const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
+  const highlightColor = cssVars?.getPropertyValue("--accent").trim() || "#ff6b3d";
+  const lineColor = cssVars?.getPropertyValue("--ink").trim() || "#1f1c16";
+
+  const option = useMemo(() => {
+    if (!comparison || comparison.included_files <= 0) {
+      return null;
+    }
+
+    if (selectedRenderer === "scatter" && comparison.scatter_points) {
+      return {
+        animation: false,
+        grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+        tooltip: {
+          trigger: "item",
+          backgroundColor: "rgba(31, 28, 22, 0.94)",
+          borderWidth: 0,
+          textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
+          formatter: (params: { data?: [number, number] }) => {
+            const point = params.data ?? [0, 0];
+            return [
+              `${t("comparisonChart.axes.x")}: ${formatNumericValue(comparison.x_field, point[0])}`,
+              `${t("comparisonChart.axes.y")}: ${formatNumericValue(comparison.y_field, point[1])}`,
+            ].join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "value",
+          axisLabel: {
+            color: axisColor,
+            formatter: (value: number) => formatNumericValue(comparison.x_field, value),
+          },
+          splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
+        },
+        yAxis: {
+          type: "value",
+          axisLabel: {
+            color: axisColor,
+            formatter: (value: number) => formatNumericValue(comparison.y_field, value),
+          },
+          splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
+        },
+        series: [
+          {
+            type: "scatter",
+            symbolSize: 10,
+            itemStyle: {
+              color: fillColor,
+              opacity: 0.72,
+            },
+            emphasis: {
+              itemStyle: {
+                color: highlightColor,
+                opacity: 0.95,
+              },
+            },
+            data: comparison.scatter_points.map((point) => [point.x_value, point.y_value]),
+          },
+        ],
+      };
+    }
+
+    if (selectedRenderer === "bar" && comparison.bar_entries) {
+      const labelsByKey = new Map(
+        comparison.x_buckets.map((bucket) => [bucket.key, formatComparisonBucketLabel(comparison.x_field, bucket, t)] as const),
+      );
+      return {
+        animation: false,
+        grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          backgroundColor: "rgba(31, 28, 22, 0.94)",
+          borderWidth: 0,
+          textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
+          formatter: (params: Array<{ dataIndex: number }>) => {
+            const entry = comparison.bar_entries?.[params[0]?.dataIndex ?? 0];
+            if (!entry) {
+              return "";
+            }
+            return [
+              `${t("comparisonChart.axes.x")}: ${labelsByKey.get(entry.x_key) ?? entry.x_label}`,
+              `${t("comparisonChart.bar.average")}: ${formatNumericValue(comparison.y_field, entry.value)}`,
+              `${t("comparisonChart.count")}: ${entry.count}`,
+            ].join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: comparison.bar_entries.map((entry) => labelsByKey.get(entry.x_key) ?? entry.x_label),
+          axisTick: { show: false },
+          axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+          axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
+        },
+        yAxis: {
+          type: "value",
+          axisLabel: {
+            color: axisColor,
+            formatter: (value: number) => formatNumericValue(comparison.y_field, value),
+          },
+          splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
+        },
+        series: [
+          {
+            type: "bar",
+            barGap: "0%",
+            barCategoryGap: "18%",
+            data: comparison.bar_entries.map((entry) => entry.value),
+            itemStyle: { color: fillColor, borderRadius: [8, 8, 0, 0] },
+            emphasis: { itemStyle: { color: highlightColor } },
+          },
+        ],
+      };
+    }
+
+    const xLabels = comparison.x_buckets.map((bucket) => formatComparisonBucketLabel(comparison.x_field, bucket, t));
+    const yLabels = comparison.y_buckets.map((bucket) => formatComparisonBucketLabel(comparison.y_field, bucket, t));
+    const xIndexByKey = new Map(comparison.x_buckets.map((bucket, index) => [bucket.key, index] as const));
+    const yIndexByKey = new Map(comparison.y_buckets.map((bucket, index) => [bucket.key, index] as const));
+    const maxCount = Math.max(0, ...comparison.heatmap_cells.map((cell) => cell.count));
+    return {
+      animation: false,
+      grid: { top: 8, right: 8, bottom: 16, left: 18, containLabel: true },
+      tooltip: {
+        trigger: "item",
+        backgroundColor: "rgba(31, 28, 22, 0.94)",
+        borderWidth: 0,
+        textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
+        formatter: (params: { data?: [number, number, number] }) => {
+          const point = params.data ?? [0, 0, 0];
+          const xLabel = xLabels[point[0]] ?? "";
+          const yLabel = yLabels[point[1]] ?? "";
+          return [
+            `${t("comparisonChart.axes.x")}: ${xLabel}`,
+            `${t("comparisonChart.axes.y")}: ${yLabel}`,
+            `${t("comparisonChart.count")}: ${point[2]}`,
+          ].join("<br/>");
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: xLabels,
+        axisTick: { show: false },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+        axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
+      },
+      yAxis: {
+        type: "category",
+        data: yLabels,
+        axisTick: { show: false },
+        axisLabel: { color: axisColor, interval: 0, hideOverlap: true },
+        axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
+      },
+      visualMap: {
+        show: false,
+        min: 0,
+        max: Math.max(1, maxCount),
+        inRange: {
+          color: ["rgba(27, 153, 139, 0.08)", fillColor, highlightColor],
+        },
+      },
+      series: [
+        {
+          type: "heatmap",
+          data: comparison.heatmap_cells.map((cell) => [
+            xIndexByKey.get(cell.x_key) ?? 0,
+            yIndexByKey.get(cell.y_key) ?? 0,
+            cell.count,
+          ]),
+          label: { show: false },
+          emphasis: {
+            itemStyle: {
+              borderColor: "rgba(31, 28, 22, 0.16)",
+              borderWidth: 1,
+            },
+          },
+        },
+      ],
+    };
+  }, [axisColor, comparison, fillColor, highlightColor, lineColor, selectedRenderer, t]);
+
+  return (
+    <AsyncPanel
+      title={title}
+      loading={loading}
+      error={error}
+      bodyClassName="async-panel-body-scroll"
+      headerAddon={
+        <div className="comparison-chart-controls">
+          <label className="comparison-chart-select-shell">
+            <span className="comparison-chart-select-label">{t("comparisonChart.axes.x")}</span>
+            <select
+              className="comparison-chart-select"
+              aria-label={t("comparisonChart.controls.xField")}
+              value={selection.xField}
+              onChange={(event) => onChangeXField(event.target.value as ComparisonFieldId)}
+            >
+              {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                <option key={field.id} value={field.id} disabled={field.id === selection.yField}>
+                  {t(field.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="comparison-chart-swap-button"
+            onClick={onSwapAxes}
+            aria-label={t("comparisonChart.controls.swapAxes")}
+            title={t("comparisonChart.controls.swapAxes")}
+          >
+            <LucideIcons.ArrowLeftRight className="distribution-chart-mode-icon" aria-hidden="true" />
+          </button>
+          <label className="comparison-chart-select-shell">
+            <span className="comparison-chart-select-label">{t("comparisonChart.axes.y")}</span>
+            <select
+              className="comparison-chart-select"
+              aria-label={t("comparisonChart.controls.yField")}
+              value={selection.yField}
+              onChange={(event) => onChangeYField(event.target.value as ComparisonFieldId)}
+            >
+              {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                <option key={field.id} value={field.id} disabled={field.id === selection.xField}>
+                  {t(field.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="comparison-chart-renderer-menu">
+            <button
+              type="button"
+              className="distribution-chart-mode-button active comparison-chart-renderer-trigger"
+              aria-label={t("comparisonChart.controls.renderer")}
+              title={t("comparisonChart.controls.renderer")}
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              <span className="distribution-chart-mode-button-content comparison-chart-renderer-trigger-content">
+                <CurrentRendererIcon className="distribution-chart-mode-icon" aria-hidden="true" />
+                <LucideIcons.ChevronDown className="comparison-chart-renderer-caret" aria-hidden="true" />
+              </span>
+            </button>
+            {menuOpen ? (
+              <div className="comparison-chart-renderer-popover" role="menu">
+                {RENDERER_DEFINITIONS.filter((definition) => availableRenderers.includes(definition.id)).map((definition) => {
+                  const Icon = definition.icon;
+                  return (
+                    <button
+                      key={definition.id}
+                      type="button"
+                      className={`comparison-chart-renderer-option${definition.id === selectedRenderer ? " active" : ""}`}
+                      onClick={() => {
+                        onChangeRenderer(definition.id);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Icon className="distribution-chart-mode-icon" aria-hidden="true" />
+                      <span>{t(definition.labelKey)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      }
+    >
+      {!comparison || comparison.included_files <= 0 ? (
+        <div className="notice">{t("comparisonChart.empty")}</div>
+      ) : (
+        <div className="stack">
+          <div className="comparison-chart-summary">
+            <span className="distribution-chart-total">
+              {t("comparisonChart.summary", {
+                included: comparison.included_files,
+                total: comparison.total_files,
+              })}
+            </span>
+            {comparison.sampled_points && selectedRenderer === "scatter" ? (
+              <span className="distribution-chart-total">
+                {t("comparisonChart.sampled", { limit: comparison.sample_limit })}
+              </span>
+            ) : null}
+          </div>
+          {option ? (
+            <ReactECharts
+              echarts={echarts}
+              option={option}
+              notMerge
+              lazyUpdate
+              style={{ height: 280, width: "100%" }}
+            />
+          ) : (
+            <div className="notice">{t("comparisonChart.empty")}</div>
+          )}
+        </div>
+      )}
+    </AsyncPanel>
+  );
+}

@@ -1,10 +1,10 @@
 import "../i18n";
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppDataProvider } from "../lib/app-data";
-import { api, type AppSettings, type DashboardResponse } from "../lib/api";
+import { api, type AppSettings, type ComparisonResponse, type DashboardResponse } from "../lib/api";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { DashboardPage } from "./DashboardPage";
@@ -109,6 +109,42 @@ function createDashboard(): DashboardResponse {
   };
 }
 
+function createComparisonResponse(): ComparisonResponse {
+  return {
+    x_field: "duration",
+    y_field: "size",
+    x_field_kind: "numeric",
+    y_field_kind: "numeric",
+    available_renderers: ["heatmap", "scatter", "bar"],
+    total_files: 10,
+    included_files: 10,
+    excluded_files: 0,
+    sampled_points: false,
+    sample_limit: 5000,
+    x_buckets: [
+      { key: "0:1800", label: "0:1800", lower: 0, upper: 1800 },
+      { key: "1800:3600", label: "1800:3600", lower: 1800, upper: 3600 },
+      { key: "3600:5400", label: "3600:5400", lower: 3600, upper: 5400 },
+    ],
+    y_buckets: [
+      { key: "0:500000000", label: "0:500000000", lower: 0, upper: 500000000 },
+      { key: "500000000:1000000000", label: "500000000:1000000000", lower: 500000000, upper: 1000000000 },
+    ],
+    heatmap_cells: [
+      { x_key: "1800:3600", y_key: "0:500000000", count: 4 },
+      { x_key: "3600:5400", y_key: "500000000:1000000000", count: 6 },
+    ],
+    scatter_points: [
+      { x_value: 2400, y_value: 400000000 },
+      { x_value: 4200, y_value: 900000000 },
+    ],
+    bar_entries: [
+      { x_key: "1800:3600", x_label: "1800:3600", value: 400000000, count: 4 },
+      { x_key: "3600:5400", x_label: "3600:5400", value: 900000000, count: 6 },
+    ],
+  };
+}
+
 function renderPage() {
   return render(
     <AppDataProvider>
@@ -136,6 +172,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
     renderPage();
@@ -159,12 +196,33 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
     renderPage();
 
-    expect(await screen.findByText("File size")).toBeInTheDocument();
-    expect(screen.getByText("Quality score")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
     expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
+  });
+
+  it("renders the comparison panel and reloads it when the axis selection changes", async () => {
+    const settings = getLibraryStatisticsSettings();
+    settings.visibility.comparison.dashboardEnabled = true;
+    saveLibraryStatisticsSettings(settings);
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    const comparisonSpy = vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Metric comparison")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Select Y-axis metric"), { target: { value: "quality_score" } });
+
+    expect(comparisonSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ xField: "duration", yField: "quality_score" }),
+    );
   });
 });
