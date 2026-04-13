@@ -665,43 +665,40 @@
   font-size: 0.82rem;
 }
 
-.comparison-chart-controls {
+.comparison-chart-toolbar {
   position: relative;
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
+  gap: 0;
   width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
-  padding-right: 2px;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
+  min-width: 0;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
 }
 
 .comparison-chart-select-shell {
   display: block;
   min-width: 0;
-  flex: 0 0 106px;
 }
 
 .comparison-chart-select {
-  width: 106px;
-  min-width: 106px;
-  max-width: 106px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   height: 34px;
   padding: 0 7px;
-  border: 1px solid rgba(31, 28, 22, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   box-shadow: none;
 }
 
 .comparison-chart-select:focus-visible {
-  outline: 2px solid rgba(31, 28, 22, 0.14);
-  outline-offset: 2px;
+  outline: none;
 }
 
 .comparison-chart-swap-button {
@@ -711,104 +708,11 @@
   width: 34px;
   height: 34px;
   padding: 0;
-  border-radius: 12px;
-}
-
-.comparison-chart-renderer-menu {
-  position: relative;
-  z-index: 2;
-}
-
-.comparison-chart-renderer-trigger {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  border: 1px solid rgba(31, 28, 22, 0.09);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.comparison-chart-renderer-trigger:hover,
-.comparison-chart-renderer-trigger:focus-visible {
-  color: var(--ink);
-}
-
-.comparison-chart-renderer-trigger-content {
-  gap: 4px;
-}
-
-.comparison-chart-renderer-caret {
-  width: 12px;
-  height: 12px;
-}
-
-.comparison-chart-renderer-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 10;
-  display: grid;
-  gap: 4px;
-  min-width: 168px;
-  padding: 8px;
-  border: 1px solid rgba(31, 28, 22, 0.1);
-  border-radius: 14px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(255, 247, 232, 0.96)),
-    var(--panel-strong);
-  box-shadow: 0 14px 28px rgba(31, 28, 22, 0.12);
-}
-
-.comparison-chart-renderer-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 34px;
-  padding: 0 10px;
-  border-radius: 10px;
-  color: var(--muted);
+  border-radius: 0;
+  border-left: 1px solid rgba(31, 28, 22, 0.08);
+  border-right: 1px solid rgba(31, 28, 22, 0.08);
   background: transparent;
   box-shadow: none;
-}
-
-.comparison-chart-renderer-option:hover,
-.comparison-chart-renderer-option:focus-visible {
-  color: var(--ink);
-  background: rgba(255, 107, 61, 0.08);
-}
-
-.comparison-chart-renderer-option.active {
-  background: rgba(255, 107, 61, 0.16);
-  color: #8d3511;
-}
-
-html[data-theme="dark"] .comparison-chart-renderer-option.active {
-  color: #ffd6c5;
-  background: rgba(255, 107, 61, 0.22);
-}
-
-.comparison-chart-controls::-webkit-scrollbar {
-  height: 6px;
-}
-
-.comparison-chart-controls::-webkit-scrollbar-thumb {
-  background: rgba(31, 28, 22, 0.18);
-  border-radius: 999px;
-}
-
-.comparison-chart-controls::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.comparison-chart-renderer-menu {
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-
-.comparison-chart-swap-button,
-.comparison-chart-renderer-trigger {
-  flex: 0 0 auto;
 }
 
 .comparison-chart-select-shell,
@@ -819,15 +723,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .comparison-chart-content {
-  gap: 8px;
-}
-
-.comparison-chart-summary {
-  gap: 4px 12px;
-}
-
-.comparison-chart-summary .distribution-chart-total:last-child {
-  margin-left: auto;
+  gap: 0;
 }
 
 .comparison-chart-swap-button:hover,
@@ -837,17 +733,41 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: rgba(255, 107, 61, 0.08);
 }
 
-.comparison-chart-renderer-trigger[aria-expanded="true"] {
-  color: var(--ink);
-  background: rgba(255, 107, 61, 0.12);
+.comparison-chart-renderer-strip {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  border-left: 1px solid rgba(31, 28, 22, 0.08);
 }
 
-.comparison-chart-summary {
-  display: flex;
-  flex-wrap: wrap;
+.comparison-chart-renderer-chip {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px 12px;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.comparison-chart-renderer-chip:hover,
+.comparison-chart-renderer-chip:focus-visible {
+  transform: none;
+  color: var(--ink);
+  background: rgba(255, 107, 61, 0.08);
+}
+
+.comparison-chart-renderer-chip.active {
+  color: #8d3511;
+  background: rgba(255, 107, 61, 0.16);
+}
+
+html[data-theme="dark"] .comparison-chart-renderer-chip.active {
+  color: #ffd6c5;
+  background: rgba(255, 107, 61, 0.22);
 }
 
 .distribution-value-button {
@@ -2633,9 +2553,9 @@ body.is-column-resizing {
     -webkit-line-clamp: 3;
   }
 
-  .comparison-chart-controls {
+  .comparison-chart-toolbar {
     width: 100%;
-    justify-content: flex-start;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
   }
 }
 
@@ -2735,16 +2655,19 @@ html[data-theme="dark"] {
     color: var(--muted);
   }
 
-  .comparison-chart-select,
-  .comparison-chart-renderer-trigger {
+  .comparison-chart-toolbar {
     background: rgba(38, 35, 31, 0.64);
     border-color: rgba(240, 236, 228, 0.09);
   }
 
-  .comparison-chart-renderer-popover {
-    background:
-      linear-gradient(145deg, rgba(46, 43, 39, 0.98), rgba(38, 32, 22, 0.96)),
-      var(--panel-strong);
+  .comparison-chart-select,
+  .comparison-chart-swap-button,
+  .comparison-chart-renderer-chip {
+    color: rgba(240, 236, 228, 0.82);
+  }
+
+  .comparison-chart-swap-button,
+  .comparison-chart-renderer-strip {
     border-color: rgba(240, 236, 228, 0.08);
   }
 
