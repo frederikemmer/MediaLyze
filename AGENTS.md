@@ -719,7 +719,7 @@ Desktop packaging structure:
 
 * `desktop/main.cjs` boots Electron, starts the packaged backend, waits for `/api/health`, and opens the local app window
 * `desktop/preload.cjs` exposes the safe desktop bridge for native folder selection
-* `desktop/scripts/build-backend.mjs` builds the Python backend sidecar for packaging
+* `desktop/scripts/build-backend.mjs` builds the Python backend sidecar for packaging and bundles the packaged `ffprobe`; macOS packaging also copies non-system `dylib` dependencies into the app bundle and rewrites them to relative loader paths
 
 ## 11.3 Deployment Shape
 
@@ -740,7 +740,7 @@ Current deployment models are:
   * a local backend sidecar process
   * a local SQLite database under the user-data directory
   * a bundled frontend build
-  * a bundled `ffprobe` binary per target platform
+  * a bundled `ffprobe` binary per target platform, with macOS desktop builds also bundling the non-system shared libraries that the packaged `ffprobe` depends on
 
 ---
 

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- bundle macOS desktop `ffprobe` dependencies into the packaged app and rewrite non-system `dylib` loader paths so scans no longer fail on machines without the original Homebrew cellar layout
+
 ## v0.7.0
 
 >2026-04-14
