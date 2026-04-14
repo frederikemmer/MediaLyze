@@ -266,6 +266,29 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("renders dashboard numeric bar charts with a non-interactive cursor", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "duration", statisticId: "duration", width: 2, height: 2 }],
+      }),
+    );
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[2,3,2,2,1,0,0]",
+    );
+    expect(chart).toBeDefined();
+    expect(chart).toHaveAttribute("data-cursor", "default");
+    expect(chart).toHaveAttribute("data-clickable", "false");
+  });
+
   it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
     window.localStorage.setItem(
       "medialyze-statistic-panel-layout-dashboard-main",
@@ -297,8 +320,87 @@ describe("DashboardPage", () => {
       (candidate) => candidate.getAttribute("data-points") === "[[2400,400000000],[4200,900000000]]",
     );
     expect(chart).toBeDefined();
+    expect(chart).toHaveAttribute("data-cursor", "pointer");
     fireEvent.click(chart!);
 
     expect(await screen.findByText("File detail 1")).toBeInTheDocument();
+  });
+
+  it("does not navigate when a dashboard comparison heatmap cell is clicked", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "comparison-1",
+            statisticId: "comparison",
+            width: 2,
+            height: 2,
+            comparisonSelection: {
+              xField: "duration",
+              yField: "size",
+              renderer: "heatmap",
+            },
+          },
+        ],
+      }),
+    );
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[1,0,4],[2,1,6]]",
+    );
+    expect(chart).toBeDefined();
+    expect(chart).toHaveAttribute("data-cursor", "default");
+    expect(chart).toHaveAttribute("data-clickable", "false");
+    fireEvent.click(chart!);
+
+    expect(screen.queryByText("File detail 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("does not navigate when a dashboard comparison bar is clicked", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "comparison-1",
+            statisticId: "comparison",
+            width: 2,
+            height: 2,
+            comparisonSelection: {
+              xField: "duration",
+              yField: "size",
+              renderer: "bar",
+            },
+          },
+        ],
+      }),
+    );
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[400000000,900000000]",
+    );
+    expect(chart).toBeDefined();
+    expect(chart).toHaveAttribute("data-cursor", "default");
+    expect(chart).toHaveAttribute("data-clickable", "false");
+    fireEvent.click(chart!);
+
+    expect(screen.queryByText("File detail 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Dashboard" })).toBeInTheDocument();
   });
 });

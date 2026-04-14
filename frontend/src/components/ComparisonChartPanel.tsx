@@ -97,6 +97,10 @@ function ComparisonChartPanelComponent({
   const SelectedRendererIcon = selectedRendererDefinition.icon;
   const hasOpenFileAction = Boolean(onOpenFile);
   const hasFilterAction = Boolean(onSelectFilters);
+  const canOpenScatterPoint = selectedRenderer === "scatter" && hasOpenFileAction;
+  const canSelectComparisonBucket =
+    (selectedRenderer === "bar" || selectedRenderer === "heatmap") && hasFilterAction;
+  const chartCursor = canOpenScatterPoint || canSelectComparisonBucket ? "pointer" : "default";
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
@@ -182,7 +186,7 @@ function ComparisonChartPanelComponent({
               opacity: 0.72,
             },
             emphasis: { disabled: true },
-            cursor: hasOpenFileAction ? "pointer" : "default",
+            cursor: canOpenScatterPoint ? "pointer" : "default",
             data: comparison.scatter_points.map((point) => [point.x_value, point.y_value]),
           },
         ],
@@ -233,10 +237,14 @@ function ComparisonChartPanelComponent({
             type: "bar",
             barGap: "0%",
             barCategoryGap: "18%",
-            cursor: hasFilterAction ? "pointer" : "default",
+            cursor: canSelectComparisonBucket ? "pointer" : "default",
             data: comparison.bar_entries.map((entry) => entry.value),
             itemStyle: { color: fillColor, borderRadius: [8, 8, 0, 0] },
-            emphasis: { itemStyle: { color: highlightColor } },
+            emphasis: {
+              itemStyle: {
+                color: canSelectComparisonBucket ? highlightColor : fillColor,
+              },
+            },
           },
         ],
       };
@@ -289,23 +297,37 @@ function ComparisonChartPanelComponent({
       series: [
         {
           type: "heatmap",
-          cursor: hasFilterAction ? "pointer" : "default",
+          cursor: canSelectComparisonBucket ? "pointer" : "default",
           data: comparison.heatmap_cells.map((cell) => [
             xIndexByKey.get(cell.x_key) ?? 0,
             yIndexByKey.get(cell.y_key) ?? 0,
             cell.count,
           ]),
           label: { show: false },
-          emphasis: {
-            itemStyle: {
-              borderColor: "rgba(31, 28, 22, 0.16)",
-              borderWidth: 1,
-            },
-          },
+          emphasis: canSelectComparisonBucket
+            ? {
+                itemStyle: {
+                  borderColor: "rgba(31, 28, 22, 0.16)",
+                  borderWidth: 1,
+                },
+              }
+            : undefined,
         },
       ],
     };
-  }, [axisColor, comparison, fillColor, hasFilterAction, hasOpenFileAction, highlightColor, lineColor, selectedRenderer, t, tooltipBase]);
+  }, [
+    axisColor,
+    canOpenScatterPoint,
+    canSelectComparisonBucket,
+    chartCursor,
+    comparison,
+    fillColor,
+    highlightColor,
+    lineColor,
+    selectedRenderer,
+    t,
+    tooltipBase,
+  ]);
 
   const onChartClick = useMemo(() => {
     if (!comparison) {
@@ -502,6 +524,7 @@ function ComparisonChartPanelComponent({
               style={{
                 height: "100%",
                 width: "100%",
+                cursor: chartCursor,
               }}
             />
           ) : (

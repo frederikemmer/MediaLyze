@@ -26,14 +26,17 @@ vi.mock("echarts-for-react", () => ({
   default: ({
     option,
     onEvents,
+    style,
   }: {
     option?: { series?: Array<{ data?: unknown[] }> };
     onEvents?: { click?: (params: { dataIndex: number }) => void };
+    style?: { cursor?: string };
   }) =>
     React.createElement("div", {
       "data-testid": "echarts-react",
       "data-points": JSON.stringify(option?.series?.[0]?.data ?? []),
       "data-clickable": String(Boolean(onEvents?.click)),
+      "data-cursor": style?.cursor ?? "",
       onClick: () => onEvents?.click?.({ dataIndex: 0 }),
     }),
 }));

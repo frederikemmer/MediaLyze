@@ -473,7 +473,11 @@ export function DashboardPage() {
                   onChangeRenderer={(renderer) =>
                     updateComparisonSelection(panel.item.instanceId, { ...selection, renderer })
                   }
-                  onOpenFile={(fileId) => navigate(`/files/${fileId}`)}
+                  onOpenFile={
+                    selection.renderer === "scatter"
+                      ? (fileId) => navigate(`/files/${fileId}`)
+                      : undefined
+                  }
                 />
               );
             } else if (panel.definition.panelKind === "numeric-chart" && panel.definition.numericMetricId) {

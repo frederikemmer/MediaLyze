@@ -116,6 +116,7 @@ export function DistributionChart({
           type: "bar",
           barGap: "0%",
           barCategoryGap: "18%",
+          cursor: interactive ? "pointer" : "default",
           data: distribution.bins.map((bin) => (mode === "percentage" ? bin.percentage : bin.count)),
           itemStyle: {
             color: fillColor,
