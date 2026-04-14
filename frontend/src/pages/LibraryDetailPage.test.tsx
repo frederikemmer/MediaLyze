@@ -214,6 +214,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         quality_score_raw: 82.4,
         container: "mkv",
         duration: 3600,
+        bitrate: 4_000_000,
+        audio_bitrate: 256_000,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -239,6 +241,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         quality_score_raw: 74.1,
         container: "mkv",
         duration: 3600,
+        bitrate: 8_000_000,
+        audio_bitrate: 512_000,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -274,6 +278,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -445,7 +450,7 @@ describe("LibraryDetailPage", () => {
 
     expect(comparisonSpy).toHaveBeenLastCalledWith(
       String(libraryId),
-      expect.objectContaining({ xField: "duration", yField: "quality_score" }),
+      expect.objectContaining({ xField: "size", yField: "quality_score" }),
     );
   });
 
@@ -474,13 +479,30 @@ describe("LibraryDetailPage", () => {
 
   it("filters the analyzed files table when a comparison heatmap cell is clicked", async () => {
     const libraryId = 124;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "comparison-1",
+            statisticId: "comparison",
+            width: 1,
+            height: 2,
+            comparisonSelection: {
+              xField: "duration",
+              yField: "size",
+              renderer: "heatmap",
+            },
+          },
+        ],
+      }),
+    );
     const comparison = createComparisonResponse();
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     vi.spyOn(api, "libraryComparison").mockResolvedValue(comparison);
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
-
     renderPage(libraryId);
 
     const chart = (await screen.findAllByTestId("echarts-react")).find(
@@ -937,7 +959,7 @@ describe("LibraryDetailPage", () => {
     renderPage(libraryId);
 
     expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Duration" })).toBeInTheDocument();
     expect(screen.getAllByTestId("echarts-react").length).toBeGreaterThan(0);
   });
 
@@ -978,6 +1000,19 @@ describe("LibraryDetailPage", () => {
 
   it("replaces existing statistic values in the same field", async () => {
     const libraryId = 411;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "audio_codecs",
+            statisticId: "audio_codecs",
+            width: 1,
+            height: 1,
+          },
+        ],
+      }),
+    );
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(
@@ -1141,6 +1176,19 @@ describe("LibraryDetailPage", () => {
     );
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "container",
+            statisticId: "container",
+            width: 1,
+            height: 1,
+          },
+        ],
+      }),
+    );
     renderPage(libraryId);
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
@@ -1189,9 +1237,14 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
-    const statisticsSettings = getLibraryStatisticsSettings();
-    statisticsSettings.visibility.subtitle_sources.panelEnabled = true;
-    saveLibraryStatisticsSettings(statisticsSettings);
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          { instanceId: "subtitle_sources", statisticId: "subtitle_sources", width: 1, height: 1 },
+        ],
+      }),
+    );
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());

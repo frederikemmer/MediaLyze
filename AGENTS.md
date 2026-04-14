@@ -388,9 +388,9 @@ Current behavior:
 Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
-* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
-* optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate
-* optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, numeric resolution in megapixels, container, codec, resolution category, and HDR type
+* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the dashboard page's persisted inline panel layout
+* optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate based on the dashboard page's persisted inline panel layout
+* optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, numeric resolution in megapixels, container, codec, resolution category, and HDR type based on the dashboard page's persisted inline panel layout
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
@@ -452,7 +452,7 @@ The backend supports:
 * comma-separated `AND` ranges for numeric filters, for example `>=4GB,<8GB` or `>=8Mb/s,<12Mb/s`
 * sorting across supported table columns
 
-The analyzed-files table and library statistics settings can also expose container as a separate configurable column / panel dimension, using the normalized file extension as the user-facing container key.
+The analyzed-files table and table-view settings can also expose container, bitrate, and audio bitrate as configurable columns, using the normalized file extension as the user-facing container key.
 
 ---
 
@@ -483,12 +483,13 @@ Implemented UI behavior includes:
 * virtualized library file table for larger datasets
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
-* statistic-panel and table-column visibility customization
-* inline statistic-panel layout editing on the dashboard and library detail pages, including add-panel menus, drag-and-drop reordering, and per-panel resizing
-* reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, runtime, file size, bitrate, and audio bitrate
+* table-column visibility and per-column tooltip customization in the settings page's `Table View` section
+* inline statistic-panel layout editing on the dashboard and library detail pages, including add-panel menus, drag-and-drop reordering, per-panel resizing, and persisted per-page panel selections that are now managed directly on those pages instead of in Settings
+* reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, duration, file size, bitrate, and audio bitrate
 * reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
 * clickable numeric histogram bins in the library detail view that apply matching analyzed-files range filters
+* curated default statistic-panel layouts for first-time dashboard and library views plus inline reset-to-default controls on both statistic-layout pages
 * user-resizable analyzed-files table columns with persisted widths in browser storage
 * lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
 * globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
@@ -526,6 +527,7 @@ Current app feature flags include:
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
+* `unlimited_panel_size`
 
 These flags currently control:
 
@@ -533,6 +535,7 @@ These flags currently control:
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 
 ---
 
@@ -577,6 +580,7 @@ Important current payload concepts:
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
+* `feature_flags.unlimited_panel_size`
 
 ## 9.4 Libraries
 

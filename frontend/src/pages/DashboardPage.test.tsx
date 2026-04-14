@@ -25,6 +25,7 @@ function createAppSettings(): AppSettings {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
     },
   };
 }
@@ -186,19 +187,24 @@ describe("DashboardPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
     fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Bitrate" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Subtitle codecs" }));
     fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
 
-    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toContain("\"bitrate\"");
+    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toContain("\"subtitle_codecs\"");
   });
 
-  it("renders newly supported dashboard statistic panels when enabled in settings", async () => {
-    const settings = getLibraryStatisticsSettings();
-    settings.visibility.container.dashboardEnabled = true;
-    settings.visibility.audio_spatial_profiles.dashboardEnabled = true;
-    settings.visibility.subtitle_codecs.dashboardEnabled = true;
-    settings.visibility.subtitle_sources.dashboardEnabled = true;
-    saveLibraryStatisticsSettings(settings);
+  it("renders dashboard statistic panels from the persisted inline layout", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [
+          { instanceId: "container", statisticId: "container", width: 1, height: 1 },
+          { instanceId: "audio_spatial_profiles", statisticId: "audio_spatial_profiles", width: 1, height: 1 },
+          { instanceId: "subtitle_codecs", statisticId: "subtitle_codecs", width: 1, height: 1 },
+          { instanceId: "subtitle_sources", statisticId: "subtitle_sources", width: 1, height: 1 },
+        ],
+      }),
+    );
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
@@ -237,9 +243,12 @@ describe("DashboardPage", () => {
   });
 
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {
-    const settings = getLibraryStatisticsSettings();
-    settings.visibility.comparison.dashboardEnabled = true;
-    saveLibraryStatisticsSettings(settings);
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
@@ -258,12 +267,23 @@ describe("DashboardPage", () => {
   });
 
   it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
-    const settings = getLibraryStatisticsSettings();
-    settings.visibility.comparison.dashboardEnabled = true;
-    saveLibraryStatisticsSettings(settings);
     window.localStorage.setItem(
-      "medialyze-comparison-selection-dashboard",
-      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "comparison-1",
+            statisticId: "comparison",
+            width: 2,
+            height: 2,
+            comparisonSelection: {
+              xField: "duration",
+              yField: "size",
+              renderer: "scatter",
+            },
+          },
+        ],
+      }),
     );
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());

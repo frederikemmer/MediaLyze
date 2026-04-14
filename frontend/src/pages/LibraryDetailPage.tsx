@@ -43,7 +43,7 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
-import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
+import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
@@ -81,10 +81,12 @@ import {
 } from "../lib/paginated-files";
 import {
   addStatisticPanelLayoutItem,
+  buildDefaultStatisticPanelLayout,
   cloneStatisticPanelLayout,
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
   moveStatisticPanelLayoutItem,
+  removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
   saveStatisticPanelLayout,
   updateStatisticPanelLayoutComparisonSelection,
@@ -399,6 +401,20 @@ export function buildFileColumns(
       sizing: { mode: "content", minPx: 90, maxPx: 110 },
       measureValue: (file) => formatDuration(file.duration),
       render: (file) => formatDuration(file.duration),
+    },
+    {
+      key: "bitrate",
+      labelKey: "fileTable.bitrate",
+      sizing: { mode: "content", minPx: 92, maxPx: 122 },
+      measureValue: (file) => formatBitrate(file.bitrate),
+      render: (file) => formatBitrate(file.bitrate),
+    },
+    {
+      key: "audio_bitrate",
+      labelKey: "fileTable.audioBitrate",
+      sizing: { mode: "content", minPx: 108, maxPx: 138 },
+      measureValue: (file) => formatBitrate(file.audio_bitrate),
+      render: (file) => formatBitrate(file.audio_bitrate),
     },
     {
       key: "audio_codecs",
@@ -743,13 +759,20 @@ export function LibraryDetailPage() {
   const { libraryId = "" } = useParams();
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
+  const statisticLayoutOptions = useMemo(
+    () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
+    [appSettings.feature_flags.unlimited_panel_size],
+  );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
-  const initialStatisticLayout = getStatisticPanelLayout("library", libraryId);
-  const [savedStatisticLayout, setSavedStatisticLayout] = useState(initialStatisticLayout);
-  const [draftStatisticLayout, setDraftStatisticLayout] = useState(() => cloneStatisticPanelLayout(initialStatisticLayout));
+  const [savedStatisticLayout, setSavedStatisticLayout] = useState(() =>
+    getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
+  );
+  const [draftStatisticLayout, setDraftStatisticLayout] = useState(() =>
+    cloneStatisticPanelLayout(getStatisticPanelLayout("library", libraryId, statisticLayoutOptions)),
+  );
   const [isEditingStatisticLayout, setIsEditingStatisticLayout] = useState(false);
   const [draggedStatisticPanelId, setDraggedStatisticPanelId] = useState<string | null>(null);
   const [dropTargetStatisticPanelId, setDropTargetStatisticPanelId] = useState<string | null>(null);
@@ -1390,13 +1413,18 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
-    const nextLayout = getStatisticPanelLayout("library", libraryId);
+    const nextLayout = saveStatisticPanelLayout(
+      "library",
+      libraryId,
+      getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
+      statisticLayoutOptions,
+    );
     setSavedStatisticLayout(nextLayout);
     setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
     setIsEditingStatisticLayout(false);
     setDraggedStatisticPanelId(null);
     setDropTargetStatisticPanelId(null);
-  }, [libraryId]);
+  }, [libraryId, statisticLayoutOptions]);
 
   useEffect(() => {
     if (hasInvalidSearchField) {
@@ -1660,7 +1688,7 @@ export function LibraryDetailPage() {
   }
 
   function persistStatisticLayout(nextLayout: typeof savedStatisticLayout) {
-    const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout);
+    const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout, statisticLayoutOptions);
     setSavedStatisticLayout(normalized);
     setDraftStatisticLayout(cloneStatisticPanelLayout(normalized));
   }
@@ -1712,6 +1740,19 @@ export function LibraryDetailPage() {
     const { item } = panel;
     return (
       <>
+        <div className="statistic-layout-size-controls statistic-layout-size-controls-top-left">
+          <button
+            type="button"
+            className="statistic-layout-size-button"
+            aria-label={t("panelLayout.remove")}
+            title={t("panelLayout.remove")}
+            onClick={() =>
+              updateStatisticLayout((current) => removeStatisticPanelLayoutItem(current, item.instanceId))
+            }
+          >
+            <Trash2 className="nav-icon" aria-hidden="true" />
+          </button>
+        </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-right">
           {item.width < 4 ? (
             <button
@@ -1745,7 +1786,7 @@ export function LibraryDetailPage() {
           ) : null}
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-bottom">
-          {item.height < 4 ? (
+          {statisticLayoutOptions.unlimitedHeight || item.height < 4 ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -1753,7 +1794,12 @@ export function LibraryDetailPage() {
               title={t("panelLayout.expandHeight")}
               onClick={() =>
                 updateStatisticLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { height: item.height + 1 }),
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height + 1 },
+                    statisticLayoutOptions,
+                  ),
                 )
               }
             >
@@ -1768,7 +1814,12 @@ export function LibraryDetailPage() {
               title={t("panelLayout.shrinkHeight")}
               onClick={() =>
                 updateStatisticLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { height: item.height - 1 }),
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height - 1 },
+                    statisticLayoutOptions,
+                  ),
                 )
               }
             >
@@ -1782,7 +1833,7 @@ export function LibraryDetailPage() {
 
   return (
     <>
-      <section className="panel stack">
+      <section className="panel stack statistic-layout-header-panel">
         <div className="panel-title-row panel-title-row-with-actions">
           <div className="panel-title-row">
             <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
@@ -1805,6 +1856,11 @@ export function LibraryDetailPage() {
               setDropTargetStatisticPanelId(null);
               setIsEditingStatisticLayout(false);
             }}
+            onRestoreDefault={() => {
+              setDraftStatisticLayout(buildDefaultStatisticPanelLayout("library", statisticLayoutOptions));
+              setDraggedStatisticPanelId(null);
+              setDropTargetStatisticPanelId(null);
+            }}
             onSaveEditing={() => {
               persistStatisticLayout(draftStatisticLayout);
               setDraggedStatisticPanelId(null);
@@ -1812,7 +1868,9 @@ export function LibraryDetailPage() {
               setIsEditingStatisticLayout(false);
             }}
             onAddPanel={(statisticId) =>
-              updateStatisticLayout((current) => addStatisticPanelLayoutItem("library", current, statisticId))
+              updateStatisticLayout((current) =>
+                addStatisticPanelLayoutItem("library", current, statisticId, statisticLayoutOptions)
+              )
             }
           />
         </div>
@@ -1840,8 +1898,7 @@ export function LibraryDetailPage() {
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingStatisticLayout ? " is-editing" : ""}`}>
-        {visibleStatisticPanels.length > 0 ? (
-          visibleStatisticPanels.map((panel) => {
+        {visibleStatisticPanels.map((panel) => {
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
@@ -1859,6 +1916,7 @@ export function LibraryDetailPage() {
                 <ComparisonChartPanel
                   comparison={comparisonByPanel[panel.item.instanceId] ?? null}
                   selection={selection}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
                   onChangeXField={(xField) =>
@@ -1890,6 +1948,7 @@ export function LibraryDetailPage() {
                   title={t(panel.definition.panelTitleKey ?? panel.definition.nameKey)}
                   distribution={distribution}
                   metricId={panel.definition.numericMetricId}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
                   interactive={!statisticsError && !libraryStatistics ? false : true}
@@ -1991,17 +2050,14 @@ export function LibraryDetailPage() {
               >
                 {content}
                 {isEditingStatisticLayout ? (
-                  <div className="statistic-layout-overlay" aria-hidden="true">
+                  <div className="statistic-layout-overlay">
                     <div className="statistic-layout-overlay-sheen" />
                     {renderStatisticPanelResizeControls(panel)}
                   </div>
                 ) : null}
               </div>
             );
-          })
-        ) : (
-          <div className="notice">{t("libraryStatistics.noPanelsSelected")}</div>
-        )}
+          })}
       </div>
 
       <AsyncPanel

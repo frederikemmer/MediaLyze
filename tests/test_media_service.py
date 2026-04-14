@@ -796,6 +796,71 @@ def test_list_library_files_supports_structured_numeric_field_searches() -> None
     assert [item.filename for item in audio_bitrate_files.items] == ["feature.mkv"]
 
 
+def test_list_library_files_exposes_and_sorts_bitrate_columns() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Bitrate sort",
+            path="/tmp/bitrate-sort",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        lower = MediaFile(
+            library_id=library.id,
+            relative_path="lower.mkv",
+            filename="lower.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        higher = MediaFile(
+            library_id=library.id,
+            relative_path="higher.mkv",
+            filename="higher.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([lower, higher])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=lower.id, duration=120.0, bit_rate=2_000_000),
+                MediaFormat(media_file_id=higher.id, duration=120.0, bit_rate=8_000_000),
+                AudioStream(media_file_id=lower.id, stream_index=1, codec="aac", bit_rate=128_000),
+                AudioStream(media_file_id=higher.id, stream_index=1, codec="aac", bit_rate=384_000),
+            ]
+        )
+        db.commit()
+
+        bitrate_sorted = list_library_files(db, library.id, limit=50, sort_key="bitrate", sort_direction="desc")
+        audio_bitrate_sorted = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            sort_key="audio_bitrate",
+            sort_direction="desc",
+        )
+
+    assert [item.filename for item in bitrate_sorted.items] == ["higher.mkv", "lower.mkv"]
+    assert [item.filename for item in audio_bitrate_sorted.items] == ["higher.mkv", "lower.mkv"]
+    assert bitrate_sorted.items[0].bitrate == 8_000_000
+    assert bitrate_sorted.items[1].bitrate == 2_000_000
+    assert audio_bitrate_sorted.items[0].audio_bitrate == 384_000
+    assert audio_bitrate_sorted.items[1].audio_bitrate == 128_000
+
+
 def test_list_library_files_supports_negated_field_search_terms_and_comma_intersections() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

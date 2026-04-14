@@ -35,6 +35,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,

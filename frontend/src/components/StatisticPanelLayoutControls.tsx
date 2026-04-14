@@ -1,4 +1,4 @@
-import { Grid2x2Plus, Save } from "lucide-react";
+import { Grid2x2Plus, History, Save, SaveOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +10,7 @@ type StatisticPanelLayoutControlsProps = {
   isEditing: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
+  onRestoreDefault: () => void;
   onSaveEditing: () => void;
   onAddPanel: (statisticId: LibraryStatisticId) => void;
 };
@@ -19,6 +20,7 @@ export function StatisticPanelLayoutControls({
   isEditing,
   onStartEditing,
   onCancelEditing,
+  onRestoreDefault,
   onSaveEditing,
   onAddPanel,
 }: StatisticPanelLayoutControlsProps) {
@@ -83,7 +85,19 @@ export function StatisticPanelLayoutControls({
       </button>
       <button
         type="button"
-        className="statistic-layout-action-button is-active"
+        className="statistic-layout-action-button"
+        aria-label={t("panelLayout.restoreDefault")}
+        title={t("panelLayout.restoreDefault")}
+        onClick={() => {
+          setMenuOpen(false);
+          onRestoreDefault();
+        }}
+      >
+        <History className="nav-icon" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="statistic-layout-action-button"
         aria-label={t("panelLayout.cancel")}
         title={t("panelLayout.cancel")}
         onClick={() => {
@@ -91,7 +105,7 @@ export function StatisticPanelLayoutControls({
           onCancelEditing();
         }}
       >
-        <LayoutPanelTopIcon className="statistic-layout-action-icon" size={18} />
+        <SaveOff className="nav-icon" aria-hidden="true" />
       </button>
       <button
         type="button"

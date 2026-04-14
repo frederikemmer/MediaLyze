@@ -7,6 +7,13 @@ import type { NumericDistribution, NumericDistributionBin, NumericDistributionMe
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
 import { AsyncPanel } from "./AsyncPanel";
 
+const METRICS_WITHOUT_TOTAL_COPY = new Set<NumericDistributionMetricId>([
+  "size",
+  "duration",
+  "quality_score",
+  "bitrate",
+]);
+
 const LazyDistributionChart = lazy(async () => {
   const module = await import("./DistributionChart");
   return { default: module.DistributionChart };
@@ -16,6 +23,7 @@ type DistributionChartPanelProps = {
   title: string;
   distribution: NumericDistribution | null;
   metricId: NumericDistributionMetricId;
+  resizeToken?: string;
   loading?: boolean;
   error?: string | null;
   interactive?: boolean;
@@ -26,6 +34,7 @@ export function DistributionChartPanel({
   title,
   distribution,
   metricId,
+  resizeToken,
   loading = false,
   error = null,
   interactive = false,
@@ -34,6 +43,7 @@ export function DistributionChartPanel({
   const { t } = useTranslation();
   const [mode, setMode] = useState<NumericDistributionDisplayMode>("count");
   const toggleId = useId();
+  const showTotalCopy = !METRICS_WITHOUT_TOTAL_COPY.has(metricId);
 
   return (
     <AsyncPanel
@@ -91,16 +101,21 @@ export function DistributionChartPanel({
       {!distribution || distribution.total <= 0 ? (
         <div className="notice">{t("distributionChart.empty")}</div>
       ) : (
-        <div className="distribution-chart-panel-content">
-          <span className="distribution-chart-total">
-            {t("distributionChart.total", {
-              total: distribution.total,
-              metric: t(`distributionChart.metrics.${metricId}`),
-            })}
-          </span>
+        <div
+          className={`distribution-chart-panel-content${showTotalCopy ? "" : " distribution-chart-panel-content-compact"}`}
+        >
+          {showTotalCopy ? (
+            <span className="distribution-chart-total">
+              {t("distributionChart.total", {
+                total: distribution.total,
+                metric: t(`distributionChart.metrics.${metricId}`),
+              })}
+            </span>
+          ) : null}
           <div className="distribution-chart-canvas">
             <Suspense fallback={<div className="notice">{t("distributionChart.loading")}</div>}>
               <LazyDistributionChart
+                key={resizeToken ? `${metricId}-${resizeToken}` : metricId}
                 distribution={distribution}
                 metricId={metricId}
                 mode={mode}

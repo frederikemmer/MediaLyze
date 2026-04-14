@@ -149,7 +149,7 @@ const SCAN_WORKER_COUNT_MAX = 16;
 const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
 const PARALLEL_SCAN_JOB_COUNT_MAX = 8;
 const COMPARISON_SCATTER_POINT_LIMIT_MIN = 100;
-const COMPARISON_SCATTER_POINT_LIMIT_MAX = 20000;
+const COMPARISON_SCATTER_POINT_LIMIT_MAX = 500000;
 const DEFAULT_SCAN_PERFORMANCE = {
   scan_worker_count: 4,
   parallel_scan_jobs: 2,
@@ -157,7 +157,19 @@ const DEFAULT_SCAN_PERFORMANCE = {
 };
 const SCAN_WORKER_OPTIONS = Array.from({ length: SCAN_WORKER_COUNT_MAX }, (_, index) => index + 1);
 const PARALLEL_SCAN_JOB_OPTIONS = Array.from({ length: PARALLEL_SCAN_JOB_COUNT_MAX }, (_, index) => index + 1);
-const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [250, 500, 1000, 2500, 5000, 10000, 20000];
+const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [
+  250,
+  500,
+  1000,
+  2500,
+  5000,
+  10000,
+  20000,
+  50000,
+  100000,
+  250000,
+  500000,
+];
 
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
@@ -432,6 +444,7 @@ export function LibrariesPage() {
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
+  const [unlimitedPanelSize, setUnlimitedPanelSize] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
   const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [comparisonScatterPointLimitInput, setComparisonScatterPointLimitInput] = useState("5000");
@@ -736,6 +749,7 @@ export function LibrariesPage() {
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
+    setUnlimitedPanelSize(appSettings.feature_flags.unlimited_panel_size);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
     parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
     comparisonScatterPointLimitInputRef.current = String(appScanPerformance.comparison_scatter_point_limit);
@@ -965,6 +979,7 @@ export function LibrariesPage() {
     nextShowAnalyzedFilesCsvExport: boolean,
     nextShowFullWidthAppShell: boolean,
     nextHideQualityScoreMeter: boolean,
+    nextUnlimitedPanelSize: boolean,
     nextResolutionCategories?: ResolutionCategory[],
     nextScanPerformance = {
       scan_worker_count: normalizeScanPerformanceInput(
@@ -996,6 +1011,7 @@ export function LibrariesPage() {
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
         show_full_width_app_shell: nextShowFullWidthAppShell,
         hide_quality_score_meter: nextHideQualityScoreMeter,
+        unlimited_panel_size: nextUnlimitedPanelSize,
       },
     });
   }
@@ -1006,6 +1022,7 @@ export function LibrariesPage() {
     nextShowAnalyzedFilesCsvExport = showAnalyzedFilesCsvExport,
     nextShowFullWidthAppShell = showFullWidthAppShell,
     nextHideQualityScoreMeter = hideQualityScoreMeter,
+    nextUnlimitedPanelSize = unlimitedPanelSize,
     nextResolutionCategories?: ResolutionCategory[],
   ) {
     const requestId = ignorePatternsRequestId.current + 1;
@@ -1018,6 +1035,7 @@ export function LibrariesPage() {
         nextShowAnalyzedFilesCsvExport,
         nextShowFullWidthAppShell,
         nextHideQualityScoreMeter,
+        nextUnlimitedPanelSize,
         nextResolutionCategories,
       );
       const persisted = toPersistedIgnorePatterns(updated);
@@ -1031,6 +1049,7 @@ export function LibrariesPage() {
         setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
         setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
         setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+        setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
         const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
         scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
         parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
@@ -1073,10 +1092,12 @@ export function LibrariesPage() {
         enabled,
         showFullWidthAppShell,
         hideQualityScoreMeter,
+        unlimitedPanelSize,
       );
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
@@ -1101,10 +1122,12 @@ export function LibrariesPage() {
         showAnalyzedFilesCsvExport,
         enabled,
         hideQualityScoreMeter,
+        unlimitedPanelSize,
       );
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
@@ -1129,16 +1152,48 @@ export function LibrariesPage() {
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         enabled,
+        unlimitedPanelSize,
       );
       setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
       setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
       setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
       setAppSettings(updated);
     } catch (reason) {
       setHideQualityScoreMeter(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
+  async function toggleUnlimitedPanelSize(enabled: boolean) {
+    const previousValue = unlimitedPanelSize;
+    setUnlimitedPanelSize(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
+        enabled,
+      );
+      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setAppSettings(updated);
+    } catch (reason) {
+      setUnlimitedPanelSize(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
     } finally {
       setIsSavingFeatureFlags(false);
@@ -1191,6 +1246,7 @@ export function LibrariesPage() {
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         hideQualityScoreMeter,
+        unlimitedPanelSize,
         nextCategories,
       );
       const normalized = normalizeResolutionCategories(updated.resolution_categories);
@@ -1241,6 +1297,7 @@ export function LibrariesPage() {
         showAnalyzedFilesCsvExport,
         showFullWidthAppShell,
         hideQualityScoreMeter,
+        unlimitedPanelSize,
         undefined,
         {
           scan_worker_count: nextScanWorkerCount,
@@ -1388,7 +1445,7 @@ export function LibrariesPage() {
 
   function toggleStatisticVisibility(
     statisticId: LibraryStatisticId,
-    area: "panelEnabled" | "tableEnabled" | "tableTooltipEnabled" | "dashboardEnabled",
+    area: "tableEnabled" | "tableTooltipEnabled",
   ) {
     updateStatisticsSettings((current) =>
       updateLibraryStatisticVisibility(current, statisticId, {
@@ -2454,87 +2511,71 @@ export function LibrariesPage() {
                   <thead>
                     <tr>
                       <th scope="col">{t("libraryStatistics.name")}</th>
-                      <th scope="col">{t("libraryStatistics.statistics")}</th>
                       <th scope="col">{t("libraryStatistics.table")}</th>
                       <th scope="col">{t("libraryStatistics.tooltips")}</th>
-                      <th scope="col">{t("libraryStatistics.dashboard")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {orderedStatistics.map((statistic) => {
-                      const visibility = statisticsSettings.visibility[statistic.id];
-                      return (
-                        <tr
-                          key={statistic.id}
-                          className={dropTargetStatisticId === statistic.id ? "is-drop-target" : undefined}
-                          onDragOver={(event) => {
-                            event.preventDefault();
-                            if (draggedStatisticId && draggedStatisticId !== statistic.id) {
-                              setDropTargetStatisticId(statistic.id);
-                            }
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            handleStatisticDrop(statistic.id);
-                          }}
-                        >
-                          <td>
-                            <div className="statistic-name-cell">
-                              <span
-                                className={`statistics-drag-handle${draggedStatisticId === statistic.id ? " is-dragging" : ""}`}
-                                draggable
-                                onDragStart={(event) => {
-                                  event.dataTransfer.effectAllowed = "move";
-                                  event.dataTransfer.setData("text/plain", statistic.id);
-                                  setDraggedStatisticId(statistic.id);
-                                  setDropTargetStatisticId(statistic.id);
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedStatisticId(null);
-                                  setDropTargetStatisticId(null);
-                                }}
-                                aria-hidden="true"
-                              >
-                                <GripVertical className="nav-icon" />
-                              </span>
-                              <span>{t(statistic.nameKey)}</span>
-                            </div>
-                          </td>
-                          <td className="settings-checkbox-cell">
-                            <input
-                              type="checkbox"
-                              checked={visibility.panelEnabled}
-                              disabled={!statistic.supportsPanel}
-                              onChange={() => toggleStatisticVisibility(statistic.id, "panelEnabled")}
-                            />
-                          </td>
-                          <td className="settings-checkbox-cell">
-                            <input
-                              type="checkbox"
-                              checked={visibility.tableEnabled}
-                              disabled={!statistic.supportsTable}
-                              onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
-                            />
-                          </td>
-                          <td className="settings-checkbox-cell">
-                            <input
-                              type="checkbox"
-                              checked={visibility.tableTooltipEnabled}
-                              disabled={!statistic.supportsTableTooltip || !visibility.tableEnabled}
-                              onChange={() => toggleStatisticVisibility(statistic.id, "tableTooltipEnabled")}
-                            />
-                          </td>
-                          <td className="settings-checkbox-cell">
-                            <input
-                              type="checkbox"
-                              checked={visibility.dashboardEnabled}
-                              disabled={!statistic.supportsDashboard}
-                              onChange={() => toggleStatisticVisibility(statistic.id, "dashboardEnabled")}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {orderedStatistics
+                      .filter((statistic) => statistic.supportsTable || statistic.supportsTableTooltip)
+                      .map((statistic) => {
+                        const visibility = statisticsSettings.visibility[statistic.id];
+                        return (
+                          <tr
+                            key={statistic.id}
+                            className={dropTargetStatisticId === statistic.id ? "is-drop-target" : undefined}
+                            onDragOver={(event) => {
+                              event.preventDefault();
+                              if (draggedStatisticId && draggedStatisticId !== statistic.id) {
+                                setDropTargetStatisticId(statistic.id);
+                              }
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              handleStatisticDrop(statistic.id);
+                            }}
+                          >
+                            <td>
+                              <div className="statistic-name-cell">
+                                <span
+                                  className={`statistics-drag-handle${draggedStatisticId === statistic.id ? " is-dragging" : ""}`}
+                                  draggable
+                                  onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", statistic.id);
+                                    setDraggedStatisticId(statistic.id);
+                                    setDropTargetStatisticId(statistic.id);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedStatisticId(null);
+                                    setDropTargetStatisticId(null);
+                                  }}
+                                  aria-hidden="true"
+                                >
+                                  <GripVertical className="nav-icon" />
+                                </span>
+                                <span>{t(statistic.nameKey)}</span>
+                              </div>
+                            </td>
+                            <td className="settings-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={visibility.tableEnabled}
+                                disabled={!statistic.supportsTable}
+                                onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
+                              />
+                            </td>
+                            <td className="settings-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={visibility.tableTooltipEnabled}
+                                disabled={!statistic.supportsTableTooltip || !visibility.tableEnabled}
+                                onChange={() => toggleStatisticVisibility(statistic.id, "tableTooltipEnabled")}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -2895,29 +2936,30 @@ export function LibrariesPage() {
             }}
           >
             <div className="settings-sidebar-stack">
-              <div className="field">
-                <label htmlFor="app-language">{t("libraries.language")}</label>
-                <select
-                  id="app-language"
-                  value={i18n.resolvedLanguage ?? "en"}
-                  onChange={(event) => void i18n.changeLanguage(event.target.value)}
-                >
-                  <option value="en">{t("language.en")}</option>
-                  <option value="de">{t("language.de")}</option>
-                </select>
-              </div>
-              <div className="app-settings-divider" aria-hidden="true" />
-              <div className="field">
-                <label htmlFor="app-theme">{t("libraries.theme")}</label>
-                <select
-                  id="app-theme"
-                  value={themePref}
-                  onChange={(event) => setThemePref(event.target.value as ThemePreference)}
-                >
-                  <option value="system">{t("theme.system")}</option>
-                  <option value="light">{t("theme.light")}</option>
-                  <option value="dark">{t("theme.dark")}</option>
-                </select>
+              <div className="app-settings-performance-grid">
+                <div className="field">
+                  <label htmlFor="app-language">{t("libraries.language")}</label>
+                  <select
+                    id="app-language"
+                    value={i18n.resolvedLanguage ?? "en"}
+                    onChange={(event) => void i18n.changeLanguage(event.target.value)}
+                  >
+                    <option value="en">{t("language.en")}</option>
+                    <option value="de">{t("language.de")}</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="app-theme">{t("libraries.theme")}</label>
+                  <select
+                    id="app-theme"
+                    value={themePref}
+                    onChange={(event) => setThemePref(event.target.value as ThemePreference)}
+                  >
+                    <option value="system">{t("theme.system")}</option>
+                    <option value="light">{t("theme.light")}</option>
+                    <option value="dark">{t("theme.dark")}</option>
+                  </select>
+                </div>
               </div>
               <div className="app-settings-divider" aria-hidden="true" />
               <div className="app-settings-section">
@@ -2977,6 +3019,14 @@ export function LibrariesPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="field">
+                  </div>
+                </div>
+              </div>
+              <div className="app-settings-divider" aria-hidden="true" />
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("libraries.plotsChartsTitle")}</p>
+                <div className="app-settings-performance-grid">
                   <div className="field">
                     <div className="field-label-row">
                       <label htmlFor="comparison-scatter-point-limit">{t("libraries.comparisonScatterPointLimit")}</label>
@@ -3066,6 +3116,25 @@ export function LibrariesPage() {
                   <TooltipTrigger
                     ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
                     content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="unlimited-panel-size">
+                    <input
+                      id="unlimited-panel-size"
+                      type="checkbox"
+                      checked={unlimitedPanelSize}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleUnlimitedPanelSize(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.unlimitedPanelSize")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.unlimitedPanelSizeTooltipAria")}
+                    content={t("libraries.featureFlags.unlimitedPanelSizeTooltip")}
                     preserveLineBreaks
                   >
                     ?

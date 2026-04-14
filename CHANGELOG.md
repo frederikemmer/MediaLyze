@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 - add configurable metric-comparison statistic panels on the dashboard and library detail pages, with two-axis selection, heatmap / scatter / bar renderers, and dedicated comparison API endpoints for direct context such as `size` versus `duration` ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
 - extend metric-comparison charts with a numeric `Resolution - MP` axis option, show the active renderer icon directly in the toolbar button, and add an App Settings control for the scatter-plot sample limit ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
 - add inline statistic-panel layout editing on the dashboard and per-library detail pages, including a visible `Dashboard` page title, animated edit controls, add-panel menus, drag-and-drop reordering, per-panel resize controls, and browser-persisted layouts for each page context
+- add curated first-run default layouts for dashboard and library statistic panels, allow intentionally empty saved panel layouts, and add a `History` restore-default action to the inline layout toolbar
+- add a new `unlimited panel size` feature flag that removes the current 4-row height cap for dashboard and library statistic panels while still keeping panel width constrained by the underlying 4-column grid
+- simplify the former `Library statistics` settings block into a `Table View` section that now only manages analyzed-files table columns and tooltips, while `Bitrate` and `Audio bitrate` can also be enabled as table columns
+
+### 🐛 Bug fixes
+
+- remount statistic charts when resized smaller so comparison and histogram panels redraw correctly after inline panel-size changes, restore top-aligned list panels, and make newly added statistic panels default to `1x2`
 
 ## v0.6.0
 

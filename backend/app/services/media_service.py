@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Iterator, Literal
 
-from sqlalchemy import String, and_, case, cast, func, literal, select, union_all
+from sqlalchemy import Float, String, and_, case, cast, func, literal, select, union_all
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
@@ -43,6 +43,8 @@ FileSortKey = Literal[
     "resolution",
     "hdr_type",
     "duration",
+    "bitrate",
+    "audio_bitrate",
     "audio_codecs",
     "audio_spatial_profiles",
     "audio_languages",
@@ -134,6 +136,8 @@ def _subtitle_sources(media_file: MediaFile) -> list[str]:
 def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaFileTableRow:
     primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
     duration = media_file.media_format.duration if media_file.media_format else None
+    bitrate = media_file.media_format.bit_rate if media_file.media_format else None
+    audio_bitrate = sum(max(stream.bit_rate or 0, 0) for stream in media_file.audio_streams) or None
     resolution = None
     if primary_video and primary_video.width and primary_video.height:
         resolution = f"{primary_video.width}x{primary_video.height}"
@@ -156,6 +160,8 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         quality_score_raw=media_file.quality_score_raw,
         container=_container_value(media_file),
         duration=duration,
+        bitrate=bitrate,
+        audio_bitrate=audio_bitrate,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
         resolution_category_id=resolution_category.id if resolution_category else None,
@@ -373,6 +379,8 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "resolution": resolution_pixels,
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
         "duration": func.coalesce(MediaFormat.duration, 0),
+        "bitrate": func.coalesce(cast(bitrate_value_expression(), Float), 0),
+        "audio_bitrate": func.coalesce(cast(audio_bitrate_value_expression(audio_aggregates), Float), 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
         "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
         "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),

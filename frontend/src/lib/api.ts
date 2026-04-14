@@ -216,6 +216,8 @@ export type MediaFileRow = {
   quality_score_raw: number;
   container: string | null;
   duration: number | null;
+  bitrate: number | null;
+  audio_bitrate: number | null;
   video_codec: string | null;
   resolution: string | null;
   resolution_category_id?: string | null;
@@ -289,6 +291,8 @@ export type MediaFileSortKey =
   | "resolution"
   | "hdr_type"
   | "duration"
+  | "bitrate"
+  | "audio_bitrate"
   | "audio_codecs"
   | "audio_spatial_profiles"
   | "audio_languages"
@@ -376,6 +380,7 @@ export type AppSettings = {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
+    unlimited_panel_size: boolean;
   };
 };
 
@@ -731,6 +736,7 @@ export const api = {
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;
+      unlimited_panel_size?: boolean;
     };
   }) =>
     request<AppSettings>("/app-settings", {

@@ -47,6 +47,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     show_analyzed_files_csv_export: false,
     show_full_width_app_shell: false,
     hide_quality_score_meter: false,
+    unlimited_panel_size: false,
   },
 };
 
@@ -67,6 +68,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
       show_full_width_app_shell: payload?.feature_flags?.show_full_width_app_shell ?? false,
       hide_quality_score_meter: payload?.feature_flags?.hide_quality_score_meter ?? false,
+      unlimited_panel_size: payload?.feature_flags?.unlimited_panel_size ?? false,
     },
   };
 }

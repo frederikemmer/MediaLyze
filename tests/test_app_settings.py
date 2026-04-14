@@ -56,6 +56,7 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
@@ -78,6 +79,7 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_path) -> None:
@@ -99,6 +101,7 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective_list(tmp_path) -> None:
@@ -120,6 +123,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
                     "show_analyzed_files_csv_export": True,
                     "show_full_width_app_shell": True,
                     "hide_quality_score_meter": True,
+                    "unlimited_panel_size": True,
                 },
             ),
             settings,
@@ -136,6 +140,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.feature_flags.show_analyzed_files_csv_export is True
     assert updated.feature_flags.show_full_width_app_shell is True
     assert updated.feature_flags.hide_quality_score_meter is True
+    assert updated.feature_flags.unlimited_panel_size is True
     assert loaded == updated
     assert stored is not None
     assert stored.value == {
@@ -151,6 +156,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "show_analyzed_files_csv_export": True,
             "show_full_width_app_shell": True,
             "hide_quality_score_meter": True,
+            "unlimited_panel_size": True,
         },
     }
 
@@ -175,6 +181,7 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.feature_flags.show_analyzed_files_csv_export is False
     assert updated.feature_flags.show_full_width_app_shell is False
     assert updated.feature_flags.hide_quality_score_meter is False
+    assert updated.feature_flags.unlimited_panel_size is False
 
 
 def test_update_app_settings_supports_resolution_category_renames_and_remaps_quality_profiles(tmp_path) -> None:

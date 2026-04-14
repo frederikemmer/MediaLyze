@@ -3,6 +3,7 @@ import {
   PanelLeftClose,
   PanelRightClose,
   PanelTopClose,
+  Trash2,
 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -27,10 +28,12 @@ import {
 } from "../lib/library-statistics-settings";
 import {
   addStatisticPanelLayoutItem,
+  buildDefaultStatisticPanelLayout,
   cloneStatisticPanelLayout,
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
   moveStatisticPanelLayoutItem,
+  removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
   saveStatisticPanelLayout,
   updateStatisticPanelLayoutComparisonSelection,
@@ -83,11 +86,18 @@ type VisibleDashboardPanel = {
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { dashboard, dashboardLoaded, loadDashboard } = useAppData();
+  const { appSettings, dashboard, dashboardLoaded, loadDashboard } = useAppData();
   const [error, setError] = useState<string | null>(null);
-  const initialLayout = getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY);
-  const [savedLayout, setSavedLayout] = useState(initialLayout);
-  const [draftLayout, setDraftLayout] = useState(() => cloneStatisticPanelLayout(initialLayout));
+  const layoutOptions = useMemo(
+    () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
+    [appSettings.feature_flags.unlimited_panel_size],
+  );
+  const [savedLayout, setSavedLayout] = useState(() =>
+    getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions),
+  );
+  const [draftLayout, setDraftLayout] = useState(() =>
+    cloneStatisticPanelLayout(getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions)),
+  );
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
   const [dropTargetPanelId, setDropTargetPanelId] = useState<string | null>(null);
@@ -136,6 +146,20 @@ export function DashboardPage() {
     }
     loadDashboard().catch((reason: Error) => setError(reason.message));
   }, [dashboardLoaded, loadDashboard]);
+
+  useEffect(() => {
+    const nextLayout = saveStatisticPanelLayout(
+      "dashboard",
+      DASHBOARD_LAYOUT_KEY,
+      getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions),
+      layoutOptions,
+    );
+    setSavedLayout(nextLayout);
+    setDraftLayout(cloneStatisticPanelLayout(nextLayout));
+    setIsEditingLayout(false);
+    setDraggedPanelId(null);
+    setDropTargetPanelId(null);
+  }, [layoutOptions]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
     const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
@@ -225,7 +249,7 @@ export function DashboardPage() {
   }, []);
 
   function persistLayout(nextLayout: typeof savedLayout) {
-    const normalized = saveStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, nextLayout);
+    const normalized = saveStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, nextLayout, layoutOptions);
     setSavedLayout(normalized);
     setDraftLayout(cloneStatisticPanelLayout(normalized));
   }
@@ -269,6 +293,19 @@ export function DashboardPage() {
     const { item } = panel;
     return (
       <>
+        <div className="statistic-layout-size-controls statistic-layout-size-controls-top-left">
+          <button
+            type="button"
+            className="statistic-layout-size-button"
+            aria-label={t("panelLayout.remove")}
+            title={t("panelLayout.remove")}
+            onClick={() =>
+              updateLayout((current) => removeStatisticPanelLayoutItem(current, item.instanceId))
+            }
+          >
+            <Trash2 className="nav-icon" aria-hidden="true" />
+          </button>
+        </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-right">
           {item.width < 4 ? (
             <button
@@ -302,7 +339,7 @@ export function DashboardPage() {
           ) : null}
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-bottom">
-          {item.height < 4 ? (
+          {layoutOptions.unlimitedHeight || item.height < 4 ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -310,7 +347,12 @@ export function DashboardPage() {
               title={t("panelLayout.expandHeight")}
               onClick={() =>
                 updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { height: item.height + 1 }),
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height + 1 },
+                    layoutOptions,
+                  ),
                 )
               }
             >
@@ -325,7 +367,12 @@ export function DashboardPage() {
               title={t("panelLayout.shrinkHeight")}
               onClick={() =>
                 updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { height: item.height - 1 }),
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height - 1 },
+                    layoutOptions,
+                  ),
                 )
               }
             >
@@ -339,7 +386,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <section className="panel stack">
+      <section className="panel stack statistic-layout-header-panel">
         <div className="panel-title-row panel-title-row-with-actions">
           <h2>{t("nav.dashboard")}</h2>
           <StatisticPanelLayoutControls
@@ -355,6 +402,11 @@ export function DashboardPage() {
               setDropTargetPanelId(null);
               setIsEditingLayout(false);
             }}
+            onRestoreDefault={() => {
+              setDraftLayout(buildDefaultStatisticPanelLayout("dashboard", layoutOptions));
+              setDraggedPanelId(null);
+              setDropTargetPanelId(null);
+            }}
             onSaveEditing={() => {
               persistLayout(draftLayout);
               setDraggedPanelId(null);
@@ -362,7 +414,9 @@ export function DashboardPage() {
               setIsEditingLayout(false);
             }}
             onAddPanel={(statisticId) =>
-              updateLayout((current) => addStatisticPanelLayoutItem("dashboard", current, statisticId))
+              updateLayout((current) =>
+                addStatisticPanelLayoutItem("dashboard", current, statisticId, layoutOptions)
+              )
             }
           />
         </div>
@@ -382,8 +436,7 @@ export function DashboardPage() {
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingLayout ? " is-editing" : ""}`}>
-        {visiblePanels.length > 0 ? (
-          visiblePanels.map((panel) => {
+        {visiblePanels.map((panel) => {
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
@@ -401,6 +454,7 @@ export function DashboardPage() {
                 <ComparisonChartPanel
                   comparison={comparisonByPanel[panel.item.instanceId] ?? null}
                   selection={selection}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
                   onChangeXField={(xField) =>
@@ -429,6 +483,7 @@ export function DashboardPage() {
                   title={t(panel.definition.dashboardTitleKey ?? panel.definition.nameKey)}
                   distribution={distribution}
                   metricId={panel.definition.numericMetricId}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={!dashboard && !error}
                   error={error}
                 />
@@ -502,17 +557,14 @@ export function DashboardPage() {
               >
                 {content}
                 {isEditingLayout ? (
-                  <div className="statistic-layout-overlay" aria-hidden="true">
+                  <div className="statistic-layout-overlay">
                     <div className="statistic-layout-overlay-sheen" />
                     {renderResizeControls(panel)}
                   </div>
                 ) : null}
               </div>
             );
-          })
-        ) : (
-          <div className="notice">{t("libraryStatistics.noDashboardSelected")}</div>
-        )}
+          })}
       </div>
     </>
   );

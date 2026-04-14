@@ -1,7 +1,4 @@
 import {
-  getLibraryStatisticsSettings,
-  getVisibleDashboardStatisticPanels,
-  getVisibleLibraryStatisticPanels,
   LIBRARY_STATISTIC_DEFINITIONS,
   type LibraryStatisticDefinition,
   type LibraryStatisticId,
@@ -28,7 +25,72 @@ export type StatisticPanelLayout = {
 
 const STORAGE_KEY_PREFIX = "medialyze-statistic-panel-layout";
 const MIN_PANEL_UNITS = 1;
-const MAX_PANEL_UNITS = 4;
+const MAX_PANEL_WIDTH_UNITS = 4;
+
+export type StatisticPanelLayoutOptions = {
+  unlimitedHeight?: boolean;
+};
+
+type DefaultLayoutBlueprintItem = {
+  statisticId: LibraryStatisticId;
+  width: number;
+  height: number;
+  comparisonSelection?: ComparisonSelection;
+};
+
+const LIBRARY_DEFAULT_LAYOUT_BLUEPRINT: DefaultLayoutBlueprintItem[] = [
+  { statisticId: "size", width: 2, height: 2 },
+  { statisticId: "resolution", width: 1, height: 2 },
+  { statisticId: "video_codec", width: 1, height: 2 },
+  { statisticId: "hdr_type", width: 1, height: 2 },
+  { statisticId: "audio_languages", width: 1, height: 2 },
+  { statisticId: "duration", width: 1, height: 2 },
+  {
+    statisticId: "comparison",
+    width: 1,
+    height: 2,
+    comparisonSelection: {
+      xField: "size",
+      yField: "duration",
+      renderer: "scatter",
+    },
+  },
+];
+
+const DASHBOARD_DEFAULT_LAYOUT_BLUEPRINT: DefaultLayoutBlueprintItem[] = [
+  { statisticId: "size", width: 2, height: 2 },
+  { statisticId: "video_codec", width: 1, height: 2 },
+  { statisticId: "quality_score", width: 1, height: 2 },
+  {
+    statisticId: "comparison",
+    width: 1,
+    height: 2,
+    comparisonSelection: {
+      xField: "size",
+      yField: "duration",
+      renderer: "scatter",
+    },
+  },
+  { statisticId: "resolution", width: 1, height: 2 },
+  {
+    statisticId: "comparison",
+    width: 2,
+    height: 2,
+    comparisonSelection: {
+      xField: "video_codec",
+      yField: "size",
+      renderer: "heatmap",
+    },
+  },
+  { statisticId: "audio_languages", width: 1, height: 2 },
+  { statisticId: "bitrate", width: 1, height: 2 },
+  { statisticId: "container", width: 1, height: 2 },
+  { statisticId: "audio_codecs", width: 1, height: 2 },
+  { statisticId: "duration", width: 1, height: 2 },
+  { statisticId: "hdr_type", width: 1, height: 2 },
+  { statisticId: "audio_bitrate", width: 1, height: 2 },
+  { statisticId: "subtitle_languages", width: 1, height: 2 },
+];
 
 function buildStorageKey(scope: StatisticPanelLayoutScope, pageKey: string): string {
   return `${STORAGE_KEY_PREFIX}-${scope}-${pageKey}`;
@@ -41,9 +103,11 @@ function getAllSupportedDefinitions(scope: StatisticPanelLayoutScope): LibrarySt
 }
 
 function getDefaultVisibleDefinitions(scope: StatisticPanelLayoutScope): LibraryStatisticDefinition[] {
-  return scope === "dashboard"
-    ? getVisibleDashboardStatisticPanels(getLibraryStatisticsSettings())
-    : getVisibleLibraryStatisticPanels(getLibraryStatisticsSettings());
+  return LIBRARY_STATISTIC_DEFINITIONS.filter((definition) =>
+    scope === "dashboard"
+      ? definition.supportsDashboard && definition.defaultDashboardEnabled
+      : definition.supportsPanel && definition.defaultPanelEnabled,
+  );
 }
 
 function getDefaultPanelSize(statisticId: LibraryStatisticId): Pick<StatisticPanelLayoutItem, "width" | "height"> {
@@ -56,11 +120,19 @@ function getDefaultPanelSize(statisticId: LibraryStatisticId): Pick<StatisticPan
   return { width: 1, height: 1 };
 }
 
-function clampPanelUnits(value: unknown): number {
+function clampPanelUnits(
+  value: unknown,
+  axis: "width" | "height",
+  options?: StatisticPanelLayoutOptions,
+): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return MIN_PANEL_UNITS;
   }
-  return Math.min(MAX_PANEL_UNITS, Math.max(MIN_PANEL_UNITS, Math.round(value)));
+  const rounded = Math.max(MIN_PANEL_UNITS, Math.round(value));
+  if (axis === "height" && options?.unlimitedHeight) {
+    return rounded;
+  }
+  return Math.min(MAX_PANEL_WIDTH_UNITS, rounded);
 }
 
 function normalizeComparisonSelection(
@@ -95,13 +167,14 @@ function buildPanelItem(
   comparisonSelection?: unknown,
   width?: unknown,
   height?: unknown,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayoutItem {
   const defaultSize = getDefaultPanelSize(statisticId);
   return {
     instanceId,
     statisticId,
-    width: clampPanelUnits(width ?? defaultSize.width),
-    height: clampPanelUnits(height ?? defaultSize.height),
+    width: clampPanelUnits(width ?? defaultSize.width, "width", options),
+    height: clampPanelUnits(height ?? defaultSize.height, "height", options),
     comparisonSelection:
       statisticId === "comparison"
         ? normalizeComparisonSelection(scope, comparisonSelection)
@@ -118,7 +191,32 @@ export function cloneStatisticPanelLayout(layout: StatisticPanelLayout): Statist
   };
 }
 
-export function buildDefaultStatisticPanelLayout(scope: StatisticPanelLayoutScope): StatisticPanelLayout {
+export function buildDefaultStatisticPanelLayout(
+  scope: StatisticPanelLayoutScope,
+  options?: StatisticPanelLayoutOptions,
+): StatisticPanelLayout {
+  if (scope === "library" || scope === "dashboard") {
+    const blueprint =
+      scope === "library" ? LIBRARY_DEFAULT_LAYOUT_BLUEPRINT : DASHBOARD_DEFAULT_LAYOUT_BLUEPRINT;
+    let comparisonIndex = 0;
+    return {
+      items: blueprint.map(({ statisticId, width, height, comparisonSelection }) => {
+        if (statisticId === "comparison") {
+          comparisonIndex += 1;
+        }
+        return buildPanelItem(
+          scope,
+          statisticId,
+          buildDefaultInstanceId(statisticId, comparisonIndex),
+          comparisonSelection,
+          width,
+          height,
+          options,
+        );
+      }),
+    };
+  }
+
   let comparisonIndex = 0;
   return {
     items: getDefaultVisibleDefinitions(scope).map((definition) => {
@@ -129,6 +227,10 @@ export function buildDefaultStatisticPanelLayout(scope: StatisticPanelLayoutScop
         scope,
         definition.id,
         buildDefaultInstanceId(definition.id, comparisonIndex),
+        undefined,
+        undefined,
+        undefined,
+        options,
       );
     }),
   };
@@ -137,15 +239,17 @@ export function buildDefaultStatisticPanelLayout(scope: StatisticPanelLayoutScop
 export function normalizeStatisticPanelLayout(
   scope: StatisticPanelLayoutScope,
   value: unknown,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
   const supportedDefinitions = getAllSupportedDefinitions(scope);
   const supportedIds = new Set(supportedDefinitions.map((definition) => definition.id));
   if (!value || typeof value !== "object") {
-    return buildDefaultStatisticPanelLayout(scope);
+    return buildDefaultStatisticPanelLayout(scope, options);
   }
 
-  const candidateItems: unknown[] = Array.isArray((value as Partial<StatisticPanelLayout>).items)
-    ? (value as Partial<StatisticPanelLayout>).items as unknown[]
+  const hasExplicitItems = Array.isArray((value as Partial<StatisticPanelLayout>).items);
+  const candidateItems: unknown[] = hasExplicitItems
+    ? ((value as Partial<StatisticPanelLayout>).items as unknown[])
     : [];
   const seenInstanceIds = new Set<string>();
   const seenSingleStatisticIds = new Set<LibraryStatisticId>();
@@ -190,30 +294,38 @@ export function normalizeStatisticPanelLayout(
         (candidate as Partial<StatisticPanelLayoutItem>).comparisonSelection,
         (candidate as Partial<StatisticPanelLayoutItem>).width,
         (candidate as Partial<StatisticPanelLayoutItem>).height,
+        options,
       ),
     );
   }
 
-  return normalizedItems.length > 0 ? { items: normalizedItems } : buildDefaultStatisticPanelLayout(scope);
+  if (normalizedItems.length > 0) {
+    return { items: normalizedItems };
+  }
+  if (hasExplicitItems && candidateItems.length === 0) {
+    return { items: [] };
+  }
+  return buildDefaultStatisticPanelLayout(scope, options);
 }
 
 export function getStatisticPanelLayout(
   scope: StatisticPanelLayoutScope,
   pageKey: string,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
   if (typeof window === "undefined") {
-    return buildDefaultStatisticPanelLayout(scope);
+    return buildDefaultStatisticPanelLayout(scope, options);
   }
 
   const raw = window.localStorage.getItem(buildStorageKey(scope, pageKey));
   if (!raw) {
-    return buildDefaultStatisticPanelLayout(scope);
+    return buildDefaultStatisticPanelLayout(scope, options);
   }
 
   try {
-    return normalizeStatisticPanelLayout(scope, JSON.parse(raw));
+    return normalizeStatisticPanelLayout(scope, JSON.parse(raw), options);
   } catch {
-    return buildDefaultStatisticPanelLayout(scope);
+    return buildDefaultStatisticPanelLayout(scope, options);
   }
 }
 
@@ -221,8 +333,9 @@ export function saveStatisticPanelLayout(
   scope: StatisticPanelLayoutScope,
   pageKey: string,
   layout: StatisticPanelLayout,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
-  const normalized = normalizeStatisticPanelLayout(scope, layout);
+  const normalized = normalizeStatisticPanelLayout(scope, layout, options);
   if (typeof window !== "undefined") {
     window.localStorage.setItem(buildStorageKey(scope, pageKey), JSON.stringify(normalized));
   }
@@ -248,6 +361,7 @@ export function addStatisticPanelLayoutItem(
   scope: StatisticPanelLayoutScope,
   layout: StatisticPanelLayout,
   statisticId: LibraryStatisticId,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
   if (
     statisticId !== "comparison" &&
@@ -263,8 +377,11 @@ export function addStatisticPanelLayoutItem(
       : statisticId;
 
   return normalizeStatisticPanelLayout(scope, {
-    items: [...layout.items, buildPanelItem(scope, statisticId, instanceId)],
-  });
+    items: [
+      ...layout.items,
+      buildPanelItem(scope, statisticId, instanceId, undefined, 1, 2, options),
+    ],
+  }, options);
 }
 
 export function moveStatisticPanelLayoutItem(
@@ -292,17 +409,27 @@ export function resizeStatisticPanelLayoutItem(
   layout: StatisticPanelLayout,
   instanceId: string,
   sizePatch: Partial<Pick<StatisticPanelLayoutItem, "width" | "height">>,
+  options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
   return {
     items: layout.items.map((item) =>
       item.instanceId === instanceId
         ? {
             ...item,
-            width: clampPanelUnits(sizePatch.width ?? item.width),
-            height: clampPanelUnits(sizePatch.height ?? item.height),
+            width: clampPanelUnits(sizePatch.width ?? item.width, "width", options),
+            height: clampPanelUnits(sizePatch.height ?? item.height, "height", options),
           }
         : item,
     ),
+  };
+}
+
+export function removeStatisticPanelLayoutItem(
+  layout: StatisticPanelLayout,
+  instanceId: string,
+): StatisticPanelLayout {
+  return {
+    items: layout.items.filter((item) => item.instanceId !== instanceId),
   };
 }
 

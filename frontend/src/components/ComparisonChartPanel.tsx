@@ -28,6 +28,7 @@ echarts.use([BarChart, GridComponent, HeatmapChart, ScatterChart, TooltipCompone
 type ComparisonChartPanelProps = {
   comparison: ComparisonResponse | null;
   selection: ComparisonSelection;
+  resizeToken?: string;
   loading?: boolean;
   error?: string | null;
   onChangeXField: (fieldId: ComparisonFieldId) => void;
@@ -74,6 +75,7 @@ function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
 function ComparisonChartPanelComponent({
   comparison,
   selection,
+  resizeToken,
   loading = false,
   error = null,
   onChangeXField,
@@ -125,7 +127,7 @@ function ComparisonChartPanelComponent({
     if (selectedRenderer === "scatter" && comparison.scatter_points) {
       return {
         animation: false,
-        grid: { top: 2, right: 2, bottom: 2, left: 2, containLabel: true },
+        grid: { top: 10, right: 12, bottom: 6, left: 6, containLabel: true },
         tooltip: {
           ...tooltipBase,
           trigger: "item",
@@ -172,6 +174,7 @@ function ComparisonChartPanelComponent({
           {
             type: "scatter",
             symbolSize: 11,
+            clip: false,
             hoverAnimation: false,
             progressive: 0,
             itemStyle: {
@@ -490,6 +493,7 @@ function ComparisonChartPanelComponent({
         <div className="comparison-chart-content">
           {option ? (
             <ReactECharts
+              key={resizeToken ?? "comparison-chart"}
               echarts={echarts}
               option={option}
               onEvents={chartEvents}
@@ -514,6 +518,7 @@ export const ComparisonChartPanel = memo(
   (previousProps, nextProps) =>
     previousProps.comparison === nextProps.comparison &&
     previousProps.selection === nextProps.selection &&
+    previousProps.resizeToken === nextProps.resizeToken &&
     previousProps.loading === nextProps.loading &&
     previousProps.error === nextProps.error &&
     Boolean(previousProps.onOpenFile) === Boolean(nextProps.onOpenFile) &&
