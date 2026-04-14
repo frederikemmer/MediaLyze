@@ -16,5 +16,9 @@ services:
       MEDIA_ROOT: /media
       TZ: ${TZ:-UTC}
     volumes:
-      - ${CONFIG_HOST_DIR:-./config}:/config
-      - /Volumes/exSSD_4TB/Mediathek:/media:ro
+      - medialyze_config:/config
+      - ${MEDIA_ROOT:-./media}:/media:ro
+
+volumes:
+  medialyze_config:
+    driver: local
