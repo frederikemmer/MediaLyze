@@ -50,8 +50,16 @@ export function DistributionChart({
       },
       tooltip: {
         trigger: "axis",
+        triggerOn: "mousemove|click",
+        showDelay: 0,
+        hideDelay: 260,
+        transitionDuration: 0,
+        confine: true,
+        appendToBody: true,
+        extraCssText: "pointer-events:none;",
         axisPointer: {
           type: "shadow",
+          animation: false,
         },
         backgroundColor: "rgba(31, 28, 22, 0.94)",
         borderWidth: 0,
@@ -108,6 +116,7 @@ export function DistributionChart({
           type: "bar",
           barGap: "0%",
           barCategoryGap: "18%",
+          cursor: interactive ? "pointer" : "default",
           data: distribution.bins.map((bin) => (mode === "percentage" ? bin.percentage : bin.count)),
           itemStyle: {
             color: fillColor,
@@ -142,7 +151,11 @@ export function DistributionChart({
       notMerge
       lazyUpdate
       onEvents={onEvents}
-      style={{ height: 240, width: "100%", cursor: interactive ? "pointer" : "default" }}
+      style={{
+        height: "100%",
+        width: "100%",
+        cursor: interactive ? "pointer" : "default",
+      }}
     />
   );
 }

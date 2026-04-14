@@ -28,10 +28,11 @@
     "audioCodecs": "Audio-Codecs",
     "containers": "Container",
     "sizeDistribution": "Dateigroesse",
-    "durationDistribution": "Laufzeit",
+    "durationDistribution": "Dauer",
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "comparisonPanel": "Metrikvergleich",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
@@ -88,6 +89,7 @@
     "language": "Sprache der Oberfläche",
     "theme": "Farbschema",
     "scanSettingsTitle": "Scan-Einstellungen",
+    "plotsChartsTitle": "Plots & Charts",
     "scanPerformanceTitle": "Scan-Performance",
     "scanWorkerCount": "Analyse-Worker pro Scan",
     "scanWorkerCountTooltipAria": "Speicherbedarf pro Scan-Worker erklaeren",
@@ -95,17 +97,23 @@
     "parallelScanJobs": "Parallele Bibliotheks-Scans",
     "parallelScanJobsTooltipAria": "Speicherbedarf paralleler Scans erklaeren",
     "parallelScanJobsTooltip": "Das steuert, wie viele Bibliotheken MediaLyze gleichzeitig scannen darf.\n\nHoehere Werte erhoehen die gesamte Ressourcenlast. Behalte CPU-, Datentraeger- und Speicherverbrauch im Blick.\nMaximum: {{max}}.",
+    "comparisonScatterPointLimit": "Scatter-Plot-Punkte",
+    "comparisonScatterPointLimitTooltipAria": "Sampling fuer Scatter-Plots erklaeren",
+    "comparisonScatterPointLimitTooltip": "Begrenzt, wie viele Punkte MediaLyze fuer Vergleichs-Scatter-Plots zurueckliefert.\n\nHeatmaps und Saeulendiagramme bleiben exakt; nur Scatter-Plots werden aus Lesbarkeits- und Performance-Gruenden gesampelt.\n\nWarnung: sehr hohe Werte koennen den Speicherverbrauch im Browser merklich erhoehen und grosse Vergleichsansichten traeger machen.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showFullWidthAppShell": "App-Shell auf volle Breite erweitern",
       "hideQualityScoreMeter": "Qualitäts-Score-Meter ausblenden",
+      "unlimitedPanelSize": "Unbegrenzte Panel-Groesse",
       "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
       "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an.",
       "showFullWidthAppShellTooltipAria": "Feature Flag fuer die volle App-Shell-Breite erklaeren",
       "showFullWidthAppShellTooltip": "Erweitert den Hauptcontainer .media-app-shell von seiner Standard-Maximalbreite auf die volle verfuegbare Seitenbreite.",
       "hideQualityScoreMeterTooltipAria": "Feature Flag fuer die Sichtbarkeit des Qualitäts-Score-Meters erklaeren",
-      "hideQualityScoreMeterTooltip": "Blendet das balkenartige Score-Meter in der Tabelle der analysierten Dateien aus, laesst den numerischen Qualitäts-Score aber sichtbar."
+      "hideQualityScoreMeterTooltip": "Blendet das balkenartige Score-Meter in der Tabelle der analysierten Dateien aus, laesst den numerischen Qualitäts-Score aber sichtbar.",
+      "unlimitedPanelSizeTooltipAria": "Feature Flag fuer unbegrenzte Panel-Groesse erklaeren",
+      "unlimitedPanelSizeTooltip": "Hebt die aktuelle Begrenzung von 4 Reihen fuer Statistik-Panels im Dashboard und auf Bibliotheksseiten auf. Die Panel-Breite bleibt weiterhin durch das zugrunde liegende Grid begrenzt."
     },
     "pathKinds": {
       "local": "Lokaler Pfad",
@@ -136,19 +144,18 @@
     "themeHint": "Wirkt sofort und wird im Browser gespeichert."
   },
   "libraryStatistics": {
-    "title": "Bibliotheks-Statistiken",
-    "subtitle": "Wähle aus, welche Metriken über der Medientabelle, in der Tabelle und im Dashboard angezeigt werden. Ziehe Zeilen, um die Reihenfolge zu ändern.",
+    "title": "Tabellenansicht",
+    "subtitle": "Wähle aus, welche Metriken in der Tabelle der analysierten Dateien angezeigt werden und für welche dieser Spalten Hover-Tooltips verfügbar sind. Ziehe Zeilen, um die Reihenfolge zu ändern.",
     "name": "Name",
-    "statistics": "Bibliothek",
     "table": "Tabelle",
     "tooltips": "Tooltips",
-    "dashboard": "Dashboard",
     "dragHint": "Zum Umordnen ziehen",
     "unavailable": "Nicht verfügbar",
     "noPanelsSelected": "Es sind keine Statistik-Panels ausgewählt.",
     "noDashboardSelected": "Es sind keine Dashboard-Statistik-Panels ausgewählt.",
     "items": {
       "size": "Dateigröße",
+      "resolutionMp": "Auflösung - MP",
       "container": "Container",
       "videoCodec": "Video-Codec",
       "resolution": "Auflösung",
@@ -162,8 +169,22 @@
       "subtitleLanguages": "Untertitel-Sprachen",
       "subtitleCodecs": "Untertitel-Codecs",
       "subtitleSources": "Untertitel-Quellen",
-      "qualityScore": "Qualitäts-Score"
+      "qualityScore": "Qualitäts-Score",
+      "comparison": "Metrikvergleich"
     }
+  },
+  "panelLayout": {
+    "edit": "Panel-Layout bearbeiten",
+    "add": "Panel hinzufügen",
+    "save": "Panel-Layout speichern",
+    "cancel": "Änderungen am Panel-Layout verwerfen",
+    "restoreDefault": "Standardlayout wiederherstellen",
+    "remove": "Panel entfernen",
+    "noMorePanels": "Alle verfügbaren Panels sind bereits sichtbar.",
+    "expandWidth": "Panel breiter machen",
+    "shrinkWidth": "Panel schmaler machen",
+    "expandHeight": "Panel höher machen",
+    "shrinkHeight": "Panel niedriger machen"
   },
   "libraryTypes": {
     "movies": "Filme",
@@ -194,10 +215,11 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "sizeDistribution": "Dateigroesse",
-    "durationDistribution": "Laufzeit",
+    "durationDistribution": "Dauer",
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "comparisonPanel": "Metrikvergleich",
     "audioCodecs": "Audio-Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
@@ -321,10 +343,34 @@
     "percentage": "Prozent",
     "metrics": {
       "quality_score": "Qualitaets-Score",
-      "duration": "Laufzeit",
+      "duration": "Dauer",
       "size": "Dateigroesse",
       "bitrate": "Bitrate",
       "audio_bitrate": "Audio-Bitrate"
+    }
+  },
+  "comparisonChart": {
+    "empty": "Noch keine vergleichbaren Analysedaten vorhanden.",
+    "summary": "{{included}} von {{total}} Dateien einbezogen",
+    "sampled": "Die Scatter-Ansicht wurde auf {{limit}} Punkte gesampelt",
+    "count": "Anzahl",
+    "axes": {
+      "x": "X-Achse",
+      "y": "Y-Achse"
+    },
+    "controls": {
+      "xField": "Metrik fuer die X-Achse auswaehlen",
+      "yField": "Metrik fuer die Y-Achse auswaehlen",
+      "renderer": "Diagrammtyp auswaehlen",
+      "swapAxes": "Vergleichsachsen tauschen"
+    },
+    "renderers": {
+      "heatmap": "Heatmap",
+      "scatter": "Scatter-Plot",
+      "bar": "Balkendiagramm"
+    },
+    "bar": {
+      "average": "Durchschnitt"
     }
   },
   "scanLogs": {
@@ -390,6 +436,8 @@
     "resolution": "Auflösung",
     "hdr": "DynR",
     "duration": "Dauer",
+    "bitrate": "Bitrate",
+    "audioBitrate": "Audio-Bitrate",
     "audioCodecs": "Audio-Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",

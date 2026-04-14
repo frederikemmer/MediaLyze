@@ -9,6 +9,7 @@ from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runt
 from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
+from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import (
@@ -58,6 +59,7 @@ from backend.app.services.scan_jobs import (
     list_recent_scan_jobs,
     serialize_scan_job,
 )
+from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
 
 router = APIRouter()
@@ -134,6 +136,17 @@ def inspect_path(
 @router.get("/dashboard", response_model=DashboardResponse)
 def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
     return build_dashboard(db)
+
+
+@router.get("/dashboard/comparison", response_model=ComparisonResponse)
+def dashboard_comparison(
+    x_field: ComparisonFieldId = Query(...),
+    y_field: ComparisonFieldId = Query(...),
+    db: Session = Depends(get_db_session),
+) -> ComparisonResponse:
+    if x_field == y_field:
+        raise HTTPException(status_code=400, detail="Comparison axes must use different fields")
+    return get_dashboard_comparison(db, x_field=x_field, y_field=y_field)
 
 
 @router.get("/scan-jobs/active", response_model=list[ScanJobRead])
@@ -236,6 +249,21 @@ def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -
     if not statistics:
         raise HTTPException(status_code=404, detail="Library not found")
     return statistics
+
+
+@router.get("/libraries/{library_id}/statistics/comparison", response_model=ComparisonResponse)
+def library_statistics_comparison(
+    library_id: int,
+    x_field: ComparisonFieldId = Query(...),
+    y_field: ComparisonFieldId = Query(...),
+    db: Session = Depends(get_db_session),
+) -> ComparisonResponse:
+    if x_field == y_field:
+        raise HTTPException(status_code=400, detail="Comparison axes must use different fields")
+    payload = get_library_comparison(db, library_id=library_id, x_field=x_field, y_field=y_field)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return payload
 
 
 @router.get("/libraries/{library_id}/duplicates", response_model=DuplicateGroupPageRead)

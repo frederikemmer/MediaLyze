@@ -4,16 +4,18 @@ import { StrictMode } from "react";
 import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
+import { buildComparisonFieldFilterValue } from "../lib/statistic-comparisons";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
+  type ComparisonResponse,
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
@@ -155,6 +157,42 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
   };
 }
 
+function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): ComparisonResponse {
+  return {
+    x_field: "duration",
+    y_field: "size",
+    x_field_kind: "numeric",
+    y_field_kind: "numeric",
+    available_renderers: ["heatmap", "scatter", "bar"],
+    total_files: 2,
+    included_files: 2,
+    excluded_files: 0,
+    sampled_points: false,
+    sample_limit: 5000,
+    x_buckets: [
+      { key: "1800:3600", label: "1800:3600", lower: 1800, upper: 3600 },
+      { key: "3600:5400", label: "3600:5400", lower: 3600, upper: 5400 },
+    ],
+    y_buckets: [
+      { key: "0:500000000", label: "0:500000000", lower: 0, upper: 500000000 },
+      { key: "500000000:1000000000", label: "500000000:1000000000", lower: 500000000, upper: 1000000000 },
+    ],
+    heatmap_cells: [
+      { x_key: "1800:3600", y_key: "0:500000000", count: 1 },
+      { x_key: "3600:5400", y_key: "500000000:1000000000", count: 1 },
+    ],
+    scatter_points: [
+      { media_file_id: 1, x_value: 3600, y_value: 1024 },
+      { media_file_id: 2, x_value: 4200, y_value: 1024 },
+    ],
+    bar_entries: [
+      { x_key: "1800:3600", x_label: "1800:3600", value: 1024, count: 1 },
+      { x_key: "3600:5400", x_label: "3600:5400", value: 1024, count: 1 },
+    ],
+    ...overrides,
+  };
+}
+
 function createFilesPage(libraryId: number): MediaFileTablePage {
   return {
     total: 2,
@@ -176,6 +214,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         quality_score_raw: 82.4,
         container: "mkv",
         duration: 3600,
+        bitrate: 4_000_000,
+        audio_bitrate: 256_000,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -201,6 +241,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         quality_score_raw: 74.1,
         container: "mkv",
         duration: 3600,
+        bitrate: 8_000_000,
+        audio_bitrate: 512_000,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -229,12 +271,14 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
     feature_flags: {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -313,12 +357,18 @@ function mockAppSettings(overrides: AppSettingsOverrides = {}) {
 }
 
 function renderPage(libraryId: number, { strictMode = false }: { strictMode?: boolean } = {}) {
+  const FileRoute = () => {
+    const { fileId = "" } = useParams();
+    return <div>{`File detail ${fileId}`}</div>;
+  };
+
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
       <AppDataProvider>
         <ScanJobsProvider>
           <Routes>
             <Route path="/libraries/:libraryId" element={<LibraryDetailPage />} />
+            <Route path="/files/:fileId" element={<FileRoute />} />
           </Routes>
         </ScanJobsProvider>
       </AppDataProvider>
@@ -339,6 +389,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
   vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
 });
 
@@ -348,6 +399,7 @@ describe("LibraryDetailPage", () => {
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryComparisonSpy = vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
     const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
@@ -356,8 +408,122 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
+    expect(libraryComparisonSpy).toHaveBeenCalled();
     expect(libraryDuplicatesSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("persists inline statistic panel layout changes for the current library", async () => {
+    const libraryId = 118;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Spatial audio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"audio_spatial_profiles\"",
+    );
+  });
+
+  it("renders the comparison panel and reloads it when the axis selection changes", async () => {
+    const libraryId = 121;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const comparisonSpy = vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(screen.queryByRole("heading", { level: 2, name: "Metric comparison" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Select Y-axis metric")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Select Y-axis metric"), { target: { value: "quality_score" } });
+
+    expect(comparisonSpy).toHaveBeenLastCalledWith(
+      String(libraryId),
+      expect.objectContaining({ xField: "size", yField: "quality_score" }),
+    );
+  });
+
+  it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
+    const libraryId = 123;
+    window.localStorage.setItem(
+      "medialyze-comparison-selection-library",
+      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[3600,1024],[4200,1024]]",
+    );
+    expect(chart).toBeDefined();
+    fireEvent.click(chart!);
+
+    expect(await screen.findByText("File detail 1")).toBeInTheDocument();
+  });
+
+  it("filters the analyzed files table when a comparison heatmap cell is clicked", async () => {
+    const libraryId = 124;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "comparison-1",
+            statisticId: "comparison",
+            width: 1,
+            height: 2,
+            comparisonSelection: {
+              xField: "duration",
+              yField: "size",
+              renderer: "heatmap",
+            },
+          },
+        ],
+      }),
+    );
+    const comparison = createComparisonResponse();
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryComparison").mockResolvedValue(comparison);
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    renderPage(libraryId);
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[[0,0,1],[1,1,1]]",
+    );
+    expect(chart).toBeDefined();
+    fireEvent.click(chart!);
+
+    expect(await screen.findByDisplayValue(buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]))).toBeInTheDocument();
+    expect(screen.getByDisplayValue(buildComparisonFieldFilterValue("size", comparison.y_buckets[0]))).toBeInTheDocument();
+    await waitFor(() => {
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            duration: buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]),
+            size: buildComparisonFieldFilterValue("size", comparison.y_buckets[0]),
+          }),
+        }),
+      );
+    });
   });
 
   it("loads duplicate groups separately and renders matching files", async () => {
@@ -792,8 +958,8 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("File size")).toBeInTheDocument();
-    expect(screen.getByText("Quality score")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Duration" })).toBeInTheDocument();
     expect(screen.getAllByTestId("echarts-react").length).toBeGreaterThan(0);
   });
 
@@ -834,6 +1000,19 @@ describe("LibraryDetailPage", () => {
 
   it("replaces existing statistic values in the same field", async () => {
     const libraryId = 411;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "audio_codecs",
+            statisticId: "audio_codecs",
+            width: 1,
+            height: 1,
+          },
+        ],
+      }),
+    );
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(
@@ -997,6 +1176,19 @@ describe("LibraryDetailPage", () => {
     );
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          {
+            instanceId: "container",
+            statisticId: "container",
+            width: 1,
+            height: 1,
+          },
+        ],
+      }),
+    );
     renderPage(libraryId);
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
@@ -1045,9 +1237,14 @@ describe("LibraryDetailPage", () => {
 
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
-    const statisticsSettings = getLibraryStatisticsSettings();
-    statisticsSettings.visibility.subtitle_sources.panelEnabled = true;
-    saveLibraryStatisticsSettings(statisticsSettings);
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          { instanceId: "subtitle_sources", statisticId: "subtitle_sources", width: 1, height: 1 },
+        ],
+      }),
+    );
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());

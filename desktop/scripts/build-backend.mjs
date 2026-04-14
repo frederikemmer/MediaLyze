@@ -1,4 +1,11 @@
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -12,6 +19,23 @@ const specDir = path.join(repoRoot, "dist", "pyinstaller-spec");
 
 export function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
+}
+
+function runCommand(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    ...options,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${args.join(" ")} failed: ${
+        result.stderr?.trim() || result.stdout?.trim() || `exit ${result.status}`
+      }`
+    );
+  }
+
+  return result;
 }
 
 function commandLookupInvocation(platform = process.platform) {
@@ -86,6 +110,249 @@ export function resolveBundledFfprobeSource({
   };
 }
 
+export function parseOtoolDependencies(stdout) {
+  return stdout
+    .split(/\r?\n/)
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.match(/^(.+?) \(/)?.[1] ?? null)
+    .filter(Boolean);
+}
+
+export function parseOtoolRpaths(stdout) {
+  const rpaths = [];
+  const lines = stdout.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!lines[index].includes("cmd LC_RPATH")) {
+      continue;
+    }
+
+    for (let offset = index + 1; offset < lines.length; offset += 1) {
+      const match = lines[offset].match(/^\s*path\s+(.+?)\s+\(offset \d+\)$/);
+      if (match) {
+        rpaths.push(match[1]);
+        break;
+      }
+      if (lines[offset].includes("Load command")) {
+        break;
+      }
+    }
+  }
+
+  return rpaths;
+}
+
+function defaultInspectMachOBinary(binaryPath) {
+  const dependencyResult = runCommand("otool", ["-L", binaryPath]);
+  const loadCommandResult = runCommand("otool", ["-l", binaryPath]);
+  return {
+    dependencies: parseOtoolDependencies(dependencyResult.stdout ?? ""),
+    rpaths: parseOtoolRpaths(loadCommandResult.stdout ?? ""),
+  };
+}
+
+function defaultPatchMachOBinary(targetPath, args) {
+  runCommand("install_name_tool", [...args, targetPath]);
+}
+
+function defaultSignMachOBinary(targetPath) {
+  runCommand("codesign", ["--force", "--sign", "-", targetPath]);
+}
+
+function isMacosSystemDependency(candidate) {
+  return (
+    typeof candidate === "string" &&
+    candidate.startsWith("/") &&
+    (candidate.startsWith("/System/Library/") || candidate.startsWith("/usr/lib/"))
+  );
+}
+
+function expandMachOPathToken(candidate, binaryPath, executablePath, pathLib = path) {
+  if (candidate === "@loader_path") {
+    return pathLib.dirname(binaryPath);
+  }
+  if (candidate.startsWith("@loader_path/")) {
+    return pathLib.resolve(
+      pathLib.dirname(binaryPath),
+      candidate.slice("@loader_path/".length)
+    );
+  }
+  if (candidate === "@executable_path") {
+    return pathLib.dirname(executablePath);
+  }
+  if (candidate.startsWith("@executable_path/")) {
+    return pathLib.resolve(
+      pathLib.dirname(executablePath),
+      candidate.slice("@executable_path/".length)
+    );
+  }
+  return null;
+}
+
+function resolveMachODependencyPath(
+  dependency,
+  binaryPath,
+  executablePath,
+  rpaths,
+  exists,
+  pathLib = path
+) {
+  if (typeof dependency !== "string" || !dependency) {
+    return null;
+  }
+
+  if (dependency.startsWith("/")) {
+    return isMacosSystemDependency(dependency) ? null : dependency;
+  }
+
+  const expandedTokenPath = expandMachOPathToken(
+    dependency,
+    binaryPath,
+    executablePath,
+    pathLib
+  );
+  if (expandedTokenPath) {
+    return exists(expandedTokenPath) ? expandedTokenPath : null;
+  }
+
+  if (!dependency.startsWith("@rpath/")) {
+    return null;
+  }
+
+  const rpathSuffix = dependency.slice("@rpath/".length);
+  for (const rpath of rpaths) {
+    const expandedRpath =
+      expandMachOPathToken(rpath, binaryPath, executablePath, pathLib) ??
+      (rpath.startsWith("/") ? rpath : null);
+    if (!expandedRpath) {
+      continue;
+    }
+
+    const resolvedCandidate = pathLib.resolve(expandedRpath, rpathSuffix);
+    if (exists(resolvedCandidate)) {
+      return resolvedCandidate;
+    }
+  }
+
+  return null;
+}
+
+export function bundleMacosFfprobeDependencies(
+  bundleDir,
+  executablePath,
+  {
+    copy = cpSync,
+    exists = existsSync,
+    inspectBinary = defaultInspectMachOBinary,
+    mkdir = mkdirSync,
+    patchBinary = defaultPatchMachOBinary,
+    pathLib = path,
+    realpath = realpathSync,
+    signBinary = defaultSignMachOBinary,
+    sourceExecutablePath = executablePath,
+  } = {}
+) {
+  const libDir = pathLib.join(bundleDir, "lib");
+  const pendingBinaries = [
+    {
+      bundledPath: executablePath,
+      sourcePath: sourceExecutablePath,
+    },
+  ];
+  const inspected = new Set();
+  const copiedLibraries = new Map();
+  const binaryDependencies = new Map();
+
+  while (pendingBinaries.length > 0) {
+    const { bundledPath, sourcePath } = pendingBinaries.pop();
+    if (inspected.has(bundledPath)) {
+      continue;
+    }
+    inspected.add(bundledPath);
+
+    const inspection = inspectBinary(sourcePath);
+    binaryDependencies.set(bundledPath, {
+      ...inspection,
+      sourcePath,
+    });
+
+    for (const dependency of inspection.dependencies) {
+      const resolvedDependency = resolveMachODependencyPath(
+        dependency,
+        sourcePath,
+        sourceExecutablePath,
+        inspection.rpaths,
+        exists,
+        pathLib
+      );
+      if (!resolvedDependency) {
+        continue;
+      }
+
+      const realDependency = realpath(resolvedDependency);
+      let bundledDependency = copiedLibraries.get(realDependency);
+
+      if (!bundledDependency) {
+        mkdir(libDir, { recursive: true });
+        bundledDependency = pathLib.join(libDir, pathLib.basename(realDependency));
+        copy(realDependency, bundledDependency);
+        copiedLibraries.set(realDependency, bundledDependency);
+        pendingBinaries.push({
+          bundledPath: bundledDependency,
+          sourcePath: realDependency,
+        });
+      }
+    }
+  }
+
+  for (const bundledDependency of copiedLibraries.values()) {
+    if (!exists(bundledDependency)) {
+      throw new Error(
+        `Bundled ffprobe dependency missing after copy: ${bundledDependency}`
+      );
+    }
+    patchBinary(bundledDependency, [
+      "-id",
+      `@loader_path/${pathLib.basename(bundledDependency)}`,
+    ]);
+  }
+
+  for (const [binaryPath, inspection] of binaryDependencies.entries()) {
+    for (const dependency of inspection.dependencies) {
+      const resolvedDependency = resolveMachODependencyPath(
+        dependency,
+        inspection.sourcePath,
+        sourceExecutablePath,
+        inspection.rpaths,
+        exists,
+        pathLib
+      );
+      if (!resolvedDependency) {
+        continue;
+      }
+
+      const bundledDependency = copiedLibraries.get(realpath(resolvedDependency));
+      if (!bundledDependency) {
+        throw new Error(`Unable to rewrite bundled dependency: ${dependency}`);
+      }
+
+      const rewrittenDependency =
+        binaryPath === executablePath
+          ? `@executable_path/lib/${pathLib.basename(bundledDependency)}`
+          : `@loader_path/${pathLib.basename(bundledDependency)}`;
+
+      patchBinary(binaryPath, ["-change", dependency, rewrittenDependency]);
+    }
+  }
+
+  for (const bundledDependency of copiedLibraries.values()) {
+    signBinary(bundledDependency);
+  }
+  signBinary(executablePath);
+}
+
 export function bundleFfprobe(outputPath, options = {}) {
   const source = resolveBundledFfprobeSource(options);
   const targetDir = path.join(outputPath, "ffprobe");
@@ -94,11 +361,30 @@ export function bundleFfprobe(outputPath, options = {}) {
 
   if (source.kind === "directory") {
     cpSync(source.sourcePath, targetDir, { recursive: true });
-    return path.join(targetDir, source.executableName);
+    const bundledExecutable = path.join(targetDir, source.executableName);
+    if ((options.platform ?? process.platform) === "darwin") {
+      bundleMacosFfprobeDependencies(targetDir, bundledExecutable, {
+        ...options,
+        sourceExecutablePath: path.join(source.sourcePath, source.executableName),
+      });
+    }
+    return bundledExecutable;
   }
 
   const targetExecutable = path.join(targetDir, source.executableName);
-  cpSync(source.sourcePath, targetExecutable);
+  const sourceExecutable = options.realpath
+    ? options.realpath(source.sourcePath)
+    : realpathSync(source.sourcePath);
+  cpSync(
+    sourceExecutable,
+    targetExecutable
+  );
+  if ((options.platform ?? process.platform) === "darwin") {
+    bundleMacosFfprobeDependencies(targetDir, targetExecutable, {
+      ...options,
+      sourceExecutablePath: sourceExecutable,
+    });
+  }
   return targetExecutable;
 }
 

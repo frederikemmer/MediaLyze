@@ -1,6 +1,15 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus, Search, Trash2, X } from "lucide-react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import {
+  PanelBottomClose,
+  PanelLeftClose,
+  PanelRightClose,
+  PanelTopClose,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   startTransition,
   useDeferredValue,
@@ -11,18 +20,21 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
+import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
   api,
+  type ComparisonResponse,
   type DuplicateGroupPage,
   type LibraryStatistics,
   type LibrarySummary,
@@ -31,7 +43,7 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
-import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
+import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
@@ -52,16 +64,33 @@ import {
   getLibraryStatisticNumericDistribution,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
-  getVisibleLibraryStatisticPanels,
   getVisibleLibraryStatisticTableColumns,
 } from "../lib/library-statistics-settings";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
+import {
+  getComparisonSelection,
+  sanitizeComparisonRenderer,
+  saveComparisonSelection,
+  type ComparisonSelection,
+} from "../lib/statistic-comparisons";
 import {
   InflightPageRequestGate,
   buildFilePageRequestKey,
   mergeUniqueFiles,
   resolveFileLoadTransition,
 } from "../lib/paginated-files";
+import {
+  addStatisticPanelLayoutItem,
+  buildDefaultStatisticPanelLayout,
+  cloneStatisticPanelLayout,
+  getAvailableStatisticPanelDefinitions,
+  getStatisticPanelLayout,
+  moveStatisticPanelLayoutItem,
+  removeStatisticPanelLayoutItem,
+  resizeStatisticPanelLayoutItem,
+  saveStatisticPanelLayout,
+  updateStatisticPanelLayoutComparisonSelection,
+} from "../lib/statistic-panel-layout";
 import { useScanJobs } from "../lib/scan-jobs";
 
 type FileColumnKey = MediaFileSortKey;
@@ -97,6 +126,11 @@ type CachedFileList = {
 
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 
+type VisibleStatisticPanel = {
+  item: ReturnType<typeof getStatisticPanelLayout>["items"][number];
+  definition: (typeof LIBRARY_STATISTIC_DEFINITIONS)[number];
+};
+
 const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
@@ -111,8 +145,12 @@ const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
+const libraryComparisonCache = new Map<string, ComparisonResponse>();
 const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
 const libraryFileListCache = new Map<string, CachedFileList>();
+const statisticDefinitionMap = new Map(
+  LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition] as const),
+);
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
 const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
@@ -363,6 +401,20 @@ export function buildFileColumns(
       sizing: { mode: "content", minPx: 90, maxPx: 110 },
       measureValue: (file) => formatDuration(file.duration),
       render: (file) => formatDuration(file.duration),
+    },
+    {
+      key: "bitrate",
+      labelKey: "fileTable.bitrate",
+      sizing: { mode: "content", minPx: 92, maxPx: 122 },
+      measureValue: (file) => formatBitrate(file.bitrate),
+      render: (file) => formatBitrate(file.bitrate),
+    },
+    {
+      key: "audio_bitrate",
+      labelKey: "fileTable.audioBitrate",
+      sizing: { mode: "content", minPx: 108, maxPx: 138 },
+      measureValue: (file) => formatBitrate(file.audio_bitrate),
+      render: (file) => formatBitrate(file.audio_bitrate),
     },
     {
       key: "audio_codecs",
@@ -698,14 +750,35 @@ function buildCsvFallbackFilename(libraryName: string): string {
   return `MediaLyze_${safeLibraryName}_${timestamp}.csv`;
 }
 
+function buildLibraryComparisonQueryKey(libraryId: string, selection: ComparisonSelection): string {
+  return `${libraryId}:${selection.xField}:${selection.yField}`;
+}
+
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
+  const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
+  const statisticLayoutOptions = useMemo(
+    () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
+    [appSettings.feature_flags.unlimited_panel_size],
+  );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
+  const [savedStatisticLayout, setSavedStatisticLayout] = useState(() =>
+    getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
+  );
+  const [draftStatisticLayout, setDraftStatisticLayout] = useState(() =>
+    cloneStatisticPanelLayout(getStatisticPanelLayout("library", libraryId, statisticLayoutOptions)),
+  );
+  const [isEditingStatisticLayout, setIsEditingStatisticLayout] = useState(false);
+  const [draggedStatisticPanelId, setDraggedStatisticPanelId] = useState<string | null>(null);
+  const [dropTargetStatisticPanelId, setDropTargetStatisticPanelId] = useState<string | null>(null);
+  const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
+  const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
+  const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -744,6 +817,7 @@ export function LibraryDetailPage() {
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
+  const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
@@ -818,8 +892,35 @@ export function LibraryDetailPage() {
     [statisticsSettings],
   );
   const visibleStatisticPanels = useMemo(
-    () => getVisibleLibraryStatisticPanels(statisticsSettings),
-    [statisticsSettings],
+    () =>
+      activeStatisticLayout.items
+        .map((item) => {
+          const definition = statisticDefinitionMap.get(item.statisticId);
+          if (!definition) {
+            return null;
+          }
+          return { item, definition };
+        })
+        .filter((entry): entry is VisibleStatisticPanel => Boolean(entry)),
+    [activeStatisticLayout.items],
+  );
+  const comparisonPanels = useMemo(
+    () => visibleStatisticPanels.filter((panel) => panel.item.statisticId === "comparison"),
+    [visibleStatisticPanels],
+  );
+  const comparisonPanelsKey = useMemo(
+    () =>
+      comparisonPanels
+        .map(({ item }) => {
+          const selection = item.comparisonSelection ?? getComparisonSelection("library");
+          return `${item.instanceId}:${selection.xField}:${selection.yField}`;
+        })
+        .join("|"),
+    [comparisonPanels],
+  );
+  const availableStatisticPanelDefinitions = useMemo(
+    () => getAvailableStatisticPanelDefinitions("library", draftStatisticLayout),
+    [draftStatisticLayout],
   );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
@@ -921,6 +1022,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
@@ -1002,30 +1104,56 @@ export function LibraryDetailPage() {
     });
   });
 
+  const applyMetadataFilters = useEffectEvent((nextFilters: Partial<Record<LibraryFileMetadataSearchField, string>>) => {
+    const filterEntries = Object.entries(nextFilters)
+      .map(([field, value]) => [field as LibraryFileMetadataSearchField, value?.trim() ?? ""] as const)
+      .filter(([, value]) => Boolean(value));
+
+    if (filterEntries.length === 0) {
+      return;
+    }
+
+    const firstNewField = filterEntries.find(([field]) => !selectedMetadataFields.includes(field))?.[0] ?? null;
+
+    startTransition(() => {
+      setSelectedMetadataFields((current) => {
+        const next = new Set(current);
+        for (const [field] of filterEntries) {
+          next.add(field);
+        }
+        return LIBRARY_METADATA_SEARCH_FIELDS.filter((field) => next.has(field));
+      });
+      setFieldValues((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const [field, value] of filterEntries) {
+          if ((current[field]?.trim() ?? "") === value) {
+            continue;
+          }
+          next[field] = value;
+          changed = true;
+        }
+        if (!changed) {
+          return current;
+        }
+        return next;
+      });
+    });
+
+    if (firstNewField) {
+      pendingStatisticFocusFieldRef.current = firstNewField;
+    }
+    requestAnimationFrame(() => {
+      analyzedFilesPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+  });
+
   const applyStatisticFilter = useEffectEvent((field: LibraryFileMetadataSearchField, rawValue: string) => {
     const normalizedValue = rawValue.trim();
     if (!normalizedValue) {
       return;
     }
-
-    const shouldFocusField = !selectedMetadataFields.includes(field);
-
-    startTransition(() => {
-      setSelectedMetadataFields((current) => (current.includes(field) ? current : [...current, field]));
-      setFieldValues((current) => {
-        if ((current[field]?.trim() ?? "") === normalizedValue) {
-          return current;
-        }
-        return { ...current, [field]: normalizedValue };
-      });
-    });
-
-    if (shouldFocusField) {
-      pendingStatisticFocusFieldRef.current = field;
-    }
-    requestAnimationFrame(() => {
-      analyzedFilesPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-    });
+    applyMetadataFilters({ [field]: normalizedValue });
   });
 
   const loadLibrarySummary = useEffectEvent(async (showLoading = false) => {
@@ -1285,6 +1413,20 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
+    const nextLayout = saveStatisticPanelLayout(
+      "library",
+      libraryId,
+      getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
+      statisticLayoutOptions,
+    );
+    setSavedStatisticLayout(nextLayout);
+    setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
+    setIsEditingStatisticLayout(false);
+    setDraggedStatisticPanelId(null);
+    setDropTargetStatisticPanelId(null);
+  }, [libraryId, statisticLayoutOptions]);
+
+  useEffect(() => {
     if (hasInvalidSearchField) {
       return;
     }
@@ -1366,6 +1508,70 @@ export function LibraryDetailPage() {
     void loadDuplicateGroups(cachedDuplicateGroups === null);
   }, [libraryId]);
 
+  const syncComparisonPanels = useEffectEvent((force = false) => {
+    const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
+    for (const [instanceId, controller] of comparisonAbortRef.current.entries()) {
+      if (!activeIds.has(instanceId)) {
+        controller.abort();
+        comparisonAbortRef.current.delete(instanceId);
+      }
+    }
+
+    if (comparisonPanels.length === 0) {
+      return;
+    }
+
+    for (const { item } of comparisonPanels) {
+      const selection = item.comparisonSelection ?? getComparisonSelection("library");
+      const queryKey = buildLibraryComparisonQueryKey(libraryId, selection);
+      const cachedComparison = !force ? libraryComparisonCache.get(queryKey) ?? null : null;
+
+      setComparisonErrorByPanel((current) => ({ ...current, [item.instanceId]: null }));
+      setComparisonByPanel((current) =>
+        current[item.instanceId] === cachedComparison ? current : { ...current, [item.instanceId]: cachedComparison },
+      );
+      setComparisonLoadingByPanel((current) => ({
+        ...current,
+        [item.instanceId]: cachedComparison === null,
+      }));
+
+      if (cachedComparison) {
+        continue;
+      }
+
+      const controller = new AbortController();
+      comparisonAbortRef.current.get(item.instanceId)?.abort();
+      comparisonAbortRef.current.set(item.instanceId, controller);
+
+      api.libraryComparison(libraryId, {
+        xField: selection.xField,
+        yField: selection.yField,
+        signal: controller.signal,
+      })
+        .then((payload) => {
+          libraryComparisonCache.set(queryKey, payload);
+          setComparisonByPanel((current) => ({ ...current, [item.instanceId]: payload }));
+          setComparisonErrorByPanel((current) => ({ ...current, [item.instanceId]: null }));
+        })
+        .catch((reason: Error) => {
+          if (reason.name === "AbortError") {
+            return;
+          }
+          setComparisonErrorByPanel((current) => ({ ...current, [item.instanceId]: reason.message }));
+        })
+        .finally(() => {
+          if (comparisonAbortRef.current.get(item.instanceId) === controller) {
+            comparisonAbortRef.current.delete(item.instanceId);
+          }
+          setComparisonLoadingByPanel((current) => ({ ...current, [item.instanceId]: false }));
+        });
+    }
+  });
+
+  useEffect(() => {
+    syncComparisonPanels();
+  }, [comparisonPanelsKey]);
+
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
@@ -1430,6 +1636,10 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
+      for (const { item } of comparisonPanels) {
+        const selection = item.comparisonSelection ?? getComparisonSelection("library");
+        libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
+      }
       libraryDuplicateGroupsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
       setQualityScoreDetails({});
@@ -1438,14 +1648,24 @@ export function LibraryDetailPage() {
       void loadLibraryStatistics(false);
       void loadDuplicateGroups(false);
       void loadFilesPage(0, false, fileQueryKey);
+      syncComparisonPanels(true);
     }
     hadActiveJobRef.current = Boolean(activeJob);
-  }, [activeJob, fileQueryKey, libraryId]);
+  }, [
+    activeJob,
+    comparisonPanelsKey,
+    fileQueryKey,
+    libraryId,
+  ]);
 
   useEffect(() => {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
+      for (const controller of comparisonAbortRef.current.values()) {
+        controller.abort();
+      }
+      comparisonAbortRef.current.clear();
       duplicateGroupsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
       exportAbortRef.current?.abort();
@@ -1467,16 +1687,192 @@ export function LibraryDetailPage() {
     );
   }
 
+  function persistStatisticLayout(nextLayout: typeof savedStatisticLayout) {
+    const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout, statisticLayoutOptions);
+    setSavedStatisticLayout(normalized);
+    setDraftStatisticLayout(cloneStatisticPanelLayout(normalized));
+  }
+
+  function updateStatisticLayout(
+    transform: (current: typeof activeStatisticLayout) => typeof activeStatisticLayout,
+    persistWhenViewing = false,
+  ) {
+    if (isEditingStatisticLayout) {
+      setDraftStatisticLayout((current) => transform(current));
+      return;
+    }
+
+    const nextLayout = transform(savedStatisticLayout);
+    if (persistWhenViewing) {
+      persistStatisticLayout(nextLayout);
+      return;
+    }
+
+    setSavedStatisticLayout(nextLayout);
+    setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
+  }
+
+  function handleStatisticPanelDrop(targetInstanceId: string) {
+    if (!draggedStatisticPanelId) {
+      return;
+    }
+
+    updateStatisticLayout((current) =>
+      moveStatisticPanelLayoutItem(current, draggedStatisticPanelId, targetInstanceId),
+    );
+    setDraggedStatisticPanelId(null);
+    setDropTargetStatisticPanelId(null);
+  }
+
+  function updateComparisonSelection(instanceId: string, nextSelection: ComparisonSelection) {
+    const normalized = saveComparisonSelection("library", {
+      ...nextSelection,
+      renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
+    });
+    updateStatisticLayout(
+      (current) =>
+        updateStatisticPanelLayoutComparisonSelection("library", current, instanceId, normalized),
+      true,
+    );
+  }
+
+  function renderStatisticPanelResizeControls(panel: VisibleStatisticPanel) {
+    const { item } = panel;
+    return (
+      <>
+        <div className="statistic-layout-size-controls statistic-layout-size-controls-top-left">
+          <button
+            type="button"
+            className="statistic-layout-size-button"
+            aria-label={t("panelLayout.remove")}
+            title={t("panelLayout.remove")}
+            onClick={() =>
+              updateStatisticLayout((current) => removeStatisticPanelLayoutItem(current, item.instanceId))
+            }
+          >
+            <Trash2 className="nav-icon" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="statistic-layout-size-controls statistic-layout-size-controls-right">
+          {item.width < 4 ? (
+            <button
+              type="button"
+              className="statistic-layout-size-button"
+              aria-label={t("panelLayout.expandWidth")}
+              title={t("panelLayout.expandWidth")}
+              onClick={() =>
+                updateStatisticLayout((current) =>
+                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width + 1 }),
+                )
+              }
+            >
+              <PanelRightClose className="nav-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+          {item.width > 1 ? (
+            <button
+              type="button"
+              className="statistic-layout-size-button"
+              aria-label={t("panelLayout.shrinkWidth")}
+              title={t("panelLayout.shrinkWidth")}
+              onClick={() =>
+                updateStatisticLayout((current) =>
+                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width - 1 }),
+                )
+              }
+            >
+              <PanelLeftClose className="nav-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        <div className="statistic-layout-size-controls statistic-layout-size-controls-bottom">
+          {statisticLayoutOptions.unlimitedHeight || item.height < 4 ? (
+            <button
+              type="button"
+              className="statistic-layout-size-button"
+              aria-label={t("panelLayout.expandHeight")}
+              title={t("panelLayout.expandHeight")}
+              onClick={() =>
+                updateStatisticLayout((current) =>
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height + 1 },
+                    statisticLayoutOptions,
+                  ),
+                )
+              }
+            >
+              <PanelBottomClose className="nav-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+          {item.height > 1 ? (
+            <button
+              type="button"
+              className="statistic-layout-size-button"
+              aria-label={t("panelLayout.shrinkHeight")}
+              title={t("panelLayout.shrinkHeight")}
+              onClick={() =>
+                updateStatisticLayout((current) =>
+                  resizeStatisticPanelLayoutItem(
+                    current,
+                    item.instanceId,
+                    { height: item.height - 1 },
+                    statisticLayoutOptions,
+                  ),
+                )
+              }
+            >
+              <PanelTopClose className="nav-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <section className="panel stack">
-        <div className="panel-title-row">
-          <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
-          {displayLibrary?.path ? (
-            <TooltipTrigger ariaLabel={t("libraryDetail.libraryPathAria")} content={displayLibrary.path}>
-              ?
-            </TooltipTrigger>
-          ) : null}
+      <section className="panel stack statistic-layout-header-panel">
+        <div className="panel-title-row panel-title-row-with-actions">
+          <div className="panel-title-row">
+            <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
+            {displayLibrary?.path ? (
+              <TooltipTrigger ariaLabel={t("libraryDetail.libraryPathAria")} content={displayLibrary.path}>
+                ?
+              </TooltipTrigger>
+            ) : null}
+          </div>
+          <StatisticPanelLayoutControls
+            availableDefinitions={availableStatisticPanelDefinitions}
+            isEditing={isEditingStatisticLayout}
+            onStartEditing={() => {
+              setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
+              setIsEditingStatisticLayout(true);
+            }}
+            onCancelEditing={() => {
+              setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
+              setDraggedStatisticPanelId(null);
+              setDropTargetStatisticPanelId(null);
+              setIsEditingStatisticLayout(false);
+            }}
+            onRestoreDefault={() => {
+              setDraftStatisticLayout(buildDefaultStatisticPanelLayout("library", statisticLayoutOptions));
+              setDraggedStatisticPanelId(null);
+              setDropTargetStatisticPanelId(null);
+            }}
+            onSaveEditing={() => {
+              persistStatisticLayout(draftStatisticLayout);
+              setDraggedStatisticPanelId(null);
+              setDropTargetStatisticPanelId(null);
+              setIsEditingStatisticLayout(false);
+            }}
+            onAddPanel={(statisticId) =>
+              updateStatisticLayout((current) =>
+                addStatisticPanelLayoutItem("library", current, statisticId, statisticLayoutOptions)
+              )
+            }
+          />
         </div>
         <div className="card-grid grid">
           <StatCard label={t("libraryDetail.files")} value={String(displayLibrary?.file_count ?? filesTotal)} />
@@ -1501,70 +1897,167 @@ export function LibraryDetailPage() {
         ) : null}
       </section>
 
-      <div className="media-grid">
-        {visibleStatisticPanels.length > 0 ? (
-          visibleStatisticPanels.map((panel) => {
-            if (panel.panelKind === "numeric-chart" && panel.numericMetricId) {
-              const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel);
-              return (
+      <div className={`media-grid statistic-layout-grid${isEditingStatisticLayout ? " is-editing" : ""}`}>
+        {visibleStatisticPanels.map((panel) => {
+            const shellClassName = [
+              "statistic-layout-panel-shell",
+              `span-x-${panel.item.width}`,
+              `span-y-${panel.item.height}`,
+              draggedStatisticPanelId === panel.item.instanceId ? "is-dragging" : "",
+              dropTargetStatisticPanelId === panel.item.instanceId ? "is-drop-target" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            let content: ReactNode;
+            if (panel.definition.panelKind === "comparison") {
+              const selection = panel.item.comparisonSelection ?? getComparisonSelection("library");
+              content = (
+                <ComparisonChartPanel
+                  comparison={comparisonByPanel[panel.item.instanceId] ?? null}
+                  selection={selection}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
+                  loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
+                  error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
+                  onChangeXField={(xField) =>
+                    updateComparisonSelection(panel.item.instanceId, { ...selection, xField })
+                  }
+                  onChangeYField={(yField) =>
+                    updateComparisonSelection(panel.item.instanceId, { ...selection, yField })
+                  }
+                  onSwapAxes={() =>
+                    updateComparisonSelection(panel.item.instanceId, {
+                      ...selection,
+                      xField: selection.yField,
+                      yField: selection.xField,
+                    })
+                  }
+                  onChangeRenderer={(renderer) =>
+                    updateComparisonSelection(panel.item.instanceId, { ...selection, renderer })
+                  }
+                  onOpenFile={(fileId) => navigate(`/files/${fileId}`)}
+                  onSelectFilters={(filters) =>
+                    applyMetadataFilters(filters as Partial<Record<LibraryFileMetadataSearchField, string>>)
+                  }
+                />
+              );
+            } else if (panel.definition.panelKind === "numeric-chart" && panel.definition.numericMetricId) {
+              const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel.definition);
+              content = (
                 <DistributionChartPanel
-                  key={panel.id}
-                  title={t(panel.panelTitleKey ?? panel.nameKey)}
+                  title={t(panel.definition.panelTitleKey ?? panel.definition.nameKey)}
                   distribution={distribution}
-                  metricId={panel.numericMetricId}
+                  metricId={panel.definition.numericMetricId}
+                  resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
                   interactive={!statisticsError && !libraryStatistics ? false : true}
                   onSelectBin={
                     statisticsError || !libraryStatistics
                       ? undefined
-                      : (bin) => applyStatisticFilter(panel.id, buildNumericDistributionFilterExpression(panel.numericMetricId!, bin))
+                      : (bin) =>
+                          applyStatisticFilter(
+                            panel.definition.id,
+                            buildNumericDistributionFilterExpression(panel.definition.numericMetricId!, bin),
+                          )
                   }
                 />
               );
+            } else {
+              const items =
+                panel.definition.id === "hdr_type"
+                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel.definition))
+                  : getLibraryStatisticPanelItems(libraryStatistics, panel.definition);
+              const formattedItems: DistributionListEntry[] = items.map((item) => {
+                const rawLabel = item.label;
+                const filterValue = item.filter_value ?? rawLabel;
+                const label = panel.definition.panelFormatKind
+                  ? formatCodecLabel(rawLabel, panel.definition.panelFormatKind)
+                  : rawLabel;
+                const isApplied = hasSearchValueTokens(fieldValues[panel.definition.id], filterValue);
+                return {
+                  key: `${panel.definition.id}:${rawLabel}`,
+                  label,
+                  value: item.value,
+                  disabled: isApplied,
+                  ariaLabel: isApplied
+                    ? t("libraryDetail.statistics.filterAlreadyApplied", {
+                        field: t(panel.definition.nameKey),
+                        value: label,
+                      })
+                    : t("libraryDetail.statistics.filterByValue", {
+                        field: t(panel.definition.nameKey),
+                        value: label,
+                      }),
+                  onClick:
+                    statisticsError || !libraryStatistics
+                      ? undefined
+                      : () => applyStatisticFilter(panel.definition.id, filterValue),
+                };
+              });
+              content = (
+                <AsyncPanel
+                  title={t(panel.definition.panelTitleKey ?? panel.definition.nameKey)}
+                  loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
+                  error={statisticsError}
+                  bodyClassName="async-panel-body-scroll"
+                >
+                  <DistributionList items={formattedItems} maxVisibleRows={5} scrollable />
+                </AsyncPanel>
+              );
             }
 
-            const items =
-              panel.id === "hdr_type"
-                ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel))
-                : getLibraryStatisticPanelItems(libraryStatistics, panel);
-            const formattedItems: DistributionListEntry[] = items.map((item) => {
-              const rawLabel = item.label;
-              const filterValue = item.filter_value ?? rawLabel;
-              const label = panel.panelFormatKind ? formatCodecLabel(rawLabel, panel.panelFormatKind) : rawLabel;
-              const isApplied = hasSearchValueTokens(fieldValues[panel.id], filterValue);
-              return {
-                key: `${panel.id}:${rawLabel}`,
-                label,
-                value: item.value,
-                disabled: isApplied,
-                ariaLabel: isApplied
-                  ? t("libraryDetail.statistics.filterAlreadyApplied", {
-                      field: t(panel.nameKey),
-                      value: label,
-                    })
-                  : t("libraryDetail.statistics.filterByValue", {
-                      field: t(panel.nameKey),
-                      value: label,
-                    }),
-                onClick: statisticsError || !libraryStatistics ? undefined : () => applyStatisticFilter(panel.id, filterValue),
-              };
-            });
             return (
-              <AsyncPanel
-                key={panel.id}
-                title={t(panel.panelTitleKey ?? panel.nameKey)}
-                loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
-                error={statisticsError}
-                bodyClassName="async-panel-body-scroll"
+              <div
+                key={panel.item.instanceId}
+                className={shellClassName}
+                draggable={isEditingStatisticLayout}
+                onDragStart={() => {
+                  if (!isEditingStatisticLayout) {
+                    return;
+                  }
+                  setDraggedStatisticPanelId(panel.item.instanceId);
+                  setDropTargetStatisticPanelId(null);
+                }}
+                onDragOver={(event) => {
+                  if (!isEditingStatisticLayout || draggedStatisticPanelId === panel.item.instanceId) {
+                    return;
+                  }
+                  event.preventDefault();
+                  setDropTargetStatisticPanelId(panel.item.instanceId);
+                }}
+                onDragLeave={() => {
+                  if (dropTargetStatisticPanelId === panel.item.instanceId) {
+                    setDropTargetStatisticPanelId(null);
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (!isEditingStatisticLayout) {
+                    return;
+                  }
+                  handleStatisticPanelDrop(panel.item.instanceId);
+                }}
+                onDragEnd={() => {
+                  setDraggedStatisticPanelId(null);
+                  setDropTargetStatisticPanelId(null);
+                }}
+                style={
+                  {
+                    "--statistic-panel-row-span": String(panel.item.height),
+                  } as CSSProperties
+                }
               >
-                <DistributionList items={formattedItems} maxVisibleRows={5} scrollable />
-              </AsyncPanel>
+                {content}
+                {isEditingStatisticLayout ? (
+                  <div className="statistic-layout-overlay">
+                    <div className="statistic-layout-overlay-sheen" />
+                    {renderStatisticPanelResizeControls(panel)}
+                  </div>
+                ) : null}
+              </div>
             );
-          })
-        ) : (
-          <div className="notice">{t("libraryStatistics.noPanelsSelected")}</div>
-        )}
+          })}
       </div>
 
       <AsyncPanel

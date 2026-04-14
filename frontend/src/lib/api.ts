@@ -23,6 +23,65 @@ export type NumericDistribution = {
   bins: NumericDistributionBin[];
 };
 
+export type ComparisonFieldId =
+  | "size"
+  | "duration"
+  | "quality_score"
+  | "bitrate"
+  | "audio_bitrate"
+  | "resolution_mp"
+  | "container"
+  | "video_codec"
+  | "resolution"
+  | "hdr_type";
+
+export type ComparisonFieldKind = "numeric" | "category";
+export type ComparisonRendererId = "heatmap" | "scatter" | "bar";
+
+export type ComparisonBucket = {
+  key: string;
+  label: string;
+  lower: number | null;
+  upper: number | null;
+};
+
+export type ComparisonHeatmapCell = {
+  x_key: string;
+  y_key: string;
+  count: number;
+};
+
+export type ComparisonScatterPoint = {
+  media_file_id: number;
+  x_value: number;
+  y_value: number;
+};
+
+export type ComparisonBarEntry = {
+  x_key: string;
+  x_label: string;
+  value: number;
+  count: number;
+};
+
+export type ComparisonResponse = {
+  x_field: ComparisonFieldId;
+  y_field: ComparisonFieldId;
+  x_field_kind: ComparisonFieldKind;
+  y_field_kind: ComparisonFieldKind;
+  available_renderers: ComparisonRendererId[];
+  total_files: number;
+  included_files: number;
+  excluded_files: number;
+  sampled_points: boolean;
+  sample_limit: number;
+  x_buckets: ComparisonBucket[];
+  y_buckets: ComparisonBucket[];
+  heatmap_cells: ComparisonHeatmapCell[];
+  scatter_points: ComparisonScatterPoint[] | null;
+  bar_entries: ComparisonBarEntry[] | null;
+};
+
 export type ResolutionCategory = {
   id: string;
   label: string;
@@ -157,6 +216,8 @@ export type MediaFileRow = {
   quality_score_raw: number;
   container: string | null;
   duration: number | null;
+  bitrate: number | null;
+  audio_bitrate: number | null;
   video_codec: string | null;
   resolution: string | null;
   resolution_category_id?: string | null;
@@ -230,6 +291,8 @@ export type MediaFileSortKey =
   | "resolution"
   | "hdr_type"
   | "duration"
+  | "bitrate"
+  | "audio_bitrate"
   | "audio_codecs"
   | "audio_spatial_profiles"
   | "audio_languages"
@@ -311,11 +374,13 @@ export type AppSettings = {
   scan_performance?: {
     scan_worker_count: number;
     parallel_scan_jobs: number;
+    comparison_scatter_point_limit: number;
   };
   feature_flags: {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
+    unlimited_panel_size: boolean;
   };
 };
 
@@ -564,6 +629,13 @@ function extractFilenameFromDisposition(value: string | null): string | null {
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   dashboard: () => request<DashboardResponse>("/dashboard"),
+  dashboardComparison: (
+    params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
+  ) =>
+    request<ComparisonResponse>(
+      `/dashboard/comparison?x_field=${encodeURIComponent(params.xField)}&y_field=${encodeURIComponent(params.yField)}`,
+      { signal: params.signal },
+    ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   recentScanJobs: (params?: {
     limit?: number;
@@ -593,6 +665,14 @@ export const api = {
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
   libraryStatistics: (id: string | number, signal?: AbortSignal) =>
     request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
+  libraryComparison: (
+    id: string | number,
+    params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
+  ) =>
+    request<ComparisonResponse>(
+      `/libraries/${id}/statistics/comparison?x_field=${encodeURIComponent(params.xField)}&y_field=${encodeURIComponent(params.yField)}`,
+      { signal: params.signal },
+    ),
   libraryDuplicates: (
     id: string | number,
     params?: { offset?: number; limit?: number; signal?: AbortSignal },
@@ -650,11 +730,13 @@ export const api = {
     scan_performance?: {
       scan_worker_count?: number;
       parallel_scan_jobs?: number;
+      comparison_scatter_point_limit?: number;
     };
     feature_flags?: {
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;
+      unlimited_panel_size?: boolean;
     };
   }) =>
     request<AppSettings>("/app-settings", {

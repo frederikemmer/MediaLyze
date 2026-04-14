@@ -110,6 +110,8 @@ class MediaFileTableRow(BaseModel):
     quality_score_raw: float = 0.0
     container: str | None = None
     duration: float | None = None
+    bitrate: float | None = None
+    audio_bitrate: float | None = None
     video_codec: str | None = None
     resolution: str | None = None
     resolution_category_id: str | None = None

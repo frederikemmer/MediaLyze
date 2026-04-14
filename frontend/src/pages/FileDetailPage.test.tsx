@@ -33,12 +33,14 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
     feature_flags: {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -63,6 +65,8 @@ function createFileDetail(): MediaFileDetail {
     quality_score_raw: 91.2,
     container: "mkv",
     duration: 3360,
+    bitrate: 25_000_000,
+    audio_bitrate: 768_000,
     video_codec: "hevc",
     resolution: "3840x1606",
     resolution_category_id: "4k",

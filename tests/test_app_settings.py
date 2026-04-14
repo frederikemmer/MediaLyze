@@ -52,9 +52,11 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     ]
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
+    assert loaded.scan_performance.comparison_scatter_point_limit == 5000
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
@@ -73,9 +75,11 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.ignore_patterns == []
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
+    assert loaded.scan_performance.comparison_scatter_point_limit == 5000
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_path) -> None:
@@ -93,9 +97,11 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.ignore_patterns == ["*.nfo", "*/Extras/*"]
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
+    assert loaded.scan_performance.comparison_scatter_point_limit == 5000
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
 
 
 def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective_list(tmp_path) -> None:
@@ -111,11 +117,13 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
                 scan_performance={
                     "scan_worker_count": 6,
                     "parallel_scan_jobs": 3,
+                    "comparison_scatter_point_limit": 10000,
                 },
                 feature_flags={
                     "show_analyzed_files_csv_export": True,
                     "show_full_width_app_shell": True,
                     "hide_quality_score_meter": True,
+                    "unlimited_panel_size": True,
                 },
             ),
             settings,
@@ -128,9 +136,11 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.ignore_patterns == ["*.tmp", "*/cache/*", "*/.DS_Store", "*/@eaDir/*"]
     assert updated.scan_performance.scan_worker_count == 6
     assert updated.scan_performance.parallel_scan_jobs == 3
+    assert updated.scan_performance.comparison_scatter_point_limit == 10000
     assert updated.feature_flags.show_analyzed_files_csv_export is True
     assert updated.feature_flags.show_full_width_app_shell is True
     assert updated.feature_flags.hide_quality_score_meter is True
+    assert updated.feature_flags.unlimited_panel_size is True
     assert loaded == updated
     assert stored is not None
     assert stored.value == {
@@ -140,11 +150,13 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
         "scan_performance": {
             "scan_worker_count": 6,
             "parallel_scan_jobs": 3,
+            "comparison_scatter_point_limit": 10000,
         },
         "feature_flags": {
             "show_analyzed_files_csv_export": True,
             "show_full_width_app_shell": True,
             "hide_quality_score_meter": True,
+            "unlimited_panel_size": True,
         },
     }
 
@@ -165,9 +177,11 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.ignore_patterns == ["[sample]", "*thumbs.db", *BUILT_IN_DEFAULT_IGNORE_PATTERNS[:-1]]
     assert updated.scan_performance.scan_worker_count == 4
     assert updated.scan_performance.parallel_scan_jobs == 2
+    assert updated.scan_performance.comparison_scatter_point_limit == 5000
     assert updated.feature_flags.show_analyzed_files_csv_export is False
     assert updated.feature_flags.show_full_width_app_shell is False
     assert updated.feature_flags.hide_quality_score_meter is False
+    assert updated.feature_flags.unlimited_panel_size is False
 
 
 def test_update_app_settings_supports_resolution_category_renames_and_remaps_quality_profiles(tmp_path) -> None:
@@ -202,6 +216,7 @@ def test_update_app_settings_merges_partial_scan_performance_updates(tmp_path) -
                 scan_performance={
                     "scan_worker_count": 7,
                     "parallel_scan_jobs": 2,
+                    "comparison_scatter_point_limit": 2500,
                 }
             ),
             settings,
@@ -214,5 +229,7 @@ def test_update_app_settings_merges_partial_scan_performance_updates(tmp_path) -
 
     assert first.scan_performance.scan_worker_count == 7
     assert first.scan_performance.parallel_scan_jobs == 2
+    assert first.scan_performance.comparison_scatter_point_limit == 2500
     assert second.scan_performance.scan_worker_count == 7
     assert second.scan_performance.parallel_scan_jobs == 5
+    assert second.scan_performance.comparison_scatter_point_limit == 2500

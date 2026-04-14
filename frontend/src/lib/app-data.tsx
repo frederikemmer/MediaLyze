@@ -34,6 +34,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 const DEFAULT_SCAN_PERFORMANCE = {
   scan_worker_count: 4,
   parallel_scan_jobs: 2,
+  comparison_scatter_point_limit: 5000,
 };
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -46,6 +47,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     show_analyzed_files_csv_export: false,
     show_full_width_app_shell: false,
     hide_quality_score_meter: false,
+    unlimited_panel_size: false,
   },
 };
 
@@ -58,11 +60,15 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     scan_performance: {
       scan_worker_count: payload?.scan_performance?.scan_worker_count ?? DEFAULT_SCAN_PERFORMANCE.scan_worker_count,
       parallel_scan_jobs: payload?.scan_performance?.parallel_scan_jobs ?? DEFAULT_SCAN_PERFORMANCE.parallel_scan_jobs,
+      comparison_scatter_point_limit:
+        payload?.scan_performance?.comparison_scatter_point_limit ??
+        DEFAULT_SCAN_PERFORMANCE.comparison_scatter_point_limit,
     },
     feature_flags: {
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
       show_full_width_app_shell: payload?.feature_flags?.show_full_width_app_shell ?? false,
       hide_quality_score_meter: payload?.feature_flags?.hide_quality_score_meter ?? false,
+      unlimited_panel_size: payload?.feature_flags?.unlimited_panel_size ?? false,
     },
   };
 }

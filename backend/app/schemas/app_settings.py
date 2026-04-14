@@ -5,6 +5,9 @@ SCAN_WORKER_COUNT_MIN = 1
 SCAN_WORKER_COUNT_MAX = 16
 PARALLEL_SCAN_JOB_COUNT_MIN = 1
 PARALLEL_SCAN_JOB_COUNT_MAX = 8
+COMPARISON_SCATTER_POINT_LIMIT_MIN = 1
+COMPARISON_SCATTER_POINT_LIMIT_MAX = 500000
+DEFAULT_COMPARISON_SCATTER_POINT_LIMIT = 5000
 
 
 class ResolutionCategory(BaseModel):
@@ -18,22 +21,34 @@ class FeatureFlagsRead(BaseModel):
     show_analyzed_files_csv_export: bool = False
     show_full_width_app_shell: bool = False
     hide_quality_score_meter: bool = False
+    unlimited_panel_size: bool = False
 
 
 class FeatureFlagsUpdate(BaseModel):
     show_analyzed_files_csv_export: bool | None = None
     show_full_width_app_shell: bool | None = None
     hide_quality_score_meter: bool | None = None
+    unlimited_panel_size: bool | None = None
 
 
 class ScanPerformanceRead(BaseModel):
     scan_worker_count: int = Field(default=4, ge=SCAN_WORKER_COUNT_MIN, le=SCAN_WORKER_COUNT_MAX)
     parallel_scan_jobs: int = Field(default=2, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
+    comparison_scatter_point_limit: int = Field(
+        default=DEFAULT_COMPARISON_SCATTER_POINT_LIMIT,
+        ge=COMPARISON_SCATTER_POINT_LIMIT_MIN,
+        le=COMPARISON_SCATTER_POINT_LIMIT_MAX,
+    )
 
 
 class ScanPerformanceUpdate(BaseModel):
     scan_worker_count: int | None = Field(default=None, ge=SCAN_WORKER_COUNT_MIN, le=SCAN_WORKER_COUNT_MAX)
     parallel_scan_jobs: int | None = Field(default=None, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
+    comparison_scatter_point_limit: int | None = Field(
+        default=None,
+        ge=COMPARISON_SCATTER_POINT_LIMIT_MIN,
+        le=COMPARISON_SCATTER_POINT_LIMIT_MAX,
+    )
 
 
 class AppSettingsRead(BaseModel):

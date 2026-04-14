@@ -53,6 +53,7 @@ MediaLyze currently implements:
 * per-library duplicate detection using filename signatures, exact file hashes, or both together
 * structured metadata search, filtering, sorting, and pagination
 * dashboard and per-library statistics
+* dashboard and per-library metric-comparison panels with selectable X/Y dimensions and heatmap, scatter, or bar renderers where supported
 * theme selection and feature flags
 * English and German UI translations
 * Docker-first deployment and GHCR image publishing
@@ -387,8 +388,9 @@ Current behavior:
 Current aggregated statistics include:
 
 * dashboard totals for libraries, files, storage, and duration
-* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
-* optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate
+* optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the dashboard page's persisted inline panel layout
+* optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate based on the dashboard page's persisted inline panel layout
+* optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, numeric resolution in megapixels, container, codec, resolution category, and HDR type based on the dashboard page's persisted inline panel layout
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
@@ -400,15 +402,18 @@ Current aggregated statistics include:
 * subtitle codec distribution
 * subtitle source distribution
 * histogram-based numeric distributions in library statistics for quality score, runtime, file size, bitrate, and audio bitrate
+* metric-comparison panels in library statistics for pairs of single-value fields, with server-provided heatmap data and optional scatter or bar views depending on the selected axis kinds
 
 ## 7.2 Statistics Caching
 
 The project currently uses in-process stats caching via `backend/app/services/stats_cache.py` for:
 
 * dashboard payloads
+* dashboard comparison payloads keyed by selected X/Y fields
 * library lists
 * library summaries
 * library statistics
+* library comparison payloads keyed by library id plus selected X/Y fields
 
 Cache invalidation is tied to library changes and scan activity.
 
@@ -447,7 +452,7 @@ The backend supports:
 * comma-separated `AND` ranges for numeric filters, for example `>=4GB,<8GB` or `>=8Mb/s,<12Mb/s`
 * sorting across supported table columns
 
-The analyzed-files table and library statistics settings can also expose container as a separate configurable column / panel dimension, using the normalized file extension as the user-facing container key.
+The analyzed-files table and table-view settings can also expose container, bitrate, and audio bitrate as configurable columns, using the normalized file extension as the user-facing container key.
 
 ---
 
@@ -478,16 +483,19 @@ Implemented UI behavior includes:
 * virtualized library file table for larger datasets
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
-* statistic-panel and table-column visibility customization
-* reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, runtime, file size, bitrate, and audio bitrate
+* table-column visibility and per-column tooltip customization in the settings page's `Table View` section
+* inline statistic-panel layout editing on the dashboard and library detail pages, including add-panel menus, drag-and-drop reordering, per-panel resizing, and persisted per-page panel selections that are now managed directly on those pages instead of in Settings
+* reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, duration, file size, bitrate, and audio bitrate
+* reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
 * clickable numeric histogram bins in the library detail view that apply matching analyzed-files range filters
+* curated default statistic-panel layouts for first-time dashboard and library views plus inline reset-to-default controls on both statistic-layout pages
 * user-resizable analyzed-files table columns with persisted widths in browser storage
 * lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
 * globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
+* persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
 ## 8.3 Internationalization
 
@@ -519,6 +527,7 @@ Current app feature flags include:
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
+* `unlimited_panel_size`
 
 These flags currently control:
 
@@ -526,6 +535,7 @@ These flags currently control:
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 
 ---
 
@@ -537,6 +547,7 @@ The backend currently exposes a REST-style API under the configured prefix, typi
 
 * `GET /api/health`
 * `GET /api/dashboard`
+* `GET /api/dashboard/comparison`
 * `GET /api/scan-jobs/active`
 * `POST /api/scan-jobs/active/cancel`
 * `GET /api/scan-jobs/recent`
@@ -565,9 +576,11 @@ Important current payload concepts:
 * `resolution_categories`
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
+* `scan_performance.comparison_scatter_point_limit`
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
+* `feature_flags.unlimited_panel_size`
 
 ## 9.4 Libraries
 
@@ -575,6 +588,7 @@ Important current payload concepts:
 * `POST /api/libraries`
 * `GET /api/libraries/{library_id}/summary`
 * `GET /api/libraries/{library_id}/statistics`
+* `GET /api/libraries/{library_id}/statistics/comparison`
 * `GET /api/libraries/{library_id}/duplicates`
 * `GET /api/libraries/{library_id}/scan-jobs`
 * `PATCH /api/libraries/{library_id}`
@@ -590,6 +604,7 @@ Important library contract concepts:
 * `scan_config`
 * `quality_profile`
 * `numeric_distributions`
+* comparison responses expose `x_field`, `y_field`, field kinds, available renderers, bucket metadata, heatmap cells, optional scatter points, optional bar aggregates, and the active scatter sample limit
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
 ## 9.5 Files
@@ -684,6 +699,7 @@ Implemented backend structure:
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
 * `backend/app/services/duplicates.py` provides duplicate-signature strategies and duplicate-group queries
 * `backend/app/services/numeric_distributions.py` builds histogram-ready numeric statistics for dashboard and library payloads
+* `backend/app/services/stat_comparisons.py` builds cached comparison datasets for dashboard and library views from the normalized per-file metadata model, including numeric megapixel resolution comparisons and app-configured scatter-point sampling
 * `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
 * `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
 * `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics
@@ -694,15 +710,16 @@ Implemented frontend structure:
 
 * `frontend/src/App.tsx` wires routing and providers
 * `frontend/src/lib/app-data.tsx` manages cached app settings, dashboard, and library data
+* `frontend/src/lib/statistic-comparisons.ts` manages comparison field definitions, renderer compatibility, and persisted per-view selections
 * `frontend/src/lib/scan-jobs.tsx` manages active scan polling state
-* page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views
+* page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views, including separate comparison-data loading on dashboard and library pages
 * `frontend/src/lib/desktop.ts` exposes the optional Electron preload bridge used by desktop builds
 
 Desktop packaging structure:
 
 * `desktop/main.cjs` boots Electron, starts the packaged backend, waits for `/api/health`, and opens the local app window
 * `desktop/preload.cjs` exposes the safe desktop bridge for native folder selection
-* `desktop/scripts/build-backend.mjs` builds the Python backend sidecar for packaging
+* `desktop/scripts/build-backend.mjs` builds the Python backend sidecar for packaging and bundles the packaged `ffprobe`; macOS packaging also copies non-system `dylib` dependencies into the app bundle and rewrites them to relative loader paths
 
 ## 11.3 Deployment Shape
 
@@ -723,7 +740,7 @@ Current deployment models are:
   * a local backend sidecar process
   * a local SQLite database under the user-data directory
   * a bundled frontend build
-  * a bundled `ffprobe` binary per target platform
+  * a bundled `ffprobe` binary per target platform, with macOS desktop builds also bundling the non-system shared libraries that the packaged `ffprobe` depends on
 
 ---
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "medialyze"
-version = "0.6.0"
+version = "0.7.0"
 description = "Self-hosted media library analyzer for technical video metadata."
 readme = "README.md"
 requires-python = ">=3.12"

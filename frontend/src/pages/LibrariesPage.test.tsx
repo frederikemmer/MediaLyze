@@ -37,12 +37,14 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
     feature_flags: {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
+      unlimited_panel_size: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -254,11 +256,13 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -271,6 +275,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_analyzed_files_csv_export: true,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -289,11 +294,13 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: true,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -306,6 +313,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -324,11 +332,13 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -341,6 +351,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
+          unlimited_panel_size: false,
         },
       }),
     );
@@ -359,11 +370,51 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
+          unlimited_panel_size: false,
+        },
+      }),
+    );
+  });
+
+  it("persists the unlimited panel size feature flag", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: true,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("Unlimited panel size");
+    await screen.findByDisplayValue("movie.tmp");
+    await waitFor(() => expect(checkbox).toBeEnabled());
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: true,
         },
       }),
     );
@@ -375,6 +426,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 6,
           parallel_scan_jobs: 3,
+          comparison_scatter_point_limit: 5000,
         },
       }),
     );
@@ -400,14 +452,69 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 6,
           parallel_scan_jobs: 3,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
+          unlimited_panel_size: false,
         },
       }),
     );
+  });
+
+  it("persists the comparison scatter point limit from app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 10000,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const scatterPointLimitInput = (await screen.findByLabelText("Scatter plot points")) as HTMLSelectElement;
+    await screen.findByDisplayValue("movie.tmp");
+    await waitFor(() => expect(scatterPointLimitInput).toBeEnabled());
+
+    fireEvent.change(scatterPointLimitInput, { target: { value: "10000" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 10000,
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: false,
+        },
+      }),
+    );
+  });
+
+  it("shows the scatter plot point limit under the plots and charts section", async () => {
+    renderPage();
+
+    const sectionTitle = await screen.findByText("Plots & Charts");
+    const settingsSection = sectionTitle.closest(".app-settings-section") as HTMLElement | null;
+    expect(settingsSection).not.toBeNull();
+    if (!settingsSection) {
+      return;
+    }
+
+    expect(within(settingsSection).getByLabelText("Scatter plot points")).toBeInTheDocument();
+    expect(within(settingsSection).queryByLabelText("Per-scan analysis workers")).not.toBeInTheDocument();
+    expect(within(settingsSection).queryByLabelText("Parallel library scans")).not.toBeInTheDocument();
   });
 
   it("auto-saves renamed resolution categories on blur", async () => {
@@ -579,10 +686,10 @@ describe("LibrariesPage statistics settings", () => {
     const audioLanguagesRow = screen.getByText("Audio languages").closest("tr");
     expect(audioLanguagesRow).not.toBeNull();
     const audioLanguagesCheckboxes = within(audioLanguagesRow!).getAllByRole("checkbox");
-    expect(audioLanguagesCheckboxes).toHaveLength(4);
-    expect(audioLanguagesCheckboxes[2]).toBeEnabled();
+    expect(audioLanguagesCheckboxes).toHaveLength(2);
+    expect(audioLanguagesCheckboxes[1]).toBeEnabled();
 
-    fireEvent.click(audioLanguagesCheckboxes[2]);
+    fireEvent.click(audioLanguagesCheckboxes[1]);
 
     expect(window.localStorage.getItem("medialyze-library-statistics-settings")).toContain(
       '"audio_languages":{"panelEnabled":true,"tableEnabled":true,"tableTooltipEnabled":false,"dashboardEnabled":true}',
@@ -591,7 +698,7 @@ describe("LibrariesPage statistics settings", () => {
     const fileSizeRow = screen.getByText("File size").closest("tr");
     expect(fileSizeRow).not.toBeNull();
     const fileSizeCheckboxes = within(fileSizeRow!).getAllByRole("checkbox");
-    expect(fileSizeCheckboxes[2]).toBeDisabled();
+    expect(fileSizeCheckboxes[1]).toBeDisabled();
   });
 });
 
@@ -674,6 +781,27 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("shows the table-view statistic settings without the old panel or dashboard toggles", async () => {
+    renderPage();
+
+    const tableViewToggle = await screen.findByRole("button", { name: /^table view$/i });
+    const settingsPanel = tableViewToggle.closest(".async-panel") as HTMLElement | null;
+    expect(settingsPanel).not.toBeNull();
+    if (!settingsPanel) {
+      return;
+    }
+
+    const panel = within(settingsPanel);
+    expect(panel.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(panel.getByRole("columnheader", { name: "Table" })).toBeInTheDocument();
+    expect(panel.getByRole("columnheader", { name: "Tooltips" })).toBeInTheDocument();
+    expect(panel.queryByRole("columnheader", { name: "Library" })).not.toBeInTheDocument();
+    expect(panel.queryByRole("columnheader", { name: "Dashboard" })).not.toBeInTheDocument();
+    expect(panel.getByText("Bitrate")).toBeInTheDocument();
+    expect(panel.getByText("Audio bitrate")).toBeInTheDocument();
+    expect(panel.queryByText("Metric comparison")).not.toBeInTheDocument();
+  });
+
   it("shows the main settings panels expanded by default", async () => {
     renderPage();
 
