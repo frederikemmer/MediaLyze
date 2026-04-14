@@ -169,19 +169,22 @@ function isMacosSystemDependency(candidate) {
   );
 }
 
-function expandMachOPathToken(candidate, binaryPath, executablePath) {
+function expandMachOPathToken(candidate, binaryPath, executablePath, pathLib = path) {
   if (candidate === "@loader_path") {
-    return path.dirname(binaryPath);
+    return pathLib.dirname(binaryPath);
   }
   if (candidate.startsWith("@loader_path/")) {
-    return path.resolve(path.dirname(binaryPath), candidate.slice("@loader_path/".length));
+    return pathLib.resolve(
+      pathLib.dirname(binaryPath),
+      candidate.slice("@loader_path/".length)
+    );
   }
   if (candidate === "@executable_path") {
-    return path.dirname(executablePath);
+    return pathLib.dirname(executablePath);
   }
   if (candidate.startsWith("@executable_path/")) {
-    return path.resolve(
-      path.dirname(executablePath),
+    return pathLib.resolve(
+      pathLib.dirname(executablePath),
       candidate.slice("@executable_path/".length)
     );
   }
@@ -193,7 +196,8 @@ function resolveMachODependencyPath(
   binaryPath,
   executablePath,
   rpaths,
-  exists
+  exists,
+  pathLib = path
 ) {
   if (typeof dependency !== "string" || !dependency) {
     return null;
@@ -206,7 +210,8 @@ function resolveMachODependencyPath(
   const expandedTokenPath = expandMachOPathToken(
     dependency,
     binaryPath,
-    executablePath
+    executablePath,
+    pathLib
   );
   if (expandedTokenPath) {
     return exists(expandedTokenPath) ? expandedTokenPath : null;
@@ -219,13 +224,13 @@ function resolveMachODependencyPath(
   const rpathSuffix = dependency.slice("@rpath/".length);
   for (const rpath of rpaths) {
     const expandedRpath =
-      expandMachOPathToken(rpath, binaryPath, executablePath) ??
+      expandMachOPathToken(rpath, binaryPath, executablePath, pathLib) ??
       (rpath.startsWith("/") ? rpath : null);
     if (!expandedRpath) {
       continue;
     }
 
-    const resolvedCandidate = path.resolve(expandedRpath, rpathSuffix);
+    const resolvedCandidate = pathLib.resolve(expandedRpath, rpathSuffix);
     if (exists(resolvedCandidate)) {
       return resolvedCandidate;
     }
@@ -243,12 +248,13 @@ export function bundleMacosFfprobeDependencies(
     inspectBinary = defaultInspectMachOBinary,
     mkdir = mkdirSync,
     patchBinary = defaultPatchMachOBinary,
+    pathLib = path,
     realpath = realpathSync,
     signBinary = defaultSignMachOBinary,
     sourceExecutablePath = executablePath,
   } = {}
 ) {
-  const libDir = path.join(bundleDir, "lib");
+  const libDir = pathLib.join(bundleDir, "lib");
   const pendingBinaries = [
     {
       bundledPath: executablePath,
@@ -278,7 +284,8 @@ export function bundleMacosFfprobeDependencies(
         sourcePath,
         sourceExecutablePath,
         inspection.rpaths,
-        exists
+        exists,
+        pathLib
       );
       if (!resolvedDependency) {
         continue;
@@ -289,7 +296,7 @@ export function bundleMacosFfprobeDependencies(
 
       if (!bundledDependency) {
         mkdir(libDir, { recursive: true });
-        bundledDependency = path.join(libDir, path.basename(realDependency));
+        bundledDependency = pathLib.join(libDir, pathLib.basename(realDependency));
         copy(realDependency, bundledDependency);
         copiedLibraries.set(realDependency, bundledDependency);
         pendingBinaries.push({
@@ -308,7 +315,7 @@ export function bundleMacosFfprobeDependencies(
     }
     patchBinary(bundledDependency, [
       "-id",
-      `@loader_path/${path.basename(bundledDependency)}`,
+      `@loader_path/${pathLib.basename(bundledDependency)}`,
     ]);
   }
 
@@ -319,7 +326,8 @@ export function bundleMacosFfprobeDependencies(
         inspection.sourcePath,
         sourceExecutablePath,
         inspection.rpaths,
-        exists
+        exists,
+        pathLib
       );
       if (!resolvedDependency) {
         continue;
@@ -332,8 +340,8 @@ export function bundleMacosFfprobeDependencies(
 
       const rewrittenDependency =
         binaryPath === executablePath
-          ? `@executable_path/lib/${path.basename(bundledDependency)}`
-          : `@loader_path/${path.basename(bundledDependency)}`;
+          ? `@executable_path/lib/${pathLib.basename(bundledDependency)}`
+          : `@loader_path/${pathLib.basename(bundledDependency)}`;
 
       patchBinary(binaryPath, ["-change", dependency, rewrittenDependency]);
     }

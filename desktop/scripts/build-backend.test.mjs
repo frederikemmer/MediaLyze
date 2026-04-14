@@ -4,7 +4,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  realpathSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -118,49 +117,57 @@ Load command 12
   assert.deepEqual(rpaths, ["@loader_path/../lib", "/opt/homebrew/lib"]);
 });
 
-test("bundleMacosFfprobeDependencies copies and rewrites non-system dylibs", () => {
-  withTempDir((tempDir) => {
-    const bundleDir = path.join(tempDir, "ffprobe");
-    const libDir = path.join(bundleDir, "lib");
-    const executablePath = path.join(bundleDir, "ffprobe");
-    const sourceLibDirPath = path.join(tempDir, "homebrew");
+test(
+  "bundleMacosFfprobeDependencies copies and rewrites non-system dylibs",
+  () => {
+    const pathLib = path.posix;
+    const bundleDir = "/bundle/ffprobe";
+    const libDir = pathLib.join(bundleDir, "lib");
+    const executablePath = pathLib.join(bundleDir, "ffprobe");
+    const sourceExecutablePath = "/source/ffprobe";
+    const sourceLibDir = "/source/lib";
+    const avdevicePath = pathLib.join(sourceLibDir, "libavdevice.62.dylib");
+    const avutilPath = pathLib.join(sourceLibDir, "libavutil.60.dylib");
+    const sharpyuvPath = pathLib.join(sourceLibDir, "libsharpyuv.0.dylib");
 
-    mkdirSync(bundleDir, { recursive: true });
-    mkdirSync(sourceLibDirPath, { recursive: true });
-    const sourceLibDir = realpathSync(sourceLibDirPath);
-    const avdevicePath = path.join(sourceLibDir, "libavdevice.62.dylib");
-    const avutilPath = path.join(sourceLibDir, "libavutil.60.dylib");
-    const sharpyuvPath = path.join(sourceLibDir, "libsharpyuv.0.dylib");
-    writeFileSync(executablePath, "ffprobe");
-    writeFileSync(avdevicePath, "avdevice");
-    writeFileSync(avutilPath, "avutil");
-    writeFileSync(sharpyuvPath, "sharpyuv");
-
+    const directories = new Set([bundleDir, sourceLibDir]);
+    const files = new Map([
+      [executablePath, "ffprobe-binary"],
+      [sourceExecutablePath, "ffprobe-source"],
+      [avdevicePath, "avdevice"],
+      [avutilPath, "avutil"],
+      [sharpyuvPath, "sharpyuv"],
+    ]);
     const patched = [];
     const signed = [];
 
     bundleMacosFfprobeDependencies(bundleDir, executablePath, {
-      sourceExecutablePath: executablePath,
+      sourceExecutablePath,
+      pathLib,
+      copy: (sourcePath, targetPath) => {
+        files.set(targetPath, files.get(sourcePath) ?? "");
+      },
+      exists: (candidate) => files.has(candidate) || directories.has(candidate),
       inspectBinary: (candidate) => {
-        if (candidate === executablePath) {
+        if (candidate === sourceExecutablePath) {
           return {
             dependencies: [avdevicePath, "/usr/lib/libSystem.B.dylib"],
             rpaths: [],
           };
         }
-        if (candidate.endsWith("/libavdevice.62.dylib")) {
+        if (candidate === avdevicePath) {
           return {
             dependencies: [avutilPath],
             rpaths: [],
           };
         }
-        if (candidate.endsWith("/libavutil.60.dylib")) {
+        if (candidate === avutilPath) {
           return {
             dependencies: ["@rpath/libsharpyuv.0.dylib"],
             rpaths: ["@loader_path"],
           };
         }
-        if (candidate.endsWith("/libsharpyuv.0.dylib")) {
+        if (candidate === sharpyuvPath) {
           return {
             dependencies: [],
             rpaths: [],
@@ -168,39 +175,34 @@ test("bundleMacosFfprobeDependencies copies and rewrites non-system dylibs", () 
         }
         throw new Error(`Unexpected inspect target: ${candidate}`);
       },
+      mkdir: (directoryPath) => {
+        directories.add(directoryPath);
+      },
       patchBinary: (targetPath, args) => {
         patched.push([targetPath, ...args]);
       },
+      realpath: (candidate) => candidate,
       signBinary: (targetPath) => {
         signed.push(targetPath);
       },
     });
 
-    assert.equal(
-      readFileSync(path.join(libDir, "libavdevice.62.dylib"), "utf8"),
-      "avdevice"
-    );
-    assert.equal(
-      readFileSync(path.join(libDir, "libavutil.60.dylib"), "utf8"),
-      "avutil"
-    );
-    assert.equal(
-      readFileSync(path.join(libDir, "libsharpyuv.0.dylib"), "utf8"),
-      "sharpyuv"
-    );
+    assert.equal(files.get(pathLib.join(libDir, "libavdevice.62.dylib")), "avdevice");
+    assert.equal(files.get(pathLib.join(libDir, "libavutil.60.dylib")), "avutil");
+    assert.equal(files.get(pathLib.join(libDir, "libsharpyuv.0.dylib")), "sharpyuv");
     assert.deepEqual(patched, [
       [
-        path.join(libDir, "libavdevice.62.dylib"),
+        pathLib.join(libDir, "libavdevice.62.dylib"),
         "-id",
         "@loader_path/libavdevice.62.dylib",
       ],
       [
-        path.join(libDir, "libavutil.60.dylib"),
+        pathLib.join(libDir, "libavutil.60.dylib"),
         "-id",
         "@loader_path/libavutil.60.dylib",
       ],
       [
-        path.join(libDir, "libsharpyuv.0.dylib"),
+        pathLib.join(libDir, "libsharpyuv.0.dylib"),
         "-id",
         "@loader_path/libsharpyuv.0.dylib",
       ],
@@ -211,23 +213,23 @@ test("bundleMacosFfprobeDependencies copies and rewrites non-system dylibs", () 
         "@executable_path/lib/libavdevice.62.dylib",
       ],
       [
-        path.join(libDir, "libavdevice.62.dylib"),
+        pathLib.join(libDir, "libavdevice.62.dylib"),
         "-change",
         avutilPath,
         "@loader_path/libavutil.60.dylib",
       ],
       [
-        path.join(libDir, "libavutil.60.dylib"),
+        pathLib.join(libDir, "libavutil.60.dylib"),
         "-change",
         "@rpath/libsharpyuv.0.dylib",
         "@loader_path/libsharpyuv.0.dylib",
       ],
     ]);
     assert.deepEqual(signed, [
-      path.join(libDir, "libavdevice.62.dylib"),
-      path.join(libDir, "libavutil.60.dylib"),
-      path.join(libDir, "libsharpyuv.0.dylib"),
+      pathLib.join(libDir, "libavdevice.62.dylib"),
+      pathLib.join(libDir, "libavutil.60.dylib"),
+      pathLib.join(libDir, "libsharpyuv.0.dylib"),
       executablePath,
     ]);
-  });
-});
+  }
+);
