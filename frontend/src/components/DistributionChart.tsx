@@ -150,7 +150,11 @@ export function DistributionChart({
       notMerge
       lazyUpdate
       onEvents={onEvents}
-      style={{ height: 240, width: "100%", cursor: interactive ? "pointer" : "default" }}
+      style={{
+        height: "100%",
+        width: "100%",
+        cursor: interactive ? "pointer" : "default",
+      }}
     />
   );
 }

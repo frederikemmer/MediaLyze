@@ -484,6 +484,7 @@ Implemented UI behavior includes:
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * statistic-panel and table-column visibility customization
+* inline statistic-panel layout editing on the dashboard and library detail pages, including add-panel menus, drag-and-drop reordering, and per-panel resizing
 * reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, runtime, file size, bitrate, and audio bitrate
 * reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
@@ -493,7 +494,7 @@ Implemented UI behavior includes:
 * globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
 * per-file quality tooltip and full breakdown view
 * persistent app theme preference
-* persistent local UI state for selected statistics, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
+* persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
 ## 8.3 Internationalization
 

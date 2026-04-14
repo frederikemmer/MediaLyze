@@ -408,6 +408,27 @@ describe("LibraryDetailPage", () => {
     expect(libraryFilesSpy).toHaveBeenCalled();
   });
 
+  it("persists inline statistic panel layout changes for the current library", async () => {
+    const libraryId = 118;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Spatial audio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"audio_spatial_profiles\"",
+    );
+  });
+
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {
     const libraryId = 121;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });

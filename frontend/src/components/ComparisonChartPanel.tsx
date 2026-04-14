@@ -487,7 +487,7 @@ function ComparisonChartPanelComponent({
       {!comparison || comparison.included_files <= 0 ? (
         <div className="notice">{t("comparisonChart.empty")}</div>
       ) : (
-        <div className="stack comparison-chart-content">
+        <div className="comparison-chart-content">
           {option ? (
             <ReactECharts
               echarts={echarts}
@@ -495,7 +495,10 @@ function ComparisonChartPanelComponent({
               onEvents={chartEvents}
               notMerge
               lazyUpdate
-              style={{ height: 280, width: "100%" }}
+              style={{
+                height: "100%",
+                width: "100%",
+              }}
             />
           ) : (
             <div className="notice">{t("comparisonChart.empty")}</div>

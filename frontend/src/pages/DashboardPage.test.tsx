@@ -174,6 +174,24 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it("shows the dashboard title and persists inline layout changes", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Dashboard" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Bitrate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toContain("\"bitrate\"");
+  });
+
   it("renders newly supported dashboard statistic panels when enabled in settings", async () => {
     const settings = getLibraryStatisticsSettings();
     settings.visibility.container.dashboardEnabled = true;

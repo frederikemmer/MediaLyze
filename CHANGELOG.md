@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - add configurable metric-comparison statistic panels on the dashboard and library detail pages, with two-axis selection, heatmap / scatter / bar renderers, and dedicated comparison API endpoints for direct context such as `size` versus `duration` ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
 - extend metric-comparison charts with a numeric `Resolution - MP` axis option, show the active renderer icon directly in the toolbar button, and add an App Settings control for the scatter-plot sample limit ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
+- add inline statistic-panel layout editing on the dashboard and per-library detail pages, including a visible `Dashboard` page title, animated edit controls, add-panel menus, drag-and-drop reordering, per-panel resize controls, and browser-persisted layouts for each page context
 
 ## v0.6.0
 

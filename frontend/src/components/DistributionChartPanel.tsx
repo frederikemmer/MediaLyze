@@ -91,22 +91,24 @@ export function DistributionChartPanel({
       {!distribution || distribution.total <= 0 ? (
         <div className="notice">{t("distributionChart.empty")}</div>
       ) : (
-        <div className="stack">
+        <div className="distribution-chart-panel-content">
           <span className="distribution-chart-total">
             {t("distributionChart.total", {
               total: distribution.total,
               metric: t(`distributionChart.metrics.${metricId}`),
             })}
           </span>
-          <Suspense fallback={<div className="notice">{t("distributionChart.loading")}</div>}>
-            <LazyDistributionChart
-              distribution={distribution}
-              metricId={metricId}
-              mode={mode}
-              interactive={interactive}
-              onSelectBin={onSelectBin}
-            />
-          </Suspense>
+          <div className="distribution-chart-canvas">
+            <Suspense fallback={<div className="notice">{t("distributionChart.loading")}</div>}>
+              <LazyDistributionChart
+                distribution={distribution}
+                metricId={metricId}
+                mode={mode}
+                interactive={interactive}
+                onSelectBin={onSelectBin}
+              />
+            </Suspense>
+          </div>
         </div>
       )}
     </AsyncPanel>

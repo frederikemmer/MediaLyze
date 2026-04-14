@@ -171,6 +171,17 @@
       "comparison": "Metrikvergleich"
     }
   },
+  "panelLayout": {
+    "edit": "Panel-Layout bearbeiten",
+    "add": "Panel hinzufügen",
+    "save": "Panel-Layout speichern",
+    "cancel": "Änderungen am Panel-Layout verwerfen",
+    "noMorePanels": "Alle verfügbaren Panels sind bereits sichtbar.",
+    "expandWidth": "Panel breiter machen",
+    "shrinkWidth": "Panel schmaler machen",
+    "expandHeight": "Panel höher machen",
+    "shrinkHeight": "Panel niedriger machen"
+  },
   "libraryTypes": {
     "movies": "Filme",
     "series": "Serien",

@@ -171,6 +171,17 @@
       "comparison": "Metric comparison"
     }
   },
+  "panelLayout": {
+    "edit": "Edit panel layout",
+    "add": "Add panel",
+    "save": "Save panel layout",
+    "cancel": "Discard panel layout changes",
+    "noMorePanels": "All available panels are already shown.",
+    "expandWidth": "Expand panel width",
+    "shrinkWidth": "Shrink panel width",
+    "expandHeight": "Expand panel height",
+    "shrinkHeight": "Shrink panel height"
+  },
   "libraryTypes": {
     "movies": "Movies",
     "series": "Shows",
