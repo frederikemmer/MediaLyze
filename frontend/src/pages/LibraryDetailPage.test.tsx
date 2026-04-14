@@ -9,7 +9,6 @@ import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
-import { buildComparisonFieldFilterValue } from "../lib/statistic-comparisons";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import {
   api,
@@ -451,7 +450,7 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("File detail 1")).toBeInTheDocument();
   });
 
-  it("filters the analyzed files table when a comparison heatmap cell is clicked", async () => {
+  it("keeps the dashboard-style non-filtering comparison behavior on the library page", async () => {
     const libraryId = 124;
     const comparison = createComparisonResponse();
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -468,18 +467,8 @@ describe("LibraryDetailPage", () => {
     expect(chart).toBeDefined();
     fireEvent.click(chart!);
 
-    expect(await screen.findByDisplayValue(buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]))).toBeInTheDocument();
-    expect(screen.getByDisplayValue(buildComparisonFieldFilterValue("size", comparison.y_buckets[0]))).toBeInTheDocument();
     await waitFor(() => {
-      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
-        String(libraryId),
-        expect.objectContaining({
-          filters: expect.objectContaining({
-            duration: buildComparisonFieldFilterValue("duration", comparison.x_buckets[0]),
-            size: buildComparisonFieldFilterValue("size", comparison.y_buckets[0]),
-          }),
-        }),
-      );
+      expect(libraryFilesSpy).toHaveBeenCalledTimes(1);
     });
   });
 

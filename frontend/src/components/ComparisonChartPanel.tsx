@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as LucideIcons from "lucide-react";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts/core";
@@ -71,7 +71,7 @@ function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
-export function ComparisonChartPanel({
+function ComparisonChartPanelComponent({
   comparison,
   selection,
   loading = false,
@@ -93,24 +93,29 @@ export function ComparisonChartPanel({
   const selectedRendererDefinition =
     RENDERER_DEFINITIONS.find((entry) => entry.id === selectedRenderer) ?? RENDERER_DEFINITIONS[0];
   const SelectedRendererIcon = selectedRendererDefinition.icon;
+  const hasOpenFileAction = Boolean(onOpenFile);
+  const hasFilterAction = Boolean(onSelectFilters);
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
   const highlightColor = cssVars?.getPropertyValue("--accent").trim() || "#ff6b3d";
   const lineColor = cssVars?.getPropertyValue("--ink").trim() || "#1f1c16";
-  const tooltipBase = {
-    triggerOn: "mousemove|click",
-    showDelay: 0,
-    hideDelay: 260,
-    transitionDuration: 0,
-    confine: true,
-    enterable: false,
-    appendToBody: true,
-    extraCssText: "pointer-events:none;",
-    backgroundColor: "rgba(31, 28, 22, 0.94)",
-    borderWidth: 0,
-    textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
-  };
+  const tooltipBase = useMemo(
+    () => ({
+      triggerOn: "mousemove|click",
+      showDelay: 0,
+      hideDelay: 260,
+      transitionDuration: 0,
+      confine: true,
+      enterable: false,
+      appendToBody: true,
+      extraCssText: "pointer-events:none;",
+      backgroundColor: "rgba(31, 28, 22, 0.94)",
+      borderWidth: 0,
+      textStyle: { color: "#fffaf3", fontSize: 12, lineHeight: 18 },
+    }),
+    [],
+  );
 
   const option = useMemo(() => {
     if (!comparison || comparison.included_files <= 0) {
@@ -174,7 +179,7 @@ export function ComparisonChartPanel({
               opacity: 0.72,
             },
             emphasis: { disabled: true },
-            cursor: onOpenFile ? "pointer" : "default",
+            cursor: hasOpenFileAction ? "pointer" : "default",
             data: comparison.scatter_points.map((point) => [point.x_value, point.y_value]),
           },
         ],
@@ -225,7 +230,7 @@ export function ComparisonChartPanel({
             type: "bar",
             barGap: "0%",
             barCategoryGap: "18%",
-            cursor: onSelectFilters ? "pointer" : "default",
+            cursor: hasFilterAction ? "pointer" : "default",
             data: comparison.bar_entries.map((entry) => entry.value),
             itemStyle: { color: fillColor, borderRadius: [8, 8, 0, 0] },
             emphasis: { itemStyle: { color: highlightColor } },
@@ -281,7 +286,7 @@ export function ComparisonChartPanel({
       series: [
         {
           type: "heatmap",
-          cursor: onSelectFilters ? "pointer" : "default",
+          cursor: hasFilterAction ? "pointer" : "default",
           data: comparison.heatmap_cells.map((cell) => [
             xIndexByKey.get(cell.x_key) ?? 0,
             yIndexByKey.get(cell.y_key) ?? 0,
@@ -297,7 +302,7 @@ export function ComparisonChartPanel({
         },
       ],
     };
-  }, [axisColor, comparison, fillColor, highlightColor, lineColor, onOpenFile, onSelectFilters, selectedRenderer, t, tooltipBase]);
+  }, [axisColor, comparison, fillColor, hasFilterAction, hasOpenFileAction, highlightColor, lineColor, selectedRenderer, t, tooltipBase]);
 
   const onChartClick = useMemo(() => {
     if (!comparison) {
@@ -362,6 +367,8 @@ export function ComparisonChartPanel({
       }
     };
   }, [comparison, onOpenFile, onSelectFilters, selectedRenderer]);
+
+  const chartEvents = useMemo(() => (onChartClick ? { click: onChartClick } : undefined), [onChartClick]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -485,7 +492,7 @@ export function ComparisonChartPanel({
             <ReactECharts
               echarts={echarts}
               option={option}
-              onEvents={onChartClick ? { click: onChartClick } : undefined}
+              onEvents={chartEvents}
               notMerge
               lazyUpdate
               style={{ height: 280, width: "100%" }}
@@ -498,3 +505,14 @@ export function ComparisonChartPanel({
     </AsyncPanel>
   );
 }
+
+export const ComparisonChartPanel = memo(
+  ComparisonChartPanelComponent,
+  (previousProps, nextProps) =>
+    previousProps.comparison === nextProps.comparison &&
+    previousProps.selection === nextProps.selection &&
+    previousProps.loading === nextProps.loading &&
+    previousProps.error === nextProps.error &&
+    Boolean(previousProps.onOpenFile) === Boolean(nextProps.onOpenFile) &&
+    Boolean(previousProps.onSelectFilters) === Boolean(nextProps.onSelectFilters),
+);

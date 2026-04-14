@@ -835,6 +835,10 @@ export function LibraryDetailPage() {
     () => getVisibleLibraryStatisticPanels(statisticsSettings),
     [statisticsSettings],
   );
+  const showComparisonPanel = useMemo(
+    () => visibleStatisticPanels.some((panel) => panel.panelKind === "comparison"),
+    [visibleStatisticPanels],
+  );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
     [fileColumns, visibleColumns],
@@ -1131,39 +1135,6 @@ export function LibraryDetailPage() {
     }
   });
 
-  const loadLibraryComparison = useEffectEvent(async (showLoading = false) => {
-    comparisonAbortRef.current?.abort();
-    const controller = new AbortController();
-    comparisonAbortRef.current = controller;
-
-    if (showLoading) {
-      setIsComparisonLoading(true);
-    }
-
-    try {
-      const payload = await api.libraryComparison(libraryId, {
-        xField: comparisonSelection.xField,
-        yField: comparisonSelection.yField,
-        signal: controller.signal,
-      });
-      libraryComparisonCache.set(comparisonQueryKey, payload);
-      setComparison(payload);
-      setComparisonError(null);
-    } catch (reason) {
-      if ((reason as Error).name === "AbortError") {
-        return;
-      }
-      setComparisonError((reason as Error).message);
-    } finally {
-      if (comparisonAbortRef.current === controller) {
-        comparisonAbortRef.current = null;
-      }
-      if (showLoading) {
-        setIsComparisonLoading(false);
-      }
-    }
-  });
-
   const loadDuplicateGroups = useEffectEvent(async (showLoading = false) => {
     duplicateGroupsAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1445,12 +1416,53 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
+    if (!showComparisonPanel) {
+      setComparison(null);
+      setComparisonError(null);
+      setIsComparisonLoading(false);
+      comparisonAbortRef.current?.abort();
+      comparisonAbortRef.current = null;
+      return;
+    }
+
     const cachedComparison = libraryComparisonCache.get(comparisonQueryKey) ?? null;
     setComparison(cachedComparison);
     setComparisonError(null);
     setIsComparisonLoading(cachedComparison === null);
-    void loadLibraryComparison(cachedComparison === null);
-  }, [comparisonQueryKey, loadLibraryComparison]);
+
+    const controller = new AbortController();
+    comparisonAbortRef.current?.abort();
+    comparisonAbortRef.current = controller;
+
+    api.libraryComparison(libraryId, {
+      xField: comparisonSelection.xField,
+      yField: comparisonSelection.yField,
+      signal: controller.signal,
+    })
+      .then((payload) => {
+        libraryComparisonCache.set(comparisonQueryKey, payload);
+        setComparison(payload);
+        setComparisonError(null);
+      })
+      .catch((reason: Error) => {
+        if (reason.name === "AbortError") {
+          return;
+        }
+        setComparisonError(reason.message);
+      })
+      .finally(() => {
+        if (comparisonAbortRef.current === controller) {
+          comparisonAbortRef.current = null;
+          setIsComparisonLoading(false);
+        }
+      });
+  }, [
+    comparisonQueryKey,
+    comparisonSelection.xField,
+    comparisonSelection.yField,
+    libraryId,
+    showComparisonPanel,
+  ]);
 
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
@@ -1523,12 +1535,47 @@ export function LibraryDetailPage() {
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
-      void loadLibraryComparison(false);
       void loadDuplicateGroups(false);
       void loadFilesPage(0, false, fileQueryKey);
+      if (showComparisonPanel) {
+        setIsComparisonLoading(true);
+        const controller = new AbortController();
+        comparisonAbortRef.current?.abort();
+        comparisonAbortRef.current = controller;
+        api.libraryComparison(libraryId, {
+          xField: comparisonSelection.xField,
+          yField: comparisonSelection.yField,
+          signal: controller.signal,
+        })
+          .then((payload) => {
+            libraryComparisonCache.set(comparisonQueryKey, payload);
+            setComparison(payload);
+            setComparisonError(null);
+          })
+          .catch((reason: Error) => {
+            if (reason.name === "AbortError") {
+              return;
+            }
+            setComparisonError(reason.message);
+          })
+          .finally(() => {
+            if (comparisonAbortRef.current === controller) {
+              comparisonAbortRef.current = null;
+              setIsComparisonLoading(false);
+            }
+          });
+      }
     }
     hadActiveJobRef.current = Boolean(activeJob);
-  }, [activeJob, comparisonQueryKey, fileQueryKey, libraryId, loadLibraryComparison]);
+  }, [
+    activeJob,
+    comparisonQueryKey,
+    comparisonSelection.xField,
+    comparisonSelection.yField,
+    fileQueryKey,
+    libraryId,
+    showComparisonPanel,
+  ]);
 
   useEffect(() => {
     return () => {

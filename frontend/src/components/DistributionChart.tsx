@@ -50,8 +50,16 @@ export function DistributionChart({
       },
       tooltip: {
         trigger: "axis",
+        triggerOn: "mousemove|click",
+        showDelay: 0,
+        hideDelay: 260,
+        transitionDuration: 0,
+        confine: true,
+        appendToBody: true,
+        extraCssText: "pointer-events:none;",
         axisPointer: {
           type: "shadow",
+          animation: false,
         },
         backgroundColor: "rgba(31, 28, 22, 0.94)",
         borderWidth: 0,

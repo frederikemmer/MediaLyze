@@ -443,6 +443,16 @@
   font-size: 0.68rem;
 }
 
+.stat-card {
+  min-height: 76px;
+  padding: 8px 14px 6px;
+  gap: 2px;
+}
+
+.stat-card h3 {
+  line-height: 1.02;
+}
+
 .metric-card-default {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 232, 0.92)),
