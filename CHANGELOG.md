@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-### 🐛 Bug fixes
-
-- bundle macOS desktop `ffprobe` dependencies into the packaged app and rewrite non-system `dylib` loader paths so scans no longer fail on machines without the original Homebrew cellar layout
-
 ## v0.7.0
 
 >2026-04-14
@@ -24,6 +20,8 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - remount statistic charts when resized smaller so comparison and histogram panels redraw correctly after inline panel-size changes, restore top-aligned list panels, and make newly added statistic panels default to `1x2`
+- align dashboard and library statistic layout controls with the existing header-style button design language so Darkmode no longer renders bright low-contrast white action circles
+- bundle macOS desktop `ffprobe` dependencies into the packaged app and rewrite non-system `dylib` loader paths so scans no longer fail on machines without the original Homebrew cellar layout
 
 ## v0.6.0
 
