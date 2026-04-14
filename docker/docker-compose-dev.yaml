@@ -1,0 +1,20 @@
+services:
+  medialyze:
+    image: medialyze:local
+    container_name: medialyze
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      CONFIG_PATH: /config
+      MEDIA_ROOT: /media
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${CONFIG_HOST_DIR:-./config}:/config
+      - /Volumes/exSSD_4TB/Mediathek:/media:ro
