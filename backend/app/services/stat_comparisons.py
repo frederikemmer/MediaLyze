@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import Session
@@ -16,7 +17,6 @@ from backend.app.schemas.comparison import (
     ComparisonResponse,
     ComparisonScatterPoint,
 )
-from backend.app.schemas.media import NumericDistributionMetricId
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.container_formats import format_container_label, normalize_container
 from backend.app.services.numeric_distributions import (
@@ -29,7 +29,15 @@ from backend.app.services.resolution_categories import classify_resolution_categ
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
 
-COMPARISON_SAMPLE_LIMIT = 5000
+RESOLUTION_MP_BINS: Final[list[tuple[float | None, float | None]]] = [
+    (0, 1),
+    (1, 2),
+    (2, 4),
+    (4, 8),
+    (8, 12),
+    (12, 20),
+    (20, None),
+]
 
 
 @dataclass(frozen=True)
@@ -65,6 +73,7 @@ COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition]
     "quality_score": ComparisonFieldDefinition(field_id="quality_score", kind="numeric"),
     "bitrate": ComparisonFieldDefinition(field_id="bitrate", kind="numeric"),
     "audio_bitrate": ComparisonFieldDefinition(field_id="audio_bitrate", kind="numeric"),
+    "resolution_mp": ComparisonFieldDefinition(field_id="resolution_mp", kind="numeric"),
     "container": ComparisonFieldDefinition(field_id="container", kind="category"),
     "video_codec": ComparisonFieldDefinition(field_id="video_codec", kind="category"),
     "resolution": ComparisonFieldDefinition(field_id="resolution", kind="category"),
@@ -87,9 +96,14 @@ def _bucket_key(lower: float | None, upper: float | None) -> str:
     return f"{lower_key}:{upper_key}"
 
 
-def _numeric_bucket(metric_id: NumericDistributionMetricId, value: float) -> ComparisonBucket | None:
-    config = NUMERIC_BUCKET_CONFIGS[metric_id]
-    for lower, upper in config.bins:
+def _numeric_bins(field_id: ComparisonFieldId) -> list[tuple[float | None, float | None]]:
+    if field_id == "resolution_mp":
+        return RESOLUTION_MP_BINS
+    return NUMERIC_BUCKET_CONFIGS[field_id].bins
+
+
+def _numeric_bucket(field_id: ComparisonFieldId, value: float) -> ComparisonBucket | None:
+    for lower, upper in _numeric_bins(field_id):
         meets_lower = lower is None or value >= lower
         meets_upper = upper is None or value < upper
         if meets_lower and meets_upper:
@@ -102,8 +116,7 @@ def _numeric_bucket(metric_id: NumericDistributionMetricId, value: float) -> Com
     return None
 
 
-def _numeric_axis_buckets(metric_id: NumericDistributionMetricId) -> list[ComparisonBucket]:
-    config = NUMERIC_BUCKET_CONFIGS[metric_id]
+def _numeric_axis_buckets(field_id: ComparisonFieldId) -> list[ComparisonBucket]:
     return [
         ComparisonBucket(
             key=_bucket_key(lower, upper),
@@ -111,7 +124,7 @@ def _numeric_axis_buckets(metric_id: NumericDistributionMetricId) -> list[Compar
             lower=lower,
             upper=upper,
         )
-        for lower, upper in config.bins
+        for lower, upper in _numeric_bins(field_id)
     ]
 
 
@@ -171,6 +184,10 @@ def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> flo
         return row.bitrate if row.bitrate is not None and row.bitrate > 0 else None
     if field_id == "audio_bitrate":
         return row.audio_bitrate if row.audio_bitrate is not None and row.audio_bitrate > 0 else None
+    if field_id == "resolution_mp":
+        if row.width is None or row.height is None or row.width <= 0 or row.height <= 0:
+            return None
+        return (row.width * row.height) / 1_000_000
     return None
 
 
@@ -228,7 +245,9 @@ def _build_comparison(
 ) -> ComparisonResponse:
     x_definition = COMPARISON_FIELD_DEFINITIONS[x_field]
     y_definition = COMPARISON_FIELD_DEFINITIONS[y_field]
-    resolution_categories = get_app_settings(db).resolution_categories
+    app_settings = get_app_settings(db)
+    resolution_categories = app_settings.resolution_categories
+    sample_limit = app_settings.scan_performance.comparison_scatter_point_limit
     rows = _comparison_source_rows(db, library_id=library_id)
     total_files = len(rows)
 
@@ -324,7 +343,7 @@ def _build_comparison(
 
     sampled_scatter_points, sampled_points = _sample_scatter_points(
         scatter_points,
-        sample_limit=COMPARISON_SAMPLE_LIMIT,
+        sample_limit=sample_limit,
     )
 
     return ComparisonResponse(
@@ -337,7 +356,7 @@ def _build_comparison(
         included_files=len(included_rows),
         excluded_files=max(0, total_files - len(included_rows)),
         sampled_points=sampled_points,
-        sample_limit=COMPARISON_SAMPLE_LIMIT,
+        sample_limit=sample_limit,
         x_buckets=x_buckets,
         y_buckets=y_buckets,
         heatmap_cells=[

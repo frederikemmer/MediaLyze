@@ -9,6 +9,7 @@ ComparisonFieldId = Literal[
     "quality_score",
     "bitrate",
     "audio_bitrate",
+    "resolution_mp",
     "container",
     "video_codec",
     "resolution",

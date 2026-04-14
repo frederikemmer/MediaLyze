@@ -35,6 +35,7 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
   { id: "quality_score", kind: "numeric", labelKey: "libraryStatistics.items.qualityScore" },
   { id: "bitrate", kind: "numeric", labelKey: "libraryStatistics.items.bitrate" },
   { id: "audio_bitrate", kind: "numeric", labelKey: "libraryStatistics.items.audioBitrate" },
+  { id: "resolution_mp", kind: "numeric", labelKey: "libraryStatistics.items.resolutionMp" },
   { id: "container", kind: "category", labelKey: "libraryStatistics.items.container" },
   { id: "video_codec", kind: "category", labelKey: "libraryStatistics.items.videoCodec" },
   { id: "resolution", kind: "category", labelKey: "libraryStatistics.items.resolution" },
@@ -42,6 +43,17 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
 ];
 
 const FIELD_MAP = new Map(COMPARISON_FIELD_DEFINITIONS.map((definition) => [definition.id, definition]));
+const FILTERABLE_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
+  "duration",
+  "size",
+  "quality_score",
+  "bitrate",
+  "audio_bitrate",
+  "container",
+  "video_codec",
+  "resolution",
+  "hdr_type",
+]);
 const DEFAULT_SELECTION: ComparisonSelection = {
   xField: "duration",
   yField: "size",
@@ -117,8 +129,22 @@ export function sanitizeComparisonRenderer(
   return available.includes(renderer) ? renderer : available[0];
 }
 
+export function isComparisonFieldFilterable(fieldId: ComparisonFieldId): boolean {
+  return FILTERABLE_COMPARISON_FIELDS.has(fieldId);
+}
+
 export function buildComparisonFieldFilterValue(fieldId: ComparisonFieldId, bucket: ComparisonBucket): string {
   if (getComparisonFieldDefinition(fieldId).kind === "numeric") {
+    if (fieldId === "resolution_mp") {
+      const segments: string[] = [];
+      if (typeof bucket.lower === "number") {
+        segments.push(`>=${bucket.lower}MP`);
+      }
+      if (typeof bucket.upper === "number") {
+        segments.push(`<${bucket.upper}MP`);
+      }
+      return segments.join(",");
+    }
     return buildNumericDistributionFilterExpression(fieldId as NumericDistributionMetricId, {
       lower: bucket.lower,
       upper: bucket.upper,
@@ -135,6 +161,18 @@ export function formatComparisonBucketLabel(
   t: TranslationFn,
 ): string {
   if (getComparisonFieldDefinition(fieldId).kind === "numeric") {
+    if (fieldId === "resolution_mp") {
+      if (bucket.lower === null && bucket.upper === null) {
+        return "0 MP";
+      }
+      if (bucket.lower === null) {
+        return `< ${bucket.upper} MP`;
+      }
+      if (bucket.upper === null) {
+        return `${bucket.lower}+ MP`;
+      }
+      return `${bucket.lower} - ${bucket.upper} MP`;
+    }
     return formatNumericDistributionBinLabel(fieldId as NumericDistributionMetricId, {
       lower: bucket.lower,
       upper: bucket.upper,

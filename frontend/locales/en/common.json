@@ -96,6 +96,9 @@
     "parallelScanJobs": "Parallel library scans",
     "parallelScanJobsTooltipAria": "Explain parallel scan memory impact",
     "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nHigher values increase overall resource usage. Keep an eye on CPU, disk, and memory pressure.\nMaximum: {{max}}.",
+    "comparisonScatterPointLimit": "Scatter plot points",
+    "comparisonScatterPointLimitTooltipAria": "Explain scatter plot point sampling",
+    "comparisonScatterPointLimitTooltip": "Caps how many points MediaLyze returns for comparison scatter plots.\n\nHeatmaps and bar charts stay exact; only scatter plots are sampled for readability and browser performance.\nMaximum: {{max}}.",
     "featureFlagsTitle": "Feature flags",
     "featureFlags": {
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
@@ -150,6 +153,7 @@
     "noDashboardSelected": "No dashboard statistic panels selected.",
     "items": {
       "size": "File size",
+      "resolutionMp": "Resolution - MP",
       "container": "Container",
       "videoCodec": "Video codec",
       "resolution": "Resolution",

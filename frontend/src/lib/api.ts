@@ -29,6 +29,7 @@ export type ComparisonFieldId =
   | "quality_score"
   | "bitrate"
   | "audio_bitrate"
+  | "resolution_mp"
   | "container"
   | "video_codec"
   | "resolution"
@@ -369,6 +370,7 @@ export type AppSettings = {
   scan_performance?: {
     scan_worker_count: number;
     parallel_scan_jobs: number;
+    comparison_scatter_point_limit: number;
   };
   feature_flags: {
     show_analyzed_files_csv_export: boolean;
@@ -723,6 +725,7 @@ export const api = {
     scan_performance?: {
       scan_worker_count?: number;
       parallel_scan_jobs?: number;
+      comparison_scatter_point_limit?: number;
     };
     feature_flags?: {
       show_analyzed_files_csv_export?: boolean;

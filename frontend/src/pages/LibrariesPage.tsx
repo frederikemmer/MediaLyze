@@ -148,12 +148,16 @@ const SCAN_WORKER_COUNT_MIN = 1;
 const SCAN_WORKER_COUNT_MAX = 16;
 const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
 const PARALLEL_SCAN_JOB_COUNT_MAX = 8;
+const COMPARISON_SCATTER_POINT_LIMIT_MIN = 100;
+const COMPARISON_SCATTER_POINT_LIMIT_MAX = 20000;
 const DEFAULT_SCAN_PERFORMANCE = {
   scan_worker_count: 4,
   parallel_scan_jobs: 2,
+  comparison_scatter_point_limit: 5000,
 };
 const SCAN_WORKER_OPTIONS = Array.from({ length: SCAN_WORKER_COUNT_MAX }, (_, index) => index + 1);
 const PARALLEL_SCAN_JOB_OPTIONS = Array.from({ length: PARALLEL_SCAN_JOB_COUNT_MAX }, (_, index) => index + 1);
+const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [250, 500, 1000, 2500, 5000, 10000, 20000];
 
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
@@ -430,6 +434,7 @@ export function LibrariesPage() {
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
   const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
+  const [comparisonScatterPointLimitInput, setComparisonScatterPointLimitInput] = useState("5000");
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
     EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
@@ -444,6 +449,7 @@ export function LibrariesPage() {
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
   const parallelScanJobsInputRef = useRef("2");
+  const comparisonScatterPointLimitInputRef = useRef("5000");
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -732,8 +738,10 @@ export function LibrariesPage() {
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
     parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+    comparisonScatterPointLimitInputRef.current = String(appScanPerformance.comparison_scatter_point_limit);
     setScanWorkerCountInput(scanWorkerCountInputRef.current);
     setParallelScanJobsInput(parallelScanJobsInputRef.current);
+    setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
   }, [appScanPerformance, appSettings, appSettingsLoaded]);
 
   useEffect(() => {
@@ -971,6 +979,12 @@ export function LibrariesPage() {
         PARALLEL_SCAN_JOB_COUNT_MIN,
         PARALLEL_SCAN_JOB_COUNT_MAX,
       ),
+      comparison_scatter_point_limit: normalizeScanPerformanceInput(
+        comparisonScatterPointLimitInputRef.current,
+        appScanPerformance.comparison_scatter_point_limit,
+        COMPARISON_SCATTER_POINT_LIMIT_MIN,
+        COMPARISON_SCATTER_POINT_LIMIT_MAX,
+      ),
     },
   ) {
     return api.updateAppSettings({
@@ -1020,8 +1034,10 @@ export function LibrariesPage() {
         const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
         scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
         parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+        comparisonScatterPointLimitInputRef.current = String(updatedScanPerformance.comparison_scatter_point_limit);
         setScanWorkerCountInput(scanWorkerCountInputRef.current);
         setParallelScanJobsInput(parallelScanJobsInputRef.current);
+        setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
         persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
         setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
         setIgnorePatternsStatus(null);
@@ -1141,6 +1157,12 @@ export function LibrariesPage() {
     setScanPerformanceStatus(null);
   }
 
+  function updateComparisonScatterPointLimitInput(value: string) {
+    comparisonScatterPointLimitInputRef.current = value;
+    setComparisonScatterPointLimitInput(value);
+    setScanPerformanceStatus(null);
+  }
+
   function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
     setResolutionCategoryDrafts((current) =>
       current.map((draft, draftIndex) => (draftIndex === index ? { ...draft, ...patch } : draft)),
@@ -1189,6 +1211,7 @@ export function LibrariesPage() {
   async function saveScanPerformance(
     nextScanWorkerInput = scanWorkerCountInputRef.current,
     nextParallelScanJobsInput = parallelScanJobsInputRef.current,
+    nextComparisonScatterPointLimitInput = comparisonScatterPointLimitInputRef.current,
   ) {
     const nextScanWorkerCount = normalizeScanPerformanceInput(
       nextScanWorkerInput,
@@ -1201,6 +1224,12 @@ export function LibrariesPage() {
       appScanPerformance.parallel_scan_jobs,
       PARALLEL_SCAN_JOB_COUNT_MIN,
       PARALLEL_SCAN_JOB_COUNT_MAX,
+    );
+    const nextComparisonScatterPointLimit = normalizeScanPerformanceInput(
+      nextComparisonScatterPointLimitInput,
+      appScanPerformance.comparison_scatter_point_limit,
+      COMPARISON_SCATTER_POINT_LIMIT_MIN,
+      COMPARISON_SCATTER_POINT_LIMIT_MAX,
     );
 
     setIsSavingScanPerformance(true);
@@ -1216,13 +1245,16 @@ export function LibrariesPage() {
         {
           scan_worker_count: nextScanWorkerCount,
           parallel_scan_jobs: nextParallelScanJobs,
+          comparison_scatter_point_limit: nextComparisonScatterPointLimit,
         },
       );
       const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
       scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
       parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+      comparisonScatterPointLimitInputRef.current = String(updatedScanPerformance.comparison_scatter_point_limit);
       setScanWorkerCountInput(scanWorkerCountInputRef.current);
       setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setResolutionCategoriesStatus(null);
@@ -1231,8 +1263,10 @@ export function LibrariesPage() {
     } catch (reason) {
       scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
       parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
+      comparisonScatterPointLimitInputRef.current = String(appScanPerformance.comparison_scatter_point_limit);
       setScanWorkerCountInput(scanWorkerCountInputRef.current);
       setParallelScanJobsInput(parallelScanJobsInputRef.current);
+      setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
       setScanPerformanceStatus((reason as Error).message);
     } finally {
       setIsSavingScanPerformance(false);
@@ -2939,6 +2973,37 @@ export function LibrariesPage() {
                       {PARALLEL_SCAN_JOB_OPTIONS.map((workerCount) => (
                         <option key={workerCount} value={workerCount}>
                           {workerCount}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label htmlFor="comparison-scatter-point-limit">{t("libraries.comparisonScatterPointLimit")}</label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.comparisonScatterPointLimitTooltipAria")}
+                        content={t("libraries.comparisonScatterPointLimitTooltip", { max: COMPARISON_SCATTER_POINT_LIMIT_MAX })}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                    <select
+                      id="comparison-scatter-point-limit"
+                      value={comparisonScatterPointLimitInput}
+                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      onChange={(event) => {
+                        updateComparisonScatterPointLimitInput(event.target.value);
+                        void saveScanPerformance(
+                          scanWorkerCountInputRef.current,
+                          parallelScanJobsInputRef.current,
+                          event.target.value,
+                        );
+                      }}
+                    >
+                      {COMPARISON_SCATTER_POINT_LIMIT_OPTIONS.map((pointLimit) => (
+                        <option key={pointLimit} value={pointLimit}>
+                          {pointLimit}
                         </option>
                       ))}
                     </select>

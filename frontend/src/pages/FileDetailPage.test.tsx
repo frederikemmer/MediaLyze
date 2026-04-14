@@ -33,6 +33,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
     feature_flags: {

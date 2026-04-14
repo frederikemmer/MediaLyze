@@ -18,6 +18,7 @@ import {
   COMPARISON_FIELD_DEFINITIONS,
   formatComparisonBucketLabel,
   getAvailableComparisonRenderers,
+  isComparisonFieldFilterable,
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { AsyncPanel } from "./AsyncPanel";
@@ -45,8 +46,8 @@ type RendererDefinition = {
 
 const lucideIconMap = LucideIcons as unknown as Record<string, LucideIcons.LucideIcon | undefined>;
 const HeatmapIcon = LucideIcons.Grid2x2;
-const BarIcon = lucideIconMap.ChartNoAxesColumn ?? LucideIcons.Hash;
-const ScatterIcon = lucideIconMap.ChartScatter ?? LucideIcons.Percent;
+const BarIcon = lucideIconMap.ChartNoAxesColumn ?? LucideIcons.BarChart3;
+const ScatterIcon = lucideIconMap.ChartScatter ?? LucideIcons.CircleDot;
 
 const RENDERER_DEFINITIONS: RendererDefinition[] = [
   { id: "heatmap", labelKey: "comparisonChart.renderers.heatmap", icon: HeatmapIcon },
@@ -63,6 +64,9 @@ function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
   }
   if (fieldId === "bitrate" || fieldId === "audio_bitrate") {
     return formatBitrate(value);
+  }
+  if (fieldId === "resolution_mp") {
+    return `${Math.round(value * 100) / 100} MP`;
   }
   return String(Math.round(value * 10) / 10);
 }
@@ -86,6 +90,9 @@ export function ComparisonChartPanel({
   const selectedRenderer = availableRenderers.includes(selection.renderer)
     ? selection.renderer
     : availableRenderers[0];
+  const selectedRendererDefinition =
+    RENDERER_DEFINITIONS.find((entry) => entry.id === selectedRenderer) ?? RENDERER_DEFINITIONS[0];
+  const SelectedRendererIcon = selectedRendererDefinition.icon;
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
@@ -323,7 +330,7 @@ export function ComparisonChartPanel({
           return;
         }
         const xBucket = comparison.x_buckets.find((bucket) => bucket.key === entry.x_key);
-        if (!xBucket) {
+        if (!xBucket || !isComparisonFieldFilterable(comparison.x_field)) {
           return;
         }
         onSelectFilters({
@@ -343,10 +350,16 @@ export function ComparisonChartPanel({
         return;
       }
 
-      onSelectFilters({
-        [comparison.x_field]: buildComparisonFieldFilterValue(comparison.x_field, xBucket),
-        [comparison.y_field]: buildComparisonFieldFilterValue(comparison.y_field, yBucket),
-      });
+      const nextFilters: Partial<Record<ComparisonFieldId, string>> = {};
+      if (isComparisonFieldFilterable(comparison.x_field)) {
+        nextFilters[comparison.x_field] = buildComparisonFieldFilterValue(comparison.x_field, xBucket);
+      }
+      if (isComparisonFieldFilterable(comparison.y_field)) {
+        nextFilters[comparison.y_field] = buildComparisonFieldFilterValue(comparison.y_field, yBucket);
+      }
+      if (Object.keys(nextFilters).length > 0) {
+        onSelectFilters(nextFilters);
+      }
     };
   }, [comparison, onOpenFile, onSelectFilters, selectedRenderer]);
 
@@ -427,19 +440,11 @@ export function ComparisonChartPanel({
               className="comparison-chart-renderer-button"
               aria-label={t("comparisonChart.controls.renderer")}
               aria-expanded={menuOpen}
-              title={t("comparisonChart.controls.renderer")}
+              title={t(selectedRendererDefinition.labelKey)}
               onClick={() => setMenuOpen((current) => !current)}
             >
-              {(() => {
-                const definition = RENDERER_DEFINITIONS.find((entry) => entry.id === selectedRenderer) ?? RENDERER_DEFINITIONS[0];
-                const Icon = definition.icon;
-                return (
-                  <>
-                    <Icon className="distribution-chart-mode-icon" aria-hidden="true" />
-                    <LucideIcons.ChevronDown className="comparison-chart-renderer-caret" aria-hidden="true" />
-                  </>
-                );
-              })()}
+              <SelectedRendererIcon className="comparison-chart-renderer-icon" aria-hidden="true" />
+              <LucideIcons.ChevronDown className="comparison-chart-renderer-caret" aria-hidden="true" />
             </button>
           </div>
           {menuOpen ? (

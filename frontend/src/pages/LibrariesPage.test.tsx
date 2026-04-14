@@ -37,6 +37,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
+      comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
     feature_flags: {
@@ -254,6 +255,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
@@ -289,6 +291,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: true,
@@ -324,6 +327,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
@@ -359,6 +363,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
@@ -375,6 +380,7 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 6,
           parallel_scan_jobs: 3,
+          comparison_scatter_point_limit: 5000,
         },
       }),
     );
@@ -400,6 +406,44 @@ describe("LibrariesPage ignore patterns", () => {
         scan_performance: {
           scan_worker_count: 6,
           parallel_scan_jobs: 3,
+          comparison_scatter_point_limit: 5000,
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+        },
+      }),
+    );
+  });
+
+  it("persists the comparison scatter point limit from app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 10000,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const scatterPointLimitInput = (await screen.findByLabelText("Scatter plot points")) as HTMLSelectElement;
+    await screen.findByDisplayValue("movie.tmp");
+    await waitFor(() => expect(scatterPointLimitInput).toBeEnabled());
+
+    fireEvent.change(scatterPointLimitInput, { target: { value: "10000" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 10000,
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,

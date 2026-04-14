@@ -3,7 +3,8 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.db.base import Base
 from backend.app.models.entities import AudioStream, Library, LibraryType, MediaFile, MediaFormat, ScanMode, ScanStatus, VideoStream
-from backend.app.services import stat_comparisons
+from backend.app.schemas.app_settings import AppSettingsUpdate
+from backend.app.services.app_settings import update_app_settings
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats_cache import stats_cache
 
@@ -109,11 +110,53 @@ def test_library_comparison_uses_resolution_categories_for_resolution_axis() -> 
     assert payload.heatmap_cells[0].count == 1
 
 
-def test_dashboard_comparison_marks_scatter_payload_as_sampled(monkeypatch) -> None:
+def test_dashboard_comparison_supports_resolution_mp_as_numeric_axis() -> None:
     session_factory = _session_factory()
-    monkeypatch.setattr(stat_comparisons, "COMPARISON_SAMPLE_LIMIT", 3)
 
     with session_factory() as db:
+        library = Library(
+            name="Resolution MP",
+            path="/tmp/comparison-resolution-mp",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=6_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(MediaFormat(media_file_id=media_file.id, duration=3600.0))
+        db.add(VideoStream(media_file_id=media_file.id, stream_index=0, codec="hevc", width=3840, height=2160, hdr_type="HDR10"))
+        db.commit()
+
+        payload = get_dashboard_comparison(db, x_field="resolution_mp", y_field="size")
+
+    assert payload.available_renderers == ["heatmap", "scatter", "bar"]
+    assert payload.scatter_points is not None
+    assert payload.scatter_points[0].x_value == 8.2944
+    assert payload.x_buckets[4].key == "8:12"
+    assert payload.heatmap_cells[0].x_key == "8:12"
+
+
+def test_dashboard_comparison_marks_scatter_payload_as_sampled() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(scan_performance={"comparison_scatter_point_limit": 3}),
+        )
         library = Library(
             name="Sampling",
             path="/tmp/comparison-sampling",

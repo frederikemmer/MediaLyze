@@ -5,6 +5,9 @@ SCAN_WORKER_COUNT_MIN = 1
 SCAN_WORKER_COUNT_MAX = 16
 PARALLEL_SCAN_JOB_COUNT_MIN = 1
 PARALLEL_SCAN_JOB_COUNT_MAX = 8
+COMPARISON_SCATTER_POINT_LIMIT_MIN = 1
+COMPARISON_SCATTER_POINT_LIMIT_MAX = 20000
+DEFAULT_COMPARISON_SCATTER_POINT_LIMIT = 5000
 
 
 class ResolutionCategory(BaseModel):
@@ -29,11 +32,21 @@ class FeatureFlagsUpdate(BaseModel):
 class ScanPerformanceRead(BaseModel):
     scan_worker_count: int = Field(default=4, ge=SCAN_WORKER_COUNT_MIN, le=SCAN_WORKER_COUNT_MAX)
     parallel_scan_jobs: int = Field(default=2, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
+    comparison_scatter_point_limit: int = Field(
+        default=DEFAULT_COMPARISON_SCATTER_POINT_LIMIT,
+        ge=COMPARISON_SCATTER_POINT_LIMIT_MIN,
+        le=COMPARISON_SCATTER_POINT_LIMIT_MAX,
+    )
 
 
 class ScanPerformanceUpdate(BaseModel):
     scan_worker_count: int | None = Field(default=None, ge=SCAN_WORKER_COUNT_MIN, le=SCAN_WORKER_COUNT_MAX)
     parallel_scan_jobs: int | None = Field(default=None, ge=PARALLEL_SCAN_JOB_COUNT_MIN, le=PARALLEL_SCAN_JOB_COUNT_MAX)
+    comparison_scatter_point_limit: int | None = Field(
+        default=None,
+        ge=COMPARISON_SCATTER_POINT_LIMIT_MIN,
+        le=COMPARISON_SCATTER_POINT_LIMIT_MAX,
+    )
 
 
 class AppSettingsRead(BaseModel):

@@ -741,16 +741,24 @@
 }
 
 .comparison-chart-renderer-button {
-  width: 42px;
+  width: 38px;
   height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
+  padding: 0 6px 0 5px;
   border-left: 1px solid rgba(31, 28, 22, 0.08);
+  border-radius: 0 16px 16px 0;
   background: transparent;
   color: var(--ink);
   box-shadow: none;
+}
+
+.comparison-chart-renderer-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .comparison-chart-renderer-button:hover,

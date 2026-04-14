@@ -70,6 +70,7 @@ def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
     return ScanPerformanceRead(
         scan_worker_count=settings.ffprobe_worker_count,
         parallel_scan_jobs=settings.scan_runtime_worker_count,
+        comparison_scatter_point_limit=ScanPerformanceRead.model_fields["comparison_scatter_point_limit"].default,
     )
 
 
@@ -88,6 +89,9 @@ def _deserialize_scan_performance(payload: Any, settings: Settings) -> ScanPerfo
     return ScanPerformanceRead(
         scan_worker_count=int(candidate.get("scan_worker_count", defaults.scan_worker_count)),
         parallel_scan_jobs=int(candidate.get("parallel_scan_jobs", defaults.parallel_scan_jobs)),
+        comparison_scatter_point_limit=int(
+            candidate.get("comparison_scatter_point_limit", defaults.comparison_scatter_point_limit)
+        ),
     )
 
 

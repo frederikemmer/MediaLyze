@@ -390,7 +390,7 @@ Current aggregated statistics include:
 * dashboard totals for libraries, files, storage, and duration
 * optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the user's statistic-panel settings
 * optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate
-* optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, container, codec, resolution category, and HDR type
+* optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, numeric resolution in megapixels, container, codec, resolution category, and HDR type
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
@@ -572,6 +572,7 @@ Important current payload concepts:
 * `resolution_categories`
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
+* `scan_performance.comparison_scatter_point_limit`
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
@@ -598,7 +599,7 @@ Important library contract concepts:
 * `scan_config`
 * `quality_profile`
 * `numeric_distributions`
-* comparison responses expose `x_field`, `y_field`, field kinds, available renderers, bucket metadata, heatmap cells, optional scatter points, and optional bar aggregates
+* comparison responses expose `x_field`, `y_field`, field kinds, available renderers, bucket metadata, heatmap cells, optional scatter points, optional bar aggregates, and the active scatter sample limit
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
 ## 9.5 Files
@@ -693,7 +694,7 @@ Implemented backend structure:
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
 * `backend/app/services/duplicates.py` provides duplicate-signature strategies and duplicate-group queries
 * `backend/app/services/numeric_distributions.py` builds histogram-ready numeric statistics for dashboard and library payloads
-* `backend/app/services/stat_comparisons.py` builds cached comparison datasets for dashboard and library views from the normalized per-file metadata model
+* `backend/app/services/stat_comparisons.py` builds cached comparison datasets for dashboard and library views from the normalized per-file metadata model, including numeric megapixel resolution comparisons and app-configured scatter-point sampling
 * `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
 * `backend/app/services/runtime.py` orchestrates scheduled scans, watchdog scans, executor-backed execution, and cancelation
 * `backend/app/services/stats_cache.py` provides in-memory cache helpers for dashboard and library statistics
