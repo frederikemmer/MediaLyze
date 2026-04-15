@@ -14,6 +14,7 @@ import {
   type PathInspection,
   type RecentScanJobPage,
   type RecentScanJob,
+  type ScanJob,
   type ScanJobDetail,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
@@ -116,6 +117,25 @@ function createRecentScanJob(overrides: Partial<RecentScanJob> = {}): RecentScan
     modified_files: 1,
     deleted_files: 0,
     analysis_failed: 0,
+    ...overrides,
+  };
+}
+
+function createScanJob(overrides: Partial<ScanJob> = {}): ScanJob {
+  return {
+    id: 21,
+    library_id: 1,
+    library_name: "Movies",
+    status: "queued",
+    job_type: "incremental",
+    files_total: 0,
+    files_scanned: 0,
+    errors: 0,
+    started_at: null,
+    finished_at: null,
+    progress_percent: 0,
+    phase_label: "Queued",
+    phase_detail: null,
     ...overrides,
   };
 }
@@ -863,6 +883,26 @@ describe("LibrariesPage settings panels", () => {
         appSettings: false,
       }),
     );
+  });
+
+  it("queues a full scan for all configured libraries from the panel header", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary(),
+      createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
+    ]);
+    const scanSpy = vi
+      .spyOn(api, "scanLibrary")
+      .mockResolvedValueOnce(createScanJob({ id: 31, library_id: 1, library_name: "Movies", job_type: "full" }))
+      .mockResolvedValueOnce(createScanJob({ id: 32, library_id: 2, library_name: "Series", job_type: "full" }));
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^full scan$/i }));
+
+    await waitFor(() => {
+      expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
+      expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
+    });
   });
 
   it("shows the recent scan logs panel expanded by default", async () => {

@@ -415,6 +415,7 @@ export function LibrariesPage() {
   const [qualityLanguageErrors, setQualityLanguageErrors] = useState<Record<string, string | null>>({});
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
+  const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
@@ -860,32 +861,64 @@ export function LibrariesPage() {
     updateLibraryForm(libraryId, { quality_profile: transform(cloneQualityProfile(current)) });
   }
 
-  async function runLibraryScan(libraryId: number) {
+  async function persistPendingLibrarySettings(libraryId: number): Promise<string | null> {
     const current = settingsForms[libraryId];
-    if (current && autoSaveTimers.current[libraryId]) {
-      window.clearTimeout(autoSaveTimers.current[libraryId]);
-      delete autoSaveTimers.current[libraryId];
-      try {
-        const updated = await api.updateLibrarySettings(libraryId, {
-          scan_mode: current.scan_mode,
-          duplicate_detection_mode: current.duplicate_detection_mode,
-          scan_config: buildScanConfig(current),
-          quality_profile: current.quality_profile,
-        });
-        upsertLibrary(updated);
-      } catch (reason) {
-        setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
-        return;
-      }
+    if (!(current && autoSaveTimers.current[libraryId])) {
+      return null;
+    }
+
+    window.clearTimeout(autoSaveTimers.current[libraryId]);
+    delete autoSaveTimers.current[libraryId];
+    try {
+      const updated = await api.updateLibrarySettings(libraryId, {
+        scan_mode: current.scan_mode,
+        duplicate_detection_mode: current.duplicate_detection_mode,
+        scan_config: buildScanConfig(current),
+        quality_profile: current.quality_profile,
+      });
+      upsertLibrary(updated);
+      return null;
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
+      return message;
+    }
+  }
+
+  async function requestLibraryScan(libraryId: number, scanType: "incremental" | "full"): Promise<string | null> {
+    const settingsError = await persistPendingLibrarySettings(libraryId);
+    if (settingsError) {
+      return settingsError;
     }
 
     try {
-      const job = await api.scanLibrary(libraryId, "incremental");
+      const job = await api.scanLibrary(libraryId, scanType);
       trackJob(job);
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
+      return null;
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
+      const message = (reason as Error).message;
+      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
+      return message;
+    }
+  }
+
+  async function runLibraryScan(libraryId: number) {
+    await requestLibraryScan(libraryId, "incremental");
+  }
+
+  async function runFullScanForAllLibraries() {
+    if (!libraries.length || isRunningFullScanAll) {
       return;
+    }
+
+    setIsRunningFullScanAll(true);
+    try {
+      for (const library of libraries) {
+        await requestLibraryScan(library.id, "full");
+      }
+    } finally {
+      setIsRunningFullScanAll(false);
     }
   }
 
@@ -2305,6 +2338,16 @@ export function LibrariesPage() {
             title={t("libraries.configured")}
             loading={isLoadingLibraries}
             error={error}
+            collapseActions={
+              <button
+                type="button"
+                className="small"
+                disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
+                onClick={() => void runFullScanForAllLibraries()}
+              >
+                {t("libraries.fullScan")}
+              </button>
+            }
             collapseState={{
               collapsed: !settingsPanelState.configuredLibraries,
               onToggle: () => toggleSettingsPanel("configuredLibraries"),

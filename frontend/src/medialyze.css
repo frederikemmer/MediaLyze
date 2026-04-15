@@ -650,7 +650,26 @@
   box-shadow: none;
 }
 
+.async-panel-toggle.has-collapse-actions {
+  justify-content: flex-start;
+}
+
 .async-panel-toggle:hover {
+  transform: none;
+}
+
+.async-panel-toggle-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.async-panel-toggle-icon-button {
+  flex: 0 0 auto;
+}
+
+.async-panel-toggle-icon-button:hover {
   transform: none;
 }
 

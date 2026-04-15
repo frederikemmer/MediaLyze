@@ -39,8 +39,13 @@
     "subtitleCodecs": "Untertitel-Codecs",
     "subtitleSources": "Untertitel-Quellen"
   },
+  "panel": {
+    "collapseAria": "{{title}} einklappen",
+    "expandAria": "{{title}} ausklappen"
+  },
   "libraries": {
     "configured": "Konfigurierte Bibliotheken",
+    "fullScan": "Vollscan",
     "addFirstLibrary": "Erste Bibliothek anlegen",
     "createTitle": "Bibliothek anlegen",
     "createSubtitle": "Die Pfadauswahl ist auf Verzeichnisse unterhalb von MEDIA_ROOT begrenzt.",

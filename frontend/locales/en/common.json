@@ -39,8 +39,13 @@
     "subtitleCodecs": "Subtitle codecs",
     "subtitleSources": "Subtitle sources"
   },
+  "panel": {
+    "collapseAria": "Collapse {{title}}",
+    "expandAria": "Expand {{title}}"
+  },
   "libraries": {
     "configured": "Configured libraries",
+    "fullScan": "full scan",
     "addFirstLibrary": "Add first library",
     "createTitle": "Create library",
     "createSubtitle": "Path selection is restricted to directories below MEDIA_ROOT.",
