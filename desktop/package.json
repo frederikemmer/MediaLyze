@@ -14,7 +14,7 @@
     "build:backend": "node ./scripts/build-backend.mjs"
   },
   "devDependencies": {
-    "electron": "^37.4.0",
+    "electron": "^39.8.5",
     "electron-builder": "^26.0.12",
     "icon-gen": "^5.0.0"
   },
