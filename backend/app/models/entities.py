@@ -83,6 +83,7 @@ class Library(TimestampMixin, Base):
     )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     quality_profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
+    show_on_dashboard: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     media_files: Mapped[list[MediaFile]] = relationship(
         back_populates="library",

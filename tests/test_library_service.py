@@ -152,6 +152,7 @@ def test_create_library_defaults_duplicate_detection_mode_to_off(tmp_path) -> No
         )
 
     assert library.duplicate_detection_mode == DuplicateDetectionMode.off
+    assert library.show_on_dashboard is True
 
 
 def test_update_library_settings_can_change_duplicate_detection_mode() -> None:
@@ -213,6 +214,37 @@ def test_update_library_settings_can_change_duplicate_detection_mode_to_both() -
 
     assert updated is not None
     assert updated.duplicate_detection_mode == DuplicateDetectionMode.both
+    assert quality_profile_changed is False
+
+
+def test_update_library_settings_can_toggle_dashboard_visibility() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        db.add(library)
+        db.commit()
+
+        updated, quality_profile_changed = update_library_settings(
+            db,
+            Settings(),
+            library.id,
+            LibraryUpdate(show_on_dashboard=False),
+        )
+
+    assert updated is not None
+    assert updated.show_on_dashboard is False
     assert quality_profile_changed is False
 
 

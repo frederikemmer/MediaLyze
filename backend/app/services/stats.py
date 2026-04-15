@@ -87,11 +87,23 @@ def build_dashboard(db: Session) -> DashboardResponse:
 
     primary_video_streams = primary_video_streams_subquery()
     app_settings = get_app_settings(db)
+    dashboard_library_ids = select(Library.id).where(Library.show_on_dashboard.is_(True))
     totals = {
-        "libraries": db.scalar(select(func.count(Library.id))) or 0,
-        "files": db.scalar(select(func.count(MediaFile.id))) or 0,
-        "storage_bytes": db.scalar(select(func.coalesce(func.sum(MediaFile.size_bytes), 0))) or 0,
-        "duration_seconds": db.scalar(select(func.coalesce(func.sum(MediaFormat.duration), 0.0))) or 0.0,
+        "libraries": db.scalar(select(func.count(Library.id)).where(Library.show_on_dashboard.is_(True))) or 0,
+        "files": db.scalar(select(func.count(MediaFile.id)).where(MediaFile.library_id.in_(dashboard_library_ids))) or 0,
+        "storage_bytes": (
+            db.scalar(select(func.coalesce(func.sum(MediaFile.size_bytes), 0)).where(MediaFile.library_id.in_(dashboard_library_ids)))
+            or 0
+        ),
+        "duration_seconds": (
+            db.scalar(
+                select(func.coalesce(func.sum(MediaFormat.duration), 0.0))
+                .select_from(MediaFile)
+                .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id, isouter=True)
+                .where(MediaFile.library_id.in_(dashboard_library_ids))
+            )
+            or 0.0
+        ),
     }
 
     container_distribution = [
@@ -101,6 +113,7 @@ def build_dashboard(db: Session) -> DashboardResponse:
                 _normalized_text_expr(MediaFile.extension, "unknown"),
                 func.count(MediaFile.id),
             )
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
             .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
             .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
         ).all()
@@ -109,6 +122,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
     ]
     video_codec_rows = db.execute(
         select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .group_by(primary_video_streams.c.codec)
         .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
@@ -118,6 +133,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             primary_video_streams.c.height,
             func.count(primary_video_streams.c.id),
         )
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
         .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
@@ -126,6 +143,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             func.coalesce(primary_video_streams.c.hdr_type, "SDR"),
             func.count(primary_video_streams.c.id),
         )
+        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
         .order_by(func.count(primary_video_streams.c.id).desc())
     ).all()
@@ -134,6 +153,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             AudioStream.media_file_id.label("media_file_id"),
             _normalized_text_expr(AudioStream.codec, "unknown").label("value"),
         )
+        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .distinct()
         .subquery("dashboard_audio_codec_values")
     )
@@ -150,6 +171,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             AudioStream.media_file_id.label("media_file_id"),
             _normalized_language_expr(AudioStream.language).label("value"),
         )
+        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .distinct()
         .subquery("dashboard_audio_language_values")
     )
@@ -162,6 +185,8 @@ def build_dashboard(db: Session) -> DashboardResponse:
             AudioStream.media_file_id.label("media_file_id"),
             _normalized_text_expr(AudioStream.spatial_audio_profile, "").label("value"),
         )
+        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
         .where(func.length(func.trim(func.coalesce(AudioStream.spatial_audio_profile, ""))) > 0)
         .distinct()
         .subquery("dashboard_audio_spatial_profile_values")
@@ -186,11 +211,15 @@ def build_dashboard(db: Session) -> DashboardResponse:
         select(
             SubtitleStream.media_file_id.label("media_file_id"),
             _normalized_language_expr(SubtitleStream.language).label("value"),
-        ),
+        )
+        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
         select(
             ExternalSubtitle.media_file_id.label("media_file_id"),
             _normalized_language_expr(ExternalSubtitle.language).label("value"),
-        ),
+        )
+        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
     ).subquery("dashboard_subtitle_language_values")
     subtitle_language_rows = _count_distinct_normalized_languages(
         db.execute(select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)).all(),
@@ -200,11 +229,15 @@ def build_dashboard(db: Session) -> DashboardResponse:
         select(
             SubtitleStream.media_file_id.label("media_file_id"),
             _normalized_text_expr(SubtitleStream.codec, "unknown").label("value"),
-        ),
+        )
+        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
         select(
             ExternalSubtitle.media_file_id.label("media_file_id"),
             _normalized_text_expr(ExternalSubtitle.format, "unknown").label("value"),
-        ),
+        )
+        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
     ).subquery("dashboard_subtitle_codec_values")
     subtitle_codec_rows = db.execute(
         select(
@@ -215,8 +248,12 @@ def build_dashboard(db: Session) -> DashboardResponse:
         .order_by(func.count(distinct(subtitle_codec_values.c.media_file_id)).desc())
     ).all()
     subtitle_source_values = union_all(
-        select(SubtitleStream.media_file_id.label("media_file_id"), literal("internal").label("value")),
-        select(ExternalSubtitle.media_file_id.label("media_file_id"), literal("external").label("value")),
+        select(SubtitleStream.media_file_id.label("media_file_id"), literal("internal").label("value"))
+        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
+        select(ExternalSubtitle.media_file_id.label("media_file_id"), literal("external").label("value"))
+        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+        .where(MediaFile.library_id.in_(dashboard_library_ids)),
     ).subquery("dashboard_subtitle_source_values")
     subtitle_source_distinct_values = (
         select(
@@ -258,7 +295,7 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ],
         subtitle_codec_distribution=_distribution(subtitle_codec_rows),
         subtitle_source_distribution=subtitle_source_distribution,
-        numeric_distributions=build_numeric_distributions(db),
+        numeric_distributions=build_numeric_distributions(db, dashboard_only=True),
     )
     stats_cache.set_dashboard(cache_key, payload)
     return payload

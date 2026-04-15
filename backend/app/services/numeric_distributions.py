@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import Float, and_, case, cast, func, literal, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.entities import AudioStream, MediaFile, MediaFormat
+from backend.app.models.entities import AudioStream, Library, MediaFile, MediaFormat
 from backend.app.schemas.media import (
     NumericDistribution,
     NumericDistributionBin,
@@ -106,17 +106,25 @@ def audio_bitrate_value_expression(audio_bitrate_totals):
     )
 
 
-def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: int | None):
+def _apply_library_scope(query, *, library_id: int | None, dashboard_only: bool):
+    if library_id is not None:
+        return query.where(MediaFile.library_id == library_id)
+    if dashboard_only:
+        return query.join(Library, Library.id == MediaFile.library_id).where(Library.show_on_dashboard.is_(True))
+    return query
+
+
+def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: int | None, dashboard_only: bool):
     if metric_id == "quality_score":
         query = (
             select(
                 MediaFile.id.label("media_file_id"),
                 cast(MediaFile.quality_score, Float).label("value"),
             )
+            .select_from(MediaFile)
             .where(MediaFile.quality_score >= 1)
         )
-        if library_id is not None:
-            query = query.where(MediaFile.library_id == library_id)
+        query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
 
     if metric_id == "duration":
@@ -129,8 +137,7 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
             .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
             .where(MediaFormat.duration.is_not(None), MediaFormat.duration > 0)
         )
-        if library_id is not None:
-            query = query.where(MediaFile.library_id == library_id)
+        query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
 
     if metric_id == "size":
@@ -139,10 +146,10 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
                 MediaFile.id.label("media_file_id"),
                 cast(MediaFile.size_bytes, Float).label("value"),
             )
+            .select_from(MediaFile)
             .where(MediaFile.size_bytes >= 0)
         )
-        if library_id is not None:
-            query = query.where(MediaFile.library_id == library_id)
+        query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
 
     if metric_id == "bitrate":
@@ -156,8 +163,7 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
             .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
             .where(value_expression.is_not(None), value_expression > 0)
         )
-        if library_id is not None:
-            query = query.where(MediaFile.library_id == library_id)
+        query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
 
     audio_bitrate_totals = build_audio_bitrate_subquery(f"{metric_id}_distribution_audio_bitrate_totals")
@@ -171,8 +177,7 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
         .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
         .where(audio_bitrate_expression.is_not(None))
     )
-    if library_id is not None:
-        query = query.where(MediaFile.library_id == library_id)
+    query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
     return query.subquery(f"{metric_id}_distribution_values")
 
 
@@ -192,9 +197,10 @@ def _build_distribution(
     *,
     metric_id: NumericDistributionMetricId,
     library_id: int | None,
+    dashboard_only: bool,
 ) -> NumericDistribution:
     config = next(item for item in NUMERIC_DISTRIBUTION_CONFIGS if item.metric_id == metric_id)
-    values = _metric_value_subquery(metric_id, library_id)
+    values = _metric_value_subquery(metric_id, library_id, dashboard_only)
     total = db.scalar(select(func.count()).select_from(values)) or 0
     if total <= 0:
         return NumericDistribution(
@@ -245,8 +251,14 @@ def build_numeric_distributions(
     db: Session,
     *,
     library_id: int | None = None,
+    dashboard_only: bool = False,
 ) -> dict[NumericDistributionMetricId, NumericDistribution]:
     return {
-        config.metric_id: _build_distribution(db, metric_id=config.metric_id, library_id=library_id)
+        config.metric_id: _build_distribution(
+            db,
+            metric_id=config.metric_id,
+            library_id=library_id,
+            dashboard_only=dashboard_only,
+        )
         for config in NUMERIC_DISTRIBUTION_CONFIGS
     }

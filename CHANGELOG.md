@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - add a `full scan` header action to the `Configured libraries` settings panel so all configured libraries can be queued for a manual full rescan at once
+- move configured-library path and summary metadata into a title tooltip in Settings and reposition the library type / scan-mode badges beside the title with responsive wrapping
+- add a per-library dashboard visibility toggle in Settings so selected libraries can be excluded from dashboard totals, distributions, and comparison panels
 
 ## v0.7.1
 

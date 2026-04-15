@@ -348,3 +348,70 @@ def test_dashboard_includes_numeric_distributions() -> None:
     assert dashboard.numeric_distributions["size"].bins[4].count == 1
     assert dashboard.numeric_distributions["bitrate"].bins[3].count == 1
     assert dashboard.numeric_distributions["audio_bitrate"].bins[3].count == 1
+
+
+def test_dashboard_excludes_libraries_hidden_from_dashboard() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        visible_library = Library(
+            name="Visible",
+            path="/tmp/visible-dashboard",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden",
+            path="/tmp/hidden-dashboard",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+
+        visible_file = MediaFile(
+            library_id=visible_library.id,
+            relative_path="visible.mkv",
+            filename="visible.mkv",
+            extension="mkv",
+            size_bytes=2_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        hidden_file = MediaFile(
+            library_id=hidden_library.id,
+            relative_path="hidden.mp4",
+            filename="hidden.mp4",
+            extension="mp4",
+            size_bytes=4_000_000_000,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=9,
+        )
+        db.add_all([visible_file, hidden_file])
+        db.flush()
+        db.add(MediaFormat(media_file_id=visible_file.id, duration=3600.0))
+        db.add(MediaFormat(media_file_id=hidden_file.id, duration=7200.0))
+        db.add(VideoStream(media_file_id=visible_file.id, stream_index=0, codec="h264", width=1920, height=1080))
+        db.add(VideoStream(media_file_id=hidden_file.id, stream_index=0, codec="hevc", width=3840, height=2160))
+        db.commit()
+
+        dashboard = build_dashboard(db)
+
+    assert dashboard.totals["libraries"] == 1
+    assert dashboard.totals["files"] == 1
+    assert dashboard.totals["storage_bytes"] == 2_000_000_000
+    assert dashboard.totals["duration_seconds"] == 3600.0
+    assert [item.model_dump(exclude_none=True) for item in dashboard.container_distribution] == [
+        {"label": "MKV", "value": 1, "filter_value": "mkv"}
+    ]
+    assert [item.model_dump(exclude_none=True) for item in dashboard.video_codec_distribution] == [
+        {"label": "h264", "value": 1}
+    ]

@@ -51,6 +51,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    show_on_dashboard: true,
     file_count: 2,
     total_size_bytes: 2048,
     total_duration_seconds: 7200,

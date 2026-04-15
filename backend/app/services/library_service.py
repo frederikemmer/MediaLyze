@@ -176,6 +176,7 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
         duplicate_detection_mode=payload.duplicate_detection_mode,
         scan_config=scan_config,
         quality_profile=normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories),
+        show_on_dashboard=payload.show_on_dashboard,
     )
     db.add(library)
     db.commit()
@@ -219,6 +220,8 @@ def update_library_settings(
         if next_quality_profile != current_quality_profile or library.quality_profile != current_quality_profile:
             library.quality_profile = next_quality_profile
             quality_profile_changed = True
+    if payload.show_on_dashboard is not None:
+        library.show_on_dashboard = payload.show_on_dashboard
     db.commit()
     db.refresh(library)
     stats_cache.invalidate(cache_key, library.id)

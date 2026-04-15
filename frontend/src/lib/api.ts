@@ -180,6 +180,7 @@ export type LibrarySummary = {
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
+  show_on_dashboard: boolean;
   file_count: number;
   total_size_bytes: number;
   total_duration_seconds: number;
@@ -751,6 +752,7 @@ export const api = {
     duplicate_detection_mode?: DuplicateDetectionMode;
     scan_config?: Record<string, number>;
     quality_profile?: QualityProfile;
+    show_on_dashboard?: boolean;
   }) =>
     request<LibrarySummary>("/libraries", {
       method: "POST",
@@ -764,6 +766,7 @@ export const api = {
       duplicate_detection_mode?: DuplicateDetectionMode;
       scan_config?: Record<string, number>;
       quality_profile?: QualityProfile;
+      show_on_dashboard?: boolean;
     },
   ) =>
     request<LibrarySummary>(`/libraries/${libraryId}`, {

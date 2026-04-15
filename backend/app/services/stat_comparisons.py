@@ -154,6 +154,8 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
     )
     if library_id is not None:
         query = query.where(MediaFile.library_id == library_id)
+    else:
+        query = query.join(Library, Library.id == MediaFile.library_id).where(Library.show_on_dashboard.is_(True))
 
     return [
         ComparisonSourceRow(
