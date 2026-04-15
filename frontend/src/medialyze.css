@@ -1249,10 +1249,12 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .library-title-main h3 {
+  display: flex;
+  align-items: center;
   flex: 0 1 auto;
   min-width: 0;
   font-size: 1.5rem;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .library-title-main .file-link {
@@ -1260,7 +1262,12 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   max-width: 100%;
 }
 
+.library-title-main .tooltip-trigger {
+  align-self: center;
+}
+
 .library-title-tags {
+  align-self: center;
   flex: 1 1 180px;
   min-width: 0;
 }
