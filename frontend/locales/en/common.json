@@ -39,8 +39,13 @@
     "subtitleCodecs": "Subtitle codecs",
     "subtitleSources": "Subtitle sources"
   },
+  "panel": {
+    "collapseAria": "Collapse {{title}}",
+    "expandAria": "Expand {{title}}"
+  },
   "libraries": {
     "configured": "Configured libraries",
+    "fullScan": "full scan",
     "addFirstLibrary": "Add first library",
     "createTitle": "Create library",
     "createSubtitle": "Path selection is restricted to directories below MEDIA_ROOT.",
@@ -67,10 +72,18 @@
     "debounceSeconds": "Debounce in seconds",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
+    "scanNowTooltip": "Queue an incremental scan",
     "qualityScoreTitle": "Quality score",
     "renamePrompt": "Enter a new library name",
     "renameAria": "Rename library {{name}}",
+    "renameTooltip": "Rename library",
     "deleteAria": "Delete library {{name}}",
+    "deleteTooltip": "Delete library",
+    "detailsTooltipAria": "Show library details for {{name}}",
+    "showOnDashboardAria": "Show library {{name}} on dashboard",
+    "hideFromDashboardAria": "Hide library {{name}} from dashboard",
+    "showOnDashboardTooltip": "Include this library in dashboard statistics",
+    "hideFromDashboardTooltip": "Exclude this library from dashboard statistics",
     "lastScan": "Last scan",
     "files": "Files",
     "active": "Active",

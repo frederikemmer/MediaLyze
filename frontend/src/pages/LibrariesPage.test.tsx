@@ -10,10 +10,12 @@ import {
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
   type BrowseResponse,
+  type DashboardResponse,
   type LibrarySummary,
   type PathInspection,
   type RecentScanJobPage,
   type RecentScanJob,
+  type ScanJob,
   type ScanJobDetail,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
@@ -78,6 +80,7 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    show_on_dashboard: true,
     file_count: 0,
     total_size_bytes: 0,
     total_duration_seconds: 0,
@@ -116,6 +119,25 @@ function createRecentScanJob(overrides: Partial<RecentScanJob> = {}): RecentScan
     modified_files: 1,
     deleted_files: 0,
     analysis_failed: 0,
+    ...overrides,
+  };
+}
+
+function createScanJob(overrides: Partial<ScanJob> = {}): ScanJob {
+  return {
+    id: 21,
+    library_id: 1,
+    library_name: "Movies",
+    status: "queued",
+    job_type: "incremental",
+    files_total: 0,
+    files_scanned: 0,
+    errors: 0,
+    started_at: null,
+    finished_at: null,
+    progress_percent: 0,
+    phase_label: "Queued",
+    phase_detail: null,
     ...overrides,
   };
 }
@@ -171,6 +193,35 @@ function createRecentScanJobPage(overrides: Partial<RecentScanJobPage> = {}): Re
   };
 }
 
+function createDashboard(overrides: Partial<DashboardResponse> = {}): DashboardResponse {
+  return {
+    totals: {
+      libraries: 1,
+      files: 0,
+      storage_bytes: 0,
+      duration_seconds: 0,
+    },
+    container_distribution: [],
+    video_codec_distribution: [],
+    resolution_distribution: [],
+    hdr_distribution: [],
+    audio_codec_distribution: [],
+    audio_spatial_profile_distribution: [],
+    audio_language_distribution: [],
+    subtitle_distribution: [],
+    subtitle_codec_distribution: [],
+    subtitle_source_distribution: [],
+    numeric_distributions: {
+      quality_score: { total: 0, bins: [] },
+      duration: { total: 0, bins: [] },
+      size: { total: 0, bins: [] },
+      bitrate: { total: 0, bins: [] },
+      audio_bitrate: { total: 0, bins: [] },
+    },
+    ...overrides,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -186,6 +237,7 @@ function renderPage() {
 beforeEach(() => {
   vi.spyOn(api, "libraries").mockResolvedValue([]);
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+  vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
@@ -863,6 +915,69 @@ describe("LibrariesPage settings panels", () => {
         appSettings: false,
       }),
     );
+  });
+
+  it("queues a full scan for all configured libraries from the panel header", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary(),
+      createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
+    ]);
+    const scanSpy = vi
+      .spyOn(api, "scanLibrary")
+      .mockResolvedValueOnce(createScanJob({ id: 31, library_id: 1, library_name: "Movies", job_type: "full" }))
+      .mockResolvedValueOnce(createScanJob({ id: 32, library_id: 2, library_name: "Series", job_type: "full" }));
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^full scan$/i }));
+
+    await waitFor(() => {
+      expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
+      expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
+    });
+  });
+
+  it("moves library details into a title tooltip and keeps badges in the title area", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    expect(screen.queryByText("/media/movies")).not.toBeInTheDocument();
+
+    const detailsButton = await screen.findByRole("button", { name: "Show library details for Movies" });
+    const titleMain = screen.getByRole("link", { name: "Movies" }).closest(".library-title-main") as HTMLElement | null;
+    expect(titleMain).not.toBeNull();
+    if (!titleMain) {
+      return;
+    }
+
+    const titleArea = within(titleMain);
+    expect(titleArea.getByRole("link", { name: "Movies" })).toBeInTheDocument();
+    expect(titleArea.getByText("Manual")).toBeInTheDocument();
+
+    fireEvent.mouseEnter(detailsButton);
+
+    expect(await screen.findByText("/media/movies")).toBeInTheDocument();
+    expect(screen.getByText("0 files")).toBeInTheDocument();
+  });
+
+  it("toggles dashboard visibility from the library action button and refreshes dashboard data", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const updateSpy = vi
+      .spyOn(api, "updateLibrarySettings")
+      .mockResolvedValue(createLibrarySummary({ show_on_dashboard: false }));
+    const dashboardSpy = vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard({ totals: { libraries: 0, files: 0, storage_bytes: 0, duration_seconds: 0 } }));
+
+    renderPage();
+
+    const toggleButton = await screen.findByRole("button", { name: "Hide library Movies from dashboard" });
+    expect(toggleButton).toHaveAttribute("title", "Exclude this library from dashboard statistics");
+
+    fireEvent.click(toggleButton);
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { show_on_dashboard: false }));
+    await waitFor(() => expect(dashboardSpy).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: "Show library Movies on dashboard" })).toBeInTheDocument();
   });
 
   it("shows the recent scan logs panel expanded by default", async () => {

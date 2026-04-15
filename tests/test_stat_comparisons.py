@@ -191,6 +191,64 @@ def test_dashboard_comparison_marks_scatter_payload_as_sampled() -> None:
     assert len(payload.scatter_points) == 3
 
 
+def test_dashboard_comparison_excludes_libraries_hidden_from_dashboard() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        visible_library = Library(
+            name="Visible",
+            path="/tmp/comparison-visible",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden",
+            path="/tmp/comparison-hidden",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+
+        visible_file = MediaFile(
+            library_id=visible_library.id,
+            relative_path="visible.mkv",
+            filename="visible.mkv",
+            extension="mkv",
+            size_bytes=4_000_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+        )
+        hidden_file = MediaFile(
+            library_id=hidden_library.id,
+            relative_path="hidden.mkv",
+            filename="hidden.mkv",
+            extension="mkv",
+            size_bytes=8_000_000_000,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=9,
+        )
+        db.add_all([visible_file, hidden_file])
+        db.flush()
+        visible_file_id = visible_file.id
+        db.add(MediaFormat(media_file_id=visible_file.id, duration=3600.0))
+        db.add(MediaFormat(media_file_id=hidden_file.id, duration=5400.0))
+        db.commit()
+
+        payload = get_dashboard_comparison(db, x_field="duration", y_field="size")
+
+    assert payload.total_files == 1
+    assert payload.included_files == 1
+    assert payload.scatter_points is not None
+    assert payload.scatter_points[0].media_file_id == visible_file_id
+
+
 def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None:
     session_factory = _session_factory()
 

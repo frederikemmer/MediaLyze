@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add a `full scan` header action to the `Configured libraries` settings panel so all configured libraries can be queued for a manual full rescan at once
+- move configured-library path and summary metadata into a title tooltip in Settings and reposition the library type / scan-mode badges beside the title with responsive wrapping
+- add a per-library dashboard visibility toggle in Settings so selected libraries can be excluded from dashboard totals, distributions, and comparison panels
+
+## v0.7.1
+
+>2026-04-15
+
+### 🐛 Bug fixes
+
+- broaden ffprobe-based spatial-audio detection so additional explicit Atmos metadata variants beyond `stream.profile` are recognized during analysis; existing libraries may need a full rescan to refresh previously analyzed files ([#107](https://github.com/frederikemmer/MediaLyze/issues/107))
+
 ## v0.7.0
 
 >2026-04-14

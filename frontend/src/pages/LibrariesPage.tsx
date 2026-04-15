@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
 import { PathBrowser } from "../components/PathBrowser";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
@@ -399,6 +400,7 @@ export function LibrariesPage() {
     libraries,
     librariesLoaded,
     loadAppSettings,
+    loadDashboard,
     loadLibraries,
     setAppSettings,
     upsertLibrary,
@@ -415,6 +417,8 @@ export function LibrariesPage() {
   const [qualityLanguageErrors, setQualityLanguageErrors] = useState<Record<string, string | null>>({});
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
+  const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
+  const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
   const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
@@ -860,32 +864,92 @@ export function LibrariesPage() {
     updateLibraryForm(libraryId, { quality_profile: transform(cloneQualityProfile(current)) });
   }
 
-  async function runLibraryScan(libraryId: number) {
+  async function persistPendingLibrarySettings(libraryId: number): Promise<string | null> {
     const current = settingsForms[libraryId];
-    if (current && autoSaveTimers.current[libraryId]) {
-      window.clearTimeout(autoSaveTimers.current[libraryId]);
-      delete autoSaveTimers.current[libraryId];
-      try {
-        const updated = await api.updateLibrarySettings(libraryId, {
-          scan_mode: current.scan_mode,
-          duplicate_detection_mode: current.duplicate_detection_mode,
-          scan_config: buildScanConfig(current),
-          quality_profile: current.quality_profile,
-        });
-        upsertLibrary(updated);
-      } catch (reason) {
-        setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
-        return;
-      }
+    if (!(current && autoSaveTimers.current[libraryId])) {
+      return null;
+    }
+
+    window.clearTimeout(autoSaveTimers.current[libraryId]);
+    delete autoSaveTimers.current[libraryId];
+    try {
+      const updated = await api.updateLibrarySettings(libraryId, {
+        scan_mode: current.scan_mode,
+        duplicate_detection_mode: current.duplicate_detection_mode,
+        scan_config: buildScanConfig(current),
+        quality_profile: current.quality_profile,
+      });
+      upsertLibrary(updated);
+      return null;
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
+      return message;
+    }
+  }
+
+  async function requestLibraryScan(libraryId: number, scanType: "incremental" | "full"): Promise<string | null> {
+    const settingsError = await persistPendingLibrarySettings(libraryId);
+    if (settingsError) {
+      return settingsError;
     }
 
     try {
-      const job = await api.scanLibrary(libraryId, "incremental");
+      const job = await api.scanLibrary(libraryId, scanType);
       trackJob(job);
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
+      return null;
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
+      const message = (reason as Error).message;
+      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
+      return message;
+    }
+  }
+
+  async function runLibraryScan(libraryId: number) {
+    await requestLibraryScan(libraryId, "incremental");
+  }
+
+  async function runFullScanForAllLibraries() {
+    if (!libraries.length || isRunningFullScanAll) {
       return;
+    }
+
+    setIsRunningFullScanAll(true);
+    try {
+      for (const library of libraries) {
+        await requestLibraryScan(library.id, "full");
+      }
+    } finally {
+      setIsRunningFullScanAll(false);
+    }
+  }
+
+  async function toggleLibraryDashboardVisibility(library: LibrarySummary) {
+    if (dashboardVisibilityPending[library.id]) {
+      return;
+    }
+
+    const nextShowOnDashboard = !library.show_on_dashboard;
+    setDashboardVisibilityPending((current) => ({ ...current, [library.id]: true }));
+    upsertLibrary({ ...library, show_on_dashboard: nextShowOnDashboard });
+
+    try {
+      const updated = await api.updateLibrarySettings(library.id, {
+        show_on_dashboard: nextShowOnDashboard,
+      });
+      upsertLibrary(updated);
+      setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
+      await loadDashboard(true);
+    } catch (reason) {
+      upsertLibrary(library);
+      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+    } finally {
+      setDashboardVisibilityPending((current) => {
+        const next = { ...current };
+        delete next[library.id];
+        return next;
+      });
     }
   }
 
@@ -2305,6 +2369,16 @@ export function LibrariesPage() {
             title={t("libraries.configured")}
             loading={isLoadingLibraries}
             error={error}
+            collapseActions={
+              <button
+                type="button"
+                className="small"
+                disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
+                onClick={() => void runFullScanForAllLibraries()}
+              >
+                {t("libraries.fullScan")}
+              </button>
+            }
             collapseState={{
               collapsed: !settingsPanelState.configuredLibraries,
               onToggle: () => toggleSettingsPanel("configuredLibraries"),
@@ -2317,28 +2391,68 @@ export function LibrariesPage() {
                 <div className="media-card library-settings-card" key={library.id}>
                   <div className="library-settings-header">
                     <div className="item-meta">
-                      <div className="meta-tags">
-                        <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
-                        <span className="badge">{t(`scanModes.${library.scan_mode}`)}</span>
-                        {activeJobs
-                          .filter((job) => job.library_id === library.id)
-                          .map((job) => (
-                            <span className="badge scan-badge" key={job.id}>
-                              {job.files_total > 0 ? `${job.progress_percent}%` : t("libraries.active")}
-                            </span>
-                          ))}
-                      </div>
                       <div className="library-title-row">
-                        <h3>
-                          <Link to={`/libraries/${library.id}`} className="file-link">
-                            {library.name}
-                          </Link>
-                        </h3>
+                        <div className="library-title-meta">
+                          <div className="library-title-main">
+                            <h3>
+                              <Link to={`/libraries/${library.id}`} className="file-link">
+                                {library.name}
+                              </Link>
+                            </h3>
+                            <TooltipTrigger
+                              ariaLabel={t("libraries.detailsTooltipAria", { name: library.name })}
+                              align="start"
+                              maxWidth={420}
+                              tooltipClassName="library-details-tooltip"
+                              content={
+                                <div className="library-details-tooltip-content">
+                                  <p className="library-details-tooltip-path">{library.path}</p>
+                                  <div className="library-details-tooltip-stats">
+                                    <span>{library.file_count} {t("libraries.files").toLowerCase()}</span>
+                                    <span>{formatBytes(library.total_size_bytes)}</span>
+                                    <span>{formatDuration(library.total_duration_seconds)}</span>
+                                    <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
+                                  </div>
+                                </div>
+                              }
+                            />
+                            <div className="meta-tags library-title-tags">
+                              <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
+                              <span className="badge">{t(`scanModes.${library.scan_mode}`)}</span>
+                              {activeJobs
+                                .filter((job) => job.library_id === library.id)
+                                .map((job) => (
+                                  <span className="badge scan-badge" key={job.id}>
+                                    {job.files_total > 0 ? `${job.progress_percent}%` : t("libraries.active")}
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
                         <div className="library-title-actions">
                           <button
                             type="button"
                             className="secondary icon-only-button"
+                            aria-label={
+                              library.show_on_dashboard
+                                ? t("libraries.hideFromDashboardAria", { name: library.name })
+                                : t("libraries.showOnDashboardAria", { name: library.name })
+                            }
+                            title={
+                              library.show_on_dashboard
+                                ? t("libraries.hideFromDashboardTooltip")
+                                : t("libraries.showOnDashboardTooltip")
+                            }
+                            disabled={Boolean(dashboardVisibilityPending[library.id])}
+                            onClick={() => void toggleLibraryDashboardVisibility(library)}
+                          >
+                            <DashboardVisibilityIcon visible={library.show_on_dashboard} />
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary icon-only-button"
                             aria-label={t("libraries.renameAria", { name: library.name })}
+                            title={t("libraries.renameTooltip")}
                             onClick={() => void renameLibrary(library)}
                           >
                             <Pencil aria-hidden="true" className="nav-icon" />
@@ -2347,6 +2461,7 @@ export function LibrariesPage() {
                             type="button"
                             className="secondary icon-only-button"
                             aria-label={t("libraries.deleteAria", { name: library.name })}
+                            title={t("libraries.deleteTooltip")}
                             onClick={() => void removeLibrary(library.id)}
                           >
                             <Trash2 aria-hidden="true" className="nav-icon" />
@@ -2354,19 +2469,13 @@ export function LibrariesPage() {
                           <button
                             type="button"
                             className="small"
+                            title={t("libraries.scanNowTooltip")}
                             onClick={() => void runLibraryScan(library.id)}
                           >
                             {t("libraries.scanNow")}
                           </button>
                         </div>
                       </div>
-                      <p className="media-meta">{library.path}</p>
-                    </div>
-                    <div className="library-stats">
-                      <span>{library.file_count} {t("libraries.files").toLowerCase()}</span>
-                      <span>{formatBytes(library.total_size_bytes)}</span>
-                      <span>{formatDuration(library.total_duration_seconds)}</span>
-                      <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
                     </div>
                   </div>
                   {activeJobs.find((job) => job.library_id === library.id) ? (

@@ -403,6 +403,71 @@ def test_run_scan_persists_audio_profile_and_spatial_audio_profile(tmp_path: Pat
     assert audio_stream.spatial_audio_profile == "dolby_atmos"
 
 
+def test_run_scan_persists_spatial_audio_profile_from_ffprobe_metadata_fallback(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "movie.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "truehd",
+                "profile": "TrueHD",
+                "tags": {"title": "English Dolby Atmos"},
+                "channels": 8,
+                "channel_layout": "7.1",
+            },
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "full")
+        audio_stream = db.scalar(select(AudioStream))
+
+    assert audio_stream is not None
+    assert audio_stream.profile == "TrueHD"
+    assert audio_stream.spatial_audio_profile == "dolby_atmos"
+
+
 def test_scan_ignores_matching_relative_paths_and_external_subtitles(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()

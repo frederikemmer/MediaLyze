@@ -39,8 +39,13 @@
     "subtitleCodecs": "Untertitel-Codecs",
     "subtitleSources": "Untertitel-Quellen"
   },
+  "panel": {
+    "collapseAria": "{{title}} einklappen",
+    "expandAria": "{{title}} ausklappen"
+  },
   "libraries": {
     "configured": "Konfigurierte Bibliotheken",
+    "fullScan": "Vollscan",
     "addFirstLibrary": "Erste Bibliothek anlegen",
     "createTitle": "Bibliothek anlegen",
     "createSubtitle": "Die Pfadauswahl ist auf Verzeichnisse unterhalb von MEDIA_ROOT begrenzt.",
@@ -67,10 +72,18 @@
     "debounceSeconds": "Debounce in Sekunden",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
+    "scanNowTooltip": "Einen inkrementellen Scan einreihen",
     "qualityScoreTitle": "Qualitäts-Score",
     "renamePrompt": "Neuen Bibliotheksnamen eingeben",
     "renameAria": "Bibliothek {{name}} umbenennen",
+    "renameTooltip": "Bibliothek umbenennen",
     "deleteAria": "Bibliothek {{name}} löschen",
+    "deleteTooltip": "Bibliothek löschen",
+    "detailsTooltipAria": "Details für Bibliothek {{name}} anzeigen",
+    "showOnDashboardAria": "Bibliothek {{name}} im Dashboard anzeigen",
+    "hideFromDashboardAria": "Bibliothek {{name}} im Dashboard ausblenden",
+    "showOnDashboardTooltip": "Diese Bibliothek in die Dashboard-Statistiken aufnehmen",
+    "hideFromDashboardTooltip": "Diese Bibliothek aus den Dashboard-Statistiken ausschließen",
     "lastScan": "Letzter Scan",
     "files": "Dateien",
     "active": "Aktiv",

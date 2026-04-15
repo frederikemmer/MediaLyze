@@ -292,6 +292,7 @@ def test_libraries_route_serializes_timestamps_as_utc_z_strings() -> None:
     assert payload["created_at"].endswith("Z")
     assert payload["updated_at"].endswith("Z")
     assert payload["last_scan_at"].endswith("Z")
+    assert payload["show_on_dashboard"] is True
     assert payload["created_at"] == "2026-03-24T04:06:00Z"
     assert payload["updated_at"] == "2026-03-24T04:07:00Z"
     assert payload["last_scan_at"] == "2026-03-24T04:08:00Z"

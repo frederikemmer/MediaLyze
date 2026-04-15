@@ -13,7 +13,6 @@ desktop/node_modules/
 desktop/.generated-icons/
 dist/
 config/
-.vscode/
 .env
 media/
 .local-config

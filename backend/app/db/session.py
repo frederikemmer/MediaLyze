@@ -50,6 +50,7 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         ),
         "scan_config": "ALTER TABLE libraries ADD COLUMN scan_config JSON NOT NULL DEFAULT '{}'",
         "quality_profile": "ALTER TABLE libraries ADD COLUMN quality_profile JSON NOT NULL DEFAULT '{}'",
+        "show_on_dashboard": "ALTER TABLE libraries ADD COLUMN show_on_dashboard BOOLEAN NOT NULL DEFAULT 1",
     },
     "media_files": {
         "last_seen_at": "ALTER TABLE media_files ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
@@ -185,6 +186,9 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
                     "UPDATE libraries SET duplicate_detection_mode = 'off' "
                     "WHERE duplicate_detection_mode IS NULL OR duplicate_detection_mode = ''"
                 )
+            )
+            connection.execute(
+                text("UPDATE libraries SET show_on_dashboard = 1 WHERE show_on_dashboard IS NULL")
             )
 
 

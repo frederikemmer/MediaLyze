@@ -40,6 +40,7 @@ It focuses on file analysis, scan orchestration, metadata normalization, and lib
 MediaLyze currently implements:
 
 * library creation, update, rename, and deletion
+* per-library dashboard visibility toggles that can exclude selected libraries from dashboard statistics and comparison panels
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
 * full and incremental scans
@@ -95,6 +96,7 @@ Each library currently stores:
 * `duplicate_detection_mode`
 * `scan_config`
 * `quality_profile`
+* `show_on_dashboard`
 * timestamps such as `created_at`, `updated_at`, and `last_scan_at`
 
 Supported library types:
@@ -391,6 +393,7 @@ Current aggregated statistics include:
 * optional dashboard distributions for containers, video codecs, resolutions, HDR / dynamic range, audio codecs, audio spatial profiles, audio languages, subtitle languages, subtitle codecs, and subtitle sources based on the dashboard page's persisted inline panel layout
 * optional dashboard histogram-based numeric distributions for quality score, runtime, file size, bitrate, and audio bitrate based on the dashboard page's persisted inline panel layout
 * optional dashboard metric-comparison panels for pairs of single-value fields such as file size, runtime, bitrate, numeric resolution in megapixels, container, codec, resolution category, and HDR type based on the dashboard page's persisted inline panel layout
+* dashboard aggregates and comparison panels only include libraries whose `show_on_dashboard` flag is enabled
 * container distribution in library statistics
 * video codec distribution
 * resolution distribution grouped by global resolution categories
@@ -603,6 +606,7 @@ Important library contract concepts:
 * `duplicate_detection_mode`
 * `scan_config`
 * `quality_profile`
+* `show_on_dashboard`
 * `numeric_distributions`
 * comparison responses expose `x_field`, `y_field`, field kinds, available renderers, bucket metadata, heatmap cells, optional scatter points, optional bar aggregates, and the active scatter sample limit
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
@@ -665,6 +669,7 @@ Important post-`0.0.1` additions that must be treated as real schema surface:
 * library `duplicate_detection_mode`
 * library `scan_config`
 * library `quality_profile`
+* library `show_on_dashboard`
 * app-level settings storage
 * media `filename_signature`
 * media `content_hash`

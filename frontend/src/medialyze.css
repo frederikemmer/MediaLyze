@@ -650,7 +650,26 @@
   box-shadow: none;
 }
 
+.async-panel-toggle.has-collapse-actions {
+  justify-content: flex-start;
+}
+
 .async-panel-toggle:hover {
+  transform: none;
+}
+
+.async-panel-toggle-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.async-panel-toggle-icon-button {
+  flex: 0 0 auto;
+}
+
+.async-panel-toggle-icon-button:hover {
   transform: none;
 }
 
@@ -1205,13 +1224,52 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .library-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .library-title-row h3 {
   margin: 0;
+}
+
+.library-title-meta {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.library-title-main {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.library-title-main h3 {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.library-title-main .file-link {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.library-title-main .tooltip-trigger {
+  align-self: center;
+}
+
+.library-title-tags {
+  align-self: center;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 .library-title-actions {
@@ -1219,6 +1277,29 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   flex-direction: row;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
+}
+
+.library-details-tooltip {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.library-details-tooltip-content {
+  display: grid;
+  gap: 10px;
+}
+
+.library-details-tooltip-path {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.library-details-tooltip-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: rgba(243, 239, 232, 0.88);
+  font-size: 0.8rem;
 }
 
 .icon-only-button {
@@ -1269,6 +1350,17 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: rgba(255, 255, 255, 0.72);
   color: var(--muted);
   box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .library-title-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .library-title-tags {
+    flex-basis: 100%;
+  }
 }
 
 .library-settings-form {
