@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.7.1
+
+>2026-04-15
+
+### 🐛 Bug fixes
+
+- broaden ffprobe-based spatial-audio detection so additional explicit Atmos metadata variants beyond `stream.profile` are recognized during analysis; existing libraries may need a full rescan to refresh previously analyzed files ([#107](https://github.com/frederikemmer/MediaLyze/issues/107))
+
 ## v0.7.0
 
 >2026-04-14

@@ -96,6 +96,62 @@ def test_normalize_ffprobe_payload_extracts_spatial_audio_profiles() -> None:
     ]
 
 
+def test_normalize_ffprobe_payload_detects_atmos_from_audio_stream_metadata() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "truehd",
+                "profile": "TrueHD",
+                "tags": {"title": "English Dolby Atmos"},
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audio_streams[0].spatial_audio_profile == "dolby_atmos"
+
+
+def test_normalize_ffprobe_payload_does_not_infer_atmos_without_explicit_marker() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "truehd",
+                "profile": "TrueHD",
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audio_streams[0].spatial_audio_profile is None
+
+
+def test_normalize_ffprobe_payload_does_not_infer_atmos_for_non_dolby_streams() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "profile": "LC",
+                "tags": {"title": "English Atmos"},
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audio_streams[0].spatial_audio_profile is None
+
+
 def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:
     payload = {
         "format": {"format_name": "matroska"},

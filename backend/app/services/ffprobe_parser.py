@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -116,14 +117,28 @@ def _subtitle_type(codec_name: str | None) -> str | None:
     return None
 
 
-def _spatial_audio_profile(profile: str | None) -> str | None:
-    normalized = (profile or "").strip().lower()
-    if not normalized:
-        return None
-    if "dolby atmos" in normalized:
+def _spatial_audio_profile(stream: dict[str, Any]) -> str | None:
+    tags = stream.get("tags") or {}
+    candidates = [
+        str(stream.get("profile") or "").strip().lower(),
+        str(stream.get("codec_name") or "").strip().lower(),
+        str(stream.get("codec_long_name") or "").strip().lower(),
+        str(tags.get("title") or "").strip().lower(),
+        _metadata_text(stream.get("side_data_list") or []).strip().lower(),
+    ]
+    if any("dolby atmos" in candidate for candidate in candidates):
         return "dolby_atmos"
-    if "dts:x" in normalized or "dts x" in normalized:
+    if any("dts:x" in candidate or "dts x" in candidate for candidate in candidates):
         return "dts_x"
+
+    if any(re.search(r"\batmos\b", candidate) for candidate in candidates):
+        dolby_candidates = candidates[:4]
+        if any(
+            marker in candidate
+            for candidate in dolby_candidates
+            for marker in ("truehd", "mlp", "eac3", "dolby digital plus", "dolby truehd")
+        ):
+            return "dolby_atmos"
     return None
 
 
@@ -288,7 +303,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     stream_index=int(stream.get("index", 0)),
                     codec=stream.get("codec_name"),
                     profile=stream.get("profile"),
-                    spatial_audio_profile=_spatial_audio_profile(stream.get("profile")),
+                    spatial_audio_profile=_spatial_audio_profile(stream),
                     channels=_safe_int(stream.get("channels")),
                     channel_layout=stream.get("channel_layout"),
                     sample_rate=_safe_int(stream.get("sample_rate")),
