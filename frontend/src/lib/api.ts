@@ -469,6 +469,31 @@ export type HistoryReconstructionResult = {
   newest_reconstructed_snapshot_day: string | null;
 };
 
+export type HistoryReconstructionStatus = {
+  status: "idle" | "queued" | "running" | "completed" | "failed";
+  phase:
+    | "idle"
+    | "loading_libraries"
+    | "loading_library"
+    | "reconstructing_file_history"
+    | "reconstructing_library_history"
+    | "completed"
+    | "failed";
+  started_at: string | null;
+  finished_at: string | null;
+  progress_percent: number;
+  libraries_total: number;
+  libraries_processed: number;
+  libraries_with_media: number;
+  current_library_name: string | null;
+  phase_total: number;
+  phase_completed: number;
+  created_file_history_entries: number;
+  created_library_history_entries: number;
+  result: HistoryReconstructionResult | null;
+  error: string | null;
+};
+
 export type ScanJob = {
   id: number;
   library_id: number;
@@ -725,8 +750,9 @@ export const api = {
     ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   historyStorage: () => request<HistoryStorage>("/history-storage"),
+  historyReconstructionStatus: () => request<HistoryReconstructionStatus>("/history/reconstruct"),
   reconstructHistory: () =>
-    request<HistoryReconstructionResult>("/history/reconstruct", {
+    request<HistoryReconstructionStatus>("/history/reconstruct", {
       method: "POST",
     }),
   recentScanJobs: (params?: {

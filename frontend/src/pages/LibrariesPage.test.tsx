@@ -10,6 +10,7 @@ import {
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
   type BrowseResponse,
+  type HistoryReconstructionStatus,
   type DashboardResponse,
   type HistoryReconstructionResult,
   type HistoryStorage,
@@ -121,6 +122,29 @@ function createHistoryReconstructionResult(
     created_library_history_entries: 24,
     oldest_reconstructed_snapshot_day: "2026-03-01",
     newest_reconstructed_snapshot_day: "2026-04-18",
+    ...overrides,
+  };
+}
+
+function createHistoryReconstructionStatus(
+  overrides: Partial<HistoryReconstructionStatus> = {},
+): HistoryReconstructionStatus {
+  return {
+    status: "idle",
+    phase: "idle",
+    started_at: null,
+    finished_at: null,
+    progress_percent: 0,
+    libraries_total: 0,
+    libraries_processed: 0,
+    libraries_with_media: 0,
+    current_library_name: null,
+    phase_total: 0,
+    phase_completed: 0,
+    created_file_history_entries: 0,
+    created_library_history_entries: 0,
+    result: null,
+    error: null,
     ...overrides,
   };
 }
@@ -311,7 +335,14 @@ beforeEach(() => {
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
   vi.spyOn(api, "historyStorage").mockResolvedValue(createHistoryStorage());
-  vi.spyOn(api, "reconstructHistory").mockResolvedValue(createHistoryReconstructionResult());
+  vi.spyOn(api, "historyReconstructionStatus").mockResolvedValue(createHistoryReconstructionStatus());
+  vi.spyOn(api, "reconstructHistory").mockResolvedValue(
+    createHistoryReconstructionStatus({
+      status: "running",
+      phase: "loading_libraries",
+      libraries_total: 2,
+    }),
+  );
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
@@ -691,13 +722,63 @@ describe("LibrariesPage ignore patterns", () => {
     expect(await screen.findByText("2.9 MB")).toBeInTheDocument();
   });
 
-  it("reconstructs approximate history and refreshes the storage forecast", async () => {
-    const reconstructSpy = vi.spyOn(api, "reconstructHistory").mockResolvedValue(
-      createHistoryReconstructionResult({
-        created_library_history_entries: 12,
-        created_file_history_entries: 4,
+  it("shows live reconstruction progress inside the history retention panel", async () => {
+    vi.spyOn(api, "historyReconstructionStatus").mockResolvedValue(
+      createHistoryReconstructionStatus({
+        status: "running",
+        phase: "reconstructing_file_history",
+        progress_percent: 25,
+        libraries_total: 4,
+        libraries_processed: 1,
+        current_library_name: "Movies",
+        phase_total: 200,
+        phase_completed: 50,
+        created_file_history_entries: 12,
+        created_library_history_entries: 3,
       }),
     );
+
+    renderPage();
+
+    expect(await screen.findByText("Reconstructing file history")).toBeInTheDocument();
+    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText("50 of 200 media files")).toBeInTheDocument();
+    expect(screen.getByText("1 of 4 libraries")).toBeInTheDocument();
+    expect(screen.getByText("Current library: Movies")).toBeInTheDocument();
+  });
+
+  it("reconstructs approximate history and refreshes the storage forecast", async () => {
+    const reconstructSpy = vi.spyOn(api, "reconstructHistory").mockResolvedValue(
+      createHistoryReconstructionStatus({
+        status: "running",
+        phase: "reconstructing_file_history",
+        progress_percent: 40,
+        libraries_total: 2,
+        libraries_processed: 0,
+        current_library_name: "Movies",
+        phase_total: 10,
+        phase_completed: 4,
+      }),
+    );
+    const historyStatusSpy = vi
+      .spyOn(api, "historyReconstructionStatus")
+      .mockResolvedValueOnce(createHistoryReconstructionStatus())
+      .mockResolvedValueOnce(
+        createHistoryReconstructionStatus({
+          status: "completed",
+          phase: "completed",
+          progress_percent: 100,
+          libraries_total: 2,
+          libraries_processed: 2,
+          libraries_with_media: 2,
+          created_library_history_entries: 12,
+          created_file_history_entries: 4,
+          result: createHistoryReconstructionResult({
+            created_library_history_entries: 12,
+            created_file_history_entries: 4,
+          }),
+        }),
+      );
     const historyStorageSpy = vi
       .spyOn(api, "historyStorage")
       .mockResolvedValueOnce(createHistoryStorage())
@@ -709,7 +790,8 @@ describe("LibrariesPage ignore patterns", () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(historyStatusSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
     expect(
       await screen.findByText("Reconstructed 12 library snapshots and 4 initial file-history entries."),
     ).toBeInTheDocument();

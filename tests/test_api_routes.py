@@ -26,6 +26,11 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.core.config import Settings
+from backend.app.schemas.history import (
+    HistoryReconstructionJobStatus,
+    HistoryReconstructionPhase,
+    HistoryReconstructionStatusRead,
+)
 from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
@@ -39,11 +44,23 @@ def _build_test_app(db: Session) -> TestClient:
         "TestScanRuntime",
         (),
         {
+            "__init__": lambda self: setattr(self, "history_reconstruction_status", HistoryReconstructionStatusRead()),
             "sync_library": lambda self, library_id: None,
             "refresh_worker_settings": lambda self: None,
             "request_quality_recompute": lambda self, library_id: None,
             "run_history_retention": lambda self: None,
             "cancel_active_jobs": lambda self: [],
+            "get_history_reconstruction_status": lambda self: self.history_reconstruction_status,
+            "request_history_reconstruction": lambda self: setattr(
+                self,
+                "history_reconstruction_status",
+                HistoryReconstructionStatusRead(
+                    status=HistoryReconstructionJobStatus.running,
+                    phase=HistoryReconstructionPhase.loading_libraries,
+                    libraries_total=1,
+                ),
+            )
+            or self.history_reconstruction_status,
         },
     )()
     return TestClient(app)
@@ -542,7 +559,7 @@ def test_history_storage_route_returns_storage_payload() -> None:
     assert payload["categories"]["scan_history"]["current_estimated_bytes"] > 0
 
 
-def test_history_reconstruct_route_returns_summary_payload() -> None:
+def test_history_reconstruct_route_starts_background_job() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -577,11 +594,25 @@ def test_history_reconstruct_route_returns_summary_payload() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["generated_at"].endswith("Z")
-    assert payload["libraries_processed"] == 1
-    assert payload["libraries_with_media"] == 1
-    assert payload["created_file_history_entries"] == 1
-    assert payload["created_library_history_entries"] >= 1
+    assert payload["status"] == "running"
+    assert payload["phase"] == "loading_libraries"
+    assert payload["libraries_total"] == 1
+    assert payload["result"] is None
+
+
+def test_history_reconstruct_status_route_returns_runtime_state() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/history/reconstruct")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "idle"
+    assert payload["phase"] == "idle"
 
 
 def test_library_duplicates_route_returns_404_for_unknown_library() -> None:

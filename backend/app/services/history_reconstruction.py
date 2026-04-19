@@ -4,6 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from math import isfinite
+from typing import Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -16,13 +17,14 @@ from backend.app.models.entities import (
     MediaFileHistoryCaptureReason,
     ScanStatus,
 )
-from backend.app.schemas.history import HistoryReconstructionRead
+from backend.app.schemas.history import HistoryReconstructionPhase, HistoryReconstructionRead
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.history_snapshots import build_media_file_history_snapshot
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.utils.time import utc_now
 
 _MIN_REASONABLE_MTIME = datetime(1990, 1, 1, tzinfo=UTC)
+ProgressCallback = Callable[..., None]
 
 
 @dataclass(slots=True)
@@ -179,7 +181,30 @@ def _build_reconstructed_library_snapshot(
     }
 
 
-def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRead:
+def _progress_percent(libraries_total: int, libraries_processed: int, library_phase_progress: float = 0.0) -> float:
+    if libraries_total <= 0:
+        return 0.0
+    completed = min(float(libraries_processed) + max(0.0, min(library_phase_progress, 1.0)), float(libraries_total))
+    return round((completed / float(libraries_total)) * 100.0, 1)
+
+
+def _emit_progress(progress_callback: ProgressCallback | None, **payload) -> None:
+    if progress_callback is None:
+        return
+    progress_callback(**payload)
+
+
+def _progress_update_step(total: int) -> int:
+    if total <= 0:
+        return 1
+    return max(1, total // 100)
+
+
+def reconstruct_history_from_media_files(
+    db: Session,
+    *,
+    progress_callback: ProgressCallback | None = None,
+) -> HistoryReconstructionRead:
     now = utc_now()
     app_settings = get_app_settings(db)
     resolution_categories = app_settings.resolution_categories
@@ -197,8 +222,36 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
 
     libraries = db.scalars(select(Library).order_by(Library.id.asc())).all()
     libraries_with_media = 0
+    libraries_total = len(libraries)
 
-    for library in libraries:
+    _emit_progress(
+        progress_callback,
+        phase=HistoryReconstructionPhase.loading_libraries,
+        progress_percent=0.0,
+        libraries_total=libraries_total,
+        libraries_processed=0,
+        libraries_with_media=0,
+        current_library_name=None,
+        phase_total=libraries_total,
+        phase_completed=0,
+        created_file_history_entries=0,
+        created_library_history_entries=0,
+    )
+
+    for library_index, library in enumerate(libraries):
+        _emit_progress(
+            progress_callback,
+            phase=HistoryReconstructionPhase.loading_library,
+            progress_percent=_progress_percent(libraries_total, library_index, 0.0),
+            libraries_total=libraries_total,
+            libraries_processed=library_index,
+            libraries_with_media=libraries_with_media,
+            current_library_name=library.name,
+            phase_total=0,
+            phase_completed=0,
+            created_file_history_entries=created_file_history_entries,
+            created_library_history_entries=created_library_history_entries,
+        )
         media_files = db.scalars(
             select(MediaFile)
             .where(MediaFile.library_id == library.id)
@@ -212,12 +265,44 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
             )
         ).all()
         if not media_files:
+            _emit_progress(
+                progress_callback,
+                phase=HistoryReconstructionPhase.loading_libraries,
+                progress_percent=_progress_percent(libraries_total, library_index + 1, 0.0),
+                libraries_total=libraries_total,
+                libraries_processed=library_index + 1,
+                libraries_with_media=libraries_with_media,
+                current_library_name=None,
+                phase_total=libraries_total,
+                phase_completed=library_index + 1,
+                created_file_history_entries=created_file_history_entries,
+                created_library_history_entries=created_library_history_entries,
+            )
             continue
 
         libraries_with_media += 1
-        prepared_files = [
-            _build_prepared_media_file(media_file, resolution_categories, now) for media_file in media_files
-        ]
+        prepared_files: list[_PreparedMediaFile] = []
+        prepared_step = _progress_update_step(len(media_files))
+        for prepared_index, media_file in enumerate(media_files, start=1):
+            prepared_files.append(_build_prepared_media_file(media_file, resolution_categories, now))
+            if prepared_index % prepared_step == 0 or prepared_index == len(media_files):
+                _emit_progress(
+                    progress_callback,
+                    phase=HistoryReconstructionPhase.reconstructing_file_history,
+                    progress_percent=_progress_percent(
+                        libraries_total,
+                        library_index,
+                        0.5 * (prepared_index / len(media_files)),
+                    ),
+                    libraries_total=libraries_total,
+                    libraries_processed=library_index,
+                    libraries_with_media=libraries_with_media,
+                    current_library_name=library.name,
+                    phase_total=len(media_files),
+                    phase_completed=prepared_index,
+                    created_file_history_entries=created_file_history_entries,
+                    created_library_history_entries=created_library_history_entries,
+                )
 
         earliest_file_history_by_path = dict(
             db.execute(
@@ -229,28 +314,48 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
                 .group_by(MediaFileHistory.relative_path)
             ).all()
         )
-        for prepared in prepared_files:
+        file_history_emit_step = _progress_update_step(len(prepared_files))
+        for prepared_index, prepared in enumerate(prepared_files, start=1):
             earliest_existing_capture = earliest_file_history_by_path.get(prepared.media_file.relative_path)
             if earliest_existing_capture is not None and earliest_existing_capture <= prepared.inferred_added_at:
-                continue
-            if file_history_cutoff is not None and prepared.inferred_added_at < file_history_cutoff:
-                continue
-
-            snapshot, snapshot_hash = build_media_file_history_snapshot(prepared.media_file, resolution_categories)
-            db.add(
-                MediaFileHistory(
-                    library_id=library.id,
-                    media_file_id=prepared.media_file.id,
-                    relative_path=prepared.media_file.relative_path,
-                    filename=prepared.media_file.filename,
-                    captured_at=prepared.inferred_added_at,
-                    capture_reason=MediaFileHistoryCaptureReason.history_reconstruction,
-                    snapshot_hash=snapshot_hash,
-                    snapshot=snapshot,
+                pass
+            elif file_history_cutoff is not None and prepared.inferred_added_at < file_history_cutoff:
+                pass
+            else:
+                snapshot, snapshot_hash = build_media_file_history_snapshot(prepared.media_file, resolution_categories)
+                db.add(
+                    MediaFileHistory(
+                        library_id=library.id,
+                        media_file_id=prepared.media_file.id,
+                        relative_path=prepared.media_file.relative_path,
+                        filename=prepared.media_file.filename,
+                        captured_at=prepared.inferred_added_at,
+                        capture_reason=MediaFileHistoryCaptureReason.history_reconstruction,
+                        snapshot_hash=snapshot_hash,
+                        snapshot=snapshot,
+                    )
                 )
-            )
-            earliest_file_history_by_path[prepared.media_file.relative_path] = prepared.inferred_added_at
-            created_file_history_entries += 1
+                earliest_file_history_by_path[prepared.media_file.relative_path] = prepared.inferred_added_at
+                created_file_history_entries += 1
+
+            if prepared_index % file_history_emit_step == 0 or prepared_index == len(prepared_files):
+                _emit_progress(
+                    progress_callback,
+                    phase=HistoryReconstructionPhase.reconstructing_file_history,
+                    progress_percent=_progress_percent(
+                        libraries_total,
+                        library_index,
+                        0.5 * (prepared_index / len(prepared_files)),
+                    ),
+                    libraries_total=libraries_total,
+                    libraries_processed=library_index,
+                    libraries_with_media=libraries_with_media,
+                    current_library_name=library.name,
+                    phase_total=len(prepared_files),
+                    phase_completed=prepared_index,
+                    created_file_history_entries=created_file_history_entries,
+                    created_library_history_entries=created_library_history_entries,
+                )
 
         if not prepared_files:
             continue
@@ -266,7 +371,21 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
         earliest_inferred_day = min(item.inferred_snapshot_day for item in prepared_files)
         start_day = max(earliest_inferred_day, library_history_start_day) if library_history_start_day else earliest_inferred_day
         if stop_day < start_day:
+            _emit_progress(
+                progress_callback,
+                phase=HistoryReconstructionPhase.loading_libraries,
+                progress_percent=_progress_percent(libraries_total, library_index + 1, 0.0),
+                libraries_total=libraries_total,
+                libraries_processed=library_index + 1,
+                libraries_with_media=libraries_with_media,
+                current_library_name=None,
+                phase_total=libraries_total,
+                phase_completed=library_index + 1,
+                created_file_history_entries=created_file_history_entries,
+                created_library_history_entries=created_library_history_entries,
+            )
             continue
+        total_snapshot_days = (stop_day - start_day).days + 1
 
         events_by_day: dict[date, list[_PreparedMediaFile]] = defaultdict(list)
         accumulator = _LibraryAccumulator(
@@ -281,6 +400,8 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
             events_by_day[prepared.inferred_snapshot_day].append(prepared)
 
         current_day = start_day
+        snapshot_step = _progress_update_step(total_snapshot_days)
+        completed_snapshot_days = 0
         while current_day <= stop_day:
             new_files = events_by_day.get(current_day, [])
             for prepared in new_files:
@@ -304,7 +425,40 @@ def reconstruct_history_from_media_files(db: Session) -> HistoryReconstructionRe
                     oldest_snapshot_day = current_day.isoformat()
                 if newest_snapshot_day is None or current_day.isoformat() > newest_snapshot_day:
                     newest_snapshot_day = current_day.isoformat()
+            completed_snapshot_days += 1
+            if completed_snapshot_days % snapshot_step == 0 or completed_snapshot_days == total_snapshot_days:
+                _emit_progress(
+                    progress_callback,
+                    phase=HistoryReconstructionPhase.reconstructing_library_history,
+                    progress_percent=_progress_percent(
+                        libraries_total,
+                        library_index,
+                        0.5 + (0.5 * (completed_snapshot_days / total_snapshot_days)),
+                    ),
+                    libraries_total=libraries_total,
+                    libraries_processed=library_index,
+                    libraries_with_media=libraries_with_media,
+                    current_library_name=library.name,
+                    phase_total=total_snapshot_days,
+                    phase_completed=completed_snapshot_days,
+                    created_file_history_entries=created_file_history_entries,
+                    created_library_history_entries=created_library_history_entries,
+                )
             current_day += timedelta(days=1)
+
+        _emit_progress(
+            progress_callback,
+            phase=HistoryReconstructionPhase.loading_libraries,
+            progress_percent=_progress_percent(libraries_total, library_index + 1, 0.0),
+            libraries_total=libraries_total,
+            libraries_processed=library_index + 1,
+            libraries_with_media=libraries_with_media,
+            current_library_name=None,
+            phase_total=libraries_total,
+            phase_completed=library_index + 1,
+            created_file_history_entries=created_file_history_entries,
+            created_library_history_entries=created_library_history_entries,
+        )
 
     db.commit()
     return HistoryReconstructionRead(

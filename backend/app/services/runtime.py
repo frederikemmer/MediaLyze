@@ -19,7 +19,13 @@ from backend.app.services.history_retention import (
     apply_history_retention,
     run_pending_history_compaction,
 )
+from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
 from backend.app.services.path_access import is_watch_supported_for_library
+from backend.app.schemas.history import (
+    HistoryReconstructionJobStatus,
+    HistoryReconstructionPhase,
+    HistoryReconstructionStatusRead,
+)
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
     execute_scan_job,
@@ -50,6 +56,7 @@ class ScanRuntimeManager:
         self.active_library_ids: set[int] = set()
         self.submitted_job_ids: set[int] = set()
         self.history_compaction_pending = False
+        self.history_reconstruction_status = HistoryReconstructionStatusRead()
         self.started = False
 
     def start(self) -> None:
@@ -205,6 +212,29 @@ class ScanRuntimeManager:
             raise ValueError(f"Failed to request quality recompute for library {library_id}")
         return job_id, created
 
+    def get_history_reconstruction_status(self) -> HistoryReconstructionStatusRead:
+        with self.lock:
+            return self.history_reconstruction_status.model_copy(deep=True)
+
+    def request_history_reconstruction(self) -> HistoryReconstructionStatusRead:
+        should_submit = False
+        with self.lock:
+            current = self.history_reconstruction_status
+            if current.status in {
+                HistoryReconstructionJobStatus.queued,
+                HistoryReconstructionJobStatus.running,
+            }:
+                return current.model_copy(deep=True)
+            self.history_reconstruction_status = HistoryReconstructionStatusRead(
+                status=HistoryReconstructionJobStatus.queued,
+                phase=HistoryReconstructionPhase.loading_libraries,
+            )
+            should_submit = True
+
+        if should_submit:
+            self.executor.submit(self._run_history_reconstruction)
+        return self.get_history_reconstruction_status()
+
     def submit_scan_job(self, job_id: int) -> None:
         db = SessionLocal()
         try:
@@ -235,6 +265,52 @@ class ScanRuntimeManager:
             self._submit_next_active_job(library_id)
             if should_attempt_compaction:
                 self.run_pending_history_compaction()
+
+    def _run_history_reconstruction(self) -> None:
+        started_at = utc_now()
+        self._update_history_reconstruction_status(
+            status=HistoryReconstructionJobStatus.running,
+            phase=HistoryReconstructionPhase.loading_libraries,
+            started_at=started_at,
+            finished_at=None,
+            progress_percent=0.0,
+            error=None,
+            result=None,
+        )
+        db = SessionLocal()
+        try:
+            result = reconstruct_history_from_media_files(
+                db,
+                progress_callback=self._update_history_reconstruction_status,
+            )
+        except Exception as exc:
+            self._update_history_reconstruction_status(
+                status=HistoryReconstructionJobStatus.failed,
+                phase=HistoryReconstructionPhase.failed,
+                finished_at=utc_now(),
+                progress_percent=0.0,
+                error=str(exc) or exc.__class__.__name__,
+                result=None,
+            )
+        else:
+            self._update_history_reconstruction_status(
+                status=HistoryReconstructionJobStatus.completed,
+                phase=HistoryReconstructionPhase.completed,
+                finished_at=utc_now(),
+                progress_percent=100.0,
+                libraries_total=result.libraries_processed,
+                libraries_processed=result.libraries_processed,
+                libraries_with_media=result.libraries_with_media,
+                current_library_name=None,
+                phase_total=0,
+                phase_completed=0,
+                created_file_history_entries=result.created_file_history_entries,
+                created_library_history_entries=result.created_library_history_entries,
+                error=None,
+                result=result,
+            )
+        finally:
+            db.close()
 
     def cancel_active_jobs(self) -> list[int]:
         db = SessionLocal()
@@ -447,6 +523,14 @@ class ScanRuntimeManager:
         with self.lock:
             self.history_compaction_pending = result.compaction_deferred
         return result
+
+    def _update_history_reconstruction_status(self, **updates) -> None:
+        with self.lock:
+            current = self.history_reconstruction_status
+            next_status = current.model_copy(update=updates)
+            if next_status.status == HistoryReconstructionJobStatus.queued:
+                next_status.status = HistoryReconstructionJobStatus.running
+            self.history_reconstruction_status = next_status
 
     def run_pending_history_compaction(self) -> bool:
         db = SessionLocal()

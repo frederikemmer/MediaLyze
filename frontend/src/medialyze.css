@@ -1452,6 +1452,33 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   gap: 10px;
 }
 
+.history-retention-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.history-reconstruction-progress {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.history-reconstruction-progress-detail {
+  margin-top: -2px;
+}
+
+.history-reconstruction-progress-meta {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .scan-badge {
   background: rgba(27, 153, 139, 0.16);
   color: #0e6b62;

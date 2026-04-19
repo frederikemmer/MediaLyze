@@ -12,6 +12,7 @@ import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type DuplicateDetectionMode,
+  type HistoryReconstructionStatus,
   type HistoryReconstructionResult,
   type HistoryStorage,
   type HistoryStorageCategory,
@@ -179,6 +180,7 @@ const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [
   250000,
   500000,
 ];
+const HISTORY_RECONSTRUCTION_POLL_INTERVAL_MS = 1500;
 
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
@@ -516,6 +518,7 @@ export function LibrariesPage() {
     historyRetentionInputsFromSettings(),
   );
   const [historyStorage, setHistoryStorage] = useState<HistoryStorage | null>(null);
+  const [historyReconstruction, setHistoryReconstruction] = useState<HistoryReconstructionStatus | null>(null);
   const [historyStorageError, setHistoryStorageError] = useState<string | null>(null);
   const [isLoadingHistoryStorage, setIsLoadingHistoryStorage] = useState(true);
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
@@ -529,7 +532,6 @@ export function LibrariesPage() {
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingHistoryRetention, setIsSavingHistoryRetention] = useState(false);
-  const [isReconstructingHistory, setIsReconstructingHistory] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
@@ -549,7 +551,10 @@ export function LibrariesPage() {
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
+  const hadActiveHistoryReconstructionRef = useRef(false);
   const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
+  const isHistoryReconstructionActive =
+    historyReconstruction?.status === "queued" || historyReconstruction?.status === "running";
 
   useEffect(() => {
     return () => {
@@ -607,6 +612,18 @@ export function LibrariesPage() {
       });
   };
 
+  const refreshHistoryReconstructionStatus = () => {
+    return api
+      .historyReconstructionStatus()
+      .then((payload) => {
+        setHistoryReconstruction(payload);
+        return payload;
+      })
+      .catch((reason: Error) => {
+        throw reason;
+      });
+  };
+
   const refreshRecentScanJobs = (showLoading = false) => {
     if (showLoading) {
       setIsLoadingRecentScanJobs(true);
@@ -656,19 +673,15 @@ export function LibrariesPage() {
   }
 
   async function reconstructHistory() {
-    if (isReconstructingHistory || hasActiveJobs) {
+    if (isHistoryReconstructionActive || hasActiveJobs) {
       return;
     }
-    setIsReconstructingHistory(true);
     setHistoryRetentionStatus(null);
     try {
-      const result = await api.reconstructHistory();
-      await refreshHistoryStorage();
-      setHistoryRetentionStatus(formatHistoryReconstructionStatus(result));
+      const status = await api.reconstructHistory();
+      setHistoryReconstruction(status);
     } catch (reason) {
       setHistoryRetentionStatus((reason as Error).message);
-    } finally {
-      setIsReconstructingHistory(false);
     }
   }
 
@@ -707,6 +720,42 @@ export function LibrariesPage() {
   useEffect(() => {
     void refreshHistoryStorage(true).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void refreshHistoryReconstructionStatus().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!isHistoryReconstructionActive) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshHistoryReconstructionStatus().catch(() => undefined);
+    }, HISTORY_RECONSTRUCTION_POLL_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isHistoryReconstructionActive]);
+
+  useEffect(() => {
+    if (!historyReconstruction) {
+      hadActiveHistoryReconstructionRef.current = false;
+      return;
+    }
+
+    if (hadActiveHistoryReconstructionRef.current && !isHistoryReconstructionActive) {
+      if (historyReconstruction.status === "completed" && historyReconstruction.result) {
+        void refreshHistoryStorage().catch(() => undefined);
+        setHistoryRetentionStatus(formatHistoryReconstructionStatus(historyReconstruction.result));
+      } else if (historyReconstruction.status === "failed") {
+        setHistoryRetentionStatus(historyReconstruction.error ?? t("libraries.historyRetention.reconstructFailed"));
+      }
+    }
+
+    hadActiveHistoryReconstructionRef.current = isHistoryReconstructionActive;
+  }, [historyReconstruction, isHistoryReconstructionActive, t]);
 
   useEffect(() => {
     setForm((current) =>
@@ -2108,6 +2157,64 @@ export function LibrariesPage() {
     });
   }
 
+  function formatHistoryReconstructionPhaseLabel(status: HistoryReconstructionStatus) {
+    if (status.status === "queued") {
+      return t("libraries.historyRetention.progressQueued");
+    }
+    switch (status.phase) {
+      case "loading_libraries":
+        return t("libraries.historyRetention.progressLoadingLibraries");
+      case "loading_library":
+        return t("libraries.historyRetention.progressLoadingLibrary");
+      case "reconstructing_file_history":
+        return t("libraries.historyRetention.progressFileHistory");
+      case "reconstructing_library_history":
+        return t("libraries.historyRetention.progressLibraryHistory");
+      case "completed":
+        return t("libraries.historyRetention.progressCompleted");
+      case "failed":
+        return t("libraries.historyRetention.progressFailed");
+      default:
+        return t("libraries.historyRetention.reconstructButton");
+    }
+  }
+
+  function formatHistoryReconstructionPhaseDetail(status: HistoryReconstructionStatus) {
+    if (status.status === "queued") {
+      return null;
+    }
+    if (status.phase === "loading_libraries") {
+      return t("libraries.historyRetention.progressLibraries", {
+        completed: status.libraries_processed,
+        total: status.libraries_total,
+      });
+    }
+    if (status.phase === "loading_library") {
+      return status.current_library_name
+        ? t("libraries.historyRetention.progressCurrentLibrary", { name: status.current_library_name })
+        : null;
+    }
+    if (status.phase === "reconstructing_file_history") {
+      return t("libraries.historyRetention.progressFiles", {
+        completed: status.phase_completed,
+        total: status.phase_total,
+      });
+    }
+    if (status.phase === "reconstructing_library_history") {
+      return t("libraries.historyRetention.progressDays", {
+        completed: status.phase_completed,
+        total: status.phase_total,
+      });
+    }
+    if (status.phase === "completed" && status.result) {
+      return formatHistoryReconstructionStatus(status.result);
+    }
+    if (status.phase === "failed") {
+      return status.error ?? t("libraries.historyRetention.reconstructFailed");
+    }
+    return null;
+  }
+
   function renderIgnorePatternSection(
     group: IgnorePatternGroup,
     title: string,
@@ -3098,6 +3205,25 @@ export function LibrariesPage() {
 
           <AsyncPanel
             title={t("libraries.historyRetention.title")}
+            titleAddon={
+              <div className="history-retention-title-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void reconstructHistory()}
+                  disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
+                >
+                  {isHistoryReconstructionActive
+                    ? t("libraries.historyRetention.reconstructing")
+                    : t("libraries.historyRetention.reconstructButton")}
+                </button>
+                <TooltipTrigger
+                  ariaLabel={t("libraries.historyRetention.reconstructTooltipAria")}
+                  content={t("libraries.historyRetention.reconstructTooltip")}
+                  preserveLineBreaks
+                />
+              </div>
+            }
             collapseState={{
               collapsed: !settingsPanelState.historyRetention,
               onToggle: () => toggleSettingsPanel("historyRetention"),
@@ -3110,23 +3236,43 @@ export function LibrariesPage() {
               {renderHistoryRetentionRow("file_history", historyStorage?.categories.file_history)}
               {renderHistoryRetentionRow("library_history", historyStorage?.categories.library_history)}
               {renderHistoryRetentionRow("scan_history", historyStorage?.categories.scan_history)}
-              <div className="history-retention-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void reconstructHistory()}
-                  disabled={!appSettingsLoaded || isReconstructingHistory || hasActiveJobs}
-                >
-                  {isReconstructingHistory
-                    ? t("libraries.historyRetention.reconstructing")
-                    : t("libraries.historyRetention.reconstructButton")}
-                </button>
-                <TooltipTrigger
-                  ariaLabel={t("libraries.historyRetention.reconstructTooltipAria")}
-                  content={t("libraries.historyRetention.reconstructTooltip")}
-                  preserveLineBreaks
-                />
-              </div>
+              {historyReconstruction && isHistoryReconstructionActive ? (
+                <div className="history-reconstruction-progress" role="status" aria-live="polite">
+                  <div className="distribution-copy">
+                    <strong>{formatHistoryReconstructionPhaseLabel(historyReconstruction)}</strong>
+                    <span>{Math.round(historyReconstruction.progress_percent)}%</span>
+                  </div>
+                  {formatHistoryReconstructionPhaseDetail(historyReconstruction) ? (
+                    <p className="field-hint history-reconstruction-progress-detail">
+                      {formatHistoryReconstructionPhaseDetail(historyReconstruction)}
+                    </p>
+                  ) : null}
+                  <div className="progress">
+                    <span style={{ width: `${historyReconstruction.progress_percent}%` }} />
+                  </div>
+                  <div className="history-reconstruction-progress-meta">
+                    <span>
+                      {t("libraries.historyRetention.progressLibraries", {
+                        completed: historyReconstruction.libraries_processed,
+                        total: historyReconstruction.libraries_total,
+                      })}
+                    </span>
+                    {historyReconstruction.current_library_name ? (
+                      <span>
+                        {t("libraries.historyRetention.progressCurrentLibrary", {
+                          name: historyReconstruction.current_library_name,
+                        })}
+                      </span>
+                    ) : null}
+                    <span>
+                      {t("libraries.historyRetention.progressEntries", {
+                        libraryEntries: historyReconstruction.created_library_history_entries,
+                        fileEntries: historyReconstruction.created_file_history_entries,
+                      })}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
               {hasActiveJobs ? (
                 <p className="field-hint">{t("libraries.historyRetention.reconstructActiveScanHint")}</p>
               ) : null}
