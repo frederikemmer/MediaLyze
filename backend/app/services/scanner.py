@@ -1055,15 +1055,14 @@ def run_scan(
         queued_for_duplicate_processing,
         include_duplicate_counts=True,
     )
-    if job.status == JobStatus.completed:
-        stats_cache.invalidate(cache_key, job.library_id)
-        upsert_library_history_snapshot(
-            db,
-            library,
-            source_scan_job_id=job.id,
-            scan_summary=job.scan_summary,
-            captured_at=job.finished_at,
-        )
+    stats_cache.invalidate(cache_key, job.library_id)
+    upsert_library_history_snapshot(
+        db,
+        library,
+        source_scan_job_id=job.id,
+        scan_summary=job.scan_summary,
+        captured_at=job.finished_at,
+    )
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
     db.refresh(job)

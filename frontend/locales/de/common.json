@@ -365,8 +365,8 @@
     },
     "history": {
       "title": "Mediathekverlauf",
-      "subtitle": "Taegliche Trend-Snapshots erfolgreicher Scans",
-      "empty": "Verlaufstrends erscheinen nach dem naechsten erfolgreichen Scan.",
+      "subtitle": "Taegliche Trend-Snapshots abgeschlossener Scans",
+      "empty": "Verlaufstrends erscheinen nach dem naechsten abgeschlossenen Scan.",
       "controls": {
         "metric": "Verlaufsmetrik auswaehlen"
       },

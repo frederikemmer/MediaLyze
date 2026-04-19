@@ -510,7 +510,7 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("History trends will appear after the next successful scan.")).toBeInTheDocument();
+    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
   });
 
   it("renders the resolution history metric as a stacked area chart", async () => {
@@ -1066,7 +1066,7 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("History trends will appear after the next successful scan.")).toBeInTheDocument();
+    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
     await waitFor(() => expect(libraryHistorySpy).toHaveBeenCalledTimes(1));
 
     fireEvent.focus(window);

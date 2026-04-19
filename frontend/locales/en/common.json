@@ -365,8 +365,8 @@
     },
     "history": {
       "title": "Media library history",
-      "subtitle": "Daily trend snapshots from successful scans",
-      "empty": "History trends will appear after the next successful scan.",
+      "subtitle": "Daily trend snapshots from finished scans",
+      "empty": "History trends will appear after the next finished scan.",
       "controls": {
         "metric": "Select history metric"
       },

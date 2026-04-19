@@ -17,6 +17,7 @@ from backend.app.models.entities import (
     DuplicateDetectionMode,
     ExternalSubtitle,
     Library,
+    LibraryHistory,
     LibraryType,
     MediaFile,
     ScanMode,
@@ -884,6 +885,11 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
 
         job = run_scan(db, settings, library.id, "incremental")
         indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        history_rows = db.scalars(
+            select(LibraryHistory)
+            .where(LibraryHistory.library_id == library.id)
+            .order_by(LibraryHistory.snapshot_day.asc())
+        ).all()
 
     assert job.files_total == 2
     assert job.files_scanned == 2
@@ -892,6 +898,9 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
         ("broken.mkv", "failed"),
         ("good.mkv", "ready"),
     ]
+    assert len(history_rows) == 1
+    assert history_rows[0].snapshot["trend_metrics"]["total_files"] == 1
+    assert history_rows[0].snapshot["scan_delta"]["new_files"] == 2
     assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
     assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "bad payload"
     assert "ValueError: bad payload" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
