@@ -532,7 +532,7 @@ export function DashboardPage() {
         onChangeMetric={setSelectedHistoryMetric}
         collapsed={isHistoryPanelCollapsed}
         onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
-        currentResolutionCategoryIds={appSettings.resolution_categories.map((category) => category.id)}
+        currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
         title={t("dashboard.history.title")}
         subtitle={t("dashboard.history.subtitle")}
         emptyMessage={t("dashboard.history.empty")}
