@@ -29,7 +29,6 @@ const HISTORY_METRICS = [
   { id: "average_bitrate", icon: Gauge },
   { id: "average_audio_bitrate", icon: AudioLines },
   { id: "average_duration_seconds", icon: Clock3 },
-  { id: "average_quality_score", icon: Gauge },
 ] as const satisfies ReadonlyArray<{ id: LibraryHistoryMetricId; icon: typeof Frame }>;
 
 export function LibraryHistoryPanel({
@@ -104,14 +103,13 @@ export function LibraryHistoryPanel({
       subtitle={subtitle}
       loading={loading}
       error={error}
-      titleAddon={history ? <span className="badge">{history.points.length}</span> : null}
       bodyClassName="async-panel-body-scroll"
       headerAddon={
         !collapsed ? (
           <div ref={pickerRef} className="library-history-toolbar search-filter-picker">
             <button
               type="button"
-              className={`search-filter-picker-button search-filter-picker-button-standalone${pickerOpen ? " is-open" : ""}`}
+              className={`search-filter-picker-button search-filter-picker-button-standalone library-history-picker-button${pickerOpen ? " is-open" : ""}`}
               aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
               aria-haspopup="menu"
               aria-expanded={pickerOpen}
@@ -120,6 +118,9 @@ export function LibraryHistoryPanel({
               onClick={() => setPickerOpen((current) => !current)}
             >
               <SelectedMetricIcon size={18} aria-hidden="true" />
+              <span className="library-history-picker-button-label">
+                {t(`libraryDetail.history.metrics.${selectedMetricOption.id}`)}
+              </span>
             </button>
             {pickerOpen ? (
               <div

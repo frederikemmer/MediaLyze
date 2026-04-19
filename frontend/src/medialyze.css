@@ -686,6 +686,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.panel-title-row > * {
+  min-width: 0;
 }
 
 .async-panel-toggle-heading {
@@ -797,12 +802,16 @@
 
 .stat-card {
   min-height: 76px;
-  padding: 8px 14px 6px;
-  gap: 2px;
+  padding: 8px 14px 4px;
+  gap: 0;
 }
 
 .stat-card h3 {
-  line-height: 1.02;
+  line-height: 1;
+}
+
+.stat-card .eyebrow {
+  line-height: 1;
 }
 
 .metric-card-default {
@@ -1128,17 +1137,42 @@
 }
 
 .library-history-toolbar {
+  display: flex;
   width: auto;
   justify-self: end;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-left: 12px;
 }
 
 .library-history-chart-shell {
   height: 320px;
 }
 
+.library-history-picker-button {
+  width: auto;
+  min-width: 0;
+  max-width: min(100%, 18rem);
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 14px 0 12px;
+}
+
+.library-history-picker-button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .library-history-picker-popover {
   left: auto;
-  right: 0;
+  right: 4px;
+  min-width: 16rem;
+  max-width: min(100vw - 48px, 22rem);
+  overflow-x: hidden;
 }
 
 .comparison-chart-swap-button:hover,
@@ -2602,6 +2636,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .search-filter-picker-popover-scroll {
   max-height: 17.5rem;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }

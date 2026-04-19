@@ -804,8 +804,7 @@ function readHistoryMetricPreference(): LibraryHistoryMetricId {
     storedPreference === "resolution_mix" ||
     storedPreference === "average_bitrate" ||
     storedPreference === "average_audio_bitrate" ||
-    storedPreference === "average_duration_seconds" ||
-    storedPreference === "average_quality_score"
+    storedPreference === "average_duration_seconds"
   ) {
     return storedPreference;
   }
