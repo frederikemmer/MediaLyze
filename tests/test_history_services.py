@@ -25,9 +25,11 @@ from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.history_retention import apply_history_retention
 from backend.app.services.history_snapshots import (
+    build_library_history_snapshot,
     create_media_file_history_entry_if_changed,
     upsert_library_history_snapshot,
 )
+from backend.app.services.library_history_service import get_library_history
 from backend.app.services.history_storage import get_history_storage
 from backend.app.services.resolution_categories import default_resolution_categories
 
@@ -168,7 +170,222 @@ def test_upsert_library_history_snapshot_reuses_same_day_row() -> None:
     assert len(rows) == 2
     assert rows[0].source_scan_job_id == 2
     assert rows[0].snapshot["scan_delta"]["new_files"] == 2
+    assert rows[0].snapshot["trend_metrics"]["total_files"] == 1
+    assert rows[0].snapshot["trend_metrics"]["resolution_counts"]["4k"] == 1
     assert rows[1].source_scan_job_id == 3
+
+
+def test_build_library_history_snapshot_includes_trend_metrics() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            last_scan_at=datetime(2026, 3, 24, 10, 0, tzinfo=UTC),
+        )
+        db.add(library)
+        db.flush()
+        media_file = _build_media_file(library.id)
+        media_file.audio_streams[0].bit_rate = 768_000
+        db.add(media_file)
+        db.commit()
+
+        snapshot = build_library_history_snapshot(
+            db,
+            library,
+            scan_summary={"discovery": {"discovered_files": 4}, "changes": {"new_files": {"count": 1}}},
+        )
+
+    assert snapshot["trend_metrics"]["total_files"] == 1
+    assert snapshot["trend_metrics"]["resolution_counts"]["8k"] == 0
+    assert snapshot["trend_metrics"]["resolution_counts"]["4k"] == 1
+    assert snapshot["trend_metrics"]["average_bitrate"] == 12_000_000.0
+    assert snapshot["trend_metrics"]["average_audio_bitrate"] == 768_000.0
+    assert snapshot["trend_metrics"]["average_duration_seconds"] == 7200.0
+    assert snapshot["trend_metrics"]["average_quality_score"] == 8.0
+
+
+def test_build_library_history_snapshot_averages_ignore_null_values() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        null_only = MediaFile(
+            library_id=library.id,
+            relative_path="null-only.mkv",
+            filename="null-only.mkv",
+            extension="mkv",
+            size_bytes=1_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        null_only.media_format = MediaFormat(container_format="matroska", duration=None, bit_rate=None, probe_score=100)
+        null_only.video_streams = [VideoStream(stream_index=0, codec="h264", width=1920, height=1080, hdr_type=None)]
+        null_only.audio_streams = [AudioStream(stream_index=1, codec="aac", channels=2, language="en", bit_rate=None)]
+
+        with_values = MediaFile(
+            library_id=library.id,
+            relative_path="with-values.mkv",
+            filename="with-values.mkv",
+            extension="mkv",
+            size_bytes=2_000_000,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        with_values.media_format = MediaFormat(
+            container_format="matroska",
+            duration=5400.0,
+            bit_rate=9_000_000,
+            probe_score=100,
+        )
+        with_values.video_streams = [VideoStream(stream_index=0, codec="hevc", width=3840, height=2160, hdr_type="HDR10")]
+        with_values.audio_streams = [AudioStream(stream_index=1, codec="ac3", channels=6, language="en", bit_rate=512_000)]
+
+        db.add_all([null_only, with_values])
+        db.commit()
+
+        snapshot = build_library_history_snapshot(db, library)
+
+    assert snapshot["trend_metrics"]["total_files"] == 2
+    assert snapshot["trend_metrics"]["average_bitrate"] == 9_000_000.0
+    assert snapshot["trend_metrics"]["average_audio_bitrate"] == 512_000.0
+    assert snapshot["trend_metrics"]["average_duration_seconds"] == 5400.0
+    assert snapshot["trend_metrics"]["average_quality_score"] == 7.0
+
+
+def test_build_library_history_snapshot_returns_null_for_null_only_average_columns() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="null-only.mkv",
+            filename="null-only.mkv",
+            extension="mkv",
+            size_bytes=1_000_000,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        media_file.media_format = MediaFormat(container_format="matroska", duration=None, bit_rate=None, probe_score=100)
+        media_file.video_streams = [VideoStream(stream_index=0, codec="h264", width=1920, height=1080, hdr_type=None)]
+        media_file.audio_streams = [AudioStream(stream_index=1, codec="aac", channels=2, language="en", bit_rate=None)]
+        db.add(media_file)
+        db.commit()
+
+        snapshot = build_library_history_snapshot(db, library)
+
+    assert snapshot["trend_metrics"]["average_bitrate"] is None
+    assert snapshot["trend_metrics"]["average_audio_bitrate"] is None
+    assert snapshot["trend_metrics"]["average_duration_seconds"] is None
+    assert snapshot["trend_metrics"]["average_quality_score"] == 5.0
+
+
+def test_get_library_history_skips_legacy_rows_and_preserves_unknown_resolution_categories() -> None:
+    session_factory = _session_factory()
+    settings = Settings()
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                resolution_categories=[
+                    {"id": "4k", "label": "Ultra HD", "min_width": 3648, "min_height": 1520},
+                    {"id": "1080p", "label": "Full HD", "min_width": 1824, "min_height": 760},
+                    {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                ]
+            ),
+            settings,
+        )
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-03-22",
+                    captured_at=datetime(2026, 3, 22, 9, 0, tzinfo=UTC),
+                    snapshot={"file_count": 1},
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-03-23",
+                    captured_at=datetime(2026, 3, 23, 9, 0, tzinfo=UTC),
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 10,
+                            "resolution_counts": {"4k": 4, "legacy_hd": 6},
+                            "average_bitrate": 8_000_000,
+                            "average_audio_bitrate": 512_000,
+                            "average_duration_seconds": 5400,
+                            "average_quality_score": 7.3,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-03-24",
+                    captured_at=datetime(2026, 3, 24, 9, 0, tzinfo=UTC),
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 12,
+                            "resolution_counts": {"1080p": 8, "legacy_hd": 4},
+                            "average_bitrate": 9_000_000,
+                            "average_audio_bitrate": 640_000,
+                            "average_duration_seconds": 5600,
+                            "average_quality_score": 7.8,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        payload = get_library_history(db, library.id)
+
+    assert payload is not None
+    assert payload.oldest_snapshot_day == "2026-03-23"
+    assert payload.newest_snapshot_day == "2026-03-24"
+    assert [point.snapshot_day for point in payload.points] == ["2026-03-23", "2026-03-24"]
+    assert payload.points[0].trend_metrics.resolution_counts["legacy_hd"] == 6
+    assert [item.model_dump() for item in payload.resolution_categories] == [
+        {"id": "4k", "label": "Ultra HD"},
+        {"id": "1080p", "label": "Full HD"},
+        {"id": "sd", "label": "SD"},
+        {"id": "legacy_hd", "label": "legacy_hd"},
+    ]
 
 
 def test_get_history_storage_reports_bucket_usage_and_limits(tmp_path) -> None:

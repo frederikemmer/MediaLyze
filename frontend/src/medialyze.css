@@ -1068,6 +1068,14 @@
   gap: 0;
 }
 
+.library-history-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.library-history-chart-shell {
+  height: 320px;
+}
+
 .comparison-chart-swap-button:hover,
 .comparison-chart-swap-button:focus-visible {
   transform: none;
@@ -3218,6 +3226,10 @@ html[data-theme="dark"] {
       linear-gradient(145deg, rgba(46, 43, 39, 0.98), rgba(38, 32, 22, 0.96)),
       var(--panel-strong);
     border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .library-history-chart-shell {
+    min-height: 280px;
   }
 
   .metric-card-default {

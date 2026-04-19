@@ -15,6 +15,7 @@ from backend.app.models.entities import (
     ExternalSubtitle,
     JobStatus,
     Library,
+    LibraryHistory,
     LibraryType,
     MediaFile,
     MediaFormat,
@@ -26,6 +27,8 @@ from backend.app.models.entities import (
 )
 from backend.app.core.config import Settings
 from pathlib import Path
+from backend.app.schemas.app_settings import AppSettingsUpdate
+from backend.app.services.app_settings import update_app_settings
 
 
 def _build_test_app(db: Session) -> TestClient:
@@ -190,6 +193,101 @@ def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Comparison axes must use different fields"}
+
+
+def test_library_history_route_returns_enriched_points_and_resolved_labels() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                resolution_categories=[
+                    {"id": "4k", "label": "Ultra HD", "min_width": 3648, "min_height": 1520},
+                    {"id": "1080p", "label": "Full HD", "min_width": 1824, "min_height": 760},
+                    {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                ]
+            ),
+            Settings(),
+        )
+        library = Library(
+            name="History",
+            path="/tmp/library-history-route",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={"file_count": 3},
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-11",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 3,
+                            "resolution_counts": {"4k": 1, "legacy_hd": 2},
+                            "average_bitrate": 8000000,
+                            "average_audio_bitrate": 512000,
+                            "average_duration_seconds": 5400,
+                            "average_quality_score": 7.3,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-12",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 4,
+                            "resolution_counts": {"1080p": 4},
+                            "average_bitrate": 9000000,
+                            "average_audio_bitrate": 640000,
+                            "average_duration_seconds": 5600,
+                            "average_quality_score": 7.8,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["oldest_snapshot_day"] == "2026-04-11"
+    assert payload["newest_snapshot_day"] == "2026-04-12"
+    assert [point["snapshot_day"] for point in payload["points"]] == ["2026-04-11", "2026-04-12"]
+    assert payload["resolution_categories"] == [
+        {"id": "4k", "label": "Ultra HD"},
+        {"id": "1080p", "label": "Full HD"},
+        {"id": "sd", "label": "SD"},
+        {"id": "legacy_hd", "label": "legacy_hd"},
+    ]
+    assert payload["points"][0]["trend_metrics"]["resolution_counts"]["legacy_hd"] == 2
+
+
+def test_library_history_route_returns_404_for_unknown_library() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/libraries/999/history")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Library not found"}
 
 
 def test_paths_inspect_returns_404_outside_desktop_mode() -> None:

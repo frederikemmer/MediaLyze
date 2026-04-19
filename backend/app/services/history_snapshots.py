@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Float, and_, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
@@ -13,9 +13,18 @@ from backend.app.models.entities import (
     MediaFile,
     MediaFileHistory,
     MediaFileHistoryCaptureReason,
+    MediaFormat,
+    ScanStatus,
 )
+from backend.app.services.app_settings import get_app_settings
 from backend.app.services.library_service import get_library_summary
 from backend.app.services.media_service import serialize_media_file_detail
+from backend.app.services.numeric_distributions import (
+    audio_bitrate_value_expression,
+    bitrate_value_expression,
+    build_audio_bitrate_subquery,
+)
+from backend.app.services.video_queries import primary_video_streams_subquery
 from backend.app.utils.time import utc_now
 
 
@@ -65,6 +74,79 @@ def create_media_file_history_entry_if_changed(
     return True
 
 
+def _resolution_category_id_expression(primary_video_streams, resolution_categories):
+    max_edge = func.max(primary_video_streams.c.width, primary_video_streams.c.height)
+    min_edge = func.min(primary_video_streams.c.width, primary_video_streams.c.height)
+    return case(
+        *[
+            (
+                and_(max_edge >= category.min_width, min_edge >= category.min_height),
+                category.id,
+            )
+            for category in resolution_categories
+        ],
+        else_=resolution_categories[-1].id if resolution_categories else None,
+    )
+
+
+def _build_library_trend_metrics_snapshot(db: Session, library_id: int) -> dict:
+    resolution_categories = get_app_settings(db).resolution_categories
+    ready_files_filter = (
+        MediaFile.library_id == library_id,
+        MediaFile.scan_status == ScanStatus.ready,
+    )
+    total_files = db.scalar(
+        select(func.count(MediaFile.id)).where(*ready_files_filter)
+    ) or 0
+
+    resolution_counts = {category.id: 0 for category in resolution_categories}
+    primary_video_streams = primary_video_streams_subquery("library_history_primary_video_streams")
+    resolution_category_id = _resolution_category_id_expression(primary_video_streams, resolution_categories)
+    resolution_rows = db.execute(
+        select(
+            resolution_category_id.label("resolution_category_id"),
+            func.count(MediaFile.id).label("file_count"),
+        )
+        .select_from(MediaFile)
+        .join(primary_video_streams, primary_video_streams.c.media_file_id == MediaFile.id)
+        .where(*ready_files_filter)
+        .group_by(resolution_category_id)
+    ).all()
+    for category_id, file_count in resolution_rows:
+        if category_id:
+            resolution_counts[str(category_id)] = int(file_count or 0)
+
+    audio_bitrate_totals = build_audio_bitrate_subquery("library_history_audio_bitrate_totals")
+    audio_bitrate_expression = audio_bitrate_value_expression(audio_bitrate_totals)
+    averages = db.execute(
+        select(
+            func.avg(cast(bitrate_value_expression(), Float)).label("average_bitrate"),
+            func.avg(cast(audio_bitrate_expression, Float)).label("average_audio_bitrate"),
+            func.avg(cast(MediaFormat.duration, Float)).label("average_duration_seconds"),
+            func.avg(cast(MediaFile.quality_score, Float)).label("average_quality_score"),
+        )
+        .select_from(MediaFile)
+        .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
+        .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
+        .where(*ready_files_filter)
+    ).one()
+
+    return {
+        "total_files": int(total_files),
+        "resolution_counts": resolution_counts,
+        "average_bitrate": float(averages.average_bitrate) if averages.average_bitrate is not None else None,
+        "average_audio_bitrate": (
+            float(averages.average_audio_bitrate) if averages.average_audio_bitrate is not None else None
+        ),
+        "average_duration_seconds": (
+            float(averages.average_duration_seconds) if averages.average_duration_seconds is not None else None
+        ),
+        "average_quality_score": (
+            float(averages.average_quality_score) if averages.average_quality_score is not None else None
+        ),
+    }
+
+
 def build_library_history_snapshot(
     db: Session,
     library: Library,
@@ -91,6 +173,7 @@ def build_library_history_snapshot(
             "modified_files": ((changes.get("modified_files") or {}).get("count") or 0),
             "deleted_files": ((changes.get("deleted_files") or {}).get("count") or 0),
         },
+        "trend_metrics": _build_library_trend_metrics_snapshot(db, library.id),
     }
 
 

@@ -13,6 +13,7 @@ from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.history import HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
+from backend.app.schemas.library_history import LibraryHistoryResponse
 from backend.app.schemas.media import (
     DashboardResponse,
     MediaFileDetail,
@@ -35,6 +36,7 @@ from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
 from backend.app.services.history_storage import get_history_storage
+from backend.app.services.library_history_service import get_library_history
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -290,6 +292,14 @@ def library_duplicates(
         return list_library_duplicate_groups(db, library_id, offset=offset, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Library not found") from exc
+
+
+@router.get("/libraries/{library_id}/history", response_model=LibraryHistoryResponse)
+def library_history(library_id: int, db: Session = Depends(get_db_session)) -> LibraryHistoryResponse:
+    payload = get_library_history(db, library_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return payload
 
 
 @router.get("/libraries/{library_id}/scan-jobs", response_model=list[ScanJobRead])

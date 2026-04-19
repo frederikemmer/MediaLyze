@@ -26,6 +26,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
@@ -36,6 +37,7 @@ import {
   api,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type LibraryHistoryResponse,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileQualityScoreDetail,
@@ -43,6 +45,7 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
+import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
@@ -136,6 +139,9 @@ const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
 const DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-duplicates-collapsed";
+const HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-history-collapsed";
+const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
+const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
 const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
@@ -145,6 +151,7 @@ const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
+const libraryHistoryCache = new Map<string, LibraryHistoryResponse>();
 const libraryComparisonCache = new Map<string, ComparisonResponse>();
 const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
 const libraryFileListCache = new Map<string, CachedFileList>();
@@ -744,6 +751,34 @@ function readDuplicatePanelCollapsedPreference(): boolean {
   return storedPreference === "true";
 }
 
+function readHistoryPanelCollapsedPreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const storedPreference = window.localStorage.getItem(HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  if (storedPreference === null) {
+    return false;
+  }
+  return storedPreference === "true";
+}
+
+function readHistoryMetricPreference(): LibraryHistoryMetricId {
+  if (typeof window === "undefined") {
+    return DEFAULT_HISTORY_METRIC;
+  }
+  const storedPreference = window.localStorage.getItem(HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  if (
+    storedPreference === "resolution_mix" ||
+    storedPreference === "average_bitrate" ||
+    storedPreference === "average_audio_bitrate" ||
+    storedPreference === "average_duration_seconds" ||
+    storedPreference === "average_quality_score"
+  ) {
+    return storedPreference;
+  }
+  return DEFAULT_HISTORY_METRIC;
+}
+
 function buildCsvFallbackFilename(libraryName: string): string {
   const safeLibraryName = libraryName.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Library";
   const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -765,6 +800,7 @@ export function LibraryDetailPage() {
   );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
+  const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
   const [savedStatisticLayout, setSavedStatisticLayout] = useState(() =>
@@ -783,10 +819,12 @@ export function LibraryDetailPage() {
   const [filesTotal, setFilesTotal] = useState(0);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
@@ -806,6 +844,12 @@ export function LibraryDetailPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
     readDuplicatePanelCollapsedPreference(),
+  );
+  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
+    readHistoryPanelCollapsedPreference(),
+  );
+  const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
+    readHistoryMetricPreference(),
   );
   const [qualityScoreDetails, setQualityScoreDetails] = useState<Record<number, MediaFileQualityScoreDetail>>({});
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
@@ -1022,6 +1066,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
@@ -1214,6 +1259,35 @@ export function LibraryDetailPage() {
     }
   });
 
+  const loadLibraryHistory = useEffectEvent(async (showLoading = false) => {
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsHistoryLoading(true);
+    }
+
+    try {
+      const payload = await api.libraryHistory(libraryId, controller.signal);
+      libraryHistoryCache.set(libraryId, payload);
+      setLibraryHistory(payload);
+      setHistoryError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setHistoryError((reason as Error).message);
+    } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsHistoryLoading(false);
+      }
+    }
+  });
+
   const loadDuplicateGroups = useEffectEvent(async (showLoading = false) => {
     duplicateGroupsAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1365,6 +1439,14 @@ export function LibraryDetailPage() {
   }, [isDuplicatesPanelCollapsed]);
 
   useEffect(() => {
+    window.localStorage.setItem(HISTORY_PANEL_COLLAPSE_STORAGE_KEY, isHistoryPanelCollapsed ? "true" : "false");
+  }, [isHistoryPanelCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+  }, [selectedHistoryMetric]);
+
+  useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
       const resizeState = resizeStateRef.current;
       if (!resizeState) {
@@ -1491,20 +1573,25 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
+    const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
 
     setLibrarySummary(cachedSummary);
     setLibraryStatistics(cachedStatistics);
+    setLibraryHistory(cachedHistory);
     setDuplicateGroups(cachedDuplicateGroups);
     setSummaryError(null);
     setStatisticsError(null);
+    setHistoryError(null);
     setDuplicateGroupsError(null);
     setIsSummaryLoading(cachedSummary === null);
     setIsStatisticsLoading(cachedStatistics === null);
+    setIsHistoryLoading(cachedHistory === null);
     setIsDuplicateGroupsLoading(cachedDuplicateGroups === null);
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryStatistics(cachedStatistics === null);
+    void loadLibraryHistory(cachedHistory === null);
     void loadDuplicateGroups(cachedDuplicateGroups === null);
   }, [libraryId]);
 
@@ -1636,6 +1723,7 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
+      libraryHistoryCache.delete(libraryId);
       for (const { item } of comparisonPanels) {
         const selection = item.comparisonSelection ?? getComparisonSelection("library");
         libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
@@ -1646,6 +1734,7 @@ export function LibraryDetailPage() {
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
+      void loadLibraryHistory(false);
       void loadDuplicateGroups(false);
       void loadFilesPage(0, false, fileQueryKey);
       syncComparisonPanels(true);
@@ -1662,6 +1751,7 @@ export function LibraryDetailPage() {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
+      historyAbortRef.current?.abort();
       for (const controller of comparisonAbortRef.current.values()) {
         controller.abort();
       }
@@ -2059,6 +2149,17 @@ export function LibraryDetailPage() {
             );
           })}
       </div>
+
+      <LibraryHistoryPanel
+        history={libraryHistory}
+        loading={isHistoryLoading && !libraryHistory && !historyError}
+        error={historyError}
+        selectedMetric={selectedHistoryMetric}
+        onChangeMetric={setSelectedHistoryMetric}
+        collapsed={isHistoryPanelCollapsed}
+        onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
+        currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+      />
 
       <AsyncPanel
         title={t("libraryDetail.duplicates.title")}

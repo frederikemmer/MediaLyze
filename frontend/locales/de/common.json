@@ -356,6 +356,25 @@
       "searchLabel": "Duplikate durchsuchen",
       "clearSearch": "Duplikat-Suche loeschen"
     },
+    "history": {
+      "title": "Library-Verlauf",
+      "subtitle": "Taegliche Trend-Snapshots erfolgreicher Scans",
+      "empty": "Verlaufstrends erscheinen nach dem naechsten erfolgreichen Scan.",
+      "controls": {
+        "metric": "Verlaufsmetrik auswaehlen"
+      },
+      "tooltip": {
+        "total": "Gesamt"
+      },
+      "metrics": {
+        "resolution_mix": "Aufloesungsmix",
+        "average_bitrate": "Durchschnittliche Bitrate",
+        "average_audio_bitrate": "Durchschnittliche Audio-Bitrate",
+        "average_duration_seconds": "Durchschnittliche Dauer",
+        "average_quality_score": "Durchschnittlicher Qualitaets-Score"
+      },
+      "unknownLegacyResolutionCategory": "Unbekannte Legacy-Kategorie: {{id}}"
+    },
     "renderedEntries": "{{rendered}} von {{total}} Einträgen gerendert",
     "loadMore": "{{count}} weitere laden",
     "resizeColumnAria": "Spaltenbreite für {{column}} anpassen",

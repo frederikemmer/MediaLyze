@@ -356,6 +356,25 @@
       "searchLabel": "Search duplicates",
       "clearSearch": "Clear duplicate search"
     },
+    "history": {
+      "title": "Library history",
+      "subtitle": "Daily trend snapshots from successful scans",
+      "empty": "History trends will appear after the next successful scan.",
+      "controls": {
+        "metric": "Select history metric"
+      },
+      "tooltip": {
+        "total": "Total"
+      },
+      "metrics": {
+        "resolution_mix": "Resolution mix",
+        "average_bitrate": "Average bitrate",
+        "average_audio_bitrate": "Average audio bitrate",
+        "average_duration_seconds": "Average duration",
+        "average_quality_score": "Average quality score"
+      },
+      "unknownLegacyResolutionCategory": "Unknown legacy category: {{id}}"
+    },
     "renderedEntries": "{{rendered}} of {{total}} entries rendered",
     "loadMore": "Load {{count}} more",
     "resizeColumnAria": "Resize column {{column}}",

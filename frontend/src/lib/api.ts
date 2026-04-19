@@ -89,6 +89,34 @@ export type ResolutionCategory = {
   min_height: number;
 };
 
+export type LibraryHistoryTrendMetrics = {
+  total_files: number;
+  resolution_counts: Record<string, number>;
+  average_bitrate: number | null;
+  average_audio_bitrate: number | null;
+  average_duration_seconds: number | null;
+  average_quality_score: number | null;
+};
+
+export type LibraryHistoryPoint = {
+  snapshot_day: string;
+  trend_metrics: LibraryHistoryTrendMetrics;
+};
+
+export type LibraryHistoryResolutionCategory = {
+  id: string;
+  label: string;
+};
+
+export type LibraryHistoryResponse = {
+  generated_at: string;
+  library_id: number;
+  oldest_snapshot_day: string | null;
+  newest_snapshot_day: string | null;
+  resolution_categories: LibraryHistoryResolutionCategory[];
+  points: LibraryHistoryPoint[];
+};
+
 export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
@@ -704,6 +732,8 @@ export const api = {
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
   libraryStatistics: (id: string | number, signal?: AbortSignal) =>
     request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
+  libraryHistory: (id: string | number, signal?: AbortSignal) =>
+    request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
   libraryComparison: (
     id: string | number,
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
