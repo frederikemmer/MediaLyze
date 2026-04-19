@@ -113,6 +113,29 @@
     "comparisonScatterPointLimit": "Scatter plot points",
     "comparisonScatterPointLimitTooltipAria": "Explain scatter plot point sampling",
     "comparisonScatterPointLimitTooltip": "Caps how many points MediaLyze returns for comparison scatter plots.\n\nHeatmaps and bar charts stay exact; only scatter plots are sampled for readability and browser performance.\n\nWarning: very high values can noticeably increase browser memory use and make large comparison views sluggish.\nMaximum: {{max}}.",
+    "historyRetention": {
+      "title": "History retention",
+      "loading": "Loading storage forecast…",
+      "daysLabel": "Retention days",
+      "storageLimitLabel": "Storage limit (GB)",
+      "zeroUnlimited": "0 = unlimited",
+      "currentStorage": "Current storage",
+      "averagePerDay": "Average per day",
+      "projected30Days": "Projected 30 days",
+      "projectedConfigured": "Projected configured window",
+      "reclaimableNote": "{{reclaimable}} can be reclaimed from the database file. Physical compaction may wait until scans are idle.",
+      "buckets": {
+        "file_history": {
+          "title": "File history"
+        },
+        "library_history": {
+          "title": "Library history"
+        },
+        "scan_history": {
+          "title": "Scan history"
+        }
+      }
+    },
     "featureFlagsTitle": "Feature flags",
     "featureFlags": {
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",

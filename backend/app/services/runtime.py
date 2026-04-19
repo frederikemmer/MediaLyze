@@ -14,6 +14,11 @@ from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import JobStatus, Library, ScanJob, ScanMode, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings
+from backend.app.services.history_retention import (
+    HistoryRetentionResult,
+    apply_history_retention,
+    run_pending_history_compaction,
+)
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.utils.time import utc_now
 from backend.app.services.scanner import (
@@ -44,6 +49,7 @@ class ScanRuntimeManager:
         self.watch_trigger_buffers: dict[int, dict] = {}
         self.active_library_ids: set[int] = set()
         self.submitted_job_ids: set[int] = set()
+        self.history_compaction_pending = False
         self.started = False
 
     def start(self) -> None:
@@ -53,8 +59,10 @@ class ScanRuntimeManager:
                 return
             self.scheduler.start()
             self.started = True
+        self._ensure_history_maintenance_job()
         self._recover_orphaned_jobs()
         self.sync_all_libraries()
+        self.run_history_retention()
 
     def stop(self) -> None:
         with self.lock:
@@ -219,10 +227,14 @@ class ScanRuntimeManager:
         try:
             execute_scan_job(job_id, self.settings)
         finally:
+            should_attempt_compaction = False
             with self.lock:
                 self.submitted_job_ids.discard(job_id)
                 self.active_library_ids.discard(library_id)
+                should_attempt_compaction = self.history_compaction_pending and not self.active_library_ids
             self._submit_next_active_job(library_id)
+            if should_attempt_compaction:
+                self.run_pending_history_compaction()
 
     def cancel_active_jobs(self) -> list[int]:
         db = SessionLocal()
@@ -337,6 +349,17 @@ class ScanRuntimeManager:
             coalesce=True,
         )
 
+    def _ensure_history_maintenance_job(self) -> None:
+        self.scheduler.add_job(
+            self.run_history_retention,
+            trigger="interval",
+            hours=24,
+            id="history-retention-maintenance",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     def _ensure_watch_observer(self, library: Library) -> None:
         library_path = str(library.path)
         if not library.path or not library.path.strip():
@@ -413,6 +436,29 @@ class ScanRuntimeManager:
     @staticmethod
     def _scheduled_job_id(library_id: int) -> str:
         return f"library-schedule-{library_id}"
+
+    def run_history_retention(self) -> HistoryRetentionResult:
+        db = SessionLocal()
+        try:
+            result = apply_history_retention(db, self.settings)
+        finally:
+            db.close()
+
+        with self.lock:
+            self.history_compaction_pending = result.compaction_deferred
+        return result
+
+    def run_pending_history_compaction(self) -> bool:
+        db = SessionLocal()
+        try:
+            completed = run_pending_history_compaction(db)
+        finally:
+            db.close()
+
+        if completed:
+            with self.lock:
+                self.history_compaction_pending = False
+        return completed
 
     def _request_watch_scan(self, library_id: int) -> None:
         with self.lock:

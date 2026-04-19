@@ -137,6 +137,16 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_external_subtitles_media_file_id ON external_subtitles (media_file_id)",
     "CREATE INDEX IF NOT EXISTS ix_scan_jobs_status ON scan_jobs (status)",
     "CREATE INDEX IF NOT EXISTS ix_scan_jobs_library_id ON scan_jobs (library_id)",
+    (
+        "CREATE INDEX IF NOT EXISTS ix_media_file_history_library_path_captured_at "
+        "ON media_file_history (library_id, relative_path, captured_at)"
+    ),
+    "CREATE INDEX IF NOT EXISTS ix_media_file_history_captured_at ON media_file_history (captured_at)",
+    (
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_library_history_library_snapshot_day "
+        "ON library_history (library_id, snapshot_day)"
+    ),
+    "CREATE INDEX IF NOT EXISTS ix_library_history_captured_at ON library_history (captured_at)",
 )
 
 

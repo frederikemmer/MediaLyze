@@ -63,6 +63,11 @@ class ScanTriggerSource(str, Enum):
     watchdog = "watchdog"
 
 
+class MediaFileHistoryCaptureReason(str, Enum):
+    scan_analysis = "scan_analysis"
+    quality_recompute = "quality_recompute"
+
+
 class Library(TimestampMixin, Base):
     __tablename__ = "libraries"
 
@@ -91,6 +96,16 @@ class Library(TimestampMixin, Base):
         passive_deletes=True,
     )
     scan_jobs: Mapped[list[ScanJob]] = relationship(
+        back_populates="library",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    media_file_history_entries: Mapped[list[MediaFileHistory]] = relationship(
+        back_populates="library",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    library_history_entries: Mapped[list[LibraryHistory]] = relationship(
         back_populates="library",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -165,6 +180,11 @@ class MediaFile(Base):
     external_subtitles: Mapped[list[ExternalSubtitle]] = relationship(
         back_populates="media_file",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    history_entries: Mapped[list[MediaFileHistory]] = relationship(
+        primaryjoin="foreign(MediaFileHistory.media_file_id) == MediaFile.id",
+        cascade="save-update, merge",
         passive_deletes=True,
     )
 
@@ -305,3 +325,43 @@ class ScanJob(Base):
     scan_summary: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="scan_jobs")
+
+
+class MediaFileHistory(Base):
+    __tablename__ = "media_file_history"
+    __table_args__ = (
+        Index("ix_media_file_history_library_path_captured_at", "library_id", "relative_path", "captured_at"),
+        Index("ix_media_file_history_captured_at", "captured_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    media_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    capture_reason: Mapped[MediaFileHistoryCaptureReason] = mapped_column(
+        SqlEnum(MediaFileHistoryCaptureReason, native_enum=False),
+        nullable=False,
+    )
+    snapshot_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+    library: Mapped[Library] = relationship(back_populates="media_file_history_entries")
+
+
+class LibraryHistory(Base):
+    __tablename__ = "library_history"
+    __table_args__ = (
+        Index("ix_library_history_library_snapshot_day", "library_id", "snapshot_day", unique=True),
+        Index("ix_library_history_captured_at", "captured_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    snapshot_day: Mapped[str] = mapped_column(String(10), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    source_scan_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+    library: Mapped[Library] = relationship(back_populates="library_history_entries")

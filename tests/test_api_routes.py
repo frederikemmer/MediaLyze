@@ -39,6 +39,7 @@ def _build_test_app(db: Session) -> TestClient:
             "sync_library": lambda self, library_id: None,
             "refresh_worker_settings": lambda self: None,
             "request_quality_recompute": lambda self, library_id: None,
+            "run_history_retention": lambda self: None,
             "cancel_active_jobs": lambda self: [],
         },
     )()
@@ -331,6 +332,45 @@ def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None
     payload = response.json()[0]
     assert payload["started_at"] == "2026-03-24T04:06:00Z"
     assert payload["finished_at"] == "2026-03-24T04:10:00Z"
+
+
+def test_history_storage_route_returns_storage_payload() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.completed,
+                job_type="incremental",
+                finished_at=datetime(2026, 3, 24, 4, 10, tzinfo=UTC),
+                trigger_details={"reason": "user_requested"},
+                scan_summary={"changes": {"new_files": {"count": 1}}},
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/history-storage")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generated_at"].endswith("Z")
+    assert payload["database_file_bytes"] >= 0
+    assert payload["reclaimable_file_bytes"] >= 0
+    assert payload["categories"]["scan_history"]["entry_count"] == 1
+    assert payload["categories"]["scan_history"]["current_estimated_bytes"] > 0
 
 
 def test_library_duplicates_route_returns_404_for_unknown_library() -> None:

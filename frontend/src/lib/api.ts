@@ -374,14 +374,51 @@ export type AppSettings = {
   resolution_categories?: ResolutionCategory[];
   scan_performance?: {
     scan_worker_count: number;
-    parallel_scan_jobs: number;
-    comparison_scatter_point_limit: number;
+      parallel_scan_jobs: number;
+      comparison_scatter_point_limit: number;
+  };
+  history_retention?: {
+    file_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
+    library_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
+    scan_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
   };
   feature_flags: {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
     unlimited_panel_size: boolean;
+  };
+};
+
+export type HistoryStorageCategory = {
+  entry_count: number;
+  current_estimated_bytes: number;
+  average_daily_bytes: number;
+  projected_bytes_30d: number;
+  projected_bytes_for_configured_days: number | null;
+  days_limit: number;
+  storage_limit_bytes: number;
+  oldest_recorded_at: string | null;
+  newest_recorded_at: string | null;
+};
+
+export type HistoryStorage = {
+  generated_at: string;
+  database_file_bytes: number;
+  reclaimable_file_bytes: number;
+  categories: {
+    file_history: HistoryStorageCategory;
+    library_history: HistoryStorageCategory;
+    scan_history: HistoryStorageCategory;
   };
 };
 
@@ -638,6 +675,7 @@ export const api = {
       { signal: params.signal },
     ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
+  historyStorage: () => request<HistoryStorage>("/history-storage"),
   recentScanJobs: (params?: {
     limit?: number;
     sinceHours?: number;
@@ -732,6 +770,20 @@ export const api = {
       scan_worker_count?: number;
       parallel_scan_jobs?: number;
       comparison_scatter_point_limit?: number;
+    };
+    history_retention?: {
+      file_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
+      library_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
+      scan_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
     };
     feature_flags?: {
       show_analyzed_files_csv_export?: boolean;

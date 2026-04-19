@@ -133,6 +133,9 @@ def test_start_does_not_resume_preexisting_active_jobs(monkeypatch) -> None:
         def start(self) -> None:
             self.running = True
 
+        def add_job(self, func, **kwargs):
+            return None
+
         def get_jobs(self):
             return []
 
@@ -199,6 +202,9 @@ def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
         def start(self) -> None:
             self.running = True
 
+        def add_job(self, func, **kwargs):
+            return None
+
         def get_jobs(self):
             return []
 
@@ -225,6 +231,55 @@ def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
         jobs = db.scalars(select(ScanJob).order_by(ScanJob.id.asc())).all()
 
     assert jobs == []
+
+
+def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    added_jobs: list[dict] = []
+    retention_calls: list[str] = []
+
+    class SchedulerStub:
+        running = False
+
+        def start(self) -> None:
+            self.running = True
+
+        def add_job(self, func, **kwargs):
+            added_jobs.append({"func": func, "kwargs": kwargs})
+
+        def get_jobs(self):
+            return []
+
+        def get_job(self, job_id):
+            return None
+
+        def shutdown(self, wait=False) -> None:
+            self.running = False
+
+    class ExecutorStub:
+        def submit(self, fn, job_id: int, library_id: int) -> None:
+            return None
+
+        def shutdown(self, wait=False, cancel_futures=True) -> None:
+            return None
+
+    monkeypatch.setattr(
+        runtime_module,
+        "apply_history_retention",
+        lambda db, settings: retention_calls.append("called") or runtime_module.HistoryRetentionResult(),
+    )
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+    runtime.executor = ExecutorStub()
+
+    runtime.start()
+
+    assert retention_calls == ["called"]
+    assert added_jobs[0]["func"] == runtime.run_history_retention
+    assert added_jobs[0]["kwargs"]["id"] == "history-retention-maintenance"
 
 
 def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch, tmp_path) -> None:

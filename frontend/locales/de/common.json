@@ -113,6 +113,29 @@
     "comparisonScatterPointLimit": "Scatter-Plot-Punkte",
     "comparisonScatterPointLimitTooltipAria": "Sampling fuer Scatter-Plots erklaeren",
     "comparisonScatterPointLimitTooltip": "Begrenzt, wie viele Punkte MediaLyze fuer Vergleichs-Scatter-Plots zurueckliefert.\n\nHeatmaps und Saeulendiagramme bleiben exakt; nur Scatter-Plots werden aus Lesbarkeits- und Performance-Gruenden gesampelt.\n\nWarnung: sehr hohe Werte koennen den Speicherverbrauch im Browser merklich erhoehen und grosse Vergleichsansichten traeger machen.\nMaximum: {{max}}.",
+    "historyRetention": {
+      "title": "Verlaufsaufbewahrung",
+      "loading": "Speicherprognose wird geladen…",
+      "daysLabel": "Aufbewahrung in Tagen",
+      "storageLimitLabel": "Speicherlimit (GB)",
+      "zeroUnlimited": "0 = unbegrenzt",
+      "currentStorage": "Aktueller Speicher",
+      "averagePerDay": "Durchschnitt pro Tag",
+      "projected30Days": "Prognose fuer 30 Tage",
+      "projectedConfigured": "Prognose fuer das konfigurierte Fenster",
+      "reclaimableNote": "{{reclaimable}} koennen aus der Datenbankdatei freigegeben werden. Die physische Komprimierung kann bis zum Leerlauf aktiver Scans warten.",
+      "buckets": {
+        "file_history": {
+          "title": "Dateiverlauf"
+        },
+        "library_history": {
+          "title": "Library-Verlauf"
+        },
+        "scan_history": {
+          "title": "Scan-Verlauf"
+        }
+      }
+    },
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",

@@ -11,6 +11,7 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
+from backend.app.schemas.history import HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import (
     DashboardResponse,
@@ -33,6 +34,7 @@ from backend.app.services.app_settings import get_app_settings as load_app_setti
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.history_storage import get_history_storage
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -171,6 +173,14 @@ def recent_scan_jobs(
     )
 
 
+@router.get("/history-storage", response_model=HistoryStorageRead)
+def history_storage(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> HistoryStorageRead:
+    return get_history_storage(db, settings)
+
+
 @router.get("/scan-jobs/{job_id}", response_model=ScanJobDetailRead)
 def scan_job_detail(job_id: int, db: Session = Depends(get_db_session)) -> ScanJobDetailRead:
     payload = get_scan_job_detail(db, job_id)
@@ -194,11 +204,14 @@ def app_settings_update(
     settings: Settings = Depends(get_app_settings),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> AppSettingsRead:
+    current_settings = load_app_settings(db, settings)
     try:
         updated_settings, recompute_library_ids = update_app_settings(db, payload, settings, include_effects=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     runtime.refresh_worker_settings()
+    if updated_settings.history_retention != current_settings.history_retention:
+        runtime.run_history_retention()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings

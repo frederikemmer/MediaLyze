@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - add a `full scan` header action to the `Configured libraries` settings panel so all configured libraries can be queued for a manual full rescan at once
 - move configured-library path and summary metadata into a title tooltip in Settings and reposition the library type / scan-mode badges beside the title with responsive wrapping
 - add a per-library dashboard visibility toggle in Settings so selected libraries can be excluded from dashboard totals, distributions, and comparison panels
+- add configurable history retention and storage budgeting for `file_history`, `library_history`, and `scan_history`, including persisted per-file snapshot history, daily library snapshots, oldest-first cleanup, and a new `GET /api/history-storage` forecast endpoint
 
 ## v0.7.1
 

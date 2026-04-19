@@ -70,8 +70,12 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     subtitle_columns = {column["name"] for column in inspector.get_columns("subtitle_streams")}
     external_subtitle_columns = {column["name"] for column in inspector.get_columns("external_subtitles")}
     scan_job_columns = {column["name"] for column in inspector.get_columns("scan_jobs")}
+    media_file_history_columns = {column["name"] for column in inspector.get_columns("media_file_history")}
+    library_history_columns = {column["name"] for column in inspector.get_columns("library_history")}
 
     assert "app_settings" in inspector.get_table_names()
+    assert "media_file_history" in inspector.get_table_names()
+    assert "library_history" in inspector.get_table_names()
     assert {"last_scan_at", "scan_mode", "duplicate_detection_mode", "scan_config"}.issubset(library_columns)
     assert {
         "last_seen_at",
@@ -88,6 +92,19 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     assert {"codec", "language", "default_flag", "forced_flag", "subtitle_type"}.issubset(subtitle_columns)
     assert {"language", "format"}.issubset(external_subtitle_columns)
     assert {"trigger_source", "trigger_details", "scan_summary"}.issubset(scan_job_columns)
+    assert {
+        "library_id",
+        "media_file_id",
+        "relative_path",
+        "filename",
+        "captured_at",
+        "capture_reason",
+        "snapshot_hash",
+        "snapshot",
+    }.issubset(media_file_history_columns)
+    assert {"library_id", "snapshot_day", "captured_at", "source_scan_job_id", "snapshot"}.issubset(
+        library_history_columns
+    )
 
 
 def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
@@ -147,6 +164,37 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
                 """
             )
         )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE media_file_history (
+                    id INTEGER PRIMARY KEY,
+                    library_id INTEGER NOT NULL,
+                    media_file_id INTEGER,
+                    relative_path VARCHAR(2048) NOT NULL,
+                    filename VARCHAR(512) NOT NULL,
+                    captured_at DATETIME NOT NULL,
+                    capture_reason VARCHAR(32) NOT NULL,
+                    snapshot_hash VARCHAR(128) NOT NULL,
+                    snapshot JSON NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE library_history (
+                    id INTEGER PRIMARY KEY,
+                    library_id INTEGER NOT NULL,
+                    snapshot_day VARCHAR(10) NOT NULL,
+                    captured_at DATETIME NOT NULL,
+                    source_scan_job_id INTEGER,
+                    snapshot JSON NOT NULL
+                )
+                """
+            )
+        )
 
     init_db(engine)
 
@@ -154,6 +202,8 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     subtitle_index_names = {index["name"] for index in inspect(engine).get_indexes("subtitle_streams")}
     external_subtitle_index_names = {index["name"] for index in inspect(engine).get_indexes("external_subtitles")}
     scan_job_index_names = {index["name"] for index in inspect(engine).get_indexes("scan_jobs")}
+    media_file_history_index_names = {index["name"] for index in inspect(engine).get_indexes("media_file_history")}
+    library_history_index_names = {index["name"] for index in inspect(engine).get_indexes("library_history")}
 
     assert "ix_media_files_library_relative_path" in index_names
     assert "ix_media_files_scan_status" in index_names
@@ -171,6 +221,10 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     assert "ix_external_subtitles_media_file_id" in external_subtitle_index_names
     assert "ix_scan_jobs_status" in scan_job_index_names
     assert "ix_scan_jobs_library_id" in scan_job_index_names
+    assert "ix_media_file_history_library_path_captured_at" in media_file_history_index_names
+    assert "ix_media_file_history_captured_at" in media_file_history_index_names
+    assert "ix_library_history_library_snapshot_day" in library_history_index_names
+    assert "ix_library_history_captured_at" in library_history_index_names
 
 
 def test_sqlite_utc_datetime_roundtrip_restores_utc_tzinfo() -> None:

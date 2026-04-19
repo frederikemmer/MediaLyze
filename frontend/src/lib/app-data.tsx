@@ -37,12 +37,19 @@ const DEFAULT_SCAN_PERFORMANCE = {
   comparison_scatter_point_limit: 5000,
 };
 
+const DEFAULT_HISTORY_RETENTION = {
+  file_history: { days: 90, storage_limit_gb: 0 },
+  library_history: { days: 365, storage_limit_gb: 0 },
+  scan_history: { days: 30, storage_limit_gb: 0 },
+};
+
 const DEFAULT_APP_SETTINGS: AppSettings = {
   ignore_patterns: [],
   user_ignore_patterns: [],
   default_ignore_patterns: [],
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   scan_performance: DEFAULT_SCAN_PERFORMANCE,
+  history_retention: DEFAULT_HISTORY_RETENTION,
   feature_flags: {
     show_analyzed_files_csv_export: false,
     show_full_width_app_shell: false,
@@ -63,6 +70,26 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       comparison_scatter_point_limit:
         payload?.scan_performance?.comparison_scatter_point_limit ??
         DEFAULT_SCAN_PERFORMANCE.comparison_scatter_point_limit,
+    },
+    history_retention: {
+      file_history: {
+        days: payload?.history_retention?.file_history?.days ?? DEFAULT_HISTORY_RETENTION.file_history.days,
+        storage_limit_gb:
+          payload?.history_retention?.file_history?.storage_limit_gb ??
+          DEFAULT_HISTORY_RETENTION.file_history.storage_limit_gb,
+      },
+      library_history: {
+        days: payload?.history_retention?.library_history?.days ?? DEFAULT_HISTORY_RETENTION.library_history.days,
+        storage_limit_gb:
+          payload?.history_retention?.library_history?.storage_limit_gb ??
+          DEFAULT_HISTORY_RETENTION.library_history.storage_limit_gb,
+      },
+      scan_history: {
+        days: payload?.history_retention?.scan_history?.days ?? DEFAULT_HISTORY_RETENTION.scan_history.days,
+        storage_limit_gb:
+          payload?.history_retention?.scan_history?.storage_limit_gb ??
+          DEFAULT_HISTORY_RETENTION.scan_history.storage_limit_gb,
+      },
     },
     feature_flags: {
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,
