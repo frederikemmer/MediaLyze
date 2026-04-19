@@ -1558,6 +1558,43 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   flex-wrap: wrap;
 }
 
+.history-retention-primary-button {
+  box-shadow: 0 6px 14px rgba(255, 107, 61, 0.08);
+}
+
+.history-retention-primary-button:hover:not(:disabled),
+.history-retention-primary-button:focus-visible:not(:disabled) {
+  box-shadow: 0 8px 16px rgba(255, 107, 61, 0.1);
+}
+
+.history-retention-panel-content {
+  gap: 12px;
+}
+
+.history-retention-tables {
+  display: grid;
+  gap: 12px;
+}
+
+.history-retention-table-shell {
+  overflow-x: auto;
+}
+
+.history-retention-table th,
+.history-retention-table td {
+  white-space: nowrap;
+}
+
+.history-retention-table tbody th {
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.history-retention-input {
+  min-width: 7.5rem;
+}
+
 .history-reconstruction-progress {
   display: grid;
   gap: 10px;

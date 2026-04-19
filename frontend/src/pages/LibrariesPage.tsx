@@ -15,7 +15,6 @@ import {
   type HistoryReconstructionStatus,
   type HistoryReconstructionResult,
   type HistoryStorage,
-  type HistoryStorageCategory,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -314,6 +313,11 @@ function normalizeHistoryRetentionStorageInput(value: string, fallback: number):
 }
 
 type HistoryRetentionBucketKey = keyof typeof DEFAULT_HISTORY_RETENTION;
+const HISTORY_RETENTION_BUCKETS: HistoryRetentionBucketKey[] = [
+  "file_history",
+  "library_history",
+  "scan_history",
+];
 
 type HistoryRetentionInputs = Record<
   HistoryRetentionBucketKey,
@@ -2083,65 +2087,8 @@ export function LibrariesPage() {
     );
   }
 
-  function renderHistoryRetentionRow(
-    bucket: HistoryRetentionBucketKey,
-    category: HistoryStorageCategory | undefined,
-  ) {
-    const baseKey = `libraries.historyRetention.buckets.${bucket}`;
-    return (
-      <div className="app-settings-section" key={bucket}>
-        <p className="app-settings-section-title">{t(`${baseKey}.title`)}</p>
-        <div className="app-settings-performance-grid">
-          <div className="field">
-            <label htmlFor={`${bucket}-history-days`}>{t("libraries.historyRetention.daysLabel")}</label>
-            <input
-              id={`${bucket}-history-days`}
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={historyRetentionInputs[bucket].days}
-              disabled={isSavingHistoryRetention || !appSettingsLoaded}
-              onChange={(event) => updateHistoryRetentionInput(bucket, "days", event.target.value)}
-              onBlur={() => void saveHistoryRetention(bucket)}
-            />
-            <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
-          </div>
-          <div className="field">
-            <label htmlFor={`${bucket}-history-gb`}>{t("libraries.historyRetention.storageLimitLabel")}</label>
-            <input
-              id={`${bucket}-history-gb`}
-              type="number"
-              min="0"
-              step="0.1"
-              inputMode="decimal"
-              value={historyRetentionInputs[bucket].storage_limit_gb}
-              disabled={isSavingHistoryRetention || !appSettingsLoaded}
-              onChange={(event) => updateHistoryRetentionInput(bucket, "storage_limit_gb", event.target.value)}
-              onBlur={() => void saveHistoryRetention(bucket)}
-            />
-            <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
-          </div>
-        </div>
-        <div className="scan-log-summary-grid">
-          <div className="scan-log-stat">
-            <strong>{formatBytes(category?.current_estimated_bytes ?? 0)}</strong>
-            <span>{t("libraries.historyRetention.currentStorage")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{formatBytes(category?.average_daily_bytes ?? 0)}</strong>
-            <span>{t("libraries.historyRetention.averagePerDay")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{formatBytes(category?.projected_bytes_30d ?? 0)}</strong>
-            <span>{t("libraries.historyRetention.projected30Days")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{formatHistoryProjection(category?.projected_bytes_for_configured_days)}</strong>
-            <span>{t("libraries.historyRetention.projectedConfigured")}</span>
-          </div>
-        </div>
-      </div>
-    );
+  function historyRetentionBucketTitle(bucket: HistoryRetentionBucketKey) {
+    return t(`libraries.historyRetention.buckets.${bucket}.title`);
   }
 
   function formatHistoryReconstructionStatus(result: HistoryReconstructionResult) {
@@ -2740,7 +2687,7 @@ export function LibrariesPage() {
             collapseActions={
               <button
                 type="button"
-                className="small"
+                className="small history-retention-primary-button"
                 disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
                 onClick={() => void runFullScanForAllLibraries()}
               >
@@ -3205,11 +3152,11 @@ export function LibrariesPage() {
 
           <AsyncPanel
             title={t("libraries.historyRetention.title")}
-            titleAddon={
+            collapseActions={
               <div className="history-retention-title-actions">
                 <button
                   type="button"
-                  className="secondary"
+                  className="history-retention-primary-button"
                   onClick={() => void reconstructHistory()}
                   disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
                 >
@@ -3230,12 +3177,91 @@ export function LibrariesPage() {
               bodyId: "history-retention-panel-body",
             }}
           >
-            <div className="settings-sidebar-stack">
+            <div className="settings-sidebar-stack history-retention-panel-content">
               {isLoadingHistoryStorage ? <p className="field-hint">{t("libraries.historyRetention.loading")}</p> : null}
               {historyStorageError ? <div className="alert">{historyStorageError}</div> : null}
-              {renderHistoryRetentionRow("file_history", historyStorage?.categories.file_history)}
-              {renderHistoryRetentionRow("library_history", historyStorage?.categories.library_history)}
-              {renderHistoryRetentionRow("scan_history", historyStorage?.categories.scan_history)}
+              <div className="history-retention-tables">
+                <div className="settings-table-shell history-retention-table-shell">
+                  <table className="settings-data-table history-retention-table">
+                    <thead>
+                      <tr>
+                        <th>{t("libraries.historyRetention.bucketLabel")}</th>
+                        <th>{t("libraries.historyRetention.daysLabel")}</th>
+                        <th>{t("libraries.historyRetention.storageLimitLabel")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HISTORY_RETENTION_BUCKETS.map((bucket) => {
+                        const bucketTitle = historyRetentionBucketTitle(bucket);
+                        return (
+                          <tr key={`history-retention-settings-${bucket}`}>
+                            <th scope="row">{bucketTitle}</th>
+                            <td>
+                              <input
+                                id={`${bucket}-history-days`}
+                                className="history-retention-input"
+                                aria-label={t("libraries.historyRetention.daysLabel")}
+                                type="number"
+                                min="0"
+                                inputMode="numeric"
+                                value={historyRetentionInputs[bucket].days}
+                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                onChange={(event) => updateHistoryRetentionInput(bucket, "days", event.target.value)}
+                                onBlur={() => void saveHistoryRetention(bucket)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                id={`${bucket}-history-gb`}
+                                className="history-retention-input"
+                                aria-label={t("libraries.historyRetention.storageLimitLabel")}
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                inputMode="decimal"
+                                value={historyRetentionInputs[bucket].storage_limit_gb}
+                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                onChange={(event) =>
+                                  updateHistoryRetentionInput(bucket, "storage_limit_gb", event.target.value)
+                                }
+                                onBlur={() => void saveHistoryRetention(bucket)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
+                <div className="settings-table-shell history-retention-table-shell">
+                  <table className="settings-data-table history-retention-table">
+                    <thead>
+                      <tr>
+                        <th>{t("libraries.historyRetention.bucketLabel")}</th>
+                        <th>{t("libraries.historyRetention.currentStorage")}</th>
+                        <th>{t("libraries.historyRetention.averagePerDay")}</th>
+                        <th>{t("libraries.historyRetention.projected30Days")}</th>
+                        <th>{t("libraries.historyRetention.projectedConfigured")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HISTORY_RETENTION_BUCKETS.map((bucket) => {
+                        const category = historyStorage?.categories[bucket];
+                        return (
+                          <tr key={`history-retention-forecast-${bucket}`}>
+                            <th scope="row">{historyRetentionBucketTitle(bucket)}</th>
+                            <td>{formatBytes(category?.current_estimated_bytes ?? 0)}</td>
+                            <td>{formatBytes(category?.average_daily_bytes ?? 0)}</td>
+                            <td>{formatBytes(category?.projected_bytes_30d ?? 0)}</td>
+                            <td>{formatHistoryProjection(category?.projected_bytes_for_configured_days)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
               {historyReconstruction && isHistoryReconstructionActive ? (
                 <div className="history-reconstruction-progress" role="status" aria-live="polite">
                   <div className="distribution-copy">
@@ -3437,7 +3463,7 @@ export function LibrariesPage() {
                   onChange={(path) => setForm((current) => ({ ...current, path }))}
                 />
               )}
-              <button type="submit" disabled={submitting}>
+              <button type="submit" className="history-retention-primary-button" disabled={submitting}>
                 {submitting ? t("libraries.creating") : t("libraries.createButton")}
               </button>
             </form>

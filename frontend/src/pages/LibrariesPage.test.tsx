@@ -713,9 +713,9 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage();
 
     expect(await screen.findByText("History retention")).toBeInTheDocument();
-    expect(screen.getByText("File history")).toBeInTheDocument();
-    expect(screen.getByText("Media library history")).toBeInTheDocument();
-    expect(screen.getByText("Scan history")).toBeInTheDocument();
+    expect(screen.getAllByText("File history")).toHaveLength(2);
+    expect(screen.getAllByText("Media library history")).toHaveLength(2);
+    expect(screen.getAllByText("Scan history")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
     expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
     expect(await screen.findByText("977 KB")).toBeInTheDocument();
