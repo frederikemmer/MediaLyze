@@ -450,6 +450,16 @@ export type HistoryStorage = {
   };
 };
 
+export type HistoryReconstructionResult = {
+  generated_at: string;
+  libraries_processed: number;
+  libraries_with_media: number;
+  created_file_history_entries: number;
+  created_library_history_entries: number;
+  oldest_reconstructed_snapshot_day: string | null;
+  newest_reconstructed_snapshot_day: string | null;
+};
+
 export type ScanJob = {
   id: number;
   library_id: number;
@@ -704,6 +714,10 @@ export const api = {
     ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   historyStorage: () => request<HistoryStorage>("/history-storage"),
+  reconstructHistory: () =>
+    request<HistoryReconstructionResult>("/history/reconstruct", {
+      method: "POST",
+    }),
   recentScanJobs: (params?: {
     limit?: number;
     sinceHours?: number;

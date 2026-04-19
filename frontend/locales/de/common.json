@@ -119,6 +119,13 @@
       "daysLabel": "Aufbewahrung in Tagen",
       "storageLimitLabel": "Speicherlimit (GB)",
       "zeroUnlimited": "0 = unbegrenzt",
+      "reconstructButton": "Verlauf rekonstruieren",
+      "reconstructing": "Verlauf wird rekonstruiert…",
+      "reconstructTooltipAria": "Genauigkeit des rekonstruierten Verlaufs erklaeren",
+      "reconstructTooltip": "Erstellt einen approximierten Vergangenheitsverlauf aus dem aktuellen Medienbestand und vermuteten Hinzufuegezeitpunkten, hauptsaechlich anhand der Datei-mtime.\n\nDas ist nicht exakt: mtimes entsprechen nicht zwingend dem tatsaechlichen Hinzufuegezeitpunkt, und geloeschte oder veraenderte Dateien aus der Vergangenheit lassen sich nicht verlaesslich rekonstruieren.\n\nBestehender Verlauf bleibt unberuehrt; es werden nur fehlende fruehere Verlaufsdaten ergaenzt.",
+      "reconstructActiveScanHint": "Warte, bis aktive Scans abgeschlossen sind, bevor du den approximierten Verlauf rekonstruierst.",
+      "reconstructNoChanges": "Es mussten keine fehlenden historischen Eintraege rekonstruiert werden.",
+      "reconstructSuccess": "{{libraryEntries}} Mediathek-Snapshots und {{fileEntries}} initiale Dateiverlaufs-Eintraege wurden rekonstruiert.",
       "currentStorage": "Aktueller Speicher",
       "averagePerDay": "Durchschnitt pro Tag",
       "projected30Days": "Prognose fuer 30 Tage",
@@ -129,7 +136,7 @@
           "title": "Dateiverlauf"
         },
         "library_history": {
-          "title": "Library-Verlauf"
+          "title": "Mediathekverlauf"
         },
         "scan_history": {
           "title": "Scan-Verlauf"
@@ -357,7 +364,7 @@
       "clearSearch": "Duplikat-Suche loeschen"
     },
     "history": {
-      "title": "Library-Verlauf",
+      "title": "Mediathekverlauf",
       "subtitle": "Taegliche Trend-Snapshots erfolgreicher Scans",
       "empty": "Verlaufstrends erscheinen nach dem naechsten erfolgreichen Scan.",
       "controls": {

@@ -12,6 +12,7 @@ import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type DuplicateDetectionMode,
+  type HistoryReconstructionResult,
   type HistoryStorage,
   type HistoryStorageCategory,
   type LibrarySummary,
@@ -528,6 +529,7 @@ export function LibrariesPage() {
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingHistoryRetention, setIsSavingHistoryRetention] = useState(false);
+  const [isReconstructingHistory, setIsReconstructingHistory] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
@@ -650,6 +652,23 @@ export function LibrariesPage() {
       setRecentScanJobsError((reason as Error).message);
     } finally {
       setIsLoadingMoreRecentScanJobs(false);
+    }
+  }
+
+  async function reconstructHistory() {
+    if (isReconstructingHistory || hasActiveJobs) {
+      return;
+    }
+    setIsReconstructingHistory(true);
+    setHistoryRetentionStatus(null);
+    try {
+      const result = await api.reconstructHistory();
+      await refreshHistoryStorage();
+      setHistoryRetentionStatus(formatHistoryReconstructionStatus(result));
+    } catch (reason) {
+      setHistoryRetentionStatus((reason as Error).message);
+    } finally {
+      setIsReconstructingHistory(false);
     }
   }
 
@@ -2076,6 +2095,19 @@ export function LibrariesPage() {
     );
   }
 
+  function formatHistoryReconstructionStatus(result: HistoryReconstructionResult) {
+    if (
+      result.created_library_history_entries === 0 &&
+      result.created_file_history_entries === 0
+    ) {
+      return t("libraries.historyRetention.reconstructNoChanges");
+    }
+    return t("libraries.historyRetention.reconstructSuccess", {
+      libraryEntries: result.created_library_history_entries,
+      fileEntries: result.created_file_history_entries,
+    });
+  }
+
   function renderIgnorePatternSection(
     group: IgnorePatternGroup,
     title: string,
@@ -3078,6 +3110,26 @@ export function LibrariesPage() {
               {renderHistoryRetentionRow("file_history", historyStorage?.categories.file_history)}
               {renderHistoryRetentionRow("library_history", historyStorage?.categories.library_history)}
               {renderHistoryRetentionRow("scan_history", historyStorage?.categories.scan_history)}
+              <div className="history-retention-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void reconstructHistory()}
+                  disabled={!appSettingsLoaded || isReconstructingHistory || hasActiveJobs}
+                >
+                  {isReconstructingHistory
+                    ? t("libraries.historyRetention.reconstructing")
+                    : t("libraries.historyRetention.reconstructButton")}
+                </button>
+                <TooltipTrigger
+                  ariaLabel={t("libraries.historyRetention.reconstructTooltipAria")}
+                  content={t("libraries.historyRetention.reconstructTooltip")}
+                  preserveLineBreaks
+                />
+              </div>
+              {hasActiveJobs ? (
+                <p className="field-hint">{t("libraries.historyRetention.reconstructActiveScanHint")}</p>
+              ) : null}
               {historyStorage && historyStorage.reclaimable_file_bytes > 0 ? (
                 <p className="field-hint">
                   {t("libraries.historyRetention.reclaimableNote", {

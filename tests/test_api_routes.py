@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -469,6 +469,48 @@ def test_history_storage_route_returns_storage_payload() -> None:
     assert payload["reclaimable_file_bytes"] >= 0
     assert payload["categories"]["scan_history"]["entry_count"] == 1
     assert payload["categories"]["scan_history"]["current_estimated_bytes"] > 0
+
+
+def test_history_reconstruct_route_returns_summary_payload() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie.mkv",
+                filename="movie.mkv",
+                extension="mkv",
+                size_bytes=1024,
+                mtime=(datetime.now(UTC) - timedelta(days=2)).timestamp(),
+                scan_status=ScanStatus.ready,
+                quality_score=7,
+                quality_score_raw=7.0,
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.post("/api/history/reconstruct")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generated_at"].endswith("Z")
+    assert payload["libraries_processed"] == 1
+    assert payload["libraries_with_media"] == 1
+    assert payload["created_file_history_entries"] == 1
+    assert payload["created_library_history_entries"] >= 1
 
 
 def test_library_duplicates_route_returns_404_for_unknown_library() -> None:

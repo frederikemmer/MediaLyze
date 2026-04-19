@@ -472,7 +472,7 @@ describe("LibraryDetailPage", () => {
 
     const { container } = renderPage(libraryId);
 
-    const historyToggle = await screen.findByRole("button", { name: "Library history" });
+    const historyToggle = await screen.findByRole("button", { name: "Media library history" });
     const duplicatesToggle = screen.getByRole("button", { name: "Duplications" });
     const statisticGrid = container.querySelector(".statistic-layout-grid");
     const historySection = historyToggle.closest("section");
@@ -579,7 +579,7 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    const historyToggle = await screen.findByRole("button", { name: "Library history" });
+    const historyToggle = await screen.findByRole("button", { name: "Media library history" });
     fireEvent.click(historyToggle);
 
     expect(window.localStorage.getItem("medialyze-library-detail-history-collapsed")).toBe("true");

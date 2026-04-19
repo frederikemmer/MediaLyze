@@ -11,7 +11,7 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
-from backend.app.schemas.history import HistoryStorageRead
+from backend.app.schemas.history import HistoryReconstructionRead, HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.library_history import LibraryHistoryResponse
 from backend.app.schemas.media import (
@@ -36,6 +36,7 @@ from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
 from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
 from backend.app.services.library_history_service import get_library_history
 from backend.app.services.library_service import (
     create_library,
@@ -181,6 +182,13 @@ def history_storage(
     settings: Settings = Depends(get_app_settings),
 ) -> HistoryStorageRead:
     return get_history_storage(db, settings)
+
+
+@router.post("/history/reconstruct", response_model=HistoryReconstructionRead)
+def history_reconstruct(
+    db: Session = Depends(get_db_session),
+) -> HistoryReconstructionRead:
+    return reconstruct_history_from_media_files(db)
 
 
 @router.get("/scan-jobs/{job_id}", response_model=ScanJobDetailRead)

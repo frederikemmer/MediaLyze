@@ -119,6 +119,13 @@
       "daysLabel": "Retention days",
       "storageLimitLabel": "Storage limit (GB)",
       "zeroUnlimited": "0 = unlimited",
+      "reconstructButton": "Reconstruct history",
+      "reconstructing": "Reconstructing…",
+      "reconstructTooltipAria": "Explain reconstructed history accuracy",
+      "reconstructTooltip": "Builds approximate past history from the current media set and inferred add dates based mainly on file mtimes.\n\nThis can be inaccurate: mtimes are not guaranteed to match when a file was actually added, and deleted or changed files from the past cannot be reconstructed reliably.\n\nExisting history stays untouched; only missing earlier history is filled in.",
+      "reconstructActiveScanHint": "Wait until active scans finish before reconstructing approximate history.",
+      "reconstructNoChanges": "No missing historical entries were reconstructed.",
+      "reconstructSuccess": "Reconstructed {{libraryEntries}} library snapshots and {{fileEntries}} initial file-history entries.",
       "currentStorage": "Current storage",
       "averagePerDay": "Average per day",
       "projected30Days": "Projected 30 days",
@@ -129,7 +136,7 @@
           "title": "File history"
         },
         "library_history": {
-          "title": "Library history"
+          "title": "Media library history"
         },
         "scan_history": {
           "title": "Scan history"
@@ -357,7 +364,7 @@
       "clearSearch": "Clear duplicate search"
     },
     "history": {
-      "title": "Library history",
+      "title": "Media library history",
       "subtitle": "Daily trend snapshots from successful scans",
       "empty": "History trends will appear after the next successful scan.",
       "controls": {

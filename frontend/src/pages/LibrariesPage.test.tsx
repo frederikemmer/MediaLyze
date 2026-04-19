@@ -11,6 +11,7 @@ import {
   type AppSettings,
   type BrowseResponse,
   type DashboardResponse,
+  type HistoryReconstructionResult,
   type HistoryStorage,
   type LibrarySummary,
   type PathInspection,
@@ -105,6 +106,21 @@ function createHistoryStorage(overrides: Partial<HistoryStorage> = {}): HistoryS
         newest_recorded_at: "2026-03-16T10:03:00Z",
       },
     },
+    ...overrides,
+  };
+}
+
+function createHistoryReconstructionResult(
+  overrides: Partial<HistoryReconstructionResult> = {},
+): HistoryReconstructionResult {
+  return {
+    generated_at: "2026-04-19T12:00:00Z",
+    libraries_processed: 2,
+    libraries_with_media: 2,
+    created_file_history_entries: 8,
+    created_library_history_entries: 24,
+    oldest_reconstructed_snapshot_day: "2026-03-01",
+    newest_reconstructed_snapshot_day: "2026-04-18",
     ...overrides,
   };
 }
@@ -295,6 +311,7 @@ beforeEach(() => {
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
   vi.spyOn(api, "historyStorage").mockResolvedValue(createHistoryStorage());
+  vi.spyOn(api, "reconstructHistory").mockResolvedValue(createHistoryReconstructionResult());
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
@@ -666,11 +683,36 @@ describe("LibrariesPage ignore patterns", () => {
 
     expect(await screen.findByText("History retention")).toBeInTheDocument();
     expect(screen.getByText("File history")).toBeInTheDocument();
-    expect(screen.getByText("Library history")).toBeInTheDocument();
+    expect(screen.getByText("Media library history")).toBeInTheDocument();
     expect(screen.getByText("Scan history")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
     expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
     expect(await screen.findByText("977 KB")).toBeInTheDocument();
     expect(await screen.findByText("2.9 MB")).toBeInTheDocument();
+  });
+
+  it("reconstructs approximate history and refreshes the storage forecast", async () => {
+    const reconstructSpy = vi.spyOn(api, "reconstructHistory").mockResolvedValue(
+      createHistoryReconstructionResult({
+        created_library_history_entries: 12,
+        created_file_history_entries: 4,
+      }),
+    );
+    const historyStorageSpy = vi
+      .spyOn(api, "historyStorage")
+      .mockResolvedValueOnce(createHistoryStorage())
+      .mockResolvedValueOnce(createHistoryStorage());
+
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Reconstruct history" });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByText("Reconstructed 12 library snapshots and 4 initial file-history entries."),
+    ).toBeInTheDocument();
   });
 
   it("persists history retention values and refreshes the storage forecast", async () => {

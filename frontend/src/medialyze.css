@@ -1445,6 +1445,13 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   gap: 10px;
 }
 
+.history-retention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .scan-badge {
   background: rgba(27, 153, 139, 0.16);
   color: #0e6b62;

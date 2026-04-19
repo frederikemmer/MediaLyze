@@ -26,3 +26,13 @@ class HistoryStorageRead(BaseModel):
     database_file_bytes: int = 0
     reclaimable_file_bytes: int = 0
     categories: HistoryStorageCategoriesRead = Field(default_factory=HistoryStorageCategoriesRead)
+
+
+class HistoryReconstructionRead(BaseModel):
+    generated_at: UtcDateTime
+    libraries_processed: int = 0
+    libraries_with_media: int = 0
+    created_file_history_entries: int = 0
+    created_library_history_entries: int = 0
+    oldest_reconstructed_snapshot_day: str | None = None
+    newest_reconstructed_snapshot_day: str | None = None

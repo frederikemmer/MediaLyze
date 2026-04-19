@@ -23,6 +23,7 @@ from backend.app.models.entities import (
 )
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
+from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
 from backend.app.services.history_retention import apply_history_retention
 from backend.app.services.history_snapshots import (
     build_library_history_snapshot,
@@ -565,3 +566,135 @@ def test_apply_history_retention_prunes_oldest_scan_history_and_keeps_active_job
     assert compact_calls == [False]
     assert [job.status for job in jobs] == [JobStatus.completed, JobStatus.running]
     assert jobs[0].trigger_details == {"reason": "new"}
+
+
+def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(monkeypatch) -> None:
+    session_factory = _session_factory()
+    settings = Settings()
+    fixed_now = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("backend.app.services.history_reconstruction.utc_now", lambda: fixed_now)
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                history_retention={
+                    "file_history": {"days": 90, "storage_limit_gb": 0},
+                    "library_history": {"days": 365, "storage_limit_gb": 0},
+                }
+            ),
+            settings,
+        )
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        older_file = _build_media_file(library.id)
+        older_file.relative_path = "older.mkv"
+        older_file.filename = "older.mkv"
+        older_file.mtime = datetime(2026, 4, 10, 9, 0, tzinfo=UTC).timestamp()
+
+        newer_file = _build_media_file(library.id)
+        newer_file.relative_path = "newer.mkv"
+        newer_file.filename = "newer.mkv"
+        newer_file.mtime = datetime(2026, 4, 15, 11, 0, tzinfo=UTC).timestamp()
+        newer_file.quality_score = 6
+        newer_file.quality_score_raw = 6.2
+        newer_file.quality_score_breakdown = {"score": 6, "score_raw": 6.2, "categories": []}
+
+        db.add_all([older_file, newer_file])
+        db.flush()
+        db.add(
+            LibraryHistory(
+                library_id=library.id,
+                snapshot_day="2026-04-17",
+                captured_at=datetime(2026, 4, 17, 12, 0, tzinfo=UTC),
+                snapshot={"trend_metrics": {"total_files": 2, "resolution_counts": {"4k": 2}}},
+            )
+        )
+        db.add(
+            MediaFileHistory(
+                library_id=library.id,
+                media_file_id=newer_file.id,
+                relative_path=newer_file.relative_path,
+                filename=newer_file.filename,
+                captured_at=datetime(2026, 4, 16, 12, 0, tzinfo=UTC),
+                capture_reason=MediaFileHistoryCaptureReason.scan_analysis,
+                snapshot_hash="existing",
+                snapshot={"value": "existing"},
+            )
+        )
+        db.commit()
+
+        result = reconstruct_history_from_media_files(db)
+        library_rows = db.scalars(
+            select(LibraryHistory)
+            .where(LibraryHistory.library_id == library.id)
+            .order_by(LibraryHistory.snapshot_day.asc())
+        ).all()
+        file_rows = db.scalars(
+            select(MediaFileHistory)
+            .where(MediaFileHistory.library_id == library.id)
+            .order_by(MediaFileHistory.captured_at.asc(), MediaFileHistory.id.asc())
+        ).all()
+
+    assert result.created_library_history_entries == 7
+    assert result.created_file_history_entries == 2
+    assert result.oldest_reconstructed_snapshot_day == "2026-04-10"
+    assert result.newest_reconstructed_snapshot_day == "2026-04-16"
+    assert [row.snapshot_day for row in library_rows] == [
+        "2026-04-10",
+        "2026-04-11",
+        "2026-04-12",
+        "2026-04-13",
+        "2026-04-14",
+        "2026-04-15",
+        "2026-04-16",
+        "2026-04-17",
+    ]
+    assert library_rows[0].snapshot["trend_metrics"]["total_files"] == 1
+    assert library_rows[5].snapshot["trend_metrics"]["total_files"] == 2
+    assert library_rows[5].snapshot["scan_delta"]["new_files"] == 1
+    assert file_rows[0].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction
+    assert file_rows[0].relative_path == "older.mkv"
+    assert file_rows[1].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction
+    assert file_rows[1].relative_path == "newer.mkv"
+    assert file_rows[2].relative_path == "newer.mkv"
+
+
+def test_reconstruct_history_from_media_files_is_idempotent(monkeypatch) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(
+        "backend.app.services.history_reconstruction.utc_now",
+        lambda: datetime(2026, 4, 19, 12, 0, tzinfo=UTC),
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_file = _build_media_file(library.id)
+        media_file.mtime = datetime(2026, 4, 10, 9, 0, tzinfo=UTC).timestamp()
+        db.add(media_file)
+        db.commit()
+
+        first = reconstruct_history_from_media_files(db)
+        second = reconstruct_history_from_media_files(db)
+
+    assert first.created_library_history_entries > 0
+    assert first.created_file_history_entries == 1
+    assert second.created_library_history_entries == 0
+    assert second.created_file_history_entries == 0

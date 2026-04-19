@@ -66,6 +66,7 @@ class ScanTriggerSource(str, Enum):
 class MediaFileHistoryCaptureReason(str, Enum):
     scan_analysis = "scan_analysis"
     quality_recompute = "quality_recompute"
+    history_reconstruction = "history_reconstruction"
 
 
 class Library(TimestampMixin, Base):
