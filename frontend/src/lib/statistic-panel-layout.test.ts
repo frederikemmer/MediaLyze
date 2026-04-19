@@ -58,6 +58,9 @@ describe("statistic panel layout", () => {
           renderer: "scatter",
         },
       },
+      { statisticId: "history", width: 4, height: 3 },
+      { statisticId: "duplicates", width: 4, height: 3 },
+      { statisticId: "analyzed_files", width: 4, height: 4 },
     ]);
   });
 
@@ -100,8 +103,8 @@ describe("statistic panel layout", () => {
     ]);
   });
 
-  it("adds new panels with a default size of one wide by two high", () => {
-    const layout = addStatisticPanelLayoutItem("library", { items: [] }, "bitrate");
+  it("adds new statistic panels with a default size of one wide by two high", () => {
+    const layout = addStatisticPanelLayoutItem("library", { version: 2, items: [] }, "bitrate");
 
     expect(layout.items).toHaveLength(1);
     expect(layout.items[0]).toMatchObject({
@@ -111,8 +114,20 @@ describe("statistic panel layout", () => {
     });
   });
 
+  it("adds analyzed files back as a full-width panel with its default size", () => {
+    const layout = addStatisticPanelLayoutItem("library", { items: [] }, "analyzed_files");
+
+    expect(layout.items).toHaveLength(1);
+    expect(layout.items[0]).toMatchObject({
+      statisticId: "analyzed_files",
+      width: 4,
+      height: 4,
+    });
+  });
+
   it("allows panel heights above four when unlimited height is enabled", () => {
     const layout = resizeStatisticPanelLayoutItem(
+      "library",
       { items: [{ instanceId: "bitrate", statisticId: "bitrate", width: 1, height: 4 }] },
       "bitrate",
       { height: 6 },
@@ -143,9 +158,25 @@ describe("statistic panel layout", () => {
     });
   });
 
+  it("keeps history above its minimum size and forces wide library panels to full width", () => {
+    const layout = normalizeStatisticPanelLayout("library", {
+      items: [
+        { instanceId: "history", statisticId: "history", width: 1, height: 1 },
+        { instanceId: "duplicates", statisticId: "duplicates", width: 2, height: 3 },
+        { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 2, height: 1 },
+      ],
+    });
+
+    expect(layout.items).toMatchObject([
+      { instanceId: "history", width: 2, height: 3 },
+      { instanceId: "duplicates", width: 4, height: 3 },
+      { instanceId: "analyzed_files", width: 4, height: 2 },
+    ]);
+  });
+
   it("preserves an explicitly empty layout instead of restoring defaults", () => {
     const layout = normalizeStatisticPanelLayout("library", { items: [] });
 
-    expect(layout).toEqual({ items: [] });
+    expect(layout).toEqual({ version: 2, items: [] });
   });
 });

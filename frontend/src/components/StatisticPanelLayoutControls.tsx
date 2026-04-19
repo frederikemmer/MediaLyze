@@ -2,17 +2,17 @@ import { Grid2x2Plus, History, Save, SaveOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { LibraryStatisticDefinition, LibraryStatisticId } from "../lib/library-statistics-settings";
+import type { StatisticPanelLayoutId, StatisticPanelLayoutMenuDefinition } from "../lib/statistic-panel-layout";
 import { LayoutPanelTopIcon } from "./LayoutPanelTopIcon";
 
 type StatisticPanelLayoutControlsProps = {
-  availableDefinitions: LibraryStatisticDefinition[];
+  availableDefinitions: StatisticPanelLayoutMenuDefinition[];
   isEditing: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onRestoreDefault: () => void;
   onSaveEditing: () => void;
-  onAddPanel: (statisticId: LibraryStatisticId) => void;
+  onAddPanel: (statisticId: StatisticPanelLayoutId) => void;
 };
 
 export function StatisticPanelLayoutControls({

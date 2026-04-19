@@ -155,7 +155,9 @@ export function DashboardPage() {
     () =>
       activeLayout.items
         .map((item) => {
-          const definition = statisticDefinitionMap.get(item.statisticId);
+          const definition = statisticDefinitionMap.get(
+            item.statisticId as (typeof LIBRARY_STATISTIC_DEFINITIONS)[number]["id"],
+          );
           if (!definition) {
             return null;
           }
@@ -402,11 +404,11 @@ export function DashboardPage() {
               className="statistic-layout-size-button"
               aria-label={t("panelLayout.expandWidth")}
               title={t("panelLayout.expandWidth")}
-              onClick={() =>
-                updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width + 1 }),
-                )
-              }
+                onClick={() =>
+                  updateLayout((current) =>
+                    resizeStatisticPanelLayoutItem("dashboard", current, item.instanceId, { width: item.width + 1 }),
+                  )
+                }
             >
               <PanelRightClose className="nav-icon" aria-hidden="true" />
             </button>
@@ -417,11 +419,11 @@ export function DashboardPage() {
               className="statistic-layout-size-button"
               aria-label={t("panelLayout.shrinkWidth")}
               title={t("panelLayout.shrinkWidth")}
-              onClick={() =>
-                updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width - 1 }),
-                )
-              }
+                onClick={() =>
+                  updateLayout((current) =>
+                    resizeStatisticPanelLayoutItem("dashboard", current, item.instanceId, { width: item.width - 1 }),
+                  )
+                }
             >
               <PanelLeftClose className="nav-icon" aria-hidden="true" />
             </button>
@@ -437,6 +439,7 @@ export function DashboardPage() {
               onClick={() =>
                 updateLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "dashboard",
                     current,
                     item.instanceId,
                     { height: item.height + 1 },
@@ -457,6 +460,7 @@ export function DashboardPage() {
               onClick={() =>
                 updateLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "dashboard",
                     current,
                     item.instanceId,
                     { height: item.height - 1 },

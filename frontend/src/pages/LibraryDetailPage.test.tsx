@@ -463,7 +463,7 @@ describe("LibraryDetailPage", () => {
     expect(libraryFilesSpy).toHaveBeenCalled();
   });
 
-  it("renders the library history panel between statistics and duplicates", async () => {
+  it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {
     const libraryId = 126;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
@@ -474,15 +474,19 @@ describe("LibraryDetailPage", () => {
 
     const historyToggle = await screen.findByRole("button", { name: "Media library history" });
     const duplicatesToggle = screen.getByRole("button", { name: "Duplications" });
+    const analyzedFilesHeading = screen.getByRole("heading", { level: 2, name: "Analyzed files" });
     const statisticGrid = container.querySelector(".statistic-layout-grid");
     const historySection = historyToggle.closest("section");
     const duplicatesSection = duplicatesToggle.closest("section");
+    const analyzedFilesSection = analyzedFilesHeading.closest("section");
 
     expect(statisticGrid).not.toBeNull();
     expect(historySection).not.toBeNull();
     expect(duplicatesSection).not.toBeNull();
-    expect(statisticGrid!.compareDocumentPosition(historySection!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(historySection!.compareDocumentPosition(duplicatesSection!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(analyzedFilesSection).not.toBeNull();
+    expect(statisticGrid!.contains(historySection!)).toBe(true);
+    expect(statisticGrid!.contains(duplicatesSection!)).toBe(true);
+    expect(statisticGrid!.contains(analyzedFilesSection!)).toBe(true);
   });
 
   it("loads library history independently from duplicates and files", async () => {
@@ -604,6 +608,62 @@ describe("LibraryDetailPage", () => {
 
     expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
       "\"audio_spatial_profiles\"",
+    );
+  });
+
+  it("restores the expanded default layout including history, duplicates, and analyzed files", async () => {
+    const libraryId = 119;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 2,
+        items: [{ instanceId: "size", statisticId: "size", width: 1, height: 1 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore default layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    const persistedLayout = window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`);
+    expect(persistedLayout).toContain("\"history\"");
+    expect(persistedLayout).toContain("\"duplicates\"");
+    expect(persistedLayout).toContain("\"analyzed_files\"");
+  });
+
+  it("adds analyzed files back through the add-panel menu", async () => {
+    const libraryId = 120;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 2,
+        items: [{ instanceId: "size", statisticId: "size", width: 1, height: 1 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Analyzed files" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"analyzed_files\"",
     );
   });
 
