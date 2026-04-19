@@ -37,7 +37,12 @@
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
     "subtitleCodecs": "Untertitel-Codecs",
-    "subtitleSources": "Untertitel-Quellen"
+    "subtitleSources": "Untertitel-Quellen",
+    "history": {
+      "title": "Dashboard-Verlauf",
+      "subtitle": "Taegliche Trend-Snapshots ueber alle sichtbaren Bibliotheken",
+      "empty": "Dashboard-Trends erscheinen nach dem naechsten abgeschlossenen Scan."
+    }
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",

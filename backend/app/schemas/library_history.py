@@ -22,10 +22,17 @@ class LibraryHistoryPointRead(BaseModel):
     trend_metrics: LibraryHistoryTrendMetricsRead
 
 
-class LibraryHistoryResponse(BaseModel):
+class HistoryTimelineResponse(BaseModel):
     generated_at: UtcDateTime
-    library_id: int
     oldest_snapshot_day: str | None = None
     newest_snapshot_day: str | None = None
     resolution_categories: list[LibraryHistoryResolutionCategoryRead] = Field(default_factory=list)
     points: list[LibraryHistoryPointRead] = Field(default_factory=list)
+
+
+class LibraryHistoryResponse(HistoryTimelineResponse):
+    library_id: int
+
+
+class DashboardHistoryResponse(HistoryTimelineResponse):
+    visible_library_ids: list[int] = Field(default_factory=list)

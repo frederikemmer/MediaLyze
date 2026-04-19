@@ -172,6 +172,77 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
     assert payload["scatter_points"][0]["x_value"] == 5400.0
 
 
+def test_dashboard_history_route_returns_visible_library_aggregation() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        visible_library = Library(
+            name="Visible history",
+            path="/tmp/dashboard-history-visible",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden history",
+            path="/tmp/dashboard-history-hidden",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+        visible_library_id = visible_library.id
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=visible_library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 2,
+                            "resolution_counts": {"4k": 2},
+                            "average_bitrate": 8_000_000,
+                            "average_audio_bitrate": 512_000,
+                            "average_duration_seconds": 5_400,
+                            "average_quality_score": 7.5,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=hidden_library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 5,
+                            "resolution_counts": {"sd": 5},
+                            "average_bitrate": 2_000_000,
+                            "average_audio_bitrate": 128_000,
+                            "average_duration_seconds": 1_800,
+                            "average_quality_score": 4.0,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/dashboard/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visible_library_ids"] == [visible_library_id]
+    assert payload["oldest_snapshot_day"] == "2026-04-10"
+    assert payload["newest_snapshot_day"] == "2026-04-10"
+    assert payload["points"][0]["trend_metrics"]["total_files"] == 2
+    assert payload["points"][0]["trend_metrics"]["resolution_counts"] == {"4k": 2}
+
+
 def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

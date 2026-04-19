@@ -14,10 +14,11 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { useAppData } from "../lib/app-data";
-import { api, type ComparisonResponse } from "../lib/api";
+import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
 import {
@@ -45,8 +46,12 @@ import {
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { useScanJobs } from "../lib/scan-jobs";
+import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
 
 const DASHBOARD_LAYOUT_KEY = "main";
+const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
+const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
+const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const dashboardComparisonCache = new Map<string, ComparisonResponse>();
 const statisticDefinitionMap = new Map(
   LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition] as const),
@@ -78,6 +83,34 @@ function buildComparisonQueryKey(selection: ComparisonSelection): string {
   return `${selection.xField}:${selection.yField}`;
 }
 
+function readDashboardHistoryPanelCollapsedPreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  if (storedPreference === null) {
+    return false;
+  }
+  return storedPreference === "true";
+}
+
+function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
+  if (typeof window === "undefined") {
+    return DEFAULT_HISTORY_METRIC;
+  }
+  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  if (
+    storedPreference === "resolution_mix" ||
+    storedPreference === "average_bitrate" ||
+    storedPreference === "average_audio_bitrate" ||
+    storedPreference === "average_duration_seconds" ||
+    storedPreference === "average_quality_score"
+  ) {
+    return storedPreference;
+  }
+  return DEFAULT_HISTORY_METRIC;
+}
+
 type VisibleDashboardPanel = {
   item: ReturnType<typeof getStatisticPanelLayout>["items"][number];
   definition: LibraryStatisticDefinition;
@@ -104,9 +137,19 @@ export function DashboardPage() {
   const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
   const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
   const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
+  const [dashboardHistory, setDashboardHistory] = useState<DashboardHistoryResponse | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
+    readDashboardHistoryPanelCollapsedPreference(),
+  );
+  const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
+    readDashboardHistoryMetricPreference(),
+  );
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
+  const historyAbortRef = useRef<AbortController | null>(null);
   const activeLayout = isEditingLayout ? draftLayout : savedLayout;
   const visiblePanels = useMemo(
     () =>
@@ -147,6 +190,39 @@ export function DashboardPage() {
     loadDashboard().catch((reason: Error) => setError(reason.message));
   }, [dashboardLoaded, loadDashboard]);
 
+  const loadDashboardHistory = useEffectEvent(async (showLoading = false) => {
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsHistoryLoading(true);
+    }
+
+    try {
+      const payload = await api.dashboardHistory(controller.signal);
+      setDashboardHistory(payload);
+      setHistoryError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setHistoryError((reason as Error).message);
+    } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsHistoryLoading(false);
+      }
+    }
+  });
+
+  useEffect(() => {
+    setIsHistoryLoading(true);
+    void loadDashboardHistory(true);
+  }, []);
+
   useEffect(() => {
     const nextLayout = saveStatisticPanelLayout(
       "dashboard",
@@ -160,6 +236,17 @@ export function DashboardPage() {
     setDraggedPanelId(null);
     setDropTargetPanelId(null);
   }, [layoutOptions]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY,
+      isHistoryPanelCollapsed ? "true" : "false",
+    );
+  }, [isHistoryPanelCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+  }, [selectedHistoryMetric]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
     const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
@@ -230,6 +317,7 @@ export function DashboardPage() {
       loadDashboard(true)
         .then(() => setError(null))
         .catch((reason: Error) => setError(reason.message));
+      void loadDashboardHistory(false);
       for (const { item } of comparisonPanels) {
         const selection = item.comparisonSelection ?? getComparisonSelection("dashboard");
         dashboardComparisonCache.delete(buildComparisonQueryKey(selection));
@@ -241,6 +329,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     return () => {
+      historyAbortRef.current?.abort();
       for (const controller of comparisonAbortRef.current.values()) {
         controller.abort();
       }
@@ -434,6 +523,21 @@ export function DashboardPage() {
           />
         </div>
       </section>
+
+      <LibraryHistoryPanel
+        history={dashboardHistory}
+        loading={isHistoryLoading && !dashboardHistory && !historyError}
+        error={historyError}
+        selectedMetric={selectedHistoryMetric}
+        onChangeMetric={setSelectedHistoryMetric}
+        collapsed={isHistoryPanelCollapsed}
+        onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
+        currentResolutionCategoryIds={appSettings.resolution_categories.map((category) => category.id)}
+        title={t("dashboard.history.title")}
+        subtitle={t("dashboard.history.subtitle")}
+        emptyMessage={t("dashboard.history.empty")}
+        bodyId="dashboard-history-panel-body"
+      />
 
       <div className={`media-grid statistic-layout-grid${isEditingLayout ? " is-editing" : ""}`}>
         {visiblePanels.map((panel) => {

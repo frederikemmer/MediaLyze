@@ -30,7 +30,7 @@ from backend.app.services.history_snapshots import (
     create_media_file_history_entry_if_changed,
     upsert_library_history_snapshot,
 )
-from backend.app.services.library_history_service import get_library_history
+from backend.app.services.library_history_service import get_dashboard_history, get_library_history
 from backend.app.services.history_storage import get_history_storage
 from backend.app.services.resolution_categories import default_resolution_categories
 
@@ -174,6 +174,87 @@ def test_upsert_library_history_snapshot_reuses_same_day_row() -> None:
     assert rows[0].snapshot["trend_metrics"]["total_files"] == 1
     assert rows[0].snapshot["trend_metrics"]["resolution_counts"]["4k"] == 1
     assert rows[1].source_scan_job_id == 3
+
+
+def test_get_dashboard_history_aggregates_visible_libraries() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        visible_library = Library(
+            name="Visible",
+            path="/tmp/history-visible",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden",
+            path="/tmp/history-hidden",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=visible_library.id,
+                    snapshot_day="2026-03-24",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 2,
+                            "resolution_counts": {"4k": 2},
+                            "average_bitrate": 8_000_000,
+                            "average_audio_bitrate": 512_000,
+                            "average_duration_seconds": 5_400,
+                            "average_quality_score": 7.5,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=visible_library.id,
+                    snapshot_day="2026-03-25",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 3,
+                            "resolution_counts": {"4k": 1, "1080p": 2},
+                            "average_bitrate": 10_000_000,
+                            "average_audio_bitrate": 640_000,
+                            "average_duration_seconds": 6_000,
+                            "average_quality_score": 8.0,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=hidden_library.id,
+                    snapshot_day="2026-03-24",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 10,
+                            "resolution_counts": {"sd": 10},
+                            "average_bitrate": 2_000_000,
+                            "average_audio_bitrate": 128_000,
+                            "average_duration_seconds": 1_800,
+                            "average_quality_score": 4.0,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        payload = get_dashboard_history(db)
+
+    assert payload.visible_library_ids == [visible_library.id]
+    assert payload.oldest_snapshot_day == "2026-03-24"
+    assert payload.newest_snapshot_day == "2026-03-25"
+    assert [point.snapshot_day for point in payload.points] == ["2026-03-24", "2026-03-25"]
+    assert payload.points[0].trend_metrics.total_files == 2
+    assert payload.points[0].trend_metrics.resolution_counts == {"4k": 2}
+    assert payload.points[0].trend_metrics.average_bitrate == 8_000_000.0
 
 
 def test_build_library_history_snapshot_includes_trend_metrics() -> None:

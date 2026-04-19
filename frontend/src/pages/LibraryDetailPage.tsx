@@ -1576,6 +1576,9 @@ export function LibraryDetailPage() {
     const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
 
+    setComparisonByPanel({});
+    setComparisonErrorByPanel({});
+    setComparisonLoadingByPanel({});
     setLibrarySummary(cachedSummary);
     setLibraryStatistics(cachedStatistics);
     setLibraryHistory(cachedHistory);
@@ -1657,7 +1660,7 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     syncComparisonPanels();
-  }, [comparisonPanelsKey]);
+  }, [comparisonPanelsKey, libraryId]);
 
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);

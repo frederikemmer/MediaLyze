@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
@@ -625,6 +625,82 @@ describe("LibraryDetailPage", () => {
       String(libraryId),
       expect.objectContaining({ xField: "size", yField: "quality_score" }),
     );
+  });
+
+  it("reloads comparison data when navigating to a different library with the same panel selection", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-library-131",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-library-132",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    window.localStorage.setItem(
+      "medialyze-comparison-selection-library",
+      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+    );
+
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockImplementation(async (libraryId) => createLibrarySummary(Number(libraryId)));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockImplementation(async (libraryId) => createFilesPage(Number(libraryId)));
+    vi.spyOn(api, "libraryComparison").mockImplementation(async (libraryId) =>
+      createComparisonResponse({
+        scatter_points:
+          String(libraryId) === "131"
+            ? [
+                { media_file_id: 1, x_value: 3600, y_value: 1024 },
+                { media_file_id: 2, x_value: 4200, y_value: 1024 },
+              ]
+            : [
+                { media_file_id: 3, x_value: 7200, y_value: 2048 },
+                { media_file_id: 4, x_value: 8400, y_value: 4096 },
+              ],
+      }),
+    );
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/libraries/:libraryId",
+          element: <LibraryDetailPage />,
+        },
+      ],
+      {
+        initialEntries: ["/libraries/131"],
+      },
+    );
+
+    render(
+      <AppDataProvider>
+        <ScanJobsProvider>
+          <RouterProvider router={router} />
+        </ScanJobsProvider>
+      </AppDataProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Series 131" })).toBeInTheDocument();
+    expect((await screen.findAllByTestId("echarts-react")).some(
+      (candidate) => candidate.getAttribute("data-points") === "[[3600,1024],[4200,1024]]",
+    )).toBe(true);
+
+    await router.navigate("/libraries/132");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Series 132" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("echarts-react").some(
+          (candidate) => candidate.getAttribute("data-points") === "[[7200,2048],[8400,4096]]",
+        ),
+      ).toBe(true);
+    });
   });
 
   it("opens the file detail route when a comparison point is clicked in scatter view", async () => {

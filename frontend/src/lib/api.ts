@@ -117,6 +117,15 @@ export type LibraryHistoryResponse = {
   points: LibraryHistoryPoint[];
 };
 
+export type DashboardHistoryResponse = {
+  generated_at: string;
+  oldest_snapshot_day: string | null;
+  newest_snapshot_day: string | null;
+  resolution_categories: LibraryHistoryResolutionCategory[];
+  points: LibraryHistoryPoint[];
+  visible_library_ids: number[];
+};
+
 export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
@@ -705,6 +714,8 @@ function extractFilenameFromDisposition(value: string | null): string | null {
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   dashboard: () => request<DashboardResponse>("/dashboard"),
+  dashboardHistory: (signal?: AbortSignal) =>
+    request<DashboardHistoryResponse>("/dashboard/history", { signal }),
   dashboardComparison: (
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
   ) =>

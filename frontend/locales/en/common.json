@@ -37,7 +37,12 @@
     "audioLanguages": "Audio languages",
     "subtitleLanguages": "Subtitle languages",
     "subtitleCodecs": "Subtitle codecs",
-    "subtitleSources": "Subtitle sources"
+    "subtitleSources": "Subtitle sources",
+    "history": {
+      "title": "Dashboard history",
+      "subtitle": "Daily trend snapshots across visible libraries",
+      "empty": "Dashboard trends will appear after the next finished scan."
+    }
   },
   "panel": {
     "collapseAria": "Collapse {{title}}",

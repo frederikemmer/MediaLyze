@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { LibraryHistoryResponse } from "../lib/api";
+import type { DashboardHistoryResponse, LibraryHistoryResponse } from "../lib/api";
 import { AsyncPanel } from "./AsyncPanel";
 import { HistoryTrendChart, type LibraryHistoryMetricId } from "./HistoryTrendChart";
 
+type HistoryResponse = LibraryHistoryResponse | DashboardHistoryResponse;
+
 type LibraryHistoryPanelProps = {
-  history: LibraryHistoryResponse | null;
+  history: HistoryResponse | null;
   loading?: boolean;
   error?: string | null;
   selectedMetric: LibraryHistoryMetricId;
@@ -14,6 +16,11 @@ type LibraryHistoryPanelProps = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   currentResolutionCategoryIds: string[];
+  title?: string;
+  subtitle?: string;
+  emptyMessage?: string;
+  metricLabel?: string;
+  bodyId?: string;
 };
 
 const HISTORY_METRICS: LibraryHistoryMetricId[] = [
@@ -33,6 +40,11 @@ export function LibraryHistoryPanel({
   collapsed,
   onToggleCollapsed,
   currentResolutionCategoryIds,
+  title,
+  subtitle,
+  emptyMessage,
+  metricLabel,
+  bodyId = "library-history-panel-body",
 }: LibraryHistoryPanelProps) {
   const { t } = useTranslation();
   const currentResolutionCategoryIdSet = useMemo(
@@ -53,8 +65,8 @@ export function LibraryHistoryPanel({
 
   return (
     <AsyncPanel
-      title={t("libraryDetail.history.title")}
-      subtitle={t("libraryDetail.history.subtitle")}
+      title={title ?? t("libraryDetail.history.title")}
+      subtitle={subtitle ?? t("libraryDetail.history.subtitle")}
       loading={loading}
       error={error}
       titleAddon={history ? <span className="badge">{history.points.length}</span> : null}
@@ -66,7 +78,7 @@ export function LibraryHistoryPanel({
               <label className="comparison-chart-select-shell">
                 <select
                   className="comparison-chart-select"
-                  aria-label={t("libraryDetail.history.controls.metric")}
+                  aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
                   value={selectedMetric}
                   onChange={(event) => onChangeMetric(event.target.value as LibraryHistoryMetricId)}
                 >
@@ -84,11 +96,11 @@ export function LibraryHistoryPanel({
       collapseState={{
         collapsed,
         onToggle: onToggleCollapsed,
-        bodyId: "library-history-panel-body",
+        bodyId,
       }}
     >
       {!history || history.points.length === 0 ? (
-        <div className="notice">{t("libraryDetail.history.empty")}</div>
+        <div className="notice">{emptyMessage ?? t("libraryDetail.history.empty")}</div>
       ) : (
         <div className="comparison-chart-content library-history-chart-shell">
           <HistoryTrendChart

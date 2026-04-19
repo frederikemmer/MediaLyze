@@ -13,7 +13,7 @@ from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
 from backend.app.schemas.history import HistoryReconstructionRead, HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
-from backend.app.schemas.library_history import LibraryHistoryResponse
+from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
 from backend.app.schemas.media import (
     DashboardResponse,
     MediaFileDetail,
@@ -37,7 +37,7 @@ from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
 from backend.app.services.history_storage import get_history_storage
 from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
-from backend.app.services.library_history_service import get_library_history
+from backend.app.services.library_history_service import get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -141,6 +141,11 @@ def inspect_path(
 @router.get("/dashboard", response_model=DashboardResponse)
 def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
     return build_dashboard(db)
+
+
+@router.get("/dashboard/history", response_model=DashboardHistoryResponse)
+def dashboard_history(db: Session = Depends(get_db_session)) -> DashboardHistoryResponse:
+    return get_dashboard_history(db)
 
 
 @router.get("/dashboard/comparison", response_model=ComparisonResponse)
