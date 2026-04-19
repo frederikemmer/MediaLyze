@@ -87,6 +87,10 @@ export type LibraryStatisticsSettings = {
 
 const STORAGE_KEY = "medialyze-library-statistics-settings";
 
+function buildStorageKey(storageScope?: string): string {
+  return storageScope ? `${STORAGE_KEY}-${storageScope}` : STORAGE_KEY;
+}
+
 export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   {
     id: "size",
@@ -387,6 +391,10 @@ function buildDefaultSettings(): LibraryStatisticsSettings {
   };
 }
 
+export function buildDefaultLibraryStatisticsSettings(): LibraryStatisticsSettings {
+  return buildDefaultSettings();
+}
+
 function normalizeSettings(value: unknown): LibraryStatisticsSettings {
   const defaults = buildDefaultSettings();
   if (!value || typeof value !== "object") {
@@ -436,12 +444,21 @@ function normalizeSettings(value: unknown): LibraryStatisticsSettings {
   return { order, visibility };
 }
 
-export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
+export function cloneLibraryStatisticsSettings(settings: LibraryStatisticsSettings): LibraryStatisticsSettings {
+  return {
+    order: [...settings.order],
+    visibility: Object.fromEntries(
+      Object.entries(settings.visibility).map(([key, value]) => [key, { ...value }]),
+    ) as LibraryStatisticsSettings["visibility"],
+  };
+}
+
+export function getLibraryStatisticsSettings(storageScope?: string): LibraryStatisticsSettings {
   if (typeof window === "undefined") {
     return buildDefaultSettings();
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = window.localStorage.getItem(buildStorageKey(storageScope));
   if (!raw) {
     return buildDefaultSettings();
   }
@@ -453,10 +470,13 @@ export function getLibraryStatisticsSettings(): LibraryStatisticsSettings {
   }
 }
 
-export function saveLibraryStatisticsSettings(settings: LibraryStatisticsSettings): LibraryStatisticsSettings {
+export function saveLibraryStatisticsSettings(
+  settings: LibraryStatisticsSettings,
+  storageScope?: string,
+): LibraryStatisticsSettings {
   const normalized = normalizeSettings(settings);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(buildStorageKey(storageScope), JSON.stringify(normalized));
   }
   return normalized;
 }

@@ -369,6 +369,32 @@
   height: 100%;
 }
 
+.analyzed-files-title-addon {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.analyzed-files-title-addon .statistic-layout-controls {
+  flex: 0 0 auto;
+}
+
+.analyzed-files-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(31, 28, 22, 0.08);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .statistic-layout-panel-shell.span-x-1 {
   grid-column: span 1;
 }

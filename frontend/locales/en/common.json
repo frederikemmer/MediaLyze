@@ -290,6 +290,9 @@
     "analyzedFiles": "Analyzed files",
     "indexedEntries": "{{count}} indexed entries",
     "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
+    "tableView": {
+      "edit": "Edit table view"
+    },
     "export": {
       "aria": "Export analyzed files as CSV",
       "tooltip": "Export the full filtered analyzed-files result set as CSV",

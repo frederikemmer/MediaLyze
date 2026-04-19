@@ -290,6 +290,9 @@
     "analyzedFiles": "Analysierte Dateien",
     "indexedEntries": "{{count}} indizierte Einträge",
     "indexedEntriesFiltered": "{{shown}} von {{total}} indizierten Einträgen",
+    "tableView": {
+      "edit": "Tabellenansicht bearbeiten"
+    },
     "export": {
       "aria": "Analysierte Dateien als CSV exportieren",
       "tooltip": "Die vollstaendige gefilterte Ergebnismenge der analysierten Dateien als CSV exportieren",

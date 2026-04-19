@@ -28,9 +28,11 @@ import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
+import { SettingsIcon } from "../components/SettingsIcon";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { StreamDetailsList } from "../components/StreamDetailsList";
+import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
@@ -62,13 +64,17 @@ import {
   type LibraryFileColumnWidths,
 } from "../lib/library-file-column-widths";
 import {
+  buildDefaultLibraryStatisticsSettings,
+  cloneLibraryStatisticsSettings,
   getEnabledLibraryStatisticTableTooltipColumns,
   LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticNumericDistribution,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
   getVisibleLibraryStatisticTableColumns,
+  saveLibraryStatisticsSettings,
   type LibraryStatisticId,
+  type LibraryStatisticsSettings,
 } from "../lib/library-statistics-settings";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
 import {
@@ -191,10 +197,6 @@ const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryL
 ]);
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
-const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
-  "file",
-  ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings()),
-];
 const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
 const DEFAULT_COLUMN_RESIZE_MAX_PX = 960;
 
@@ -820,11 +822,16 @@ function buildLibraryComparisonQueryKey(libraryId: string, selection: Comparison
   return `${libraryId}:${selection.xField}:${selection.yField}`;
 }
 
+function buildLibraryTableViewSettingsScope(libraryId: string): string {
+  return `library-${libraryId}`;
+}
+
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
+  const tableViewSettingsScope = useMemo(() => buildLibraryTableViewSettingsScope(libraryId), [libraryId]);
   const statisticLayoutOptions = useMemo(
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
     [appSettings.feature_flags.unlimited_panel_size],
@@ -846,6 +853,13 @@ export function LibraryDetailPage() {
   const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
   const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
   const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
+  const [savedTableViewSettings, setSavedTableViewSettings] = useState<LibraryStatisticsSettings>(() =>
+    getLibraryStatisticsSettings(tableViewSettingsScope),
+  );
+  const [draftTableViewSettings, setDraftTableViewSettings] = useState<LibraryStatisticsSettings>(() =>
+    cloneLibraryStatisticsSettings(getLibraryStatisticsSettings(tableViewSettingsScope)),
+  );
+  const [isEditingTableView, setIsEditingTableView] = useState(false);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -861,7 +875,10 @@ export function LibraryDetailPage() {
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(() => [
+    "file",
+    ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings(tableViewSettingsScope)),
+  ]);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<LibraryFileColumnWidths>(() =>
     getLibraryFileColumnWidths(),
   );
@@ -891,7 +908,6 @@ export function LibraryDetailPage() {
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
-  const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
@@ -932,8 +948,8 @@ export function LibraryDetailPage() {
     }
   });
   const tooltipEnabledColumns = useMemo(
-    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(statisticsSettings)),
-    [statisticsSettings],
+    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings)),
+    [savedTableViewSettings],
   );
   const fileColumns = useMemo(
     () =>
@@ -963,8 +979,8 @@ export function LibraryDetailPage() {
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
-    () => getVisibleLibraryStatisticTableColumns(statisticsSettings),
-    [statisticsSettings],
+    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings),
+    [savedTableViewSettings],
   );
   const visibleLayoutPanels = useMemo(
     () =>
@@ -1544,6 +1560,13 @@ export function LibraryDetailPage() {
   }, [libraryId, statisticLayoutOptions]);
 
   useEffect(() => {
+    const nextSettings = getLibraryStatisticsSettings(tableViewSettingsScope);
+    setSavedTableViewSettings(nextSettings);
+    setDraftTableViewSettings(cloneLibraryStatisticsSettings(nextSettings));
+    setIsEditingTableView(false);
+  }, [tableViewSettingsScope]);
+
+  useEffect(() => {
     if (hasInvalidSearchField) {
       return;
     }
@@ -1819,6 +1842,12 @@ export function LibraryDetailPage() {
     const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout, statisticLayoutOptions);
     setSavedStatisticLayout(normalized);
     setDraftStatisticLayout(cloneStatisticPanelLayout(normalized));
+  }
+
+  function persistTableViewSettings(nextSettings: LibraryStatisticsSettings) {
+    const normalized = saveLibraryStatisticsSettings(nextSettings, tableViewSettingsScope);
+    setSavedTableViewSettings(normalized);
+    setDraftTableViewSettings(cloneLibraryStatisticsSettings(normalized));
   }
 
   function updateStatisticLayout(
@@ -2251,236 +2280,268 @@ export function LibraryDetailPage() {
               content = (
                 <AsyncPanel
                   title={t("libraryDetail.analyzedFiles")}
-                  subtitle={
-                    hasAppliedSearchFilters
-                      ? t("libraryDetail.indexedEntriesFiltered", {
-                          shown: filesTotal,
-                          total: displayLibrary?.file_count ?? filesTotal,
-                        })
-                      : t("libraryDetail.indexedEntries", { count: filesTotal })
-                  }
                   error={filesError}
                   bodyClassName="async-panel-body-scroll"
                   titleAddon={
-                    showAnalyzedFilesCsvExport
-                      ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop")
-                      : null
+                    <div className="analyzed-files-title-addon">
+                      <StatisticPanelLayoutControls
+                        availableDefinitions={[]}
+                        isEditing={isEditingTableView}
+                        showAddButton={false}
+                        editButtonLabel={t("libraryDetail.tableView.edit")}
+                        editButtonTitle={t("libraryDetail.tableView.edit")}
+                        editButtonIcon={<SettingsIcon className="statistic-layout-action-icon" size={18} />}
+                        onStartEditing={() => {
+                          setDraftTableViewSettings(cloneLibraryStatisticsSettings(savedTableViewSettings));
+                          setIsEditingTableView(true);
+                        }}
+                        onCancelEditing={() => {
+                          setDraftTableViewSettings(cloneLibraryStatisticsSettings(savedTableViewSettings));
+                          setIsEditingTableView(false);
+                        }}
+                        onRestoreDefault={() => {
+                          setDraftTableViewSettings(buildDefaultLibraryStatisticsSettings());
+                        }}
+                        onSaveEditing={() => {
+                          persistTableViewSettings(draftTableViewSettings);
+                          setIsEditingTableView(false);
+                        }}
+                        onAddPanel={() => undefined}
+                      />
+                      <span className="analyzed-files-count" aria-label={t("libraryDetail.indexedEntries", { count: filesTotal })}>
+                        {String(filesTotal)}
+                      </span>
+                      {!isEditingTableView && showAnalyzedFilesCsvExport
+                        ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop")
+                        : null}
+                    </div>
                   }
                   subtitleAddon={
-                    showAnalyzedFilesCsvExport
+                    !isEditingTableView && showAnalyzedFilesCsvExport
                       ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile")
                       : null
                   }
                   headerAddon={
-                    <div ref={searchToolsHeaderRef} className="data-table-search-layout">
-                      <div className="metadata-search-control metadata-search-control-base search-filter-picker">
-                        <button
-                          type="button"
-                          className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
-                          aria-expanded={pickerOpen}
-                          aria-controls="library-search-picker"
-                          aria-label={t("libraryDetail.searchFields.addMetadataAria")}
-                          onClick={() => setPickerOpen((current) => !current)}
-                        >
-                          <Plus size={18} aria-hidden="true" />
-                        </button>
-                        {pickerOpen ? (
-                          <div
-                            id="library-search-picker"
-                            className="search-filter-picker-popover search-filter-picker-popover-scroll"
-                            role="menu"
+                    !isEditingTableView ? (
+                      <div ref={searchToolsHeaderRef} className="data-table-search-layout">
+                        <div className="metadata-search-control metadata-search-control-base search-filter-picker">
+                          <button
+                            type="button"
+                            className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
+                            aria-expanded={pickerOpen}
+                            aria-controls="library-search-picker"
+                            aria-label={t("libraryDetail.searchFields.addMetadataAria")}
+                            onClick={() => setPickerOpen((current) => !current)}
                           >
-                            {orderedMetadataFieldDefinitions.map((definition) => {
-                              const field = definition.id;
-                              const config = getLibraryFileSearchConfig(field);
-                              const Icon = config.icon;
-                              const isSelected = selectedMetadataFields.includes(field);
-                              return (
-                                <button
-                                  key={field}
-                                  type="button"
-                                  role="menuitemcheckbox"
-                                  aria-checked={isSelected}
-                                  className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
-                                  onClick={() => {
-                                    toggleMetadataField(field);
-                                    setPickerOpen(false);
-                                  }}
-                                >
-                                  <Icon size={16} aria-hidden="true" />
-                                  <span>{t(config.labelKey)}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                        <label className="sr-only" htmlFor="library-file-search">
-                          {t("libraryDetail.searchLabel")}
-                        </label>
-                        <TooltipTrigger
-                          ariaLabel={t("libraryDetail.searchLabel")}
-                          content={t(baseSearchConfig.labelKey)}
-                          className="metadata-search-icon-button metadata-search-icon-button-middle"
-                        >
-                          <BaseSearchIcon size={16} aria-hidden="true" />
-                        </TooltipTrigger>
-                        <input
-                          id="library-file-search"
-                          type="search"
-                          value={baseSearch}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            startTransition(() => {
-                              setBaseSearch(nextValue);
-                            });
-                          }}
-                          placeholder={t("libraryDetail.searchFields.file.placeholder")}
-                          autoComplete="off"
-                        />
+                            <Plus size={18} aria-hidden="true" />
+                          </button>
+                          {pickerOpen ? (
+                            <div
+                              id="library-search-picker"
+                              className="search-filter-picker-popover search-filter-picker-popover-scroll"
+                              role="menu"
+                            >
+                              {orderedMetadataFieldDefinitions.map((definition) => {
+                                const field = definition.id;
+                                const config = getLibraryFileSearchConfig(field);
+                                const Icon = config.icon;
+                                const isSelected = selectedMetadataFields.includes(field);
+                                return (
+                                  <button
+                                    key={field}
+                                    type="button"
+                                    role="menuitemcheckbox"
+                                    aria-checked={isSelected}
+                                    className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                                    onClick={() => {
+                                      toggleMetadataField(field);
+                                      setPickerOpen(false);
+                                    }}
+                                  >
+                                    <Icon size={16} aria-hidden="true" />
+                                    <span>{t(config.labelKey)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <label className="sr-only" htmlFor="library-file-search">
+                            {t("libraryDetail.searchLabel")}
+                          </label>
+                          <TooltipTrigger
+                            ariaLabel={t("libraryDetail.searchLabel")}
+                            content={t(baseSearchConfig.labelKey)}
+                            className="metadata-search-icon-button metadata-search-icon-button-middle"
+                          >
+                            <BaseSearchIcon size={16} aria-hidden="true" />
+                          </TooltipTrigger>
+                          <input
+                            id="library-file-search"
+                            type="search"
+                            value={baseSearch}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              startTransition(() => {
+                                setBaseSearch(nextValue);
+                              });
+                            }}
+                            placeholder={t("libraryDetail.searchFields.file.placeholder")}
+                            autoComplete="off"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : null
                   }
                 >
                   <div className="analyzed-files-panel-content">
-                    <div className="data-table-tools data-table-tools-search">
-                      {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
-                      {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
-                      {orderedSelectedMetadataFields.length > 0 ? (
-                        <div
-                          ref={searchToolsBodyRef}
-                          className="metadata-search-fields"
-                          aria-label={t("libraryDetail.searchFields.activeMetadata")}
-                        >
-                          {orderedSelectedMetadataFields.map((field) => {
-                            const config = getLibraryFileSearchConfig(field);
-                            const Icon = config.icon;
-                            const errorKey = searchFieldErrors[field];
-                            return (
-                              <div key={field} className={`metadata-search-row${errorKey ? " is-invalid" : ""}`}>
-                                <div className="metadata-search-control">
-                                  <TooltipTrigger
-                                    ariaLabel={t("libraryDetail.searchFields.tooltipAria")}
-                                    content={
-                                      config.tooltipKey
-                                        ? `${t(config.labelKey)}\n\n${t(config.tooltipKey)}`
-                                        : t(config.labelKey)
-                                    }
-                                    preserveLineBreaks={Boolean(config.tooltipKey)}
-                                    className="metadata-search-icon-button"
-                                  >
-                                    <Icon size={16} />
-                                  </TooltipTrigger>
-                                  <input
-                                    id={`library-metadata-search-${field}`}
-                                    type="search"
-                                    value={fieldValues[field] ?? ""}
-                                    onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
-                                    placeholder={t(config.placeholderKey)}
-                                    autoComplete="off"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="metadata-search-remove"
-                                    aria-label={t("libraryDetail.searchFields.removeAria", { field: t(config.labelKey) })}
-                                    onClick={() => removeMetadataField(field)}
-                                  >
-                                    <Trash2 size={15} aria-hidden="true" />
-                                  </button>
-                                </div>
-                                {errorKey ? <p className="metadata-search-error">{t(errorKey)}</p> : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                    {isFilesLoading && files.length === 0 ? (
-                      <div className="panel-loader">
-                        <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
-                        <span>{t("libraryDetail.loadingFiles")}</span>
-                      </div>
-                    ) : files.length === 0 ? (
-                      <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
+                    {isEditingTableView ? (
+                      <TableViewSettingsEditor
+                        settings={draftTableViewSettings}
+                        onChange={(nextSettings) => setDraftTableViewSettings(cloneLibraryStatisticsSettings(nextSettings))}
+                      />
                     ) : (
-                      <div ref={dataTableShellRef} className="data-table-shell">
-                        <div className="media-data-table" role="table" aria-rowcount={filesTotal}>
-                          <div className="media-data-table-head" role="rowgroup">
-                            <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
-                              {activeColumns.map((column) => {
-                                const isActiveSort = sortKey === column.key;
+                      <>
+                        <div className="data-table-tools data-table-tools-search">
+                          {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
+                          {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
+                          {orderedSelectedMetadataFields.length > 0 ? (
+                            <div
+                              ref={searchToolsBodyRef}
+                              className="metadata-search-fields"
+                              aria-label={t("libraryDetail.searchFields.activeMetadata")}
+                            >
+                              {orderedSelectedMetadataFields.map((field) => {
+                                const config = getLibraryFileSearchConfig(field);
+                                const Icon = config.icon;
+                                const errorKey = searchFieldErrors[field];
                                 return (
-                                  <div
-                                    key={column.key}
-                                    className={`media-data-cell media-data-header-cell${column.sticky ? " is-sticky" : ""}`}
-                                    role="columnheader"
-                                    aria-sort={ariaSortValue(isActiveSort, sortDirection)}
-                                    ref={(element) => {
-                                      headerCellRefs.current[column.key] = element;
-                                    }}
-                                  >
-                                    <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
-                                      <span>{t(column.labelKey)}</span>
-                                      <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`} aria-hidden="true">
-                                        {isActiveSort ? sortIndicator(sortDirection) : ""}
-                                      </span>
-                                      {isActiveSort ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="column-resize-handle"
-                                      aria-label={t("libraryDetail.resizeColumnAria", { column: t(column.labelKey) })}
-                                      onPointerDown={(event) => beginColumnResize(column.key, event)}
-                                      onDoubleClick={() => resetColumnWidth(column.key)}
-                                    />
+                                  <div key={field} className={`metadata-search-row${errorKey ? " is-invalid" : ""}`}>
+                                    <div className="metadata-search-control">
+                                      <TooltipTrigger
+                                        ariaLabel={t("libraryDetail.searchFields.tooltipAria")}
+                                        content={
+                                          config.tooltipKey
+                                            ? `${t(config.labelKey)}\n\n${t(config.tooltipKey)}`
+                                            : t(config.labelKey)
+                                        }
+                                        preserveLineBreaks={Boolean(config.tooltipKey)}
+                                        className="metadata-search-icon-button"
+                                      >
+                                        <Icon size={16} />
+                                      </TooltipTrigger>
+                                      <input
+                                        id={`library-metadata-search-${field}`}
+                                        type="search"
+                                        value={fieldValues[field] ?? ""}
+                                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
+                                        placeholder={t(config.placeholderKey)}
+                                        autoComplete="off"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="metadata-search-remove"
+                                        aria-label={t("libraryDetail.searchFields.removeAria", { field: t(config.labelKey) })}
+                                        onClick={() => removeMetadataField(field)}
+                                      >
+                                        <Trash2 size={15} aria-hidden="true" />
+                                      </button>
+                                    </div>
+                                    {errorKey ? <p className="metadata-search-error">{t(errorKey)}</p> : null}
                                   </div>
                                 );
                               })}
                             </div>
+                          ) : null}
+                        </div>
+                        {isFilesLoading && files.length === 0 ? (
+                          <div className="panel-loader">
+                            <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
+                            <span>{t("libraryDetail.loadingFiles")}</span>
                           </div>
-
-                          <div
-                            className="media-data-table-body"
-                            role="rowgroup"
-                            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-                          >
-                            {virtualRows.map((virtualRow) => {
-                              const file = files[virtualRow.index];
-                              if (!file) {
-                                return null;
-                              }
-                              return (
-                                <div
-                                  key={file.id}
-                                  className="media-data-row media-data-body-row"
-                                  role="row"
-                                  data-index={virtualRow.index}
-                                  ref={rowVirtualizer.measureElement}
-                                  style={{
-                                    gridTemplateColumns: columnTemplate,
-                                    transform: `translateY(${virtualRow.start}px)`,
-                                  }}
-                                >
-                                  {activeColumns.map((column) => (
-                                    <div
-                                      key={column.key}
-                                      className={`media-data-cell${column.sticky ? " is-sticky" : ""}`}
-                                      role="cell"
-                                    >
-                                      {column.render(file)}
-                                    </div>
-                                  ))}
+                        ) : files.length === 0 ? (
+                          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
+                        ) : (
+                          <div ref={dataTableShellRef} className="data-table-shell">
+                            <div className="media-data-table" role="table" aria-rowcount={filesTotal}>
+                              <div className="media-data-table-head" role="rowgroup">
+                                <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
+                                  {activeColumns.map((column) => {
+                                    const isActiveSort = sortKey === column.key;
+                                    return (
+                                      <div
+                                        key={column.key}
+                                        className={`media-data-cell media-data-header-cell${column.sticky ? " is-sticky" : ""}`}
+                                        role="columnheader"
+                                        aria-sort={ariaSortValue(isActiveSort, sortDirection)}
+                                        ref={(element) => {
+                                          headerCellRefs.current[column.key] = element;
+                                        }}
+                                      >
+                                        <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
+                                          <span>{t(column.labelKey)}</span>
+                                          <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`} aria-hidden="true">
+                                            {isActiveSort ? sortIndicator(sortDirection) : ""}
+                                          </span>
+                                          {isActiveSort ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="column-resize-handle"
+                                          aria-label={t("libraryDetail.resizeColumnAria", { column: t(column.labelKey) })}
+                                          onPointerDown={(event) => beginColumnResize(column.key, event)}
+                                          onDoubleClick={() => resetColumnWidth(column.key)}
+                                        />
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
+                              </div>
+
+                              <div
+                                className="media-data-table-body"
+                                role="rowgroup"
+                                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                              >
+                                {virtualRows.map((virtualRow) => {
+                                  const file = files[virtualRow.index];
+                                  if (!file) {
+                                    return null;
+                                  }
+                                  return (
+                                    <div
+                                      key={file.id}
+                                      className="media-data-row media-data-body-row"
+                                      role="row"
+                                      data-index={virtualRow.index}
+                                      ref={rowVirtualizer.measureElement}
+                                      style={{
+                                        gridTemplateColumns: columnTemplate,
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                      }}
+                                    >
+                                      {activeColumns.map((column) => (
+                                        <div
+                                          key={column.key}
+                                          className={`media-data-cell${column.sticky ? " is-sticky" : ""}`}
+                                          role="cell"
+                                        >
+                                          {column.render(file)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="data-table-footer">
+                              <span className="media-meta">
+                                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
+                              </span>
+                              {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
+                            </div>
                           </div>
-                        </div>
-                        <div className="data-table-footer">
-                          <span className="media-meta">
-                            {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
-                          </span>
-                          {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
-                        </div>
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </AsyncPanel>

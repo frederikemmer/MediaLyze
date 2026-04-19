@@ -978,6 +978,29 @@ describe("LibraryDetailPage", () => {
     expect((container.querySelector(".media-data-head-row") as HTMLElement).style.gridTemplateColumns).toContain("333px");
   });
 
+  it("uses library-specific table-view settings for visible columns", async () => {
+    const libraryId = 1241;
+    window.localStorage.setItem(
+      `medialyze-library-statistics-settings-library-${libraryId}`,
+      JSON.stringify({
+        visibility: {
+          video_codec: {
+            tableEnabled: false,
+          },
+        },
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Codec" })).not.toBeInTheDocument();
+  });
+
   it("persists resized analyzed-file column widths", async () => {
     const libraryId = 125;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });

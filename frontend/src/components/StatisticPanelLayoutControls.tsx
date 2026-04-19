@@ -1,4 +1,5 @@
 import { Grid2x2Plus, History, Save, SaveOff } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +14,10 @@ type StatisticPanelLayoutControlsProps = {
   onRestoreDefault: () => void;
   onSaveEditing: () => void;
   onAddPanel: (statisticId: StatisticPanelLayoutId) => void;
+  showAddButton?: boolean;
+  editButtonLabel?: string;
+  editButtonTitle?: string;
+  editButtonIcon?: ReactNode;
 };
 
 export function StatisticPanelLayoutControls({
@@ -23,6 +28,10 @@ export function StatisticPanelLayoutControls({
   onRestoreDefault,
   onSaveEditing,
   onAddPanel,
+  showAddButton = true,
+  editButtonLabel,
+  editButtonTitle,
+  editButtonIcon,
 }: StatisticPanelLayoutControlsProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -60,11 +69,11 @@ export function StatisticPanelLayoutControls({
         <button
           type="button"
           className="statistic-layout-action-button"
-          aria-label={t("panelLayout.edit")}
-          title={t("panelLayout.edit")}
+          aria-label={editButtonLabel ?? t("panelLayout.edit")}
+          title={editButtonTitle ?? editButtonLabel ?? t("panelLayout.edit")}
           onClick={onStartEditing}
         >
-          <LayoutPanelTopIcon className="statistic-layout-action-icon" size={18} />
+          {editButtonIcon ?? <LayoutPanelTopIcon className="statistic-layout-action-icon" size={18} />}
         </button>
       </div>
     );
@@ -72,17 +81,19 @@ export function StatisticPanelLayoutControls({
 
   return (
     <div className="statistic-layout-controls is-editing" ref={menuRef}>
-      <button
-        type="button"
-        className="statistic-layout-action-button"
-        aria-label={t("panelLayout.add")}
-        title={t("panelLayout.add")}
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((current) => !current)}
-        disabled={availableDefinitions.length === 0}
-      >
-        <Grid2x2Plus className="nav-icon" aria-hidden="true" />
-      </button>
+      {showAddButton ? (
+        <button
+          type="button"
+          className="statistic-layout-action-button"
+          aria-label={t("panelLayout.add")}
+          title={t("panelLayout.add")}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((current) => !current)}
+          disabled={availableDefinitions.length === 0}
+        >
+          <Grid2x2Plus className="nav-icon" aria-hidden="true" />
+        </button>
+      ) : null}
       <button
         type="button"
         className="statistic-layout-action-button"
@@ -119,7 +130,7 @@ export function StatisticPanelLayoutControls({
       >
         <Save className="nav-icon" aria-hidden="true" />
       </button>
-      {menuOpen ? (
+      {showAddButton && menuOpen ? (
         <div className="statistic-layout-menu" role="menu">
           {availableDefinitions.length > 0 ? (
             availableDefinitions.map((definition) => (
