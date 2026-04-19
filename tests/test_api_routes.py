@@ -102,6 +102,66 @@ def test_library_files_export_csv_returns_422_for_invalid_search_expression() ->
     assert response.json() == {"detail": "Invalid search expression for duration"}
 
 
+def test_library_files_route_accepts_bitrate_sort_keys() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Bitrate Route",
+            path="/tmp/bitrate-route",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        low = MediaFile(
+            library_id=library.id,
+            relative_path="low.mkv",
+            filename="low.mkv",
+            extension="mkv",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        high = MediaFile(
+            library_id=library.id,
+            relative_path="high.mkv",
+            filename="high.mkv",
+            extension="mkv",
+            size_bytes=2048,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([low, high])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=low.id, duration=120.0, bit_rate=2_000_000),
+                MediaFormat(media_file_id=high.id, duration=120.0, bit_rate=8_000_000),
+                AudioStream(media_file_id=low.id, stream_index=0, codec="aac", bit_rate=128_000),
+                AudioStream(media_file_id=high.id, stream_index=0, codec="aac", bit_rate=384_000),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        bitrate_response = client.get(f"/api/libraries/{library.id}/files?sort_key=bitrate&sort_direction=desc")
+        audio_bitrate_response = client.get(
+            f"/api/libraries/{library.id}/files?sort_key=audio_bitrate&sort_direction=desc"
+        )
+
+    assert bitrate_response.status_code == 200
+    assert audio_bitrate_response.status_code == 200
+    assert [item["filename"] for item in bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
+    assert [item["filename"] for item in audio_bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
+
+
 def test_library_statistics_route_includes_numeric_distributions() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
