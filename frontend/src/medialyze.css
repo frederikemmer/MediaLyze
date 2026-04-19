@@ -1138,11 +1138,14 @@
 
 .library-history-toolbar {
   display: flex;
-  width: auto;
-  justify-self: end;
+  width: max-content;
+  max-width: 100%;
   flex: 0 0 auto;
   min-width: 0;
-  margin-left: 12px;
+  margin-left: auto;
+  justify-self: end;
+  align-self: flex-start;
+  z-index: 1;
 }
 
 .library-history-chart-shell {
@@ -1151,17 +1154,19 @@
 
 .library-history-picker-button {
   width: auto;
-  min-width: 0;
-  max-width: min(100%, 18rem);
+  min-width: 12.75rem;
+  max-width: none;
+  flex: 0 0 auto;
   justify-content: flex-start;
   gap: 10px;
   padding: 0 14px 0 12px;
+  white-space: nowrap;
 }
 
 .library-history-picker-button-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: auto;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
   font-size: 0.9rem;
   font-weight: 600;
