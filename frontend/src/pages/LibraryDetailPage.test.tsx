@@ -541,8 +541,8 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    const metricSelect = await screen.findByLabelText("Select history metric");
-    fireEvent.change(metricSelect, { target: { value: "average_bitrate" } });
+    fireEvent.click(await screen.findByLabelText("Select history metric"));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average bitrate" }));
 
     const chart = (await screen.findAllByTestId("echarts-react")).find(
       (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
@@ -561,9 +561,8 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    fireEvent.change(await screen.findByLabelText("Select history metric"), {
-      target: { value: "average_duration_seconds" },
-    });
+    fireEvent.click(await screen.findByLabelText("Select history metric"));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average duration" }));
 
     expect(window.localStorage.getItem("medialyze-library-detail-history-selected-metric")).toBe(
       "average_duration_seconds",
@@ -584,6 +583,7 @@ describe("LibraryDetailPage", () => {
 
     expect(window.localStorage.getItem("medialyze-library-detail-history-collapsed")).toBe("true");
     expect(screen.queryByLabelText("Select history metric")).not.toBeInTheDocument();
+    expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
 
   it("persists inline statistic panel layout changes for the current library", async () => {

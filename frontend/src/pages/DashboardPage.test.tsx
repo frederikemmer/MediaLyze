@@ -466,5 +466,6 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByRole("button", { name: "Dashboard history" })).toBeInTheDocument();
     expect(screen.getByLabelText("Select history metric")).toBeInTheDocument();
+    expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
 });

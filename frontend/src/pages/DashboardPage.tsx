@@ -534,7 +534,6 @@ export function DashboardPage() {
         onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
         currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
         title={t("dashboard.history.title")}
-        subtitle={t("dashboard.history.subtitle")}
         emptyMessage={t("dashboard.history.empty")}
         bodyId="dashboard-history-panel-body"
       />

@@ -1069,11 +1069,17 @@
 }
 
 .library-history-toolbar {
-  grid-template-columns: minmax(0, 1fr);
+  width: auto;
+  justify-self: end;
 }
 
 .library-history-chart-shell {
   height: 320px;
+}
+
+.library-history-picker-popover {
+  left: auto;
+  right: 0;
 }
 
 .comparison-chart-swap-button:hover,
@@ -2503,6 +2509,11 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   color: #f7fbf9;
 }
 
+.search-filter-picker-button-standalone {
+  border-radius: 16px;
+  border-right: 1px solid rgba(31, 28, 22, 0.12);
+}
+
 .search-filter-picker-button:hover,
 .search-filter-picker-button:focus-visible,
 .metadata-search-icon-button:hover,
@@ -2527,6 +2538,13 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 42px rgba(31, 28, 22, 0.14);
   backdrop-filter: blur(10px);
+}
+
+.search-filter-picker-popover-scroll {
+  max-height: 17.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .search-filter-picker-item {

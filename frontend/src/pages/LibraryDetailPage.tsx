@@ -2272,7 +2272,11 @@ export function LibraryDetailPage() {
                   <Plus size={18} aria-hidden="true" />
                 </button>
                 {pickerOpen ? (
-                  <div id="library-search-picker" className="search-filter-picker-popover" role="menu">
+                  <div
+                    id="library-search-picker"
+                    className="search-filter-picker-popover search-filter-picker-popover-scroll"
+                    role="menu"
+                  >
                     {orderedMetadataFieldDefinitions.map((definition) => {
                       const field = definition.id;
                       const config = getLibraryFileSearchConfig(field);

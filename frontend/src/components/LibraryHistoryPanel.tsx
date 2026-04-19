@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { AudioLines, Clock3, Frame, Gauge } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { DashboardHistoryResponse, LibraryHistoryResponse } from "../lib/api";
@@ -23,13 +24,13 @@ type LibraryHistoryPanelProps = {
   bodyId?: string;
 };
 
-const HISTORY_METRICS: LibraryHistoryMetricId[] = [
-  "resolution_mix",
-  "average_bitrate",
-  "average_audio_bitrate",
-  "average_duration_seconds",
-  "average_quality_score",
-];
+const HISTORY_METRICS = [
+  { id: "resolution_mix", icon: Frame },
+  { id: "average_bitrate", icon: Gauge },
+  { id: "average_audio_bitrate", icon: AudioLines },
+  { id: "average_duration_seconds", icon: Clock3 },
+  { id: "average_quality_score", icon: Gauge },
+] as const satisfies ReadonlyArray<{ id: LibraryHistoryMetricId; icon: typeof Frame }>;
 
 export function LibraryHistoryPanel({
   history,
@@ -47,10 +48,18 @@ export function LibraryHistoryPanel({
   bodyId = "library-history-panel-body",
 }: LibraryHistoryPanelProps) {
   const { t } = useTranslation();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const pickerId = useId();
   const currentResolutionCategoryIdSet = useMemo(
     () => new Set(currentResolutionCategoryIds),
     [currentResolutionCategoryIds],
   );
+  const selectedMetricOption = useMemo(
+    () => HISTORY_METRICS.find((option) => option.id === selectedMetric) ?? HISTORY_METRICS[0],
+    [selectedMetric],
+  );
+  const SelectedMetricIcon = selectedMetricOption.icon;
   const resolutionCategories = useMemo(
     () =>
       (history?.resolution_categories ?? []).map((category) => ({
@@ -63,33 +72,83 @@ export function LibraryHistoryPanel({
     [currentResolutionCategoryIdSet, history?.resolution_categories, t],
   );
 
+  useEffect(() => {
+    if (!pickerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (pickerRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setPickerOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [pickerOpen]);
+
   return (
     <AsyncPanel
       title={title ?? t("libraryDetail.history.title")}
-      subtitle={subtitle ?? t("libraryDetail.history.subtitle")}
+      subtitle={subtitle}
       loading={loading}
       error={error}
       titleAddon={history ? <span className="badge">{history.points.length}</span> : null}
       bodyClassName="async-panel-body-scroll"
       headerAddon={
         !collapsed ? (
-          <div className="comparison-chart-toolbar-shell">
-            <div className="comparison-chart-toolbar library-history-toolbar">
-              <label className="comparison-chart-select-shell">
-                <select
-                  className="comparison-chart-select"
-                  aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
-                  value={selectedMetric}
-                  onChange={(event) => onChangeMetric(event.target.value as LibraryHistoryMetricId)}
-                >
-                  {HISTORY_METRICS.map((metricId) => (
-                    <option key={metricId} value={metricId}>
-                      {t(`libraryDetail.history.metrics.${metricId}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+          <div ref={pickerRef} className="library-history-toolbar search-filter-picker">
+            <button
+              type="button"
+              className={`search-filter-picker-button search-filter-picker-button-standalone${pickerOpen ? " is-open" : ""}`}
+              aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
+              aria-haspopup="menu"
+              aria-expanded={pickerOpen}
+              aria-controls={pickerId}
+              title={t(`libraryDetail.history.metrics.${selectedMetricOption.id}`)}
+              onClick={() => setPickerOpen((current) => !current)}
+            >
+              <SelectedMetricIcon size={18} aria-hidden="true" />
+            </button>
+            {pickerOpen ? (
+              <div
+                id={pickerId}
+                className="search-filter-picker-popover search-filter-picker-popover-scroll library-history-picker-popover"
+                role="menu"
+              >
+                {HISTORY_METRICS.map((option) => {
+                  const Icon = option.icon;
+                  const isSelected = option.id === selectedMetric;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                      onClick={() => {
+                        onChangeMetric(option.id);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                      <span>{t(`libraryDetail.history.metrics.${option.id}`)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         ) : null
       }
