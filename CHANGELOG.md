@@ -4,12 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.0
+
+>2026-04-20
+
 ### ✨ New
 
-- add a `full scan` header action to the `Configured libraries` settings panel so all configured libraries can be queued for a manual full rescan at once
-- move configured-library path and summary metadata into a title tooltip in Settings and reposition the library type / scan-mode badges beside the title with responsive wrapping
 - add a per-library dashboard visibility toggle in Settings so selected libraries can be excluded from dashboard totals, distributions, and comparison panels
 - add configurable history retention and storage budgeting for `file_history`, `library_history`, and `scan_history`, including persisted per-file snapshot history, daily library snapshots, oldest-first cleanup, and a new `GET /api/history-storage` forecast endpoint
+- add approximate history reconstruction from existing media files with live progress, retention-aware limits, and UI guidance for reconstruction accuracy
+- add dashboard and per-library history panels for historical metric trends, with selectable metrics and a compact `Historic data` dashboard layout panel
+
+### 🐛 Bug fixes
+
+- tighten history, duplicate, and analyzed-files panel headers to reduce wasted vertical space and keep controls aligned with existing panel patterns
+- fix for error while sorting for Bitrate in table view [#111](https://github.com/frederikemmer/MediaLyze/issues/111)
+
 
 ## v0.7.1
 
