@@ -395,12 +395,38 @@
       "tooltip": {
         "total": "Total"
       },
+      "groups": {
+        "summary": "Summary",
+        "category": "Mix",
+        "distribution": "Distribution"
+      },
       "metrics": {
+        "file_count": "Files",
+        "total_size_bytes": "Total size",
+        "total_duration_seconds": "Total duration",
+        "average_size_bytes": "Average size",
         "resolution_mix": "Resolution mix",
         "average_bitrate": "Average bitrate",
         "average_audio_bitrate": "Average audio bitrate",
         "average_duration_seconds": "Average duration",
-        "average_quality_score": "Average quality score"
+        "average_quality_score": "Average quality score",
+        "average_resolution_mp": "Average resolution MP",
+        "container_mix": "Container mix",
+        "video_codec_mix": "Video codec mix",
+        "hdr_type_mix": "Dynamic range mix",
+        "audio_codecs_mix": "Audio codec mix",
+        "audio_spatial_profiles_mix": "Spatial audio mix",
+        "audio_languages_mix": "Audio language mix",
+        "subtitle_languages_mix": "Subtitle language mix",
+        "subtitle_codecs_mix": "Subtitle codec mix",
+        "subtitle_sources_mix": "Subtitle source mix",
+        "scan_status_mix": "Scan status mix",
+        "quality_score_distribution": "Quality score distribution",
+        "duration_distribution": "Duration distribution",
+        "size_distribution": "Size distribution",
+        "bitrate_distribution": "Bitrate distribution",
+        "audio_bitrate_distribution": "Audio bitrate distribution",
+        "resolution_mp_distribution": "Resolution MP distribution"
       },
       "unknownLegacyResolutionCategory": "Unknown legacy category: {{id}}"
     },

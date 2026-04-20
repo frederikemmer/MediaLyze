@@ -1,10 +1,18 @@
-import { AudioLines, Clock3, Frame, Gauge } from "lucide-react";
+import { BarChart3, Database, Frame, Hash, Percent } from "lucide-react";
+import { motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { DashboardHistoryResponse, LibraryHistoryResponse } from "../lib/api";
+import {
+  getHistoryMetricDefinition,
+  HISTORY_METRIC_DEFINITIONS,
+  HISTORY_METRIC_GROUPS,
+  type HistoryMetricDisplayMode,
+  type LibraryHistoryMetricId,
+} from "../lib/history-metrics";
 import { AsyncPanel } from "./AsyncPanel";
-import { HistoryTrendChart, type LibraryHistoryMetricId } from "./HistoryTrendChart";
+import { HistoryTrendChart } from "./HistoryTrendChart";
 
 type HistoryResponse = LibraryHistoryResponse | DashboardHistoryResponse;
 
@@ -24,12 +32,11 @@ type LibraryHistoryPanelProps = {
   bodyId?: string;
 };
 
-const HISTORY_METRICS = [
-  { id: "resolution_mix", icon: Frame },
-  { id: "average_bitrate", icon: Gauge },
-  { id: "average_audio_bitrate", icon: AudioLines },
-  { id: "average_duration_seconds", icon: Clock3 },
-] as const satisfies ReadonlyArray<{ id: LibraryHistoryMetricId; icon: typeof Frame }>;
+const HISTORY_GROUP_ICONS = {
+  summary: Database,
+  category: Frame,
+  distribution: BarChart3,
+} as const;
 
 export function LibraryHistoryPanel({
   history,
@@ -48,17 +55,19 @@ export function LibraryHistoryPanel({
 }: LibraryHistoryPanelProps) {
   const { t } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [displayMode, setDisplayMode] = useState<HistoryMetricDisplayMode>("count");
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const pickerId = useId();
+  const toggleId = useId();
   const currentResolutionCategoryIdSet = useMemo(
     () => new Set(currentResolutionCategoryIds),
     [currentResolutionCategoryIds],
   );
-  const selectedMetricOption = useMemo(
-    () => HISTORY_METRICS.find((option) => option.id === selectedMetric) ?? HISTORY_METRICS[0],
+  const selectedMetricDefinition = useMemo(
+    () => getHistoryMetricDefinition(selectedMetric),
     [selectedMetric],
   );
-  const SelectedMetricIcon = selectedMetricOption.icon;
+  const SelectedMetricIcon = HISTORY_GROUP_ICONS[selectedMetricDefinition.group];
   const resolutionCategories = useMemo(
     () =>
       (history?.resolution_categories ?? []).map((category) => ({
@@ -106,51 +115,105 @@ export function LibraryHistoryPanel({
       bodyClassName="async-panel-body-scroll"
       collapseActions={
         !collapsed ? (
-          <div ref={pickerRef} className="library-history-toolbar search-filter-picker">
-            <button
-              type="button"
-              className={`search-filter-picker-button search-filter-picker-button-standalone library-history-picker-button${pickerOpen ? " is-open" : ""}`}
-              aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
-              aria-haspopup="menu"
-              aria-expanded={pickerOpen}
-              aria-controls={pickerId}
-              title={t(`libraryDetail.history.metrics.${selectedMetricOption.id}`)}
-              onClick={() => setPickerOpen((current) => !current)}
-            >
-              <SelectedMetricIcon size={18} aria-hidden="true" />
-              <span className="library-history-picker-button-label">
-                {t(`libraryDetail.history.metrics.${selectedMetricOption.id}`)}
-              </span>
-            </button>
-            {pickerOpen ? (
+          <>
+            {selectedMetricDefinition.group !== "summary" ? (
               <div
-                id={pickerId}
-                className="search-filter-picker-popover search-filter-picker-popover-scroll library-history-picker-popover"
-                role="menu"
+                className="distribution-chart-mode-toggle"
+                role="group"
+                aria-label={t("distributionChart.displayMode")}
               >
-                {HISTORY_METRICS.map((option) => {
-                  const Icon = option.icon;
-                  const isSelected = option.id === selectedMetric;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={isSelected}
-                      className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
-                      onClick={() => {
-                        onChangeMetric(option.id);
-                        setPickerOpen(false);
-                      }}
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      <span>{t(`libraryDetail.history.metrics.${option.id}`)}</span>
-                    </button>
-                  );
-                })}
+                <button
+                  type="button"
+                  className={`distribution-chart-mode-button${displayMode === "count" ? " active" : ""}`}
+                  onClick={() => setDisplayMode("count")}
+                  aria-label={t("distributionChart.countMode")}
+                  title={t("distributionChart.countMode")}
+                >
+                  {displayMode === "count" ? (
+                    <motion.span
+                      layoutId={`library-history-mode-pill-${toggleId}`}
+                      className="nav-active-pill distribution-chart-mode-pill"
+                    />
+                  ) : null}
+                  <span className="distribution-chart-mode-button-content">
+                    <Hash aria-hidden="true" className="distribution-chart-mode-icon" />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`distribution-chart-mode-button${displayMode === "percentage" ? " active" : ""}`}
+                  onClick={() => setDisplayMode("percentage")}
+                  aria-label={t("distributionChart.percentMode")}
+                  title={t("distributionChart.percentMode")}
+                >
+                  {displayMode === "percentage" ? (
+                    <motion.span
+                      layoutId={`library-history-mode-pill-${toggleId}`}
+                      className="nav-active-pill distribution-chart-mode-pill"
+                    />
+                  ) : null}
+                  <span className="distribution-chart-mode-button-content">
+                    <Percent aria-hidden="true" className="distribution-chart-mode-icon" />
+                  </span>
+                </button>
               </div>
             ) : null}
-          </div>
+            <div ref={pickerRef} className="library-history-toolbar search-filter-picker">
+              <button
+                type="button"
+                className={`search-filter-picker-button search-filter-picker-button-standalone library-history-picker-button${pickerOpen ? " is-open" : ""}`}
+                aria-label={metricLabel ?? t("libraryDetail.history.controls.metric")}
+                aria-haspopup="menu"
+                aria-expanded={pickerOpen}
+                aria-controls={pickerId}
+                title={t(selectedMetricDefinition.labelKey)}
+                onClick={() => setPickerOpen((current) => !current)}
+              >
+                <SelectedMetricIcon size={18} aria-hidden="true" />
+                <span className="library-history-picker-button-label">
+                  {t(selectedMetricDefinition.labelKey)}
+                </span>
+              </button>
+              {pickerOpen ? (
+                <div
+                  id={pickerId}
+                  className="search-filter-picker-popover search-filter-picker-popover-scroll library-history-picker-popover"
+                  role="menu"
+                >
+                  {HISTORY_METRIC_GROUPS.map((group) => {
+                    const GroupIcon = HISTORY_GROUP_ICONS[group.id];
+                    const metrics = HISTORY_METRIC_DEFINITIONS.filter((definition) => definition.group === group.id);
+                    return (
+                      <div key={group.id} className="library-history-picker-group">
+                        <div className="library-history-picker-group-label">
+                          <GroupIcon size={14} aria-hidden="true" />
+                          <span>{t(group.labelKey)}</span>
+                        </div>
+                        {metrics.map((option) => {
+                          const isSelected = option.id === selectedMetric;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={isSelected}
+                              className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                              onClick={() => {
+                                onChangeMetric(option.id);
+                                setPickerOpen(false);
+                              }}
+                            >
+                              <span>{t(option.labelKey)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </>
         ) : null
       }
       collapseButtonClassName={!collapsed ? "async-panel-toggle-icon-button-flat" : undefined}
@@ -168,7 +231,8 @@ export function LibraryHistoryPanel({
             points={history.points}
             resolutionCategories={resolutionCategories}
             metricId={selectedMetric}
-            resizeToken={`${selectedMetric}:${history.points.length}`}
+            displayMode={displayMode}
+            resizeToken={`${selectedMetric}:${displayMode}:${history.points.length}`}
           />
         </div>
       )}

@@ -19,8 +19,16 @@ from backend.app.models.entities import (
 )
 from backend.app.schemas.history import HistoryReconstructionPhase, HistoryReconstructionRead
 from backend.app.services.app_settings import get_app_settings
-from backend.app.services.history_snapshots import build_media_file_history_snapshot
+from backend.app.services.container_formats import normalize_container
+from backend.app.services.history_snapshots import (
+    _numeric_distribution,
+    _numeric_distribution_bins,
+    _numeric_summary,
+    build_media_file_history_snapshot,
+)
+from backend.app.services.languages import normalize_language_code
 from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.utils.time import utc_now
 
 _MIN_REASONABLE_MTIME = datetime(1990, 1, 1, tzinfo=UTC)
@@ -38,12 +46,25 @@ class _PreparedMediaFile:
     audio_bitrate: float | None
     quality_score: int
     resolution_category_id: str | None
+    resolution_mp: float | None
+    container: str
+    scan_status: str
+    video_codec: str | None
+    hdr_type: str | None
+    audio_codecs: set[str]
+    audio_spatial_profiles: set[str]
+    audio_languages: set[str]
+    subtitle_languages: set[str]
+    subtitle_codecs: set[str]
+    subtitle_sources: set[str]
     is_ready: bool
 
 
 @dataclass(slots=True)
 class _LibraryAccumulator:
     resolution_counts: dict[str, int]
+    numeric_values: dict[str, list[float]]
+    category_counts: dict[str, dict[str, int]]
     file_count: int = 0
     total_size_bytes: int = 0
     total_duration_seconds: float = 0.0
@@ -62,23 +83,53 @@ class _LibraryAccumulator:
         self.file_count += 1
         self.total_size_bytes += max(item.size_bytes, 0)
         self.total_duration_seconds += max(item.duration_seconds, 0.0)
+        self.numeric_values["size"].append(float(max(item.size_bytes, 0)))
+        if item.quality_score >= 1:
+            self.numeric_values["quality_score"].append(float(item.quality_score))
+        self.category_counts["container"][item.container] = self.category_counts["container"].get(item.container, 0) + 1
+        self.category_counts["scan_status"][item.scan_status] = self.category_counts["scan_status"].get(item.scan_status, 0) + 1
         if item.is_ready:
             self.ready_files += 1
             if item.resolution_category_id:
                 self.resolution_counts[item.resolution_category_id] = (
                     self.resolution_counts.get(item.resolution_category_id, 0) + 1
                 )
+                self.category_counts["resolution"][item.resolution_category_id] = (
+                    self.category_counts["resolution"].get(item.resolution_category_id, 0) + 1
+                )
+            if item.video_codec:
+                self.category_counts["video_codec"][item.video_codec] = (
+                    self.category_counts["video_codec"].get(item.video_codec, 0) + 1
+                )
+            self.category_counts["hdr_type"][item.hdr_type or "SDR"] = (
+                self.category_counts["hdr_type"].get(item.hdr_type or "SDR", 0) + 1
+            )
             if item.bitrate is not None:
                 self.bitrate_sum += item.bitrate
                 self.bitrate_count += 1
+                self.numeric_values["bitrate"].append(item.bitrate)
             if item.audio_bitrate is not None:
                 self.audio_bitrate_sum += item.audio_bitrate
                 self.audio_bitrate_count += 1
+                self.numeric_values["audio_bitrate"].append(item.audio_bitrate)
             if item.duration_seconds > 0:
                 self.duration_sum += item.duration_seconds
                 self.duration_count += 1
+                self.numeric_values["duration"].append(item.duration_seconds)
+            if item.resolution_mp is not None:
+                self.numeric_values["resolution_mp"].append(item.resolution_mp)
             self.quality_score_sum += float(item.quality_score)
             self.quality_score_count += 1
+            for metric_id, values in (
+                ("audio_codecs", item.audio_codecs),
+                ("audio_spatial_profiles", item.audio_spatial_profiles),
+                ("audio_languages", item.audio_languages),
+                ("subtitle_languages", item.subtitle_languages),
+                ("subtitle_codecs", item.subtitle_codecs),
+                ("subtitle_sources", item.subtitle_sources),
+            ):
+                for value in values:
+                    self.category_counts[metric_id][value] = self.category_counts[metric_id].get(value, 0) + 1
             return
         self.pending_files += 1
 
@@ -124,6 +175,11 @@ def _build_prepared_media_file(media_file: MediaFile, resolution_categories, now
         if primary_video
         else None
     )
+    resolution_mp = (
+        (float(primary_video.width) * float(primary_video.height)) / 1_000_000
+        if primary_video and primary_video.width and primary_video.height
+        else None
+    )
     return _PreparedMediaFile(
         media_file=media_file,
         inferred_added_at=inferred_added_at,
@@ -134,6 +190,30 @@ def _build_prepared_media_file(media_file: MediaFile, resolution_categories, now
         audio_bitrate=float(audio_bitrate) if audio_bitrate is not None else None,
         quality_score=int(media_file.quality_score or 0),
         resolution_category_id=resolution_category.id if resolution_category else None,
+        resolution_mp=resolution_mp,
+        container=normalize_container(media_file.extension) or "unknown",
+        scan_status=media_file.scan_status.value,
+        video_codec=(primary_video.codec or "").strip().lower() if primary_video and primary_video.codec else None,
+        hdr_type=(primary_video.hdr_type or "").strip() if primary_video and primary_video.hdr_type else "SDR",
+        audio_codecs={(stream.codec or "").strip().lower() or "unknown" for stream in media_file.audio_streams},
+        audio_spatial_profiles={
+            label
+            for label in (format_spatial_audio_profile(stream.spatial_audio_profile) for stream in media_file.audio_streams)
+            if label
+        },
+        audio_languages={normalize_language_code(stream.language) or "und" for stream in media_file.audio_streams},
+        subtitle_languages=(
+            {normalize_language_code(stream.language) or "und" for stream in media_file.subtitle_streams}
+            | {normalize_language_code(subtitle.language) or "und" for subtitle in media_file.external_subtitles}
+        ),
+        subtitle_codecs=(
+            {(stream.codec or "").strip().lower() or "unknown" for stream in media_file.subtitle_streams}
+            | {(subtitle.format or "").strip().lower() or "unknown" for subtitle in media_file.external_subtitles}
+        ),
+        subtitle_sources=(
+            ({"internal"} if media_file.subtitle_streams else set())
+            | ({"external"} if media_file.external_subtitles else set())
+        ),
         is_ready=media_file.scan_status == ScanStatus.ready,
     )
 
@@ -154,6 +234,15 @@ def _build_reconstructed_library_snapshot(
     *,
     new_files: int,
 ) -> dict:
+    numeric_summaries = {
+        metric_id: _numeric_summary(values)
+        for metric_id, values in accumulator.numeric_values.items()
+    }
+    distribution_bins = _numeric_distribution_bins()
+    numeric_distributions = {
+        metric_id: _numeric_distribution(values, distribution_bins[metric_id])
+        for metric_id, values in accumulator.numeric_values.items()
+    }
     return {
         "file_count": accumulator.file_count,
         "total_size_bytes": accumulator.total_size_bytes,
@@ -171,12 +260,26 @@ def _build_reconstructed_library_snapshot(
             "deleted_files": 0,
         },
         "trend_metrics": {
+            "schema_version": 2,
             "total_files": accumulator.ready_files,
             "resolution_counts": dict(accumulator.resolution_counts),
             "average_bitrate": _average(accumulator.bitrate_sum, accumulator.bitrate_count),
             "average_audio_bitrate": _average(accumulator.audio_bitrate_sum, accumulator.audio_bitrate_count),
             "average_duration_seconds": _average(accumulator.duration_sum, accumulator.duration_count),
             "average_quality_score": _average(accumulator.quality_score_sum, accumulator.quality_score_count),
+            "totals": {
+                "file_count": accumulator.file_count,
+                "ready_files": accumulator.ready_files,
+                "pending_files": accumulator.pending_files,
+                "total_size_bytes": accumulator.total_size_bytes,
+                "total_duration_seconds": accumulator.total_duration_seconds,
+            },
+            "numeric_summaries": numeric_summaries,
+            "category_counts": {
+                metric_id: dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+                for metric_id, counts in accumulator.category_counts.items()
+            },
+            "numeric_distributions": numeric_distributions,
         },
     }
 
@@ -389,7 +492,28 @@ def reconstruct_history_from_media_files(
 
         events_by_day: dict[date, list[_PreparedMediaFile]] = defaultdict(list)
         accumulator = _LibraryAccumulator(
-            resolution_counts={category.id: 0 for category in resolution_categories}
+            resolution_counts={category.id: 0 for category in resolution_categories},
+            numeric_values={
+                "quality_score": [],
+                "duration": [],
+                "size": [],
+                "bitrate": [],
+                "audio_bitrate": [],
+                "resolution_mp": [],
+            },
+            category_counts={
+                "container": {},
+                "video_codec": {},
+                "resolution": {category.id: 0 for category in resolution_categories},
+                "hdr_type": {},
+                "audio_codecs": {},
+                "audio_spatial_profiles": {},
+                "audio_languages": {},
+                "subtitle_languages": {},
+                "subtitle_codecs": {},
+                "subtitle_sources": {},
+                "scan_status": {},
+            },
         )
         for prepared in prepared_files:
             if prepared.inferred_snapshot_day < start_day:
