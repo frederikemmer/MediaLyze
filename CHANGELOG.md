@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.1
+
+>2026-04-20
+
+### ✨ New
+
+- enhance library history panels with additional metrics, display modes, localized labels, and updated reconstruction/statistics support
+
 ## v0.8.0
 
 >2026-04-20
