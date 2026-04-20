@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 
 from sqlalchemy import select
@@ -18,6 +19,19 @@ from backend.app.schemas.media import NumericDistribution, NumericDistributionBi
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.stats_cache import stats_cache
 from backend.app.utils.time import utc_now
+
+
+STANDARD_RESOLUTION_MEGAPIXELS: dict[str, float] = {
+    "8k": (7680 * 4320) / 1_000_000,
+    "4k": (3840 * 2160) / 1_000_000,
+    "2160p": (3840 * 2160) / 1_000_000,
+    "1440p": (2560 * 1440) / 1_000_000,
+    "1080p": (1920 * 1080) / 1_000_000,
+    "720p": (1280 * 720) / 1_000_000,
+    "576p": (720 * 576) / 1_000_000,
+    "480p": (720 * 480) / 1_000_000,
+    "sd": (720 * 480) / 1_000_000,
+}
 
 
 def _coerce_float(value) -> float | None:
@@ -64,6 +78,30 @@ def _coerce_totals(value) -> dict[str, int | float]:
     return totals
 
 
+def _coerce_legacy_totals(snapshot: dict) -> dict[str, int | float]:
+    totals: dict[str, int | float] = {}
+    for key in ("file_count", "ready_files", "pending_files", "total_size_bytes"):
+        value = _coerce_int(snapshot.get(key))
+        if value is not None:
+            totals[key] = value
+    total_duration_seconds = _coerce_float(snapshot.get("total_duration_seconds"))
+    if total_duration_seconds is not None:
+        totals["total_duration_seconds"] = total_duration_seconds
+    return totals
+
+
+def _has_enriched_legacy_totals(totals: dict[str, int | float]) -> bool:
+    return any(
+        key in totals
+        for key in (
+            "ready_files",
+            "pending_files",
+            "total_size_bytes",
+            "total_duration_seconds",
+        )
+    )
+
+
 def _coerce_numeric_summary(value) -> LibraryHistoryNumericSummaryRead | None:
     if not isinstance(value, dict):
         return None
@@ -103,6 +141,68 @@ def _legacy_summary(value: float | None, weight: int) -> LibraryHistoryNumericSu
         average=value,
         minimum=value,
         maximum=value,
+    )
+
+
+def _legacy_size_summary(
+    totals: dict[str, int | float],
+    total_files: int,
+) -> LibraryHistoryNumericSummaryRead | None:
+    total_size_bytes = _coerce_float(totals.get("total_size_bytes"))
+    if total_size_bytes is None:
+        return None
+    count = _coerce_int(totals.get("file_count")) or total_files
+    if count <= 0:
+        return None
+    return LibraryHistoryNumericSummaryRead(
+        count=count,
+        sum=total_size_bytes,
+        average=total_size_bytes / count,
+        minimum=None,
+        maximum=None,
+    )
+
+
+def _resolution_label_megapixels(value: str) -> float | None:
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized in STANDARD_RESOLUTION_MEGAPIXELS:
+        return STANDARD_RESOLUTION_MEGAPIXELS[normalized]
+    match = re.search(r"(?P<height>\d{3,4})p", normalized)
+    if match is None:
+        return None
+    height = int(match.group("height"))
+    if height <= 0:
+        return None
+    width = round(height * 16 / 9)
+    return (width * height) / 1_000_000
+
+
+def _legacy_resolution_mp_summary(
+    resolution_counts: dict[str, int],
+    resolution_categories: OrderedDict[str, str],
+) -> LibraryHistoryNumericSummaryRead | None:
+    weighted_sum = 0.0
+    count = 0
+    for category_id, category_count in resolution_counts.items():
+        if category_count <= 0:
+            continue
+        megapixels = _resolution_label_megapixels(category_id)
+        if megapixels is None:
+            megapixels = _resolution_label_megapixels(resolution_categories.get(category_id, ""))
+        if megapixels is None:
+            continue
+        weighted_sum += megapixels * category_count
+        count += category_count
+    if count <= 0:
+        return None
+    return LibraryHistoryNumericSummaryRead(
+        count=count,
+        sum=weighted_sum,
+        average=weighted_sum / count,
+        minimum=None,
+        maximum=None,
     )
 
 
@@ -169,7 +269,14 @@ def _parse_history_metrics(
 ) -> LibraryHistoryTrendMetricsRead | None:
     raw_metrics = snapshot.get("trend_metrics")
     if not isinstance(raw_metrics, dict):
-        return None
+        legacy_totals = _coerce_legacy_totals(snapshot)
+        if not _has_enriched_legacy_totals(legacy_totals):
+            return None
+        raw_metrics = {
+            "total_files": legacy_totals.get("ready_files", legacy_totals.get("file_count", 0)),
+            "resolution_counts": {},
+            "totals": legacy_totals,
+        }
 
     raw_resolution_counts = raw_metrics.get("resolution_counts")
     resolution_counts: dict[str, int] = {}
@@ -192,6 +299,18 @@ def _parse_history_metrics(
     average_duration_seconds = _coerce_float(raw_metrics.get("average_duration_seconds"))
     average_quality_score = _coerce_float(raw_metrics.get("average_quality_score"))
 
+    totals = _coerce_totals(raw_metrics.get("totals"))
+    for total_key, total_value in _coerce_legacy_totals(snapshot).items():
+        totals.setdefault(total_key, total_value)
+    if "file_count" not in totals and total_files > 0:
+        totals["file_count"] = total_files
+    if (
+        "total_duration_seconds" not in totals
+        and average_duration_seconds is not None
+        and total_files > 0
+    ):
+        totals["total_duration_seconds"] = average_duration_seconds * total_files
+
     numeric_summaries = _coerce_numeric_summaries(raw_metrics.get("numeric_summaries"))
     for metric_id, average_value in (
         ("bitrate", average_bitrate),
@@ -203,6 +322,17 @@ def _parse_history_metrics(
             legacy_summary = _legacy_summary(average_value, total_files)
             if legacy_summary is not None:
                 numeric_summaries[metric_id] = legacy_summary
+    if "size" not in numeric_summaries:
+        legacy_size_summary = _legacy_size_summary(totals, total_files)
+        if legacy_size_summary is not None:
+            numeric_summaries["size"] = legacy_size_summary
+    if "resolution_mp" not in numeric_summaries:
+        legacy_resolution_summary = _legacy_resolution_mp_summary(
+            resolution_counts,
+            resolution_categories,
+        )
+        if legacy_resolution_summary is not None:
+            numeric_summaries["resolution_mp"] = legacy_resolution_summary
 
     category_counts = _coerce_category_counts(raw_metrics.get("category_counts"))
     category_counts.setdefault("resolution", dict(resolution_counts))
@@ -215,7 +345,7 @@ def _parse_history_metrics(
         average_audio_bitrate=average_audio_bitrate,
         average_duration_seconds=average_duration_seconds,
         average_quality_score=average_quality_score,
-        totals=_coerce_totals(raw_metrics.get("totals")),
+        totals=totals,
         numeric_summaries=numeric_summaries,
         category_counts=category_counts,
         numeric_distributions=_coerce_numeric_distributions(raw_metrics.get("numeric_distributions")),

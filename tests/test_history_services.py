@@ -204,6 +204,9 @@ def test_get_dashboard_history_aggregates_visible_libraries() -> None:
                     library_id=visible_library.id,
                     snapshot_day="2026-03-24",
                     snapshot={
+                        "file_count": 2,
+                        "total_size_bytes": 3_000,
+                        "total_duration_seconds": 10_800,
                         "trend_metrics": {
                             "total_files": 2,
                             "resolution_counts": {"4k": 2},
@@ -218,6 +221,9 @@ def test_get_dashboard_history_aggregates_visible_libraries() -> None:
                     library_id=visible_library.id,
                     snapshot_day="2026-03-25",
                     snapshot={
+                        "file_count": 3,
+                        "total_size_bytes": 6_000,
+                        "total_duration_seconds": 18_000,
                         "trend_metrics": {
                             "total_files": 3,
                             "resolution_counts": {"4k": 1, "1080p": 2},
@@ -255,6 +261,10 @@ def test_get_dashboard_history_aggregates_visible_libraries() -> None:
     assert payload.points[0].trend_metrics.total_files == 2
     assert payload.points[0].trend_metrics.resolution_counts == {"4k": 2}
     assert payload.points[0].trend_metrics.average_bitrate == 8_000_000.0
+    assert payload.points[0].trend_metrics.totals["total_size_bytes"] == 3_000
+    assert payload.points[0].trend_metrics.totals["total_duration_seconds"] == 10_800.0
+    assert payload.points[0].trend_metrics.numeric_summaries["size"].average == 1_500.0
+    assert payload.points[0].trend_metrics.numeric_summaries["resolution_mp"].average == 8.2944
 
 
 def test_build_library_history_snapshot_includes_trend_metrics() -> None:
@@ -401,7 +411,7 @@ def test_build_library_history_snapshot_returns_null_for_null_only_average_colum
     assert snapshot["trend_metrics"]["average_quality_score"] == 5.0
 
 
-def test_get_library_history_skips_legacy_rows_and_preserves_unknown_resolution_categories() -> None:
+def test_get_library_history_enriches_legacy_rows_and_preserves_unknown_resolution_categories() -> None:
     session_factory = _session_factory()
     settings = Settings()
 
@@ -432,13 +442,22 @@ def test_get_library_history_skips_legacy_rows_and_preserves_unknown_resolution_
                     library_id=library.id,
                     snapshot_day="2026-03-22",
                     captured_at=datetime(2026, 3, 22, 9, 0, tzinfo=UTC),
-                    snapshot={"file_count": 1},
+                    snapshot={
+                        "file_count": 1,
+                        "ready_files": 1,
+                        "pending_files": 0,
+                        "total_size_bytes": 1_500_000_000,
+                        "total_duration_seconds": 5_400,
+                    },
                 ),
                 LibraryHistory(
                     library_id=library.id,
                     snapshot_day="2026-03-23",
                     captured_at=datetime(2026, 3, 23, 9, 0, tzinfo=UTC),
                     snapshot={
+                        "file_count": 10,
+                        "total_size_bytes": 15_000_000_000,
+                        "total_duration_seconds": 54_000,
                         "trend_metrics": {
                             "total_files": 10,
                             "resolution_counts": {"4k": 4, "legacy_hd": 6},
@@ -471,10 +490,20 @@ def test_get_library_history_skips_legacy_rows_and_preserves_unknown_resolution_
         payload = get_library_history(db, library.id)
 
     assert payload is not None
-    assert payload.oldest_snapshot_day == "2026-03-23"
+    assert payload.oldest_snapshot_day == "2026-03-22"
     assert payload.newest_snapshot_day == "2026-03-24"
-    assert [point.snapshot_day for point in payload.points] == ["2026-03-23", "2026-03-24"]
-    assert payload.points[0].trend_metrics.resolution_counts["legacy_hd"] == 6
+    assert [point.snapshot_day for point in payload.points] == [
+        "2026-03-22",
+        "2026-03-23",
+        "2026-03-24",
+    ]
+    assert payload.points[0].trend_metrics.totals["total_size_bytes"] == 1_500_000_000
+    assert payload.points[0].trend_metrics.totals["total_duration_seconds"] == 5_400.0
+    assert payload.points[0].trend_metrics.numeric_summaries["size"].average == 1_500_000_000.0
+    assert payload.points[1].trend_metrics.resolution_counts["legacy_hd"] == 6
+    assert payload.points[1].trend_metrics.totals["total_duration_seconds"] == 54_000.0
+    assert payload.points[1].trend_metrics.numeric_summaries["resolution_mp"].average == 8.2944
+    assert payload.points[2].trend_metrics.numeric_summaries["resolution_mp"].average == 2.0736
     assert [item.model_dump() for item in payload.resolution_categories] == [
         {"id": "4k", "label": "Ultra HD"},
         {"id": "1080p", "label": "Full HD"},
