@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-alpine AS runtime
-ARG APP_VERSION=0.8.1
+ARG APP_VERSION=0.8.2
 
 LABEL name="MediaLyze"
 LABEL org.opencontainers.image.source="https://github.com/frederikemmer/MediaLyze"

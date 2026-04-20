@@ -224,7 +224,7 @@ wheels = [
 
 [[package]]
 name = "medialyze"
-version = "0.8.1"
+version = "0.8.2"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
