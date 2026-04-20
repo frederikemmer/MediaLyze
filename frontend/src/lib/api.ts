@@ -90,12 +90,25 @@ export type ResolutionCategory = {
 };
 
 export type LibraryHistoryTrendMetrics = {
+  schema_version?: number;
   total_files: number;
   resolution_counts: Record<string, number>;
   average_bitrate: number | null;
   average_audio_bitrate: number | null;
   average_duration_seconds: number | null;
   average_quality_score: number | null;
+  totals?: Record<string, number>;
+  numeric_summaries?: Record<string, LibraryHistoryNumericSummary>;
+  category_counts?: Record<string, Record<string, number>>;
+  numeric_distributions?: Record<string, NumericDistribution>;
+};
+
+export type LibraryHistoryNumericSummary = {
+  count: number;
+  sum: number;
+  average: number | null;
+  minimum: number | null;
+  maximum: number | null;
 };
 
 export type LibraryHistoryPoint = {

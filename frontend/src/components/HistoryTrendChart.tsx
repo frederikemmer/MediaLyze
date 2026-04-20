@@ -6,59 +6,98 @@ import { GridComponent, LegendComponent, TooltipComponent } from "echarts/compon
 import { CanvasRenderer } from "echarts/renderers";
 import { useTranslation } from "react-i18next";
 
-import type {
-  LibraryHistoryPoint,
-  LibraryHistoryResolutionCategory,
-  LibraryHistoryTrendMetrics,
-} from "../lib/api";
-import { formatBitrate, formatDuration } from "../lib/format";
+import type { LibraryHistoryPoint, LibraryHistoryResolutionCategory } from "../lib/api";
+import {
+  formatHistoryMetricValue,
+  getHistoryMetricDefinition,
+  type HistoryMetricDisplayMode,
+  type LibraryHistoryMetricId,
+} from "../lib/history-metrics";
 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
-
-export type LibraryHistoryMetricId =
-  | "resolution_mix"
-  | "average_bitrate"
-  | "average_audio_bitrate"
-  | "average_duration_seconds"
-  | "average_quality_score";
 
 type HistoryTrendChartProps = {
   points: LibraryHistoryPoint[];
   resolutionCategories: LibraryHistoryResolutionCategory[];
   metricId: LibraryHistoryMetricId;
+  displayMode?: HistoryMetricDisplayMode;
   resizeToken?: string;
 };
 
-function formatMetricValue(metricId: Exclude<LibraryHistoryMetricId, "resolution_mix">, value: number): string {
-  if (metricId === "average_bitrate" || metricId === "average_audio_bitrate") {
-    return formatBitrate(value);
-  }
-  if (metricId === "average_duration_seconds") {
-    return formatDuration(value);
-  }
-  return `${Math.round(value * 10) / 10} / 10`;
+function formatAxisCount(value: number): string {
+  return String(Math.round(value));
 }
 
-function numericMetricValue(metricId: Exclude<LibraryHistoryMetricId, "resolution_mix">, metrics: LibraryHistoryTrendMetrics) {
-  if (metricId === "average_bitrate") {
-    return metrics.average_bitrate;
+function formatAxisPercentage(value: number): string {
+  return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
+}
+
+function categoryCounts(
+  point: LibraryHistoryPoint,
+  categoryKey: string,
+): Record<string, number> {
+  if (categoryKey === "resolution") {
+    return point.trend_metrics.category_counts?.resolution ?? point.trend_metrics.resolution_counts;
   }
-  if (metricId === "average_audio_bitrate") {
-    return metrics.average_audio_bitrate;
+  return point.trend_metrics.category_counts?.[categoryKey] ?? {};
+}
+
+function categorySeriesKeys(
+  points: LibraryHistoryPoint[],
+  categoryKey: string,
+  resolutionCategories: LibraryHistoryResolutionCategory[],
+): string[] {
+  const keys = new Set<string>();
+  for (const point of points) {
+    for (const key of Object.keys(categoryCounts(point, categoryKey))) {
+      keys.add(key);
+    }
   }
-  if (metricId === "average_duration_seconds") {
-    return metrics.average_duration_seconds;
+  if (categoryKey === "resolution") {
+    return [
+      ...resolutionCategories.map((category) => category.id).filter((id) => keys.has(id)),
+      ...[...keys].filter((id) => !resolutionCategories.some((category) => category.id === id)).sort(),
+    ];
   }
-  return metrics.average_quality_score;
+  return [...keys].sort((left, right) => {
+    const leftTotal = points.reduce((sum, point) => sum + (categoryCounts(point, categoryKey)[left] ?? 0), 0);
+    const rightTotal = points.reduce((sum, point) => sum + (categoryCounts(point, categoryKey)[right] ?? 0), 0);
+    return rightTotal - leftTotal || left.localeCompare(right);
+  });
+}
+
+function distributionSeriesKeys(points: LibraryHistoryPoint[], distributionKey: string): string[] {
+  const keys = new Set<string>();
+  for (const point of points) {
+    const distribution = point.trend_metrics.numeric_distributions?.[distributionKey];
+    for (const bin of distribution?.bins ?? []) {
+      keys.add(`${bin.lower ?? ""}:${bin.upper ?? ""}`);
+    }
+  }
+  return [...keys].sort((left, right) => {
+    const [leftLower, leftUpper] = left.split(":").map((part) => (part === "" ? null : Number(part)));
+    const [rightLower, rightUpper] = right.split(":").map((part) => (part === "" ? null : Number(part)));
+    return (
+      (leftLower ?? Number.NEGATIVE_INFINITY) - (rightLower ?? Number.NEGATIVE_INFINITY) ||
+      (leftUpper ?? Number.POSITIVE_INFINITY) - (rightUpper ?? Number.POSITIVE_INFINITY)
+    );
+  });
+}
+
+function findDistributionBin(point: LibraryHistoryPoint, distributionKey: string, key: string) {
+  const distribution = point.trend_metrics.numeric_distributions?.[distributionKey];
+  return distribution?.bins.find((bin) => `${bin.lower ?? ""}:${bin.upper ?? ""}` === key) ?? null;
 }
 
 function HistoryTrendChartComponent({
   points,
   resolutionCategories,
   metricId,
+  displayMode = "count",
   resizeToken,
 }: HistoryTrendChartProps) {
   const { t } = useTranslation();
+  const metric = getHistoryMetricDefinition(metricId);
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const lineColor = cssVars?.getPropertyValue("--ink").trim() || "#1f1c16";
@@ -83,31 +122,20 @@ function HistoryTrendChartComponent({
   const option = useMemo(() => {
     const xAxisData = points.map((point) => point.snapshot_day);
 
-    if (metricId === "resolution_mix") {
+    if (metric.group === "summary") {
       return {
         animation: false,
-        grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
-        legend: {
-          top: 0,
-          type: "scroll",
-          icon: "roundRect",
-          textStyle: {
-            color: axisColor,
-            fontSize: 12,
-          },
-        },
+        grid: { top: 10, right: 12, bottom: 12, left: 12, containLabel: true },
         tooltip: {
           ...tooltipBase,
           trigger: "axis",
           axisPointer: { type: "line" },
-          formatter: (params: Array<{ axisValueLabel?: string; seriesName?: string; value?: number }>) => {
-            const rows = Array.isArray(params) ? params : [];
-            const day = rows[0]?.axisValueLabel ?? "";
-            const total = rows.reduce((sum, item) => sum + (typeof item.value === "number" ? item.value : 0), 0);
+          formatter: (params: Array<{ axisValueLabel?: string; value?: number | null }>) => {
+            const point = Array.isArray(params) ? params[0] : null;
+            const rawValue = typeof point?.value === "number" ? point.value : null;
             return [
-              day,
-              ...rows.map((item) => `${item.seriesName}: ${typeof item.value === "number" ? item.value : 0}`),
-              `${t("libraryDetail.history.tooltip.total")}: ${total}`,
+              point?.axisValueLabel ?? "",
+              `${t(metric.labelKey)}: ${formatHistoryMetricValue(metric, rawValue, t)}`,
             ].join("<br/>");
           },
         },
@@ -121,40 +149,131 @@ function HistoryTrendChartComponent({
         },
         yAxis: {
           type: "value",
-          axisLabel: { color: axisColor, fontSize: 12, margin: 8 },
+          axisLabel: {
+            color: axisColor,
+            fontSize: 12,
+            margin: 8,
+            formatter: (value: number) => formatHistoryMetricValue(metric, value, t),
+          },
           splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
         },
-        series: resolutionCategories.map((category) => ({
-          name: category.label,
-          type: "line",
-          stack: "resolution_mix",
-          showSymbol: points.length <= 1,
-          smooth: false,
-          lineStyle: { width: 2 },
-          areaStyle: { opacity: 0.22 },
-          emphasis: { focus: "series" },
-          data: points.map((point) => point.trend_metrics.resolution_counts[category.id] ?? 0),
-        })),
+        series: [
+          {
+            name: t(metric.labelKey),
+            type: "line",
+            showSymbol: true,
+            symbolSize: points.length <= 1 ? 9 : 7,
+            smooth: false,
+            lineStyle: { width: 2.5, color: fillColor },
+            itemStyle: { color: fillColor },
+            data: points.map((point) => metric.value(point.trend_metrics)),
+          },
+        ],
       };
     }
 
-    const numericSeriesMetric = metricId;
+    if (metric.group === "distribution") {
+      const seriesKeys = distributionSeriesKeys(points, metric.distributionKey);
+      return {
+        animation: false,
+        grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
+        legend: {
+          top: 0,
+          type: "scroll",
+          icon: "roundRect",
+          textStyle: { color: axisColor, fontSize: 12 },
+        },
+        tooltip: {
+          ...tooltipBase,
+          trigger: "axis",
+          axisPointer: { type: "line" },
+          formatter: (params: Array<{ axisValueLabel?: string; seriesName?: string; value?: number }>) => {
+            const rows = Array.isArray(params) ? params : [];
+            const day = rows[0]?.axisValueLabel ?? "";
+            return [
+              day,
+              ...rows.map((item) => {
+                const value = typeof item.value === "number" ? item.value : 0;
+                return `${item.seriesName}: ${
+                  displayMode === "percentage" ? formatAxisPercentage(value) : formatAxisCount(value)
+                }`;
+              }),
+            ].join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: xAxisData,
+          boundaryGap: false,
+          axisTick: { show: false },
+          axisLabel: { color: axisColor, hideOverlap: true, fontSize: 12, margin: 8 },
+          axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
+        },
+        yAxis: {
+          type: "value",
+          axisLabel: {
+            color: axisColor,
+            fontSize: 12,
+            margin: 8,
+            formatter: displayMode === "percentage" ? formatAxisPercentage : formatAxisCount,
+          },
+          splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
+        },
+        series: seriesKeys.map((key) => {
+          const exampleBin = points
+            .map((point) => findDistributionBin(point, metric.distributionKey, key))
+            .find(Boolean);
+          return {
+            name: exampleBin ? metric.formatBin(exampleBin) : key,
+            type: "line",
+            stack: metric.id,
+            showSymbol: points.length <= 1,
+            smooth: false,
+            lineStyle: { width: 2 },
+            areaStyle: { opacity: 0.22 },
+            emphasis: { focus: "series" },
+            data: points.map((point) => {
+              const bin = findDistributionBin(point, metric.distributionKey, key);
+              if (!bin) {
+                return 0;
+              }
+              return displayMode === "percentage" ? bin.percentage : bin.count;
+            }),
+          };
+        }),
+      };
+    }
+
+    const seriesKeys = categorySeriesKeys(points, metric.categoryKey, resolutionCategories);
     return {
       animation: false,
-      grid: { top: 10, right: 12, bottom: 12, left: 12, containLabel: true },
+      grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
+      legend: {
+        top: 0,
+        type: "scroll",
+        icon: "roundRect",
+        textStyle: { color: axisColor, fontSize: 12 },
+      },
       tooltip: {
         ...tooltipBase,
         trigger: "axis",
         axisPointer: { type: "line" },
-        formatter: (params: Array<{ axisValueLabel?: string; value?: number | null }>) => {
-          const point = Array.isArray(params) ? params[0] : null;
-          const rawValue = typeof point?.value === "number" ? point.value : null;
+        formatter: (params: Array<{ axisValueLabel?: string; seriesName?: string; value?: number }>) => {
+          const rows = Array.isArray(params) ? params : [];
+          const day = rows[0]?.axisValueLabel ?? "";
+          const total = rows.reduce((sum, item) => sum + (typeof item.value === "number" ? item.value : 0), 0);
           return [
-            point?.axisValueLabel ?? "",
-            `${t(`libraryDetail.history.metrics.${numericSeriesMetric}`)}: ${
-              rawValue === null ? t("fileTable.na") : formatMetricValue(numericSeriesMetric, rawValue)
-            }`,
-          ].join("<br/>");
+            day,
+            ...rows.map((item) => {
+              const value = typeof item.value === "number" ? item.value : 0;
+              return `${item.seriesName}: ${
+                displayMode === "percentage" ? formatAxisPercentage(value) : formatAxisCount(value)
+              }`;
+            }),
+            displayMode === "count" ? `${t("libraryDetail.history.tooltip.total")}: ${total}` : null,
+          ]
+            .filter(Boolean)
+            .join("<br/>");
         },
       },
       xAxis: {
@@ -171,28 +290,35 @@ function HistoryTrendChartComponent({
           color: axisColor,
           fontSize: 12,
           margin: 8,
-          formatter: (value: number) => formatMetricValue(numericSeriesMetric, value),
+          formatter: displayMode === "percentage" ? formatAxisPercentage : formatAxisCount,
         },
         splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
       },
-      series: [
-        {
-          name: t(`libraryDetail.history.metrics.${numericSeriesMetric}`),
-          type: "line",
-          showSymbol: true,
-          symbolSize: points.length <= 1 ? 9 : 7,
-          smooth: false,
-          lineStyle: { width: 2.5, color: fillColor },
-          itemStyle: { color: fillColor },
-          data: points.map((point) => numericMetricValue(numericSeriesMetric, point.trend_metrics)),
-        },
-      ],
+      series: seriesKeys.map((key) => ({
+        name: metric.formatCategory(key, resolutionCategories),
+        type: "line",
+        stack: metric.id,
+        showSymbol: points.length <= 1,
+        smooth: false,
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.22 },
+        emphasis: { focus: "series" },
+        data: points.map((point) => {
+          const counts = categoryCounts(point, metric.categoryKey);
+          const count = counts[key] ?? 0;
+          if (displayMode === "count") {
+            return count;
+          }
+          const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+          return total > 0 ? (count / total) * 100 : 0;
+        }),
+      })),
     };
-  }, [axisColor, fillColor, lineColor, metricId, points, resolutionCategories, t, tooltipBase]);
+  }, [axisColor, displayMode, fillColor, lineColor, metric, points, resolutionCategories, t, tooltipBase]);
 
   return (
     <ReactECharts
-      key={resizeToken ? `${metricId}-${resizeToken}` : metricId}
+      key={resizeToken ? `${metricId}-${displayMode}-${resizeToken}` : `${metricId}-${displayMode}`}
       echarts={echarts}
       option={option}
       notMerge
@@ -208,5 +334,6 @@ export const HistoryTrendChart = memo(
     previousProps.points === nextProps.points &&
     previousProps.resolutionCategories === nextProps.resolutionCategories &&
     previousProps.metricId === nextProps.metricId &&
+    previousProps.displayMode === nextProps.displayMode &&
     previousProps.resizeToken === nextProps.resizeToken,
 );

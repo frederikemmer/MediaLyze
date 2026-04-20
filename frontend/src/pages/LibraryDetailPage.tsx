@@ -47,8 +47,8 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
-import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
+import { isLibraryHistoryMetricId, type LibraryHistoryMetricId } from "../lib/history-metrics";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
@@ -806,12 +806,7 @@ function readHistoryMetricPreference(): LibraryHistoryMetricId {
     return DEFAULT_HISTORY_METRIC;
   }
   const storedPreference = window.localStorage.getItem(HISTORY_SELECTED_METRIC_STORAGE_KEY);
-  if (
-    storedPreference === "resolution_mix" ||
-    storedPreference === "average_bitrate" ||
-    storedPreference === "average_audio_bitrate" ||
-    storedPreference === "average_duration_seconds"
-  ) {
+  if (isLibraryHistoryMetricId(storedPreference)) {
     return storedPreference;
   }
   return DEFAULT_HISTORY_METRIC;

@@ -289,6 +289,19 @@ def test_build_library_history_snapshot_includes_trend_metrics() -> None:
     assert snapshot["trend_metrics"]["average_audio_bitrate"] == 768_000.0
     assert snapshot["trend_metrics"]["average_duration_seconds"] == 7200.0
     assert snapshot["trend_metrics"]["average_quality_score"] == 8.0
+    assert snapshot["trend_metrics"]["schema_version"] == 2
+    assert snapshot["trend_metrics"]["totals"]["file_count"] == 1
+    assert snapshot["trend_metrics"]["totals"]["ready_files"] == 1
+    assert snapshot["trend_metrics"]["numeric_summaries"]["size"]["count"] == 1
+    assert snapshot["trend_metrics"]["numeric_summaries"]["size"]["average"] == 1_500_000_000.0
+    assert snapshot["trend_metrics"]["numeric_summaries"]["resolution_mp"]["average"] == 8.2944
+    assert snapshot["trend_metrics"]["category_counts"]["container"]["mkv"] == 1
+    assert snapshot["trend_metrics"]["category_counts"]["video_codec"]["hevc"] == 1
+    assert snapshot["trend_metrics"]["category_counts"]["hdr_type"]["HDR10"] == 1
+    assert snapshot["trend_metrics"]["category_counts"]["audio_codecs"]["truehd"] == 1
+    assert snapshot["trend_metrics"]["category_counts"]["audio_languages"]["en"] == 1
+    assert snapshot["trend_metrics"]["category_counts"]["scan_status"]["ready"] == 1
+    assert snapshot["trend_metrics"]["numeric_distributions"]["resolution_mp"]["total"] == 1
 
 
 def test_build_library_history_snapshot_averages_ignore_null_values() -> None:
@@ -740,7 +753,11 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
         "2026-04-17",
     ]
     assert library_rows[0].snapshot["trend_metrics"]["total_files"] == 1
+    assert library_rows[0].snapshot["trend_metrics"]["schema_version"] == 2
+    assert library_rows[0].snapshot["trend_metrics"]["category_counts"]["container"]["mkv"] == 1
+    assert library_rows[0].snapshot["trend_metrics"]["numeric_distributions"]["size"]["total"] == 1
     assert library_rows[5].snapshot["trend_metrics"]["total_files"] == 2
+    assert library_rows[5].snapshot["trend_metrics"]["numeric_summaries"]["quality_score"]["count"] == 2
     assert library_rows[5].snapshot["scan_delta"]["new_files"] == 1
     assert file_rows[0].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction
     assert file_rows[0].relative_path == "older.mkv"

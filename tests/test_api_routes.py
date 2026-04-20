@@ -318,6 +318,8 @@ def test_dashboard_history_route_returns_visible_library_aggregation() -> None:
     assert payload["newest_snapshot_day"] == "2026-04-10"
     assert payload["points"][0]["trend_metrics"]["total_files"] == 2
     assert payload["points"][0]["trend_metrics"]["resolution_counts"] == {"4k": 2}
+    assert payload["points"][0]["trend_metrics"]["category_counts"]["resolution"] == {"4k": 2}
+    assert payload["points"][0]["trend_metrics"]["numeric_summaries"]["bitrate"]["average"] == 8_000_000
 
 
 def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
@@ -423,6 +425,9 @@ def test_library_history_route_returns_enriched_points_and_resolved_labels() -> 
         {"id": "legacy_hd", "label": "legacy_hd"},
     ]
     assert payload["points"][0]["trend_metrics"]["resolution_counts"]["legacy_hd"] == 2
+    assert payload["points"][0]["trend_metrics"]["schema_version"] == 1
+    assert payload["points"][0]["trend_metrics"]["category_counts"]["resolution"]["legacy_hd"] == 2
+    assert payload["points"][0]["trend_metrics"]["numeric_summaries"]["quality_score"]["average"] == 7.3
 
 
 def test_library_history_route_returns_404_for_unknown_library() -> None:

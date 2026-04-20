@@ -395,12 +395,38 @@
       "tooltip": {
         "total": "Gesamt"
       },
+      "groups": {
+        "summary": "Zusammenfassung",
+        "category": "Mix",
+        "distribution": "Verteilung"
+      },
       "metrics": {
+        "file_count": "Dateien",
+        "total_size_bytes": "Gesamtgroesse",
+        "total_duration_seconds": "Gesamtdauer",
+        "average_size_bytes": "Durchschnittliche Groesse",
         "resolution_mix": "Aufloesungsmix",
         "average_bitrate": "Durchschnittliche Bitrate",
         "average_audio_bitrate": "Durchschnittliche Audio-Bitrate",
         "average_duration_seconds": "Durchschnittliche Dauer",
-        "average_quality_score": "Durchschnittlicher Qualitaets-Score"
+        "average_quality_score": "Durchschnittlicher Qualitaets-Score",
+        "average_resolution_mp": "Durchschnittliche Aufloesung in MP",
+        "container_mix": "Container-Mix",
+        "video_codec_mix": "Video-Codec-Mix",
+        "hdr_type_mix": "Dynamikumfang-Mix",
+        "audio_codecs_mix": "Audio-Codec-Mix",
+        "audio_spatial_profiles_mix": "Raumklang-Mix",
+        "audio_languages_mix": "Audio-Sprachen-Mix",
+        "subtitle_languages_mix": "Untertitel-Sprachen-Mix",
+        "subtitle_codecs_mix": "Untertitel-Codec-Mix",
+        "subtitle_sources_mix": "Untertitelquellen-Mix",
+        "scan_status_mix": "Scan-Status-Mix",
+        "quality_score_distribution": "Qualitaets-Score-Verteilung",
+        "duration_distribution": "Dauerverteilung",
+        "size_distribution": "Groessenverteilung",
+        "bitrate_distribution": "Bitratenverteilung",
+        "audio_bitrate_distribution": "Audio-Bitratenverteilung",
+        "resolution_mp_distribution": "Aufloesung-in-MP-Verteilung"
       },
       "unknownLegacyResolutionCategory": "Unbekannte Legacy-Kategorie: {{id}}"
     },

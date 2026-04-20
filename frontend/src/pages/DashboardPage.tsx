@@ -47,7 +47,7 @@ import {
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { useScanJobs } from "../lib/scan-jobs";
-import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
+import { isLibraryHistoryMetricId, type LibraryHistoryMetricId } from "../lib/history-metrics";
 
 const DASHBOARD_LAYOUT_KEY = "main";
 const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
@@ -124,12 +124,7 @@ function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
     return DEFAULT_HISTORY_METRIC;
   }
   const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
-  if (
-    storedPreference === "resolution_mix" ||
-    storedPreference === "average_bitrate" ||
-    storedPreference === "average_audio_bitrate" ||
-    storedPreference === "average_duration_seconds"
-  ) {
+  if (isLibraryHistoryMetricId(storedPreference)) {
     return storedPreference;
   }
   return DEFAULT_HISTORY_METRIC;
