@@ -51,6 +51,28 @@ class ScanPerformanceUpdate(BaseModel):
     )
 
 
+class HistoryRetentionBucketRead(BaseModel):
+    days: int = Field(default=0, ge=0)
+    storage_limit_gb: float = Field(default=0.0, ge=0.0)
+
+
+class HistoryRetentionBucketUpdate(BaseModel):
+    days: int | None = Field(default=None, ge=0)
+    storage_limit_gb: float | None = Field(default=None, ge=0.0)
+
+
+class HistoryRetentionRead(BaseModel):
+    file_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=90))
+    library_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=365))
+    scan_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=30))
+
+
+class HistoryRetentionUpdate(BaseModel):
+    file_history: HistoryRetentionBucketUpdate | None = None
+    library_history: HistoryRetentionBucketUpdate | None = None
+    scan_history: HistoryRetentionBucketUpdate | None = None
+
+
 class AppSettingsRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     user_ignore_patterns: list[str] = Field(default_factory=list)
@@ -58,6 +80,7 @@ class AppSettingsRead(BaseModel):
     resolution_categories: list[ResolutionCategory] = Field(default_factory=list)
     feature_flags: FeatureFlagsRead = Field(default_factory=FeatureFlagsRead)
     scan_performance: ScanPerformanceRead = Field(default_factory=ScanPerformanceRead)
+    history_retention: HistoryRetentionRead = Field(default_factory=HistoryRetentionRead)
 
 
 class AppSettingsUpdate(BaseModel):
@@ -67,3 +90,4 @@ class AppSettingsUpdate(BaseModel):
     resolution_categories: list[ResolutionCategory] | None = None
     feature_flags: FeatureFlagsUpdate | None = None
     scan_performance: ScanPerformanceUpdate | None = None
+    history_retention: HistoryRetentionUpdate | None = None

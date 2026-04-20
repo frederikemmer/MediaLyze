@@ -8,9 +8,11 @@ type AsyncPanelProps = {
   subtitleAddon?: ReactNode;
   loading?: boolean;
   error?: string | null;
+  className?: string;
   bodyClassName?: string;
   titleAddon?: ReactNode;
   collapseActions?: ReactNode;
+  collapseButtonClassName?: string;
   headerAddon?: ReactNode;
   collapseState?: {
     collapsed: boolean;
@@ -26,9 +28,11 @@ export function AsyncPanel({
   subtitleAddon,
   loading,
   error,
+  className,
   bodyClassName,
   titleAddon,
   collapseActions,
+  collapseButtonClassName,
   headerAddon,
   collapseState,
   children,
@@ -41,7 +45,7 @@ export function AsyncPanel({
   const hasHeaderLead = Boolean(collapseState || title || titleAddon || subtitle || subtitleAddon);
 
   return (
-    <section className={`panel async-panel${isCollapsed ? " is-collapsed" : ""}`}>
+    <section className={`panel async-panel${isCollapsed ? " is-collapsed" : ""}${className ? ` ${className}` : ""}`}>
       <div className="panel-header">
         {hasHeaderLead ? (
           <div>
@@ -65,7 +69,7 @@ export function AsyncPanel({
                       {collapseActions}
                       <button
                         type="button"
-                        className="secondary icon-only-button async-panel-toggle-icon-button"
+                        className={`secondary icon-only-button async-panel-toggle-icon-button${collapseButtonClassName ? ` ${collapseButtonClassName}` : ""}`}
                         aria-label={
                           isCollapsed
                             ? t("panel.expandAria", { title })

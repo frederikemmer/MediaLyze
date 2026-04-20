@@ -20,6 +20,7 @@ from backend.app.models.entities import (
     JobStatus,
     Library,
     MediaFile,
+    MediaFileHistoryCaptureReason,
     MediaFormat,
     ScanJob,
     ScanStatus,
@@ -33,6 +34,10 @@ from backend.app.services.duplicates import (
 )
 from backend.app.services.app_settings import get_app_settings, get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
+from backend.app.services.history_snapshots import (
+    create_media_file_history_entry_if_changed,
+    upsert_library_history_snapshot,
+)
 from backend.app.services.quality import (
     build_quality_score_input,
     build_quality_score_input_from_media_file,
@@ -855,6 +860,12 @@ def run_scan(
                                 library,
                                 app_settings.resolution_categories,
                             )
+                            create_media_file_history_entry_if_changed(
+                                db,
+                                work.media_file,
+                                MediaFileHistoryCaptureReason.scan_analysis,
+                                app_settings.resolution_categories,
+                            )
                             analyzed_successfully += 1
                         except Exception as exc:
                             logger.exception("Media normalization failed for %s", relative_path)
@@ -1044,6 +1055,14 @@ def run_scan(
         queued_for_duplicate_processing,
         include_duplicate_counts=True,
     )
+    stats_cache.invalidate(cache_key, job.library_id)
+    upsert_library_history_snapshot(
+        db,
+        library,
+        source_scan_job_id=job.id,
+        scan_summary=job.scan_summary,
+        captured_at=job.finished_at,
+    )
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
     db.refresh(job)
@@ -1105,6 +1124,12 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
             resolution_categories,
         )
         _persist_quality_breakdown(media_file, breakdown)
+        create_media_file_history_entry_if_changed(
+            db,
+            media_file,
+            MediaFileHistoryCaptureReason.quality_recompute,
+            resolution_categories,
+        )
         job.files_scanned += 1
         batch_counter += 1
         if batch_counter >= 200:

@@ -10,7 +10,10 @@ import {
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
   type BrowseResponse,
+  type HistoryReconstructionStatus,
   type DashboardResponse,
+  type HistoryReconstructionResult,
+  type HistoryStorage,
   type LibrarySummary,
   type PathInspection,
   type RecentScanJobPage,
@@ -21,8 +24,13 @@ import {
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibrariesPage } from "./LibrariesPage";
 
-type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
+type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags" | "history_retention"> & {
   scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
+  history_retention?: {
+    file_history?: Partial<NonNullable<AppSettings["history_retention"]>["file_history"]>;
+    library_history?: Partial<NonNullable<AppSettings["history_retention"]>["library_history"]>;
+    scan_history?: Partial<NonNullable<AppSettings["history_retention"]>["scan_history"]>;
+  };
   feature_flags?: Partial<AppSettings["feature_flags"]>;
 };
 
@@ -30,6 +38,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
   const {
     feature_flags: overrideFeatureFlags = {},
     scan_performance: overrideScanPerformance = {},
+    history_retention: overrideHistoryRetention = {},
     ...restOverrides
   } = overrides;
   return {
@@ -42,6 +51,11 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       comparison_scatter_point_limit: 5000,
       ...overrideScanPerformance,
     },
+    history_retention: {
+      file_history: { days: 90, storage_limit_gb: 0, ...overrideHistoryRetention.file_history },
+      library_history: { days: 365, storage_limit_gb: 0, ...overrideHistoryRetention.library_history },
+      scan_history: { days: 30, storage_limit_gb: 0, ...overrideHistoryRetention.scan_history },
+    },
     feature_flags: {
       show_analyzed_files_csv_export: false,
       show_full_width_app_shell: false,
@@ -50,6 +64,88 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideFeatureFlags,
     },
     ...restOverrides,
+  };
+}
+
+function createHistoryStorage(overrides: Partial<HistoryStorage> = {}): HistoryStorage {
+  return {
+    generated_at: "2026-03-16T10:03:00Z",
+    database_file_bytes: 5_000_000,
+    reclaimable_file_bytes: 0,
+    categories: {
+      file_history: {
+        entry_count: 10,
+        current_estimated_bytes: 1_000_000,
+        average_daily_bytes: 100_000,
+        projected_bytes_30d: 3_000_000,
+        projected_bytes_for_configured_days: 9_000_000,
+        days_limit: 90,
+        storage_limit_bytes: 0,
+        oldest_recorded_at: "2026-01-01T00:00:00Z",
+        newest_recorded_at: "2026-03-16T10:03:00Z",
+      },
+      library_history: {
+        entry_count: 5,
+        current_estimated_bytes: 200_000,
+        average_daily_bytes: 1_000,
+        projected_bytes_30d: 30_000,
+        projected_bytes_for_configured_days: 365_000,
+        days_limit: 365,
+        storage_limit_bytes: 0,
+        oldest_recorded_at: "2025-03-16T10:03:00Z",
+        newest_recorded_at: "2026-03-16T10:03:00Z",
+      },
+      scan_history: {
+        entry_count: 20,
+        current_estimated_bytes: 300_000,
+        average_daily_bytes: 10_000,
+        projected_bytes_30d: 300_000,
+        projected_bytes_for_configured_days: 300_000,
+        days_limit: 30,
+        storage_limit_bytes: 0,
+        oldest_recorded_at: "2026-02-15T10:03:00Z",
+        newest_recorded_at: "2026-03-16T10:03:00Z",
+      },
+    },
+    ...overrides,
+  };
+}
+
+function createHistoryReconstructionResult(
+  overrides: Partial<HistoryReconstructionResult> = {},
+): HistoryReconstructionResult {
+  return {
+    generated_at: "2026-04-19T12:00:00Z",
+    libraries_processed: 2,
+    libraries_with_media: 2,
+    created_file_history_entries: 8,
+    created_library_history_entries: 24,
+    oldest_reconstructed_snapshot_day: "2026-03-01",
+    newest_reconstructed_snapshot_day: "2026-04-18",
+    ...overrides,
+  };
+}
+
+function createHistoryReconstructionStatus(
+  overrides: Partial<HistoryReconstructionStatus> = {},
+): HistoryReconstructionStatus {
+  return {
+    status: "idle",
+    phase: "idle",
+    started_at: null,
+    finished_at: null,
+    progress_percent: 0,
+    libraries_total: 0,
+    libraries_processed: 0,
+    libraries_with_media: 0,
+    current_library_name: null,
+    phase_total: 0,
+    phase_completed: 0,
+    created_file_history_entries: 0,
+    created_library_history_entries: 0,
+    result: null,
+    error: null,
+    ...overrides,
   };
 }
 
@@ -238,6 +334,15 @@ beforeEach(() => {
   vi.spyOn(api, "libraries").mockResolvedValue([]);
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+  vi.spyOn(api, "historyStorage").mockResolvedValue(createHistoryStorage());
+  vi.spyOn(api, "historyReconstructionStatus").mockResolvedValue(createHistoryReconstructionStatus());
+  vi.spyOn(api, "reconstructHistory").mockResolvedValue(
+    createHistoryReconstructionStatus({
+      status: "running",
+      phase: "loading_libraries",
+      libraries_total: 2,
+    }),
+  );
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
@@ -310,6 +415,11 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 5000,
         },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
@@ -347,6 +457,11 @@ describe("LibrariesPage ignore patterns", () => {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 5000,
+        },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
         },
         feature_flags: {
           show_analyzed_files_csv_export: true,
@@ -386,6 +501,11 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 5000,
         },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: true,
@@ -424,6 +544,11 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 5000,
         },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
@@ -461,6 +586,11 @@ describe("LibrariesPage ignore patterns", () => {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 5000,
+        },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
         },
         feature_flags: {
           show_analyzed_files_csv_export: false,
@@ -506,6 +636,11 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 3,
           comparison_scatter_point_limit: 5000,
         },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
@@ -544,6 +679,11 @@ describe("LibrariesPage ignore patterns", () => {
           parallel_scan_jobs: 2,
           comparison_scatter_point_limit: 10000,
         },
+        history_retention: {
+          file_history: { days: 90, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
         feature_flags: {
           show_analyzed_files_csv_export: false,
           show_full_width_app_shell: false,
@@ -567,6 +707,160 @@ describe("LibrariesPage ignore patterns", () => {
     expect(within(settingsSection).getByLabelText("Scatter plot points")).toBeInTheDocument();
     expect(within(settingsSection).queryByLabelText("Per-scan analysis workers")).not.toBeInTheDocument();
     expect(within(settingsSection).queryByLabelText("Parallel library scans")).not.toBeInTheDocument();
+  });
+
+  it("renders history retention rows with storage forecast values", async () => {
+    renderPage();
+
+    expect(await screen.findByText("History retention")).toBeInTheDocument();
+    expect(screen.getAllByText("File history")).toHaveLength(2);
+    expect(screen.getAllByText("Media library history")).toHaveLength(2);
+    expect(screen.getAllByText("Scan history")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
+    expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
+    expect(await screen.findByText("977 KB")).toBeInTheDocument();
+    expect(await screen.findByText("2.9 MB")).toBeInTheDocument();
+  });
+
+  it("shows live reconstruction progress inside the history retention panel", async () => {
+    vi.spyOn(api, "historyReconstructionStatus").mockResolvedValue(
+      createHistoryReconstructionStatus({
+        status: "running",
+        phase: "reconstructing_file_history",
+        progress_percent: 25,
+        libraries_total: 4,
+        libraries_processed: 1,
+        current_library_name: "Movies",
+        phase_total: 200,
+        phase_completed: 50,
+        created_file_history_entries: 12,
+        created_library_history_entries: 3,
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Reconstructing file history")).toBeInTheDocument();
+    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText("50 of 200 media files")).toBeInTheDocument();
+    expect(screen.getByText("1 of 4 libraries")).toBeInTheDocument();
+    expect(screen.getByText("Current library: Movies")).toBeInTheDocument();
+  });
+
+  it("reconstructs approximate history and refreshes the storage forecast", async () => {
+    const reconstructSpy = vi.spyOn(api, "reconstructHistory").mockResolvedValue(
+      createHistoryReconstructionStatus({
+        status: "running",
+        phase: "reconstructing_file_history",
+        progress_percent: 40,
+        libraries_total: 2,
+        libraries_processed: 0,
+        current_library_name: "Movies",
+        phase_total: 10,
+        phase_completed: 4,
+      }),
+    );
+    const historyStatusSpy = vi
+      .spyOn(api, "historyReconstructionStatus")
+      .mockResolvedValueOnce(createHistoryReconstructionStatus())
+      .mockResolvedValueOnce(
+        createHistoryReconstructionStatus({
+          status: "completed",
+          phase: "completed",
+          progress_percent: 100,
+          libraries_total: 2,
+          libraries_processed: 2,
+          libraries_with_media: 2,
+          created_library_history_entries: 12,
+          created_file_history_entries: 4,
+          result: createHistoryReconstructionResult({
+            created_library_history_entries: 12,
+            created_file_history_entries: 4,
+          }),
+        }),
+      );
+    const historyStorageSpy = vi
+      .spyOn(api, "historyStorage")
+      .mockResolvedValueOnce(createHistoryStorage())
+      .mockResolvedValueOnce(createHistoryStorage());
+
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Reconstruct history" });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(historyStatusSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    expect(
+      await screen.findByText("Reconstructed 12 library snapshots and 4 initial file-history entries."),
+    ).toBeInTheDocument();
+  });
+
+  it("persists history retention values and refreshes the storage forecast", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        history_retention: {
+          file_history: { days: 120, storage_limit_gb: 1.5 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
+      }),
+    );
+    const historyStorageSpy = vi
+      .spyOn(api, "historyStorage")
+      .mockResolvedValueOnce(createHistoryStorage())
+      .mockResolvedValueOnce(
+        createHistoryStorage({
+          categories: {
+            ...createHistoryStorage().categories,
+            file_history: {
+              ...createHistoryStorage().categories.file_history,
+              days_limit: 120,
+              storage_limit_bytes: 1610612736,
+            },
+          },
+        }),
+      );
+
+    renderPage();
+
+    await screen.findByDisplayValue("movie.tmp");
+    const daysInput = (await screen.findByLabelText("Retention days", {
+      selector: "#file_history-history-days",
+    })) as HTMLInputElement;
+    const storageInput = screen.getByLabelText("Storage limit (GB)", {
+      selector: "#file_history-history-gb",
+    }) as HTMLInputElement;
+    expect(daysInput.value).toBe("90");
+    expect(storageInput.value).toBe("0");
+    fireEvent.change(daysInput, { target: { value: "120" } });
+    fireEvent.change(storageInput, { target: { value: "1.5" } });
+    fireEvent.blur(storageInput);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
+        },
+        history_retention: {
+          file_history: { days: 120, storage_limit_gb: 1.5 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: false,
+        },
+      }),
+    );
+    await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2));
   });
 
   it("auto-saves renamed resolution categories on blur", async () => {
@@ -727,33 +1021,6 @@ describe("LibrariesPage ignore patterns", () => {
   });
 });
 
-describe("LibrariesPage statistics settings", () => {
-  it("shows a dedicated tooltip column and stores tooltip visibility choices", async () => {
-    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
-
-    renderPage();
-
-    expect(await screen.findByText("Tooltips")).toBeInTheDocument();
-
-    const audioLanguagesRow = screen.getByText("Audio languages").closest("tr");
-    expect(audioLanguagesRow).not.toBeNull();
-    const audioLanguagesCheckboxes = within(audioLanguagesRow!).getAllByRole("checkbox");
-    expect(audioLanguagesCheckboxes).toHaveLength(2);
-    expect(audioLanguagesCheckboxes[1]).toBeEnabled();
-
-    fireEvent.click(audioLanguagesCheckboxes[1]);
-
-    expect(window.localStorage.getItem("medialyze-library-statistics-settings")).toContain(
-      '"audio_languages":{"panelEnabled":true,"tableEnabled":true,"tableTooltipEnabled":false,"dashboardEnabled":true}',
-    );
-
-    const fileSizeRow = screen.getByText("File size").closest("tr");
-    expect(fileSizeRow).not.toBeNull();
-    const fileSizeCheckboxes = within(fileSizeRow!).getAllByRole("checkbox");
-    expect(fileSizeCheckboxes[1]).toBeDisabled();
-  });
-});
-
 describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
@@ -833,25 +1100,11 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
-  it("shows the table-view statistic settings without the old panel or dashboard toggles", async () => {
+  it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
-    const tableViewToggle = await screen.findByRole("button", { name: /^table view$/i });
-    const settingsPanel = tableViewToggle.closest(".async-panel") as HTMLElement | null;
-    expect(settingsPanel).not.toBeNull();
-    if (!settingsPanel) {
-      return;
-    }
-
-    const panel = within(settingsPanel);
-    expect(panel.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
-    expect(panel.getByRole("columnheader", { name: "Table" })).toBeInTheDocument();
-    expect(panel.getByRole("columnheader", { name: "Tooltips" })).toBeInTheDocument();
-    expect(panel.queryByRole("columnheader", { name: "Library" })).not.toBeInTheDocument();
-    expect(panel.queryByRole("columnheader", { name: "Dashboard" })).not.toBeInTheDocument();
-    expect(panel.getByText("Bitrate")).toBeInTheDocument();
-    expect(panel.getByText("Audio bitrate")).toBeInTheDocument();
-    expect(panel.queryByText("Metric comparison")).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: /^configured libraries$/i });
+    expect(screen.queryByRole("button", { name: /^table view$/i })).not.toBeInTheDocument();
   });
 
   it("shows the main settings panels expanded by default", async () => {
@@ -859,12 +1112,39 @@ describe("LibrariesPage settings panels", () => {
 
     const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
     const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
+    const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
 
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
     expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
+    expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
+  });
+
+  it("places the history retention panel between resolution categories and recent scan logs", async () => {
+    renderPage();
+
+    const resolutionPanel = (await screen.findByRole("button", { name: /^resolution categories$/i })).closest(
+      ".async-panel",
+    ) as HTMLElement | null;
+    const historyRetentionPanel = screen.getByRole("button", { name: /^history retention$/i }).closest(
+      ".async-panel",
+    ) as HTMLElement | null;
+    const recentScanLogsPanel = screen.getByRole("button", { name: /^recent scan logs$/i }).closest(
+      ".async-panel",
+    ) as HTMLElement | null;
+
+    expect(resolutionPanel).not.toBeNull();
+    expect(historyRetentionPanel).not.toBeNull();
+    expect(recentScanLogsPanel).not.toBeNull();
+
+    if (!resolutionPanel || !historyRetentionPanel || !recentScanLogsPanel) {
+      return;
+    }
+
+    expect(resolutionPanel.compareDocumentPosition(historyRetentionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(historyRetentionPanel.compareDocumentPosition(recentScanLogsPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("restores persisted settings panel state from localStorage", async () => {
@@ -872,8 +1152,8 @@ describe("LibrariesPage settings panels", () => {
       "medialyze-settings-panel-state",
       JSON.stringify({
         configuredLibraries: false,
+        historyRetention: false,
         recentScanLogs: true,
-        libraryStatistics: true,
         resolutionCategories: false,
         createLibrary: true,
         ignorePatterns: false,
@@ -886,11 +1166,13 @@ describe("LibrariesPage settings panels", () => {
     const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
     const ignorePatternsToggle = screen.getByRole("button", { name: /^ignore patterns$/i });
     const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
+    const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
     const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
 
     expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
     expect(ignorePatternsToggle).toHaveAttribute("aria-expanded", "false");
     expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
+    expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "false");
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Add first library")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
@@ -907,8 +1189,8 @@ describe("LibrariesPage settings panels", () => {
     expect(window.localStorage.getItem("medialyze-settings-panel-state")).toBe(
       JSON.stringify({
         configuredLibraries: true,
+        historyRetention: true,
         recentScanLogs: true,
-        libraryStatistics: true,
         resolutionCategories: true,
         createLibrary: true,
         ignorePatterns: true,

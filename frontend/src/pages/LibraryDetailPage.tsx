@@ -26,16 +26,20 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
+import { SettingsIcon } from "../components/SettingsIcon";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { StreamDetailsList } from "../components/StreamDetailsList";
+import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
   api,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type LibraryHistoryResponse,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileQualityScoreDetail,
@@ -43,6 +47,7 @@ import {
   type MediaFileSortKey,
   type MediaFileStreamDetails,
 } from "../lib/api";
+import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
@@ -59,12 +64,17 @@ import {
   type LibraryFileColumnWidths,
 } from "../lib/library-file-column-widths";
 import {
+  buildDefaultLibraryStatisticsSettings,
+  cloneLibraryStatisticsSettings,
   getEnabledLibraryStatisticTableTooltipColumns,
   LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticNumericDistribution,
   getLibraryStatisticPanelItems,
   getLibraryStatisticsSettings,
   getVisibleLibraryStatisticTableColumns,
+  saveLibraryStatisticsSettings,
+  type LibraryStatisticId,
+  type LibraryStatisticsSettings,
 } from "../lib/library-statistics-settings";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
 import {
@@ -83,12 +93,15 @@ import {
   addStatisticPanelLayoutItem,
   buildDefaultStatisticPanelLayout,
   cloneStatisticPanelLayout,
+  getStatisticPanelSizeConfigForItem,
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
   moveStatisticPanelLayoutItem,
   removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
   saveStatisticPanelLayout,
+  type ExtraLibraryStatisticPanelId,
+  type StatisticPanelLayoutId,
   updateStatisticPanelLayoutComparisonSelection,
 } from "../lib/statistic-panel-layout";
 import { useScanJobs } from "../lib/scan-jobs";
@@ -126,16 +139,30 @@ type CachedFileList = {
 
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 
-type VisibleStatisticPanel = {
+type LibraryLayoutPanelDefinition =
+  | {
+      id: LibraryStatisticId;
+      kind: "statistic";
+      statisticDefinition: (typeof LIBRARY_STATISTIC_DEFINITIONS)[number];
+      nameKey: string;
+    }
+  | {
+      id: ExtraLibraryStatisticPanelId;
+      kind: ExtraLibraryStatisticPanelId;
+      nameKey: string;
+    };
+
+type VisibleLibraryLayoutPanel = {
   item: ReturnType<typeof getStatisticPanelLayout>["items"][number];
-  definition: (typeof LIBRARY_STATISTIC_DEFINITIONS)[number];
+  definition: LibraryLayoutPanelDefinition;
 };
 
 const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
-const DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-duplicates-collapsed";
+const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
+const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
 const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
@@ -145,18 +172,29 @@ const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new Map<string, LibrarySummary>();
 const libraryStatisticsCache = new Map<string, LibraryStatistics>();
+const libraryHistoryCache = new Map<string, LibraryHistoryResponse>();
 const libraryComparisonCache = new Map<string, ComparisonResponse>();
 const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
 const libraryFileListCache = new Map<string, CachedFileList>();
-const statisticDefinitionMap = new Map(
-  LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition] as const),
-);
+const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryLayoutPanelDefinition>([
+  ...LIBRARY_STATISTIC_DEFINITIONS.map(
+    (definition) =>
+      [
+        definition.id,
+        {
+          id: definition.id,
+          kind: "statistic",
+          statisticDefinition: definition,
+          nameKey: definition.nameKey,
+        },
+      ] as const,
+  ),
+  ["history", { id: "history", kind: "history", nameKey: "libraryDetail.history.title" }],
+  ["duplicates", { id: "duplicates", kind: "duplicates", nameKey: "libraryDetail.duplicates.title" }],
+  ["analyzed_files", { id: "analyzed_files", kind: "analyzed_files", nameKey: "libraryDetail.analyzedFiles" }],
+]);
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
-const DEFAULT_VISIBLE_COLUMNS: FileColumnKey[] = [
-  "file",
-  ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings()),
-];
 const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
 const DEFAULT_COLUMN_RESIZE_MAX_PX = 960;
 
@@ -733,15 +771,50 @@ function matchesSearchTokens(candidate: string, tokens: string[]): boolean {
   return tokens.every((token) => normalizedCandidate.includes(token));
 }
 
-function readDuplicatePanelCollapsedPreference(): boolean {
+function buildDuplicatePanelCollapseStorageKey(libraryId: string): string {
+  return `medialyze-library-detail-${libraryId}-duplicates-collapsed`;
+}
+
+function buildHistoryPanelCollapseStorageKey(libraryId: string): string {
+  return `medialyze-library-detail-${libraryId}-history-collapsed`;
+}
+
+function readDuplicatePanelCollapsedPreference(libraryId: string): boolean {
   if (typeof window === "undefined") {
     return true;
   }
-  const storedPreference = window.localStorage.getItem(DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY);
+  const storedPreference = window.localStorage.getItem(buildDuplicatePanelCollapseStorageKey(libraryId));
   if (storedPreference === null) {
     return true;
   }
   return storedPreference === "true";
+}
+
+function readHistoryPanelCollapsedPreference(libraryId: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const storedPreference = window.localStorage.getItem(buildHistoryPanelCollapseStorageKey(libraryId));
+  if (storedPreference === null) {
+    return false;
+  }
+  return storedPreference === "true";
+}
+
+function readHistoryMetricPreference(): LibraryHistoryMetricId {
+  if (typeof window === "undefined") {
+    return DEFAULT_HISTORY_METRIC;
+  }
+  const storedPreference = window.localStorage.getItem(HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  if (
+    storedPreference === "resolution_mix" ||
+    storedPreference === "average_bitrate" ||
+    storedPreference === "average_audio_bitrate" ||
+    storedPreference === "average_duration_seconds"
+  ) {
+    return storedPreference;
+  }
+  return DEFAULT_HISTORY_METRIC;
 }
 
 function buildCsvFallbackFilename(libraryName: string): string {
@@ -754,17 +827,23 @@ function buildLibraryComparisonQueryKey(libraryId: string, selection: Comparison
   return `${libraryId}:${selection.xField}:${selection.yField}`;
 }
 
+function buildLibraryTableViewSettingsScope(libraryId: string): string {
+  return `library-${libraryId}`;
+}
+
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
+  const tableViewSettingsScope = useMemo(() => buildLibraryTableViewSettingsScope(libraryId), [libraryId]);
   const statisticLayoutOptions = useMemo(
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
     [appSettings.feature_flags.unlimited_panel_size],
   );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
+  const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
   const [savedStatisticLayout, setSavedStatisticLayout] = useState(() =>
@@ -779,20 +858,32 @@ export function LibraryDetailPage() {
   const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
   const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
   const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
+  const [savedTableViewSettings, setSavedTableViewSettings] = useState<LibraryStatisticsSettings>(() =>
+    getLibraryStatisticsSettings(tableViewSettingsScope),
+  );
+  const [draftTableViewSettings, setDraftTableViewSettings] = useState<LibraryStatisticsSettings>(() =>
+    cloneLibraryStatisticsSettings(getLibraryStatisticsSettings(tableViewSettingsScope)),
+  );
+  const [isEditingTableView, setIsEditingTableView] = useState(false);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [visibleColumns, setVisibleColumns] = useState<FileColumnKey[]>(() => [
+    "file",
+    ...getVisibleLibraryStatisticTableColumns(getLibraryStatisticsSettings(tableViewSettingsScope)),
+  ]);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<LibraryFileColumnWidths>(() =>
     getLibraryFileColumnWidths(),
   );
@@ -805,7 +896,13 @@ export function LibraryDetailPage() {
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
   const [exportError, setExportError] = useState<string | null>(null);
   const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
-    readDuplicatePanelCollapsedPreference(),
+    readDuplicatePanelCollapsedPreference(libraryId),
+  );
+  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
+    readHistoryPanelCollapsedPreference(libraryId),
+  );
+  const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
+    readHistoryMetricPreference(),
   );
   const [qualityScoreDetails, setQualityScoreDetails] = useState<Record<number, MediaFileQualityScoreDetail>>({});
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
@@ -816,7 +913,6 @@ export function LibraryDetailPage() {
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
-  const statisticsSettings = useState(() => getLibraryStatisticsSettings())[0];
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
@@ -857,8 +953,8 @@ export function LibraryDetailPage() {
     }
   });
   const tooltipEnabledColumns = useMemo(
-    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(statisticsSettings)),
-    [statisticsSettings],
+    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings)),
+    [savedTableViewSettings],
   );
   const fileColumns = useMemo(
     () =>
@@ -888,25 +984,29 @@ export function LibraryDetailPage() {
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
-    () => getVisibleLibraryStatisticTableColumns(statisticsSettings),
-    [statisticsSettings],
+    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings),
+    [savedTableViewSettings],
   );
-  const visibleStatisticPanels = useMemo(
+  const visibleLayoutPanels = useMemo(
     () =>
       activeStatisticLayout.items
         .map((item) => {
-          const definition = statisticDefinitionMap.get(item.statisticId);
+          const definition = libraryLayoutPanelDefinitionMap.get(item.statisticId);
           if (!definition) {
             return null;
           }
           return { item, definition };
         })
-        .filter((entry): entry is VisibleStatisticPanel => Boolean(entry)),
+        .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
     [activeStatisticLayout.items],
   );
   const comparisonPanels = useMemo(
-    () => visibleStatisticPanels.filter((panel) => panel.item.statisticId === "comparison"),
-    [visibleStatisticPanels],
+    () =>
+      visibleLayoutPanels.filter(
+        (panel): panel is VisibleLibraryLayoutPanel & { definition: Extract<LibraryLayoutPanelDefinition, { kind: "statistic" }> } =>
+          panel.item.statisticId === "comparison" && panel.definition.kind === "statistic",
+      ),
+    [visibleLayoutPanels],
   );
   const comparisonPanelsKey = useMemo(
     () =>
@@ -1022,6 +1122,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
@@ -1214,6 +1315,35 @@ export function LibraryDetailPage() {
     }
   });
 
+  const loadLibraryHistory = useEffectEvent(async (showLoading = false) => {
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsHistoryLoading(true);
+    }
+
+    try {
+      const payload = await api.libraryHistory(libraryId, controller.signal);
+      libraryHistoryCache.set(libraryId, payload);
+      setLibraryHistory(payload);
+      setHistoryError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setHistoryError((reason as Error).message);
+    } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsHistoryLoading(false);
+      }
+    }
+  });
+
   const loadDuplicateGroups = useEffectEvent(async (showLoading = false) => {
     duplicateGroupsAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1358,11 +1488,27 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
+    setIsDuplicatesPanelCollapsed(readDuplicatePanelCollapsedPreference(libraryId));
+    setIsHistoryPanelCollapsed(readHistoryPanelCollapsedPreference(libraryId));
+  }, [libraryId]);
+
+  useEffect(() => {
     window.localStorage.setItem(
-      DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY,
+      buildDuplicatePanelCollapseStorageKey(libraryId),
       isDuplicatesPanelCollapsed ? "true" : "false",
     );
-  }, [isDuplicatesPanelCollapsed]);
+  }, [isDuplicatesPanelCollapsed, libraryId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      buildHistoryPanelCollapseStorageKey(libraryId),
+      isHistoryPanelCollapsed ? "true" : "false",
+    );
+  }, [isHistoryPanelCollapsed, libraryId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+  }, [selectedHistoryMetric]);
 
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
@@ -1425,6 +1571,13 @@ export function LibraryDetailPage() {
     setDraggedStatisticPanelId(null);
     setDropTargetStatisticPanelId(null);
   }, [libraryId, statisticLayoutOptions]);
+
+  useEffect(() => {
+    const nextSettings = getLibraryStatisticsSettings(tableViewSettingsScope);
+    setSavedTableViewSettings(nextSettings);
+    setDraftTableViewSettings(cloneLibraryStatisticsSettings(nextSettings));
+    setIsEditingTableView(false);
+  }, [tableViewSettingsScope]);
 
   useEffect(() => {
     if (hasInvalidSearchField) {
@@ -1491,20 +1644,28 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
+    const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
 
+    setComparisonByPanel({});
+    setComparisonErrorByPanel({});
+    setComparisonLoadingByPanel({});
     setLibrarySummary(cachedSummary);
     setLibraryStatistics(cachedStatistics);
+    setLibraryHistory(cachedHistory);
     setDuplicateGroups(cachedDuplicateGroups);
     setSummaryError(null);
     setStatisticsError(null);
+    setHistoryError(null);
     setDuplicateGroupsError(null);
     setIsSummaryLoading(cachedSummary === null);
     setIsStatisticsLoading(cachedStatistics === null);
+    setIsHistoryLoading(cachedHistory === null);
     setIsDuplicateGroupsLoading(cachedDuplicateGroups === null);
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryStatistics(cachedStatistics === null);
+    void loadLibraryHistory(cachedHistory === null);
     void loadDuplicateGroups(cachedDuplicateGroups === null);
   }, [libraryId]);
 
@@ -1570,7 +1731,7 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     syncComparisonPanels();
-  }, [comparisonPanelsKey]);
+  }, [comparisonPanelsKey, libraryId]);
 
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
@@ -1636,6 +1797,7 @@ export function LibraryDetailPage() {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(libraryId);
+      libraryHistoryCache.delete(libraryId);
       for (const { item } of comparisonPanels) {
         const selection = item.comparisonSelection ?? getComparisonSelection("library");
         libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
@@ -1646,6 +1808,7 @@ export function LibraryDetailPage() {
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
+      void loadLibraryHistory(false);
       void loadDuplicateGroups(false);
       void loadFilesPage(0, false, fileQueryKey);
       syncComparisonPanels(true);
@@ -1662,6 +1825,7 @@ export function LibraryDetailPage() {
     return () => {
       summaryAbortRef.current?.abort();
       statisticsAbortRef.current?.abort();
+      historyAbortRef.current?.abort();
       for (const controller of comparisonAbortRef.current.values()) {
         controller.abort();
       }
@@ -1691,6 +1855,12 @@ export function LibraryDetailPage() {
     const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout, statisticLayoutOptions);
     setSavedStatisticLayout(normalized);
     setDraftStatisticLayout(cloneStatisticPanelLayout(normalized));
+  }
+
+  function persistTableViewSettings(nextSettings: LibraryStatisticsSettings) {
+    const normalized = saveLibraryStatisticsSettings(nextSettings, tableViewSettingsScope);
+    setSavedTableViewSettings(normalized);
+    setDraftTableViewSettings(cloneLibraryStatisticsSettings(normalized));
   }
 
   function updateStatisticLayout(
@@ -1736,8 +1906,9 @@ export function LibraryDetailPage() {
     );
   }
 
-  function renderStatisticPanelResizeControls(panel: VisibleStatisticPanel) {
+  function renderStatisticPanelResizeControls(panel: VisibleLibraryLayoutPanel) {
     const { item } = panel;
+    const sizeConfig = getStatisticPanelSizeConfigForItem("library", item.statisticId, statisticLayoutOptions);
     return (
       <>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-top-left">
@@ -1754,7 +1925,7 @@ export function LibraryDetailPage() {
           </button>
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-right">
-          {item.width < 4 ? (
+          {sizeConfig.allowWidthResize && item.width < sizeConfig.maxWidth ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -1762,14 +1933,14 @@ export function LibraryDetailPage() {
               title={t("panelLayout.expandWidth")}
               onClick={() =>
                 updateStatisticLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width + 1 }),
+                  resizeStatisticPanelLayoutItem("library", current, item.instanceId, { width: item.width + 1 }),
                 )
               }
             >
               <PanelRightClose className="nav-icon" aria-hidden="true" />
             </button>
           ) : null}
-          {item.width > 1 ? (
+          {sizeConfig.allowWidthResize && item.width > sizeConfig.minWidth ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -1777,7 +1948,7 @@ export function LibraryDetailPage() {
               title={t("panelLayout.shrinkWidth")}
               onClick={() =>
                 updateStatisticLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width - 1 }),
+                  resizeStatisticPanelLayoutItem("library", current, item.instanceId, { width: item.width - 1 }),
                 )
               }
             >
@@ -1786,7 +1957,7 @@ export function LibraryDetailPage() {
           ) : null}
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-bottom">
-          {statisticLayoutOptions.unlimitedHeight || item.height < 4 ? (
+          {sizeConfig.allowHeightResize && item.height < sizeConfig.maxHeight ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -1795,6 +1966,7 @@ export function LibraryDetailPage() {
               onClick={() =>
                 updateStatisticLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "library",
                     current,
                     item.instanceId,
                     { height: item.height + 1 },
@@ -1806,7 +1978,7 @@ export function LibraryDetailPage() {
               <PanelBottomClose className="nav-icon" aria-hidden="true" />
             </button>
           ) : null}
-          {item.height > 1 ? (
+          {sizeConfig.allowHeightResize && item.height > sizeConfig.minHeight ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -1815,6 +1987,7 @@ export function LibraryDetailPage() {
               onClick={() =>
                 updateStatisticLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "library",
                     current,
                     item.instanceId,
                     { height: item.height - 1 },
@@ -1898,11 +2071,27 @@ export function LibraryDetailPage() {
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingStatisticLayout ? " is-editing" : ""}`}>
-        {visibleStatisticPanels.map((panel) => {
+        {(() => {
+          let collapsedPanelsBefore = 0;
+
+          return visibleLayoutPanels.map((panel) => {
+            const offsetCount = collapsedPanelsBefore;
+            const isCollapsedLargePanel =
+              (panel.definition.kind === "history" && isHistoryPanelCollapsed) ||
+              (panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed);
+            if (isCollapsedLargePanel) {
+              collapsedPanelsBefore += 1;
+            }
+
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
               `span-y-${panel.item.height}`,
+              panel.definition.kind === "history" ? "library-layout-panel-history" : "",
+              panel.definition.kind === "duplicates" ? "library-layout-panel-duplicates" : "",
+              panel.definition.kind === "analyzed_files" ? "library-layout-panel-analyzed-files" : "",
+              panel.definition.kind === "history" && isHistoryPanelCollapsed ? "is-collapsed-panel" : "",
+              panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed ? "is-collapsed-panel" : "",
               draggedStatisticPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetStatisticPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -1910,7 +2099,7 @@ export function LibraryDetailPage() {
               .join(" ");
 
             let content: ReactNode;
-            if (panel.definition.panelKind === "comparison") {
+            if (panel.definition.kind === "statistic" && panel.definition.statisticDefinition.panelKind === "comparison") {
               const selection = panel.item.comparisonSelection ?? getComparisonSelection("library");
               content = (
                 <ComparisonChartPanel
@@ -1941,13 +2130,22 @@ export function LibraryDetailPage() {
                   }
                 />
               );
-            } else if (panel.definition.panelKind === "numeric-chart" && panel.definition.numericMetricId) {
-              const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, panel.definition);
+            } else if (
+              panel.definition.kind === "statistic" &&
+              panel.definition.statisticDefinition.panelKind === "numeric-chart" &&
+              panel.definition.statisticDefinition.numericMetricId
+            ) {
+              const statisticDefinition = panel.definition.statisticDefinition;
+              const metricId = statisticDefinition.numericMetricId;
+              if (!metricId) {
+                content = null;
+              } else {
+              const distribution = getLibraryStatisticNumericDistribution(libraryStatistics, statisticDefinition);
               content = (
                 <DistributionChartPanel
-                  title={t(panel.definition.panelTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey)}
                   distribution={distribution}
-                  metricId={panel.definition.numericMetricId}
+                  metricId={metricId}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
@@ -1957,52 +2155,422 @@ export function LibraryDetailPage() {
                       ? undefined
                       : (bin) =>
                           applyStatisticFilter(
-                            panel.definition.id,
-                            buildNumericDistributionFilterExpression(panel.definition.numericMetricId!, bin),
+                            statisticDefinition.id,
+                            buildNumericDistributionFilterExpression(metricId, bin),
                           )
                   }
                 />
               );
-            } else {
+              }
+            } else if (panel.definition.kind === "statistic") {
+              const statisticDefinition = panel.definition.statisticDefinition;
               const items =
-                panel.definition.id === "hdr_type"
-                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, panel.definition))
-                  : getLibraryStatisticPanelItems(libraryStatistics, panel.definition);
+                statisticDefinition.id === "hdr_type"
+                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition))
+                  : getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition);
               const formattedItems: DistributionListEntry[] = items.map((item) => {
                 const rawLabel = item.label;
                 const filterValue = item.filter_value ?? rawLabel;
-                const label = panel.definition.panelFormatKind
-                  ? formatCodecLabel(rawLabel, panel.definition.panelFormatKind)
+                const label = statisticDefinition.panelFormatKind
+                  ? formatCodecLabel(rawLabel, statisticDefinition.panelFormatKind)
                   : rawLabel;
-                const isApplied = hasSearchValueTokens(fieldValues[panel.definition.id], filterValue);
+                const isApplied = hasSearchValueTokens(fieldValues[statisticDefinition.id], filterValue);
                 return {
-                  key: `${panel.definition.id}:${rawLabel}`,
+                  key: `${statisticDefinition.id}:${rawLabel}`,
                   label,
                   value: item.value,
                   disabled: isApplied,
                   ariaLabel: isApplied
                     ? t("libraryDetail.statistics.filterAlreadyApplied", {
-                        field: t(panel.definition.nameKey),
+                        field: t(statisticDefinition.nameKey),
                         value: label,
                       })
                     : t("libraryDetail.statistics.filterByValue", {
-                        field: t(panel.definition.nameKey),
+                        field: t(statisticDefinition.nameKey),
                         value: label,
                       }),
                   onClick:
                     statisticsError || !libraryStatistics
                       ? undefined
-                      : () => applyStatisticFilter(panel.definition.id, filterValue),
+                      : () => applyStatisticFilter(statisticDefinition.id, filterValue),
                 };
               });
               content = (
                 <AsyncPanel
-                  title={t(panel.definition.panelTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey)}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
                   bodyClassName="async-panel-body-scroll"
                 >
                   <DistributionList items={formattedItems} maxVisibleRows={5} scrollable />
+                </AsyncPanel>
+              );
+            } else if (panel.definition.kind === "history") {
+              content = (
+                <LibraryHistoryPanel
+                  history={libraryHistory}
+                  loading={isHistoryLoading && !libraryHistory && !historyError}
+                  error={historyError}
+                  selectedMetric={selectedHistoryMetric}
+                  onChangeMetric={setSelectedHistoryMetric}
+                  collapsed={isHistoryPanelCollapsed}
+                  onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
+                  currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  bodyId={`library-history-panel-body-${panel.item.instanceId}`}
+                />
+              );
+            } else if (panel.definition.kind === "duplicates") {
+              content = (
+                <AsyncPanel
+                  title={t("libraryDetail.duplicates.title")}
+                  loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
+                  error={duplicateGroupsError}
+                  bodyClassName="async-panel-body-scroll"
+                  collapseActions={
+                    <div className="duplicate-panel-title-actions">
+                      {duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null}
+                      {!isDuplicatesPanelCollapsed ? (
+                        <div className="data-table-search-layout duplicate-search-layout">
+                          <div className="metadata-search-control duplicate-search-control">
+                            <span className="metadata-search-icon-button" aria-hidden="true">
+                              <Search size={18} />
+                            </span>
+                            <input
+                              type="search"
+                              value={duplicateSearch}
+                              placeholder={t("libraryDetail.duplicates.searchPlaceholder")}
+                              aria-label={t("libraryDetail.duplicates.searchLabel")}
+                              autoComplete="off"
+                              className={duplicateSearch ? "has-trailing-action" : undefined}
+                              onChange={(event) => setDuplicateSearch(event.target.value)}
+                            />
+                            {duplicateSearch ? (
+                              <button
+                                type="button"
+                                className="metadata-search-remove"
+                                aria-label={t("libraryDetail.duplicates.clearSearch")}
+                                onClick={() => setDuplicateSearch("")}
+                              >
+                                <X size={18} aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  }
+                  collapseButtonClassName="async-panel-toggle-icon-button-flat"
+                  collapseState={{
+                    collapsed: isDuplicatesPanelCollapsed,
+                    onToggle: () => setIsDuplicatesPanelCollapsed((current) => !current),
+                    bodyId: "library-duplicates-panel-body",
+                  }}
+                >
+                  {duplicateGroups && filteredDuplicateGroups.length > 0 ? (
+                    <div className="duplicate-group-list">
+                      {filteredDuplicateGroups.map((group) => (
+                        <div key={`${group.mode}:${group.signature}`} className="media-card duplicate-group-card">
+                          <div className="duplicate-group-summary">
+                            <div className="meta-tags">
+                              <span className="badge">{t(`libraries.duplicateDetectionModes.${group.mode}`)}</span>
+                              <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
+                              <span className="badge">{formatBytes(group.total_size_bytes)}</span>
+                            </div>
+                            <code className="scan-log-path">{group.signature}</code>
+                          </div>
+                          <div className="scan-log-path-list duplicate-group-items-scroll">
+                            {group.items.map((item) => (
+                              <div key={item.id} className="scan-log-pattern-card">
+                                <div className="scan-log-detail-title">
+                                  <Link to={`/files/${item.id}`} className="file-link">
+                                    {item.filename}
+                                  </Link>
+                                  <span className="badge">{formatBytes(item.size_bytes)}</span>
+                                </div>
+                                <code className="scan-log-path">{item.relative_path}</code>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="notice">
+                      {duplicateSearchTokens.length > 0
+                        ? t("libraryDetail.duplicates.emptySearch")
+                        : t("libraryDetail.duplicates.empty")}
+                    </div>
+                  )}
+                </AsyncPanel>
+              );
+            } else {
+              content = (
+                <AsyncPanel
+                  title={t("libraryDetail.analyzedFiles")}
+                  error={filesError}
+                  bodyClassName="async-panel-body-scroll"
+                  titleAddon={
+                    <div className="analyzed-files-title-addon">
+                      <StatisticPanelLayoutControls
+                        availableDefinitions={[]}
+                        isEditing={isEditingTableView}
+                        showAddButton={false}
+                        editButtonLabel={t("libraryDetail.tableView.edit")}
+                        editButtonTitle={t("libraryDetail.tableView.edit")}
+                        editButtonIcon={<SettingsIcon className="statistic-layout-action-icon" size={18} />}
+                        onStartEditing={() => {
+                          setDraftTableViewSettings(cloneLibraryStatisticsSettings(savedTableViewSettings));
+                          setIsEditingTableView(true);
+                        }}
+                        onCancelEditing={() => {
+                          setDraftTableViewSettings(cloneLibraryStatisticsSettings(savedTableViewSettings));
+                          setIsEditingTableView(false);
+                        }}
+                        onRestoreDefault={() => {
+                          setDraftTableViewSettings(buildDefaultLibraryStatisticsSettings());
+                        }}
+                        onSaveEditing={() => {
+                          persistTableViewSettings(draftTableViewSettings);
+                          setIsEditingTableView(false);
+                        }}
+                        onAddPanel={() => undefined}
+                      />
+                      <span className="analyzed-files-count" aria-label={t("libraryDetail.indexedEntries", { count: filesTotal })}>
+                        {String(filesTotal)}
+                      </span>
+                      {!isEditingTableView && showAnalyzedFilesCsvExport
+                        ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop")
+                        : null}
+                    </div>
+                  }
+                  subtitleAddon={
+                    !isEditingTableView && showAnalyzedFilesCsvExport
+                      ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile")
+                      : null
+                  }
+                  headerAddon={
+                    !isEditingTableView ? (
+                      <div ref={searchToolsHeaderRef} className="data-table-search-layout">
+                        <div className="metadata-search-control metadata-search-control-base search-filter-picker">
+                          <button
+                            type="button"
+                            className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
+                            aria-expanded={pickerOpen}
+                            aria-controls="library-search-picker"
+                            aria-label={t("libraryDetail.searchFields.addMetadataAria")}
+                            onClick={() => setPickerOpen((current) => !current)}
+                          >
+                            <Plus size={18} aria-hidden="true" />
+                          </button>
+                          {pickerOpen ? (
+                            <div
+                              id="library-search-picker"
+                              className="search-filter-picker-popover search-filter-picker-popover-scroll"
+                              role="menu"
+                            >
+                              {orderedMetadataFieldDefinitions.map((definition) => {
+                                const field = definition.id;
+                                const config = getLibraryFileSearchConfig(field);
+                                const Icon = config.icon;
+                                const isSelected = selectedMetadataFields.includes(field);
+                                return (
+                                  <button
+                                    key={field}
+                                    type="button"
+                                    role="menuitemcheckbox"
+                                    aria-checked={isSelected}
+                                    className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                                    onClick={() => {
+                                      toggleMetadataField(field);
+                                      setPickerOpen(false);
+                                    }}
+                                  >
+                                    <Icon size={16} aria-hidden="true" />
+                                    <span>{t(config.labelKey)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <label className="sr-only" htmlFor="library-file-search">
+                            {t("libraryDetail.searchLabel")}
+                          </label>
+                          <TooltipTrigger
+                            ariaLabel={t("libraryDetail.searchLabel")}
+                            content={t(baseSearchConfig.labelKey)}
+                            className="metadata-search-icon-button metadata-search-icon-button-middle"
+                          >
+                            <BaseSearchIcon size={16} aria-hidden="true" />
+                          </TooltipTrigger>
+                          <input
+                            id="library-file-search"
+                            type="search"
+                            value={baseSearch}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              startTransition(() => {
+                                setBaseSearch(nextValue);
+                              });
+                            }}
+                            placeholder={t("libraryDetail.searchFields.file.placeholder")}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                    ) : null
+                  }
+                >
+                  <div className="analyzed-files-panel-content">
+                    {isEditingTableView ? (
+                      <TableViewSettingsEditor
+                        settings={draftTableViewSettings}
+                        onChange={(nextSettings) => setDraftTableViewSettings(cloneLibraryStatisticsSettings(nextSettings))}
+                      />
+                    ) : (
+                      <>
+                        <div className="data-table-tools data-table-tools-search">
+                          {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
+                          {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
+                          {orderedSelectedMetadataFields.length > 0 ? (
+                            <div
+                              ref={searchToolsBodyRef}
+                              className="metadata-search-fields"
+                              aria-label={t("libraryDetail.searchFields.activeMetadata")}
+                            >
+                              {orderedSelectedMetadataFields.map((field) => {
+                                const config = getLibraryFileSearchConfig(field);
+                                const Icon = config.icon;
+                                const errorKey = searchFieldErrors[field];
+                                return (
+                                  <div key={field} className={`metadata-search-row${errorKey ? " is-invalid" : ""}`}>
+                                    <div className="metadata-search-control">
+                                      <TooltipTrigger
+                                        ariaLabel={t("libraryDetail.searchFields.tooltipAria")}
+                                        content={
+                                          config.tooltipKey
+                                            ? `${t(config.labelKey)}\n\n${t(config.tooltipKey)}`
+                                            : t(config.labelKey)
+                                        }
+                                        preserveLineBreaks={Boolean(config.tooltipKey)}
+                                        className="metadata-search-icon-button"
+                                      >
+                                        <Icon size={16} />
+                                      </TooltipTrigger>
+                                      <input
+                                        id={`library-metadata-search-${field}`}
+                                        type="search"
+                                        value={fieldValues[field] ?? ""}
+                                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
+                                        placeholder={t(config.placeholderKey)}
+                                        autoComplete="off"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="metadata-search-remove"
+                                        aria-label={t("libraryDetail.searchFields.removeAria", { field: t(config.labelKey) })}
+                                        onClick={() => removeMetadataField(field)}
+                                      >
+                                        <Trash2 size={15} aria-hidden="true" />
+                                      </button>
+                                    </div>
+                                    {errorKey ? <p className="metadata-search-error">{t(errorKey)}</p> : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                        {isFilesLoading && files.length === 0 ? (
+                          <div className="panel-loader">
+                            <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
+                            <span>{t("libraryDetail.loadingFiles")}</span>
+                          </div>
+                        ) : files.length === 0 ? (
+                          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
+                        ) : (
+                          <div ref={dataTableShellRef} className="data-table-shell">
+                            <div className="media-data-table" role="table" aria-rowcount={filesTotal}>
+                              <div className="media-data-table-head" role="rowgroup">
+                                <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
+                                  {activeColumns.map((column) => {
+                                    const isActiveSort = sortKey === column.key;
+                                    return (
+                                      <div
+                                        key={column.key}
+                                        className={`media-data-cell media-data-header-cell${column.sticky ? " is-sticky" : ""}`}
+                                        role="columnheader"
+                                        aria-sort={ariaSortValue(isActiveSort, sortDirection)}
+                                        ref={(element) => {
+                                          headerCellRefs.current[column.key] = element;
+                                        }}
+                                      >
+                                        <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
+                                          <span>{t(column.labelKey)}</span>
+                                          <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`} aria-hidden="true">
+                                            {isActiveSort ? sortIndicator(sortDirection) : ""}
+                                          </span>
+                                          {isActiveSort ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="column-resize-handle"
+                                          aria-label={t("libraryDetail.resizeColumnAria", { column: t(column.labelKey) })}
+                                          onPointerDown={(event) => beginColumnResize(column.key, event)}
+                                          onDoubleClick={() => resetColumnWidth(column.key)}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div
+                                className="media-data-table-body"
+                                role="rowgroup"
+                                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                              >
+                                {virtualRows.map((virtualRow) => {
+                                  const file = files[virtualRow.index];
+                                  if (!file) {
+                                    return null;
+                                  }
+                                  return (
+                                    <div
+                                      key={file.id}
+                                      className="media-data-row media-data-body-row"
+                                      role="row"
+                                      data-index={virtualRow.index}
+                                      ref={rowVirtualizer.measureElement}
+                                      style={{
+                                        gridTemplateColumns: columnTemplate,
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                      }}
+                                    >
+                                      {activeColumns.map((column) => (
+                                        <div
+                                          key={column.key}
+                                          className={`media-data-cell${column.sticky ? " is-sticky" : ""}`}
+                                          role="cell"
+                                        >
+                                          {column.render(file)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="data-table-footer">
+                              <span className="media-meta">
+                                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
+                              </span>
+                              {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </AsyncPanel>
               );
             }
@@ -2012,6 +2580,7 @@ export function LibraryDetailPage() {
                 key={panel.item.instanceId}
                 className={shellClassName}
                 draggable={isEditingStatisticLayout}
+                ref={panel.definition.kind === "analyzed_files" ? analyzedFilesPanelRef : undefined}
                 onDragStart={() => {
                   if (!isEditingStatisticLayout) {
                     return;
@@ -2044,6 +2613,7 @@ export function LibraryDetailPage() {
                 }}
                 style={
                   {
+                    "--collapsed-panel-offset-count": String(offsetCount),
                     "--statistic-panel-row-span": String(panel.item.height),
                   } as CSSProperties
                 }
@@ -2057,310 +2627,8 @@ export function LibraryDetailPage() {
                 ) : null}
               </div>
             );
-          })}
-      </div>
-
-      <AsyncPanel
-        title={t("libraryDetail.duplicates.title")}
-        loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
-        error={duplicateGroupsError}
-        titleAddon={
-          duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null
-        }
-        headerAddon={
-          !isDuplicatesPanelCollapsed ? (
-            <div className="data-table-search-layout duplicate-search-layout">
-              <div className="metadata-search-control duplicate-search-control">
-                <span className="metadata-search-icon-button" aria-hidden="true">
-                  <Search size={18} />
-                </span>
-                <input
-                  type="search"
-                  value={duplicateSearch}
-                  placeholder={t("libraryDetail.duplicates.searchPlaceholder")}
-                  aria-label={t("libraryDetail.duplicates.searchLabel")}
-                  autoComplete="off"
-                  className={duplicateSearch ? "has-trailing-action" : undefined}
-                  onChange={(event) => setDuplicateSearch(event.target.value)}
-                />
-                {duplicateSearch ? (
-                  <button
-                    type="button"
-                    className="metadata-search-remove"
-                    aria-label={t("libraryDetail.duplicates.clearSearch")}
-                    onClick={() => setDuplicateSearch("")}
-                  >
-                    <X size={18} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null
-        }
-        collapseState={{
-          collapsed: isDuplicatesPanelCollapsed,
-          onToggle: () => setIsDuplicatesPanelCollapsed((current) => !current),
-          bodyId: "library-duplicates-panel-body",
-        }}
-      >
-        {duplicateGroups && filteredDuplicateGroups.length > 0 ? (
-          <div className="duplicate-group-list">
-            {filteredDuplicateGroups.map((group) => (
-              <div key={`${group.mode}:${group.signature}`} className="media-card duplicate-group-card">
-                <div className="duplicate-group-summary">
-                  <div className="meta-tags">
-                    <span className="badge">{t(`libraries.duplicateDetectionModes.${group.mode}`)}</span>
-                    <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
-                    <span className="badge">{formatBytes(group.total_size_bytes)}</span>
-                  </div>
-                  <code className="scan-log-path">{group.signature}</code>
-                </div>
-                <div className="scan-log-path-list duplicate-group-items-scroll">
-                  {group.items.map((item) => (
-                    <div key={item.id} className="scan-log-pattern-card">
-                      <div className="scan-log-detail-title">
-                        <Link to={`/files/${item.id}`} className="file-link">
-                          {item.filename}
-                        </Link>
-                        <span className="badge">{formatBytes(item.size_bytes)}</span>
-                      </div>
-                      <code className="scan-log-path">{item.relative_path}</code>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="notice">
-            {duplicateSearchTokens.length > 0
-              ? t("libraryDetail.duplicates.emptySearch")
-              : t("libraryDetail.duplicates.empty")}
-          </div>
-        )}
-      </AsyncPanel>
-
-      <div ref={analyzedFilesPanelRef}>
-        <AsyncPanel
-          title={t("libraryDetail.analyzedFiles")}
-          subtitle={
-            hasAppliedSearchFilters
-              ? t("libraryDetail.indexedEntriesFiltered", {
-                  shown: filesTotal,
-                  total: displayLibrary?.file_count ?? filesTotal,
-                })
-              : t("libraryDetail.indexedEntries", { count: filesTotal })
-          }
-          error={filesError}
-          titleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop") : null}
-          subtitleAddon={showAnalyzedFilesCsvExport ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-mobile") : null}
-          headerAddon={
-            <div ref={searchToolsHeaderRef} className="data-table-search-layout">
-              <div className="metadata-search-control metadata-search-control-base search-filter-picker">
-                <button
-                  type="button"
-                  className={`search-filter-picker-button${pickerOpen ? " is-open" : ""}`}
-                  aria-expanded={pickerOpen}
-                  aria-controls="library-search-picker"
-                  aria-label={t("libraryDetail.searchFields.addMetadataAria")}
-                  onClick={() => setPickerOpen((current) => !current)}
-                >
-                  <Plus size={18} aria-hidden="true" />
-                </button>
-                {pickerOpen ? (
-                  <div id="library-search-picker" className="search-filter-picker-popover" role="menu">
-                    {orderedMetadataFieldDefinitions.map((definition) => {
-                      const field = definition.id;
-                      const config = getLibraryFileSearchConfig(field);
-                      const Icon = config.icon;
-                      const isSelected = selectedMetadataFields.includes(field);
-                      return (
-                        <button
-                          key={field}
-                          type="button"
-                          role="menuitemcheckbox"
-                          aria-checked={isSelected}
-                          className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
-                          onClick={() => {
-                            toggleMetadataField(field);
-                            setPickerOpen(false);
-                          }}
-                        >
-                          <Icon size={16} aria-hidden="true" />
-                          <span>{t(config.labelKey)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                <label className="sr-only" htmlFor="library-file-search">
-                  {t("libraryDetail.searchLabel")}
-                </label>
-                <TooltipTrigger
-                  ariaLabel={t("libraryDetail.searchLabel")}
-                  content={t(baseSearchConfig.labelKey)}
-                  className="metadata-search-icon-button metadata-search-icon-button-middle"
-                >
-                  <BaseSearchIcon size={16} aria-hidden="true" />
-                </TooltipTrigger>
-                <input
-                  id="library-file-search"
-                  type="search"
-                  value={baseSearch}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    startTransition(() => {
-                      setBaseSearch(nextValue);
-                    });
-                  }}
-                  placeholder={t("libraryDetail.searchFields.file.placeholder")}
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-          }
-        >
-        <div className="data-table-tools data-table-tools-search">
-          {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
-          {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
-          {orderedSelectedMetadataFields.length > 0 ? (
-            <div
-              ref={searchToolsBodyRef}
-              className="metadata-search-fields"
-              aria-label={t("libraryDetail.searchFields.activeMetadata")}
-            >
-              {orderedSelectedMetadataFields.map((field) => {
-                const config = getLibraryFileSearchConfig(field);
-                const Icon = config.icon;
-                const errorKey = searchFieldErrors[field];
-                return (
-                  <div key={field} className={`metadata-search-row${errorKey ? " is-invalid" : ""}`}>
-                    <div className="metadata-search-control">
-                      <TooltipTrigger
-                        ariaLabel={t("libraryDetail.searchFields.tooltipAria")}
-                        content={
-                          config.tooltipKey
-                            ? `${t(config.labelKey)}\n\n${t(config.tooltipKey)}`
-                            : t(config.labelKey)
-                        }
-                        preserveLineBreaks={Boolean(config.tooltipKey)}
-                        className="metadata-search-icon-button"
-                      >
-                        <Icon size={16} />
-                      </TooltipTrigger>
-                      <input
-                        id={`library-metadata-search-${field}`}
-                        type="search"
-                        value={fieldValues[field] ?? ""}
-                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
-                        placeholder={t(config.placeholderKey)}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        className="metadata-search-remove"
-                        aria-label={t("libraryDetail.searchFields.removeAria", { field: t(config.labelKey) })}
-                        onClick={() => removeMetadataField(field)}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                      </button>
-                    </div>
-                    {errorKey ? <p className="metadata-search-error">{t(errorKey)}</p> : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-        {isFilesLoading && files.length === 0 ? (
-          <div className="panel-loader">
-            <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
-            <span>{t("libraryDetail.loadingFiles")}</span>
-          </div>
-        ) : files.length === 0 ? (
-          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
-        ) : (
-          <div ref={dataTableShellRef} className="data-table-shell">
-            <div className="media-data-table" role="table" aria-rowcount={filesTotal}>
-              <div className="media-data-table-head" role="rowgroup">
-                <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
-                  {activeColumns.map((column) => {
-                    const isActiveSort = sortKey === column.key;
-                    return (
-                      <div
-                        key={column.key}
-                        className={`media-data-cell media-data-header-cell${column.sticky ? " is-sticky" : ""}`}
-                        role="columnheader"
-                        aria-sort={ariaSortValue(isActiveSort, sortDirection)}
-                        ref={(element) => {
-                          headerCellRefs.current[column.key] = element;
-                        }}
-                      >
-                        <button type="button" className="column-sort" onClick={() => updateSort(column.key)}>
-                          <span>{t(column.labelKey)}</span>
-                          <span className={`sort-indicator${isActiveSort ? " is-active" : ""}`} aria-hidden="true">
-                            {isActiveSort ? sortIndicator(sortDirection) : ""}
-                          </span>
-                          {isActiveSort ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
-                        </button>
-                        <button
-                          type="button"
-                          className="column-resize-handle"
-                          aria-label={t("libraryDetail.resizeColumnAria", { column: t(column.labelKey) })}
-                          onPointerDown={(event) => beginColumnResize(column.key, event)}
-                          onDoubleClick={() => resetColumnWidth(column.key)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div
-                className="media-data-table-body"
-                role="rowgroup"
-                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-              >
-                {virtualRows.map((virtualRow) => {
-                  const file = files[virtualRow.index];
-                  if (!file) {
-                    return null;
-                  }
-                  return (
-                    <div
-                      key={file.id}
-                      className="media-data-row media-data-body-row"
-                      role="row"
-                      data-index={virtualRow.index}
-                      ref={rowVirtualizer.measureElement}
-                      style={{
-                        gridTemplateColumns: columnTemplate,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                    >
-                      {activeColumns.map((column) => (
-                        <div
-                          key={column.key}
-                          className={`media-data-cell${column.sticky ? " is-sticky" : ""}`}
-                          role="cell"
-                        >
-                          {column.render(file)}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="data-table-footer">
-              <span className="media-meta">
-                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
-              </span>
-              {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
-            </div>
-          </div>
-        )}
-        </AsyncPanel>
+          });
+        })()}
       </div>
     </>
   );

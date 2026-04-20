@@ -11,7 +11,9 @@ from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.duplicates import DuplicateGroupPageRead
+from backend.app.schemas.history import HistoryReconstructionStatusRead, HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
+from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
 from backend.app.schemas.media import (
     DashboardResponse,
     MediaFileDetail,
@@ -33,6 +35,9 @@ from backend.app.services.app_settings import get_app_settings as load_app_setti
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_retention import has_active_scan_jobs
+from backend.app.services.library_history_service import get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -138,6 +143,11 @@ def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
     return build_dashboard(db)
 
 
+@router.get("/dashboard/history", response_model=DashboardHistoryResponse)
+def dashboard_history(db: Session = Depends(get_db_session)) -> DashboardHistoryResponse:
+    return get_dashboard_history(db)
+
+
 @router.get("/dashboard/comparison", response_model=ComparisonResponse)
 def dashboard_comparison(
     x_field: ComparisonFieldId = Query(...),
@@ -171,6 +181,31 @@ def recent_scan_jobs(
     )
 
 
+@router.get("/history-storage", response_model=HistoryStorageRead)
+def history_storage(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> HistoryStorageRead:
+    return get_history_storage(db, settings)
+
+
+@router.get("/history/reconstruct", response_model=HistoryReconstructionStatusRead)
+def history_reconstruct_status(
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> HistoryReconstructionStatusRead:
+    return runtime.get_history_reconstruction_status()
+
+
+@router.post("/history/reconstruct", response_model=HistoryReconstructionStatusRead)
+def history_reconstruct(
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+    db: Session = Depends(get_db_session),
+) -> HistoryReconstructionStatusRead:
+    if has_active_scan_jobs(db):
+        raise HTTPException(status_code=409, detail="Wait until active scans finish before reconstructing history")
+    return runtime.request_history_reconstruction()
+
+
 @router.get("/scan-jobs/{job_id}", response_model=ScanJobDetailRead)
 def scan_job_detail(job_id: int, db: Session = Depends(get_db_session)) -> ScanJobDetailRead:
     payload = get_scan_job_detail(db, job_id)
@@ -194,11 +229,14 @@ def app_settings_update(
     settings: Settings = Depends(get_app_settings),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> AppSettingsRead:
+    current_settings = load_app_settings(db, settings)
     try:
         updated_settings, recompute_library_ids = update_app_settings(db, payload, settings, include_effects=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     runtime.refresh_worker_settings()
+    if updated_settings.history_retention != current_settings.history_retention:
+        runtime.run_history_retention()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings
@@ -279,6 +317,14 @@ def library_duplicates(
         raise HTTPException(status_code=404, detail="Library not found") from exc
 
 
+@router.get("/libraries/{library_id}/history", response_model=LibraryHistoryResponse)
+def library_history(library_id: int, db: Session = Depends(get_db_session)) -> LibraryHistoryResponse:
+    payload = get_library_history(db, library_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return payload
+
+
 @router.get("/libraries/{library_id}/scan-jobs", response_model=list[ScanJobRead])
 def library_scan_jobs(
     library_id: int,
@@ -356,6 +402,8 @@ def library_files(
         "file",
         "container",
         "size",
+        "bitrate",
+        "audio_bitrate",
         "video_codec",
         "resolution",
         "hdr_type",
@@ -431,6 +479,8 @@ def library_files_export_csv(
         "file",
         "container",
         "size",
+        "bitrate",
+        "audio_bitrate",
         "video_codec",
         "resolution",
         "hdr_type",

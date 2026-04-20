@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
@@ -17,6 +17,7 @@ import {
   type AppSettings,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type LibraryHistoryResponse,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileStreamDetails,
@@ -158,6 +159,45 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
   };
 }
 
+function createLibraryHistoryResponse(overrides: Partial<LibraryHistoryResponse> = {}): LibraryHistoryResponse {
+  return {
+    generated_at: "2026-04-19T12:00:00Z",
+    library_id: 1,
+    oldest_snapshot_day: "2026-04-15",
+    newest_snapshot_day: "2026-04-16",
+    resolution_categories: [
+      { id: "4k", label: "4k" },
+      { id: "1080p", label: "1080p" },
+      { id: "720p", label: "720p" },
+    ],
+    points: [
+      {
+        snapshot_day: "2026-04-15",
+        trend_metrics: {
+          total_files: 10,
+          resolution_counts: { "4k": 2, "1080p": 6, "720p": 2 },
+          average_bitrate: 8_000_000,
+          average_audio_bitrate: 512_000,
+          average_duration_seconds: 5400,
+          average_quality_score: 7.3,
+        },
+      },
+      {
+        snapshot_day: "2026-04-16",
+        trend_metrics: {
+          total_files: 12,
+          resolution_counts: { "4k": 3, "1080p": 7, "720p": 2 },
+          average_bitrate: 9_000_000,
+          average_audio_bitrate: 640_000,
+          average_duration_seconds: 5600,
+          average_quality_score: 7.8,
+        },
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): ComparisonResponse {
   return {
     x_field: "duration",
@@ -269,6 +309,12 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     ignore_patterns: [],
     user_ignore_patterns: [],
     default_ignore_patterns: [],
+    resolution_categories: [
+      { id: "4k", label: "4k", min_width: 3648, min_height: 1520 },
+      { id: "1080p", label: "1080p", min_width: 1824, min_height: 760 },
+      { id: "720p", label: "720p", min_width: 1216, min_height: 506 },
+      { id: "sd", label: "sd", min_width: 0, min_height: 0 },
+    ],
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
@@ -391,6 +437,7 @@ afterEach(() => {
 beforeEach(() => {
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
   vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
+  vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
   vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
 });
 
@@ -400,6 +447,7 @@ describe("LibraryDetailPage", () => {
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     const librarySummarySpy = vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     const libraryStatisticsSpy = vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryHistorySpy = vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
     const libraryComparisonSpy = vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
     const libraryDuplicatesSpy = vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
     const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
@@ -409,9 +457,138 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(librarySummarySpy).toHaveBeenCalled();
     expect(libraryStatisticsSpy).toHaveBeenCalled();
+    expect(libraryHistorySpy).toHaveBeenCalled();
     expect(libraryComparisonSpy).toHaveBeenCalled();
     expect(libraryDuplicatesSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {
+    const libraryId = 126;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    const historyToggle = await screen.findByRole("button", { name: "Media library history" });
+    const duplicatesToggle = screen.getByRole("button", { name: "Duplications" });
+    const analyzedFilesHeading = screen.getByRole("heading", { level: 2, name: "Analyzed files" });
+    const statisticGrid = container.querySelector(".statistic-layout-grid");
+    const historySection = historyToggle.closest("section");
+    const duplicatesSection = duplicatesToggle.closest("section");
+    const analyzedFilesSection = analyzedFilesHeading.closest("section");
+
+    expect(statisticGrid).not.toBeNull();
+    expect(historySection).not.toBeNull();
+    expect(duplicatesSection).not.toBeNull();
+    expect(analyzedFilesSection).not.toBeNull();
+    expect(statisticGrid!.contains(historySection!)).toBe(true);
+    expect(statisticGrid!.contains(duplicatesSection!)).toBe(true);
+    expect(statisticGrid!.contains(analyzedFilesSection!)).toBe(true);
+  });
+
+  it("loads library history independently from duplicates and files", async () => {
+    const libraryId = 127;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockRejectedValue(new Error("history unavailable"));
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(await screen.findByText("history unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplications" })).toBeInTheDocument();
+  });
+
+  it("renders an empty history state when no enriched points exist", async () => {
+    const libraryId = 128;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse({ points: [] }));
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
+  });
+
+  it("renders the resolution history metric as a stacked area chart", async () => {
+    const libraryId = 129;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-series-count") === "3",
+    );
+    expect(chart).toBeDefined();
+    expect(chart?.getAttribute("data-series-has-area")).toBe("[true,true,true]");
+    expect(chart?.getAttribute("data-points")).toBe("[2,3]");
+  });
+
+  it("renders numeric history metrics as line charts and updates when the selector changes", async () => {
+    const libraryId = 130;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    fireEvent.click(await screen.findByLabelText("Select history metric"));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average bitrate" }));
+
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
+    );
+    expect(chart).toBeDefined();
+    expect(chart?.getAttribute("data-series-count")).toBe("1");
+    expect(chart?.getAttribute("data-series-has-area")).toBe("[false]");
+  });
+
+  it("persists the selected history metric", async () => {
+    const libraryId = 131;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    fireEvent.click(await screen.findByLabelText("Select history metric"));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average duration" }));
+
+    expect(window.localStorage.getItem("medialyze-library-detail-history-selected-metric")).toBe(
+      "average_duration_seconds",
+    );
+  });
+
+  it("persists the history panel collapsed state", async () => {
+    const libraryId = 132;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const historyToggle = await screen.findByRole("button", { name: "Media library history" });
+    fireEvent.click(historyToggle);
+
+    expect(window.localStorage.getItem(`medialyze-library-detail-${libraryId}-history-collapsed`)).toBe("true");
+    expect(historyToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
+    expect(screen.queryByLabelText("Select history metric")).not.toBeInTheDocument();
+    expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
 
   it("persists inline statistic panel layout changes for the current library", async () => {
@@ -435,6 +612,62 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("restores the expanded default layout including history, duplicates, and analyzed files", async () => {
+    const libraryId = 119;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 2,
+        items: [{ instanceId: "size", statisticId: "size", width: 1, height: 1 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore default layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    const persistedLayout = window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`);
+    expect(persistedLayout).toContain("\"history\"");
+    expect(persistedLayout).toContain("\"duplicates\"");
+    expect(persistedLayout).toContain("\"analyzed_files\"");
+  });
+
+  it("adds analyzed files back through the add-panel menu", async () => {
+    const libraryId = 120;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 2,
+        items: [{ instanceId: "size", statisticId: "size", width: 1, height: 1 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: `Series ${libraryId}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add panel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Analyzed files" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"analyzed_files\"",
+    );
+  });
+
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {
     const libraryId = 121;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -453,6 +686,82 @@ describe("LibraryDetailPage", () => {
       String(libraryId),
       expect.objectContaining({ xField: "size", yField: "quality_score" }),
     );
+  });
+
+  it("reloads comparison data when navigating to a different library with the same panel selection", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-library-131",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-library-132",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    window.localStorage.setItem(
+      "medialyze-comparison-selection-library",
+      JSON.stringify({ xField: "duration", yField: "size", renderer: "scatter" }),
+    );
+
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockImplementation(async (libraryId) => createLibrarySummary(Number(libraryId)));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockImplementation(async (libraryId) => createFilesPage(Number(libraryId)));
+    vi.spyOn(api, "libraryComparison").mockImplementation(async (libraryId) =>
+      createComparisonResponse({
+        scatter_points:
+          String(libraryId) === "131"
+            ? [
+                { media_file_id: 1, x_value: 3600, y_value: 1024 },
+                { media_file_id: 2, x_value: 4200, y_value: 1024 },
+              ]
+            : [
+                { media_file_id: 3, x_value: 7200, y_value: 2048 },
+                { media_file_id: 4, x_value: 8400, y_value: 4096 },
+              ],
+      }),
+    );
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/libraries/:libraryId",
+          element: <LibraryDetailPage />,
+        },
+      ],
+      {
+        initialEntries: ["/libraries/131"],
+      },
+    );
+
+    render(
+      <AppDataProvider>
+        <ScanJobsProvider>
+          <RouterProvider router={router} />
+        </ScanJobsProvider>
+      </AppDataProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Series 131" })).toBeInTheDocument();
+    expect((await screen.findAllByTestId("echarts-react")).some(
+      (candidate) => candidate.getAttribute("data-points") === "[[3600,1024],[4200,1024]]",
+    )).toBe(true);
+
+    await router.navigate("/libraries/132");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Series 132" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("echarts-react").some(
+          (candidate) => candidate.getAttribute("data-points") === "[[7200,2048],[8400,4096]]",
+        ),
+      ).toBe(true);
+    });
   });
 
   it("opens the file detail route when a comparison point is clicked in scatter view", async () => {
@@ -670,6 +979,29 @@ describe("LibraryDetailPage", () => {
     expect((container.querySelector(".media-data-head-row") as HTMLElement).style.gridTemplateColumns).toContain("333px");
   });
 
+  it("uses library-specific table-view settings for visible columns", async () => {
+    const libraryId = 1241;
+    window.localStorage.setItem(
+      `medialyze-library-statistics-settings-library-${libraryId}`,
+      JSON.stringify({
+        visibility: {
+          video_codec: {
+            tableEnabled: false,
+          },
+        },
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Codec" })).not.toBeInTheDocument();
+  });
+
   it("persists resized analyzed-file column widths", async () => {
     const libraryId = 125;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -758,6 +1090,7 @@ describe("LibraryDetailPage", () => {
 
     const collapsedToggle = await screen.findByRole("button", { name: "Duplications" });
     expect(collapsedToggle).toBeInTheDocument();
+    expect(collapsedToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
     expect(within(collapsedToggle.closest("section") ?? document.body).getAllByText(/^2$/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
     expect(screen.queryByText("bonus-scene-copy.mkv")).not.toBeInTheDocument();
@@ -860,6 +1193,83 @@ describe("LibraryDetailPage", () => {
 
     await waitFor(() => expect(libraryDuplicatesSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
+  });
+
+  it("reloads library history after an active scan finishes", async () => {
+    const libraryId = 204;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryHistorySpy = vi
+      .spyOn(api, "libraryHistory")
+      .mockResolvedValueOnce(createLibraryHistoryResponse({ points: [] }))
+      .mockResolvedValueOnce(createLibraryHistoryResponse());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    vi.spyOn(api, "activeScanJobs")
+      .mockResolvedValueOnce([
+        {
+          id: 51,
+          library_id: libraryId,
+          library_name: "Series 204",
+          status: "running",
+          job_type: "incremental",
+          files_total: 2,
+          files_scanned: 1,
+          errors: 0,
+          started_at: "2026-03-12T09:10:00Z",
+          finished_at: null,
+          progress_percent: 50,
+          phase_label: "Analyzing media",
+          phase_detail: "1 of 2 files analyzed",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
+    await waitFor(() => expect(libraryHistorySpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.focus(window);
+
+    await waitFor(() => expect(libraryHistorySpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+    const chart = (await screen.findAllByTestId("echarts-react")).find(
+      (candidate) => candidate.getAttribute("data-series-count") === "3",
+    );
+    expect(chart).toBeDefined();
+  });
+
+  it("renders a safe fallback label for unknown legacy resolution categories", async () => {
+    const libraryId = 205;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryHistory").mockResolvedValue(
+      createLibraryHistoryResponse({
+        resolution_categories: [
+          { id: "4k", label: "4k" },
+          { id: "legacy_hd", label: "legacy_hd" },
+        ],
+        points: [
+          {
+            snapshot_day: "2026-04-15",
+            trend_metrics: {
+              total_files: 10,
+              resolution_counts: { "4k": 4, "legacy_hd": 6 },
+              average_bitrate: 8_000_000,
+              average_audio_bitrate: 512_000,
+              average_duration_seconds: 5400,
+              average_quality_score: 7.3,
+            },
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText(/Unknown legacy category: legacy_hd/)).toBeInTheDocument();
   });
 
   it("refetches only files when sorting changes", async () => {

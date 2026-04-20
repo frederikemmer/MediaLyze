@@ -14,10 +14,11 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { useAppData } from "../lib/app-data";
-import { api, type ComparisonResponse } from "../lib/api";
+import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
 import {
@@ -37,6 +38,7 @@ import {
   resizeStatisticPanelLayoutItem,
   saveStatisticPanelLayout,
   updateStatisticPanelLayoutComparisonSelection,
+  type StatisticPanelLayoutId,
 } from "../lib/statistic-panel-layout";
 import {
   getComparisonSelection,
@@ -45,11 +47,39 @@ import {
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { useScanJobs } from "../lib/scan-jobs";
+import type { LibraryHistoryMetricId } from "../components/HistoryTrendChart";
 
 const DASHBOARD_LAYOUT_KEY = "main";
+const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
+const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
+const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const dashboardComparisonCache = new Map<string, ComparisonResponse>();
-const statisticDefinitionMap = new Map(
-  LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition] as const),
+type DashboardLayoutPanelDefinition =
+  | {
+      id: LibraryStatisticDefinition["id"];
+      kind: "statistic";
+      statisticDefinition: LibraryStatisticDefinition;
+    }
+  | {
+      id: "history";
+      kind: "history";
+    };
+
+const dashboardLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, DashboardLayoutPanelDefinition>(
+  [
+    ...LIBRARY_STATISTIC_DEFINITIONS.map(
+      (definition) =>
+        [
+          definition.id,
+          {
+            id: definition.id,
+            kind: "statistic",
+            statisticDefinition: definition,
+          },
+        ] as const,
+    ),
+    ["history", { id: "history", kind: "history" }] as const,
+  ],
 );
 
 function formatDashboardDistributionLabel(
@@ -78,9 +108,36 @@ function buildComparisonQueryKey(selection: ComparisonSelection): string {
   return `${selection.xField}:${selection.yField}`;
 }
 
+function readDashboardHistoryPanelCollapsedPreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  if (storedPreference === null) {
+    return false;
+  }
+  return storedPreference === "true";
+}
+
+function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
+  if (typeof window === "undefined") {
+    return DEFAULT_HISTORY_METRIC;
+  }
+  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  if (
+    storedPreference === "resolution_mix" ||
+    storedPreference === "average_bitrate" ||
+    storedPreference === "average_audio_bitrate" ||
+    storedPreference === "average_duration_seconds"
+  ) {
+    return storedPreference;
+  }
+  return DEFAULT_HISTORY_METRIC;
+}
+
 type VisibleDashboardPanel = {
   item: ReturnType<typeof getStatisticPanelLayout>["items"][number];
-  definition: LibraryStatisticDefinition;
+  definition: DashboardLayoutPanelDefinition;
 };
 
 export function DashboardPage() {
@@ -104,15 +161,25 @@ export function DashboardPage() {
   const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
   const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
   const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
+  const [dashboardHistory, setDashboardHistory] = useState<DashboardHistoryResponse | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
+    readDashboardHistoryPanelCollapsedPreference(),
+  );
+  const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
+    readDashboardHistoryMetricPreference(),
+  );
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
+  const historyAbortRef = useRef<AbortController | null>(null);
   const activeLayout = isEditingLayout ? draftLayout : savedLayout;
   const visiblePanels = useMemo(
     () =>
       activeLayout.items
         .map((item) => {
-          const definition = statisticDefinitionMap.get(item.statisticId);
+          const definition = dashboardLayoutPanelDefinitionMap.get(item.statisticId);
           if (!definition) {
             return null;
           }
@@ -147,6 +214,39 @@ export function DashboardPage() {
     loadDashboard().catch((reason: Error) => setError(reason.message));
   }, [dashboardLoaded, loadDashboard]);
 
+  const loadDashboardHistory = useEffectEvent(async (showLoading = false) => {
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsHistoryLoading(true);
+    }
+
+    try {
+      const payload = await api.dashboardHistory(controller.signal);
+      setDashboardHistory(payload);
+      setHistoryError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setHistoryError((reason as Error).message);
+    } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsHistoryLoading(false);
+      }
+    }
+  });
+
+  useEffect(() => {
+    setIsHistoryLoading(true);
+    void loadDashboardHistory(true);
+  }, []);
+
   useEffect(() => {
     const nextLayout = saveStatisticPanelLayout(
       "dashboard",
@@ -160,6 +260,17 @@ export function DashboardPage() {
     setDraggedPanelId(null);
     setDropTargetPanelId(null);
   }, [layoutOptions]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY,
+      isHistoryPanelCollapsed ? "true" : "false",
+    );
+  }, [isHistoryPanelCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+  }, [selectedHistoryMetric]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
     const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
@@ -230,6 +341,7 @@ export function DashboardPage() {
       loadDashboard(true)
         .then(() => setError(null))
         .catch((reason: Error) => setError(reason.message));
+      void loadDashboardHistory(false);
       for (const { item } of comparisonPanels) {
         const selection = item.comparisonSelection ?? getComparisonSelection("dashboard");
         dashboardComparisonCache.delete(buildComparisonQueryKey(selection));
@@ -241,6 +353,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     return () => {
+      historyAbortRef.current?.abort();
       for (const controller of comparisonAbortRef.current.values()) {
         controller.abort();
       }
@@ -313,11 +426,11 @@ export function DashboardPage() {
               className="statistic-layout-size-button"
               aria-label={t("panelLayout.expandWidth")}
               title={t("panelLayout.expandWidth")}
-              onClick={() =>
-                updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width + 1 }),
-                )
-              }
+                onClick={() =>
+                  updateLayout((current) =>
+                    resizeStatisticPanelLayoutItem("dashboard", current, item.instanceId, { width: item.width + 1 }),
+                  )
+                }
             >
               <PanelRightClose className="nav-icon" aria-hidden="true" />
             </button>
@@ -328,11 +441,11 @@ export function DashboardPage() {
               className="statistic-layout-size-button"
               aria-label={t("panelLayout.shrinkWidth")}
               title={t("panelLayout.shrinkWidth")}
-              onClick={() =>
-                updateLayout((current) =>
-                  resizeStatisticPanelLayoutItem(current, item.instanceId, { width: item.width - 1 }),
-                )
-              }
+                onClick={() =>
+                  updateLayout((current) =>
+                    resizeStatisticPanelLayoutItem("dashboard", current, item.instanceId, { width: item.width - 1 }),
+                  )
+                }
             >
               <PanelLeftClose className="nav-icon" aria-hidden="true" />
             </button>
@@ -348,6 +461,7 @@ export function DashboardPage() {
               onClick={() =>
                 updateLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "dashboard",
                     current,
                     item.instanceId,
                     { height: item.height + 1 },
@@ -368,6 +482,7 @@ export function DashboardPage() {
               onClick={() =>
                 updateLayout((current) =>
                   resizeStatisticPanelLayoutItem(
+                    "dashboard",
                     current,
                     item.instanceId,
                     { height: item.height - 1 },
@@ -436,11 +551,20 @@ export function DashboardPage() {
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingLayout ? " is-editing" : ""}`}>
-        {visiblePanels.map((panel) => {
+        {(() => {
+          let collapsedPanelsBefore = 0;
+          return visiblePanels.map((panel) => {
+            const collapsedPanelOffsetCount = collapsedPanelsBefore;
+            const isCollapsedHistoryPanel = panel.definition.kind === "history" && isHistoryPanelCollapsed;
+            if (isCollapsedHistoryPanel) {
+              collapsedPanelsBefore += 1;
+            }
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
               `span-y-${panel.item.height}`,
+              panel.definition.kind === "history" ? "library-layout-panel-history" : "",
+              isCollapsedHistoryPanel ? "is-collapsed-panel" : "",
               draggedPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -448,7 +572,23 @@ export function DashboardPage() {
               .join(" ");
 
             let content: ReactNode;
-            if (panel.definition.panelKind === "comparison") {
+            if (panel.definition.kind === "history") {
+              content = (
+                <LibraryHistoryPanel
+                  history={dashboardHistory}
+                  loading={isHistoryLoading && !dashboardHistory && !historyError}
+                  error={historyError}
+                  selectedMetric={selectedHistoryMetric}
+                  onChangeMetric={setSelectedHistoryMetric}
+                  collapsed={isHistoryPanelCollapsed}
+                  onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
+                  currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  title={t("dashboard.history.title")}
+                  emptyMessage={t("dashboard.history.empty")}
+                  bodyId="dashboard-history-panel-body"
+                />
+              );
+            } else if (panel.definition.statisticDefinition.panelKind === "comparison") {
               const selection = panel.item.comparisonSelection ?? getComparisonSelection("dashboard");
               content = (
                 <ComparisonChartPanel
@@ -480,35 +620,40 @@ export function DashboardPage() {
                   }
                 />
               );
-            } else if (panel.definition.panelKind === "numeric-chart" && panel.definition.numericMetricId) {
-              const distribution = getDashboardStatisticNumericDistribution(dashboard, panel.definition);
+            } else if (panel.definition.statisticDefinition.panelKind === "numeric-chart") {
+              const statisticDefinition = panel.definition.statisticDefinition;
+              if (!statisticDefinition.numericMetricId) {
+                return null;
+              }
+              const distribution = getDashboardStatisticNumericDistribution(dashboard, statisticDefinition);
               content = (
                 <DistributionChartPanel
-                  title={t(panel.definition.dashboardTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
                   distribution={distribution}
-                  metricId={panel.definition.numericMetricId}
+                  metricId={statisticDefinition.numericMetricId}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={!dashboard && !error}
                   error={error}
                 />
               );
             } else {
+              const statisticDefinition = panel.definition.statisticDefinition;
               const items =
-                panel.definition.id === "hdr_type"
-                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel.definition))
-                  : getDashboardStatisticPanelItems(dashboard, panel.definition);
-              const formattedItems = panel.definition.dashboardFormatKind
+                statisticDefinition.id === "hdr_type"
+                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition))
+                  : getDashboardStatisticPanelItems(dashboard, statisticDefinition);
+              const formattedItems = statisticDefinition.dashboardFormatKind
                 ? items.map((item) => ({
                     ...item,
-                    label: formatCodecLabel(item.label, panel.definition.dashboardFormatKind!),
+                    label: formatCodecLabel(item.label, statisticDefinition.dashboardFormatKind!),
                   }))
                 : items.map((item) => ({
                     ...item,
-                    label: formatDashboardDistributionLabel(panel.definition.id, item.label, t),
+                    label: formatDashboardDistributionLabel(statisticDefinition.id, item.label, t),
                   }));
               content = (
                 <AsyncPanel
-                  title={t(panel.definition.dashboardTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
                   loading={!dashboard && !error}
                   error={error}
                   bodyClassName="async-panel-body-scroll"
@@ -555,6 +700,7 @@ export function DashboardPage() {
                 }}
                 style={
                   {
+                    "--collapsed-panel-offset-count": String(collapsedPanelOffsetCount),
                     "--statistic-panel-row-span": String(panel.item.height),
                   } as CSSProperties
                 }
@@ -568,7 +714,8 @@ export function DashboardPage() {
                 ) : null}
               </div>
             );
-          })}
+          });
+        })()}
       </div>
     </>
   );

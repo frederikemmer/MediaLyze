@@ -53,6 +53,12 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
+    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.storage_limit_gb == 0
+    assert loaded.history_retention.library_history.days == 365
+    assert loaded.history_retention.library_history.storage_limit_gb == 0
+    assert loaded.history_retention.scan_history.days == 30
+    assert loaded.history_retention.scan_history.storage_limit_gb == 0
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
@@ -76,6 +82,9 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
+    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.library_history.days == 365
+    assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
@@ -98,6 +107,9 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
+    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.library_history.days == 365
+    assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
@@ -119,6 +131,11 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
                     "parallel_scan_jobs": 3,
                     "comparison_scatter_point_limit": 10000,
                 },
+                history_retention={
+                    "file_history": {"days": 120, "storage_limit_gb": 1.5},
+                    "library_history": {"days": 730, "storage_limit_gb": 0},
+                    "scan_history": {"days": 45, "storage_limit_gb": 0.25},
+                },
                 feature_flags={
                     "show_analyzed_files_csv_export": True,
                     "show_full_width_app_shell": True,
@@ -137,6 +154,11 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.scan_performance.scan_worker_count == 6
     assert updated.scan_performance.parallel_scan_jobs == 3
     assert updated.scan_performance.comparison_scatter_point_limit == 10000
+    assert updated.history_retention.file_history.days == 120
+    assert updated.history_retention.file_history.storage_limit_gb == 1.5
+    assert updated.history_retention.library_history.days == 730
+    assert updated.history_retention.scan_history.days == 45
+    assert updated.history_retention.scan_history.storage_limit_gb == 0.25
     assert updated.feature_flags.show_analyzed_files_csv_export is True
     assert updated.feature_flags.show_full_width_app_shell is True
     assert updated.feature_flags.hide_quality_score_meter is True
@@ -151,6 +173,11 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "scan_worker_count": 6,
             "parallel_scan_jobs": 3,
             "comparison_scatter_point_limit": 10000,
+        },
+        "history_retention": {
+            "file_history": {"days": 120, "storage_limit_gb": 1.5},
+            "library_history": {"days": 730, "storage_limit_gb": 0.0},
+            "scan_history": {"days": 45, "storage_limit_gb": 0.25},
         },
         "feature_flags": {
             "show_analyzed_files_csv_export": True,
@@ -178,6 +205,9 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.scan_performance.scan_worker_count == 4
     assert updated.scan_performance.parallel_scan_jobs == 2
     assert updated.scan_performance.comparison_scatter_point_limit == 5000
+    assert updated.history_retention.file_history.days == 90
+    assert updated.history_retention.library_history.days == 365
+    assert updated.history_retention.scan_history.days == 30
     assert updated.feature_flags.show_analyzed_files_csv_export is False
     assert updated.feature_flags.show_full_width_app_shell is False
     assert updated.feature_flags.hide_quality_score_meter is False
@@ -233,3 +263,35 @@ def test_update_app_settings_merges_partial_scan_performance_updates(tmp_path) -
     assert second.scan_performance.scan_worker_count == 7
     assert second.scan_performance.parallel_scan_jobs == 5
     assert second.scan_performance.comparison_scatter_point_limit == 2500
+
+
+def test_update_app_settings_merges_partial_history_retention_updates(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        first = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                history_retention={
+                    "file_history": {"days": 120, "storage_limit_gb": 2},
+                    "library_history": {"days": 365, "storage_limit_gb": 0},
+                    "scan_history": {"days": 30, "storage_limit_gb": 0.5},
+                }
+            ),
+            settings,
+        )
+        second = update_app_settings(
+            db,
+            AppSettingsUpdate(history_retention={"scan_history": {"days": 60}}),
+            settings,
+        )
+
+    assert first.history_retention.file_history.days == 120
+    assert first.history_retention.file_history.storage_limit_gb == 2
+    assert first.history_retention.scan_history.days == 30
+    assert first.history_retention.scan_history.storage_limit_gb == 0.5
+    assert second.history_retention.file_history.days == 120
+    assert second.history_retention.file_history.storage_limit_gb == 2
+    assert second.history_retention.scan_history.days == 60
+    assert second.history_retention.scan_history.storage_limit_gb == 0.5

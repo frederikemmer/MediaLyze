@@ -5,6 +5,7 @@ from threading import Lock
 
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.library import LibraryStatistics, LibrarySummary
+from backend.app.schemas.library_history import DashboardHistoryResponse
 from backend.app.schemas.media import DashboardResponse
 
 
@@ -12,6 +13,7 @@ class StatsCache:
     def __init__(self) -> None:
         self._lock = Lock()
         self._dashboard: dict[str, DashboardResponse] = {}
+        self._dashboard_history: dict[str, DashboardHistoryResponse] = {}
         self._dashboard_comparisons: dict[str, dict[tuple[ComparisonFieldId, ComparisonFieldId], ComparisonResponse]] = {}
         self._libraries: dict[str, list[LibrarySummary]] = {}
         self._library_summaries: dict[str, dict[int, LibrarySummary]] = {}
@@ -28,6 +30,14 @@ class StatsCache:
     def set_dashboard(self, cache_key: str, payload: DashboardResponse) -> None:
         with self._lock:
             self._dashboard[cache_key] = deepcopy(payload)
+
+    def get_dashboard_history(self, cache_key: str) -> DashboardHistoryResponse | None:
+        with self._lock:
+            return deepcopy(self._dashboard_history.get(cache_key))
+
+    def set_dashboard_history(self, cache_key: str, payload: DashboardHistoryResponse) -> None:
+        with self._lock:
+            self._dashboard_history[cache_key] = deepcopy(payload)
 
     def get_dashboard_comparison(
         self,
@@ -98,6 +108,7 @@ class StatsCache:
     def invalidate(self, cache_key: str, library_id: int | None = None) -> None:
         with self._lock:
             self._dashboard.pop(cache_key, None)
+            self._dashboard_history.pop(cache_key, None)
             self._dashboard_comparisons.pop(cache_key, None)
             self._libraries.pop(cache_key, None)
             if library_id is None:

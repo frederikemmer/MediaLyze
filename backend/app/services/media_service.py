@@ -648,14 +648,18 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
     if not media_file:
         return None
 
-    row = _row_from_model(media_file, get_app_settings(db).resolution_categories)
+    return serialize_media_file_detail(media_file, get_app_settings(db).resolution_categories)
+
+
+def serialize_media_file_detail(media_file: MediaFile, resolution_categories=None) -> MediaFileDetail:
+    row = _row_from_model(media_file, resolution_categories)
     return MediaFileDetail(
         **row.model_dump(),
         media_format=media_file.media_format,
-        video_streams=media_file.video_streams,
-        audio_streams=media_file.audio_streams,
-        subtitle_streams=media_file.subtitle_streams,
-        external_subtitles=media_file.external_subtitles,
+        video_streams=sorted(media_file.video_streams, key=lambda stream: stream.stream_index),
+        audio_streams=sorted(media_file.audio_streams, key=lambda stream: stream.stream_index),
+        subtitle_streams=sorted(media_file.subtitle_streams, key=lambda stream: stream.stream_index),
+        external_subtitles=sorted(media_file.external_subtitles, key=lambda subtitle: subtitle.path.lower()),
         raw_ffprobe_json=media_file.raw_ffprobe_json,
     )
 

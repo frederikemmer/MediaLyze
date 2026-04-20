@@ -37,7 +37,12 @@
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
     "subtitleCodecs": "Untertitel-Codecs",
-    "subtitleSources": "Untertitel-Quellen"
+    "subtitleSources": "Untertitel-Quellen",
+    "history": {
+      "title": "Historische Daten",
+      "subtitle": "Taegliche Trend-Snapshots ueber alle sichtbaren Bibliotheken",
+      "empty": "Dashboard-Trends erscheinen nach dem naechsten abgeschlossenen Scan."
+    }
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",
@@ -113,6 +118,50 @@
     "comparisonScatterPointLimit": "Scatter-Plot-Punkte",
     "comparisonScatterPointLimitTooltipAria": "Sampling fuer Scatter-Plots erklaeren",
     "comparisonScatterPointLimitTooltip": "Begrenzt, wie viele Punkte MediaLyze fuer Vergleichs-Scatter-Plots zurueckliefert.\n\nHeatmaps und Saeulendiagramme bleiben exakt; nur Scatter-Plots werden aus Lesbarkeits- und Performance-Gruenden gesampelt.\n\nWarnung: sehr hohe Werte koennen den Speicherverbrauch im Browser merklich erhoehen und grosse Vergleichsansichten traeger machen.\nMaximum: {{max}}.",
+    "historyRetention": {
+      "title": "Verlaufsaufbewahrung",
+      "loading": "Speicherprognose wird geladen…",
+      "bucketLabel": "Verlaufstyp",
+      "daysLabel": "Aufbewahrung in Tagen",
+      "storageLimitLabel": "Speicherlimit (GB)",
+      "zeroUnlimited": "0 = unbegrenzt",
+      "reconstructButton": "Verlauf rekonstruieren",
+      "reconstructing": "Verlauf wird rekonstruiert…",
+      "reconstructTooltipAria": "Genauigkeit des rekonstruierten Verlaufs erklaeren",
+      "reconstructTooltip": "Erstellt einen approximierten Vergangenheitsverlauf aus dem aktuellen Medienbestand und vermuteten Hinzufuegezeitpunkten, hauptsaechlich anhand der Datei-mtime.\n\nDas ist nicht exakt: mtimes entsprechen nicht zwingend dem tatsaechlichen Hinzufuegezeitpunkt, und geloeschte oder veraenderte Dateien aus der Vergangenheit lassen sich nicht verlaesslich rekonstruieren.\n\nEs wird nur so viel Verlauf rekonstruiert, wie mit den aktuell in diesem Panel gesetzten Aufbewahrungstagen und Speicherlimits ueberhaupt erhalten bliebe.\n\nBestehender Verlauf bleibt unberuehrt; es werden nur fehlende fruehere Verlaufsdaten ergaenzt.",
+      "reconstructActiveScanHint": "Warte, bis aktive Scans abgeschlossen sind, bevor du den approximierten Verlauf rekonstruierst.",
+      "reconstructNoChanges": "Es mussten keine fehlenden historischen Eintraege rekonstruiert werden.",
+      "reconstructSuccess": "{{libraryEntries}} Mediathek-Snapshots und {{fileEntries}} initiale Dateiverlaufs-Eintraege wurden rekonstruiert.",
+      "reconstructFailed": "Die Verlaufsrekonstruktion ist fehlgeschlagen.",
+      "progressQueued": "Wartet auf den Start",
+      "progressLoadingLibraries": "Bibliotheken werden vorbereitet",
+      "progressLoadingLibrary": "Mediendateien werden geladen",
+      "progressFileHistory": "Dateiverlauf wird rekonstruiert",
+      "progressLibraryHistory": "Bibliothekssnapshots werden rekonstruiert",
+      "progressCompleted": "Abgeschlossen",
+      "progressFailed": "Fehlgeschlagen",
+      "progressLibraries": "{{completed}} von {{total}} Bibliotheken",
+      "progressCurrentLibrary": "Aktuelle Bibliothek: {{name}}",
+      "progressFiles": "{{completed}} von {{total}} Mediendateien",
+      "progressDays": "{{completed}} von {{total}} Tagen",
+      "progressEntries": "{{libraryEntries}} Bibliothekssnapshots und {{fileEntries}} Dateiverlaufs-Eintraege bisher erstellt.",
+      "currentStorage": "Aktueller Speicher",
+      "averagePerDay": "Durchschnitt pro Tag",
+      "projected30Days": "Prognose fuer 30 Tage",
+      "projectedConfigured": "Prognose fuer das konfigurierte Fenster",
+      "reclaimableNote": "{{reclaimable}} koennen aus der Datenbankdatei freigegeben werden. Die physische Komprimierung kann bis zum Leerlauf aktiver Scans warten.",
+      "buckets": {
+        "file_history": {
+          "title": "Dateiverlauf"
+        },
+        "library_history": {
+          "title": "Mediathekverlauf"
+        },
+        "scan_history": {
+          "title": "Scan-Verlauf"
+        }
+      }
+    },
     "featureFlagsTitle": "Feature Flags",
     "featureFlags": {
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
@@ -242,6 +291,9 @@
     "analyzedFiles": "Analysierte Dateien",
     "indexedEntries": "{{count}} indizierte Einträge",
     "indexedEntriesFiltered": "{{shown}} von {{total}} indizierten Einträgen",
+    "tableView": {
+      "edit": "Tabellenansicht bearbeiten"
+    },
     "export": {
       "aria": "Analysierte Dateien als CSV exportieren",
       "tooltip": "Die vollstaendige gefilterte Ergebnismenge der analysierten Dateien als CSV exportieren",
@@ -332,6 +384,25 @@
       "searchPlaceholder": "Duplikate durchsuchen",
       "searchLabel": "Duplikate durchsuchen",
       "clearSearch": "Duplikat-Suche loeschen"
+    },
+    "history": {
+      "title": "Mediathekverlauf",
+      "subtitle": "Taegliche Trend-Snapshots abgeschlossener Scans",
+      "empty": "Verlaufstrends erscheinen nach dem naechsten abgeschlossenen Scan.",
+      "controls": {
+        "metric": "Verlaufsmetrik auswaehlen"
+      },
+      "tooltip": {
+        "total": "Gesamt"
+      },
+      "metrics": {
+        "resolution_mix": "Aufloesungsmix",
+        "average_bitrate": "Durchschnittliche Bitrate",
+        "average_audio_bitrate": "Durchschnittliche Audio-Bitrate",
+        "average_duration_seconds": "Durchschnittliche Dauer",
+        "average_quality_score": "Durchschnittlicher Qualitaets-Score"
+      },
+      "unknownLegacyResolutionCategory": "Unbekannte Legacy-Kategorie: {{id}}"
     },
     "renderedEntries": "{{rendered}} von {{total}} Einträgen gerendert",
     "loadMore": "{{count}} weitere laden",

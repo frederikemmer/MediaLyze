@@ -89,6 +89,43 @@ export type ResolutionCategory = {
   min_height: number;
 };
 
+export type LibraryHistoryTrendMetrics = {
+  total_files: number;
+  resolution_counts: Record<string, number>;
+  average_bitrate: number | null;
+  average_audio_bitrate: number | null;
+  average_duration_seconds: number | null;
+  average_quality_score: number | null;
+};
+
+export type LibraryHistoryPoint = {
+  snapshot_day: string;
+  trend_metrics: LibraryHistoryTrendMetrics;
+};
+
+export type LibraryHistoryResolutionCategory = {
+  id: string;
+  label: string;
+};
+
+export type LibraryHistoryResponse = {
+  generated_at: string;
+  library_id: number;
+  oldest_snapshot_day: string | null;
+  newest_snapshot_day: string | null;
+  resolution_categories: LibraryHistoryResolutionCategory[];
+  points: LibraryHistoryPoint[];
+};
+
+export type DashboardHistoryResponse = {
+  generated_at: string;
+  oldest_snapshot_day: string | null;
+  newest_snapshot_day: string | null;
+  resolution_categories: LibraryHistoryResolutionCategory[];
+  points: LibraryHistoryPoint[];
+  visible_library_ids: number[];
+};
+
 export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
@@ -374,8 +411,22 @@ export type AppSettings = {
   resolution_categories?: ResolutionCategory[];
   scan_performance?: {
     scan_worker_count: number;
-    parallel_scan_jobs: number;
-    comparison_scatter_point_limit: number;
+      parallel_scan_jobs: number;
+      comparison_scatter_point_limit: number;
+  };
+  history_retention?: {
+    file_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
+    library_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
+    scan_history: {
+      days: number;
+      storage_limit_gb: number;
+    };
   };
   feature_flags: {
     show_analyzed_files_csv_export: boolean;
@@ -383,6 +434,64 @@ export type AppSettings = {
     hide_quality_score_meter: boolean;
     unlimited_panel_size: boolean;
   };
+};
+
+export type HistoryStorageCategory = {
+  entry_count: number;
+  current_estimated_bytes: number;
+  average_daily_bytes: number;
+  projected_bytes_30d: number;
+  projected_bytes_for_configured_days: number | null;
+  days_limit: number;
+  storage_limit_bytes: number;
+  oldest_recorded_at: string | null;
+  newest_recorded_at: string | null;
+};
+
+export type HistoryStorage = {
+  generated_at: string;
+  database_file_bytes: number;
+  reclaimable_file_bytes: number;
+  categories: {
+    file_history: HistoryStorageCategory;
+    library_history: HistoryStorageCategory;
+    scan_history: HistoryStorageCategory;
+  };
+};
+
+export type HistoryReconstructionResult = {
+  generated_at: string;
+  libraries_processed: number;
+  libraries_with_media: number;
+  created_file_history_entries: number;
+  created_library_history_entries: number;
+  oldest_reconstructed_snapshot_day: string | null;
+  newest_reconstructed_snapshot_day: string | null;
+};
+
+export type HistoryReconstructionStatus = {
+  status: "idle" | "queued" | "running" | "completed" | "failed";
+  phase:
+    | "idle"
+    | "loading_libraries"
+    | "loading_library"
+    | "reconstructing_file_history"
+    | "reconstructing_library_history"
+    | "completed"
+    | "failed";
+  started_at: string | null;
+  finished_at: string | null;
+  progress_percent: number;
+  libraries_total: number;
+  libraries_processed: number;
+  libraries_with_media: number;
+  current_library_name: string | null;
+  phase_total: number;
+  phase_completed: number;
+  created_file_history_entries: number;
+  created_library_history_entries: number;
+  result: HistoryReconstructionResult | null;
+  error: string | null;
 };
 
 export type ScanJob = {
@@ -630,6 +739,8 @@ function extractFilenameFromDisposition(value: string | null): string | null {
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   dashboard: () => request<DashboardResponse>("/dashboard"),
+  dashboardHistory: (signal?: AbortSignal) =>
+    request<DashboardHistoryResponse>("/dashboard/history", { signal }),
   dashboardComparison: (
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
   ) =>
@@ -638,6 +749,12 @@ export const api = {
       { signal: params.signal },
     ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
+  historyStorage: () => request<HistoryStorage>("/history-storage"),
+  historyReconstructionStatus: () => request<HistoryReconstructionStatus>("/history/reconstruct"),
+  reconstructHistory: () =>
+    request<HistoryReconstructionStatus>("/history/reconstruct", {
+      method: "POST",
+    }),
   recentScanJobs: (params?: {
     limit?: number;
     sinceHours?: number;
@@ -666,6 +783,8 @@ export const api = {
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
   libraryStatistics: (id: string | number, signal?: AbortSignal) =>
     request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
+  libraryHistory: (id: string | number, signal?: AbortSignal) =>
+    request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
   libraryComparison: (
     id: string | number,
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
@@ -732,6 +851,20 @@ export const api = {
       scan_worker_count?: number;
       parallel_scan_jobs?: number;
       comparison_scatter_point_limit?: number;
+    };
+    history_retention?: {
+      file_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
+      library_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
+      scan_history?: {
+        days?: number;
+        storage_limit_gb?: number;
+      };
     };
     feature_flags?: {
       show_analyzed_files_csv_export?: boolean;

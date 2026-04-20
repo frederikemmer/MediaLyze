@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ from backend.app.models.entities import (
     ExternalSubtitle,
     JobStatus,
     Library,
+    LibraryHistory,
     LibraryType,
     MediaFile,
     MediaFormat,
@@ -25,7 +26,14 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.core.config import Settings
+from backend.app.schemas.history import (
+    HistoryReconstructionJobStatus,
+    HistoryReconstructionPhase,
+    HistoryReconstructionStatusRead,
+)
 from pathlib import Path
+from backend.app.schemas.app_settings import AppSettingsUpdate
+from backend.app.services.app_settings import update_app_settings
 
 
 def _build_test_app(db: Session) -> TestClient:
@@ -36,10 +44,23 @@ def _build_test_app(db: Session) -> TestClient:
         "TestScanRuntime",
         (),
         {
+            "__init__": lambda self: setattr(self, "history_reconstruction_status", HistoryReconstructionStatusRead()),
             "sync_library": lambda self, library_id: None,
             "refresh_worker_settings": lambda self: None,
             "request_quality_recompute": lambda self, library_id: None,
+            "run_history_retention": lambda self: None,
             "cancel_active_jobs": lambda self: [],
+            "get_history_reconstruction_status": lambda self: self.history_reconstruction_status,
+            "request_history_reconstruction": lambda self: setattr(
+                self,
+                "history_reconstruction_status",
+                HistoryReconstructionStatusRead(
+                    status=HistoryReconstructionJobStatus.running,
+                    phase=HistoryReconstructionPhase.loading_libraries,
+                    libraries_total=1,
+                ),
+            )
+            or self.history_reconstruction_status,
         },
     )()
     return TestClient(app)
@@ -79,6 +100,66 @@ def test_library_files_export_csv_returns_422_for_invalid_search_expression() ->
 
     assert response.status_code == 422
     assert response.json() == {"detail": "Invalid search expression for duration"}
+
+
+def test_library_files_route_accepts_bitrate_sort_keys() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Bitrate Route",
+            path="/tmp/bitrate-route",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        low = MediaFile(
+            library_id=library.id,
+            relative_path="low.mkv",
+            filename="low.mkv",
+            extension="mkv",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        high = MediaFile(
+            library_id=library.id,
+            relative_path="high.mkv",
+            filename="high.mkv",
+            extension="mkv",
+            size_bytes=2048,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([low, high])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=low.id, duration=120.0, bit_rate=2_000_000),
+                MediaFormat(media_file_id=high.id, duration=120.0, bit_rate=8_000_000),
+                AudioStream(media_file_id=low.id, stream_index=0, codec="aac", bit_rate=128_000),
+                AudioStream(media_file_id=high.id, stream_index=0, codec="aac", bit_rate=384_000),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        bitrate_response = client.get(f"/api/libraries/{library.id}/files?sort_key=bitrate&sort_direction=desc")
+        audio_bitrate_response = client.get(
+            f"/api/libraries/{library.id}/files?sort_key=audio_bitrate&sort_direction=desc"
+        )
+
+    assert bitrate_response.status_code == 200
+    assert audio_bitrate_response.status_code == 200
+    assert [item["filename"] for item in bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
+    assert [item["filename"] for item in audio_bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
 
 
 def test_library_statistics_route_includes_numeric_distributions() -> None:
@@ -168,6 +249,77 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
     assert payload["scatter_points"][0]["x_value"] == 5400.0
 
 
+def test_dashboard_history_route_returns_visible_library_aggregation() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        visible_library = Library(
+            name="Visible history",
+            path="/tmp/dashboard-history-visible",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden history",
+            path="/tmp/dashboard-history-hidden",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+        visible_library_id = visible_library.id
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=visible_library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 2,
+                            "resolution_counts": {"4k": 2},
+                            "average_bitrate": 8_000_000,
+                            "average_audio_bitrate": 512_000,
+                            "average_duration_seconds": 5_400,
+                            "average_quality_score": 7.5,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=hidden_library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 5,
+                            "resolution_counts": {"sd": 5},
+                            "average_bitrate": 2_000_000,
+                            "average_audio_bitrate": 128_000,
+                            "average_duration_seconds": 1_800,
+                            "average_quality_score": 4.0,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/dashboard/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visible_library_ids"] == [visible_library_id]
+    assert payload["oldest_snapshot_day"] == "2026-04-10"
+    assert payload["newest_snapshot_day"] == "2026-04-10"
+    assert payload["points"][0]["trend_metrics"]["total_files"] == 2
+    assert payload["points"][0]["trend_metrics"]["resolution_counts"] == {"4k": 2}
+
+
 def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
@@ -189,6 +341,101 @@ def test_library_statistics_comparison_route_rejects_identical_axes() -> None:
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Comparison axes must use different fields"}
+
+
+def test_library_history_route_returns_enriched_points_and_resolved_labels() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                resolution_categories=[
+                    {"id": "4k", "label": "Ultra HD", "min_width": 3648, "min_height": 1520},
+                    {"id": "1080p", "label": "Full HD", "min_width": 1824, "min_height": 760},
+                    {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                ]
+            ),
+            Settings(),
+        )
+        library = Library(
+            name="History",
+            path="/tmp/library-history-route",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-10",
+                    snapshot={"file_count": 3},
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-11",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 3,
+                            "resolution_counts": {"4k": 1, "legacy_hd": 2},
+                            "average_bitrate": 8000000,
+                            "average_audio_bitrate": 512000,
+                            "average_duration_seconds": 5400,
+                            "average_quality_score": 7.3,
+                        }
+                    },
+                ),
+                LibraryHistory(
+                    library_id=library.id,
+                    snapshot_day="2026-04-12",
+                    snapshot={
+                        "trend_metrics": {
+                            "total_files": 4,
+                            "resolution_counts": {"1080p": 4},
+                            "average_bitrate": 9000000,
+                            "average_audio_bitrate": 640000,
+                            "average_duration_seconds": 5600,
+                            "average_quality_score": 7.8,
+                        }
+                    },
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/libraries/{library.id}/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["oldest_snapshot_day"] == "2026-04-11"
+    assert payload["newest_snapshot_day"] == "2026-04-12"
+    assert [point["snapshot_day"] for point in payload["points"]] == ["2026-04-11", "2026-04-12"]
+    assert payload["resolution_categories"] == [
+        {"id": "4k", "label": "Ultra HD"},
+        {"id": "1080p", "label": "Full HD"},
+        {"id": "sd", "label": "SD"},
+        {"id": "legacy_hd", "label": "legacy_hd"},
+    ]
+    assert payload["points"][0]["trend_metrics"]["resolution_counts"]["legacy_hd"] == 2
+
+
+def test_library_history_route_returns_404_for_unknown_library() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/libraries/999/history")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Library not found"}
 
 
 def test_paths_inspect_returns_404_outside_desktop_mode() -> None:
@@ -331,6 +578,101 @@ def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None
     payload = response.json()[0]
     assert payload["started_at"] == "2026-03-24T04:06:00Z"
     assert payload["finished_at"] == "2026-03-24T04:10:00Z"
+
+
+def test_history_storage_route_returns_storage_payload() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.completed,
+                job_type="incremental",
+                finished_at=datetime(2026, 3, 24, 4, 10, tzinfo=UTC),
+                trigger_details={"reason": "user_requested"},
+                scan_summary={"changes": {"new_files": {"count": 1}}},
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/history-storage")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generated_at"].endswith("Z")
+    assert payload["database_file_bytes"] >= 0
+    assert payload["reclaimable_file_bytes"] >= 0
+    assert payload["categories"]["scan_history"]["entry_count"] == 1
+    assert payload["categories"]["scan_history"]["current_estimated_bytes"] > 0
+
+
+def test_history_reconstruct_route_starts_background_job() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie.mkv",
+                filename="movie.mkv",
+                extension="mkv",
+                size_bytes=1024,
+                mtime=(datetime.now(UTC) - timedelta(days=2)).timestamp(),
+                scan_status=ScanStatus.ready,
+                quality_score=7,
+                quality_score_raw=7.0,
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.post("/api/history/reconstruct")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "running"
+    assert payload["phase"] == "loading_libraries"
+    assert payload["libraries_total"] == 1
+    assert payload["result"] is None
+
+
+def test_history_reconstruct_status_route_returns_runtime_state() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/history/reconstruct")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "idle"
+    assert payload["phase"] == "idle"
 
 
 def test_library_duplicates_route_returns_404_for_unknown_library() -> None:

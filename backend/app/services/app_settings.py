@@ -11,6 +11,8 @@ from backend.app.schemas.app_settings import (
     AppSettingsRead,
     AppSettingsUpdate,
     FeatureFlagsRead,
+    HistoryRetentionBucketRead,
+    HistoryRetentionRead,
     ResolutionCategory,
     ScanPerformanceRead,
 )
@@ -74,6 +76,10 @@ def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
     )
 
 
+def _default_history_retention() -> HistoryRetentionRead:
+    return HistoryRetentionRead()
+
+
 def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
     candidate = payload if isinstance(payload, dict) else {}
     return FeatureFlagsRead(
@@ -96,6 +102,27 @@ def _deserialize_scan_performance(payload: Any, settings: Settings) -> ScanPerfo
     )
 
 
+def _deserialize_history_retention_bucket(
+    payload: Any,
+    defaults: HistoryRetentionBucketRead,
+) -> HistoryRetentionBucketRead:
+    candidate = payload if isinstance(payload, dict) else {}
+    return HistoryRetentionBucketRead(
+        days=int(candidate.get("days", defaults.days)),
+        storage_limit_gb=float(candidate.get("storage_limit_gb", defaults.storage_limit_gb)),
+    )
+
+
+def _deserialize_history_retention(payload: Any) -> HistoryRetentionRead:
+    candidate = payload if isinstance(payload, dict) else {}
+    defaults = _default_history_retention()
+    return HistoryRetentionRead(
+        file_history=_deserialize_history_retention_bucket(candidate.get("file_history"), defaults.file_history),
+        library_history=_deserialize_history_retention_bucket(candidate.get("library_history"), defaults.library_history),
+        scan_history=_deserialize_history_retention_bucket(candidate.get("scan_history"), defaults.scan_history),
+    )
+
+
 def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead:
     payload = value if isinstance(value, dict) else {}
     user_ignore_patterns = payload.get("user_ignore_patterns")
@@ -115,6 +142,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         normalized_default = _seeded_default_ignore_patterns(settings)
     feature_flags = _deserialize_feature_flags(payload.get("feature_flags"))
     scan_performance = _deserialize_scan_performance(payload.get("scan_performance"), settings)
+    history_retention = _deserialize_history_retention(payload.get("history_retention"))
     resolution_categories_payload = payload.get("resolution_categories")
     normalized_resolution_categories = normalize_resolution_categories(
         resolution_categories_payload if isinstance(resolution_categories_payload, list) else None
@@ -127,6 +155,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         resolution_categories=normalized_resolution_categories,
         feature_flags=feature_flags,
         scan_performance=scan_performance,
+        history_retention=history_retention,
     )
 
 
@@ -141,6 +170,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             resolution_categories=default_resolution_categories(),
             feature_flags=_default_feature_flags(),
             scan_performance=_default_scan_performance(resolved_settings),
+            history_retention=_default_history_retention(),
         )
     return _deserialize_app_settings(setting.value, resolved_settings)
 
@@ -219,6 +249,18 @@ def update_app_settings(
     next_scan_performance = current.scan_performance.model_copy(
         update=payload.scan_performance.model_dump(exclude_none=True) if payload.scan_performance is not None else {}
     )
+    history_retention_updates = {}
+    if payload.history_retention is not None:
+        for key in ("file_history", "library_history", "scan_history"):
+            bucket_update = getattr(payload.history_retention, key)
+            if bucket_update is None:
+                continue
+            history_retention_updates[key] = getattr(current.history_retention, key).model_copy(
+                update=bucket_update.model_dump(exclude_none=True)
+            )
+    next_history_retention = current.history_retention.model_copy(
+        update=history_retention_updates
+    )
 
     affected_library_ids: list[int] = []
     if resolution_update.changed:
@@ -239,6 +281,7 @@ def update_app_settings(
         "resolution_categories": [item.model_dump(mode="json") for item in next_resolution_categories],
         "feature_flags": next_feature_flags.model_dump(mode="json"),
         "scan_performance": next_scan_performance.model_dump(mode="json"),
+        "history_retention": next_history_retention.model_dump(mode="json"),
     }
     db.commit()
     db.refresh(setting)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -12,6 +12,9 @@ import {
   api,
   DEFAULT_QUALITY_PROFILE,
   type DuplicateDetectionMode,
+  type HistoryReconstructionStatus,
+  type HistoryReconstructionResult,
+  type HistoryStorage,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -22,15 +25,6 @@ import {
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
-import {
-  getLibraryStatisticsSettings,
-  getOrderedLibraryStatisticDefinitions,
-  moveLibraryStatistic,
-  saveLibraryStatisticsSettings,
-  updateLibraryStatisticVisibility,
-  type LibraryStatisticId,
-  type LibraryStatisticsSettings,
-} from "../lib/library-statistics-settings";
 import {
   getSettingsPanelState,
   saveSettingsPanelState,
@@ -156,6 +150,11 @@ const DEFAULT_SCAN_PERFORMANCE = {
   parallel_scan_jobs: 2,
   comparison_scatter_point_limit: 5000,
 };
+const DEFAULT_HISTORY_RETENTION = {
+  file_history: { days: 90, storage_limit_gb: 0 },
+  library_history: { days: 365, storage_limit_gb: 0 },
+  scan_history: { days: 30, storage_limit_gb: 0 },
+};
 const SCAN_WORKER_OPTIONS = Array.from({ length: SCAN_WORKER_COUNT_MAX }, (_, index) => index + 1);
 const PARALLEL_SCAN_JOB_OPTIONS = Array.from({ length: PARALLEL_SCAN_JOB_COUNT_MAX }, (_, index) => index + 1);
 const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [
@@ -171,6 +170,7 @@ const COMPARISON_SCATTER_POINT_LIMIT_OPTIONS = [
   250000,
   500000,
 ];
+const HISTORY_RECONSTRUCTION_POLL_INTERVAL_MS = 1500;
 
 function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): ResolutionCategoryDraft[] {
   return categories.map((category) => ({ ...category, persisted: true }));
@@ -285,6 +285,63 @@ function normalizeScanPerformanceInput(
     return fallback;
   }
   return clampInteger(parsed, minimum, maximum);
+}
+
+function normalizeHistoryRetentionDaysInput(value: string, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(0, Math.round(parsed));
+}
+
+function normalizeHistoryRetentionStorageInput(value: string, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(0, parsed);
+}
+
+type HistoryRetentionBucketKey = keyof typeof DEFAULT_HISTORY_RETENTION;
+const HISTORY_RETENTION_BUCKETS: HistoryRetentionBucketKey[] = [
+  "file_history",
+  "library_history",
+  "scan_history",
+];
+
+type HistoryRetentionInputs = Record<
+  HistoryRetentionBucketKey,
+  {
+    days: string;
+    storage_limit_gb: string;
+  }
+>;
+
+function historyRetentionInputsFromSettings(
+  historyRetention = DEFAULT_HISTORY_RETENTION,
+): HistoryRetentionInputs {
+  return {
+    file_history: {
+      days: String(historyRetention.file_history.days),
+      storage_limit_gb: String(historyRetention.file_history.storage_limit_gb),
+    },
+    library_history: {
+      days: String(historyRetention.library_history.days),
+      storage_limit_gb: String(historyRetention.library_history.storage_limit_gb),
+    },
+    scan_history: {
+      days: String(historyRetention.scan_history.days),
+      storage_limit_gb: String(historyRetention.scan_history.storage_limit_gb),
+    },
+  };
+}
+
+function formatHistoryProjection(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "∞";
+  }
+  return formatBytes(value);
 }
 
 function toPersistedIgnorePatterns(payload: {
@@ -419,7 +476,6 @@ export function LibrariesPage() {
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
-  const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
@@ -431,8 +487,6 @@ export function LibrariesPage() {
   const [scanJobDetailLoading, setScanJobDetailLoading] = useState<Record<number, boolean>>({});
   const [scanJobDetailErrors, setScanJobDetailErrors] = useState<Record<number, string | null>>({});
   const [copiedScanDiagnosticKey, setCopiedScanDiagnosticKey] = useState<string | null>(null);
-  const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
-  const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState<CreateLibraryForm>(() => createEmptyForm(desktopApp));
   const [formPathInspection, setFormPathInspection] = useState<PathInspection | null>(null);
   const [formPathInspectionError, setFormPathInspectionError] = useState<string | null>(null);
@@ -452,21 +506,31 @@ export function LibrariesPage() {
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
   const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [comparisonScatterPointLimitInput, setComparisonScatterPointLimitInput] = useState("5000");
+  const [historyRetentionInputs, setHistoryRetentionInputs] = useState<HistoryRetentionInputs>(
+    historyRetentionInputsFromSettings(),
+  );
+  const [historyStorage, setHistoryStorage] = useState<HistoryStorage | null>(null);
+  const [historyReconstruction, setHistoryReconstruction] = useState<HistoryReconstructionStatus | null>(null);
+  const [historyStorageError, setHistoryStorageError] = useState<string | null>(null);
+  const [isLoadingHistoryStorage, setIsLoadingHistoryStorage] = useState(true);
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
   const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
     EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
   );
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
   const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
+  const [historyRetentionStatus, setHistoryRetentionStatus] = useState<string | null>(null);
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
+  const [isSavingHistoryRetention, setIsSavingHistoryRetention] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
   const parallelScanJobsInputRef = useRef("2");
   const comparisonScatterPointLimitInputRef = useRef("5000");
+  const historyRetentionInputsRef = useRef<HistoryRetentionInputs>(historyRetentionInputsFromSettings());
   const persistedResolutionCategories = useRef<ResolutionCategory[]>(normalizeResolutionCategories(appSettings.resolution_categories));
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
@@ -475,10 +539,13 @@ export function LibrariesPage() {
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const appScanPerformance = appSettings.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+  const appHistoryRetention = appSettings.history_retention ?? DEFAULT_HISTORY_RETENTION;
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
-  const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
+  const hadActiveHistoryReconstructionRef = useRef(false);
+  const isHistoryReconstructionActive =
+    historyReconstruction?.status === "queued" || historyReconstruction?.status === "running";
 
   useEffect(() => {
     return () => {
@@ -487,6 +554,66 @@ export function LibrariesPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const nextInputs = historyRetentionInputsFromSettings(appHistoryRetention);
+    historyRetentionInputsRef.current = nextInputs;
+    setHistoryRetentionInputs(nextInputs);
+  }, [appHistoryRetention]);
+
+  function applyUpdatedAppSettingsState(updated: typeof appSettings) {
+    setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
+    setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
+    setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+    setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+    const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
+    scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
+    parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
+    comparisonScatterPointLimitInputRef.current = String(updatedScanPerformance.comparison_scatter_point_limit);
+    setScanWorkerCountInput(scanWorkerCountInputRef.current);
+    setParallelScanJobsInput(parallelScanJobsInputRef.current);
+    setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
+    const nextHistoryRetentionInputs = historyRetentionInputsFromSettings(updated.history_retention ?? DEFAULT_HISTORY_RETENTION);
+    historyRetentionInputsRef.current = nextHistoryRetentionInputs;
+    setHistoryRetentionInputs(nextHistoryRetentionInputs);
+    persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
+    setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
+    setAppSettings(updated);
+  }
+
+  const refreshHistoryStorage = (showLoading = false) => {
+    if (showLoading) {
+      setIsLoadingHistoryStorage(true);
+    }
+    return api
+      .historyStorage()
+      .then((payload) => {
+        setHistoryStorage(payload);
+        setHistoryStorageError(null);
+        return payload;
+      })
+      .catch((reason: Error) => {
+        setHistoryStorageError(reason.message);
+        throw reason;
+      })
+      .finally(() => {
+        if (showLoading) {
+          setIsLoadingHistoryStorage(false);
+        }
+      });
+  };
+
+  const refreshHistoryReconstructionStatus = () => {
+    return api
+      .historyReconstructionStatus()
+      .then((payload) => {
+        setHistoryReconstruction(payload);
+        return payload;
+      })
+      .catch((reason: Error) => {
+        throw reason;
+      });
+  };
 
   const refreshRecentScanJobs = (showLoading = false) => {
     if (showLoading) {
@@ -536,6 +663,19 @@ export function LibrariesPage() {
     }
   }
 
+  async function reconstructHistory() {
+    if (isHistoryReconstructionActive || hasActiveJobs) {
+      return;
+    }
+    setHistoryRetentionStatus(null);
+    try {
+      const status = await api.reconstructHistory();
+      setHistoryReconstruction(status);
+    } catch (reason) {
+      setHistoryRetentionStatus((reason as Error).message);
+    }
+  }
+
   const refreshLibraries = (showLoading = false, force = false) => {
     if (showLoading) {
       setIsLoadingLibraries(true);
@@ -567,6 +707,46 @@ export function LibrariesPage() {
   useEffect(() => {
     void refreshRecentScanJobs(true).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void refreshHistoryStorage(true).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void refreshHistoryReconstructionStatus().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!isHistoryReconstructionActive) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshHistoryReconstructionStatus().catch(() => undefined);
+    }, HISTORY_RECONSTRUCTION_POLL_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isHistoryReconstructionActive]);
+
+  useEffect(() => {
+    if (!historyReconstruction) {
+      hadActiveHistoryReconstructionRef.current = false;
+      return;
+    }
+
+    if (hadActiveHistoryReconstructionRef.current && !isHistoryReconstructionActive) {
+      if (historyReconstruction.status === "completed" && historyReconstruction.result) {
+        void refreshHistoryStorage().catch(() => undefined);
+        setHistoryRetentionStatus(formatHistoryReconstructionStatus(historyReconstruction.result));
+      } else if (historyReconstruction.status === "failed") {
+        setHistoryRetentionStatus(historyReconstruction.error ?? t("libraries.historyRetention.reconstructFailed"));
+      }
+    }
+
+    hadActiveHistoryReconstructionRef.current = isHistoryReconstructionActive;
+  }, [historyReconstruction, isHistoryReconstructionActive, t]);
 
   useEffect(() => {
     setForm((current) =>
@@ -1045,6 +1225,7 @@ export function LibrariesPage() {
     nextHideQualityScoreMeter: boolean,
     nextUnlimitedPanelSize: boolean,
     nextResolutionCategories?: ResolutionCategory[],
+    nextHistoryRetention = appHistoryRetention,
     nextScanPerformance = {
       scan_worker_count: normalizeScanPerformanceInput(
         scanWorkerCountInputRef.current,
@@ -1071,6 +1252,7 @@ export function LibrariesPage() {
       default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
       scan_performance: nextScanPerformance,
+      history_retention: nextHistoryRetention,
       feature_flags: {
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
         show_full_width_app_shell: nextShowFullWidthAppShell,
@@ -1110,25 +1292,14 @@ export function LibrariesPage() {
       if (requestId === ignorePatternsRequestId.current) {
         setUserIgnorePatternInputs(persisted.user);
         setDefaultIgnorePatternInputs(persisted.default);
-        setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-        setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-        setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-        setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
-        const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
-        scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
-        parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
-        comparisonScatterPointLimitInputRef.current = String(updatedScanPerformance.comparison_scatter_point_limit);
-        setScanWorkerCountInput(scanWorkerCountInputRef.current);
-        setParallelScanJobsInput(parallelScanJobsInputRef.current);
-        setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
-        persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
-        setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
+        applyUpdatedAppSettingsState(updated);
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
         setScanPerformanceStatus(null);
+        setHistoryRetentionStatus(null);
         setResolutionCategoriesStatus(null);
       }
-      setAppSettings(updated);
+      void refreshHistoryStorage().catch(() => undefined);
       return persisted;
     } catch (reason) {
       if (requestId === ignorePatternsRequestId.current) {
@@ -1158,14 +1329,12 @@ export function LibrariesPage() {
         hideQualityScoreMeter,
         unlimitedPanelSize,
       );
-      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+      applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
@@ -1188,14 +1357,12 @@ export function LibrariesPage() {
         hideQualityScoreMeter,
         unlimitedPanelSize,
       );
-      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+      applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowFullWidthAppShell(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
@@ -1218,14 +1385,12 @@ export function LibrariesPage() {
         enabled,
         unlimitedPanelSize,
       );
-      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+      applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setHideQualityScoreMeter(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
@@ -1248,14 +1413,12 @@ export function LibrariesPage() {
         hideQualityScoreMeter,
         enabled,
       );
-      setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
-      setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
-      setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
-      setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+      applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setUnlimitedPanelSize(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
@@ -1280,6 +1443,72 @@ export function LibrariesPage() {
     comparisonScatterPointLimitInputRef.current = value;
     setComparisonScatterPointLimitInput(value);
     setScanPerformanceStatus(null);
+  }
+
+  function updateHistoryRetentionInput(
+    bucket: HistoryRetentionBucketKey,
+    field: "days" | "storage_limit_gb",
+    value: string,
+  ) {
+    historyRetentionInputsRef.current = {
+      ...historyRetentionInputsRef.current,
+      [bucket]: {
+        ...historyRetentionInputsRef.current[bucket],
+        [field]: value,
+      },
+    };
+    setHistoryRetentionInputs((current) => ({
+      ...current,
+      [bucket]: {
+        ...current[bucket],
+        [field]: value,
+      },
+    }));
+    setHistoryRetentionStatus(null);
+  }
+
+  async function saveHistoryRetention(bucket: HistoryRetentionBucketKey) {
+    const currentBucket = appHistoryRetention[bucket];
+    const nextBucketInputs = historyRetentionInputsRef.current[bucket];
+    const nextHistoryRetention = {
+      ...appHistoryRetention,
+      [bucket]: {
+        days: normalizeHistoryRetentionDaysInput(nextBucketInputs.days, currentBucket.days),
+        storage_limit_gb: normalizeHistoryRetentionStorageInput(
+          nextBucketInputs.storage_limit_gb,
+          currentBucket.storage_limit_gb,
+        ),
+      },
+    };
+
+    setIsSavingHistoryRetention(true);
+    setHistoryRetentionStatus(null);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
+        unlimitedPanelSize,
+        undefined,
+        nextHistoryRetention,
+      );
+      applyUpdatedAppSettingsState(updated);
+      setIgnorePatternsStatus(null);
+      setFeatureFlagsStatus(null);
+      setScanPerformanceStatus(null);
+      setResolutionCategoriesStatus(null);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
+    } catch (reason) {
+      const revertedInputs = historyRetentionInputsFromSettings(appHistoryRetention);
+      historyRetentionInputsRef.current = revertedInputs;
+      setHistoryRetentionInputs(revertedInputs);
+      setHistoryRetentionStatus((reason as Error).message);
+    } finally {
+      setIsSavingHistoryRetention(false);
+    }
   }
 
   function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
@@ -1320,7 +1549,9 @@ export function LibrariesPage() {
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      setHistoryRetentionStatus(null);
+      applyUpdatedAppSettingsState(updated);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setResolutionCategoriesStatus((reason as Error).message);
     } finally {
@@ -1363,24 +1594,20 @@ export function LibrariesPage() {
         hideQualityScoreMeter,
         unlimitedPanelSize,
         undefined,
+        appHistoryRetention,
         {
           scan_worker_count: nextScanWorkerCount,
           parallel_scan_jobs: nextParallelScanJobs,
           comparison_scatter_point_limit: nextComparisonScatterPointLimit,
         },
       );
-      const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
-      scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
-      parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
-      comparisonScatterPointLimitInputRef.current = String(updatedScanPerformance.comparison_scatter_point_limit);
-      setScanWorkerCountInput(scanWorkerCountInputRef.current);
-      setParallelScanJobsInput(parallelScanJobsInputRef.current);
-      setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
+      applyUpdatedAppSettingsState(updated);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setResolutionCategoriesStatus(null);
+      setHistoryRetentionStatus(null);
       setScanPerformanceStatus(null);
-      setAppSettings(updated);
+      void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
       parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
@@ -1499,33 +1726,6 @@ export function LibrariesPage() {
     }
     setDefaultIgnorePatternInputs(nextPatterns);
     await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
-  }
-
-  function updateStatisticsSettings(
-    transform: (current: LibraryStatisticsSettings) => LibraryStatisticsSettings,
-  ) {
-    setStatisticsSettings((current) => saveLibraryStatisticsSettings(transform(current)));
-  }
-
-  function toggleStatisticVisibility(
-    statisticId: LibraryStatisticId,
-    area: "tableEnabled" | "tableTooltipEnabled",
-  ) {
-    updateStatisticsSettings((current) =>
-      updateLibraryStatisticVisibility(current, statisticId, {
-        [area]: !current.visibility[statisticId][area],
-      }),
-    );
-  }
-
-  function handleStatisticDrop(targetId: LibraryStatisticId) {
-    if (!draggedStatisticId) {
-      return;
-    }
-
-    updateStatisticsSettings((current) => moveLibraryStatistic(current, draggedStatisticId, targetId));
-    setDraggedStatisticId(null);
-    setDropTargetStatisticId(null);
   }
 
   function renderScanPathList(
@@ -1845,6 +2045,81 @@ export function LibrariesPage() {
         </div>
       </div>
     );
+  }
+
+  function historyRetentionBucketTitle(bucket: HistoryRetentionBucketKey) {
+    return t(`libraries.historyRetention.buckets.${bucket}.title`);
+  }
+
+  function formatHistoryReconstructionStatus(result: HistoryReconstructionResult) {
+    if (
+      result.created_library_history_entries === 0 &&
+      result.created_file_history_entries === 0
+    ) {
+      return t("libraries.historyRetention.reconstructNoChanges");
+    }
+    return t("libraries.historyRetention.reconstructSuccess", {
+      libraryEntries: result.created_library_history_entries,
+      fileEntries: result.created_file_history_entries,
+    });
+  }
+
+  function formatHistoryReconstructionPhaseLabel(status: HistoryReconstructionStatus) {
+    if (status.status === "queued") {
+      return t("libraries.historyRetention.progressQueued");
+    }
+    switch (status.phase) {
+      case "loading_libraries":
+        return t("libraries.historyRetention.progressLoadingLibraries");
+      case "loading_library":
+        return t("libraries.historyRetention.progressLoadingLibrary");
+      case "reconstructing_file_history":
+        return t("libraries.historyRetention.progressFileHistory");
+      case "reconstructing_library_history":
+        return t("libraries.historyRetention.progressLibraryHistory");
+      case "completed":
+        return t("libraries.historyRetention.progressCompleted");
+      case "failed":
+        return t("libraries.historyRetention.progressFailed");
+      default:
+        return t("libraries.historyRetention.reconstructButton");
+    }
+  }
+
+  function formatHistoryReconstructionPhaseDetail(status: HistoryReconstructionStatus) {
+    if (status.status === "queued") {
+      return null;
+    }
+    if (status.phase === "loading_libraries") {
+      return t("libraries.historyRetention.progressLibraries", {
+        completed: status.libraries_processed,
+        total: status.libraries_total,
+      });
+    }
+    if (status.phase === "loading_library") {
+      return status.current_library_name
+        ? t("libraries.historyRetention.progressCurrentLibrary", { name: status.current_library_name })
+        : null;
+    }
+    if (status.phase === "reconstructing_file_history") {
+      return t("libraries.historyRetention.progressFiles", {
+        completed: status.phase_completed,
+        total: status.phase_total,
+      });
+    }
+    if (status.phase === "reconstructing_library_history") {
+      return t("libraries.historyRetention.progressDays", {
+        completed: status.phase_completed,
+        total: status.phase_total,
+      });
+    }
+    if (status.phase === "completed" && status.result) {
+      return formatHistoryReconstructionStatus(status.result);
+    }
+    if (status.phase === "failed") {
+      return status.error ?? t("libraries.historyRetention.reconstructFailed");
+    }
+    return null;
   }
 
   function renderIgnorePatternSection(
@@ -2372,13 +2647,14 @@ export function LibrariesPage() {
             collapseActions={
               <button
                 type="button"
-                className="small"
+                className="small history-retention-primary-button"
                 disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
                 onClick={() => void runFullScanForAllLibraries()}
               >
                 {t("libraries.fullScan")}
               </button>
             }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
             collapseState={{
               collapsed: !settingsPanelState.configuredLibraries,
               onToggle: () => toggleSettingsPanel("configuredLibraries"),
@@ -2606,92 +2882,6 @@ export function LibrariesPage() {
           </AsyncPanel>
 
           <AsyncPanel
-            title={t("libraryStatistics.title")}
-            collapseState={{
-              collapsed: !settingsPanelState.libraryStatistics,
-              onToggle: () => toggleSettingsPanel("libraryStatistics"),
-              bodyId: "library-statistics-panel-body",
-            }}
-          >
-            <div className="settings-sidebar-stack">
-              <p className="settings-copy">{t("libraryStatistics.subtitle")}</p>
-              <div className="settings-table-shell">
-                <table className="settings-data-table library-statistics-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("libraryStatistics.name")}</th>
-                      <th scope="col">{t("libraryStatistics.table")}</th>
-                      <th scope="col">{t("libraryStatistics.tooltips")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderedStatistics
-                      .filter((statistic) => statistic.supportsTable || statistic.supportsTableTooltip)
-                      .map((statistic) => {
-                        const visibility = statisticsSettings.visibility[statistic.id];
-                        return (
-                          <tr
-                            key={statistic.id}
-                            className={dropTargetStatisticId === statistic.id ? "is-drop-target" : undefined}
-                            onDragOver={(event) => {
-                              event.preventDefault();
-                              if (draggedStatisticId && draggedStatisticId !== statistic.id) {
-                                setDropTargetStatisticId(statistic.id);
-                              }
-                            }}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              handleStatisticDrop(statistic.id);
-                            }}
-                          >
-                            <td>
-                              <div className="statistic-name-cell">
-                                <span
-                                  className={`statistics-drag-handle${draggedStatisticId === statistic.id ? " is-dragging" : ""}`}
-                                  draggable
-                                  onDragStart={(event) => {
-                                    event.dataTransfer.effectAllowed = "move";
-                                    event.dataTransfer.setData("text/plain", statistic.id);
-                                    setDraggedStatisticId(statistic.id);
-                                    setDropTargetStatisticId(statistic.id);
-                                  }}
-                                  onDragEnd={() => {
-                                    setDraggedStatisticId(null);
-                                    setDropTargetStatisticId(null);
-                                  }}
-                                  aria-hidden="true"
-                                >
-                                  <GripVertical className="nav-icon" />
-                                </span>
-                                <span>{t(statistic.nameKey)}</span>
-                              </div>
-                            </td>
-                            <td className="settings-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={visibility.tableEnabled}
-                                disabled={!statistic.supportsTable}
-                                onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
-                              />
-                            </td>
-                            <td className="settings-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={visibility.tableTooltipEnabled}
-                                disabled={!statistic.supportsTableTooltip || !visibility.tableEnabled}
-                                onChange={() => toggleStatisticVisibility(statistic.id, "tableTooltipEnabled")}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </AsyncPanel>
-
-          <AsyncPanel
             title="Resolution categories"
             collapseState={{
               collapsed: !settingsPanelState.resolutionCategories,
@@ -2832,6 +3022,170 @@ export function LibrariesPage() {
                 </p>
               ) : null}
               {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
+            </div>
+          </AsyncPanel>
+
+          <AsyncPanel
+            title={t("libraries.historyRetention.title")}
+            collapseActions={
+              <div className="history-retention-title-actions">
+                <button
+                  type="button"
+                  className="history-retention-primary-button"
+                  onClick={() => void reconstructHistory()}
+                  disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
+                >
+                  {isHistoryReconstructionActive
+                    ? t("libraries.historyRetention.reconstructing")
+                    : t("libraries.historyRetention.reconstructButton")}
+                </button>
+                <TooltipTrigger
+                  ariaLabel={t("libraries.historyRetention.reconstructTooltipAria")}
+                  content={t("libraries.historyRetention.reconstructTooltip")}
+                  preserveLineBreaks
+                />
+              </div>
+            }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
+            collapseState={{
+              collapsed: !settingsPanelState.historyRetention,
+              onToggle: () => toggleSettingsPanel("historyRetention"),
+              bodyId: "history-retention-panel-body",
+            }}
+          >
+            <div className="settings-sidebar-stack history-retention-panel-content">
+              {isLoadingHistoryStorage ? <p className="field-hint">{t("libraries.historyRetention.loading")}</p> : null}
+              {historyStorageError ? <div className="alert">{historyStorageError}</div> : null}
+              <div className="history-retention-tables">
+                <div className="settings-table-shell history-retention-table-shell">
+                  <table className="settings-data-table history-retention-table">
+                    <thead>
+                      <tr>
+                        <th>{t("libraries.historyRetention.bucketLabel")}</th>
+                        <th>{t("libraries.historyRetention.daysLabel")}</th>
+                        <th>{t("libraries.historyRetention.storageLimitLabel")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HISTORY_RETENTION_BUCKETS.map((bucket) => {
+                        const bucketTitle = historyRetentionBucketTitle(bucket);
+                        return (
+                          <tr key={`history-retention-settings-${bucket}`}>
+                            <th scope="row">{bucketTitle}</th>
+                            <td>
+                              <input
+                                id={`${bucket}-history-days`}
+                                className="history-retention-input"
+                                aria-label={t("libraries.historyRetention.daysLabel")}
+                                type="number"
+                                min="0"
+                                inputMode="numeric"
+                                value={historyRetentionInputs[bucket].days}
+                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                onChange={(event) => updateHistoryRetentionInput(bucket, "days", event.target.value)}
+                                onBlur={() => void saveHistoryRetention(bucket)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                id={`${bucket}-history-gb`}
+                                className="history-retention-input"
+                                aria-label={t("libraries.historyRetention.storageLimitLabel")}
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                inputMode="decimal"
+                                value={historyRetentionInputs[bucket].storage_limit_gb}
+                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                onChange={(event) =>
+                                  updateHistoryRetentionInput(bucket, "storage_limit_gb", event.target.value)
+                                }
+                                onBlur={() => void saveHistoryRetention(bucket)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
+                <div className="settings-table-shell history-retention-table-shell">
+                  <table className="settings-data-table history-retention-table">
+                    <thead>
+                      <tr>
+                        <th>{t("libraries.historyRetention.bucketLabel")}</th>
+                        <th>{t("libraries.historyRetention.currentStorage")}</th>
+                        <th>{t("libraries.historyRetention.averagePerDay")}</th>
+                        <th>{t("libraries.historyRetention.projected30Days")}</th>
+                        <th>{t("libraries.historyRetention.projectedConfigured")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HISTORY_RETENTION_BUCKETS.map((bucket) => {
+                        const category = historyStorage?.categories[bucket];
+                        return (
+                          <tr key={`history-retention-forecast-${bucket}`}>
+                            <th scope="row">{historyRetentionBucketTitle(bucket)}</th>
+                            <td>{formatBytes(category?.current_estimated_bytes ?? 0)}</td>
+                            <td>{formatBytes(category?.average_daily_bytes ?? 0)}</td>
+                            <td>{formatBytes(category?.projected_bytes_30d ?? 0)}</td>
+                            <td>{formatHistoryProjection(category?.projected_bytes_for_configured_days)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {historyReconstruction && isHistoryReconstructionActive ? (
+                <div className="history-reconstruction-progress" role="status" aria-live="polite">
+                  <div className="distribution-copy">
+                    <strong>{formatHistoryReconstructionPhaseLabel(historyReconstruction)}</strong>
+                    <span>{Math.round(historyReconstruction.progress_percent)}%</span>
+                  </div>
+                  {formatHistoryReconstructionPhaseDetail(historyReconstruction) ? (
+                    <p className="field-hint history-reconstruction-progress-detail">
+                      {formatHistoryReconstructionPhaseDetail(historyReconstruction)}
+                    </p>
+                  ) : null}
+                  <div className="progress">
+                    <span style={{ width: `${historyReconstruction.progress_percent}%` }} />
+                  </div>
+                  <div className="history-reconstruction-progress-meta">
+                    <span>
+                      {t("libraries.historyRetention.progressLibraries", {
+                        completed: historyReconstruction.libraries_processed,
+                        total: historyReconstruction.libraries_total,
+                      })}
+                    </span>
+                    {historyReconstruction.current_library_name ? (
+                      <span>
+                        {t("libraries.historyRetention.progressCurrentLibrary", {
+                          name: historyReconstruction.current_library_name,
+                        })}
+                      </span>
+                    ) : null}
+                    <span>
+                      {t("libraries.historyRetention.progressEntries", {
+                        libraryEntries: historyReconstruction.created_library_history_entries,
+                        fileEntries: historyReconstruction.created_file_history_entries,
+                      })}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {hasActiveJobs ? (
+                <p className="field-hint">{t("libraries.historyRetention.reconstructActiveScanHint")}</p>
+              ) : null}
+              {historyStorage && historyStorage.reclaimable_file_bytes > 0 ? (
+                <p className="field-hint">
+                  {t("libraries.historyRetention.reclaimableNote", {
+                    reclaimable: formatBytes(historyStorage.reclaimable_file_bytes),
+                  })}
+                </p>
+              ) : null}
+              {historyRetentionStatus ? <div className="alert">{historyRetentionStatus}</div> : null}
             </div>
           </AsyncPanel>
 
@@ -2985,7 +3339,7 @@ export function LibrariesPage() {
                   onChange={(path) => setForm((current) => ({ ...current, path }))}
                 />
               )}
-              <button type="submit" disabled={submitting}>
+              <button type="submit" className="history-retention-primary-button" disabled={submitting}>
                 {submitting ? t("libraries.creating") : t("libraries.createButton")}
               </button>
             </form>

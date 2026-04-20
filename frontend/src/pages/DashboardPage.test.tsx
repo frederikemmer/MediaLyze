@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
-import { api, type AppSettings, type ComparisonResponse, type DashboardResponse } from "../lib/api";
+import {
+  api,
+  type AppSettings,
+  type ComparisonResponse,
+  type DashboardHistoryResponse,
+  type DashboardResponse,
+} from "../lib/api";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { DashboardPage } from "./DashboardPage";
@@ -148,6 +154,43 @@ function createComparisonResponse(): ComparisonResponse {
   };
 }
 
+function createDashboardHistory(): DashboardHistoryResponse {
+  return {
+    generated_at: "2026-04-19T08:00:00Z",
+    oldest_snapshot_day: "2026-04-17",
+    newest_snapshot_day: "2026-04-18",
+    visible_library_ids: [1, 2],
+    resolution_categories: [
+      { id: "4k", label: "4k" },
+      { id: "1080p", label: "1080p" },
+    ],
+    points: [
+      {
+        snapshot_day: "2026-04-17",
+        trend_metrics: {
+          total_files: 8,
+          resolution_counts: { "4k": 3, "1080p": 5 },
+          average_bitrate: 8_000_000,
+          average_audio_bitrate: 512_000,
+          average_duration_seconds: 4_200,
+          average_quality_score: 7.2,
+        },
+      },
+      {
+        snapshot_day: "2026-04-18",
+        trend_metrics: {
+          total_files: 10,
+          resolution_counts: { "4k": 4, "1080p": 6 },
+          average_bitrate: 8_500_000,
+          average_audio_bitrate: 576_000,
+          average_duration_seconds: 4_500,
+          average_quality_score: 7.6,
+        },
+      },
+    ],
+  };
+}
+
 function renderPage() {
   const FileRoute = () => {
     const { fileId = "" } = useParams();
@@ -178,6 +221,7 @@ describe("DashboardPage", () => {
   it("shows the dashboard title and persists inline layout changes", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -208,6 +252,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -232,6 +277,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -252,6 +298,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     const comparisonSpy = vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -276,6 +323,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -311,6 +359,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -348,6 +397,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -387,6 +437,7 @@ describe("DashboardPage", () => {
 
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
     vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
     vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
 
@@ -402,5 +453,21 @@ describe("DashboardPage", () => {
 
     expect(screen.queryByText("File detail 1")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("renders the dashboard history panel", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    const historyToggle = await screen.findByRole("button", { name: "Historic data" });
+    expect(historyToggle).toBeInTheDocument();
+    expect(historyToggle.closest(".statistic-layout-panel-shell")).not.toBeNull();
+    expect(screen.getByLabelText("Select history metric")).toBeInTheDocument();
+    expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
 });

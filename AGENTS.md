@@ -184,6 +184,7 @@ Actual implementation:
 * quality recomputation runs as a distinct runtime-managed job type
 * startup no longer auto-queues quality-recompute backfill jobs; recomputation is queued only from explicit follow-up actions such as library profile updates
 * old `queued` and `running` jobs from previous processes are canceled during startup instead of being resumed
+* startup also runs one history-retention maintenance pass, APScheduler registers a daily history-retention maintenance job, and deferred SQLite compaction is retried automatically once scans are idle
 
 ## 3.6 Scan Logs
 
@@ -199,6 +200,7 @@ Scan-job tracking now includes:
 * change summaries
 * analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file
 * duplicate-processing summaries including mode, failure samples, and grouped duplicate counts
+* retention cleanup for terminal scan-job history based on the app-level `history_retention.scan_history` settings, while queued or running jobs are never pruned
 
 ---
 
@@ -580,12 +582,43 @@ Important current payload concepts:
 * `scan_performance.scan_worker_count`
 * `scan_performance.parallel_scan_jobs`
 * `scan_performance.comparison_scatter_point_limit`
+* `history_retention.file_history.days`
+* `history_retention.file_history.storage_limit_gb`
+* `history_retention.library_history.days`
+* `history_retention.library_history.storage_limit_gb`
+* `history_retention.scan_history.days`
+* `history_retention.scan_history.storage_limit_gb`
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
 * `feature_flags.unlimited_panel_size`
 
-## 9.4 Libraries
+`history_retention` currently applies to three buckets:
+
+* `file_history`: persisted per-file analyzed snapshots, default `90` days and `0` GB unlimited
+* `library_history`: one compact per-library UTC-day snapshot, default `365` days and `0` GB unlimited
+* `scan_history`: terminal `scan_jobs` records, default `30` days and `0` GB unlimited
+
+`0` means unlimited for both days and storage.
+Age and storage limits are both active at the same time, with oldest-first pruning until both limits are satisfied.
+
+## 9.4 History Storage
+
+* `GET /api/history-storage`
+
+Important current contract concepts:
+
+* `database_file_bytes`
+* `reclaimable_file_bytes`
+* `categories.file_history.current_estimated_bytes`
+* `categories.file_history.average_daily_bytes`
+* `categories.file_history.projected_bytes_30d`
+* `categories.file_history.projected_bytes_for_configured_days`
+* matching fields for `library_history` and `scan_history`
+
+Storage figures are logical estimates based on persisted payload sizes, not exact per-table SQLite file usage.
+
+## 9.5 Libraries
 
 * `GET /api/libraries`
 * `POST /api/libraries`
@@ -611,7 +644,7 @@ Important library contract concepts:
 * comparison responses expose `x_field`, `y_field`, field kinds, available renderers, bucket metadata, heatmap cells, optional scatter points, optional bar aggregates, and the active scatter sample limit
 * `path` is relative to `MEDIA_ROOT` in server mode and absolute in desktop mode
 
-## 9.5 Files
+## 9.6 Files
 
 * `GET /api/files/{file_id}`
 * `GET /api/files/{file_id}/streams`
@@ -628,7 +661,7 @@ Important file contract concepts:
 * `subtitle_type`
 * lightweight stream-detail responses expose `video_streams`, `audio_streams`, `subtitle_streams`, and `external_subtitles` without the full raw ffprobe payload
 
-## 9.6 Scan Job Contract
+## 9.7 Scan Job Contract
 
 Important scan-job contract concepts:
 
@@ -656,11 +689,13 @@ Current logical schema includes:
 * `libraries`
 * `app_settings`
 * `media_files`
+* `media_file_history`
 * `media_formats`
 * `video_streams`
 * `audio_streams`
 * `subtitle_streams`
 * `external_subtitles`
+* `library_history`
 * `scan_jobs`
 
 Important post-`0.0.1` additions that must be treated as real schema surface:
@@ -677,6 +712,8 @@ Important post-`0.0.1` additions that must be treated as real schema surface:
 * media `quality_score_raw`
 * media `quality_score_breakdown`
 * media `raw_ffprobe_json`
+* media-file history snapshots keyed by `(library_id, relative_path)` over time
+* library daily history snapshots keyed by `(library_id, snapshot_day)`
 * subtitle `subtitle_type`
 * scan job `trigger_source`
 * scan job `trigger_details`
@@ -703,6 +740,9 @@ Implemented backend structure:
 * `backend/app/models/entities.py` defines the ORM schema
 * the session module under `backend/app/db` configures SQLite, WAL, additive migrations, and sessions
 * `backend/app/services/duplicates.py` provides duplicate-signature strategies and duplicate-group queries
+* `backend/app/services/history_snapshots.py` builds persisted media-file and library history snapshots
+* `backend/app/services/history_storage.py` estimates history bucket usage, growth, projections, and database reclaimable bytes
+* `backend/app/services/history_retention.py` applies age/storage cleanup and SQLite compaction for history buckets
 * `backend/app/services/numeric_distributions.py` builds histogram-ready numeric statistics for dashboard and library payloads
 * `backend/app/services/stat_comparisons.py` builds cached comparison datasets for dashboard and library views from the normalized per-file metadata model, including numeric megapixel resolution comparisons and app-configured scatter-point sampling
 * `backend/app/services/scanner.py` performs discovery, change detection, ffprobe analysis, normalization, and scan-summary generation
@@ -717,7 +757,7 @@ Implemented frontend structure:
 * `frontend/src/lib/app-data.tsx` manages cached app settings, dashboard, and library data
 * `frontend/src/lib/statistic-comparisons.ts` manages comparison field definitions, renderer compatibility, and persisted per-view selections
 * `frontend/src/lib/scan-jobs.tsx` manages active scan polling state
-* page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views, including separate comparison-data loading on dashboard and library pages
+* page modules under `frontend/src/pages/` implement dashboard, settings/libraries, library detail, and file detail views, including separate comparison-data loading on dashboard and library pages; the Settings page also exposes history-retention controls and `GET /api/history-storage` forecast data
 * `frontend/src/lib/desktop.ts` exposes the optional Electron preload bridge used by desktop builds
 
 Desktop packaging structure:
@@ -802,6 +842,7 @@ Additional behavior:
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
 * scan concurrency is configured through the UI under App Settings and persisted in `app_settings`, including both per-scan analysis workers and parallel-library job limits
+* history retention and storage budgets are configured through the UI under App Settings and persisted in `app_settings.history_retention`
 * `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage
 * `FRONTEND_DIST_PATH` can point the backend at an explicit built frontend bundle, which is used by desktop packaging
 
