@@ -464,7 +464,9 @@ describe("DashboardPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "Dashboard history" })).toBeInTheDocument();
+    const historyToggle = await screen.findByRole("button", { name: "Historic data" });
+    expect(historyToggle).toBeInTheDocument();
+    expect(historyToggle.closest(".statistic-layout-panel-shell")).not.toBeNull();
     expect(screen.getByLabelText("Select history metric")).toBeInTheDocument();
     expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });

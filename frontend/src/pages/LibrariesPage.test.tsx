@@ -1021,33 +1021,6 @@ describe("LibrariesPage ignore patterns", () => {
   });
 });
 
-describe("LibrariesPage statistics settings", () => {
-  it("shows a dedicated tooltip column and stores tooltip visibility choices", async () => {
-    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
-
-    renderPage();
-
-    expect(await screen.findByText("Tooltips")).toBeInTheDocument();
-
-    const audioLanguagesRow = screen.getByText("Audio languages").closest("tr");
-    expect(audioLanguagesRow).not.toBeNull();
-    const audioLanguagesCheckboxes = within(audioLanguagesRow!).getAllByRole("checkbox");
-    expect(audioLanguagesCheckboxes).toHaveLength(2);
-    expect(audioLanguagesCheckboxes[1]).toBeEnabled();
-
-    fireEvent.click(audioLanguagesCheckboxes[1]);
-
-    expect(window.localStorage.getItem("medialyze-library-statistics-settings")).toContain(
-      '"audio_languages":{"panelEnabled":true,"tableEnabled":true,"tableTooltipEnabled":false,"dashboardEnabled":true}',
-    );
-
-    const fileSizeRow = screen.getByText("File size").closest("tr");
-    expect(fileSizeRow).not.toBeNull();
-    const fileSizeCheckboxes = within(fileSizeRow!).getAllByRole("checkbox");
-    expect(fileSizeCheckboxes[1]).toBeDisabled();
-  });
-});
-
 describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
@@ -1127,25 +1100,11 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
-  it("shows the table-view statistic settings without the old panel or dashboard toggles", async () => {
+  it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
-    const tableViewToggle = await screen.findByRole("button", { name: /^table view$/i });
-    const settingsPanel = tableViewToggle.closest(".async-panel") as HTMLElement | null;
-    expect(settingsPanel).not.toBeNull();
-    if (!settingsPanel) {
-      return;
-    }
-
-    const panel = within(settingsPanel);
-    expect(panel.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
-    expect(panel.getByRole("columnheader", { name: "Table" })).toBeInTheDocument();
-    expect(panel.getByRole("columnheader", { name: "Tooltips" })).toBeInTheDocument();
-    expect(panel.queryByRole("columnheader", { name: "Library" })).not.toBeInTheDocument();
-    expect(panel.queryByRole("columnheader", { name: "Dashboard" })).not.toBeInTheDocument();
-    expect(panel.getByText("Bitrate")).toBeInTheDocument();
-    expect(panel.getByText("Audio bitrate")).toBeInTheDocument();
-    expect(panel.queryByText("Metric comparison")).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: /^configured libraries$/i });
+    expect(screen.queryByRole("button", { name: /^table view$/i })).not.toBeInTheDocument();
   });
 
   it("shows the main settings panels expanded by default", async () => {
@@ -1195,7 +1154,6 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: false,
         historyRetention: false,
         recentScanLogs: true,
-        libraryStatistics: true,
         resolutionCategories: false,
         createLibrary: true,
         ignorePatterns: false,
@@ -1233,7 +1191,6 @@ describe("LibrariesPage settings panels", () => {
         configuredLibraries: true,
         historyRetention: true,
         recentScanLogs: true,
-        libraryStatistics: true,
         resolutionCategories: true,
         createLibrary: true,
         ignorePatterns: true,

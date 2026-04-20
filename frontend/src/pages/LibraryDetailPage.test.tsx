@@ -585,7 +585,8 @@ describe("LibraryDetailPage", () => {
     const historyToggle = await screen.findByRole("button", { name: "Media library history" });
     fireEvent.click(historyToggle);
 
-    expect(window.localStorage.getItem("medialyze-library-detail-history-collapsed")).toBe("true");
+    expect(window.localStorage.getItem(`medialyze-library-detail-${libraryId}-history-collapsed`)).toBe("true");
+    expect(historyToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
     expect(screen.queryByLabelText("Select history metric")).not.toBeInTheDocument();
     expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
@@ -1089,6 +1090,7 @@ describe("LibraryDetailPage", () => {
 
     const collapsedToggle = await screen.findByRole("button", { name: "Duplications" });
     expect(collapsedToggle).toBeInTheDocument();
+    expect(collapsedToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
     expect(within(collapsedToggle.closest("section") ?? document.body).getAllByText(/^2$/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
     expect(screen.queryByText("bonus-scene-copy.mkv")).not.toBeInTheDocument();

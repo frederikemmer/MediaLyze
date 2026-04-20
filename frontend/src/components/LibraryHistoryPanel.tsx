@@ -104,7 +104,7 @@ export function LibraryHistoryPanel({
       loading={loading}
       error={error}
       bodyClassName="async-panel-body-scroll"
-      headerAddon={
+      collapseActions={
         !collapsed ? (
           <div ref={pickerRef} className="library-history-toolbar search-filter-picker">
             <button
@@ -153,6 +153,7 @@ export function LibraryHistoryPanel({
           </div>
         ) : null
       }
+      collapseButtonClassName={!collapsed ? "async-panel-toggle-icon-button-flat" : undefined}
       collapseState={{
         collapsed,
         onToggle: onToggleCollapsed,

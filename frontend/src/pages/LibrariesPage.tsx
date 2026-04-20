@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -25,15 +25,6 @@ import {
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
-import {
-  getLibraryStatisticsSettings,
-  getOrderedLibraryStatisticDefinitions,
-  moveLibraryStatistic,
-  saveLibraryStatisticsSettings,
-  updateLibraryStatisticVisibility,
-  type LibraryStatisticId,
-  type LibraryStatisticsSettings,
-} from "../lib/library-statistics-settings";
 import {
   getSettingsPanelState,
   saveSettingsPanelState,
@@ -485,7 +476,6 @@ export function LibrariesPage() {
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
-  const [statisticsSettings, setStatisticsSettings] = useState<LibraryStatisticsSettings>(() => getLibraryStatisticsSettings());
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
@@ -497,8 +487,6 @@ export function LibrariesPage() {
   const [scanJobDetailLoading, setScanJobDetailLoading] = useState<Record<number, boolean>>({});
   const [scanJobDetailErrors, setScanJobDetailErrors] = useState<Record<number, string | null>>({});
   const [copiedScanDiagnosticKey, setCopiedScanDiagnosticKey] = useState<string | null>(null);
-  const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
-  const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
   const [form, setForm] = useState<CreateLibraryForm>(() => createEmptyForm(desktopApp));
   const [formPathInspection, setFormPathInspection] = useState<PathInspection | null>(null);
   const [formPathInspectionError, setFormPathInspectionError] = useState<string | null>(null);
@@ -556,7 +544,6 @@ export function LibrariesPage() {
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const hadActiveHistoryReconstructionRef = useRef(false);
-  const orderedStatistics = getOrderedLibraryStatisticDefinitions(statisticsSettings);
   const isHistoryReconstructionActive =
     historyReconstruction?.status === "queued" || historyReconstruction?.status === "running";
 
@@ -1741,33 +1728,6 @@ export function LibrariesPage() {
     await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
   }
 
-  function updateStatisticsSettings(
-    transform: (current: LibraryStatisticsSettings) => LibraryStatisticsSettings,
-  ) {
-    setStatisticsSettings((current) => saveLibraryStatisticsSettings(transform(current)));
-  }
-
-  function toggleStatisticVisibility(
-    statisticId: LibraryStatisticId,
-    area: "tableEnabled" | "tableTooltipEnabled",
-  ) {
-    updateStatisticsSettings((current) =>
-      updateLibraryStatisticVisibility(current, statisticId, {
-        [area]: !current.visibility[statisticId][area],
-      }),
-    );
-  }
-
-  function handleStatisticDrop(targetId: LibraryStatisticId) {
-    if (!draggedStatisticId) {
-      return;
-    }
-
-    updateStatisticsSettings((current) => moveLibraryStatistic(current, draggedStatisticId, targetId));
-    setDraggedStatisticId(null);
-    setDropTargetStatisticId(null);
-  }
-
   function renderScanPathList(
     title: string,
     count: number,
@@ -2694,6 +2654,7 @@ export function LibrariesPage() {
                 {t("libraries.fullScan")}
               </button>
             }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
             collapseState={{
               collapsed: !settingsPanelState.configuredLibraries,
               onToggle: () => toggleSettingsPanel("configuredLibraries"),
@@ -2921,92 +2882,6 @@ export function LibrariesPage() {
           </AsyncPanel>
 
           <AsyncPanel
-            title={t("libraryStatistics.title")}
-            collapseState={{
-              collapsed: !settingsPanelState.libraryStatistics,
-              onToggle: () => toggleSettingsPanel("libraryStatistics"),
-              bodyId: "library-statistics-panel-body",
-            }}
-          >
-            <div className="settings-sidebar-stack">
-              <p className="settings-copy">{t("libraryStatistics.subtitle")}</p>
-              <div className="settings-table-shell">
-                <table className="settings-data-table library-statistics-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("libraryStatistics.name")}</th>
-                      <th scope="col">{t("libraryStatistics.table")}</th>
-                      <th scope="col">{t("libraryStatistics.tooltips")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderedStatistics
-                      .filter((statistic) => statistic.supportsTable || statistic.supportsTableTooltip)
-                      .map((statistic) => {
-                        const visibility = statisticsSettings.visibility[statistic.id];
-                        return (
-                          <tr
-                            key={statistic.id}
-                            className={dropTargetStatisticId === statistic.id ? "is-drop-target" : undefined}
-                            onDragOver={(event) => {
-                              event.preventDefault();
-                              if (draggedStatisticId && draggedStatisticId !== statistic.id) {
-                                setDropTargetStatisticId(statistic.id);
-                              }
-                            }}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              handleStatisticDrop(statistic.id);
-                            }}
-                          >
-                            <td>
-                              <div className="statistic-name-cell">
-                                <span
-                                  className={`statistics-drag-handle${draggedStatisticId === statistic.id ? " is-dragging" : ""}`}
-                                  draggable
-                                  onDragStart={(event) => {
-                                    event.dataTransfer.effectAllowed = "move";
-                                    event.dataTransfer.setData("text/plain", statistic.id);
-                                    setDraggedStatisticId(statistic.id);
-                                    setDropTargetStatisticId(statistic.id);
-                                  }}
-                                  onDragEnd={() => {
-                                    setDraggedStatisticId(null);
-                                    setDropTargetStatisticId(null);
-                                  }}
-                                  aria-hidden="true"
-                                >
-                                  <GripVertical className="nav-icon" />
-                                </span>
-                                <span>{t(statistic.nameKey)}</span>
-                              </div>
-                            </td>
-                            <td className="settings-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={visibility.tableEnabled}
-                                disabled={!statistic.supportsTable}
-                                onChange={() => toggleStatisticVisibility(statistic.id, "tableEnabled")}
-                              />
-                            </td>
-                            <td className="settings-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={visibility.tableTooltipEnabled}
-                                disabled={!statistic.supportsTableTooltip || !visibility.tableEnabled}
-                                onChange={() => toggleStatisticVisibility(statistic.id, "tableTooltipEnabled")}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </AsyncPanel>
-
-          <AsyncPanel
             title="Resolution categories"
             collapseState={{
               collapsed: !settingsPanelState.resolutionCategories,
@@ -3171,6 +3046,7 @@ export function LibrariesPage() {
                 />
               </div>
             }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
             collapseState={{
               collapsed: !settingsPanelState.historyRetention,
               onToggle: () => toggleSettingsPanel("historyRetention"),

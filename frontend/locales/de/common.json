@@ -39,7 +39,7 @@
     "subtitleCodecs": "Untertitel-Codecs",
     "subtitleSources": "Untertitel-Quellen",
     "history": {
-      "title": "Dashboard-Verlauf",
+      "title": "Historische Daten",
       "subtitle": "Taegliche Trend-Snapshots ueber alle sichtbaren Bibliotheken",
       "empty": "Dashboard-Trends erscheinen nach dem naechsten abgeschlossenen Scan."
     }

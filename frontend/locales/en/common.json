@@ -39,7 +39,7 @@
     "subtitleCodecs": "Subtitle codecs",
     "subtitleSources": "Subtitle sources",
     "history": {
-      "title": "Dashboard history",
+      "title": "Historic data",
       "subtitle": "Daily trend snapshots across visible libraries",
       "empty": "Dashboard trends will appear after the next finished scan."
     }

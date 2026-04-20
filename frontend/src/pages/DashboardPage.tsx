@@ -38,6 +38,7 @@ import {
   resizeStatisticPanelLayoutItem,
   saveStatisticPanelLayout,
   updateStatisticPanelLayoutComparisonSelection,
+  type StatisticPanelLayoutId,
 } from "../lib/statistic-panel-layout";
 import {
   getComparisonSelection,
@@ -53,8 +54,32 @@ const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-histor
 const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const dashboardComparisonCache = new Map<string, ComparisonResponse>();
-const statisticDefinitionMap = new Map(
-  LIBRARY_STATISTIC_DEFINITIONS.map((definition) => [definition.id, definition] as const),
+type DashboardLayoutPanelDefinition =
+  | {
+      id: LibraryStatisticDefinition["id"];
+      kind: "statistic";
+      statisticDefinition: LibraryStatisticDefinition;
+    }
+  | {
+      id: "history";
+      kind: "history";
+    };
+
+const dashboardLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, DashboardLayoutPanelDefinition>(
+  [
+    ...LIBRARY_STATISTIC_DEFINITIONS.map(
+      (definition) =>
+        [
+          definition.id,
+          {
+            id: definition.id,
+            kind: "statistic",
+            statisticDefinition: definition,
+          },
+        ] as const,
+    ),
+    ["history", { id: "history", kind: "history" }] as const,
+  ],
 );
 
 function formatDashboardDistributionLabel(
@@ -112,7 +137,7 @@ function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
 
 type VisibleDashboardPanel = {
   item: ReturnType<typeof getStatisticPanelLayout>["items"][number];
-  definition: LibraryStatisticDefinition;
+  definition: DashboardLayoutPanelDefinition;
 };
 
 export function DashboardPage() {
@@ -154,9 +179,7 @@ export function DashboardPage() {
     () =>
       activeLayout.items
         .map((item) => {
-          const definition = statisticDefinitionMap.get(
-            item.statisticId as (typeof LIBRARY_STATISTIC_DEFINITIONS)[number]["id"],
-          );
+          const definition = dashboardLayoutPanelDefinitionMap.get(item.statisticId);
           if (!definition) {
             return null;
           }
@@ -527,26 +550,21 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <LibraryHistoryPanel
-        history={dashboardHistory}
-        loading={isHistoryLoading && !dashboardHistory && !historyError}
-        error={historyError}
-        selectedMetric={selectedHistoryMetric}
-        onChangeMetric={setSelectedHistoryMetric}
-        collapsed={isHistoryPanelCollapsed}
-        onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
-        currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
-        title={t("dashboard.history.title")}
-        emptyMessage={t("dashboard.history.empty")}
-        bodyId="dashboard-history-panel-body"
-      />
-
       <div className={`media-grid statistic-layout-grid${isEditingLayout ? " is-editing" : ""}`}>
-        {visiblePanels.map((panel) => {
+        {(() => {
+          let collapsedPanelsBefore = 0;
+          return visiblePanels.map((panel) => {
+            const collapsedPanelOffsetCount = collapsedPanelsBefore;
+            const isCollapsedHistoryPanel = panel.definition.kind === "history" && isHistoryPanelCollapsed;
+            if (isCollapsedHistoryPanel) {
+              collapsedPanelsBefore += 1;
+            }
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
               `span-y-${panel.item.height}`,
+              panel.definition.kind === "history" ? "library-layout-panel-history" : "",
+              isCollapsedHistoryPanel ? "is-collapsed-panel" : "",
               draggedPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -554,7 +572,23 @@ export function DashboardPage() {
               .join(" ");
 
             let content: ReactNode;
-            if (panel.definition.panelKind === "comparison") {
+            if (panel.definition.kind === "history") {
+              content = (
+                <LibraryHistoryPanel
+                  history={dashboardHistory}
+                  loading={isHistoryLoading && !dashboardHistory && !historyError}
+                  error={historyError}
+                  selectedMetric={selectedHistoryMetric}
+                  onChangeMetric={setSelectedHistoryMetric}
+                  collapsed={isHistoryPanelCollapsed}
+                  onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
+                  currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  title={t("dashboard.history.title")}
+                  emptyMessage={t("dashboard.history.empty")}
+                  bodyId="dashboard-history-panel-body"
+                />
+              );
+            } else if (panel.definition.statisticDefinition.panelKind === "comparison") {
               const selection = panel.item.comparisonSelection ?? getComparisonSelection("dashboard");
               content = (
                 <ComparisonChartPanel
@@ -586,35 +620,40 @@ export function DashboardPage() {
                   }
                 />
               );
-            } else if (panel.definition.panelKind === "numeric-chart" && panel.definition.numericMetricId) {
-              const distribution = getDashboardStatisticNumericDistribution(dashboard, panel.definition);
+            } else if (panel.definition.statisticDefinition.panelKind === "numeric-chart") {
+              const statisticDefinition = panel.definition.statisticDefinition;
+              if (!statisticDefinition.numericMetricId) {
+                return null;
+              }
+              const distribution = getDashboardStatisticNumericDistribution(dashboard, statisticDefinition);
               content = (
                 <DistributionChartPanel
-                  title={t(panel.definition.dashboardTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
                   distribution={distribution}
-                  metricId={panel.definition.numericMetricId}
+                  metricId={statisticDefinition.numericMetricId}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={!dashboard && !error}
                   error={error}
                 />
               );
             } else {
+              const statisticDefinition = panel.definition.statisticDefinition;
               const items =
-                panel.definition.id === "hdr_type"
-                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, panel.definition))
-                  : getDashboardStatisticPanelItems(dashboard, panel.definition);
-              const formattedItems = panel.definition.dashboardFormatKind
+                statisticDefinition.id === "hdr_type"
+                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition))
+                  : getDashboardStatisticPanelItems(dashboard, statisticDefinition);
+              const formattedItems = statisticDefinition.dashboardFormatKind
                 ? items.map((item) => ({
                     ...item,
-                    label: formatCodecLabel(item.label, panel.definition.dashboardFormatKind!),
+                    label: formatCodecLabel(item.label, statisticDefinition.dashboardFormatKind!),
                   }))
                 : items.map((item) => ({
                     ...item,
-                    label: formatDashboardDistributionLabel(panel.definition.id, item.label, t),
+                    label: formatDashboardDistributionLabel(statisticDefinition.id, item.label, t),
                   }));
               content = (
                 <AsyncPanel
-                  title={t(panel.definition.dashboardTitleKey ?? panel.definition.nameKey)}
+                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
                   loading={!dashboard && !error}
                   error={error}
                   bodyClassName="async-panel-body-scroll"
@@ -661,6 +700,7 @@ export function DashboardPage() {
                 }}
                 style={
                   {
+                    "--collapsed-panel-offset-count": String(collapsedPanelOffsetCount),
                     "--statistic-panel-row-span": String(panel.item.height),
                   } as CSSProperties
                 }
@@ -674,7 +714,8 @@ export function DashboardPage() {
                 ) : null}
               </div>
             );
-          })}
+          });
+        })()}
       </div>
     </>
   );

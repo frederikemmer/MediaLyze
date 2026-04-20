@@ -32,7 +32,7 @@ export type StatisticPanelLayout = {
 };
 
 const STORAGE_KEY_PREFIX = "medialyze-statistic-panel-layout";
-const STATISTIC_PANEL_LAYOUT_VERSION = 2;
+const STATISTIC_PANEL_LAYOUT_VERSION = 3;
 const MAX_PANEL_WIDTH_UNITS = 4;
 
 export type StatisticPanelLayoutOptions = {
@@ -63,6 +63,10 @@ const LIBRARY_EXTRA_LAYOUT_DEFINITIONS: StatisticPanelLayoutMenuDefinition[] = [
   { id: "analyzed_files", nameKey: "libraryDetail.analyzedFiles" },
 ];
 
+const DASHBOARD_EXTRA_LAYOUT_DEFINITIONS: StatisticPanelLayoutMenuDefinition[] = [
+  { id: "history", nameKey: "dashboard.history.title" },
+];
+
 const LIBRARY_DEFAULT_LAYOUT_BLUEPRINT: DefaultLayoutBlueprintItem[] = [
   { statisticId: "size", width: 2, height: 2 },
   { statisticId: "resolution", width: 1, height: 2 },
@@ -86,6 +90,7 @@ const LIBRARY_DEFAULT_LAYOUT_BLUEPRINT: DefaultLayoutBlueprintItem[] = [
 ];
 
 const DASHBOARD_DEFAULT_LAYOUT_BLUEPRINT: DefaultLayoutBlueprintItem[] = [
+  { statisticId: "history", width: 4, height: 3 },
   { statisticId: "size", width: 2, height: 2 },
   { statisticId: "video_codec", width: 1, height: 2 },
   { statisticId: "quality_score", width: 1, height: 2 },
@@ -133,7 +138,7 @@ function getAllSupportedDefinitions(scope: StatisticPanelLayoutScope): Statistic
     return [...statisticDefinitions, ...LIBRARY_EXTRA_LAYOUT_DEFINITIONS];
   }
 
-  return statisticDefinitions;
+  return [...statisticDefinitions, ...DASHBOARD_EXTRA_LAYOUT_DEFINITIONS];
 }
 
 function getDefaultVisibleDefinitions(scope: StatisticPanelLayoutScope): LibraryStatisticDefinition[] {
@@ -151,7 +156,7 @@ function getPanelSizeConfig(
 ): PanelSizeConfig {
   const boundedMaxHeight = options?.unlimitedHeight ? Number.MAX_SAFE_INTEGER : MAX_PANEL_WIDTH_UNITS;
 
-  if (scope === "library" && statisticId === "history") {
+  if ((scope === "library" || scope === "dashboard") && statisticId === "history") {
     return {
       defaultWidth: 4,
       defaultHeight: 3,
@@ -373,10 +378,8 @@ export function normalizeStatisticPanelLayout(
   const candidateItems: unknown[] = hasExplicitItems
     ? ((value as Partial<StatisticPanelLayout>).items as unknown[])
     : [];
-  const layoutVersion =
-    typeof (value as Partial<StatisticPanelLayout>).version === "number"
-      ? (value as Partial<StatisticPanelLayout>).version
-      : null;
+  const rawLayoutVersion = (value as Partial<StatisticPanelLayout>).version;
+  const layoutVersion = typeof rawLayoutVersion === "number" ? rawLayoutVersion : null;
   const seenInstanceIds = new Set<string>();
   const seenSingleStatisticIds = new Set<StatisticPanelLayoutId>();
   const normalizedItems: StatisticPanelLayoutItem[] = [];
@@ -426,6 +429,16 @@ export function normalizeStatisticPanelLayout(
   }
 
   if (normalizedItems.length > 0) {
+    if (
+      scope === "dashboard" &&
+      (layoutVersion === null || layoutVersion < STATISTIC_PANEL_LAYOUT_VERSION) &&
+      !normalizedItems.some((item) => item.statisticId === "history")
+    ) {
+      normalizedItems.unshift(
+        buildPanelItem(scope, "history", "history", undefined, undefined, undefined, options),
+      );
+    }
+
     if (scope === "library" && layoutVersion === null) {
       const hasAnyExtraLibraryPanel = normalizedItems.some(
         (item) =>
@@ -446,6 +459,12 @@ export function normalizeStatisticPanelLayout(
     return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: normalizedItems };
   }
   if (hasExplicitItems && candidateItems.length === 0) {
+    if (scope === "dashboard" && (layoutVersion === null || layoutVersion < STATISTIC_PANEL_LAYOUT_VERSION)) {
+      return {
+        version: STATISTIC_PANEL_LAYOUT_VERSION,
+        items: [buildPanelItem(scope, "history", "history", undefined, undefined, undefined, options)],
+      };
+    }
     return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: [] };
   }
   return buildDefaultStatisticPanelLayout(scope, options);
@@ -528,12 +547,14 @@ export function addStatisticPanelLayoutItem(
         statisticId,
         instanceId,
         undefined,
-        scope === "library" &&
-          (statisticId === "history" || statisticId === "duplicates" || statisticId === "analyzed_files")
+        ((scope === "library" &&
+          (statisticId === "history" || statisticId === "duplicates" || statisticId === "analyzed_files")) ||
+          (scope === "dashboard" && statisticId === "history"))
           ? undefined
           : 1,
-        scope === "library" &&
-          (statisticId === "history" || statisticId === "duplicates" || statisticId === "analyzed_files")
+        ((scope === "library" &&
+          (statisticId === "history" || statisticId === "duplicates" || statisticId === "analyzed_files")) ||
+          (scope === "dashboard" && statisticId === "history"))
           ? undefined
           : 2,
         options,

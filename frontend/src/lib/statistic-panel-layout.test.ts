@@ -68,6 +68,7 @@ describe("statistic panel layout", () => {
     const layout = buildDefaultStatisticPanelLayout("dashboard");
 
     expect(layout.items).toMatchObject([
+      { statisticId: "history", width: 4, height: 3 },
       { statisticId: "size", width: 2, height: 2 },
       { statisticId: "video_codec", width: 1, height: 2 },
       { statisticId: "quality_score", width: 1, height: 2 },
@@ -101,6 +102,44 @@ describe("statistic panel layout", () => {
       { statisticId: "audio_bitrate", width: 1, height: 2 },
       { statisticId: "subtitle_languages", width: 1, height: 2 },
     ]);
+  });
+
+  it("adds dashboard history when migrating older dashboard layouts", () => {
+    const layout = normalizeStatisticPanelLayout("dashboard", {
+      version: 2,
+      items: [{ instanceId: "size", statisticId: "size", width: 2, height: 2 }],
+    });
+
+    expect(layout.items).toMatchObject([
+      { instanceId: "history", statisticId: "history", width: 4, height: 3 },
+      { instanceId: "size", statisticId: "size", width: 2, height: 2 },
+    ]);
+  });
+
+  it("keeps dashboard history visible when migrating older empty dashboard layouts", () => {
+    const layout = normalizeStatisticPanelLayout("dashboard", { version: 2, items: [] });
+
+    expect(layout).toEqual({
+      version: 3,
+      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 3 }],
+    });
+  });
+
+  it("adds dashboard history back with its default editable size", () => {
+    const layout = addStatisticPanelLayoutItem("dashboard", { version: 3, items: [] }, "history");
+
+    expect(layout.items).toHaveLength(1);
+    expect(layout.items[0]).toMatchObject({
+      statisticId: "history",
+      width: 4,
+      height: 3,
+    });
+  });
+
+  it("keeps newly saved empty dashboard layouts empty after history was removed", () => {
+    const layout = normalizeStatisticPanelLayout("dashboard", { version: 3, items: [] });
+
+    expect(layout).toEqual({ version: 3, items: [] });
   });
 
   it("adds new statistic panels with a default size of one wide by two high", () => {
@@ -177,6 +216,6 @@ describe("statistic panel layout", () => {
   it("preserves an explicitly empty layout instead of restoring defaults", () => {
     const layout = normalizeStatisticPanelLayout("library", { items: [] });
 
-    expect(layout).toEqual({ version: 2, items: [] });
+    expect(layout).toEqual({ version: 3, items: [] });
   });
 });

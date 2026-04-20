@@ -161,8 +161,6 @@ const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
-const DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-duplicates-collapsed";
-const HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-library-detail-history-collapsed";
 const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const HEADER_FONT_SIZE_PX = 12.48;
@@ -773,22 +771,30 @@ function matchesSearchTokens(candidate: string, tokens: string[]): boolean {
   return tokens.every((token) => normalizedCandidate.includes(token));
 }
 
-function readDuplicatePanelCollapsedPreference(): boolean {
+function buildDuplicatePanelCollapseStorageKey(libraryId: string): string {
+  return `medialyze-library-detail-${libraryId}-duplicates-collapsed`;
+}
+
+function buildHistoryPanelCollapseStorageKey(libraryId: string): string {
+  return `medialyze-library-detail-${libraryId}-history-collapsed`;
+}
+
+function readDuplicatePanelCollapsedPreference(libraryId: string): boolean {
   if (typeof window === "undefined") {
     return true;
   }
-  const storedPreference = window.localStorage.getItem(DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY);
+  const storedPreference = window.localStorage.getItem(buildDuplicatePanelCollapseStorageKey(libraryId));
   if (storedPreference === null) {
     return true;
   }
   return storedPreference === "true";
 }
 
-function readHistoryPanelCollapsedPreference(): boolean {
+function readHistoryPanelCollapsedPreference(libraryId: string): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  const storedPreference = window.localStorage.getItem(HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  const storedPreference = window.localStorage.getItem(buildHistoryPanelCollapseStorageKey(libraryId));
   if (storedPreference === null) {
     return false;
   }
@@ -890,10 +896,10 @@ export function LibraryDetailPage() {
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
   const [exportError, setExportError] = useState<string | null>(null);
   const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
-    readDuplicatePanelCollapsedPreference(),
+    readDuplicatePanelCollapsedPreference(libraryId),
   );
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
-    readHistoryPanelCollapsedPreference(),
+    readHistoryPanelCollapsedPreference(libraryId),
   );
   const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
     readHistoryMetricPreference(),
@@ -1482,15 +1488,23 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(
-      DUPLICATE_PANEL_COLLAPSE_STORAGE_KEY,
-      isDuplicatesPanelCollapsed ? "true" : "false",
-    );
-  }, [isDuplicatesPanelCollapsed]);
+    setIsDuplicatesPanelCollapsed(readDuplicatePanelCollapsedPreference(libraryId));
+    setIsHistoryPanelCollapsed(readHistoryPanelCollapsedPreference(libraryId));
+  }, [libraryId]);
 
   useEffect(() => {
-    window.localStorage.setItem(HISTORY_PANEL_COLLAPSE_STORAGE_KEY, isHistoryPanelCollapsed ? "true" : "false");
-  }, [isHistoryPanelCollapsed]);
+    window.localStorage.setItem(
+      buildDuplicatePanelCollapseStorageKey(libraryId),
+      isDuplicatesPanelCollapsed ? "true" : "false",
+    );
+  }, [isDuplicatesPanelCollapsed, libraryId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      buildHistoryPanelCollapseStorageKey(libraryId),
+      isHistoryPanelCollapsed ? "true" : "false",
+    );
+  }, [isHistoryPanelCollapsed, libraryId]);
 
   useEffect(() => {
     window.localStorage.setItem(HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
@@ -2057,7 +2071,18 @@ export function LibraryDetailPage() {
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingStatisticLayout ? " is-editing" : ""}`}>
-        {visibleLayoutPanels.map((panel) => {
+        {(() => {
+          let collapsedPanelsBefore = 0;
+
+          return visibleLayoutPanels.map((panel) => {
+            const offsetCount = collapsedPanelsBefore;
+            const isCollapsedLargePanel =
+              (panel.definition.kind === "history" && isHistoryPanelCollapsed) ||
+              (panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed);
+            if (isCollapsedLargePanel) {
+              collapsedPanelsBefore += 1;
+            }
+
             const shellClassName = [
               "statistic-layout-panel-shell",
               `span-x-${panel.item.width}`,
@@ -2065,6 +2090,8 @@ export function LibraryDetailPage() {
               panel.definition.kind === "history" ? "library-layout-panel-history" : "",
               panel.definition.kind === "duplicates" ? "library-layout-panel-duplicates" : "",
               panel.definition.kind === "analyzed_files" ? "library-layout-panel-analyzed-files" : "",
+              panel.definition.kind === "history" && isHistoryPanelCollapsed ? "is-collapsed-panel" : "",
+              panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed ? "is-collapsed-panel" : "",
               draggedStatisticPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetStatisticPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -2198,40 +2225,41 @@ export function LibraryDetailPage() {
                   title={t("libraryDetail.duplicates.title")}
                   loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
                   error={duplicateGroupsError}
-                  titleAddon={
-                    duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null
-                  }
                   bodyClassName="async-panel-body-scroll"
-                  headerAddon={
-                    !isDuplicatesPanelCollapsed ? (
-                      <div className="data-table-search-layout duplicate-search-layout">
-                        <div className="metadata-search-control duplicate-search-control">
-                          <span className="metadata-search-icon-button" aria-hidden="true">
-                            <Search size={18} />
-                          </span>
-                          <input
-                            type="search"
-                            value={duplicateSearch}
-                            placeholder={t("libraryDetail.duplicates.searchPlaceholder")}
-                            aria-label={t("libraryDetail.duplicates.searchLabel")}
-                            autoComplete="off"
-                            className={duplicateSearch ? "has-trailing-action" : undefined}
-                            onChange={(event) => setDuplicateSearch(event.target.value)}
-                          />
-                          {duplicateSearch ? (
-                            <button
-                              type="button"
-                              className="metadata-search-remove"
-                              aria-label={t("libraryDetail.duplicates.clearSearch")}
-                              onClick={() => setDuplicateSearch("")}
-                            >
-                              <X size={18} aria-hidden="true" />
-                            </button>
-                          ) : null}
+                  collapseActions={
+                    <div className="duplicate-panel-title-actions">
+                      {duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null}
+                      {!isDuplicatesPanelCollapsed ? (
+                        <div className="data-table-search-layout duplicate-search-layout">
+                          <div className="metadata-search-control duplicate-search-control">
+                            <span className="metadata-search-icon-button" aria-hidden="true">
+                              <Search size={18} />
+                            </span>
+                            <input
+                              type="search"
+                              value={duplicateSearch}
+                              placeholder={t("libraryDetail.duplicates.searchPlaceholder")}
+                              aria-label={t("libraryDetail.duplicates.searchLabel")}
+                              autoComplete="off"
+                              className={duplicateSearch ? "has-trailing-action" : undefined}
+                              onChange={(event) => setDuplicateSearch(event.target.value)}
+                            />
+                            {duplicateSearch ? (
+                              <button
+                                type="button"
+                                className="metadata-search-remove"
+                                aria-label={t("libraryDetail.duplicates.clearSearch")}
+                                onClick={() => setDuplicateSearch("")}
+                              >
+                                <X size={18} aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ) : null
+                      ) : null}
+                    </div>
                   }
+                  collapseButtonClassName="async-panel-toggle-icon-button-flat"
                   collapseState={{
                     collapsed: isDuplicatesPanelCollapsed,
                     onToggle: () => setIsDuplicatesPanelCollapsed((current) => !current),
@@ -2585,6 +2613,7 @@ export function LibraryDetailPage() {
                 }}
                 style={
                   {
+                    "--collapsed-panel-offset-count": String(offsetCount),
                     "--statistic-panel-row-span": String(panel.item.height),
                   } as CSSProperties
                 }
@@ -2598,7 +2627,8 @@ export function LibraryDetailPage() {
                 ) : null}
               </div>
             );
-          })}
+          });
+        })()}
       </div>
     </>
   );
