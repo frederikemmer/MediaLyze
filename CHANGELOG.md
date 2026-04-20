@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.2
+
+>2026-04-20
+
+### 🐛 Bug fixes
+
+- backfill legacy library-history snapshots with total size, total duration, file-size summaries, and resolution megapixel summaries so the newer history metrics render for older stored data
+
 ## v0.8.1
 
 >2026-04-20
