@@ -20,7 +20,6 @@ All notable changes to this project will be documented in this file.
 - tighten history, duplicate, and analyzed-files panel headers to reduce wasted vertical space and keep controls aligned with existing panel patterns
 - fix for error while sorting for Bitrate in table view [#111](https://github.com/frederikemmer/MediaLyze/issues/111)
 
-
 ## v0.7.1
 
 >2026-04-15
