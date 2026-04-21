@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.3
+
+>2026-04-22
+
 ### ✨ New
 
 - default the full-width app shell feature flag to enabled for first-run desktop app installations while still preserving user changes
