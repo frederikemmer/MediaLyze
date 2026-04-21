@@ -308,7 +308,7 @@ h3 {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(255, 107, 61, 0.14);
   color: #8a2f18;
   font-size: 0.75rem;

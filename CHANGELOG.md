@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - remove the stray dark-mode tooltip background behind the resolution badge on the file detail page
 - cache the history storage forecast and refresh it in the background after scans, history maintenance, and on a periodic schedule
 - report scans with unreadable media files as completed with issues instead of failed when the scan itself finished successfully
+- keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
 
 ## v0.8.2
 

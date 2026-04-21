@@ -992,7 +992,7 @@
   max-width: 100%;
   min-width: 0;
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(31, 28, 22, 0.06);
   color: var(--muted);
   font-size: 0.9rem;
