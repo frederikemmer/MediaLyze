@@ -689,6 +689,136 @@ def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: 
     assert {row.media_file_id for row in history_rows} == {first_file_id}
 
 
+def test_incremental_scan_preserves_file_identity_when_renamed_file_metadata_changes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    original_path = media_dir / "Movie.Name.2024.mkv"
+    renamed_path = media_dir / "Movie Name 2024 Remux.mkv"
+    original_path.write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        first_file = db.scalar(select(MediaFile))
+        assert first_file is not None
+        first_file_id = first_file.id
+
+        original_path.rename(renamed_path)
+        renamed_path.write_text("video with updated container metadata")
+        second_job = run_scan(db, settings, library.id, "incremental")
+
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        history_rows = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.captured_at.asc())).all()
+
+    assert [(media_file.id, media_file.relative_path) for media_file in indexed_files] == [
+        (first_file_id, "Movie Name 2024 Remux.mkv")
+    ]
+    assert second_job.scan_summary["changes"]["new_files"]["count"] == 0
+    assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 0
+    assert second_job.scan_summary["changes"]["modified_files"]["count"] == 1
+    assert [row.relative_path for row in history_rows] == ["Movie.Name.2024.mkv", "Movie Name 2024 Remux.mkv"]
+    assert {row.media_file_id for row in history_rows} == {first_file_id}
+
+
+def test_incremental_scan_does_not_merge_similar_names_with_conflicting_numbers(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    original_path = media_dir / "Episode 01.mkv"
+    replacement_path = media_dir / "Episode 02.mkv"
+    original_path.write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Series",
+            path=str(media_dir),
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        first_file = db.scalar(select(MediaFile))
+        assert first_file is not None
+        first_file_id = first_file.id
+
+        original_path.unlink()
+        replacement_path.write_text("different video content")
+        second_job = run_scan(db, settings, library.id, "incremental")
+
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+
+    assert [media_file.relative_path for media_file in indexed_files] == ["Episode 02.mkv"]
+    assert indexed_files[0].id != first_file_id
+    assert second_job.scan_summary["changes"]["new_files"]["count"] == 1
+    assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 1
+    assert second_job.scan_summary["changes"]["modified_files"]["count"] == 0
+
+
 def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
@@ -1316,3 +1446,68 @@ def test_deleted_files_disappear_from_duplicate_groups_on_rescan(tmp_path: Path,
     assert second_summary["duplicates"]["duplicate_groups"] == 0
     assert second_summary["duplicates"]["duplicate_files"] == 0
     assert second_groups.total_groups == 0
+
+
+def test_incremental_scan_removes_deleted_files_from_active_index_but_keeps_history(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.mkv"
+    video_path.write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        video_path.unlink()
+        second_job = run_scan(db, settings, library.id, "incremental")
+
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        history_rows = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.captured_at.asc())).all()
+
+    assert indexed_files == []
+    assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 1
+    assert [row.relative_path for row in history_rows] == ["movie.mkv"]

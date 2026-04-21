@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from fnmatch import fnmatchcase
 import logging
 import os
 from pathlib import Path
+import re
 import traceback
 
 from sqlalchemy import delete, or_, select
@@ -29,8 +32,11 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.services.duplicates import (
+    FILE_HASH_ALGORITHM,
+    FileHashDuplicateDetectionStrategy,
     get_duplicate_detection_strategy,
     get_duplicate_group_counts,
+    normalize_filename_signature,
 )
 from backend.app.services.app_settings import get_app_settings, get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
@@ -56,6 +62,10 @@ MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
 MAX_FAILURE_DETAIL_LENGTH = 12000
+RENAME_MATCH_SCORE_THRESHOLD = 0.82
+RENAME_MATCH_SCORE_GAP = 0.08
+RENAME_SINGLE_MISSING_SCORE_THRESHOLD = 0.68
+RENAME_NUMBER_PATTERN = re.compile(r"\d+")
 
 
 class ScanCanceled(Exception):
@@ -134,6 +144,48 @@ class QueuedMediaWork:
 
 def _library_root(library: Library) -> Path:
     return Path(library.path)
+
+
+def _rename_similarity_score(
+    old_relative_path: str,
+    new_relative_path: str,
+    old_size: int,
+    new_size: int,
+) -> float:
+    old_path = Path(old_relative_path)
+    new_path = Path(new_relative_path)
+    old_signature = normalize_filename_signature(old_path)
+    new_signature = normalize_filename_signature(new_path)
+    if not old_signature or not new_signature:
+        return 0.0
+
+    old_numbers = Counter(
+        match.lstrip("0") or "0"
+        for match in RENAME_NUMBER_PATTERN.findall(old_signature)
+    )
+    new_numbers = Counter(
+        match.lstrip("0") or "0"
+        for match in RENAME_NUMBER_PATTERN.findall(new_signature)
+    )
+    if old_numbers and new_numbers and not (old_numbers <= new_numbers or new_numbers <= old_numbers):
+        return 0.0
+
+    score = SequenceMatcher(None, old_signature, new_signature).ratio()
+    if old_path.parent == new_path.parent:
+        score += 0.05
+    if old_path.suffix.lower() == new_path.suffix.lower():
+        score += 0.03
+
+    max_size = max(old_size, new_size, 1)
+    size_delta_ratio = abs(old_size - new_size) / max_size
+    if size_delta_ratio <= 0.01:
+        score += 0.07
+    elif size_delta_ratio <= 0.05:
+        score += 0.04
+    elif size_delta_ratio <= 0.15:
+        score += 0.02
+
+    return min(score, 1.0)
 
 
 def _candidate_ignore_paths(relative_path: str, *, is_dir: bool = False) -> set[str]:
@@ -684,20 +736,119 @@ def run_scan(
     duplicate_processed_successfully = 0
     duplicate_processing_failed = 0
 
-    def _find_rename_candidate(relative_path: str, size_bytes: int, mtime: float) -> MediaFile | None:
-        candidates = [
+    def _missing_rename_candidates() -> list[MediaFile]:
+        return [
             candidate
             for candidate_path, candidate in existing_by_path.items()
             if candidate_path not in seen_relative_paths
-            and candidate.size_bytes == size_bytes
-            and candidate.mtime == mtime
             and not (root / candidate.relative_path).exists()
         ]
-        if len(candidates) != 1:
-            return None
-        candidate = candidates[0]
-        logger.info("Detected media rename in library %s: %s -> %s", library.id, candidate.relative_path, relative_path)
+
+    def _log_rename_candidate(candidate: MediaFile, relative_path: str, reason: str) -> MediaFile:
+        logger.info(
+            "Detected media rename in library %s via %s: %s -> %s",
+            library.id,
+            reason,
+            candidate.relative_path,
+            relative_path,
+        )
         return candidate
+
+    def _find_hash_rename_candidate(
+        relative_path: str,
+        candidates: list[MediaFile],
+    ) -> MediaFile | None:
+        hash_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
+            and (candidate.content_hash or "").strip()
+        ]
+        if not hash_candidates:
+            return None
+        try:
+            payload = FileHashDuplicateDetectionStrategy().build_payload(root / relative_path)
+        except OSError:
+            logger.exception("Failed to hash rename candidate %s", relative_path)
+            return None
+
+        content_hash = payload.get("content_hash")
+        matches = [
+            candidate
+            for candidate in hash_candidates
+            if candidate.content_hash == content_hash
+        ]
+        if len(matches) != 1:
+            return None
+        return _log_rename_candidate(matches[0], relative_path, "content hash")
+
+    def _find_similar_rename_candidate(
+        relative_path: str,
+        size_bytes: int,
+        candidates: list[MediaFile],
+    ) -> MediaFile | None:
+        scored_candidates = sorted(
+            (
+                (
+                    _rename_similarity_score(
+                        candidate.relative_path,
+                        relative_path,
+                        candidate.size_bytes,
+                        size_bytes,
+                    ),
+                    candidate,
+                )
+                for candidate in candidates
+            ),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        if not scored_candidates:
+            return None
+
+        best_score, best_candidate = scored_candidates[0]
+        if len(scored_candidates) == 1 and best_score >= RENAME_SINGLE_MISSING_SCORE_THRESHOLD:
+            return _log_rename_candidate(
+                best_candidate,
+                relative_path,
+                f"name similarity {best_score:.2f}",
+            )
+        if best_score < RENAME_MATCH_SCORE_THRESHOLD:
+            return None
+        if (
+            len(scored_candidates) > 1
+            and best_score - scored_candidates[1][0] < RENAME_MATCH_SCORE_GAP
+        ):
+            return None
+        return _log_rename_candidate(
+            best_candidate,
+            relative_path,
+            f"name similarity {best_score:.2f}",
+        )
+
+    def _find_rename_candidate(
+        relative_path: str,
+        size_bytes: int,
+        mtime: float,
+    ) -> MediaFile | None:
+        candidates = _missing_rename_candidates()
+        exact_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.size_bytes == size_bytes and candidate.mtime == mtime
+        ]
+        if len(exact_candidates) == 1:
+            return _log_rename_candidate(exact_candidates[0], relative_path, "size and mtime")
+
+        hash_candidate = _find_hash_rename_candidate(relative_path, candidates)
+        if hash_candidate is not None:
+            return hash_candidate
+
+        similar_candidate = _find_similar_rename_candidate(relative_path, size_bytes, candidates)
+        if similar_candidate is not None:
+            return similar_candidate
+
+        return None
 
     def _build_scan_summary(
         discovery: DiscoveryResult,
