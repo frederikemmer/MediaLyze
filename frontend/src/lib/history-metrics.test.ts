@@ -12,11 +12,16 @@ describe("history metrics", () => {
     expect(HISTORY_METRIC_GROUPS.map((group) => group.id)).toEqual(["summary", "category", "distribution"]);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "average_quality_score")).toBe(true);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "container_mix")).toBe(true);
+    expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "resolution_distribution")).toBe(true);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "resolution_mp_distribution")).toBe(true);
+
+    const distributionMetrics = HISTORY_METRIC_DEFINITIONS.filter((definition) => definition.group === "distribution");
+    expect(distributionMetrics[0]?.id).toBe("resolution_distribution");
   });
 
   it("validates stored metric ids", () => {
     expect(isLibraryHistoryMetricId("average_quality_score")).toBe(true);
+    expect(isLibraryHistoryMetricId("resolution_distribution")).toBe(true);
     expect(isLibraryHistoryMetricId("quality_score_distribution")).toBe(true);
     expect(isLibraryHistoryMetricId("ready_files")).toBe(false);
     expect(isLibraryHistoryMetricId("pending_files")).toBe(false);

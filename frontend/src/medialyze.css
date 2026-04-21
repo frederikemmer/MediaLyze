@@ -2694,13 +2694,16 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .file-history-entry-head::before {
   content: "›";
   flex: 0 0 auto;
+  width: 10px;
+  text-align: center;
   color: var(--muted);
   font-weight: 800;
+  transform: translateX(1px);
   transition: transform 0.16s ease;
 }
 
 .file-history-entry[open] > .file-history-entry-head::before {
-  transform: rotate(90deg);
+  transform: translateX(2px) rotate(90deg);
 }
 
 .file-history-entry-head strong {

@@ -33,6 +33,7 @@ export type LibraryHistoryMetricId =
   | "subtitle_codecs_mix"
   | "subtitle_sources_mix"
   | "scan_status_mix"
+  | "resolution_distribution"
   | "quality_score_distribution"
   | "duration_distribution"
   | "size_distribution"
@@ -61,6 +62,13 @@ export type HistoryMetricDefinition =
       labelKey: string;
       distributionKey: NumericDistributionMetricId | "resolution_mp";
       formatBin: (bin: NumericDistributionBin) => string;
+    }
+  | {
+      id: LibraryHistoryMetricId;
+      group: "distribution";
+      labelKey: string;
+      categoryKey: string;
+      formatCategory: (value: string, resolutionCategories: LibraryHistoryResolutionCategory[]) => string;
     };
 
 type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
@@ -236,6 +244,13 @@ export const HISTORY_METRIC_DEFINITIONS: HistoryMetricDefinition[] = [
     labelKey: "libraryDetail.history.metrics.scan_status_mix",
     categoryKey: "scan_status",
     formatCategory: formatPlain,
+  },
+  {
+    id: "resolution_distribution",
+    group: "distribution",
+    labelKey: "libraryDetail.history.metrics.resolution_distribution",
+    categoryKey: "resolution",
+    formatCategory: formatResolutionCategory,
   },
   {
     id: "quality_score_distribution",

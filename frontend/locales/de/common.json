@@ -422,6 +422,7 @@
         "subtitle_codecs_mix": "Untertitel-Codec-Mix",
         "subtitle_sources_mix": "Untertitelquellen-Mix",
         "scan_status_mix": "Scan-Status-Mix",
+        "resolution_distribution": "Aufloesungsverteilung",
         "quality_score_distribution": "Qualitaets-Score-Verteilung",
         "duration_distribution": "Dauerverteilung",
         "size_distribution": "Groessenverteilung",

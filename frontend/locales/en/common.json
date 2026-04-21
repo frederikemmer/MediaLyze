@@ -422,6 +422,7 @@
         "subtitle_codecs_mix": "Subtitle codec mix",
         "subtitle_sources_mix": "Subtitle source mix",
         "scan_status_mix": "Scan status mix",
+        "resolution_distribution": "Resolution distribution",
         "quality_score_distribution": "Quality score distribution",
         "duration_distribution": "Duration distribution",
         "size_distribution": "Size distribution",
