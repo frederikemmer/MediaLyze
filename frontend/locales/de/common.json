@@ -14,6 +14,7 @@
     "searchingFound": "Suche... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analysiert",
     "libraryFallback": "Bibliothek #{{id}}",
+    "refreshHint": "Während Scans laufen, aktualisiert sich der Scan-Fortschritt live. Statistiken und Tabellen-Caches werden nach dem Scan aktualisiert, damit die App reaktionsfähig bleibt.",
     "stopAria": "Aktive Scans stoppen"
   },
   "dashboard": {

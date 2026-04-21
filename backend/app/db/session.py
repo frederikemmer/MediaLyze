@@ -63,6 +63,28 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "filename_signature": "ALTER TABLE media_files ADD COLUMN filename_signature VARCHAR(512)",
         "content_hash": "ALTER TABLE media_files ADD COLUMN content_hash VARCHAR(128)",
         "content_hash_algorithm": "ALTER TABLE media_files ADD COLUMN content_hash_algorithm VARCHAR(32)",
+        "duration_seconds": "ALTER TABLE media_files ADD COLUMN duration_seconds FLOAT",
+        "bitrate": "ALTER TABLE media_files ADD COLUMN bitrate INTEGER",
+        "audio_bitrate": "ALTER TABLE media_files ADD COLUMN audio_bitrate INTEGER",
+        "primary_video_codec": "ALTER TABLE media_files ADD COLUMN primary_video_codec VARCHAR(64)",
+        "primary_video_width": "ALTER TABLE media_files ADD COLUMN primary_video_width INTEGER",
+        "primary_video_height": "ALTER TABLE media_files ADD COLUMN primary_video_height INTEGER",
+        "primary_video_resolution_pixels": "ALTER TABLE media_files ADD COLUMN primary_video_resolution_pixels INTEGER",
+        "primary_video_hdr_type": "ALTER TABLE media_files ADD COLUMN primary_video_hdr_type VARCHAR(64)",
+        "min_audio_codec": "ALTER TABLE media_files ADD COLUMN min_audio_codec VARCHAR(64) NOT NULL DEFAULT ''",
+        "min_audio_spatial_profile": "ALTER TABLE media_files ADD COLUMN min_audio_spatial_profile VARCHAR(64) NOT NULL DEFAULT ''",
+        "min_audio_language": "ALTER TABLE media_files ADD COLUMN min_audio_language VARCHAR(16) NOT NULL DEFAULT ''",
+        "min_subtitle_language": "ALTER TABLE media_files ADD COLUMN min_subtitle_language VARCHAR(16) NOT NULL DEFAULT ''",
+        "min_subtitle_codec": "ALTER TABLE media_files ADD COLUMN min_subtitle_codec VARCHAR(64) NOT NULL DEFAULT ''",
+        "audio_codecs_search": "ALTER TABLE media_files ADD COLUMN audio_codecs_search VARCHAR(2048) NOT NULL DEFAULT ''",
+        "audio_spatial_profiles_search": "ALTER TABLE media_files ADD COLUMN audio_spatial_profiles_search VARCHAR(1024) NOT NULL DEFAULT ''",
+        "audio_languages_search": "ALTER TABLE media_files ADD COLUMN audio_languages_search VARCHAR(1024) NOT NULL DEFAULT ''",
+        "subtitle_languages_search": "ALTER TABLE media_files ADD COLUMN subtitle_languages_search VARCHAR(1024) NOT NULL DEFAULT ''",
+        "subtitle_codecs_search": "ALTER TABLE media_files ADD COLUMN subtitle_codecs_search VARCHAR(1024) NOT NULL DEFAULT ''",
+        "subtitle_sources_search": "ALTER TABLE media_files ADD COLUMN subtitle_sources_search VARCHAR(64) NOT NULL DEFAULT ''",
+        "has_internal_subtitles": "ALTER TABLE media_files ADD COLUMN has_internal_subtitles BOOLEAN NOT NULL DEFAULT 0",
+        "has_external_subtitles": "ALTER TABLE media_files ADD COLUMN has_external_subtitles BOOLEAN NOT NULL DEFAULT 0",
+        "search_fields_version": "ALTER TABLE media_files ADD COLUMN search_fields_version INTEGER NOT NULL DEFAULT 0",
     },
     "media_formats": {
         "bit_rate": "ALTER TABLE media_formats ADD COLUMN bit_rate INTEGER",
@@ -116,6 +138,20 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_mtime ON media_files (library_id, mtime)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_last_analyzed_at ON media_files (library_id, last_analyzed_at)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_quality_score ON media_files (library_id, quality_score)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_quality_score_raw ON media_files (library_id, quality_score_raw)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_extension ON media_files (library_id, extension)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_duration_seconds ON media_files (library_id, duration_seconds)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_bitrate ON media_files (library_id, bitrate)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audio_bitrate ON media_files (library_id, audio_bitrate)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_primary_video_codec ON media_files (library_id, primary_video_codec)",
+    (
+        "CREATE INDEX IF NOT EXISTS ix_media_files_library_resolution_pixels "
+        "ON media_files (library_id, primary_video_resolution_pixels)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS ix_media_files_library_primary_video_hdr_type "
+        "ON media_files (library_id, primary_video_hdr_type)"
+    ),
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_filename_signature ON media_files (library_id, filename_signature)",
     (
         "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_hash "
@@ -148,6 +184,213 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     ),
     "CREATE INDEX IF NOT EXISTS ix_library_history_captured_at ON library_history (captured_at)",
 )
+
+
+def _backfill_media_file_search_fields(connection) -> None:
+    if not _sqlite_has_table(connection, "media_files"):
+        return
+    existing_columns = _sqlite_column_names(connection, "media_files")
+    if "search_fields_version" not in existing_columns:
+        return
+
+    connection.execute(
+        text(
+            """
+            UPDATE media_files
+            SET
+              duration_seconds = (SELECT duration FROM media_formats WHERE media_file_id = media_files.id LIMIT 1),
+              bitrate = (SELECT bit_rate FROM media_formats WHERE media_file_id = media_files.id LIMIT 1),
+              audio_bitrate = (
+                SELECT NULLIF(SUM(COALESCE(bit_rate, 0)), 0)
+                FROM audio_streams
+                WHERE media_file_id = media_files.id
+              ),
+              primary_video_codec = (
+                SELECT codec FROM video_streams
+                WHERE media_file_id = media_files.id
+                ORDER BY stream_index ASC LIMIT 1
+              ),
+              primary_video_width = (
+                SELECT width FROM video_streams
+                WHERE media_file_id = media_files.id
+                ORDER BY stream_index ASC LIMIT 1
+              ),
+              primary_video_height = (
+                SELECT height FROM video_streams
+                WHERE media_file_id = media_files.id
+                ORDER BY stream_index ASC LIMIT 1
+              ),
+              primary_video_resolution_pixels = (
+                SELECT CASE
+                  WHEN width IS NOT NULL AND height IS NOT NULL THEN width * height
+                  ELSE NULL
+                END
+                FROM video_streams
+                WHERE media_file_id = media_files.id
+                ORDER BY stream_index ASC LIMIT 1
+              ),
+              primary_video_hdr_type = (
+                SELECT hdr_type FROM video_streams
+                WHERE media_file_id = media_files.id
+                ORDER BY stream_index ASC LIMIT 1
+              ),
+              min_audio_codec = COALESCE((
+                SELECT MIN(value)
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(codec, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(codec, '')))
+                  END AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                )
+              ), ''),
+              min_audio_spatial_profile = COALESCE((
+                SELECT MIN(value)
+                FROM (
+                  SELECT DISTINCT LOWER(TRIM(COALESCE(spatial_audio_profile, ''))) AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                )
+                WHERE value != ''
+              ), ''),
+              min_audio_language = COALESCE((
+                SELECT MIN(value)
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                )
+              ), ''),
+              audio_codecs_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(codec, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(codec, '')))
+                  END AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                  ORDER BY value
+                )
+              ), ''),
+              audio_spatial_profiles_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT LOWER(TRIM(COALESCE(spatial_audio_profile, ''))) AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                    AND LENGTH(LOWER(TRIM(COALESCE(spatial_audio_profile, '')))) > 0
+                  ORDER BY value
+                )
+              ), ''),
+              audio_languages_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM audio_streams
+                  WHERE media_file_id = media_files.id
+                  ORDER BY value
+                )
+              ), ''),
+              min_subtitle_language = COALESCE((
+                SELECT MIN(value)
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM subtitle_streams
+                  WHERE media_file_id = media_files.id
+                  UNION
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM external_subtitles
+                  WHERE media_file_id = media_files.id
+                )
+              ), ''),
+              min_subtitle_codec = COALESCE((
+                SELECT MIN(value)
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(codec, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(codec, '')))
+                  END AS value
+                  FROM subtitle_streams
+                  WHERE media_file_id = media_files.id
+                  UNION
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(format, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(format, '')))
+                  END AS value
+                  FROM external_subtitles
+                  WHERE media_file_id = media_files.id
+                )
+              ), ''),
+              subtitle_languages_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM subtitle_streams
+                  WHERE media_file_id = media_files.id
+                  UNION
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(language, '')))) = 0 THEN 'und'
+                    ELSE LOWER(TRIM(COALESCE(language, '')))
+                  END AS value
+                  FROM external_subtitles
+                  WHERE media_file_id = media_files.id
+                  ORDER BY value
+                )
+              ), ''),
+              subtitle_codecs_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(codec, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(codec, '')))
+                  END AS value
+                  FROM subtitle_streams
+                  WHERE media_file_id = media_files.id
+                  UNION
+                  SELECT DISTINCT CASE
+                    WHEN LENGTH(LOWER(TRIM(COALESCE(format, '')))) = 0 THEN 'unknown'
+                    ELSE LOWER(TRIM(COALESCE(format, '')))
+                  END AS value
+                  FROM external_subtitles
+                  WHERE media_file_id = media_files.id
+                  ORDER BY value
+                )
+              ), ''),
+              has_internal_subtitles = EXISTS (
+                SELECT 1 FROM subtitle_streams WHERE media_file_id = media_files.id
+              ),
+              has_external_subtitles = EXISTS (
+                SELECT 1 FROM external_subtitles WHERE media_file_id = media_files.id
+              ),
+              subtitle_sources_search = TRIM(
+                CASE WHEN EXISTS (SELECT 1 FROM subtitle_streams WHERE media_file_id = media_files.id)
+                  THEN 'internal ' ELSE '' END
+                ||
+                CASE WHEN EXISTS (SELECT 1 FROM external_subtitles WHERE media_file_id = media_files.id)
+                  THEN 'external' ELSE '' END
+              ),
+              search_fields_version = 1
+            WHERE search_fields_version < 1
+            """
+        )
+    )
 
 
 def _sqlite_has_table(connection, table_name: str) -> bool:
@@ -200,6 +443,7 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
             connection.execute(
                 text("UPDATE libraries SET show_on_dashboard = 1 WHERE show_on_dashboard IS NULL")
             )
+        _backfill_media_file_search_fields(connection)
 
 
 def init_db(engine: Engine | None = None) -> None:

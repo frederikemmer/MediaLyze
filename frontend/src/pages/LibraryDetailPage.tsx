@@ -134,7 +134,9 @@ type FileColumnDefinition = {
 };
 
 type CachedFileList = {
-  total: number;
+  total: number | null;
+  nextCursor: string | null;
+  hasMore: boolean;
   items: MediaFileRow[];
 };
 
@@ -194,6 +196,11 @@ const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryL
   ["duplicates", { id: "duplicates", kind: "duplicates", nameKey: "libraryDetail.duplicates.title" }],
   ["analyzed_files", { id: "analyzed_files", kind: "analyzed_files", nameKey: "libraryDetail.analyzedFiles" }],
 ]);
+
+function buildLibraryStatisticsCacheKey(libraryId: string, panelIds: readonly string[]): string {
+  const panelKey = panelIds.length ? [...new Set(panelIds)].sort().join(",") : "none";
+  return `${libraryId}:${panelKey}`;
+}
 let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
 const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
@@ -862,7 +869,9 @@ export function LibraryDetailPage() {
   );
   const [isEditingTableView, setIsEditingTableView] = useState(false);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
-  const [filesTotal, setFilesTotal] = useState(0);
+  const [filesTotal, setFilesTotal] = useState<number | null>(null);
+  const [filesNextCursor, setFilesNextCursor] = useState<string | null>(null);
+  const [hasMoreFilePages, setHasMoreFilePages] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -996,6 +1005,17 @@ export function LibraryDetailPage() {
         .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
     [activeStatisticLayout.items],
   );
+  const visibleLibraryStatisticPanelIds = useMemo(
+    () =>
+      visibleLayoutPanels
+        .filter((panel) => panel.definition.kind === "statistic")
+        .map((panel) => panel.item.statisticId),
+    [visibleLayoutPanels],
+  );
+  const visibleLibraryStatisticPanelIdsKey = useMemo(
+    () => visibleLibraryStatisticPanelIds.slice().sort().join("|"),
+    [visibleLibraryStatisticPanelIds],
+  );
   const comparisonPanels = useMemo(
     () =>
       visibleLayoutPanels.filter(
@@ -1122,8 +1142,11 @@ export function LibraryDetailPage() {
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
+  const filesCountAbortRef = useRef<AbortController | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
-  const hasMoreFiles = files.length < filesTotal;
+  const hasMoreFiles = hasMoreFilePages;
+  const filesTotalLabel = filesTotal === null ? "..." : String(filesTotal);
+  const filesTotalAriaCount = filesTotal ?? files.length;
 
   const rowVirtualizer = useVirtualizer({
     count: files.length,
@@ -1292,8 +1315,8 @@ export function LibraryDetailPage() {
     }
 
     try {
-      const payload = await api.libraryStatistics(libraryId, controller.signal);
-      libraryStatisticsCache.set(libraryId, payload);
+      const payload = await api.libraryStatistics(libraryId, controller.signal, visibleLibraryStatisticPanelIds);
+      libraryStatisticsCache.set(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds), payload);
       setLibraryStatistics(payload);
       setStatisticsError(null);
     } catch (reason) {
@@ -1370,7 +1393,8 @@ export function LibraryDetailPage() {
   });
 
   const loadFilesPage = useEffectEvent(async (offset: number, append: boolean, queryKey: string) => {
-    const requestKey = buildFilePageRequestKey(queryKey, offset);
+    const cursor = append ? filesNextCursor : null;
+    const requestKey = buildFilePageRequestKey(queryKey, cursor ?? offset);
     if (!inflightRequestGateRef.current.begin(requestKey)) {
       return;
     }
@@ -1389,8 +1413,10 @@ export function LibraryDetailPage() {
 
     try {
       const payload = await api.libraryFiles(libraryId, {
-        offset,
+        offset: cursor ? 0 : offset,
         limit: PAGE_SIZE,
+        cursor,
+        includeTotal: false,
         filters: deferredAppliedSearchFilters,
         sortKey,
         sortDirection,
@@ -1401,12 +1427,53 @@ export function LibraryDetailPage() {
       }
 
       const nextItems = append ? mergeUniqueFiles(filesRef.current, payload.items) : payload.items;
-      libraryFileListCache.set(queryKey, { total: payload.total, items: nextItems });
+      libraryFileListCache.set(queryKey, {
+        total: payload.total ?? filesTotal,
+        nextCursor: payload.next_cursor,
+        hasMore: payload.has_more,
+        items: nextItems,
+      });
       startTransition(() => {
         setFiles(nextItems);
-        setFilesTotal(payload.total);
+        setFilesTotal(payload.total ?? filesTotal);
+        setFilesNextCursor(payload.next_cursor);
+        setHasMoreFilePages(payload.has_more);
       });
       setFilesError(null);
+      if (!append && payload.total === null) {
+        filesCountAbortRef.current?.abort();
+        const countController = new AbortController();
+        filesCountAbortRef.current = countController;
+        api.libraryFiles(libraryId, {
+          offset: 0,
+          limit: 1,
+          includeTotal: true,
+          filters: deferredAppliedSearchFilters,
+          sortKey,
+          sortDirection,
+          signal: countController.signal,
+        })
+          .then((countPayload) => {
+            if (activeFileQueryKeyRef.current !== queryKey) {
+              return;
+            }
+            setFilesTotal(countPayload.total);
+            const cached = libraryFileListCache.get(queryKey);
+            if (cached) {
+              libraryFileListCache.set(queryKey, { ...cached, total: countPayload.total });
+            }
+          })
+          .catch((reason: Error) => {
+            if (reason.name !== "AbortError" && activeFileQueryKeyRef.current === queryKey) {
+              setFilesError(reason.message);
+            }
+          })
+          .finally(() => {
+            if (filesCountAbortRef.current === countController) {
+              filesCountAbortRef.current = null;
+            }
+          });
+      }
     } catch (reason) {
       if ((reason as Error).name === "AbortError") {
         return;
@@ -1639,7 +1706,6 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
-    const cachedStatistics = libraryStatisticsCache.get(libraryId) ?? null;
     const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
 
@@ -1647,23 +1713,29 @@ export function LibraryDetailPage() {
     setComparisonErrorByPanel({});
     setComparisonLoadingByPanel({});
     setLibrarySummary(cachedSummary);
-    setLibraryStatistics(cachedStatistics);
     setLibraryHistory(cachedHistory);
     setDuplicateGroups(cachedDuplicateGroups);
     setSummaryError(null);
-    setStatisticsError(null);
     setHistoryError(null);
     setDuplicateGroupsError(null);
     setIsSummaryLoading(cachedSummary === null);
-    setIsStatisticsLoading(cachedStatistics === null);
     setIsHistoryLoading(cachedHistory === null);
     setIsDuplicateGroupsLoading(cachedDuplicateGroups === null);
 
     void loadLibrarySummary(cachedSummary === null);
-    void loadLibraryStatistics(cachedStatistics === null);
     void loadLibraryHistory(cachedHistory === null);
     void loadDuplicateGroups(cachedDuplicateGroups === null);
   }, [libraryId]);
+
+  useEffect(() => {
+    const statisticsCacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
+    const cachedStatistics = libraryStatisticsCache.get(statisticsCacheKey) ?? null;
+
+    setLibraryStatistics(cachedStatistics);
+    setStatisticsError(null);
+    setIsStatisticsLoading(cachedStatistics === null);
+    void loadLibraryStatistics(cachedStatistics === null);
+  }, [libraryId, visibleLibraryStatisticPanelIdsKey]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
     const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
@@ -1744,6 +1816,8 @@ export function LibraryDetailPage() {
     if (cachedFiles) {
       setFiles(cachedFiles.items);
       setFilesTotal(cachedFiles.total);
+      setFilesNextCursor(cachedFiles.nextCursor);
+      setHasMoreFilePages(cachedFiles.hasMore);
       setIsFilesLoading(false);
       setIsFilesRefreshing(true);
       previousLibraryIdRef.current = libraryId;
@@ -1753,7 +1827,9 @@ export function LibraryDetailPage() {
 
     if (transition.clearExisting) {
       setFiles([]);
-      setFilesTotal(0);
+      setFilesTotal(null);
+      setFilesNextCursor(null);
+      setHasMoreFilePages(false);
     }
     setIsFilesLoading(transition.showFullLoader);
     setIsFilesRefreshing(transition.showInlineRefresh);
@@ -1792,7 +1868,7 @@ export function LibraryDetailPage() {
   useEffect(() => {
     if (hadActiveJobRef.current && !activeJob) {
       librarySummaryCache.delete(libraryId);
-      libraryStatisticsCache.delete(libraryId);
+      libraryStatisticsCache.delete(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
       libraryHistoryCache.delete(libraryId);
       for (const { item } of comparisonPanels) {
         const selection = item.comparisonSelection ?? getComparisonSelection("library");
@@ -1815,6 +1891,7 @@ export function LibraryDetailPage() {
     comparisonPanelsKey,
     fileQueryKey,
     libraryId,
+    visibleLibraryStatisticPanelIdsKey,
   ]);
 
   useEffect(() => {
@@ -1828,6 +1905,7 @@ export function LibraryDetailPage() {
       comparisonAbortRef.current.clear();
       duplicateGroupsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
+      filesCountAbortRef.current?.abort();
       exportAbortRef.current?.abort();
       inflightRequestGateRef.current.reset();
     };
@@ -2044,7 +2122,7 @@ export function LibraryDetailPage() {
           />
         </div>
         <div className="card-grid grid">
-          <StatCard label={t("libraryDetail.files")} value={String(displayLibrary?.file_count ?? filesTotal)} />
+          <StatCard label={t("libraryDetail.files")} value={String(displayLibrary?.file_count ?? filesTotal ?? 0)} />
           <StatCard
             label={t("libraryDetail.storage")}
             value={formatBytes(displayLibrary?.total_size_bytes ?? 0)}
@@ -2331,8 +2409,8 @@ export function LibraryDetailPage() {
                         }}
                         onAddPanel={() => undefined}
                       />
-                      <span className="analyzed-files-count" aria-label={t("libraryDetail.indexedEntries", { count: filesTotal })}>
-                        {String(filesTotal)}
+                      <span className="analyzed-files-count" aria-label={t("libraryDetail.indexedEntries", { count: filesTotalAriaCount })}>
+                        {filesTotalLabel}
                       </span>
                       {!isEditingTableView && showAnalyzedFilesCsvExport
                         ? renderExportButton("analyzed-files-export-button analyzed-files-export-button-desktop")
@@ -2485,7 +2563,7 @@ export function LibraryDetailPage() {
                           <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
                         ) : (
                           <div ref={dataTableShellRef} className="data-table-shell">
-                            <div className="media-data-table" role="table" aria-rowcount={filesTotal}>
+                            <div className="media-data-table" role="table" aria-rowcount={filesTotal ?? undefined}>
                               <div className="media-data-table-head" role="rowgroup">
                                 <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
                                   {activeColumns.map((column) => {
@@ -2558,7 +2636,7 @@ export function LibraryDetailPage() {
                             </div>
                             <div className="data-table-footer">
                               <span className="media-meta">
-                                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotal })}
+                                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotalLabel })}
                               </span>
                               {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
                             </div>

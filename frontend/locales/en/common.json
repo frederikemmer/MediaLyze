@@ -14,6 +14,7 @@
     "searchingFound": "searching... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analyzed",
     "libraryFallback": "Library #{{id}}",
+    "refreshHint": "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
     "stopAria": "Stop active scans"
   },
   "dashboard": {

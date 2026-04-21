@@ -188,6 +188,14 @@ export function DashboardPage() {
     () => visiblePanels.filter((panel) => panel.item.statisticId === "comparison"),
     [visiblePanels],
   );
+  const visibleDashboardPanelIds = useMemo(
+    () => [...new Set(visiblePanels.map((panel) => panel.item.statisticId))],
+    [visiblePanels],
+  );
+  const visibleDashboardPanelIdsKey = useMemo(
+    () => visibleDashboardPanelIds.slice().sort().join("|"),
+    [visibleDashboardPanelIds],
+  );
   const comparisonPanelsKey = useMemo(
     () =>
       comparisonPanels
@@ -204,11 +212,10 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    if (dashboardLoaded) {
-      return;
-    }
-    loadDashboard().catch((reason: Error) => setError(reason.message));
-  }, [dashboardLoaded, loadDashboard]);
+    loadDashboard(false, visibleDashboardPanelIds)
+      .then(() => setError(null))
+      .catch((reason: Error) => setError(reason.message));
+  }, [dashboardLoaded, loadDashboard, visibleDashboardPanelIdsKey]);
 
   const loadDashboardHistory = useEffectEvent(async (showLoading = false) => {
     historyAbortRef.current?.abort();
@@ -334,7 +341,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
-      loadDashboard(true)
+      loadDashboard(true, visibleDashboardPanelIds)
         .then(() => setError(null))
         .catch((reason: Error) => setError(reason.message));
       void loadDashboardHistory(false);
@@ -345,7 +352,7 @@ export function DashboardPage() {
       syncComparisonPanels(true);
     }
     hadActiveJobsRef.current = hasActiveJobs;
-  }, [comparisonPanelsKey, hasActiveJobs, loadDashboard]);
+  }, [comparisonPanelsKey, hasActiveJobs, loadDashboard, visibleDashboardPanelIdsKey]);
 
   useEffect(() => {
     return () => {

@@ -143,9 +143,11 @@ class MediaFileStreamDetails(BaseModel):
 
 
 class MediaFileTablePage(BaseModel):
-    total: int
+    total: int | None
     offset: int
     limit: int
+    next_cursor: str | None = None
+    has_more: bool = False
     items: list[MediaFileTableRow]
 
 

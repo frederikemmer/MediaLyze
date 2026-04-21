@@ -459,6 +459,7 @@ def apply_field_search_filters(
     filters: LibraryFileSearchFilters | None,
     bitrate_expression=None,
     audio_bitrate_expression=None,
+    duration_expression=None,
     resolution_categories: list[ResolutionCategory] | None = None,
 ):
     if filters is None:
@@ -509,7 +510,7 @@ def apply_field_search_filters(
     if normalized.search_duration:
         query = _apply_numeric_filter(
             query,
-            MediaFormat.duration,
+            duration_expression if duration_expression is not None else MediaFormat.duration,
             normalized.search_duration,
             _parse_duration_value,
             "duration",

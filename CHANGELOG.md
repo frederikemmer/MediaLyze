@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
 - include all recognized video and audio codec options in quality-profile scoring and settings so Opus and other known codecs no longer fall back to neutral scoring
 - reduce post-scan CPU and memory pressure by bounding large statistics/table caches and estimating history-storage sizes without loading every stored JSON snapshot into Python
+- improve large-library responsiveness with lighter scan discovery memory, deferred table counts, cursor-based table paging, persisted table search fields, additional SQLite indexes, and low-priority post-scan cache warmup
 
 ## v0.8.2
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import csv
+import base64
 import io
+import json
 import re
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from typing import Iterator, Literal
 
@@ -104,6 +107,94 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_subtitle_codecs": "subtitle_codecs",
     "search_subtitle_sources": "subtitle_sources",
 }
+
+
+def _encode_cursor(sort_value, relative_path: str) -> str:
+    payload = json.dumps(
+        {"value": sort_value, "path": relative_path.lower()},
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(value: str | None) -> dict | None:
+    if not value:
+        return None
+    try:
+        padding = "=" * (-len(value) % 4)
+        payload = base64.urlsafe_b64decode(f"{value}{padding}".encode("ascii"))
+        decoded = json.loads(payload.decode("utf-8"))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(decoded, dict) or "path" not in decoded:
+        return None
+    return decoded
+
+
+def _cursor_sort_value(row: MediaFileTableRow, sort_key: FileSortKey):
+    if sort_key == "file":
+        return row.relative_path.lower()
+    if sort_key == "container":
+        return (row.extension or "").lower()
+    if sort_key == "size":
+        return row.size_bytes
+    if sort_key == "video_codec":
+        return (row.video_codec or "").lower()
+    if sort_key == "resolution":
+        return _resolution_pixels(row)
+    if sort_key == "hdr_type":
+        return (row.hdr_type or "").lower()
+    if sort_key == "duration":
+        return row.duration or 0
+    if sort_key == "bitrate":
+        return row.bitrate or 0
+    if sort_key == "audio_bitrate":
+        return row.audio_bitrate or 0
+    if sort_key == "audio_codecs":
+        return min(row.audio_codecs, default="")
+    if sort_key == "audio_spatial_profiles":
+        return min(row.audio_spatial_profiles, default="")
+    if sort_key == "audio_languages":
+        return min(row.audio_languages, default="")
+    if sort_key == "subtitle_languages":
+        return min(row.subtitle_languages, default="")
+    if sort_key == "subtitle_codecs":
+        return min(row.subtitle_codecs, default="")
+    if sort_key == "subtitle_sources":
+        return ",".join(row.subtitle_sources)
+    if sort_key == "mtime":
+        return row.mtime
+    if sort_key == "last_analyzed_at":
+        return row.last_analyzed_at.isoformat() if row.last_analyzed_at else ""
+    if sort_key == "quality_score":
+        return row.quality_score_raw if row.quality_score_raw > 0 else row.quality_score * 10
+    return row.relative_path.lower()
+
+
+def _resolution_pixels(row: MediaFileTableRow) -> int:
+    if not row.resolution:
+        return -1
+    width, _, height = row.resolution.partition("x")
+    try:
+        return int(width) * int(height)
+    except ValueError:
+        return -1
+
+
+def _apply_cursor(query, sort_expression, sort_direction: FileSortDirection, cursor: dict | None):
+    if not cursor:
+        return query
+    cursor_path = str(cursor.get("path") or "")
+    cursor_value = cursor.get("value")
+    path_expression = func.lower(MediaFile.relative_path)
+    sort_clause = sort_expression < cursor_value if sort_direction == "desc" else sort_expression > cursor_value
+    return query.where(
+        or_(
+            sort_clause,
+            and_(sort_expression == cursor_value, path_expression > cursor_path),
+        )
+    )
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -387,9 +478,9 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "video_codec": func.lower(func.coalesce(primary_video_streams.c.codec, "")),
         "resolution": resolution_pixels,
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
-        "duration": func.coalesce(MediaFormat.duration, 0),
-        "bitrate": func.coalesce(cast(bitrate_value_expression(), Float), 0),
-        "audio_bitrate": func.coalesce(cast(audio_bitrate_value_expression(audio_aggregates), Float), 0),
+        "duration": func.coalesce(MediaFile.duration_seconds, 0),
+        "bitrate": func.coalesce(cast(MediaFile.bitrate, Float), 0),
+        "audio_bitrate": func.coalesce(cast(MediaFile.audio_bitrate, Float), 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
         "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
         "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
@@ -433,30 +524,52 @@ def _build_library_file_id_query(
     sort_key: FileSortKey = "file",
     sort_direction: FileSortDirection = "asc",
 ):
-    primary_video_streams = primary_video_streams_subquery("media_list_primary_video")
-    audio_aggregates = _audio_aggregate_subquery("media_list_audio_aggregates")
-    subtitle_aggregates = _subtitle_aggregate_subquery("media_list_subtitle_aggregates")
+    _ensure_library_search_fields(db, library_id)
+    primary_video_streams = SimpleNamespace(
+        c=SimpleNamespace(
+            codec=MediaFile.primary_video_codec,
+            width=MediaFile.primary_video_width,
+            height=MediaFile.primary_video_height,
+            hdr_type=MediaFile.primary_video_hdr_type,
+        )
+    )
+    audio_aggregates = SimpleNamespace(
+        c=SimpleNamespace(
+            min_audio_language=MediaFile.min_audio_language,
+            min_audio_codec=MediaFile.min_audio_codec,
+            min_audio_spatial_profile=MediaFile.min_audio_spatial_profile,
+            audio_languages_search=MediaFile.audio_languages_search,
+            audio_codecs_search=MediaFile.audio_codecs_search,
+            audio_spatial_profiles_search=MediaFile.audio_spatial_profiles_search,
+            total_audio_bitrate=MediaFile.audio_bitrate,
+        )
+    )
+    subtitle_aggregates = SimpleNamespace(
+        c=SimpleNamespace(
+            min_subtitle_language=MediaFile.min_subtitle_language,
+            min_subtitle_codec=MediaFile.min_subtitle_codec,
+            subtitle_languages_search=MediaFile.subtitle_languages_search,
+            subtitle_codecs_search=MediaFile.subtitle_codecs_search,
+            has_internal_subtitles=MediaFile.has_internal_subtitles,
+            has_external_subtitles=MediaFile.has_external_subtitles,
+        )
+    )
 
     base_query = (
         select(MediaFile.id)
         .select_from(MediaFile)
-        .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
-        .outerjoin(primary_video_streams, primary_video_streams.c.media_file_id == MediaFile.id)
-        .outerjoin(audio_aggregates, audio_aggregates.c.media_file_id == MediaFile.id)
-        .outerjoin(subtitle_aggregates, subtitle_aggregates.c.media_file_id == MediaFile.id)
         .where(MediaFile.library_id == library_id)
     )
     filtered_query = apply_legacy_search(base_query, primary_video_streams, audio_aggregates, subtitle_aggregates, search)
-    bitrate_expression = bitrate_value_expression()
-    audio_bitrate_expression = audio_bitrate_value_expression(audio_aggregates)
     filtered_query = apply_field_search_filters(
         filtered_query,
         primary_video_streams,
         audio_aggregates,
         subtitle_aggregates,
         search_filters,
-        bitrate_expression=bitrate_expression,
-        audio_bitrate_expression=audio_bitrate_expression,
+        bitrate_expression=MediaFile.bitrate,
+        audio_bitrate_expression=MediaFile.audio_bitrate,
+        duration_expression=MediaFile.duration_seconds,
         resolution_categories=get_app_settings(db).resolution_categories,
     )
     sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
@@ -464,6 +577,20 @@ def _build_library_file_id_query(
         sort_expression.desc() if sort_direction == "desc" else sort_expression.asc(),
         func.lower(MediaFile.relative_path).asc(),
     )
+
+
+def _ensure_library_search_fields(db: Session, library_id: int) -> None:
+    needs_backfill = db.scalar(
+        select(func.count())
+        .select_from(MediaFile)
+        .where(MediaFile.library_id == library_id, MediaFile.search_fields_version < 1)
+    )
+    if not needs_backfill:
+        return
+    from backend.app.db.session import _backfill_media_file_search_fields
+
+    with db.get_bind().begin() as connection:
+        _backfill_media_file_search_fields(connection)
 
 
 def _active_export_search_entries(
@@ -617,6 +744,8 @@ def list_library_files(
     search_filters: LibraryFileSearchFilters | None = None,
     sort_key: FileSortKey = "file",
     sort_direction: FileSortDirection = "asc",
+    cursor: str | None = None,
+    include_total: bool = True,
 ) -> MediaFileTablePage:
     ordered_query = _build_library_file_id_query(
         db,
@@ -626,19 +755,63 @@ def list_library_files(
         sort_key=sort_key,
         sort_direction=sort_direction,
     )
-    total = db.scalar(select(func.count()).select_from(ordered_query.order_by(None).subquery())) or 0
-    selected_ids = list(db.scalars(ordered_query.offset(offset).limit(limit)).all())
+    total = (
+        (db.scalar(select(func.count()).select_from(ordered_query.order_by(None).subquery())) or 0)
+        if include_total
+        else None
+    )
+    cursor_payload = _decode_cursor(cursor)
+    if cursor_payload:
+        primary_video_streams = SimpleNamespace(
+            c=SimpleNamespace(
+                codec=MediaFile.primary_video_codec,
+                width=MediaFile.primary_video_width,
+                height=MediaFile.primary_video_height,
+                hdr_type=MediaFile.primary_video_hdr_type,
+            )
+        )
+        audio_aggregates = SimpleNamespace(
+            c=SimpleNamespace(
+                min_audio_language=MediaFile.min_audio_language,
+                min_audio_codec=MediaFile.min_audio_codec,
+                min_audio_spatial_profile=MediaFile.min_audio_spatial_profile,
+                total_audio_bitrate=MediaFile.audio_bitrate,
+            )
+        )
+        subtitle_aggregates = SimpleNamespace(
+            c=SimpleNamespace(
+                min_subtitle_language=MediaFile.min_subtitle_language,
+                min_subtitle_codec=MediaFile.min_subtitle_codec,
+                has_internal_subtitles=MediaFile.has_internal_subtitles,
+                has_external_subtitles=MediaFile.has_external_subtitles,
+            )
+        )
+        sort_expression = _sort_expression(sort_key, primary_video_streams, audio_aggregates, subtitle_aggregates)
+        ordered_query = _apply_cursor(ordered_query, sort_expression, sort_direction, cursor_payload)
+        offset = 0
+
+    selected_ids = list(db.scalars(ordered_query.offset(offset).limit(limit + 1)).all())
+    has_more = len(selected_ids) > limit
+    selected_ids = selected_ids[:limit]
 
     if not selected_ids:
-        return MediaFileTablePage(total=total, offset=offset, limit=limit, items=[])
+        return MediaFileTablePage(total=total, offset=offset, limit=limit, items=[], has_more=False)
 
     files = _load_media_files_by_ids(db, selected_ids)
     resolution_categories = get_app_settings(db).resolution_categories
+    rows = [_row_from_model(media_file, resolution_categories) for media_file in files]
+    next_cursor = (
+        _encode_cursor(_cursor_sort_value(rows[-1], sort_key), rows[-1].relative_path)
+        if has_more and rows
+        else None
+    )
     return MediaFileTablePage(
         total=total,
         offset=offset,
         limit=limit,
-        items=[_row_from_model(media_file, resolution_categories) for media_file in files],
+        next_cursor=next_cursor,
+        has_more=has_more,
+        items=rows,
     )
 
 

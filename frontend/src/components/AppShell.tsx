@@ -115,7 +115,7 @@ export function AppShell() {
           </nav>
         </div>
         {activeJobs.length > 0 ? (
-          <div className="scan-banner">
+          <div className="scan-banner" title={t("scanBanner.refreshHint")}>
             <div className="scan-banner-header">
               <div className="scan-banner-copy">
                 <strong className="scan-banner-status">

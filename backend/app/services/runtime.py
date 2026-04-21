@@ -22,7 +22,9 @@ from backend.app.services.history_retention import (
 )
 from backend.app.services.history_storage import get_history_storage
 from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
+from backend.app.services.library_service import get_library_statistics, get_library_summary
 from backend.app.services.path_access import is_watch_supported_for_library
+from backend.app.services.stats import build_dashboard
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -63,6 +65,7 @@ class ScanRuntimeManager:
         self.submitted_job_ids: set[int] = set()
         self.history_compaction_pending = False
         self.history_storage_refresh_submitted = False
+        self.stats_warmup_timer: Timer | None = None
         self.history_reconstruction_status = HistoryReconstructionStatusRead()
         self.started = False
 
@@ -87,6 +90,9 @@ class ScanRuntimeManager:
         for timer in self.debounce_timers.values():
             timer.cancel()
         self.debounce_timers.clear()
+        if self.stats_warmup_timer is not None:
+            self.stats_warmup_timer.cancel()
+            self.stats_warmup_timer = None
         self.watch_trigger_buffers.clear()
 
         for _library_id, (_path, observer) in list(self.watch_observers.items()):
@@ -172,6 +178,7 @@ class ScanRuntimeManager:
         job_id: int | None = None
 
         with self.lock:
+            self._cancel_stats_warmup_locked()
             db = SessionLocal()
             try:
                 job, created = queue_scan_job(
@@ -202,6 +209,7 @@ class ScanRuntimeManager:
         job_id: int | None = None
 
         with self.lock:
+            self._cancel_stats_warmup_locked()
             db = SessionLocal()
             try:
                 job, created = queue_quality_recompute_job(db, library_id)
@@ -272,6 +280,7 @@ class ScanRuntimeManager:
                 should_attempt_compaction = self.history_compaction_pending and not self.active_library_ids
             self._submit_next_active_job(library_id)
             self.request_history_storage_refresh()
+            self.request_stats_warmup(library_id)
             if should_attempt_compaction:
                 self.run_pending_history_compaction()
 
@@ -562,6 +571,46 @@ class ScanRuntimeManager:
                 self.history_storage_refresh_submitted = False
             return False
         return True
+
+    def request_stats_warmup(self, library_id: int) -> bool:
+        with self.lock:
+            if not self.started:
+                return False
+            self._cancel_stats_warmup_locked()
+            timer = Timer(20, lambda: self._submit_stats_warmup(library_id))
+            timer.daemon = True
+            self.stats_warmup_timer = timer
+            timer.start()
+            return True
+
+    def _cancel_stats_warmup_locked(self) -> None:
+        if self.stats_warmup_timer is not None:
+            self.stats_warmup_timer.cancel()
+            self.stats_warmup_timer = None
+
+    def _submit_stats_warmup(self, library_id: int) -> None:
+        with self.lock:
+            self.stats_warmup_timer = None
+            if self.active_library_ids:
+                return
+        try:
+            self.maintenance_executor.submit(self._run_stats_warmup, library_id)
+        except RuntimeError:
+            return
+
+    def _run_stats_warmup(self, library_id: int) -> None:
+        with self.lock:
+            if self.active_library_ids:
+                return
+        db = SessionLocal()
+        try:
+            get_library_summary(db, library_id)
+            get_library_statistics(db, library_id)
+            build_dashboard(db)
+        except Exception:
+            logger.exception("Failed to warm statistics caches")
+        finally:
+            db.close()
 
     def _run_history_storage_refresh(self) -> None:
         db = SessionLocal()

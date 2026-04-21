@@ -6,8 +6,8 @@ export type FileLoadTransition = {
   showInlineRefresh: boolean;
 };
 
-export function buildFilePageRequestKey(queryKey: string, offset: number) {
-  return `${queryKey}:${offset}`;
+export function buildFilePageRequestKey(queryKey: string, pageToken: number | string) {
+  return `${queryKey}:${pageToken}`;
 }
 
 export function mergeUniqueFiles(current: MediaFileRow[], next: MediaFileRow[]) {

@@ -373,9 +373,11 @@ export type LibraryFileSearchField =
   | "subtitle_sources";
 
 export type MediaFileTablePage = {
-  total: number;
+  total: number | null;
   offset: number;
   limit: number;
+  next_cursor: string | null;
+  has_more: boolean;
   items: MediaFileRow[];
 };
 
@@ -665,6 +667,8 @@ export type ScanCancelResponse = {
 type LibraryFilesRequestParams = {
   offset?: number;
   limit?: number;
+  cursor?: string | null;
+  includeTotal?: boolean;
   search?: string;
   filters?: Partial<Record<LibraryFileSearchField, string>>;
   sortKey?: MediaFileSortKey;
@@ -724,8 +728,14 @@ function buildLibraryFilesSearchParams(params?: LibraryFilesRequestParams): URLS
   if (params?.offset !== undefined) {
     searchParams.set("offset", String(params.offset));
   }
+  if (params?.cursor) {
+    searchParams.set("cursor", params.cursor);
+  }
   if (params?.limit !== undefined) {
     searchParams.set("limit", String(params.limit));
+  }
+  if (params?.includeTotal !== undefined) {
+    searchParams.set("include_total", params.includeTotal ? "true" : "false");
   }
   if (params?.search) {
     searchParams.set("search", params.search);
@@ -771,9 +781,21 @@ function extractFilenameFromDisposition(value: string | null): string | null {
   return basicMatch?.[1] ?? null;
 }
 
+function buildPanelQuery(panels?: readonly string[] | null): string {
+  if (!panels?.length) {
+    return "";
+  }
+  const searchParams = new URLSearchParams();
+  for (const panelId of panels) {
+    searchParams.append("panels", panelId);
+  }
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
-  dashboard: () => request<DashboardResponse>("/dashboard"),
+  dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
   dashboardHistory: (signal?: AbortSignal) =>
     request<DashboardHistoryResponse>("/dashboard/history", { signal }),
   dashboardComparison: (
@@ -816,8 +838,8 @@ export const api = {
   libraries: () => request<LibrarySummary[]>("/libraries"),
   librarySummary: (id: string | number, signal?: AbortSignal) =>
     request<LibrarySummary>(`/libraries/${id}/summary`, { signal }),
-  libraryStatistics: (id: string | number, signal?: AbortSignal) =>
-    request<LibraryStatistics>(`/libraries/${id}/statistics`, { signal }),
+  libraryStatistics: (id: string | number, signal?: AbortSignal, panels?: readonly string[] | null) =>
+    request<LibraryStatistics>(`/libraries/${id}/statistics${buildPanelQuery(panels)}`, { signal }),
   libraryHistory: (id: string | number, signal?: AbortSignal) =>
     request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
   libraryComparison: (

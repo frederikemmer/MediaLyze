@@ -72,6 +72,18 @@ from backend.app.services.stats import build_dashboard
 router = APIRouter()
 
 
+def _normalize_panel_query(panels: list[str] | None) -> list[str] | None:
+    if panels is None:
+        return None
+    normalized: list[str] = []
+    for entry in panels:
+        for panel_id in entry.split(","):
+            candidate = panel_id.strip()
+            if candidate and candidate not in normalized:
+                normalized.append(candidate)
+    return normalized
+
+
 def _library_file_search_filters(
     *,
     file_search: str = "",
@@ -141,8 +153,11 @@ def inspect_path(
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
-    return build_dashboard(db)
+def dashboard(
+    panels: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+) -> DashboardResponse:
+    return build_dashboard(db, requested_panels=_normalize_panel_query(panels))
 
 
 @router.get("/dashboard/history", response_model=DashboardHistoryResponse)
@@ -284,8 +299,12 @@ def library_summary(library_id: int, db: Session = Depends(get_db_session)) -> L
 
 
 @router.get("/libraries/{library_id}/statistics", response_model=LibraryStatistics)
-def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -> LibraryStatistics:
-    statistics = get_library_statistics(db, library_id)
+def library_statistics(
+    library_id: int,
+    panels: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+) -> LibraryStatistics:
+    statistics = get_library_statistics(db, library_id, requested_panels=_normalize_panel_query(panels))
     if not statistics:
         raise HTTPException(status_code=404, detail="Library not found")
     return statistics
@@ -383,6 +402,8 @@ def library_files(
     library_id: int,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=512),
+    include_total: bool = Query(default=True),
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
     search_container: str = Query(default="", max_length=64),
@@ -452,6 +473,8 @@ def library_files(
             ),
             sort_key=sort_key,
             sort_direction=sort_direction,
+            cursor=cursor,
+            include_total=include_total,
         )
     except SearchValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
