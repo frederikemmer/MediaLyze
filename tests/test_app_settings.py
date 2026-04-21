@@ -24,8 +24,14 @@ def build_session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-def build_settings(tmp_path, *, disable_default_ignore_patterns: bool = False) -> Settings:
+def build_settings(
+    tmp_path,
+    *,
+    disable_default_ignore_patterns: bool = False,
+    runtime_mode: str = "server",
+) -> Settings:
     return Settings(
+        runtime_mode=runtime_mode,
         config_path=tmp_path / "config",
         media_root=tmp_path / "media",
         disable_default_ignore_patterns=disable_default_ignore_patterns,
@@ -53,7 +59,7 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.file_history.storage_limit_gb == 0
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.library_history.storage_limit_gb == 0
@@ -69,6 +75,35 @@ def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
     assert "*/.deletedByTMM/*" in BUILT_IN_DEFAULT_IGNORE_PATTERNS
 
 
+def test_get_app_settings_defaults_full_width_shell_for_desktop_new_installations(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path, runtime_mode="desktop")
+
+    with session_factory() as db:
+        loaded = get_app_settings(db, settings)
+
+    assert loaded.feature_flags.show_analyzed_files_csv_export is False
+    assert loaded.feature_flags.show_full_width_app_shell is True
+    assert loaded.feature_flags.hide_quality_score_meter is False
+    assert loaded.feature_flags.unlimited_panel_size is False
+
+
+def test_update_app_settings_can_disable_desktop_full_width_default(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path, runtime_mode="desktop")
+
+    with session_factory() as db:
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(feature_flags={"show_full_width_app_shell": False}),
+            settings,
+        )
+        loaded = get_app_settings(db, settings)
+
+    assert updated.feature_flags.show_full_width_app_shell is False
+    assert loaded.feature_flags.show_full_width_app_shell is False
+
+
 def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path, disable_default_ignore_patterns=True)
@@ -82,7 +117,7 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
@@ -107,7 +142,7 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
@@ -205,7 +240,7 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.scan_performance.scan_worker_count == 4
     assert updated.scan_performance.parallel_scan_jobs == 2
     assert updated.scan_performance.comparison_scatter_point_limit == 5000
-    assert updated.history_retention.file_history.days == 90
+    assert updated.history_retention.file_history.days == 30
     assert updated.history_retention.library_history.days == 365
     assert updated.history_retention.scan_history.days == 30
     assert updated.feature_flags.show_analyzed_files_csv_export is False

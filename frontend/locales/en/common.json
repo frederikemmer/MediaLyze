@@ -14,6 +14,7 @@
     "searchingFound": "searching... ({{count}})",
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analyzed",
     "libraryFallback": "Library #{{id}}",
+    "refreshHint": "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
     "stopAria": "Stop active scans"
   },
   "dashboard": {
@@ -125,13 +126,15 @@
       "daysLabel": "Retention days",
       "storageLimitLabel": "Storage limit (GB)",
       "zeroUnlimited": "0 = unlimited",
+      "scopeNote": "File history retention only affects per-file snapshots; dashboard and media library trends use the separate media library history.",
       "reconstructButton": "Reconstruct history",
       "reconstructing": "Reconstructing…",
       "reconstructTooltipAria": "Explain reconstructed history accuracy",
-      "reconstructTooltip": "Builds approximate past history from the current media set and inferred add dates based mainly on file mtimes.\n\nThis can be inaccurate: mtimes are not guaranteed to match when a file was actually added, and deleted or changed files from the past cannot be reconstructed reliably.\n\nReconstruction only fills as much history as would still be kept by the current retention days and storage limits configured in this panel.\n\nExisting history stays untouched; only missing earlier history is filled in.",
+      "reconstructTooltip": "Builds approximate past history from the current media set and inferred add dates based mainly on file mtimes.\n\nThis can be inaccurate: mtimes are not guaranteed to match when a file was actually added, and deleted or changed files from the past cannot be reconstructed reliably.\n\nReconstruction only fills as much history as would still be kept by the current retention days and storage limits configured in this panel.\n\nMissing earlier history is filled in, and older existing snapshots can be enriched with trend metrics that were not stored at the time.",
       "reconstructActiveScanHint": "Wait until active scans finish before reconstructing approximate history.",
       "reconstructNoChanges": "No missing historical entries were reconstructed.",
       "reconstructSuccess": "Reconstructed {{libraryEntries}} library snapshots and {{fileEntries}} initial file-history entries.",
+      "reconstructSuccessWithUpdates": "Reconstructed {{libraryEntries}} library snapshots, enriched {{updatedLibraryEntries}} existing snapshots, and created {{fileEntries}} initial file-history entries.",
       "reconstructFailed": "History reconstruction failed.",
       "progressQueued": "Waiting to start",
       "progressLoadingLibraries": "Preparing libraries",
@@ -144,7 +147,7 @@
       "progressCurrentLibrary": "Current library: {{name}}",
       "progressFiles": "{{completed}} of {{total}} media files",
       "progressDays": "{{completed}} of {{total}} days",
-      "progressEntries": "{{libraryEntries}} library snapshots and {{fileEntries}} file-history entries created so far.",
+      "progressEntries": "{{libraryEntries}} library snapshots created, {{updatedLibraryEntries}} existing snapshots enriched, and {{fileEntries}} file-history entries created so far.",
       "currentStorage": "Current storage",
       "averagePerDay": "Average per day",
       "projected30Days": "Projected 30 days",
@@ -421,6 +424,7 @@
         "subtitle_codecs_mix": "Subtitle codec mix",
         "subtitle_sources_mix": "Subtitle source mix",
         "scan_status_mix": "Scan status mix",
+        "resolution_distribution": "Resolution distribution",
         "quality_score_distribution": "Quality score distribution",
         "duration_distribution": "Duration distribution",
         "size_distribution": "Size distribution",
@@ -501,6 +505,7 @@
     "triggerScheduledSummary": "Started by the scheduled interval every {{minutes}} minutes.",
     "triggerWatchdogSummary": "Started after {{count}} watchdog file events.",
     "outcomeSuccessful": "Successful",
+    "outcomeCompletedWithIssues": "Completed with issues",
     "outcomeFailed": "Failed",
     "outcomeCanceled": "Canceled",
     "startedAt": "Started",
@@ -581,7 +586,26 @@
     "videoStreams": "Video streams",
     "audioStreams": "Audio streams",
     "subtitles": "Subtitles",
-    "rawJson": "Raw ffprobe JSON"
+    "rawJson": "Raw ffprobe JSON",
+    "history": {
+      "title": "File history",
+      "empty": "File history appears after a scan captures a changed snapshot for this file.",
+      "limited": "Showing the latest {{shown}} of {{total}} history entries.",
+      "since": "Since {{start}}",
+      "range": "{{start}} - {{end}}",
+      "noChanges": "No tracked fields changed in this period.",
+      "qualityValue": "{{value}}/10",
+      "video": "Video",
+      "resolution": "Resolution",
+      "dynamicRange": "DynR",
+      "audio": "Audio",
+      "subtitles": "Subtitles",
+      "reason": {
+        "scan_analysis": "Scan",
+        "quality_recompute": "Quality",
+        "history_reconstruction": "Reconstructed"
+      }
+    }
   },
   "pathBrowser": {
     "selected": "Selected",

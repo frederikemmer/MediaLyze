@@ -54,6 +54,7 @@ class HistoryReconstructionRead(BaseModel):
     libraries_with_media: int = 0
     created_file_history_entries: int = 0
     created_library_history_entries: int = 0
+    updated_library_history_entries: int = 0
     oldest_reconstructed_snapshot_day: str | None = None
     newest_reconstructed_snapshot_day: str | None = None
 
@@ -72,5 +73,6 @@ class HistoryReconstructionStatusRead(BaseModel):
     phase_completed: int = 0
     created_file_history_entries: int = 0
     created_library_history_entries: int = 0
+    updated_library_history_entries: int = 0
     result: HistoryReconstructionRead | None = None
     error: str | None = None

@@ -34,6 +34,28 @@ from backend.app.utils.time import utc_now
 _MIN_REASONABLE_MTIME = datetime(1990, 1, 1, tzinfo=UTC)
 ProgressCallback = Callable[..., None]
 
+_RECONSTRUCTED_CATEGORY_COUNT_KEYS = {
+    "container",
+    "video_codec",
+    "resolution",
+    "hdr_type",
+    "audio_codecs",
+    "audio_spatial_profiles",
+    "audio_languages",
+    "subtitle_languages",
+    "subtitle_codecs",
+    "subtitle_sources",
+    "scan_status",
+}
+_RECONSTRUCTED_NUMERIC_KEYS = {
+    "quality_score",
+    "duration",
+    "size",
+    "bitrate",
+    "audio_bitrate",
+    "resolution_mp",
+}
+
 
 @dataclass(slots=True)
 class _PreparedMediaFile:
@@ -284,6 +306,99 @@ def _build_reconstructed_library_snapshot(
     }
 
 
+def _mapping_has_keys(value, required_keys: set[str]) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return required_keys.issubset(set(value))
+
+
+def _snapshot_needs_trend_reconstruction(snapshot: dict | None) -> bool:
+    if not isinstance(snapshot, dict):
+        return True
+    raw_metrics = snapshot.get("trend_metrics")
+    if not isinstance(raw_metrics, dict):
+        return True
+    schema_version = raw_metrics.get("schema_version")
+    if not isinstance(schema_version, int) or schema_version < 2:
+        return True
+    totals = raw_metrics.get("totals")
+    if not _mapping_has_keys(
+        totals,
+        {
+            "file_count",
+            "ready_files",
+            "pending_files",
+            "total_size_bytes",
+            "total_duration_seconds",
+        },
+    ):
+        return True
+    if not _mapping_has_keys(raw_metrics.get("category_counts"), _RECONSTRUCTED_CATEGORY_COUNT_KEYS):
+        return True
+    if not _mapping_has_keys(raw_metrics.get("numeric_summaries"), _RECONSTRUCTED_NUMERIC_KEYS):
+        return True
+    if not _mapping_has_keys(raw_metrics.get("numeric_distributions"), _RECONSTRUCTED_NUMERIC_KEYS):
+        return True
+    return False
+
+
+def _merge_nested_mappings(reconstructed, existing, *, keep_empty_existing_values: bool = True) -> dict:
+    merged = dict(reconstructed) if isinstance(reconstructed, dict) else {}
+    if isinstance(existing, dict):
+        for key, value in existing.items():
+            if keep_empty_existing_values or value:
+                merged[key] = value
+    return merged
+
+
+def _merge_reconstructed_library_snapshot(existing_snapshot: dict | None, reconstructed_snapshot: dict) -> dict:
+    merged_snapshot = dict(existing_snapshot) if isinstance(existing_snapshot, dict) else {}
+    for key, value in reconstructed_snapshot.items():
+        if key == "trend_metrics":
+            continue
+        merged_snapshot.setdefault(key, value)
+
+    reconstructed_metrics = reconstructed_snapshot.get("trend_metrics") or {}
+    existing_metrics = (
+        merged_snapshot.get("trend_metrics")
+        if isinstance(merged_snapshot.get("trend_metrics"), dict)
+        else {}
+    )
+    merged_metrics = dict(reconstructed_metrics)
+    if isinstance(existing_metrics, dict):
+        for key in (
+            "total_files",
+            "resolution_counts",
+            "average_bitrate",
+            "average_audio_bitrate",
+            "average_duration_seconds",
+            "average_quality_score",
+        ):
+            existing_value = existing_metrics.get(key)
+            if existing_value is not None:
+                merged_metrics[key] = existing_value
+        merged_metrics["totals"] = _merge_nested_mappings(
+            reconstructed_metrics.get("totals"),
+            existing_metrics.get("totals"),
+        )
+        merged_metrics["numeric_summaries"] = _merge_nested_mappings(
+            reconstructed_metrics.get("numeric_summaries"),
+            existing_metrics.get("numeric_summaries"),
+        )
+        merged_metrics["category_counts"] = _merge_nested_mappings(
+            reconstructed_metrics.get("category_counts"),
+            existing_metrics.get("category_counts"),
+            keep_empty_existing_values=False,
+        )
+        merged_metrics["numeric_distributions"] = _merge_nested_mappings(
+            reconstructed_metrics.get("numeric_distributions"),
+            existing_metrics.get("numeric_distributions"),
+        )
+    merged_metrics["schema_version"] = 2
+    merged_snapshot["trend_metrics"] = merged_metrics
+    return merged_snapshot
+
+
 def _progress_percent(libraries_total: int, libraries_processed: int, library_phase_progress: float = 0.0) -> float:
     if libraries_total <= 0:
         return 0.0
@@ -319,6 +434,7 @@ def reconstruct_history_from_media_files(
     library_history_start_day = _retention_start_day(now, app_settings.history_retention.library_history.days)
 
     created_library_history_entries = 0
+    updated_library_history_entries = 0
     created_file_history_entries = 0
     oldest_snapshot_day: str | None = None
     newest_snapshot_day: str | None = None
@@ -339,6 +455,7 @@ def reconstruct_history_from_media_files(
         phase_completed=0,
         created_file_history_entries=0,
         created_library_history_entries=0,
+        updated_library_history_entries=0,
     )
 
     for library_index, library in enumerate(libraries):
@@ -354,6 +471,7 @@ def reconstruct_history_from_media_files(
             phase_completed=0,
             created_file_history_entries=created_file_history_entries,
             created_library_history_entries=created_library_history_entries,
+            updated_library_history_entries=updated_library_history_entries,
         )
         media_files = db.scalars(
             select(MediaFile)
@@ -380,6 +498,7 @@ def reconstruct_history_from_media_files(
                 phase_completed=library_index + 1,
                 created_file_history_entries=created_file_history_entries,
                 created_library_history_entries=created_library_history_entries,
+                updated_library_history_entries=updated_library_history_entries,
             )
             continue
 
@@ -405,6 +524,7 @@ def reconstruct_history_from_media_files(
                     phase_completed=prepared_index,
                     created_file_history_entries=created_file_history_entries,
                     created_library_history_entries=created_library_history_entries,
+                    updated_library_history_entries=updated_library_history_entries,
                 )
 
         earliest_file_history_by_path = dict(
@@ -458,21 +578,42 @@ def reconstruct_history_from_media_files(
                     phase_completed=prepared_index,
                     created_file_history_entries=created_file_history_entries,
                     created_library_history_entries=created_library_history_entries,
+                    updated_library_history_entries=updated_library_history_entries,
                 )
 
         if not prepared_files:
             continue
 
-        first_existing_snapshot_day = db.scalar(
-            select(func.min(LibraryHistory.snapshot_day)).where(LibraryHistory.library_id == library.id)
-        )
-        stop_day = (
-            date.fromisoformat(first_existing_snapshot_day) - timedelta(days=1)
-            if isinstance(first_existing_snapshot_day, str) and first_existing_snapshot_day
-            else now.date()
+        existing_history_rows = {
+            row.snapshot_day: row
+            for row in db.scalars(
+                select(LibraryHistory)
+                .where(LibraryHistory.library_id == library.id)
+                .order_by(LibraryHistory.snapshot_day.asc(), LibraryHistory.id.asc())
+            ).all()
+        }
+        stop_day = now.date()
+        if existing_history_rows:
+            stop_day = max(
+                stop_day,
+                max(date.fromisoformat(snapshot_day) for snapshot_day in existing_history_rows),
+            )
+        else:
+            stop_day = now.date()
+        unreconstructable_existing_days = [
+            date.fromisoformat(snapshot_day)
+            for snapshot_day, row in existing_history_rows.items()
+            if _snapshot_needs_trend_reconstruction(row.snapshot if isinstance(row.snapshot, dict) else None)
+        ]
+        earliest_existing_day_needing_reconstruction = (
+            min(unreconstructable_existing_days) if unreconstructable_existing_days else None
         )
         earliest_inferred_day = min(item.inferred_snapshot_day for item in prepared_files)
         start_day = max(earliest_inferred_day, library_history_start_day) if library_history_start_day else earliest_inferred_day
+        if earliest_existing_day_needing_reconstruction is not None:
+            start_day = min(start_day, earliest_existing_day_needing_reconstruction)
+            if library_history_start_day is not None:
+                start_day = max(start_day, library_history_start_day)
         if stop_day < start_day:
             _emit_progress(
                 progress_callback,
@@ -486,6 +627,7 @@ def reconstruct_history_from_media_files(
                 phase_completed=library_index + 1,
                 created_file_history_entries=created_file_history_entries,
                 created_library_history_entries=created_library_history_entries,
+                updated_library_history_entries=updated_library_history_entries,
             )
             continue
         total_snapshot_days = (stop_day - start_day).days + 1
@@ -531,24 +673,40 @@ def reconstruct_history_from_media_files(
             for prepared in new_files:
                 accumulator.add(prepared)
             if accumulator.file_count > 0:
-                db.add(
-                    LibraryHistory(
-                        library_id=library.id,
-                        snapshot_day=current_day.isoformat(),
-                        captured_at=_capture_time_for_day(current_day),
-                        source_scan_job_id=None,
-                        snapshot=_build_reconstructed_library_snapshot(
-                            library,
-                            accumulator,
-                            new_files=len(new_files),
-                        ),
-                    )
+                snapshot_day = current_day.isoformat()
+                reconstructed_snapshot = _build_reconstructed_library_snapshot(
+                    library,
+                    accumulator,
+                    new_files=len(new_files),
                 )
-                created_library_history_entries += 1
-                if oldest_snapshot_day is None or current_day.isoformat() < oldest_snapshot_day:
-                    oldest_snapshot_day = current_day.isoformat()
-                if newest_snapshot_day is None or current_day.isoformat() > newest_snapshot_day:
-                    newest_snapshot_day = current_day.isoformat()
+                existing_history_row = existing_history_rows.get(snapshot_day)
+                if existing_history_row is None:
+                    db.add(
+                        LibraryHistory(
+                            library_id=library.id,
+                            snapshot_day=snapshot_day,
+                            captured_at=_capture_time_for_day(current_day),
+                            source_scan_job_id=None,
+                            snapshot=reconstructed_snapshot,
+                        )
+                    )
+                    created_library_history_entries += 1
+                    if oldest_snapshot_day is None or snapshot_day < oldest_snapshot_day:
+                        oldest_snapshot_day = snapshot_day
+                    if newest_snapshot_day is None or snapshot_day > newest_snapshot_day:
+                        newest_snapshot_day = snapshot_day
+                elif _snapshot_needs_trend_reconstruction(
+                    existing_history_row.snapshot if isinstance(existing_history_row.snapshot, dict) else None
+                ):
+                    existing_history_row.snapshot = _merge_reconstructed_library_snapshot(
+                        existing_history_row.snapshot if isinstance(existing_history_row.snapshot, dict) else None,
+                        reconstructed_snapshot,
+                    )
+                    updated_library_history_entries += 1
+                    if oldest_snapshot_day is None or snapshot_day < oldest_snapshot_day:
+                        oldest_snapshot_day = snapshot_day
+                    if newest_snapshot_day is None or snapshot_day > newest_snapshot_day:
+                        newest_snapshot_day = snapshot_day
             completed_snapshot_days += 1
             if completed_snapshot_days % snapshot_step == 0 or completed_snapshot_days == total_snapshot_days:
                 _emit_progress(
@@ -567,6 +725,7 @@ def reconstruct_history_from_media_files(
                     phase_completed=completed_snapshot_days,
                     created_file_history_entries=created_file_history_entries,
                     created_library_history_entries=created_library_history_entries,
+                    updated_library_history_entries=updated_library_history_entries,
                 )
             current_day += timedelta(days=1)
 
@@ -582,6 +741,7 @@ def reconstruct_history_from_media_files(
             phase_completed=library_index + 1,
             created_file_history_entries=created_file_history_entries,
             created_library_history_entries=created_library_history_entries,
+            updated_library_history_entries=updated_library_history_entries,
         )
 
     db.commit()
@@ -591,6 +751,7 @@ def reconstruct_history_from_media_files(
         libraries_with_media=libraries_with_media,
         created_file_history_entries=created_file_history_entries,
         created_library_history_entries=created_library_history_entries,
+        updated_library_history_entries=updated_library_history_entries,
         oldest_reconstructed_snapshot_day=oldest_snapshot_day,
         newest_reconstructed_snapshot_day=newest_snapshot_day,
     )

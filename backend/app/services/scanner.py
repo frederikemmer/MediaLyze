@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from fnmatch import fnmatchcase
 import logging
 import os
 from pathlib import Path
+import re
 import traceback
 
 from sqlalchemy import delete, or_, select
@@ -29,8 +32,11 @@ from backend.app.models.entities import (
     VideoStream,
 )
 from backend.app.services.duplicates import (
+    FILE_HASH_ALGORITHM,
+    FileHashDuplicateDetectionStrategy,
     get_duplicate_detection_strategy,
     get_duplicate_group_counts,
+    normalize_filename_signature,
 )
 from backend.app.services.app_settings import get_app_settings, get_ignore_patterns
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
@@ -56,6 +62,10 @@ MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
 MAX_FAILURE_DETAIL_LENGTH = 12000
+RENAME_MATCH_SCORE_THRESHOLD = 0.82
+RENAME_MATCH_SCORE_GAP = 0.08
+RENAME_SINGLE_MISSING_SCORE_THRESHOLD = 0.68
+RENAME_NUMBER_PATTERN = re.compile(r"\d+")
 
 
 class ScanCanceled(Exception):
@@ -72,6 +82,8 @@ class PatternHit:
 @dataclass
 class DiscoveryResult:
     files: list[Path]
+    collect_files: bool = True
+    file_count: int = 0
     ignored_total: int = 0
     ignored_dir_total: int = 0
     ignored_file_total: int = 0
@@ -134,6 +146,48 @@ class QueuedMediaWork:
 
 def _library_root(library: Library) -> Path:
     return Path(library.path)
+
+
+def _rename_similarity_score(
+    old_relative_path: str,
+    new_relative_path: str,
+    old_size: int,
+    new_size: int,
+) -> float:
+    old_path = Path(old_relative_path)
+    new_path = Path(new_relative_path)
+    old_signature = normalize_filename_signature(old_path)
+    new_signature = normalize_filename_signature(new_path)
+    if not old_signature or not new_signature:
+        return 0.0
+
+    old_numbers = Counter(
+        match.lstrip("0") or "0"
+        for match in RENAME_NUMBER_PATTERN.findall(old_signature)
+    )
+    new_numbers = Counter(
+        match.lstrip("0") or "0"
+        for match in RENAME_NUMBER_PATTERN.findall(new_signature)
+    )
+    if old_numbers and new_numbers and not (old_numbers <= new_numbers or new_numbers <= old_numbers):
+        return 0.0
+
+    score = SequenceMatcher(None, old_signature, new_signature).ratio()
+    if old_path.parent == new_path.parent:
+        score += 0.05
+    if old_path.suffix.lower() == new_path.suffix.lower():
+        score += 0.03
+
+    max_size = max(old_size, new_size, 1)
+    size_delta_ratio = abs(old_size - new_size) / max_size
+    if size_delta_ratio <= 0.01:
+        score += 0.07
+    elif size_delta_ratio <= 0.05:
+        score += 0.04
+    elif size_delta_ratio <= 0.15:
+        score += 0.02
+
+    return min(score, 1.0)
 
 
 def _candidate_ignore_paths(relative_path: str, *, is_dir: bool = False) -> set[str]:
@@ -275,7 +329,9 @@ def _stream_media_files(
                 _record_pattern_hits(relative_path, matches, discovery.ignored_pattern_hits)
                 continue
             if file_path.suffix.lower() in suffixes:
-                discovery.files.append(file_path)
+                discovery.file_count += 1
+                if discovery.collect_files:
+                    discovery.files.append(file_path)
                 yield DiscoveredMediaFile(path=file_path, sibling_filenames=tuple(sorted_filenames))
 
 
@@ -343,6 +399,65 @@ def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
     media_file.quality_score_breakdown = breakdown.model_dump(mode="json")
 
 
+def _normalized_text(value: str | None, fallback: str = "") -> str:
+    candidate = (value or "").strip().lower()
+    return candidate or fallback
+
+
+def _joined_unique(values: list[str]) -> str:
+    return " ".join(sorted({value for value in values if value}))
+
+
+def _update_media_file_search_fields(media_file: MediaFile) -> None:
+    primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
+    media_file.duration_seconds = media_file.media_format.duration if media_file.media_format else None
+    media_file.bitrate = media_file.media_format.bit_rate if media_file.media_format else None
+    media_file.audio_bitrate = sum(max(stream.bit_rate or 0, 0) for stream in media_file.audio_streams) or None
+    media_file.primary_video_codec = primary_video.codec if primary_video else None
+    media_file.primary_video_width = primary_video.width if primary_video else None
+    media_file.primary_video_height = primary_video.height if primary_video else None
+    media_file.primary_video_resolution_pixels = (
+        primary_video.width * primary_video.height
+        if primary_video and primary_video.width is not None and primary_video.height is not None
+        else None
+    )
+    media_file.primary_video_hdr_type = primary_video.hdr_type if primary_video else None
+
+    audio_codecs = [_normalized_text(stream.codec, "unknown") for stream in media_file.audio_streams]
+    audio_spatial_profiles = [_normalized_text(stream.spatial_audio_profile) for stream in media_file.audio_streams]
+    audio_languages = [_normalized_text(stream.language, "und") for stream in media_file.audio_streams]
+    subtitle_languages = [
+        *[_normalized_text(stream.language, "und") for stream in media_file.subtitle_streams],
+        *[_normalized_text(subtitle.language, "und") for subtitle in media_file.external_subtitles],
+    ]
+    subtitle_codecs = [
+        *[_normalized_text(stream.codec, "unknown") for stream in media_file.subtitle_streams],
+        *[_normalized_text(subtitle.format, "unknown") for subtitle in media_file.external_subtitles],
+    ]
+
+    media_file.min_audio_codec = min(audio_codecs, default="")
+    media_file.min_audio_spatial_profile = min((value for value in audio_spatial_profiles if value), default="")
+    media_file.min_audio_language = min(audio_languages, default="")
+    media_file.min_subtitle_language = min(subtitle_languages, default="")
+    media_file.min_subtitle_codec = min(subtitle_codecs, default="")
+    media_file.audio_codecs_search = _joined_unique(audio_codecs)
+    media_file.audio_spatial_profiles_search = _joined_unique(audio_spatial_profiles)
+    media_file.audio_languages_search = _joined_unique(audio_languages)
+    media_file.subtitle_languages_search = _joined_unique(subtitle_languages)
+    media_file.subtitle_codecs_search = _joined_unique(subtitle_codecs)
+    media_file.has_internal_subtitles = bool(media_file.subtitle_streams)
+    media_file.has_external_subtitles = bool(media_file.external_subtitles)
+    media_file.subtitle_sources_search = " ".join(
+        source
+        for source, has_source in (
+            ("internal", media_file.has_internal_subtitles),
+            ("external", media_file.has_external_subtitles),
+        )
+        if has_source
+    )
+    media_file.search_fields_version = 1
+
+
 def _apply_analysis_result(
     media_file: MediaFile,
     payload: dict,
@@ -360,6 +475,7 @@ def _apply_analysis_result(
         resolution_categories,
     )
     _persist_quality_breakdown(media_file, breakdown)
+    _update_media_file_search_fields(media_file)
     media_file.last_analyzed_at = utc_now()
     media_file.scan_status = ScanStatus.ready
 
@@ -684,6 +800,120 @@ def run_scan(
     duplicate_processed_successfully = 0
     duplicate_processing_failed = 0
 
+    def _missing_rename_candidates() -> list[MediaFile]:
+        return [
+            candidate
+            for candidate_path, candidate in existing_by_path.items()
+            if candidate_path not in seen_relative_paths
+            and not (root / candidate.relative_path).exists()
+        ]
+
+    def _log_rename_candidate(candidate: MediaFile, relative_path: str, reason: str) -> MediaFile:
+        logger.info(
+            "Detected media rename in library %s via %s: %s -> %s",
+            library.id,
+            reason,
+            candidate.relative_path,
+            relative_path,
+        )
+        return candidate
+
+    def _find_hash_rename_candidate(
+        relative_path: str,
+        candidates: list[MediaFile],
+    ) -> MediaFile | None:
+        hash_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
+            and (candidate.content_hash or "").strip()
+        ]
+        if not hash_candidates:
+            return None
+        try:
+            payload = FileHashDuplicateDetectionStrategy().build_payload(root / relative_path)
+        except OSError:
+            logger.exception("Failed to hash rename candidate %s", relative_path)
+            return None
+
+        content_hash = payload.get("content_hash")
+        matches = [
+            candidate
+            for candidate in hash_candidates
+            if candidate.content_hash == content_hash
+        ]
+        if len(matches) != 1:
+            return None
+        return _log_rename_candidate(matches[0], relative_path, "content hash")
+
+    def _find_similar_rename_candidate(
+        relative_path: str,
+        size_bytes: int,
+        candidates: list[MediaFile],
+    ) -> MediaFile | None:
+        scored_candidates = sorted(
+            (
+                (
+                    _rename_similarity_score(
+                        candidate.relative_path,
+                        relative_path,
+                        candidate.size_bytes,
+                        size_bytes,
+                    ),
+                    candidate,
+                )
+                for candidate in candidates
+            ),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        if not scored_candidates:
+            return None
+
+        best_score, best_candidate = scored_candidates[0]
+        if len(scored_candidates) == 1 and best_score >= RENAME_SINGLE_MISSING_SCORE_THRESHOLD:
+            return _log_rename_candidate(
+                best_candidate,
+                relative_path,
+                f"name similarity {best_score:.2f}",
+            )
+        if best_score < RENAME_MATCH_SCORE_THRESHOLD:
+            return None
+        if (
+            len(scored_candidates) > 1
+            and best_score - scored_candidates[1][0] < RENAME_MATCH_SCORE_GAP
+        ):
+            return None
+        return _log_rename_candidate(
+            best_candidate,
+            relative_path,
+            f"name similarity {best_score:.2f}",
+        )
+
+    def _find_rename_candidate(
+        relative_path: str,
+        size_bytes: int,
+        mtime: float,
+    ) -> MediaFile | None:
+        candidates = _missing_rename_candidates()
+        exact_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.size_bytes == size_bytes and candidate.mtime == mtime
+        ]
+        if len(exact_candidates) == 1:
+            return _log_rename_candidate(exact_candidates[0], relative_path, "size and mtime")
+
+        hash_candidate = _find_hash_rename_candidate(relative_path, candidates)
+        if hash_candidate is not None:
+            return hash_candidate
+
+        similar_candidate = _find_similar_rename_candidate(relative_path, size_bytes, candidates)
+        if similar_candidate is not None:
+            return similar_candidate
+
+        return None
+
     def _build_scan_summary(
         discovery: DiscoveryResult,
         queued_for_analysis: int,
@@ -698,7 +928,7 @@ def run_scan(
         return {
             "ignore_patterns": list(ignore_patterns),
             "discovery": {
-                "discovered_files": len(discovery.files),
+                "discovered_files": discovery.file_count,
                 "ignored_total": discovery.ignored_total,
                 "ignored_dir_total": discovery.ignored_dir_total,
                 "ignored_file_total": discovery.ignored_file_total,
@@ -737,7 +967,7 @@ def run_scan(
             },
         }
 
-    discovery = DiscoveryResult(files=[])
+    discovery = DiscoveryResult(files=[], collect_files=False)
     seen_relative_paths: set[str] = set()
     queued_work_total = 0
     queued_for_analysis = 0
@@ -754,7 +984,6 @@ def run_scan(
         include_duplicate_counts=False,
     )
     db.commit()
-    stats_cache.invalidate(cache_key, job.library_id)
 
     def _safe_process_work(
         work: QueuedMediaWork,
@@ -814,7 +1043,6 @@ def run_scan(
             include_duplicate_counts=include_duplicate_counts,
         )
         db.commit()
-        stats_cache.invalidate(cache_key, job.library_id)
 
     with ThreadPoolExecutor(max_workers=scan_worker_count) as executor:
         pending: dict[Future, QueuedMediaWork] = {}
@@ -932,19 +1160,32 @@ def run_scan(
             media_file = existing_by_path.get(relative_path)
 
             if media_file is None:
-                media_file = MediaFile(
-                    library_id=library.id,
-                    relative_path=relative_path,
-                    filename=file_path.name,
-                    extension=file_path.suffix.lower().lstrip("."),
-                    size_bytes=stat.st_size,
-                    mtime=stat.st_mtime,
-                    last_seen_at=utc_now(),
-                    scan_status=ScanStatus.pending,
-                )
-                db.add(media_file)
-                db.flush()
-                new_files.add(relative_path)
+                rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
+                if rename_candidate is None:
+                    media_file = MediaFile(
+                        library_id=library.id,
+                        relative_path=relative_path,
+                        filename=file_path.name,
+                        extension=file_path.suffix.lower().lstrip("."),
+                        size_bytes=stat.st_size,
+                        mtime=stat.st_mtime,
+                        last_seen_at=utc_now(),
+                        scan_status=ScanStatus.pending,
+                    )
+                    db.add(media_file)
+                    db.flush()
+                    new_files.add(relative_path)
+                else:
+                    existing_by_path.pop(rename_candidate.relative_path, None)
+                    media_file = rename_candidate
+                    media_file.relative_path = relative_path
+                    media_file.filename = file_path.name
+                    media_file.extension = file_path.suffix.lower().lstrip(".")
+                    media_file.size_bytes = stat.st_size
+                    media_file.mtime = stat.st_mtime
+                    media_file.last_seen_at = utc_now()
+                    media_file.scan_status = ScanStatus.pending
+                    modified_files.add(relative_path)
                 queued_work_total += 1
                 queued_for_analysis += 1
                 queued_for_duplicate_processing += 1
@@ -1047,7 +1288,7 @@ def run_scan(
     if _should_cancel():
         raise ScanCanceled()
     library.last_scan_at = utc_now()
-    job.status = JobStatus.failed if job.errors else JobStatus.completed
+    job.status = JobStatus.completed
     job.finished_at = utc_now()
     job.scan_summary = _build_scan_summary(
         discovery,
@@ -1111,7 +1352,6 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     job.files_total = len(media_files)
     job.files_scanned = 0
     db.commit()
-    stats_cache.invalidate(cache_key, library_id)
 
     batch_counter = 0
     resolution_categories = get_app_settings(db).resolution_categories
@@ -1134,12 +1374,10 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
         batch_counter += 1
         if batch_counter >= 200:
             db.commit()
-            stats_cache.invalidate(cache_key, library_id)
             batch_counter = 0
 
     if batch_counter:
         db.commit()
-        stats_cache.invalidate(cache_key, library_id)
 
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()

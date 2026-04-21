@@ -132,6 +132,14 @@ class MediaFile(Base):
         Index("ix_media_files_library_quality_score", "library_id", "quality_score"),
         Index("ix_media_files_library_filename_signature", "library_id", "filename_signature"),
         Index("ix_media_files_library_content_hash", "library_id", "content_hash_algorithm", "content_hash"),
+        Index("ix_media_files_library_extension", "library_id", "extension"),
+        Index("ix_media_files_library_quality_score_raw", "library_id", "quality_score_raw"),
+        Index("ix_media_files_library_duration_seconds", "library_id", "duration_seconds"),
+        Index("ix_media_files_library_bitrate", "library_id", "bitrate"),
+        Index("ix_media_files_library_audio_bitrate", "library_id", "audio_bitrate"),
+        Index("ix_media_files_library_primary_video_codec", "library_id", "primary_video_codec"),
+        Index("ix_media_files_library_resolution_pixels", "library_id", "primary_video_resolution_pixels"),
+        Index("ix_media_files_library_primary_video_hdr_type", "library_id", "primary_video_hdr_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -155,6 +163,28 @@ class MediaFile(Base):
     filename_signature: Mapped[str | None] = mapped_column(String(512), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     content_hash_algorithm: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    primary_video_codec: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    primary_video_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    primary_video_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    primary_video_resolution_pixels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    primary_video_hdr_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    min_audio_codec: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    min_audio_spatial_profile: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    min_audio_language: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    min_subtitle_language: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    min_subtitle_codec: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    audio_codecs_search: Mapped[str] = mapped_column(String(2048), default="", nullable=False)
+    audio_spatial_profiles_search: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    audio_languages_search: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    subtitle_languages_search: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    subtitle_codecs_search: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    subtitle_sources_search: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    has_internal_subtitles: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_external_subtitles: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    search_fields_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="media_files")
     media_format: Mapped[MediaFormat | None] = relationship(

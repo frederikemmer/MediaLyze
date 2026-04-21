@@ -23,8 +23,18 @@ def _normalize_scan_summary(value: dict | None) -> ScanSummaryRead:
         return ScanSummaryRead()
 
 
-def _scan_outcome(scan_job: ScanJob) -> str:
+def _scan_has_file_issues(scan_job: ScanJob, summary: ScanSummaryRead) -> bool:
+    return (
+        scan_job.errors > 0
+        or summary.analysis.analysis_failed > 0
+        or summary.duplicates.processing_failed > 0
+    )
+
+
+def _scan_outcome(scan_job: ScanJob, summary: ScanSummaryRead) -> str:
     if scan_job.status == JobStatus.completed:
+        if _scan_has_file_issues(scan_job, summary):
+            return "completed_with_issues"
         return "successful"
     if scan_job.status == JobStatus.canceled:
         return "canceled"
@@ -36,6 +46,12 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     discovered_files = summary.discovery.discovered_files
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
+    has_file_issues = _scan_has_file_issues(scan_job, summary)
+    issue_count = max(
+        scan_job.errors or 0,
+        summary.analysis.analysis_failed + summary.duplicates.processing_failed,
+    )
+    issue_label = "issue" if issue_count == 1 else "issues"
     progress_percent = 0.0
     if files_total > 0 and files_scanned > 0:
         progress_percent = min(100.0, round((files_scanned / files_total) * 100, 1))
@@ -60,6 +76,9 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     elif scan_job.status == JobStatus.running:
         phase_label = "Analyzing media"
         phase_detail = f"{files_scanned} of {files_total} files analyzed"
+    elif scan_job.status == JobStatus.completed and has_file_issues:
+        phase_label = "Completed with issues"
+        phase_detail = f"{files_scanned} of {files_total} files processed; {issue_count} {issue_label}"
     elif scan_job.status == JobStatus.completed and is_quality_recompute:
         phase_label = "Completed"
         phase_detail = f"{files_scanned} of {files_total} quality scores updated"
@@ -120,7 +139,7 @@ def serialize_recent_scan_job(scan_job: ScanJob) -> RecentScanJobRead:
         library_id=scan_job.library_id,
         library_name=scan_job.library.name if scan_job.library else None,
         status=scan_job.status,
-        outcome=_scan_outcome(scan_job),
+        outcome=_scan_outcome(scan_job, summary),
         job_type=scan_job.job_type,
         trigger_source=scan_job.trigger_source,
         started_at=scan_job.started_at,

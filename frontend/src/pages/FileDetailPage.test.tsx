@@ -9,6 +9,7 @@ import {
   api,
   type AppSettings,
   type MediaFileDetail,
+  type MediaFileHistory,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
 import { FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, getFileDetailPanelSettings } from "../lib/file-detail-panels";
@@ -143,7 +144,78 @@ function createQualityDetail(): MediaFileQualityScoreDetail {
   };
 }
 
+function createFileHistory(): MediaFileHistory {
+  const current = createFileDetail();
+  return {
+    file_id: current.id,
+    library_id: current.library_id,
+    relative_path: current.relative_path,
+    total: 3,
+    items: [
+      {
+        id: 3,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-15T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "newer-scan-only",
+        snapshot: {
+          ...current,
+          last_seen_at: "2026-03-15T10:00:00Z",
+          last_analyzed_at: "2026-03-15T10:05:00Z",
+          quality_score: 9,
+          size_bytes: 10_737_418_240,
+        },
+      },
+      {
+        id: 2,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-14T10:00:00Z",
+        capture_reason: "quality_recompute",
+        snapshot_hash: "newer",
+        snapshot: {
+          ...current,
+          quality_score: 9,
+          size_bytes: 10_737_418_240,
+        },
+      },
+      {
+        id: 1,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-13T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "older",
+        snapshot: {
+          ...current,
+          relative_path: "Shows/Season01/Old_File_Name.mkv",
+          filename: "Old_File_Name.mkv",
+          quality_score: 8,
+          size_bytes: 8_589_934_592,
+        },
+      },
+    ],
+  };
+}
+
 function renderPage(fileId: number) {
+  if (!vi.isMockFunction(api.fileHistory)) {
+    vi.spyOn(api, "fileHistory").mockResolvedValue({
+      file_id: fileId,
+      library_id: 9,
+      relative_path: "",
+      total: 0,
+      items: [],
+    });
+  }
+
   return render(
     <MemoryRouter initialEntries={[`/files/${fileId}`]}>
       <AppDataProvider>
@@ -177,7 +249,7 @@ afterEach(() => {
 });
 
 describe("FileDetailPage", () => {
-  it("renders long paths as segmented chips with full-path and filename tooltips", async () => {
+  it("renders header badges and exposes the relative path in the title tooltip", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -186,18 +258,15 @@ describe("FileDetailPage", () => {
     const { container } = renderPage(file.id);
 
     expect(await screen.findByText("UHD")).toBeInTheDocument();
-    const segments = Array.from(container.querySelectorAll(".path-segment")).map((segment) => segment.textContent);
-    expect(segments).toEqual([
-      "Shows",
-      "Season01",
-      "A_Very_Long_Show_Name.2025.S01E01.With.An_Absurdly_Long_File_Name_That_Should_Not_Overflow_The_Layout.2160p.WEB-DL.DV.HEVC-GROUP.mkv",
-    ]);
+    expect(screen.getByText("10.0 GB")).toBeInTheDocument();
+    expect(screen.getAllByText("56m").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
+    expect(container.querySelector(".path-segment")).not.toBeInTheDocument();
+    expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show full relative path" }));
+    const pathTooltipTrigger = screen.getByRole("button", { name: "Show full relative path" });
+    fireEvent.mouseEnter(pathTooltipTrigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(file.relative_path);
-
-    fireEvent.click(screen.getByRole("button", { name: "Show full file name" }));
-    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.filename));
 
     fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
@@ -214,6 +283,29 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("External")).toBeInTheDocument();
   });
 
+  it("renders file history snapshots in the detail panel", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(api, "fileHistory").mockResolvedValue(createFileHistory());
+
+    const { container } = renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "File history" })).toBeInTheDocument();
+    expect(screen.getAllByText("Quality").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("8.0 GB").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
+    const oldValues = Array.from(container.querySelectorAll(".file-history-old-value")).map((element) =>
+      element.textContent?.trim(),
+    );
+    expect(oldValues).toContain("8.0 GB");
+    expect(oldValues).toContain("Shows/Season01/Old_File_Name.mkv");
+    expect(screen.getAllByText("Shows/Season01/Old_File_Name.mkv").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".file-history-entry")).toHaveLength(2);
+    expect(container.querySelectorAll(".file-history-entry[open]")).toHaveLength(1);
+  });
+
   it("stays stable when the quality detail request fails", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
@@ -224,7 +316,7 @@ describe("FileDetailPage", () => {
 
     expect(await screen.findByText("UHD")).toBeInTheDocument();
     expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
-    expect(container.querySelectorAll(".path-segment")).toHaveLength(3);
+    expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();
   });
 
@@ -278,5 +370,46 @@ describe("FileDetailPage", () => {
 
     expect(getPanelOrder(rerendered.container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]);
     expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain("\"rawJson\",\"qualityBreakdown\"");
+  });
+
+  it("reorders panels while following pointer drag", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getMockRect(this: HTMLElement) {
+      if (this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid")) {
+        return { x: 0, y: 0, left: 0, top: 0, width: 700, height: 600, right: 700, bottom: 600, toJSON: () => ({}) };
+      }
+      if (this instanceof HTMLElement && this.classList.contains("file-detail-panel-shell")) {
+        const width = Number.parseFloat(this.style.width || "345");
+        const height = this.textContent?.includes("Raw ffprobe JSON") ? 180 : 100;
+        return { x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height, toJSON: () => ({}) };
+      }
+      return { x: 0, y: 0, left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, toJSON: () => ({}) };
+    });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function getMockClientWidth(this: HTMLElement) {
+      return this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid") ? 700 : 345;
+    });
+
+    const { container } = renderPage(file.id);
+
+    await waitFor(() => expect(container.querySelector(".file-detail-panels-grid")).toHaveClass("is-masonry-ready"));
+    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
+    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
+    expect(rawJsonHandle).toBeTruthy();
+
+    fireEvent.pointerDown(rawJsonHandle as Element, { pointerId: 1, button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 40 });
+    expect(rawJsonShell).toHaveClass("is-dragging");
+    expect(rawJsonShell.style.transform).toContain("translate3d");
+
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 40 });
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain(
+        "\"rawJson\",\"qualityBreakdown\"",
+      ),
+    );
   });
 });

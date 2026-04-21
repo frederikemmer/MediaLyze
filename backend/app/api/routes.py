@@ -17,6 +17,7 @@ from backend.app.schemas.library_history import DashboardHistoryResponse, Librar
 from backend.app.schemas.media import (
     DashboardResponse,
     MediaFileDetail,
+    MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
     MediaFileStreamDetails,
     MediaFileTablePage,
@@ -35,7 +36,7 @@ from backend.app.services.app_settings import get_app_settings as load_app_setti
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
-from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_storage import get_cached_history_storage
 from backend.app.services.history_retention import has_active_scan_jobs
 from backend.app.services.library_history_service import get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
@@ -51,6 +52,7 @@ from backend.app.services.media_search import LibraryFileSearchFilters, SearchVa
 from backend.app.services.media_service import (
     generate_library_files_csv_export,
     get_media_file_detail,
+    get_media_file_history,
     get_media_file_quality_score_detail,
     get_media_file_stream_details,
     list_library_files,
@@ -68,6 +70,18 @@ from backend.app.services.stat_comparisons import get_dashboard_comparison, get_
 from backend.app.services.stats import build_dashboard
 
 router = APIRouter()
+
+
+def _normalize_panel_query(panels: list[str] | None) -> list[str] | None:
+    if panels is None:
+        return None
+    normalized: list[str] = []
+    for entry in panels:
+        for panel_id in entry.split(","):
+            candidate = panel_id.strip()
+            if candidate and candidate not in normalized:
+                normalized.append(candidate)
+    return normalized
 
 
 def _library_file_search_filters(
@@ -139,8 +153,11 @@ def inspect_path(
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-def dashboard(db: Session = Depends(get_db_session)) -> DashboardResponse:
-    return build_dashboard(db)
+def dashboard(
+    panels: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+) -> DashboardResponse:
+    return build_dashboard(db, requested_panels=_normalize_panel_query(panels))
 
 
 @router.get("/dashboard/history", response_model=DashboardHistoryResponse)
@@ -186,7 +203,7 @@ def history_storage(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> HistoryStorageRead:
-    return get_history_storage(db, settings)
+    return get_cached_history_storage(db, settings)
 
 
 @router.get("/history/reconstruct", response_model=HistoryReconstructionStatusRead)
@@ -282,8 +299,12 @@ def library_summary(library_id: int, db: Session = Depends(get_db_session)) -> L
 
 
 @router.get("/libraries/{library_id}/statistics", response_model=LibraryStatistics)
-def library_statistics(library_id: int, db: Session = Depends(get_db_session)) -> LibraryStatistics:
-    statistics = get_library_statistics(db, library_id)
+def library_statistics(
+    library_id: int,
+    panels: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+) -> LibraryStatistics:
+    statistics = get_library_statistics(db, library_id, requested_panels=_normalize_panel_query(panels))
     if not statistics:
         raise HTTPException(status_code=404, detail="Library not found")
     return statistics
@@ -381,6 +402,8 @@ def library_files(
     library_id: int,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=512),
+    include_total: bool = Query(default=True),
     search: str = Query(default="", max_length=200),
     file_search: str = Query(default="", max_length=200),
     search_container: str = Query(default="", max_length=64),
@@ -450,6 +473,8 @@ def library_files(
             ),
             sort_key=sort_key,
             sort_direction=sort_direction,
+            cursor=cursor,
+            include_total=include_total,
         )
     except SearchValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -580,6 +605,18 @@ def file_stream_details(file_id: int, db: Session = Depends(get_db_session)) -> 
 @router.get("/files/{file_id}/quality-score", response_model=MediaFileQualityScoreDetail)
 def file_quality_score(file_id: int, db: Session = Depends(get_db_session)) -> MediaFileQualityScoreDetail:
     payload = get_media_file_quality_score_detail(db, file_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return payload
+
+
+@router.get("/files/{file_id}/history", response_model=MediaFileHistoryRead)
+def file_history(
+    file_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db_session),
+) -> MediaFileHistoryRead:
+    payload = get_media_file_history(db, file_id, limit=limit)
     if not payload:
         raise HTTPException(status_code=404, detail="Media file not found")
     return payload

@@ -46,6 +46,29 @@ def test_serialize_scan_job_for_analysis_phase() -> None:
     assert payload.progress_percent == 25.0
 
 
+def test_serialize_completed_scan_job_with_file_issues_uses_warning_phase() -> None:
+    job = ScanJob(
+        id=1,
+        library_id=2,
+        status=JobStatus.completed,
+        job_type="incremental",
+        files_total=20,
+        files_scanned=20,
+        errors=1,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+        scan_summary={
+            "analysis": {"analysis_failed": 1},
+            "duplicates": {"processing_failed": 0},
+        },
+    )
+
+    payload = serialize_scan_job(job)
+
+    assert payload.phase_label == "Completed with issues"
+    assert payload.phase_detail == "20 of 20 files processed; 1 issue"
+
+
 def test_list_active_scan_jobs_deduplicates_per_library() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -188,6 +211,46 @@ def test_list_recent_scan_jobs_filters_quality_recompute_and_serializes_summary(
     assert page.items[0].new_files == 2
     assert page.items[0].modified_files == 1
     assert page.items[0].deleted_files == 1
+    assert page.items[0].outcome == "successful"
+
+
+def test_list_recent_scan_jobs_marks_completed_scan_with_file_issues() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.completed,
+                job_type="incremental",
+                errors=1,
+                finished_at=datetime.now(UTC),
+                scan_summary={
+                    "analysis": {
+                        "analysis_failed": 1,
+                        "failed_files": [{"path": "broken.mkv", "reason": "ffprobe exploded"}],
+                    },
+                },
+            )
+        )
+        db.commit()
+
+        page = list_recent_scan_jobs(db)
+
+    assert len(page.items) == 1
+    assert page.items[0].outcome == "completed_with_issues"
+    assert page.items[0].analysis_failed == 1
 
 
 def test_list_recent_scan_jobs_supports_since_hours_and_cursor_pagination() -> None:

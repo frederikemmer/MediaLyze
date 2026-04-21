@@ -1,5 +1,6 @@
 export type FileDetailPanelId =
   | "qualityBreakdown"
+  | "fileHistory"
   | "format"
   | "videoStreams"
   | "audioStreams"
@@ -15,6 +16,7 @@ export const FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY = "medialyze-file-detail-pan
 
 const DEFAULT_ORDER: FileDetailPanelId[] = [
   "qualityBreakdown",
+  "fileHistory",
   "format",
   "videoStreams",
   "audioStreams",
@@ -24,6 +26,7 @@ const DEFAULT_ORDER: FileDetailPanelId[] = [
 
 const DEFAULT_COLLAPSED: Record<FileDetailPanelId, boolean> = {
   qualityBreakdown: false,
+  fileHistory: false,
   format: false,
   videoStreams: false,
   audioStreams: false,
@@ -48,6 +51,10 @@ function normalizeCollapsed(value: unknown): Record<FileDetailPanelId, boolean> 
       "qualityBreakdown" in value && typeof value.qualityBreakdown === "boolean"
         ? value.qualityBreakdown
         : DEFAULT_COLLAPSED.qualityBreakdown,
+    fileHistory:
+      "fileHistory" in value && typeof value.fileHistory === "boolean"
+        ? value.fileHistory
+        : DEFAULT_COLLAPSED.fileHistory,
     format: "format" in value && typeof value.format === "boolean" ? value.format : DEFAULT_COLLAPSED.format,
     videoStreams:
       "videoStreams" in value && typeof value.videoStreams === "boolean"

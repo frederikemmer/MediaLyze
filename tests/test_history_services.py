@@ -31,7 +31,11 @@ from backend.app.services.history_snapshots import (
     upsert_library_history_snapshot,
 )
 from backend.app.services.library_history_service import get_dashboard_history, get_library_history
-from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_storage import (
+    get_cached_history_storage,
+    get_history_storage,
+    history_storage_cache,
+)
 from backend.app.services.resolution_categories import default_resolution_categories
 
 
@@ -516,8 +520,17 @@ def test_get_history_storage_reports_bucket_usage_and_limits(tmp_path) -> None:
     db_path = tmp_path / "history-storage.db"
     engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    settings = Settings(config_path=tmp_path, media_root=tmp_path / "media", database_filename=db_path.name)
+    session_factory = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    settings = Settings(
+        config_path=tmp_path,
+        media_root=tmp_path / "media",
+        database_filename=db_path.name,
+    )
 
     with session_factory() as db:
         update_app_settings(
@@ -578,6 +591,74 @@ def test_get_history_storage_reports_bucket_usage_and_limits(tmp_path) -> None:
     assert payload.categories.scan_history.entry_count == 1
 
 
+def test_cached_history_storage_reuses_snapshot_with_current_retention_settings(tmp_path) -> None:
+    history_storage_cache.clear()
+    db_path = tmp_path / "history-storage-cache.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    settings = Settings(config_path=tmp_path, media_root=tmp_path / "media", database_filename=db_path.name)
+
+    try:
+        with session_factory() as db:
+            update_app_settings(
+                db,
+                AppSettingsUpdate(
+                    history_retention={"scan_history": {"days": 30, "storage_limit_gb": 0.5}},
+                ),
+                settings,
+            )
+            library = Library(
+                name="Movies",
+                path="/tmp/movies",
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+                scan_config={},
+            )
+            db.add(library)
+            db.flush()
+            db.add(
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.completed,
+                    job_type="incremental",
+                    finished_at=datetime.now(UTC),
+                    trigger_details={"reason": "manual"},
+                    scan_summary={"analysis": {"analysis_failed": 0}},
+                )
+            )
+            db.commit()
+
+            initial = get_history_storage(db, settings)
+            update_app_settings(
+                db,
+                AppSettingsUpdate(
+                    history_retention={"scan_history": {"days": 60, "storage_limit_gb": 1}},
+                ),
+                settings,
+            )
+            db.add(
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.completed,
+                    job_type="incremental",
+                    finished_at=datetime.now(UTC),
+                    trigger_details={"reason": "second"},
+                    scan_summary={"analysis": {"analysis_failed": 0}},
+                )
+            )
+            db.commit()
+
+            cached = get_cached_history_storage(db, settings)
+
+        assert initial.categories.scan_history.entry_count == 1
+        assert cached.categories.scan_history.entry_count == 1
+        assert cached.categories.scan_history.days_limit == 60
+        assert cached.categories.scan_history.storage_limit_bytes == 1024 * 1024 * 1024
+    finally:
+        history_storage_cache.clear()
+
+
 def test_apply_history_retention_prunes_media_file_history_by_age(monkeypatch) -> None:
     session_factory = _session_factory()
     settings = Settings()
@@ -626,6 +707,83 @@ def test_apply_history_retention_prunes_media_file_history_by_age(monkeypatch) -
     assert result.deleted_entries == 1
     assert result.compaction_completed is True
     assert [entry.relative_path for entry in remaining] == ["new.mkv"]
+
+
+def test_file_history_retention_keeps_library_and_dashboard_history(monkeypatch) -> None:
+    session_factory = _session_factory()
+    settings = Settings()
+    monkeypatch.setattr("backend.app.services.history_retention._compact_database", lambda db, allow_vacuum: allow_vacuum)
+
+    captured_at = datetime.now(UTC) - timedelta(days=90)
+    snapshot_day = captured_at.date().isoformat()
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                history_retention={
+                    "file_history": {"days": 30, "storage_limit_gb": 0},
+                    "library_history": {"days": 365, "storage_limit_gb": 0},
+                }
+            ),
+            settings,
+        )
+        db.add(
+            MediaFileHistory(
+                library_id=library.id,
+                media_file_id=1,
+                relative_path="removed.mkv",
+                filename="removed.mkv",
+                captured_at=captured_at,
+                capture_reason=MediaFileHistoryCaptureReason.scan_analysis,
+                snapshot_hash="removed",
+                snapshot={"value": "removed"},
+            )
+        )
+        db.add(
+            LibraryHistory(
+                library_id=library.id,
+                snapshot_day=snapshot_day,
+                captured_at=captured_at,
+                snapshot={
+                    "file_count": 1,
+                    "total_size_bytes": 4_000,
+                    "total_duration_seconds": 60.0,
+                    "trend_metrics": {
+                        "total_files": 1,
+                        "resolution_counts": {"1080p": 1},
+                        "average_bitrate": 8_000_000,
+                        "average_audio_bitrate": 640_000,
+                        "average_duration_seconds": 60.0,
+                        "average_quality_score": 8.0,
+                        "totals": {"total_size_bytes": 4_000, "total_duration_seconds": 60.0},
+                    },
+                },
+            )
+        )
+        db.commit()
+
+        result = apply_history_retention(db, settings)
+        remaining_file_history = db.scalars(select(MediaFileHistory)).all()
+        remaining_library_history = db.scalars(select(LibraryHistory)).all()
+        dashboard_history = get_dashboard_history(db)
+
+    assert result.deleted_entries == 1
+    assert remaining_file_history == []
+    assert len(remaining_library_history) == 1
+    assert [point.snapshot_day for point in dashboard_history.points] == [snapshot_day]
+    assert dashboard_history.points[0].trend_metrics.total_files == 1
+    assert dashboard_history.points[0].trend_metrics.resolution_counts == {"1080p": 1}
+    assert dashboard_history.points[0].trend_metrics.totals["total_size_bytes"] == 4_000
 
 
 def test_apply_history_retention_prunes_oldest_scan_history_and_keeps_active_jobs(monkeypatch) -> None:
@@ -767,10 +925,11 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
             .order_by(MediaFileHistory.captured_at.asc(), MediaFileHistory.id.asc())
         ).all()
 
-    assert result.created_library_history_entries == 7
+    assert result.created_library_history_entries == 9
+    assert result.updated_library_history_entries == 1
     assert result.created_file_history_entries == 2
     assert result.oldest_reconstructed_snapshot_day == "2026-04-10"
-    assert result.newest_reconstructed_snapshot_day == "2026-04-16"
+    assert result.newest_reconstructed_snapshot_day == "2026-04-19"
     assert [row.snapshot_day for row in library_rows] == [
         "2026-04-10",
         "2026-04-11",
@@ -780,6 +939,8 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
         "2026-04-15",
         "2026-04-16",
         "2026-04-17",
+        "2026-04-18",
+        "2026-04-19",
     ]
     assert library_rows[0].snapshot["trend_metrics"]["total_files"] == 1
     assert library_rows[0].snapshot["trend_metrics"]["schema_version"] == 2
@@ -788,6 +949,17 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
     assert library_rows[5].snapshot["trend_metrics"]["total_files"] == 2
     assert library_rows[5].snapshot["trend_metrics"]["numeric_summaries"]["quality_score"]["count"] == 2
     assert library_rows[5].snapshot["scan_delta"]["new_files"] == 1
+    assert library_rows[7].snapshot["trend_metrics"]["schema_version"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["total_files"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["resolution_counts"] == {"4k": 2}
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["container"]["mkv"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["video_codec"]["hevc"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["hdr_type"]["HDR10"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["audio_codecs"]["truehd"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["audio_languages"]["en"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["scan_status"]["ready"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["numeric_distributions"]["size"]["total"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["numeric_distributions"]["resolution_mp"]["total"] == 2
     assert file_rows[0].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction
     assert file_rows[0].relative_path == "older.mkv"
     assert file_rows[1].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction

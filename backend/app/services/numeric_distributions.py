@@ -252,6 +252,7 @@ def build_numeric_distributions(
     *,
     library_id: int | None = None,
     dashboard_only: bool = False,
+    metric_ids: set[NumericDistributionMetricId] | None = None,
 ) -> dict[NumericDistributionMetricId, NumericDistribution]:
     return {
         config.metric_id: _build_distribution(
@@ -261,4 +262,5 @@ def build_numeric_distributions(
             dashboard_only=dashboard_only,
         )
         for config in NUMERIC_DISTRIBUTION_CONFIGS
+        if metric_ids is None or config.metric_id in metric_ids
     }

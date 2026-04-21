@@ -534,10 +534,44 @@
 
 .file-detail-panels-grid {
   align-items: start;
+  position: relative;
 }
 
 .file-detail-panel-shell {
   min-width: 0;
+}
+
+.file-detail-panels-grid.is-masonry-ready {
+  display: block;
+}
+
+.file-detail-panels-grid.is-masonry-ready .file-detail-panel-shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.85, 0.24, 1),
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.file-detail-panels-grid.is-reordering .file-detail-panel-shell:not(.is-dragging) {
+  transition-duration: 0.26s, 0.16s, 0.16s;
+}
+
+.file-detail-panel-shell.is-dragging {
+  cursor: grabbing;
+  filter: drop-shadow(0 22px 34px rgba(31, 28, 22, 0.18));
+  transition: none;
+}
+
+.file-detail-panels-grid.is-masonry-ready .file-detail-panel-shell.is-dragging {
+  transition: none;
+}
+
+.file-detail-panel-shell.is-dragging .async-panel {
+  border-color: rgba(31, 28, 22, 0.18);
 }
 
 .file-detail-panel-shell.is-wide {
@@ -893,10 +927,6 @@
   min-width: 0;
 }
 
-.file-detail-path-card {
-  min-width: 0;
-}
-
 .file-detail-badge-tooltip-trigger,
 .file-detail-badge-tooltip-trigger.tooltip-trigger {
   display: inline-flex;
@@ -958,7 +988,7 @@
   max-width: 100%;
   min-width: 0;
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(31, 28, 22, 0.06);
   color: var(--muted);
   font-size: 0.9rem;
@@ -1779,6 +1809,11 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .scan-log-outcome.badge-successful {
   background: rgba(91, 167, 76, 0.16);
   color: #2f6f28;
+}
+
+.scan-log-outcome.badge-completed_with_issues {
+  background: rgba(208, 122, 74, 0.16);
+  color: #8a4a23;
 }
 
 .scan-log-outcome.badge-failed {
@@ -2624,6 +2659,116 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   overflow-wrap: anywhere;
 }
 
+.file-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(520px, 68vh);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.file-history-entry {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.file-history-entry:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.file-history-entry-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.file-history-entry-head::-webkit-details-marker {
+  display: none;
+}
+
+.file-history-entry-head::before {
+  content: "›";
+  flex: 0 0 auto;
+  width: 10px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 800;
+  transform: translateX(1px);
+  transition: transform 0.16s ease;
+}
+
+.file-history-entry[open] > .file-history-entry-head::before {
+  transform: translateX(2px) rotate(90deg);
+}
+
+.file-history-entry-head strong {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metrics {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 3px;
+  margin: 0;
+}
+
+.file-history-metric {
+  display: contents;
+}
+
+.file-history-metric dt {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.file-history-metric dd {
+  grid-column: 2;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 2px 0;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metric.has-changed strong {
+  color: #1f8f61;
+}
+
+.file-history-old-value {
+  color: #b84a45;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+html[data-theme="dark"] .file-history-metric.has-changed strong {
+  color: #74d59f;
+}
+
+html[data-theme="dark"] .file-history-old-value {
+  color: #ff948c;
+}
+
 .stream-details-tooltip-portal {
   padding: 12px 14px;
 }
@@ -3460,6 +3605,11 @@ html[data-theme="dark"] {
     border-bottom-color: rgba(240, 236, 228, 0.08);
   }
 
+  .history-retention-table tbody th {
+    background: rgba(240, 236, 228, 0.045);
+    color: rgba(240, 236, 228, 0.9);
+  }
+
   .library-statistics-table tbody tr.is-drop-target td {
     background: rgba(27, 153, 139, 0.10);
   }
@@ -3640,6 +3790,11 @@ html[data-theme="dark"] {
     color: #9fd18f;
   }
 
+  .scan-log-outcome.badge-completed_with_issues {
+    background: rgba(208, 122, 74, 0.2);
+    color: #f2b183;
+  }
+
   .scan-log-outcome.badge-failed {
     background: rgba(207, 83, 69, 0.22);
     color: #f0a195;
@@ -3682,6 +3837,11 @@ html[data-theme="dark"] {
 
   .tooltip-trigger {
     background: rgba(240, 236, 228, 0.10);
+  }
+
+  .file-detail-badge-tooltip-trigger,
+  .file-detail-badge-tooltip-trigger.tooltip-trigger {
+    background: transparent;
   }
 
   .quality-score-tooltip-trigger,

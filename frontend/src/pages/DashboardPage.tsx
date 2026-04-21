@@ -21,6 +21,7 @@ import { useAppData } from "../lib/app-data";
 import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
+import { LruCache } from "../lib/lru-cache";
 import {
   getDashboardStatisticNumericDistribution,
   getDashboardStatisticPanelItems,
@@ -53,7 +54,7 @@ const DASHBOARD_LAYOUT_KEY = "main";
 const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
 const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
-const dashboardComparisonCache = new Map<string, ComparisonResponse>();
+const dashboardComparisonCache = new LruCache<string, ComparisonResponse>(24);
 type DashboardLayoutPanelDefinition =
   | {
       id: LibraryStatisticDefinition["id"];
@@ -187,6 +188,14 @@ export function DashboardPage() {
     () => visiblePanels.filter((panel) => panel.item.statisticId === "comparison"),
     [visiblePanels],
   );
+  const visibleDashboardPanelIds = useMemo(
+    () => [...new Set(visiblePanels.map((panel) => panel.item.statisticId))],
+    [visiblePanels],
+  );
+  const visibleDashboardPanelIdsKey = useMemo(
+    () => visibleDashboardPanelIds.slice().sort().join("|"),
+    [visibleDashboardPanelIds],
+  );
   const comparisonPanelsKey = useMemo(
     () =>
       comparisonPanels
@@ -203,11 +212,10 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    if (dashboardLoaded) {
-      return;
-    }
-    loadDashboard().catch((reason: Error) => setError(reason.message));
-  }, [dashboardLoaded, loadDashboard]);
+    loadDashboard(false, visibleDashboardPanelIds)
+      .then(() => setError(null))
+      .catch((reason: Error) => setError(reason.message));
+  }, [dashboardLoaded, loadDashboard, visibleDashboardPanelIdsKey]);
 
   const loadDashboardHistory = useEffectEvent(async (showLoading = false) => {
     historyAbortRef.current?.abort();
@@ -333,7 +341,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
-      loadDashboard(true)
+      loadDashboard(true, visibleDashboardPanelIds)
         .then(() => setError(null))
         .catch((reason: Error) => setError(reason.message));
       void loadDashboardHistory(false);
@@ -344,7 +352,7 @@ export function DashboardPage() {
       syncComparisonPanels(true);
     }
     hadActiveJobsRef.current = hasActiveJobs;
-  }, [comparisonPanelsKey, hasActiveJobs, loadDashboard]);
+  }, [comparisonPanelsKey, hasActiveJobs, loadDashboard, visibleDashboardPanelIdsKey]);
 
   useEffect(() => {
     return () => {

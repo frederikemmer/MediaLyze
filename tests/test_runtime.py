@@ -146,8 +146,9 @@ def test_start_does_not_resume_preexisting_active_jobs(monkeypatch) -> None:
             self.running = False
 
     class ExecutorStub:
-        def submit(self, fn, job_id: int, library_id: int) -> None:
-            submitted.append((job_id, library_id))
+        def submit(self, fn, *args) -> None:
+            if len(args) == 2:
+                submitted.append((args[0], args[1]))
 
         def shutdown(self, wait=False, cancel_futures=True) -> None:
             return None
@@ -155,6 +156,7 @@ def test_start_does_not_resume_preexisting_active_jobs(monkeypatch) -> None:
     runtime = runtime_module.ScanRuntimeManager(Settings())
     runtime.scheduler = SchedulerStub()
     runtime.executor = ExecutorStub()
+    runtime.maintenance_executor = ExecutorStub()
 
     runtime.start()
 
@@ -215,7 +217,7 @@ def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
             self.running = False
 
     class ExecutorStub:
-        def submit(self, fn, job_id: int, library_id: int) -> None:
+        def submit(self, fn, *args) -> None:
             return None
 
         def shutdown(self, wait=False, cancel_futures=True) -> None:
@@ -224,6 +226,7 @@ def test_start_does_not_queue_quality_backfill_jobs(monkeypatch) -> None:
     runtime = runtime_module.ScanRuntimeManager(Settings())
     runtime.scheduler = SchedulerStub()
     runtime.executor = ExecutorStub()
+    runtime.maintenance_executor = ExecutorStub()
 
     runtime.start()
 
@@ -259,7 +262,7 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
             self.running = False
 
     class ExecutorStub:
-        def submit(self, fn, job_id: int, library_id: int) -> None:
+        def submit(self, fn, *args) -> None:
             return None
 
         def shutdown(self, wait=False, cancel_futures=True) -> None:
@@ -274,12 +277,15 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     runtime = runtime_module.ScanRuntimeManager(Settings())
     runtime.scheduler = SchedulerStub()
     runtime.executor = ExecutorStub()
+    runtime.maintenance_executor = ExecutorStub()
 
     runtime.start()
 
     assert retention_calls == ["called"]
     assert added_jobs[0]["func"] == runtime.run_history_retention
     assert added_jobs[0]["kwargs"]["id"] == "history-retention-maintenance"
+    assert added_jobs[1]["func"] == runtime.request_history_storage_refresh
+    assert added_jobs[1]["kwargs"]["id"] == "history-storage-refresh"
 
 
 def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch, tmp_path) -> None:
@@ -294,7 +300,7 @@ def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch,
             self.max_workers = max_workers
             created_worker_counts.append(max_workers)
 
-        def submit(self, fn, job_id: int, library_id: int) -> None:
+        def submit(self, fn, *args) -> None:
             return None
 
         def shutdown(self, wait=False, cancel_futures=False) -> None:
@@ -316,7 +322,7 @@ def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch,
 
     assert refreshed is True
     assert runtime.executor_max_workers == 6
-    assert created_worker_counts == [2, 6]
+    assert created_worker_counts == [2, 1, 6]
     assert shutdown_calls == [(2, False, False)]
 
 

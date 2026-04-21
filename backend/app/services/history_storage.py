@@ -5,8 +5,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Lock
 
-from sqlalchemy import select, text
+from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -30,6 +31,30 @@ class HistoryStorageRecord:
     estimated_bytes: int
 
 
+class HistoryStorageCache:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._payloads: dict[str, HistoryStorageRead] = {}
+
+    def get(self, cache_key: str, app_settings) -> HistoryStorageRead | None:
+        with self._lock:
+            payload = self._payloads.get(cache_key)
+            if payload is None:
+                return None
+            return _apply_retention_settings(payload, app_settings)
+
+    def set(self, cache_key: str, payload: HistoryStorageRead) -> None:
+        with self._lock:
+            self._payloads[cache_key] = payload.model_copy(deep=True)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._payloads.clear()
+
+
+history_storage_cache = HistoryStorageCache()
+
+
 def _json_length(value) -> int:
     if value is None:
         return 0
@@ -42,6 +67,10 @@ def _text_length(value: str | None) -> int:
     if not value:
         return 0
     return len(value.encode("utf-8"))
+
+
+def _stored_length_expression(value) -> object:
+    return func.length(cast(func.coalesce(value, ""), String))
 
 
 def _days_limit_for_bucket(app_settings, bucket_name: str) -> int:
@@ -98,62 +127,62 @@ def _forecast_from_records(
 
 
 def _media_file_history_records(db: Session) -> list[HistoryStorageRecord]:
+    estimated_bytes = (
+        _stored_length_expression(MediaFileHistory.relative_path)
+        + _stored_length_expression(MediaFileHistory.filename)
+        + _stored_length_expression(MediaFileHistory.snapshot_hash)
+        + _stored_length_expression(MediaFileHistory.snapshot)
+    )
     rows = db.execute(
         select(
             MediaFileHistory.captured_at,
-            MediaFileHistory.relative_path,
-            MediaFileHistory.filename,
-            MediaFileHistory.snapshot_hash,
-            MediaFileHistory.snapshot,
+            estimated_bytes.label("estimated_bytes"),
         )
     ).all()
     return [
         HistoryStorageRecord(
             recorded_at=captured_at,
-            estimated_bytes=(
-                _text_length(relative_path)
-                + _text_length(filename)
-                + _text_length(snapshot_hash)
-                + _json_length(snapshot)
-            ),
+            estimated_bytes=int(estimated_bytes or 0),
         )
-        for captured_at, relative_path, filename, snapshot_hash, snapshot in rows
+        for captured_at, estimated_bytes in rows
         if captured_at is not None
     ]
 
 
 def _library_history_records(db: Session) -> list[HistoryStorageRecord]:
-    rows = db.execute(select(LibraryHistory.captured_at, LibraryHistory.snapshot)).all()
+    rows = db.execute(
+        select(
+            LibraryHistory.captured_at,
+            _stored_length_expression(LibraryHistory.snapshot).label("estimated_bytes"),
+        )
+    ).all()
     return [
-        HistoryStorageRecord(recorded_at=captured_at, estimated_bytes=_json_length(snapshot))
-        for captured_at, snapshot in rows
+        HistoryStorageRecord(recorded_at=captured_at, estimated_bytes=int(estimated_bytes or 0))
+        for captured_at, estimated_bytes in rows
         if captured_at is not None
     ]
 
 
 def _scan_history_records(db: Session) -> list[HistoryStorageRecord]:
+    estimated_bytes = (
+        _stored_length_expression(ScanJob.job_type)
+        + _stored_length_expression(ScanJob.status)
+        + _stored_length_expression(ScanJob.trigger_source)
+        + _stored_length_expression(ScanJob.trigger_details)
+        + _stored_length_expression(ScanJob.scan_summary)
+    )
     rows = db.execute(
         select(
             ScanJob.finished_at,
-            ScanJob.job_type,
-            ScanJob.status,
-            ScanJob.trigger_source,
-            ScanJob.trigger_details,
-            ScanJob.scan_summary,
+            estimated_bytes.label("estimated_bytes"),
         ).where(ScanJob.status.in_(TERMINAL_SCAN_JOB_STATUSES))
     ).all()
     return [
         HistoryStorageRecord(
             recorded_at=finished_at,
-            estimated_bytes=(
-                _text_length(job_type)
-                + _text_length(status.value if hasattr(status, "value") else str(status))
-                + _text_length(trigger_source.value if hasattr(trigger_source, "value") else str(trigger_source))
-                + _json_length(trigger_details)
-                + _json_length(scan_summary)
-            ),
+            estimated_bytes=int(estimated_bytes or 0),
         )
-        for finished_at, job_type, status, trigger_source, trigger_details, scan_summary in rows
+        for finished_at, estimated_bytes in rows
         if finished_at is not None
     ]
 
@@ -170,9 +199,37 @@ def _reclaimable_file_bytes(db: Session) -> int:
     return page_size * freelist_count
 
 
-def get_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
-    resolved_settings = settings or get_settings()
-    app_settings = get_app_settings(db, resolved_settings)
+def _history_storage_cache_key(settings: Settings, db: Session | None = None) -> str:
+    if db is not None:
+        bind = db.get_bind()
+        url = getattr(bind, "url", None)
+        if (
+            url is not None
+            and str(url).startswith("sqlite")
+            and getattr(url, "database", None) in {None, ":memory:"}
+        ):
+            return f"{settings.database_path.resolve()}::{id(bind)}"
+    return str(settings.database_path.resolve())
+
+
+def _apply_retention_settings(payload: HistoryStorageRead, app_settings) -> HistoryStorageRead:
+    next_payload = payload.model_copy(deep=True)
+    for bucket_name in ("file_history", "library_history", "scan_history"):
+        category = getattr(next_payload.categories, bucket_name)
+        days_limit = _days_limit_for_bucket(app_settings, bucket_name)
+        category.days_limit = days_limit
+        category.storage_limit_bytes = _storage_limit_bytes_for_bucket(app_settings, bucket_name)
+        category.projected_bytes_for_configured_days = (
+            category.average_daily_bytes * days_limit if days_limit > 0 else None
+        )
+    return next_payload
+
+
+def _build_history_storage(
+    db: Session,
+    resolved_settings: Settings,
+    app_settings,
+) -> HistoryStorageRead:
     categories = HistoryStorageCategoriesRead(
         file_history=_forecast_from_records(
             _media_file_history_records(db),
@@ -196,3 +253,24 @@ def get_history_storage(db: Session, settings: Settings | None = None) -> Histor
         reclaimable_file_bytes=_reclaimable_file_bytes(db),
         categories=categories,
     )
+
+
+def get_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
+    resolved_settings = settings or get_settings()
+    app_settings = get_app_settings(db, resolved_settings)
+    payload = _build_history_storage(db, resolved_settings, app_settings)
+    history_storage_cache.set(_history_storage_cache_key(resolved_settings, db), payload)
+    return payload
+
+
+def get_cached_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
+    resolved_settings = settings or get_settings()
+    app_settings = get_app_settings(db, resolved_settings)
+    cache_key = _history_storage_cache_key(resolved_settings, db)
+    cached = history_storage_cache.get(cache_key, app_settings)
+    if cached is not None:
+        return cached
+
+    payload = _build_history_storage(db, resolved_settings, app_settings)
+    history_storage_cache.set(cache_key, payload)
+    return payload

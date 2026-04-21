@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import distinct, func, literal, select, union_all
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,14 @@ from backend.app.services.resolution_categories import classify_resolution_categ
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
+
+_NUMERIC_PANEL_METRIC_IDS = {
+    "quality_score": "quality_score",
+    "duration": "duration",
+    "size": "size",
+    "bitrate": "bitrate",
+    "audio_bitrate": "audio_bitrate",
+}
 
 
 def _distribution(rows: list[tuple[str | None, int]], fallback: str = "unknown") -> list[DistributionItem]:
@@ -79,13 +89,27 @@ def _group_resolution_distribution(rows, resolution_categories) -> list[Distribu
     ]
 
 
-def build_dashboard(db: Session) -> DashboardResponse:
-    cache_key = str(id(db.get_bind()))
+def _dashboard_cache_key(base_key: str, requested_panels: set[str] | None) -> str:
+    if requested_panels is None:
+        return base_key
+    return f"{base_key}:panels={','.join(sorted(requested_panels))}"
+
+
+def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) -> DashboardResponse:
+    panel_filter = set(requested_panels) if requested_panels is not None else None
+    cache_key = _dashboard_cache_key(str(id(db.get_bind())), panel_filter)
     cached = stats_cache.get_dashboard(cache_key)
     if cached is not None:
         return cached
 
-    primary_video_streams = primary_video_streams_subquery()
+    def wants(panel_id: str) -> bool:
+        return panel_filter is None or panel_id in panel_filter
+
+    primary_video_streams = (
+        primary_video_streams_subquery()
+        if wants("video_codec") or wants("resolution") or wants("hdr_type")
+        else None
+    )
     app_settings = get_app_settings(db)
     dashboard_library_ids = select(Library.id).where(Library.show_on_dashboard.is_(True))
     totals = {
@@ -106,172 +130,216 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ),
     }
 
-    container_distribution = [
-        DistributionItem(label=label, value=value, filter_value=raw_value)
-        for raw_value, value in db.execute(
-            select(
-                _normalized_text_expr(MediaFile.extension, "unknown"),
-                func.count(MediaFile.id),
-            )
+    container_distribution = (
+        [
+            DistributionItem(label=label, value=value, filter_value=raw_value)
+            for raw_value, value in db.execute(
+                select(
+                    _normalized_text_expr(MediaFile.extension, "unknown"),
+                    func.count(MediaFile.id),
+                )
+                .where(MediaFile.library_id.in_(dashboard_library_ids))
+                .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
+                .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
+            ).all()
+            for label in [format_container_label(raw_value)]
+            if label
+        ]
+        if wants("container")
+        else []
+    )
+    video_codec_rows = (
+        db.execute(
+            select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
             .where(MediaFile.library_id.in_(dashboard_library_ids))
-            .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
-            .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
+            .group_by(primary_video_streams.c.codec)
+            .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
-        for label in [format_container_label(raw_value)]
-        if label
-    ]
-    video_codec_rows = db.execute(
-        select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
-        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .group_by(primary_video_streams.c.codec)
-        .order_by(func.count(primary_video_streams.c.id).desc())
-    ).all()
-    resolution_rows = db.execute(
-        select(
-            primary_video_streams.c.width,
-            primary_video_streams.c.height,
-            func.count(primary_video_streams.c.id),
-        )
-        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
-        .order_by(func.count(primary_video_streams.c.id).desc())
-    ).all()
-    hdr_rows = db.execute(
-        select(
-            func.coalesce(primary_video_streams.c.hdr_type, "SDR"),
-            func.count(primary_video_streams.c.id),
-        )
-        .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
-        .order_by(func.count(primary_video_streams.c.id).desc())
-    ).all()
-    audio_codec_values = (
-        select(
-            AudioStream.media_file_id.label("media_file_id"),
-            _normalized_text_expr(AudioStream.codec, "unknown").label("value"),
-        )
-        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .distinct()
-        .subquery("dashboard_audio_codec_values")
+        if primary_video_streams is not None and wants("video_codec")
+        else []
     )
-    audio_codec_rows = db.execute(
-        select(
-            audio_codec_values.c.value,
-            func.count(distinct(audio_codec_values.c.media_file_id)),
-        )
-        .group_by(audio_codec_values.c.value)
-        .order_by(func.count(distinct(audio_codec_values.c.media_file_id)).desc())
-    ).all()
-    audio_language_values = (
-        select(
-            AudioStream.media_file_id.label("media_file_id"),
-            _normalized_language_expr(AudioStream.language).label("value"),
-        )
-        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .distinct()
-        .subquery("dashboard_audio_language_values")
-    )
-    audio_language_rows = _count_distinct_normalized_languages(
-        db.execute(select(audio_language_values.c.media_file_id, audio_language_values.c.value)).all(),
-        fallback="und",
-    )
-    audio_spatial_profile_values = (
-        select(
-            AudioStream.media_file_id.label("media_file_id"),
-            _normalized_text_expr(AudioStream.spatial_audio_profile, "").label("value"),
-        )
-        .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids))
-        .where(func.length(func.trim(func.coalesce(AudioStream.spatial_audio_profile, ""))) > 0)
-        .distinct()
-        .subquery("dashboard_audio_spatial_profile_values")
-    )
-    audio_spatial_profile_rows = db.execute(
-        select(
-            audio_spatial_profile_values.c.value,
-            func.count(distinct(audio_spatial_profile_values.c.media_file_id)),
-        )
-        .group_by(audio_spatial_profile_values.c.value)
-        .order_by(func.count(distinct(audio_spatial_profile_values.c.media_file_id)).desc())
-    ).all()
-    audio_spatial_profile_distribution = [
-        DistributionItem(label=label, value=value)
-        for raw_label, value in audio_spatial_profile_rows
-        if value > 0
-        for label in [format_spatial_audio_profile(raw_label)]
-        if label
-    ]
-
-    subtitle_language_values = union_all(
-        select(
-            SubtitleStream.media_file_id.label("media_file_id"),
-            _normalized_language_expr(SubtitleStream.language).label("value"),
-        )
-        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-        select(
-            ExternalSubtitle.media_file_id.label("media_file_id"),
-            _normalized_language_expr(ExternalSubtitle.language).label("value"),
-        )
-        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-    ).subquery("dashboard_subtitle_language_values")
-    subtitle_language_rows = _count_distinct_normalized_languages(
-        db.execute(select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)).all(),
-        fallback="und",
-    )
-    subtitle_codec_values = union_all(
-        select(
-            SubtitleStream.media_file_id.label("media_file_id"),
-            _normalized_text_expr(SubtitleStream.codec, "unknown").label("value"),
-        )
-        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-        select(
-            ExternalSubtitle.media_file_id.label("media_file_id"),
-            _normalized_text_expr(ExternalSubtitle.format, "unknown").label("value"),
-        )
-        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-    ).subquery("dashboard_subtitle_codec_values")
-    subtitle_codec_rows = db.execute(
-        select(
-            subtitle_codec_values.c.value,
-            func.count(distinct(subtitle_codec_values.c.media_file_id)),
-        )
-        .group_by(subtitle_codec_values.c.value)
-        .order_by(func.count(distinct(subtitle_codec_values.c.media_file_id)).desc())
-    ).all()
-    subtitle_source_values = union_all(
-        select(SubtitleStream.media_file_id.label("media_file_id"), literal("internal").label("value"))
-        .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-        select(ExternalSubtitle.media_file_id.label("media_file_id"), literal("external").label("value"))
-        .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
-        .where(MediaFile.library_id.in_(dashboard_library_ids)),
-    ).subquery("dashboard_subtitle_source_values")
-    subtitle_source_distinct_values = (
-        select(
-            subtitle_source_values.c.media_file_id,
-            subtitle_source_values.c.value,
-        )
-        .distinct()
-        .subquery("dashboard_subtitle_source_distinct_values")
-    )
-    subtitle_source_distribution = _distribution(
+    resolution_rows = (
         db.execute(
             select(
-                subtitle_source_distinct_values.c.value,
-                func.count(distinct(subtitle_source_distinct_values.c.media_file_id)),
+                primary_video_streams.c.width,
+                primary_video_streams.c.height,
+                func.count(primary_video_streams.c.id),
             )
-            .group_by(subtitle_source_distinct_values.c.value)
-            .order_by(func.count(distinct(subtitle_source_distinct_values.c.media_file_id)).desc())
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
+            .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
+        if primary_video_streams is not None and wants("resolution")
+        else []
+    )
+    hdr_rows = (
+        db.execute(
+            select(
+                func.coalesce(primary_video_streams.c.hdr_type, "SDR"),
+                func.count(primary_video_streams.c.id),
+            )
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
+            .order_by(func.count(primary_video_streams.c.id).desc())
+        ).all()
+        if primary_video_streams is not None and wants("hdr_type")
+        else []
+    )
+
+    audio_codec_rows = []
+    if wants("audio_codecs"):
+        audio_codec_values = (
+            select(
+                AudioStream.media_file_id.label("media_file_id"),
+                _normalized_text_expr(AudioStream.codec, "unknown").label("value"),
+            )
+            .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .distinct()
+            .subquery("dashboard_audio_codec_values")
+        )
+        audio_codec_rows = db.execute(
+            select(
+                audio_codec_values.c.value,
+                func.count(distinct(audio_codec_values.c.media_file_id)),
+            )
+            .group_by(audio_codec_values.c.value)
+            .order_by(func.count(distinct(audio_codec_values.c.media_file_id)).desc())
+        ).all()
+
+    audio_language_rows: list[tuple[str, int]] = []
+    if wants("audio_languages"):
+        audio_language_values = (
+            select(
+                AudioStream.media_file_id.label("media_file_id"),
+                _normalized_language_expr(AudioStream.language).label("value"),
+            )
+            .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .distinct()
+            .subquery("dashboard_audio_language_values")
+        )
+        audio_language_rows = _count_distinct_normalized_languages(
+            db.execute(select(audio_language_values.c.media_file_id, audio_language_values.c.value)).all(),
+            fallback="und",
+        )
+
+    audio_spatial_profile_distribution = []
+    if wants("audio_spatial_profiles"):
+        audio_spatial_profile_values = (
+            select(
+                AudioStream.media_file_id.label("media_file_id"),
+                _normalized_text_expr(AudioStream.spatial_audio_profile, "").label("value"),
+            )
+            .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .where(func.length(func.trim(func.coalesce(AudioStream.spatial_audio_profile, ""))) > 0)
+            .distinct()
+            .subquery("dashboard_audio_spatial_profile_values")
+        )
+        audio_spatial_profile_rows = db.execute(
+            select(
+                audio_spatial_profile_values.c.value,
+                func.count(distinct(audio_spatial_profile_values.c.media_file_id)),
+            )
+            .group_by(audio_spatial_profile_values.c.value)
+            .order_by(func.count(distinct(audio_spatial_profile_values.c.media_file_id)).desc())
+        ).all()
+        audio_spatial_profile_distribution = [
+            DistributionItem(label=label, value=value)
+            for raw_label, value in audio_spatial_profile_rows
+            if value > 0
+            for label in [format_spatial_audio_profile(raw_label)]
+            if label
+        ]
+
+    subtitle_language_rows: list[tuple[str, int]] = []
+    if wants("subtitle_languages"):
+        subtitle_language_values = union_all(
+            select(
+                SubtitleStream.media_file_id.label("media_file_id"),
+                _normalized_language_expr(SubtitleStream.language).label("value"),
+            )
+            .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+            select(
+                ExternalSubtitle.media_file_id.label("media_file_id"),
+                _normalized_language_expr(ExternalSubtitle.language).label("value"),
+            )
+            .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+        ).subquery("dashboard_subtitle_language_values")
+        subtitle_language_rows = _count_distinct_normalized_languages(
+            db.execute(select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)).all(),
+            fallback="und",
+        )
+
+    subtitle_codec_rows = []
+    if wants("subtitle_codecs"):
+        subtitle_codec_values = union_all(
+            select(
+                SubtitleStream.media_file_id.label("media_file_id"),
+                _normalized_text_expr(SubtitleStream.codec, "unknown").label("value"),
+            )
+            .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+            select(
+                ExternalSubtitle.media_file_id.label("media_file_id"),
+                _normalized_text_expr(ExternalSubtitle.format, "unknown").label("value"),
+            )
+            .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+        ).subquery("dashboard_subtitle_codec_values")
+        subtitle_codec_rows = db.execute(
+            select(
+                subtitle_codec_values.c.value,
+                func.count(distinct(subtitle_codec_values.c.media_file_id)),
+            )
+            .group_by(subtitle_codec_values.c.value)
+            .order_by(func.count(distinct(subtitle_codec_values.c.media_file_id)).desc())
+        ).all()
+
+    subtitle_source_distribution = []
+    if wants("subtitle_sources"):
+        subtitle_source_values = union_all(
+            select(SubtitleStream.media_file_id.label("media_file_id"), literal("internal").label("value"))
+            .join(MediaFile, MediaFile.id == SubtitleStream.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+            select(ExternalSubtitle.media_file_id.label("media_file_id"), literal("external").label("value"))
+            .join(MediaFile, MediaFile.id == ExternalSubtitle.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids)),
+        ).subquery("dashboard_subtitle_source_values")
+        subtitle_source_distinct_values = (
+            select(
+                subtitle_source_values.c.media_file_id,
+                subtitle_source_values.c.value,
+            )
+            .distinct()
+            .subquery("dashboard_subtitle_source_distinct_values")
+        )
+        subtitle_source_distribution = _distribution(
+            db.execute(
+                select(
+                    subtitle_source_distinct_values.c.value,
+                    func.count(distinct(subtitle_source_distinct_values.c.media_file_id)),
+                )
+                .group_by(subtitle_source_distinct_values.c.value)
+                .order_by(func.count(distinct(subtitle_source_distinct_values.c.media_file_id)).desc())
+            ).all()
+        )
+
+    numeric_metric_ids = {
+        metric_id
+        for panel_id, metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
+        if wants(panel_id)
+    }
+    numeric_distributions = build_numeric_distributions(
+        db,
+        dashboard_only=True,
+        metric_ids=None if panel_filter is None else numeric_metric_ids,
     )
 
     payload = DashboardResponse(
@@ -295,7 +363,7 @@ def build_dashboard(db: Session) -> DashboardResponse:
         ],
         subtitle_codec_distribution=_distribution(subtitle_codec_rows),
         subtitle_source_distribution=subtitle_source_distribution,
-        numeric_distributions=build_numeric_distributions(db, dashboard_only=True),
+        numeric_distributions=numeric_distributions,
     )
     stats_cache.set_dashboard(cache_key, payload)
     return payload

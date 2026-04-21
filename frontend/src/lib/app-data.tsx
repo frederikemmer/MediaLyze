@@ -20,7 +20,7 @@ type AppDataContextValue = {
   libraries: LibrarySummary[];
   librariesLoaded: boolean;
   loadAppSettings: (force?: boolean) => Promise<AppSettings>;
-  loadDashboard: (force?: boolean) => Promise<DashboardResponse>;
+  loadDashboard: (force?: boolean, panels?: readonly string[] | null) => Promise<DashboardResponse>;
   loadLibraries: (force?: boolean) => Promise<LibrarySummary[]>;
   setAppSettings: (payload: AppSettings) => void;
   setDashboard: (payload: DashboardResponse) => void;
@@ -38,7 +38,7 @@ const DEFAULT_SCAN_PERFORMANCE = {
 };
 
 const DEFAULT_HISTORY_RETENTION = {
-  file_history: { days: 90, storage_limit_gb: 0 },
+  file_history: { days: 30, storage_limit_gb: 0 },
   library_history: { days: 365, storage_limit_gb: 0 },
   scan_history: { days: 30, storage_limit_gb: 0 },
 };
@@ -109,6 +109,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [librariesLoaded, setLibrariesLoaded] = useState(false);
   const appSettingsRequestRef = useRef<Promise<AppSettings> | null>(null);
   const dashboardRequestRef = useRef<Promise<DashboardResponse> | null>(null);
+  const dashboardRequestKeyRef = useRef<string | null>(null);
+  const dashboardPanelKeyRef = useRef<string | null>(null);
   const librariesRequestRef = useRef<Promise<LibrarySummary[]> | null>(null);
 
   const setAppSettings = useEffectEvent((payload: AppSettings) => {
@@ -119,6 +121,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const setDashboard = useEffectEvent((payload: DashboardResponse) => {
     setDashboardState(payload);
     setDashboardLoaded(true);
+    dashboardPanelKeyRef.current = null;
   });
 
   const setLibraries = useEffectEvent((payload: LibrarySummary[]) => {
@@ -173,30 +176,41 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return request;
   });
 
-  const loadDashboard = useEffectEvent(async (force = false) => {
+  const loadDashboard = useEffectEvent(async (force = false, panels?: readonly string[] | null) => {
+    const panelKey = panels?.length ? [...new Set(panels)].sort().join(",") : null;
     if (!force) {
-      if (dashboardRequestRef.current) {
+      if (
+        dashboardRequestRef.current &&
+        (dashboardRequestKeyRef.current === null || dashboardRequestKeyRef.current === panelKey)
+      ) {
         return dashboardRequestRef.current;
       }
-      if (dashboardLoaded && dashboard) {
+      if (
+        dashboardLoaded &&
+        dashboard &&
+        (dashboardPanelKeyRef.current === null || dashboardPanelKeyRef.current === panelKey)
+      ) {
         return dashboard;
       }
     }
 
     const request = api
-      .dashboard()
+      .dashboard(panels)
       .then((payload) => {
         setDashboardState(payload);
         setDashboardLoaded(true);
+        dashboardPanelKeyRef.current = panelKey;
         return payload;
       })
       .finally(() => {
         if (dashboardRequestRef.current === request) {
           dashboardRequestRef.current = null;
+          dashboardRequestKeyRef.current = null;
         }
       });
 
     dashboardRequestRef.current = request;
+    dashboardRequestKeyRef.current = panelKey;
     return request;
   });
 

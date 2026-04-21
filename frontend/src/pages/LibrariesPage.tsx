@@ -23,7 +23,7 @@ import {
   type ScanJobDetail,
 } from "../lib/api";
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
-import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
   getSettingsPanelState,
@@ -74,9 +74,28 @@ type IgnorePatternGroup = "user" | "default";
 type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
 
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
-const VIDEO_CODEC_OPTIONS = ["h264", "hevc", "av1"];
+const VIDEO_CODEC_OPTIONS = ["mpeg2video", "mpeg4", "vc1", "mjpeg", "h264", "vp9", "hevc", "prores", "av1"];
 const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
-const AUDIO_CODEC_OPTIONS = ["aac", "ac3", "eac3", "dts", "dts_hd", "truehd", "flac"];
+const AUDIO_CODEC_OPTIONS = [
+  "mp3",
+  "vorbis",
+  "aac",
+  "ac3",
+  "eac3",
+  "opus",
+  "dts",
+  "dts_hd",
+  "truehd",
+  "flac",
+  "alac",
+  "pcm_bluray",
+  "pcm_s16le",
+  "pcm_s16be",
+  "pcm_s24le",
+  "pcm_s24be",
+  "pcm_s32le",
+  "pcm_s32be",
+];
 const DYNAMIC_RANGE_OPTIONS = ["sdr", "hdr10", "hdr10_plus", "dolby_vision"];
 const LANGUAGE_OPTIONS = ["de", "en", "fr", "es", "it", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "zh", "cs", "nl"];
 const ISO_639_1_CODES = new Set([
@@ -113,6 +132,8 @@ const QUALITY_OPTION_RANKS: Record<string, Record<string, number>> = {
   audio_codec: Object.fromEntries(AUDIO_CODEC_OPTIONS.map((value, index) => [value, index])),
   dynamic_range: Object.fromEntries(DYNAMIC_RANGE_OPTIONS.map((value, index) => [value, index])),
 };
+const VIDEO_CODEC_OPTION_LABELS = new Map(VIDEO_CODEC_OPTIONS.map((value) => [value, formatCodecLabel(value, "video")]));
+const AUDIO_CODEC_OPTION_LABELS = new Map(AUDIO_CODEC_OPTIONS.map((value) => [value, formatCodecLabel(value, "audio")]));
 
 type ResolutionCategoryDraft = ResolutionCategory & {
   persisted: boolean;
@@ -151,7 +172,7 @@ const DEFAULT_SCAN_PERFORMANCE = {
   comparison_scatter_point_limit: 5000,
 };
 const DEFAULT_HISTORY_RETENTION = {
-  file_history: { days: 90, storage_limit_gb: 0 },
+  file_history: { days: 30, storage_limit_gb: 0 },
   library_history: { days: 365, storage_limit_gb: 0 },
   scan_history: { days: 30, storage_limit_gb: 0 },
 };
@@ -383,6 +404,9 @@ function formatOutcome(
   }
   if (value === "failed") {
     return t("scanLogs.outcomeFailed");
+  }
+  if (value === "completed_with_issues") {
+    return t("scanLogs.outcomeCompletedWithIssues");
   }
   return t("scanLogs.outcomeSuccessful");
 }
@@ -2054,9 +2078,17 @@ export function LibrariesPage() {
   function formatHistoryReconstructionStatus(result: HistoryReconstructionResult) {
     if (
       result.created_library_history_entries === 0 &&
+      result.updated_library_history_entries === 0 &&
       result.created_file_history_entries === 0
     ) {
       return t("libraries.historyRetention.reconstructNoChanges");
+    }
+    if (result.updated_library_history_entries > 0) {
+      return t("libraries.historyRetention.reconstructSuccessWithUpdates", {
+        libraryEntries: result.created_library_history_entries,
+        updatedLibraryEntries: result.updated_library_history_entries,
+        fileEntries: result.created_file_history_entries,
+      });
     }
     return t("libraries.historyRetention.reconstructSuccess", {
       libraryEntries: result.created_library_history_entries,
@@ -2477,9 +2509,9 @@ export function LibrariesPage() {
     return (
       <div className="quality-settings-panel field-span-full">
         {renderQualityOrdinalRow(library, "resolution", resolutionOptionIds, resolutionOptionLabels)}
-        {renderQualityOrdinalRow(library, "video_codec", VIDEO_CODEC_OPTIONS)}
+        {renderQualityOrdinalRow(library, "video_codec", VIDEO_CODEC_OPTIONS, VIDEO_CODEC_OPTION_LABELS)}
         {renderQualityOrdinalRow(library, "audio_channels", AUDIO_CHANNEL_OPTIONS)}
-        {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS)}
+        {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS, AUDIO_CODEC_OPTION_LABELS)}
         {renderQualityOrdinalRow(library, "dynamic_range", DYNAMIC_RANGE_OPTIONS)}
         <div className="quality-settings-group">
           <div className="quality-settings-group-title">{t("libraries.quality.language_preferences")}</div>
@@ -3110,6 +3142,7 @@ export function LibrariesPage() {
                   </table>
                 </div>
                 <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
+                <p className="field-hint">{t("libraries.historyRetention.scopeNote")}</p>
                 <div className="settings-table-shell history-retention-table-shell">
                   <table className="settings-data-table history-retention-table">
                     <thead>
@@ -3169,6 +3202,7 @@ export function LibrariesPage() {
                     <span>
                       {t("libraries.historyRetention.progressEntries", {
                         libraryEntries: historyReconstruction.created_library_history_entries,
+                        updatedLibraryEntries: historyReconstruction.updated_library_history_entries,
                         fileEntries: historyReconstruction.created_file_history_entries,
                       })}
                     </span>

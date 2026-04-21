@@ -64,8 +64,8 @@ def _merge_ignore_patterns(*pattern_groups: list[str]) -> list[str]:
     return merged
 
 
-def _default_feature_flags() -> FeatureFlagsRead:
-    return FeatureFlagsRead()
+def _default_feature_flags(settings: Settings) -> FeatureFlagsRead:
+    return FeatureFlagsRead(show_full_width_app_shell=settings.is_desktop)
 
 
 def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
@@ -80,13 +80,16 @@ def _default_history_retention() -> HistoryRetentionRead:
     return HistoryRetentionRead()
 
 
-def _deserialize_feature_flags(payload: Any) -> FeatureFlagsRead:
+def _deserialize_feature_flags(payload: Any, settings: Settings) -> FeatureFlagsRead:
     candidate = payload if isinstance(payload, dict) else {}
+    defaults = _default_feature_flags(settings)
     return FeatureFlagsRead(
-        show_analyzed_files_csv_export=bool(candidate.get("show_analyzed_files_csv_export", False)),
-        show_full_width_app_shell=bool(candidate.get("show_full_width_app_shell", False)),
-        hide_quality_score_meter=bool(candidate.get("hide_quality_score_meter", False)),
-        unlimited_panel_size=bool(candidate.get("unlimited_panel_size", False)),
+        show_analyzed_files_csv_export=bool(
+            candidate.get("show_analyzed_files_csv_export", defaults.show_analyzed_files_csv_export)
+        ),
+        show_full_width_app_shell=bool(candidate.get("show_full_width_app_shell", defaults.show_full_width_app_shell)),
+        hide_quality_score_meter=bool(candidate.get("hide_quality_score_meter", defaults.hide_quality_score_meter)),
+        unlimited_panel_size=bool(candidate.get("unlimited_panel_size", defaults.unlimited_panel_size)),
     )
 
 
@@ -140,7 +143,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
     else:
         normalized_user = []
         normalized_default = _seeded_default_ignore_patterns(settings)
-    feature_flags = _deserialize_feature_flags(payload.get("feature_flags"))
+    feature_flags = _deserialize_feature_flags(payload.get("feature_flags"), settings)
     scan_performance = _deserialize_scan_performance(payload.get("scan_performance"), settings)
     history_retention = _deserialize_history_retention(payload.get("history_retention"))
     resolution_categories_payload = payload.get("resolution_categories")
@@ -168,7 +171,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             user_ignore_patterns=[],
             default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
             resolution_categories=default_resolution_categories(),
-            feature_flags=_default_feature_flags(),
+            feature_flags=_default_feature_flags(resolved_settings),
             scan_performance=_default_scan_performance(resolved_settings),
             history_retention=_default_history_retention(),
         )

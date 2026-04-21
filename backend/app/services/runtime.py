@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import logging
 import os
 from pathlib import Path
 from threading import Lock, Timer
@@ -19,8 +20,11 @@ from backend.app.services.history_retention import (
     apply_history_retention,
     run_pending_history_compaction,
 )
+from backend.app.services.history_storage import get_history_storage
 from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
+from backend.app.services.library_service import get_library_statistics, get_library_summary
 from backend.app.services.path_access import is_watch_supported_for_library
+from backend.app.services.stats import build_dashboard
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -32,6 +36,9 @@ from backend.app.services.scanner import (
     queue_quality_recompute_job,
     queue_scan_job,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class LibraryWatchHandler(FileSystemEventHandler):
@@ -49,6 +56,7 @@ class ScanRuntimeManager:
         self.scheduler = BackgroundScheduler(timezone="UTC")
         self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
         self.executor = self._build_executor(self.executor_max_workers)
+        self.maintenance_executor = self._build_maintenance_executor()
         self.lock = Lock()
         self.watch_observers: dict[int, tuple[str, Observer]] = {}
         self.debounce_timers: dict[int, Timer] = {}
@@ -56,6 +64,8 @@ class ScanRuntimeManager:
         self.active_library_ids: set[int] = set()
         self.submitted_job_ids: set[int] = set()
         self.history_compaction_pending = False
+        self.history_storage_refresh_submitted = False
+        self.stats_warmup_timer: Timer | None = None
         self.history_reconstruction_status = HistoryReconstructionStatusRead()
         self.started = False
 
@@ -80,6 +90,9 @@ class ScanRuntimeManager:
         for timer in self.debounce_timers.values():
             timer.cancel()
         self.debounce_timers.clear()
+        if self.stats_warmup_timer is not None:
+            self.stats_warmup_timer.cancel()
+            self.stats_warmup_timer = None
         self.watch_trigger_buffers.clear()
 
         for _library_id, (_path, observer) in list(self.watch_observers.items()):
@@ -90,6 +103,7 @@ class ScanRuntimeManager:
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
         self._shutdown_executor(self.executor, cancel_futures=True)
+        self._shutdown_executor(self.maintenance_executor, cancel_futures=True)
 
     def refresh_worker_settings(self) -> bool:
         db = SessionLocal()
@@ -164,6 +178,7 @@ class ScanRuntimeManager:
         job_id: int | None = None
 
         with self.lock:
+            self._cancel_stats_warmup_locked()
             db = SessionLocal()
             try:
                 job, created = queue_scan_job(
@@ -194,6 +209,7 @@ class ScanRuntimeManager:
         job_id: int | None = None
 
         with self.lock:
+            self._cancel_stats_warmup_locked()
             db = SessionLocal()
             try:
                 job, created = queue_quality_recompute_job(db, library_id)
@@ -263,6 +279,8 @@ class ScanRuntimeManager:
                 self.active_library_ids.discard(library_id)
                 should_attempt_compaction = self.history_compaction_pending and not self.active_library_ids
             self._submit_next_active_job(library_id)
+            self.request_history_storage_refresh()
+            self.request_stats_warmup(library_id)
             if should_attempt_compaction:
                 self.run_pending_history_compaction()
 
@@ -306,11 +324,13 @@ class ScanRuntimeManager:
                 phase_completed=0,
                 created_file_history_entries=result.created_file_history_entries,
                 created_library_history_entries=result.created_library_history_entries,
+                updated_library_history_entries=result.updated_library_history_entries,
                 error=None,
                 result=result,
             )
         finally:
             db.close()
+            self.request_history_storage_refresh()
 
     def cancel_active_jobs(self) -> list[int]:
         db = SessionLocal()
@@ -339,6 +359,8 @@ class ScanRuntimeManager:
                     pending_timer.cancel()
                 self.watch_trigger_buffers.pop(library_id, None)
 
+        if canceled_ids:
+            self.request_history_storage_refresh()
         return canceled_ids
 
     def cancel_library_jobs(self, library_id: int) -> list[int]:
@@ -370,6 +392,8 @@ class ScanRuntimeManager:
                 pending_timer.cancel()
             self.watch_trigger_buffers.pop(library_id, None)
 
+        if canceled_ids:
+            self.request_history_storage_refresh()
         return canceled_ids
 
     def handle_watch_event(self, library_id: int, event: FileSystemEvent) -> None:
@@ -431,6 +455,15 @@ class ScanRuntimeManager:
             trigger="interval",
             hours=24,
             id="history-retention-maintenance",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        self.scheduler.add_job(
+            self.request_history_storage_refresh,
+            trigger="interval",
+            hours=1,
+            id="history-storage-refresh",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -522,7 +555,73 @@ class ScanRuntimeManager:
 
         with self.lock:
             self.history_compaction_pending = result.compaction_deferred
+        self.request_history_storage_refresh()
         return result
+
+    def request_history_storage_refresh(self) -> bool:
+        with self.lock:
+            if not self.started or self.history_storage_refresh_submitted:
+                return False
+            self.history_storage_refresh_submitted = True
+
+        try:
+            self.maintenance_executor.submit(self._run_history_storage_refresh)
+        except RuntimeError:
+            with self.lock:
+                self.history_storage_refresh_submitted = False
+            return False
+        return True
+
+    def request_stats_warmup(self, library_id: int) -> bool:
+        with self.lock:
+            if not self.started:
+                return False
+            self._cancel_stats_warmup_locked()
+            timer = Timer(20, lambda: self._submit_stats_warmup(library_id))
+            timer.daemon = True
+            self.stats_warmup_timer = timer
+            timer.start()
+            return True
+
+    def _cancel_stats_warmup_locked(self) -> None:
+        if self.stats_warmup_timer is not None:
+            self.stats_warmup_timer.cancel()
+            self.stats_warmup_timer = None
+
+    def _submit_stats_warmup(self, library_id: int) -> None:
+        with self.lock:
+            self.stats_warmup_timer = None
+            if self.active_library_ids:
+                return
+        try:
+            self.maintenance_executor.submit(self._run_stats_warmup, library_id)
+        except RuntimeError:
+            return
+
+    def _run_stats_warmup(self, library_id: int) -> None:
+        with self.lock:
+            if self.active_library_ids:
+                return
+        db = SessionLocal()
+        try:
+            get_library_summary(db, library_id)
+            get_library_statistics(db, library_id)
+            build_dashboard(db)
+        except Exception:
+            logger.exception("Failed to warm statistics caches")
+        finally:
+            db.close()
+
+    def _run_history_storage_refresh(self) -> None:
+        db = SessionLocal()
+        try:
+            get_history_storage(db, self.settings)
+        except Exception:
+            logger.exception("Failed to refresh history storage cache")
+        finally:
+            db.close()
+            with self.lock:
+                self.history_storage_refresh_submitted = False
 
     def _update_history_reconstruction_status(self, **updates) -> None:
         with self.lock:
@@ -542,6 +641,7 @@ class ScanRuntimeManager:
         if completed:
             with self.lock:
                 self.history_compaction_pending = False
+            self.request_history_storage_refresh()
         return completed
 
     def _request_watch_scan(self, library_id: int) -> None:
@@ -621,4 +721,11 @@ class ScanRuntimeManager:
         return ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-runtime",
+        )
+
+    @staticmethod
+    def _build_maintenance_executor() -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="medialyze-maintenance",
         )

@@ -239,6 +239,8 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
     total: 2,
     offset: 0,
     limit: 200,
+    next_cursor: null,
+    has_more: false,
     items: [
       {
         id: 1,

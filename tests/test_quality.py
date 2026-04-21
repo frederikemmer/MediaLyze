@@ -52,6 +52,56 @@ def test_quality_score_rewards_modern_high_quality_media() -> None:
     assert calculate_quality_score(build_quality_score_input(probe)).score >= 8
 
 
+def test_quality_score_maps_opus_audio_codec_instead_of_neutral_unknown() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=8000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="h264",
+                profile="High",
+                width=1920,
+                height=1080,
+                pix_fmt="yuv420p",
+                color_space=None,
+                color_transfer=None,
+                color_primaries=None,
+                frame_rate=24.0,
+                bit_rate=7000000,
+                hdr_type=None,
+            )
+        ],
+        audio_streams=[
+            NormalizedAudioStream(
+                stream_index=1,
+                codec="opus",
+                profile=None,
+                spatial_audio_profile=None,
+                channels=6,
+                channel_layout="5.1",
+                sample_rate=48000,
+                bit_rate=512000,
+                language="eng",
+                default_flag=True,
+                forced_flag=False,
+            )
+        ],
+    )
+
+    breakdown = calculate_quality_score(build_quality_score_input(probe))
+    audio_codec = next(category for category in breakdown.categories if category.key == "audio_codec")
+
+    assert audio_codec.actual == "opus"
+    assert audio_codec.unknown_mapping is False
+    assert audio_codec.score == 100.0
+
+
 def test_quality_score_penalizes_low_quality_media() -> None:
     probe = ProbeResult(
         raw={},

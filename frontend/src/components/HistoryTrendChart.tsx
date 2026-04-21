@@ -173,6 +173,79 @@ function HistoryTrendChartComponent({
     }
 
     if (metric.group === "distribution") {
+      if ("categoryKey" in metric) {
+        const seriesKeys = categorySeriesKeys(points, metric.categoryKey, resolutionCategories);
+        return {
+          animation: false,
+          grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
+          legend: {
+            top: 0,
+            type: "scroll",
+            icon: "roundRect",
+            textStyle: { color: axisColor, fontSize: 12 },
+          },
+          tooltip: {
+            ...tooltipBase,
+            trigger: "axis",
+            axisPointer: { type: "line" },
+            formatter: (params: Array<{ axisValueLabel?: string; seriesName?: string; value?: number }>) => {
+              const rows = Array.isArray(params) ? params : [];
+              const day = rows[0]?.axisValueLabel ?? "";
+              const total = rows.reduce((sum, item) => sum + (typeof item.value === "number" ? item.value : 0), 0);
+              return [
+                day,
+                ...rows.map((item) => {
+                  const value = typeof item.value === "number" ? item.value : 0;
+                  return `${item.seriesName}: ${
+                    displayMode === "percentage" ? formatAxisPercentage(value) : formatAxisCount(value)
+                  }`;
+                }),
+                displayMode === "count" ? `${t("libraryDetail.history.tooltip.total")}: ${total}` : null,
+              ]
+                .filter(Boolean)
+                .join("<br/>");
+            },
+          },
+          xAxis: {
+            type: "category",
+            data: xAxisData,
+            boundaryGap: false,
+            axisTick: { show: false },
+            axisLabel: { color: axisColor, hideOverlap: true, fontSize: 12, margin: 8 },
+            axisLine: { lineStyle: { color: lineColor, opacity: 0.12 } },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: {
+              color: axisColor,
+              fontSize: 12,
+              margin: 8,
+              formatter: displayMode === "percentage" ? formatAxisPercentage : formatAxisCount,
+            },
+            splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
+          },
+          series: seriesKeys.map((key) => ({
+            name: metric.formatCategory(key, resolutionCategories),
+            type: "line",
+            stack: metric.id,
+            showSymbol: points.length <= 1,
+            smooth: false,
+            lineStyle: { width: 2 },
+            areaStyle: { opacity: 0.22 },
+            emphasis: { focus: "series" },
+            data: points.map((point) => {
+              const counts = categoryCounts(point, metric.categoryKey);
+              const count = counts[key] ?? 0;
+              if (displayMode === "count") {
+                return count;
+              }
+              const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+              return total > 0 ? (count / total) * 100 : 0;
+            }),
+          })),
+        };
+      }
+
       const seriesKeys = distributionSeriesKeys(points, metric.distributionKey);
       return {
         animation: false,

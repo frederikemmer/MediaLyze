@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.3
+
+>2026-04-22
+
+### ✨ New
+
+- default the full-width app shell feature flag to enabled for first-run desktop app installations while still preserving user changes
+- default file-history retention to 30 days and clarify that dashboard/library trend history is retained separately through media library snapshots
+- make media file detail panels use a compact masonry-style layout and add live pointer-drag reordering so panels follow the cursor and surrounding panels animate into place
+
+### 🐛 Bug fixes
+
+- remove the stray dark-mode tooltip background behind the resolution badge on the file detail page
+- cache the history storage forecast and refresh it in the background after scans, history maintenance, and on a periodic schedule
+- report scans with unreadable media files as completed with issues instead of failed when the scan itself finished successfully
+- keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
+- simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
+- align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
+- include all recognized video and audio codec options in quality-profile scoring and settings so Opus and other known codecs no longer fall back to neutral scoring
+- reduce post-scan CPU and memory pressure by bounding large statistics/table caches and estimating history-storage sizes without loading every stored JSON snapshot into Python
+- improve large-library responsiveness with lighter scan discovery memory, deferred table counts, cursor-based table paging, persisted table search fields, additional SQLite indexes, and low-priority post-scan cache warmup
+
 ## v0.8.2
 
 >2026-04-20

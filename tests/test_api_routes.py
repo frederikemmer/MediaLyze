@@ -18,6 +18,8 @@ from backend.app.models.entities import (
     LibraryHistory,
     LibraryType,
     MediaFile,
+    MediaFileHistory,
+    MediaFileHistoryCaptureReason,
     MediaFormat,
     ScanJob,
     ScanMode,
@@ -776,6 +778,110 @@ def test_file_stream_details_route_returns_lightweight_stream_payload() -> None:
     assert payload["subtitle_streams"][0]["subtitle_type"] == "text"
     assert payload["external_subtitles"][0]["path"] == "movie.en.srt"
     assert "raw_ffprobe_json" not in payload
+
+
+def test_file_history_route_returns_snapshots_for_current_file_path() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="History Files",
+            path="/tmp/history-files",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=4096,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+        )
+        other_file = MediaFile(
+            library_id=library.id,
+            relative_path="other.mkv",
+            filename="other.mkv",
+            extension="mkv",
+            size_bytes=2048,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add_all([media_file, other_file])
+        db.flush()
+        db.add_all(
+            [
+                MediaFileHistory(
+                    library_id=library.id,
+                    media_file_id=media_file.id,
+                    relative_path="old/movie.mkv",
+                    filename="movie.mkv",
+                    captured_at=datetime(2026, 4, 20, 12, 0, tzinfo=UTC),
+                    capture_reason=MediaFileHistoryCaptureReason.scan_analysis,
+                    snapshot_hash="older",
+                    snapshot={
+                        "relative_path": "old/movie.mkv",
+                        "filename": "movie.mkv",
+                        "size_bytes": 1024,
+                        "quality_score": 7,
+                    },
+                ),
+                MediaFileHistory(
+                    library_id=library.id,
+                    media_file_id=media_file.id,
+                    relative_path="movie.mkv",
+                    filename="movie.mkv",
+                    captured_at=datetime(2026, 4, 21, 12, 0, tzinfo=UTC),
+                    capture_reason=MediaFileHistoryCaptureReason.quality_recompute,
+                    snapshot_hash="newer",
+                    snapshot={"filename": "movie.mkv", "size_bytes": 4096, "quality_score": 8},
+                ),
+                MediaFileHistory(
+                    library_id=library.id,
+                    media_file_id=other_file.id,
+                    relative_path="other.mkv",
+                    filename="other.mkv",
+                    captured_at=datetime(2026, 4, 21, 13, 0, tzinfo=UTC),
+                    capture_reason=MediaFileHistoryCaptureReason.scan_analysis,
+                    snapshot_hash="other",
+                    snapshot={"filename": "other.mkv", "size_bytes": 2048, "quality_score": 6},
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/files/{media_file.id}/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["file_id"] == media_file.id
+    assert payload["total"] == 2
+    assert [item["snapshot_hash"] for item in payload["items"]] == ["newer", "older"]
+    assert [item["relative_path"] for item in payload["items"]] == ["movie.mkv", "old/movie.mkv"]
+    assert payload["items"][0]["capture_reason"] == "quality_recompute"
+    assert payload["items"][0]["snapshot"]["quality_score"] == 8
+
+
+def test_file_history_route_returns_404_for_unknown_file() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/files/999/history")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Media file not found"}
 
 
 def test_library_duplicates_route_returns_grouped_duplicates_for_active_mode() -> None:
