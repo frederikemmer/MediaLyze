@@ -3605,6 +3605,11 @@ html[data-theme="dark"] {
     border-bottom-color: rgba(240, 236, 228, 0.08);
   }
 
+  .history-retention-table tbody th {
+    background: rgba(240, 236, 228, 0.045);
+    color: rgba(240, 236, 228, 0.9);
+  }
+
   .library-statistics-table tbody tr.is-drop-target td {
     background: rgba(27, 153, 139, 0.10);
   }

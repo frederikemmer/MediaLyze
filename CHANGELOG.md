@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - report scans with unreadable media files as completed with issues instead of failed when the scan itself finished successfully
 - keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
 - simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
+- align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
 
 ## v0.8.2
 
