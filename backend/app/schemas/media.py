@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.models.entities import ScanStatus
+from backend.app.models.entities import MediaFileHistoryCaptureReason, ScanStatus
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.schemas._time import UtcDateTime
 
@@ -154,6 +154,26 @@ class MediaFileQualityScoreDetail(BaseModel):
     score: int
     score_raw: float
     breakdown: QualityBreakdownRead
+
+
+class MediaFileHistoryEntryRead(BaseModel):
+    id: int
+    media_file_id: int | None
+    library_id: int
+    relative_path: str
+    filename: str
+    captured_at: UtcDateTime
+    capture_reason: MediaFileHistoryCaptureReason
+    snapshot_hash: str
+    snapshot: dict[str, Any]
+
+
+class MediaFileHistoryRead(BaseModel):
+    file_id: int
+    library_id: int
+    relative_path: str
+    total: int
+    items: list[MediaFileHistoryEntryRead]
 
 
 class DashboardResponse(BaseModel):

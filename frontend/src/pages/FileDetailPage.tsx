@@ -16,7 +16,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { PathSegmentTrail } from "../components/PathSegmentTrail";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
-import { api, type MediaFileDetail, type MediaFileQualityScoreDetail } from "../lib/api";
+import { api, type MediaFileDetail, type MediaFileHistory, type MediaFileQualityScoreDetail } from "../lib/api";
 import {
   type FileDetailPanelId,
   getFileDetailPanelSettings,
@@ -24,7 +24,7 @@ import {
   saveFileDetailPanelSettings,
   toggleFileDetailPanelCollapsed,
 } from "../lib/file-detail-panels";
-import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration } from "../lib/format";
+import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
 function JsonPreview({ value }: { value: unknown }) {
@@ -199,11 +199,304 @@ function FormatDetailsList({
   );
 }
 
+function snapshotNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function snapshotList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
+}
+
+function formatHistoryList(value: unknown, fallback: string): string {
+  const entries = snapshotList(value);
+  return entries.length > 0 ? entries.join(", ") : fallback;
+}
+
+type FileHistoryEntry = MediaFileHistory["items"][number];
+type FileHistoryState = {
+  entry: FileHistoryEntry;
+  startedAt: string;
+  endedAt: string | null;
+};
+type FileHistoryMetric = {
+  key: string;
+  label: string;
+  value: string;
+  previousValue: string | null;
+  changed: boolean;
+};
+
+const HISTORY_VOLATILE_FIELD_KEYS = new Set([
+  "id",
+  "library_id",
+  "filename",
+  "last_seen_at",
+  "last_analyzed_at",
+  "scan_status",
+  "raw_ffprobe_json",
+  "quality_score_breakdown",
+]);
+
+const HISTORY_FIELD_LABELS: Record<string, string> = {
+  relative_path: "Path",
+  extension: "Container",
+  size_bytes: "Size",
+  mtime: "Modified",
+  quality_score: "Quality",
+  quality_score_raw: "Raw quality",
+  container: "Container",
+  duration: "Duration",
+  bitrate: "Bitrate",
+  audio_bitrate: "Audio bitrate",
+  video_codec: "Video codec",
+  resolution: "Resolution",
+  resolution_category_id: "Resolution category ID",
+  resolution_category_label: "Resolution category",
+  hdr_type: "Dynamic range",
+  audio_codecs: "Audio codecs",
+  audio_spatial_profiles: "Spatial audio",
+  audio_languages: "Audio languages",
+  subtitle_languages: "Subtitle languages",
+  subtitle_codecs: "Subtitle codecs",
+  subtitle_sources: "Subtitle sources",
+  "media_format.container_format": "Format name",
+  "media_format.duration": "Format duration",
+  "media_format.bit_rate": "Format bitrate",
+  "media_format.probe_score": "Probe score",
+};
+
+function stableHistoryValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === "string" ? entry.trim() : entry))
+      .filter((entry) => entry !== "")
+      .sort();
+  }
+  return value ?? null;
+}
+
+function flattenHistorySnapshot(value: unknown, prefix = ""): Record<string, unknown> {
+  if (prefix && HISTORY_VOLATILE_FIELD_KEYS.has(prefix)) {
+    return {};
+  }
+  if (Array.isArray(value)) {
+    if (value.every((entry) => typeof entry !== "object" || entry === null)) {
+      return { [prefix]: stableHistoryValue(value) };
+    }
+    return value.reduce<Record<string, unknown>>(
+      (flattened, entry, index) => ({
+        ...flattened,
+        ...flattenHistorySnapshot(entry, `${prefix}.${index}`),
+      }),
+      {},
+    );
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>(
+      (flattened, [key, entry]) => {
+        if (HISTORY_VOLATILE_FIELD_KEYS.has(key)) {
+          return flattened;
+        }
+        return {
+          ...flattened,
+          ...flattenHistorySnapshot(entry, prefix ? `${prefix}.${key}` : key),
+        };
+      },
+      {},
+    );
+  }
+  return prefix ? { [prefix]: stableHistoryValue(value) } : {};
+}
+
+function historyStateKey(snapshot: FileHistoryEntry["snapshot"]): string {
+  const flattened = flattenHistorySnapshot(snapshot);
+  return JSON.stringify(
+    Object.keys(flattened)
+      .sort()
+      .map((key) => [key, stableHistoryValue(flattened[key])]),
+  );
+}
+
+function collapseHistoryStates(items: FileHistoryEntry[]): FileHistoryState[] {
+  const grouped: Array<{ entries: FileHistoryEntry[] }> = [];
+
+  for (const item of items) {
+    const currentGroup = grouped.at(-1);
+    if (currentGroup && historyStateKey(currentGroup.entries[0].snapshot) === historyStateKey(item.snapshot)) {
+      currentGroup.entries.push(item);
+      continue;
+    }
+    grouped.push({ entries: [item] });
+  }
+
+  return grouped.map((group, index) => {
+    const oldestEntry = group.entries.at(-1) ?? group.entries[0];
+    const newerGroup = grouped[index - 1];
+    const newerOldestEntry = newerGroup?.entries.at(-1) ?? newerGroup?.entries[0] ?? null;
+    return {
+      entry: group.entries[0],
+      startedAt: oldestEntry.captured_at,
+      endedAt: newerOldestEntry?.captured_at ?? null,
+    };
+  });
+}
+
+function formatHistoryRange(
+  state: FileHistoryState,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (!state.endedAt) {
+    return t("fileDetail.history.since", { start: formatDate(state.startedAt) });
+  }
+  return t("fileDetail.history.range", {
+    start: formatDate(state.startedAt),
+    end: formatDate(state.endedAt),
+  });
+}
+
+function formatHistoryFieldLabel(key: string): string {
+  if (HISTORY_FIELD_LABELS[key]) {
+    return HISTORY_FIELD_LABELS[key];
+  }
+  const arraylessKey = key.replace(/\.\d+\./g, ".");
+  if (HISTORY_FIELD_LABELS[arraylessKey]) {
+    return HISTORY_FIELD_LABELS[arraylessKey];
+  }
+  return key
+    .replace(/\.(\d+)\./g, " #$1 ")
+    .replace(/[._]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatHistoryFieldValue(
+  key: string,
+  value: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (value === null || value === undefined || value === "") {
+    return t("fileTable.na");
+  }
+  if (key.endsWith("size_bytes")) {
+    return formatBytes(snapshotNumber(value) ?? 0);
+  }
+  if (key === "duration" || key.endsWith(".duration")) {
+    return formatDuration(snapshotNumber(value));
+  }
+  if (key === "bitrate" || key === "audio_bitrate" || key.endsWith(".bit_rate")) {
+    return formatBitRate(snapshotNumber(value));
+  }
+  if (key === "quality_score") {
+    return snapshotNumber(value) === null ? t("fileTable.na") : t("fileDetail.history.qualityValue", { value });
+  }
+  if (key === "mtime" && typeof value === "number") {
+    return formatDate(new Date(value * 1000).toISOString());
+  }
+  if (key === "video_codec" && typeof value === "string") {
+    return formatCodecLabel(value, "video");
+  }
+  if (key.endsWith("hdr_type") && typeof value === "string") {
+    return formatHdrType(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return formatHistoryList(value, t("fileTable.na"));
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  return String(value);
+}
+
+function buildHistoryDiffMetrics(
+  snapshot: FileHistoryEntry["snapshot"],
+  previousSnapshot: FileHistoryEntry["snapshot"] | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): FileHistoryMetric[] {
+  if (!previousSnapshot) {
+    return [];
+  }
+  const current = flattenHistorySnapshot(snapshot);
+  const previous = flattenHistorySnapshot(previousSnapshot);
+  const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])].sort();
+
+  return keys
+    .filter((key) => JSON.stringify(stableHistoryValue(current[key])) !== JSON.stringify(stableHistoryValue(previous[key])))
+    .map((key) => ({
+      key,
+      label: formatHistoryFieldLabel(key),
+      value: formatHistoryFieldValue(key, current[key], t),
+      previousValue: formatHistoryFieldValue(key, previous[key], t),
+      changed: true,
+    }));
+}
+
+function FileHistoryPanel({
+  history,
+  t,
+}: {
+  history: MediaFileHistory | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): ReactNode {
+  const items = history?.items ?? [];
+  if (items.length === 0) {
+    return <div className="notice">{t("fileDetail.history.empty")}</div>;
+  }
+
+  const states = collapseHistoryStates(items);
+
+  return (
+    <div className="file-history-list">
+      {history && history.total > items.length ? (
+        <div className="notice">
+          {t("fileDetail.history.limited", {
+            shown: items.length,
+            total: history.total,
+          })}
+        </div>
+      ) : null}
+      {states.map((state, index) => {
+        const entry = state.entry;
+        const snapshot = entry.snapshot;
+        const previousSnapshot = states[index + 1]?.entry.snapshot;
+        const metrics = buildHistoryDiffMetrics(snapshot, previousSnapshot, t);
+
+        return (
+          <details className="file-history-entry" key={entry.id} open={index === 0}>
+            <summary className="file-history-entry-head">
+              <strong>{formatHistoryRange(state, t)}</strong>
+            </summary>
+            {metrics.length > 0 ? (
+              <dl className="file-history-metrics">
+                {metrics.map((metric) => (
+                  <div className="file-history-metric has-changed" key={metric.key}>
+                    <dt>{metric.label}</dt>
+                    <dd>
+                      {metric.previousValue !== null ? (
+                        <span className="file-history-old-value">{metric.previousValue}</span>
+                      ) : null}
+                      <strong>{metric.value}</strong>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <div className="notice">{t("fileDetail.history.noChanges")}</div>
+            )}
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FileDetailPage() {
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
   const [file, setFile] = useState<MediaFileDetail | null>(null);
   const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
+  const [fileHistory, setFileHistory] = useState<MediaFileHistory | null>(null);
+  const [fileHistoryError, setFileHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panelSettings, setPanelSettings] = useState(() => getFileDetailPanelSettings());
   const [draggedPanelId, setDraggedPanelId] = useState<FileDetailPanelId | null>(null);
@@ -242,6 +535,13 @@ export function FileDetailPage() {
       .fileQualityScore(fileId)
       .then((payload) => setQualityDetail(payload))
       .catch(() => setQualityDetail(null));
+    api
+      .fileHistory(fileId)
+      .then((payload) => {
+        setFileHistory(payload);
+        setFileHistoryError(null);
+      })
+      .catch((reason: Error) => setFileHistoryError(reason.message));
   }, [fileId]);
 
   const measurePanelLayout = useCallback(() => {
@@ -308,7 +608,7 @@ export function FileDetailPage() {
 
   useLayoutEffect(() => {
     measurePanelLayout();
-  }, [file, qualityDetail, error, panelSettings, measurePanelLayout]);
+  }, [file, qualityDetail, fileHistory, fileHistoryError, error, panelSettings, measurePanelLayout]);
 
   useEffect(() => {
     const container = panelContainerRef.current;
@@ -517,6 +817,12 @@ export function FileDetailPage() {
       loading: !file && !error,
       error,
       body: <FormatDetailsList detail={file} t={t} />,
+    },
+    fileHistory: {
+      title: t("fileDetail.history.title"),
+      loading: !fileHistory && !fileHistoryError,
+      error: fileHistoryError,
+      body: <FileHistoryPanel history={fileHistory} t={t} />,
     },
     videoStreams: {
       title: t("fileDetail.videoStreams"),

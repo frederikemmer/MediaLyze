@@ -397,6 +397,26 @@ export type MediaFileQualityScoreDetail = {
   breakdown: QualityBreakdown;
 };
 
+export type MediaFileHistoryEntry = {
+  id: number;
+  media_file_id: number | null;
+  library_id: number;
+  relative_path: string;
+  filename: string;
+  captured_at: string;
+  capture_reason: "scan_analysis" | "quality_recompute" | "history_reconstruction";
+  snapshot_hash: string;
+  snapshot: Partial<MediaFileDetail> & Record<string, unknown>;
+};
+
+export type MediaFileHistory = {
+  file_id: number;
+  library_id: number;
+  relative_path: string;
+  total: number;
+  items: MediaFileHistoryEntry[];
+};
+
 export type BrowseResponse = {
   current_path: string;
   parent_path: string | null;
@@ -851,6 +871,8 @@ export const api = {
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   fileStreams: (id: string | number) => request<MediaFileStreamDetails>(`/files/${id}/streams`),
   fileQualityScore: (id: string | number) => request<MediaFileQualityScoreDetail>(`/files/${id}/quality-score`),
+  fileHistory: (id: string | number, signal?: AbortSignal) =>
+    request<MediaFileHistory>(`/files/${id}/history`, { signal }),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
   inspectPath: (path: string) =>
     request<PathInspection>("/paths/inspect", {

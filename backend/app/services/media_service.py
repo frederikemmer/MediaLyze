@@ -6,12 +6,21 @@ import re
 from datetime import datetime, timezone
 from typing import Iterator, Literal
 
-from sqlalchemy import Float, String, and_, case, cast, func, literal, select, union_all
+from sqlalchemy import Float, String, and_, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.models.entities import AudioStream, ExternalSubtitle, MediaFile, MediaFormat, SubtitleStream
+from backend.app.models.entities import (
+    AudioStream,
+    ExternalSubtitle,
+    MediaFile,
+    MediaFileHistory,
+    MediaFormat,
+    SubtitleStream,
+)
 from backend.app.schemas.media import (
     MediaFileDetail,
+    MediaFileHistoryEntryRead,
+    MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
     MediaFileStreamDetails,
     MediaFileTablePage,
@@ -702,4 +711,46 @@ def get_media_file_quality_score_detail(db: Session, file_id: int) -> MediaFileQ
         score=media_file.quality_score,
         score_raw=media_file.quality_score_raw,
         breakdown=QualityBreakdownRead.model_validate(breakdown_payload),
+    )
+
+
+def get_media_file_history(db: Session, file_id: int, *, limit: int = 50) -> MediaFileHistoryRead | None:
+    media_file = db.get(MediaFile, file_id)
+    if media_file is None:
+        return None
+
+    base_query = select(MediaFileHistory).where(
+        MediaFileHistory.library_id == media_file.library_id,
+        or_(
+            MediaFileHistory.media_file_id == media_file.id,
+            MediaFileHistory.relative_path == media_file.relative_path,
+        ),
+    )
+    total = db.scalar(select(func.count()).select_from(base_query.subquery())) or 0
+    entries = db.scalars(
+        base_query.order_by(
+            MediaFileHistory.captured_at.desc(),
+            MediaFileHistory.id.desc(),
+        ).limit(limit)
+    ).all()
+
+    return MediaFileHistoryRead(
+        file_id=media_file.id,
+        library_id=media_file.library_id,
+        relative_path=media_file.relative_path,
+        total=total,
+        items=[
+            MediaFileHistoryEntryRead(
+                id=entry.id,
+                media_file_id=entry.media_file_id,
+                library_id=entry.library_id,
+                relative_path=entry.relative_path,
+                filename=entry.filename,
+                captured_at=entry.captured_at,
+                capture_reason=entry.capture_reason,
+                snapshot_hash=entry.snapshot_hash,
+                snapshot=entry.snapshot if isinstance(entry.snapshot, dict) else {},
+            )
+            for entry in entries
+        ],
     )

@@ -684,6 +684,21 @@ def run_scan(
     duplicate_processed_successfully = 0
     duplicate_processing_failed = 0
 
+    def _find_rename_candidate(relative_path: str, size_bytes: int, mtime: float) -> MediaFile | None:
+        candidates = [
+            candidate
+            for candidate_path, candidate in existing_by_path.items()
+            if candidate_path not in seen_relative_paths
+            and candidate.size_bytes == size_bytes
+            and candidate.mtime == mtime
+            and not (root / candidate.relative_path).exists()
+        ]
+        if len(candidates) != 1:
+            return None
+        candidate = candidates[0]
+        logger.info("Detected media rename in library %s: %s -> %s", library.id, candidate.relative_path, relative_path)
+        return candidate
+
     def _build_scan_summary(
         discovery: DiscoveryResult,
         queued_for_analysis: int,
@@ -932,19 +947,32 @@ def run_scan(
             media_file = existing_by_path.get(relative_path)
 
             if media_file is None:
-                media_file = MediaFile(
-                    library_id=library.id,
-                    relative_path=relative_path,
-                    filename=file_path.name,
-                    extension=file_path.suffix.lower().lstrip("."),
-                    size_bytes=stat.st_size,
-                    mtime=stat.st_mtime,
-                    last_seen_at=utc_now(),
-                    scan_status=ScanStatus.pending,
-                )
-                db.add(media_file)
-                db.flush()
-                new_files.add(relative_path)
+                rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
+                if rename_candidate is None:
+                    media_file = MediaFile(
+                        library_id=library.id,
+                        relative_path=relative_path,
+                        filename=file_path.name,
+                        extension=file_path.suffix.lower().lstrip("."),
+                        size_bytes=stat.st_size,
+                        mtime=stat.st_mtime,
+                        last_seen_at=utc_now(),
+                        scan_status=ScanStatus.pending,
+                    )
+                    db.add(media_file)
+                    db.flush()
+                    new_files.add(relative_path)
+                else:
+                    existing_by_path.pop(rename_candidate.relative_path, None)
+                    media_file = rename_candidate
+                    media_file.relative_path = relative_path
+                    media_file.filename = file_path.name
+                    media_file.extension = file_path.suffix.lower().lstrip(".")
+                    media_file.size_bytes = stat.st_size
+                    media_file.mtime = stat.st_mtime
+                    media_file.last_seen_at = utc_now()
+                    media_file.scan_status = ScanStatus.pending
+                    modified_files.add(relative_path)
                 queued_work_total += 1
                 queued_for_analysis += 1
                 queued_for_duplicate_processing += 1

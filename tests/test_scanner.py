@@ -20,6 +20,7 @@ from backend.app.models.entities import (
     LibraryHistory,
     LibraryType,
     MediaFile,
+    MediaFileHistory,
     ScanMode,
     ScanStatus,
     SubtitleStream,
@@ -623,6 +624,69 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
     assert second_files_scanned == 0
     assert indexed_after == []
     assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 1
+
+
+def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    original_path = media_dir / "movie.mkv"
+    renamed_path = media_dir / "renamed.mkv"
+    original_path.write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        first_file = db.scalar(select(MediaFile))
+        assert first_file is not None
+        first_file_id = first_file.id
+
+        original_path.rename(renamed_path)
+        second_job = run_scan(db, settings, library.id, "incremental")
+
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        history_rows = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.captured_at.asc())).all()
+
+    assert [(media_file.id, media_file.relative_path) for media_file in indexed_files] == [
+        (first_file_id, "renamed.mkv")
+    ]
+    assert second_job.scan_summary["changes"]["new_files"]["count"] == 0
+    assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 0
+    assert second_job.scan_summary["changes"]["modified_files"]["count"] == 1
+    assert [row.relative_path for row in history_rows] == ["movie.mkv", "renamed.mkv"]
+    assert {row.media_file_id for row in history_rows} == {first_file_id}
 
 
 def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatch) -> None:

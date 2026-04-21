@@ -17,6 +17,7 @@ from backend.app.schemas.library_history import DashboardHistoryResponse, Librar
 from backend.app.schemas.media import (
     DashboardResponse,
     MediaFileDetail,
+    MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
     MediaFileStreamDetails,
     MediaFileTablePage,
@@ -51,6 +52,7 @@ from backend.app.services.media_search import LibraryFileSearchFilters, SearchVa
 from backend.app.services.media_service import (
     generate_library_files_csv_export,
     get_media_file_detail,
+    get_media_file_history,
     get_media_file_quality_score_detail,
     get_media_file_stream_details,
     list_library_files,
@@ -580,6 +582,18 @@ def file_stream_details(file_id: int, db: Session = Depends(get_db_session)) -> 
 @router.get("/files/{file_id}/quality-score", response_model=MediaFileQualityScoreDetail)
 def file_quality_score(file_id: int, db: Session = Depends(get_db_session)) -> MediaFileQualityScoreDetail:
     payload = get_media_file_quality_score_detail(db, file_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return payload
+
+
+@router.get("/files/{file_id}/history", response_model=MediaFileHistoryRead)
+def file_history(
+    file_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db_session),
+) -> MediaFileHistoryRead:
+    payload = get_media_file_history(db, file_id, limit=limit)
     if not payload:
         raise HTTPException(status_code=404, detail="Media file not found")
     return payload

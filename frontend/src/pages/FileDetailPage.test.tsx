@@ -9,6 +9,7 @@ import {
   api,
   type AppSettings,
   type MediaFileDetail,
+  type MediaFileHistory,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
 import { FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, getFileDetailPanelSettings } from "../lib/file-detail-panels";
@@ -143,7 +144,78 @@ function createQualityDetail(): MediaFileQualityScoreDetail {
   };
 }
 
+function createFileHistory(): MediaFileHistory {
+  const current = createFileDetail();
+  return {
+    file_id: current.id,
+    library_id: current.library_id,
+    relative_path: current.relative_path,
+    total: 3,
+    items: [
+      {
+        id: 3,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-15T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "newer-scan-only",
+        snapshot: {
+          ...current,
+          last_seen_at: "2026-03-15T10:00:00Z",
+          last_analyzed_at: "2026-03-15T10:05:00Z",
+          quality_score: 9,
+          size_bytes: 10_737_418_240,
+        },
+      },
+      {
+        id: 2,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-14T10:00:00Z",
+        capture_reason: "quality_recompute",
+        snapshot_hash: "newer",
+        snapshot: {
+          ...current,
+          quality_score: 9,
+          size_bytes: 10_737_418_240,
+        },
+      },
+      {
+        id: 1,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-13T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "older",
+        snapshot: {
+          ...current,
+          relative_path: "Shows/Season01/Old_File_Name.mkv",
+          filename: "Old_File_Name.mkv",
+          quality_score: 8,
+          size_bytes: 8_589_934_592,
+        },
+      },
+    ],
+  };
+}
+
 function renderPage(fileId: number) {
+  if (!vi.isMockFunction(api.fileHistory)) {
+    vi.spyOn(api, "fileHistory").mockResolvedValue({
+      file_id: fileId,
+      library_id: 9,
+      relative_path: "",
+      total: 0,
+      items: [],
+    });
+  }
+
   return render(
     <MemoryRouter initialEntries={[`/files/${fileId}`]}>
       <AppDataProvider>
@@ -212,6 +284,29 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("5.1")).toBeInTheDocument();
     expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
     expect(screen.getByText("External")).toBeInTheDocument();
+  });
+
+  it("renders file history snapshots in the detail panel", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(api, "fileHistory").mockResolvedValue(createFileHistory());
+
+    const { container } = renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "File history" })).toBeInTheDocument();
+    expect(screen.getAllByText("Quality").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("8.0 GB").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
+    const oldValues = Array.from(container.querySelectorAll(".file-history-old-value")).map((element) =>
+      element.textContent?.trim(),
+    );
+    expect(oldValues).toContain("8.0 GB");
+    expect(oldValues).toContain("Shows/Season01/Old_File_Name.mkv");
+    expect(screen.getAllByText("Shows/Season01/Old_File_Name.mkv").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".file-history-entry")).toHaveLength(2);
+    expect(container.querySelectorAll(".file-history-entry[open]")).toHaveLength(1);
   });
 
   it("stays stable when the quality detail request fails", async () => {

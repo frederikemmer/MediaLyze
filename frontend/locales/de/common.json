@@ -582,7 +582,26 @@
     "videoStreams": "Video-Streams",
     "audioStreams": "Audio-Streams",
     "subtitles": "Untertitel",
-    "rawJson": "Rohes ffprobe-JSON"
+    "rawJson": "Rohes ffprobe-JSON",
+    "history": {
+      "title": "Dateiverlauf",
+      "empty": "Der Dateiverlauf erscheint, nachdem ein Scan einen geänderten Snapshot für diese Datei erfasst hat.",
+      "limited": "Zeige die neuesten {{shown}} von {{total}} Verlaufseinträgen.",
+      "since": "Seit {{start}}",
+      "range": "{{start}} - {{end}}",
+      "noChanges": "In diesem Zeitraum haben sich keine verfolgten Felder geändert.",
+      "qualityValue": "{{value}}/10",
+      "video": "Video",
+      "resolution": "Auflösung",
+      "dynamicRange": "DynR",
+      "audio": "Audio",
+      "subtitles": "Untertitel",
+      "reason": {
+        "scan_analysis": "Scan",
+        "quality_recompute": "Qualität",
+        "history_reconstruction": "Rekonstruiert"
+      }
+    }
   },
   "pathBrowser": {
     "selected": "Ausgewählt",

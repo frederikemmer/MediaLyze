@@ -582,7 +582,26 @@
     "videoStreams": "Video streams",
     "audioStreams": "Audio streams",
     "subtitles": "Subtitles",
-    "rawJson": "Raw ffprobe JSON"
+    "rawJson": "Raw ffprobe JSON",
+    "history": {
+      "title": "File history",
+      "empty": "File history appears after a scan captures a changed snapshot for this file.",
+      "limited": "Showing the latest {{shown}} of {{total}} history entries.",
+      "since": "Since {{start}}",
+      "range": "{{start}} - {{end}}",
+      "noChanges": "No tracked fields changed in this period.",
+      "qualityValue": "{{value}}/10",
+      "video": "Video",
+      "resolution": "Resolution",
+      "dynamicRange": "DynR",
+      "audio": "Audio",
+      "subtitles": "Subtitles",
+      "reason": {
+        "scan_analysis": "Scan",
+        "quality_recompute": "Quality",
+        "history_reconstruction": "Reconstructed"
+      }
+    }
   },
   "pathBrowser": {
     "selected": "Selected",

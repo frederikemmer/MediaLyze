@@ -2658,6 +2658,113 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   overflow-wrap: anywhere;
 }
 
+.file-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(520px, 68vh);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.file-history-entry {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.file-history-entry:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.file-history-entry-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.file-history-entry-head::-webkit-details-marker {
+  display: none;
+}
+
+.file-history-entry-head::before {
+  content: "›";
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 800;
+  transition: transform 0.16s ease;
+}
+
+.file-history-entry[open] > .file-history-entry-head::before {
+  transform: rotate(90deg);
+}
+
+.file-history-entry-head strong {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metrics {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 3px;
+  margin: 0;
+}
+
+.file-history-metric {
+  display: contents;
+}
+
+.file-history-metric dt {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.file-history-metric dd {
+  grid-column: 2;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 2px 0;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.file-history-metric.has-changed strong {
+  color: #1f8f61;
+}
+
+.file-history-old-value {
+  color: #b84a45;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+html[data-theme="dark"] .file-history-metric.has-changed strong {
+  color: #74d59f;
+}
+
+html[data-theme="dark"] .file-history-old-value {
+  color: #ff948c;
+}
+
 .stream-details-tooltip-portal {
   padding: 12px 14px;
 }
