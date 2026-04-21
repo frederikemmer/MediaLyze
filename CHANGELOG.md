@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
 - align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
 - include all recognized video and audio codec options in quality-profile scoring and settings so Opus and other known codecs no longer fall back to neutral scoring
+- reduce post-scan CPU and memory pressure by bounding large statistics/table caches and estimating history-storage sizes without loading every stored JSON snapshot into Python
 
 ## v0.8.2
 

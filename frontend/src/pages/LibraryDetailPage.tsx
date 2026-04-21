@@ -49,6 +49,7 @@ import {
 } from "../lib/api";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { isLibraryHistoryMetricId, type LibraryHistoryMetricId } from "../lib/history-metrics";
+import { LruCache } from "../lib/lru-cache";
 import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import {
   LIBRARY_METADATA_SEARCH_FIELDS,
@@ -170,12 +171,12 @@ const BODY_FONT = `400 ${BODY_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-s
 const HEADER_LETTER_SPACING_PX = HEADER_FONT_SIZE_PX * 0.08;
 const CELL_HORIZONTAL_PADDING_PX = 20;
 const SORT_INDICATOR_WIDTH_PX = 18;
-const librarySummaryCache = new Map<string, LibrarySummary>();
-const libraryStatisticsCache = new Map<string, LibraryStatistics>();
-const libraryHistoryCache = new Map<string, LibraryHistoryResponse>();
-const libraryComparisonCache = new Map<string, ComparisonResponse>();
-const libraryDuplicateGroupsCache = new Map<string, DuplicateGroupPage>();
-const libraryFileListCache = new Map<string, CachedFileList>();
+const librarySummaryCache = new LruCache<string, LibrarySummary>(32);
+const libraryStatisticsCache = new LruCache<string, LibraryStatistics>(16);
+const libraryHistoryCache = new LruCache<string, LibraryHistoryResponse>(16);
+const libraryComparisonCache = new LruCache<string, ComparisonResponse>(48);
+const libraryDuplicateGroupsCache = new LruCache<string, DuplicateGroupPage>(16);
+const libraryFileListCache = new LruCache<string, CachedFileList>(12);
 const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryLayoutPanelDefinition>([
   ...LIBRARY_STATISTIC_DEFINITIONS.map(
     (definition) =>

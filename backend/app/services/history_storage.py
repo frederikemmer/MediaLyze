@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
-from sqlalchemy import select, text
+from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -69,6 +69,10 @@ def _text_length(value: str | None) -> int:
     return len(value.encode("utf-8"))
 
 
+def _stored_length_expression(value) -> object:
+    return func.length(cast(func.coalesce(value, ""), String))
+
+
 def _days_limit_for_bucket(app_settings, bucket_name: str) -> int:
     return int(getattr(app_settings.history_retention, bucket_name).days)
 
@@ -123,62 +127,62 @@ def _forecast_from_records(
 
 
 def _media_file_history_records(db: Session) -> list[HistoryStorageRecord]:
+    estimated_bytes = (
+        _stored_length_expression(MediaFileHistory.relative_path)
+        + _stored_length_expression(MediaFileHistory.filename)
+        + _stored_length_expression(MediaFileHistory.snapshot_hash)
+        + _stored_length_expression(MediaFileHistory.snapshot)
+    )
     rows = db.execute(
         select(
             MediaFileHistory.captured_at,
-            MediaFileHistory.relative_path,
-            MediaFileHistory.filename,
-            MediaFileHistory.snapshot_hash,
-            MediaFileHistory.snapshot,
+            estimated_bytes.label("estimated_bytes"),
         )
     ).all()
     return [
         HistoryStorageRecord(
             recorded_at=captured_at,
-            estimated_bytes=(
-                _text_length(relative_path)
-                + _text_length(filename)
-                + _text_length(snapshot_hash)
-                + _json_length(snapshot)
-            ),
+            estimated_bytes=int(estimated_bytes or 0),
         )
-        for captured_at, relative_path, filename, snapshot_hash, snapshot in rows
+        for captured_at, estimated_bytes in rows
         if captured_at is not None
     ]
 
 
 def _library_history_records(db: Session) -> list[HistoryStorageRecord]:
-    rows = db.execute(select(LibraryHistory.captured_at, LibraryHistory.snapshot)).all()
+    rows = db.execute(
+        select(
+            LibraryHistory.captured_at,
+            _stored_length_expression(LibraryHistory.snapshot).label("estimated_bytes"),
+        )
+    ).all()
     return [
-        HistoryStorageRecord(recorded_at=captured_at, estimated_bytes=_json_length(snapshot))
-        for captured_at, snapshot in rows
+        HistoryStorageRecord(recorded_at=captured_at, estimated_bytes=int(estimated_bytes or 0))
+        for captured_at, estimated_bytes in rows
         if captured_at is not None
     ]
 
 
 def _scan_history_records(db: Session) -> list[HistoryStorageRecord]:
+    estimated_bytes = (
+        _stored_length_expression(ScanJob.job_type)
+        + _stored_length_expression(ScanJob.status)
+        + _stored_length_expression(ScanJob.trigger_source)
+        + _stored_length_expression(ScanJob.trigger_details)
+        + _stored_length_expression(ScanJob.scan_summary)
+    )
     rows = db.execute(
         select(
             ScanJob.finished_at,
-            ScanJob.job_type,
-            ScanJob.status,
-            ScanJob.trigger_source,
-            ScanJob.trigger_details,
-            ScanJob.scan_summary,
+            estimated_bytes.label("estimated_bytes"),
         ).where(ScanJob.status.in_(TERMINAL_SCAN_JOB_STATUSES))
     ).all()
     return [
         HistoryStorageRecord(
             recorded_at=finished_at,
-            estimated_bytes=(
-                _text_length(job_type)
-                + _text_length(status.value if hasattr(status, "value") else str(status))
-                + _text_length(trigger_source.value if hasattr(trigger_source, "value") else str(trigger_source))
-                + _json_length(trigger_details)
-                + _json_length(scan_summary)
-            ),
+            estimated_bytes=int(estimated_bytes or 0),
         )
-        for finished_at, job_type, status, trigger_source, trigger_details, scan_summary in rows
+        for finished_at, estimated_bytes in rows
         if finished_at is not None
     ]
 

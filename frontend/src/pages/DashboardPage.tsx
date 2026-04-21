@@ -21,6 +21,7 @@ import { useAppData } from "../lib/app-data";
 import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { collapseHdrDistribution } from "../lib/hdr";
+import { LruCache } from "../lib/lru-cache";
 import {
   getDashboardStatisticNumericDistribution,
   getDashboardStatisticPanelItems,
@@ -53,7 +54,7 @@ const DASHBOARD_LAYOUT_KEY = "main";
 const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
 const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
-const dashboardComparisonCache = new Map<string, ComparisonResponse>();
+const dashboardComparisonCache = new LruCache<string, ComparisonResponse>(24);
 type DashboardLayoutPanelDefinition =
   | {
       id: LibraryStatisticDefinition["id"];
