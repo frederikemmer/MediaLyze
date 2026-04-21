@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - default file-history retention to 30 days and clarify that dashboard/library trend history is retained separately through media library snapshots
 - make media file detail panels use a compact masonry-style layout and add live pointer-drag reordering so panels follow the cursor and surrounding panels animate into place
 
+### 🐛 Bug fixes
+
+- remove the stray dark-mode tooltip background behind the resolution badge on the file detail page
+
 ## v0.8.2
 
 >2026-04-20

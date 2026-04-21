@@ -3828,6 +3828,11 @@ html[data-theme="dark"] {
     background: rgba(240, 236, 228, 0.10);
   }
 
+  .file-detail-badge-tooltip-trigger,
+  .file-detail-badge-tooltip-trigger.tooltip-trigger {
+    background: transparent;
+  }
+
   .quality-score-tooltip-trigger,
   .quality-score-tooltip-trigger.tooltip-trigger,
   .stream-details-tooltip-trigger,
