@@ -279,4 +279,45 @@ describe("FileDetailPage", () => {
     expect(getPanelOrder(rerendered.container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]);
     expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain("\"rawJson\",\"qualityBreakdown\"");
   });
+
+  it("reorders panels while following pointer drag", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getMockRect(this: HTMLElement) {
+      if (this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid")) {
+        return { x: 0, y: 0, left: 0, top: 0, width: 700, height: 600, right: 700, bottom: 600, toJSON: () => ({}) };
+      }
+      if (this instanceof HTMLElement && this.classList.contains("file-detail-panel-shell")) {
+        const width = Number.parseFloat(this.style.width || "345");
+        const height = this.textContent?.includes("Raw ffprobe JSON") ? 180 : 100;
+        return { x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height, toJSON: () => ({}) };
+      }
+      return { x: 0, y: 0, left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, toJSON: () => ({}) };
+    });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function getMockClientWidth(this: HTMLElement) {
+      return this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid") ? 700 : 345;
+    });
+
+    const { container } = renderPage(file.id);
+
+    await waitFor(() => expect(container.querySelector(".file-detail-panels-grid")).toHaveClass("is-masonry-ready"));
+    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
+    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
+    expect(rawJsonHandle).toBeTruthy();
+
+    fireEvent.pointerDown(rawJsonHandle as Element, { pointerId: 1, button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 40 });
+    expect(rawJsonShell).toHaveClass("is-dragging");
+    expect(rawJsonShell.style.transform).toContain("translate3d");
+
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 40 });
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain(
+        "\"rawJson\",\"qualityBreakdown\"",
+      ),
+    );
+  });
 });

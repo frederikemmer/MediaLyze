@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { House, RefreshCwOff, Settings } from "lucide-react";
+import { House, SearchX, Settings } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
@@ -134,7 +134,7 @@ export function AppShell() {
                   setStoppingScans(false);
                 }}
               >
-                <RefreshCwOff aria-hidden="true" className="nav-icon" />
+                <SearchX aria-hidden="true" className="nav-icon" />
               </button>
             </div>
             <div className="scan-banner-list">

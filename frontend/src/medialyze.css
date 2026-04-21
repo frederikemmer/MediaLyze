@@ -534,10 +534,44 @@
 
 .file-detail-panels-grid {
   align-items: start;
+  position: relative;
 }
 
 .file-detail-panel-shell {
   min-width: 0;
+}
+
+.file-detail-panels-grid.is-masonry-ready {
+  display: block;
+}
+
+.file-detail-panels-grid.is-masonry-ready .file-detail-panel-shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.85, 0.24, 1),
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.file-detail-panels-grid.is-reordering .file-detail-panel-shell:not(.is-dragging) {
+  transition-duration: 0.26s, 0.16s, 0.16s;
+}
+
+.file-detail-panel-shell.is-dragging {
+  cursor: grabbing;
+  filter: drop-shadow(0 22px 34px rgba(31, 28, 22, 0.18));
+  transition: none;
+}
+
+.file-detail-panels-grid.is-masonry-ready .file-detail-panel-shell.is-dragging {
+  transition: none;
+}
+
+.file-detail-panel-shell.is-dragging .async-panel {
+  border-color: rgba(31, 28, 22, 0.18);
 }
 
 .file-detail-panel-shell.is-wide {

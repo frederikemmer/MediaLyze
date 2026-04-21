@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- default the full-width app shell feature flag to enabled for first-run desktop app installations while still preserving user changes
+- make media file detail panels use a compact masonry-style layout and add live pointer-drag reordering so panels follow the cursor and surrounding panels animate into place
+
 ## v0.8.2
 
 >2026-04-20
