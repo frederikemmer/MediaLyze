@@ -59,7 +59,7 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.file_history.storage_limit_gb == 0
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.library_history.storage_limit_gb == 0
@@ -117,7 +117,7 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
@@ -142,7 +142,7 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
-    assert loaded.history_retention.file_history.days == 90
+    assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.library_history.days == 365
     assert loaded.history_retention.scan_history.days == 30
     assert loaded.feature_flags.show_analyzed_files_csv_export is False
@@ -240,7 +240,7 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.scan_performance.scan_worker_count == 4
     assert updated.scan_performance.parallel_scan_jobs == 2
     assert updated.scan_performance.comparison_scatter_point_limit == 5000
-    assert updated.history_retention.file_history.days == 90
+    assert updated.history_retention.file_history.days == 30
     assert updated.history_retention.library_history.days == 365
     assert updated.history_retention.scan_history.days == 30
     assert updated.feature_flags.show_analyzed_files_csv_export is False

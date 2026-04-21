@@ -52,7 +52,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       ...overrideScanPerformance,
     },
     history_retention: {
-      file_history: { days: 90, storage_limit_gb: 0, ...overrideHistoryRetention.file_history },
+      file_history: { days: 30, storage_limit_gb: 0, ...overrideHistoryRetention.file_history },
       library_history: { days: 365, storage_limit_gb: 0, ...overrideHistoryRetention.library_history },
       scan_history: { days: 30, storage_limit_gb: 0, ...overrideHistoryRetention.scan_history },
     },
@@ -78,8 +78,8 @@ function createHistoryStorage(overrides: Partial<HistoryStorage> = {}): HistoryS
         current_estimated_bytes: 1_000_000,
         average_daily_bytes: 100_000,
         projected_bytes_30d: 3_000_000,
-        projected_bytes_for_configured_days: 9_000_000,
-        days_limit: 90,
+        projected_bytes_for_configured_days: 3_000_000,
+        days_limit: 30,
         storage_limit_bytes: 0,
         oldest_recorded_at: "2026-01-01T00:00:00Z",
         newest_recorded_at: "2026-03-16T10:03:00Z",
@@ -418,7 +418,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -461,7 +461,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -504,7 +504,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -547,7 +547,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -590,7 +590,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -639,7 +639,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 5000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -682,7 +682,7 @@ describe("LibrariesPage ignore patterns", () => {
           comparison_scatter_point_limit: 10000,
         },
         history_retention: {
-          file_history: { days: 90, storage_limit_gb: 0 },
+          file_history: { days: 30, storage_limit_gb: 0 },
           library_history: { days: 365, storage_limit_gb: 0 },
           scan_history: { days: 30, storage_limit_gb: 0 },
         },
@@ -720,8 +720,9 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.getAllByText("Scan history")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
     expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
+    expect(screen.getByText(/File history retention only affects per-file snapshots/)).toBeInTheDocument();
     expect(await screen.findByText("977 KB")).toBeInTheDocument();
-    expect(await screen.findByText("2.9 MB")).toBeInTheDocument();
+    expect((await screen.findAllByText("2.9 MB")).length).toBeGreaterThan(0);
   });
 
   it("shows live reconstruction progress inside the history retention panel", async () => {
@@ -834,7 +835,7 @@ describe("LibrariesPage ignore patterns", () => {
     const storageInput = screen.getByLabelText("Storage limit (GB)", {
       selector: "#file_history-history-gb",
     }) as HTMLInputElement;
-    expect(daysInput.value).toBe("90");
+    expect(daysInput.value).toBe("30");
     expect(storageInput.value).toBe("0");
     fireEvent.change(daysInput, { target: { value: "120" } });
     fireEvent.change(storageInput, { target: { value: "1.5" } });

@@ -38,7 +38,7 @@ const DEFAULT_SCAN_PERFORMANCE = {
 };
 
 const DEFAULT_HISTORY_RETENTION = {
-  file_history: { days: 90, storage_limit_gb: 0 },
+  file_history: { days: 30, storage_limit_gb: 0 },
   library_history: { days: 365, storage_limit_gb: 0 },
   scan_history: { days: 30, storage_limit_gb: 0 },
 };

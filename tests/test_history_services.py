@@ -628,6 +628,83 @@ def test_apply_history_retention_prunes_media_file_history_by_age(monkeypatch) -
     assert [entry.relative_path for entry in remaining] == ["new.mkv"]
 
 
+def test_file_history_retention_keeps_library_and_dashboard_history(monkeypatch) -> None:
+    session_factory = _session_factory()
+    settings = Settings()
+    monkeypatch.setattr("backend.app.services.history_retention._compact_database", lambda db, allow_vacuum: allow_vacuum)
+
+    captured_at = datetime.now(UTC) - timedelta(days=90)
+    snapshot_day = captured_at.date().isoformat()
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                history_retention={
+                    "file_history": {"days": 30, "storage_limit_gb": 0},
+                    "library_history": {"days": 365, "storage_limit_gb": 0},
+                }
+            ),
+            settings,
+        )
+        db.add(
+            MediaFileHistory(
+                library_id=library.id,
+                media_file_id=1,
+                relative_path="removed.mkv",
+                filename="removed.mkv",
+                captured_at=captured_at,
+                capture_reason=MediaFileHistoryCaptureReason.scan_analysis,
+                snapshot_hash="removed",
+                snapshot={"value": "removed"},
+            )
+        )
+        db.add(
+            LibraryHistory(
+                library_id=library.id,
+                snapshot_day=snapshot_day,
+                captured_at=captured_at,
+                snapshot={
+                    "file_count": 1,
+                    "total_size_bytes": 4_000,
+                    "total_duration_seconds": 60.0,
+                    "trend_metrics": {
+                        "total_files": 1,
+                        "resolution_counts": {"1080p": 1},
+                        "average_bitrate": 8_000_000,
+                        "average_audio_bitrate": 640_000,
+                        "average_duration_seconds": 60.0,
+                        "average_quality_score": 8.0,
+                        "totals": {"total_size_bytes": 4_000, "total_duration_seconds": 60.0},
+                    },
+                },
+            )
+        )
+        db.commit()
+
+        result = apply_history_retention(db, settings)
+        remaining_file_history = db.scalars(select(MediaFileHistory)).all()
+        remaining_library_history = db.scalars(select(LibraryHistory)).all()
+        dashboard_history = get_dashboard_history(db)
+
+    assert result.deleted_entries == 1
+    assert remaining_file_history == []
+    assert len(remaining_library_history) == 1
+    assert [point.snapshot_day for point in dashboard_history.points] == [snapshot_day]
+    assert dashboard_history.points[0].trend_metrics.total_files == 1
+    assert dashboard_history.points[0].trend_metrics.resolution_counts == {"1080p": 1}
+    assert dashboard_history.points[0].trend_metrics.totals["total_size_bytes"] == 4_000
+
+
 def test_apply_history_retention_prunes_oldest_scan_history_and_keeps_active_jobs(monkeypatch) -> None:
     session_factory = _session_factory()
     settings = Settings()

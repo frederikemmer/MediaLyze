@@ -125,6 +125,7 @@
       "daysLabel": "Aufbewahrung in Tagen",
       "storageLimitLabel": "Speicherlimit (GB)",
       "zeroUnlimited": "0 = unbegrenzt",
+      "scopeNote": "Die Dateiverlauf-Aufbewahrung betrifft nur dateibasierte Snapshots; Dashboard- und Mediathek-Trends nutzen den separaten Mediathekverlauf.",
       "reconstructButton": "Verlauf rekonstruieren",
       "reconstructing": "Verlauf wird rekonstruiert…",
       "reconstructTooltipAria": "Genauigkeit des rekonstruierten Verlaufs erklaeren",

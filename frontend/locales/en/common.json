@@ -125,6 +125,7 @@
       "daysLabel": "Retention days",
       "storageLimitLabel": "Storage limit (GB)",
       "zeroUnlimited": "0 = unlimited",
+      "scopeNote": "File history retention only affects per-file snapshots; dashboard and media library trends use the separate media library history.",
       "reconstructButton": "Reconstruct history",
       "reconstructing": "Reconstructing…",
       "reconstructTooltipAria": "Explain reconstructed history accuracy",

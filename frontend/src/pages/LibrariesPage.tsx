@@ -151,7 +151,7 @@ const DEFAULT_SCAN_PERFORMANCE = {
   comparison_scatter_point_limit: 5000,
 };
 const DEFAULT_HISTORY_RETENTION = {
-  file_history: { days: 90, storage_limit_gb: 0 },
+  file_history: { days: 30, storage_limit_gb: 0 },
   library_history: { days: 365, storage_limit_gb: 0 },
   scan_history: { days: 30, storage_limit_gb: 0 },
 };
@@ -3118,6 +3118,7 @@ export function LibrariesPage() {
                   </table>
                 </div>
                 <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
+                <p className="field-hint">{t("libraries.historyRetention.scopeNote")}</p>
                 <div className="settings-table-shell history-retention-table-shell">
                   <table className="settings-data-table history-retention-table">
                     <thead>
