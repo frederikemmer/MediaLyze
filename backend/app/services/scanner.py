@@ -1226,7 +1226,7 @@ def run_scan(
     if _should_cancel():
         raise ScanCanceled()
     library.last_scan_at = utc_now()
-    job.status = JobStatus.failed if job.errors else JobStatus.completed
+    job.status = JobStatus.completed
     job.finished_at = utc_now()
     job.scan_summary = _build_scan_summary(
         discovery,

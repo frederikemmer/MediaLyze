@@ -384,6 +384,9 @@ function formatOutcome(
   if (value === "failed") {
     return t("scanLogs.outcomeFailed");
   }
+  if (value === "completed_with_issues") {
+    return t("scanLogs.outcomeCompletedWithIssues");
+  }
   return t("scanLogs.outcomeSuccessful");
 }
 

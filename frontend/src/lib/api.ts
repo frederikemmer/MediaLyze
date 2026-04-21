@@ -547,7 +547,7 @@ export type ScanJob = {
 };
 
 export type ScanTriggerSource = "manual" | "scheduled" | "watchdog";
-export type ScanOutcome = "successful" | "failed" | "canceled";
+export type ScanOutcome = "successful" | "completed_with_issues" | "failed" | "canceled";
 
 export type ScanFileList = {
   count: number;

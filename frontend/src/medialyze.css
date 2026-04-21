@@ -1815,6 +1815,11 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   color: #2f6f28;
 }
 
+.scan-log-outcome.badge-completed_with_issues {
+  background: rgba(208, 122, 74, 0.16);
+  color: #8a4a23;
+}
+
 .scan-log-outcome.badge-failed {
   background: rgba(207, 83, 69, 0.16);
   color: #9c2f24;
@@ -3782,6 +3787,11 @@ html[data-theme="dark"] {
   .scan-log-outcome.badge-successful {
     background: rgba(91, 167, 76, 0.2);
     color: #9fd18f;
+  }
+
+  .scan-log-outcome.badge-completed_with_issues {
+    background: rgba(208, 122, 74, 0.2);
+    color: #f2b183;
   }
 
   .scan-log-outcome.badge-failed {

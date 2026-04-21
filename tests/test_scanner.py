@@ -998,7 +998,7 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
 
         job = run_scan(db, settings, library.id, "incremental")
 
-    assert job.status.value == "failed"
+    assert job.status.value == "completed"
     assert job.scan_summary["analysis"]["analysis_failed"] == 1
     assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
     assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "ffprobe exploded"
@@ -1087,7 +1087,7 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
 
     assert job.files_total == 2
     assert job.files_scanned == 2
-    assert job.status.value == "failed"
+    assert job.status.value == "completed"
     assert [(media_file.relative_path, media_file.scan_status.value) for media_file in indexed_files] == [
         ("broken.mkv", "failed"),
         ("good.mkv", "ready"),

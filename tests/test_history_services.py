@@ -31,7 +31,11 @@ from backend.app.services.history_snapshots import (
     upsert_library_history_snapshot,
 )
 from backend.app.services.library_history_service import get_dashboard_history, get_library_history
-from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_storage import (
+    get_cached_history_storage,
+    get_history_storage,
+    history_storage_cache,
+)
 from backend.app.services.resolution_categories import default_resolution_categories
 
 
@@ -516,8 +520,17 @@ def test_get_history_storage_reports_bucket_usage_and_limits(tmp_path) -> None:
     db_path = tmp_path / "history-storage.db"
     engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    settings = Settings(config_path=tmp_path, media_root=tmp_path / "media", database_filename=db_path.name)
+    session_factory = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    settings = Settings(
+        config_path=tmp_path,
+        media_root=tmp_path / "media",
+        database_filename=db_path.name,
+    )
 
     with session_factory() as db:
         update_app_settings(
@@ -576,6 +589,74 @@ def test_get_history_storage_reports_bucket_usage_and_limits(tmp_path) -> None:
     assert payload.categories.file_history.storage_limit_bytes == 1024 * 1024 * 1024
     assert payload.categories.library_history.entry_count == 1
     assert payload.categories.scan_history.entry_count == 1
+
+
+def test_cached_history_storage_reuses_snapshot_with_current_retention_settings(tmp_path) -> None:
+    history_storage_cache.clear()
+    db_path = tmp_path / "history-storage-cache.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    settings = Settings(config_path=tmp_path, media_root=tmp_path / "media", database_filename=db_path.name)
+
+    try:
+        with session_factory() as db:
+            update_app_settings(
+                db,
+                AppSettingsUpdate(
+                    history_retention={"scan_history": {"days": 30, "storage_limit_gb": 0.5}},
+                ),
+                settings,
+            )
+            library = Library(
+                name="Movies",
+                path="/tmp/movies",
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+                scan_config={},
+            )
+            db.add(library)
+            db.flush()
+            db.add(
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.completed,
+                    job_type="incremental",
+                    finished_at=datetime.now(UTC),
+                    trigger_details={"reason": "manual"},
+                    scan_summary={"analysis": {"analysis_failed": 0}},
+                )
+            )
+            db.commit()
+
+            initial = get_history_storage(db, settings)
+            update_app_settings(
+                db,
+                AppSettingsUpdate(
+                    history_retention={"scan_history": {"days": 60, "storage_limit_gb": 1}},
+                ),
+                settings,
+            )
+            db.add(
+                ScanJob(
+                    library_id=library.id,
+                    status=JobStatus.completed,
+                    job_type="incremental",
+                    finished_at=datetime.now(UTC),
+                    trigger_details={"reason": "second"},
+                    scan_summary={"analysis": {"analysis_failed": 0}},
+                )
+            )
+            db.commit()
+
+            cached = get_cached_history_storage(db, settings)
+
+        assert initial.categories.scan_history.entry_count == 1
+        assert cached.categories.scan_history.entry_count == 1
+        assert cached.categories.scan_history.days_limit == 60
+        assert cached.categories.scan_history.storage_limit_bytes == 1024 * 1024 * 1024
+    finally:
+        history_storage_cache.clear()
 
 
 def test_apply_history_retention_prunes_media_file_history_by_age(monkeypatch) -> None:

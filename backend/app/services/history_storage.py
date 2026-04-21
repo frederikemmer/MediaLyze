@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -28,6 +29,30 @@ GIGABYTE_BYTES = 1024 * 1024 * 1024
 class HistoryStorageRecord:
     recorded_at: datetime
     estimated_bytes: int
+
+
+class HistoryStorageCache:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._payloads: dict[str, HistoryStorageRead] = {}
+
+    def get(self, cache_key: str, app_settings) -> HistoryStorageRead | None:
+        with self._lock:
+            payload = self._payloads.get(cache_key)
+            if payload is None:
+                return None
+            return _apply_retention_settings(payload, app_settings)
+
+    def set(self, cache_key: str, payload: HistoryStorageRead) -> None:
+        with self._lock:
+            self._payloads[cache_key] = payload.model_copy(deep=True)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._payloads.clear()
+
+
+history_storage_cache = HistoryStorageCache()
 
 
 def _json_length(value) -> int:
@@ -170,9 +195,37 @@ def _reclaimable_file_bytes(db: Session) -> int:
     return page_size * freelist_count
 
 
-def get_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
-    resolved_settings = settings or get_settings()
-    app_settings = get_app_settings(db, resolved_settings)
+def _history_storage_cache_key(settings: Settings, db: Session | None = None) -> str:
+    if db is not None:
+        bind = db.get_bind()
+        url = getattr(bind, "url", None)
+        if (
+            url is not None
+            and str(url).startswith("sqlite")
+            and getattr(url, "database", None) in {None, ":memory:"}
+        ):
+            return f"{settings.database_path.resolve()}::{id(bind)}"
+    return str(settings.database_path.resolve())
+
+
+def _apply_retention_settings(payload: HistoryStorageRead, app_settings) -> HistoryStorageRead:
+    next_payload = payload.model_copy(deep=True)
+    for bucket_name in ("file_history", "library_history", "scan_history"):
+        category = getattr(next_payload.categories, bucket_name)
+        days_limit = _days_limit_for_bucket(app_settings, bucket_name)
+        category.days_limit = days_limit
+        category.storage_limit_bytes = _storage_limit_bytes_for_bucket(app_settings, bucket_name)
+        category.projected_bytes_for_configured_days = (
+            category.average_daily_bytes * days_limit if days_limit > 0 else None
+        )
+    return next_payload
+
+
+def _build_history_storage(
+    db: Session,
+    resolved_settings: Settings,
+    app_settings,
+) -> HistoryStorageRead:
     categories = HistoryStorageCategoriesRead(
         file_history=_forecast_from_records(
             _media_file_history_records(db),
@@ -196,3 +249,24 @@ def get_history_storage(db: Session, settings: Settings | None = None) -> Histor
         reclaimable_file_bytes=_reclaimable_file_bytes(db),
         categories=categories,
     )
+
+
+def get_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
+    resolved_settings = settings or get_settings()
+    app_settings = get_app_settings(db, resolved_settings)
+    payload = _build_history_storage(db, resolved_settings, app_settings)
+    history_storage_cache.set(_history_storage_cache_key(resolved_settings, db), payload)
+    return payload
+
+
+def get_cached_history_storage(db: Session, settings: Settings | None = None) -> HistoryStorageRead:
+    resolved_settings = settings or get_settings()
+    app_settings = get_app_settings(db, resolved_settings)
+    cache_key = _history_storage_cache_key(resolved_settings, db)
+    cached = history_storage_cache.get(cache_key, app_settings)
+    if cached is not None:
+        return cached
+
+    payload = _build_history_storage(db, resolved_settings, app_settings)
+    history_storage_cache.set(cache_key, payload)
+    return payload

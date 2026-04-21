@@ -36,7 +36,7 @@ from backend.app.services.app_settings import get_app_settings as load_app_setti
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
 from backend.app.services.duplicates import list_library_duplicate_groups
-from backend.app.services.history_storage import get_history_storage
+from backend.app.services.history_storage import get_cached_history_storage
 from backend.app.services.history_retention import has_active_scan_jobs
 from backend.app.services.library_history_service import get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
@@ -188,7 +188,7 @@ def history_storage(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> HistoryStorageRead:
-    return get_history_storage(db, settings)
+    return get_cached_history_storage(db, settings)
 
 
 @router.get("/history/reconstruct", response_model=HistoryReconstructionStatusRead)

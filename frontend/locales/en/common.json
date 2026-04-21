@@ -504,6 +504,7 @@
     "triggerScheduledSummary": "Started by the scheduled interval every {{minutes}} minutes.",
     "triggerWatchdogSummary": "Started after {{count}} watchdog file events.",
     "outcomeSuccessful": "Successful",
+    "outcomeCompletedWithIssues": "Completed with issues",
     "outcomeFailed": "Failed",
     "outcomeCanceled": "Canceled",
     "startedAt": "Started",

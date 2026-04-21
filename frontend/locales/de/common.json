@@ -504,6 +504,7 @@
     "triggerScheduledSummary": "Durch das geplante Intervall alle {{minutes}} Minuten ausgelöst.",
     "triggerWatchdogSummary": "Nach {{count}} Watchdog-Dateisystemereignissen ausgelöst.",
     "outcomeSuccessful": "Erfolgreich",
+    "outcomeCompletedWithIssues": "Abgeschlossen mit Problemen",
     "outcomeFailed": "Fehlgeschlagen",
     "outcomeCanceled": "Abgebrochen",
     "startedAt": "Gestartet",
