@@ -24,8 +24,14 @@ from backend.app.services.resolution_categories import (
 
 
 VIDEO_CODEC_RANKS = {
+    "mpeg2video": 0.5,
+    "mpeg4": 0.75,
+    "vc1": 0.9,
+    "mjpeg": 0.95,
     "h264": 1.0,
+    "vp9": 1.5,
     "hevc": 2.0,
+    "prores": 2.0,
     "av1": 3.0,
 }
 AUDIO_CHANNEL_RANKS = {
@@ -35,13 +41,24 @@ AUDIO_CHANNEL_RANKS = {
     "7.1": 4.0,
 }
 AUDIO_CODEC_RANKS = {
+    "mp3": 0.8,
+    "vorbis": 0.9,
     "aac": 1.0,
     "ac3": 2.0,
     "eac3": 3.0,
+    "opus": 3.5,
     "dts": 4.0,
     "dts_hd": 5.0,
     "truehd": 6.0,
     "flac": 6.0,
+    "alac": 6.0,
+    "pcm_bluray": 6.0,
+    "pcm_s16le": 6.0,
+    "pcm_s16be": 6.0,
+    "pcm_s24le": 6.0,
+    "pcm_s24be": 6.0,
+    "pcm_s32le": 6.0,
+    "pcm_s32be": 6.0,
 }
 DYNAMIC_RANGE_RANKS = {
     "sdr": 1.0,
@@ -292,7 +309,7 @@ def _primary_video_stream(video_streams: list[QualityVideoStream]) -> QualityVid
 
 
 def _normalize_video_codec(value: str | None) -> str | None:
-    candidate = (value or "").strip().lower()
+    candidate = (value or "").strip().lower().replace(".", "").replace(" ", "_")
     mapping = {
         "avc": "h264",
         "avc1": "h264",
@@ -302,16 +319,27 @@ def _normalize_video_codec(value: str | None) -> str | None:
         "hevc": "hevc",
         "x265": "hevc",
         "av1": "av1",
+        "vp9": "vp9",
+        "vc1": "vc1",
+        "mpeg2": "mpeg2video",
+        "mpeg2video": "mpeg2video",
+        "mpeg4": "mpeg4",
+        "prores": "prores",
+        "mjpeg": "mjpeg",
     }
     return mapping.get(candidate, candidate or None)
 
 
 def _normalize_audio_codec(value: str | None) -> str | None:
-    candidate = (value or "").strip().lower()
+    candidate = (value or "").strip().lower().replace(" ", "_")
     mapping = {
         "aac": "aac",
         "ac3": "ac3",
         "eac3": "eac3",
+        "mp3": "mp3",
+        "libmp3lame": "mp3",
+        "opus": "opus",
+        "vorbis": "vorbis",
         "dts": "dts",
         "dca": "dts",
         "dts-hd": "dts_hd",
@@ -321,6 +349,14 @@ def _normalize_audio_codec(value: str | None) -> str | None:
         "truehd": "truehd",
         "mlp": "truehd",
         "flac": "flac",
+        "alac": "alac",
+        "pcm_bluray": "pcm_bluray",
+        "pcm_s16le": "pcm_s16le",
+        "pcm_s16be": "pcm_s16be",
+        "pcm_s24le": "pcm_s24le",
+        "pcm_s24be": "pcm_s24be",
+        "pcm_s32le": "pcm_s32le",
+        "pcm_s32be": "pcm_s32be",
     }
     return mapping.get(candidate, candidate or None)
 

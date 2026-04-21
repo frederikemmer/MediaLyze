@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
 - simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
 - align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
+- include all recognized video and audio codec options in quality-profile scoring and settings so Opus and other known codecs no longer fall back to neutral scoring
 
 ## v0.8.2
 

@@ -1022,6 +1022,33 @@ describe("LibrariesPage ignore patterns", () => {
 
     await waitFor(() => expect(maximumInput).toHaveValue(0.09));
   });
+
+  it("shows recognized codec options in quality score settings", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage();
+
+    await screen.findByText("Movies");
+    fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
+
+    const videoCodecTitle = await screen.findByText("Video codec");
+    const videoCodecGroup = videoCodecTitle.closest(".quality-settings-group");
+    if (!(videoCodecGroup instanceof HTMLElement)) {
+      throw new Error("Expected video codec settings group");
+    }
+    fireEvent.click(within(videoCodecGroup).getAllByRole("button")[0]);
+    expect(await within(videoCodecGroup).findByRole("menuitemcheckbox", { name: "VP9" })).toBeInTheDocument();
+    expect(within(videoCodecGroup).getByRole("menuitemcheckbox", { name: "Apple ProRes" })).toBeInTheDocument();
+
+    const audioCodecTitle = await screen.findByText("Audio codec");
+    const audioCodecGroup = audioCodecTitle.closest(".quality-settings-group");
+    if (!(audioCodecGroup instanceof HTMLElement)) {
+      throw new Error("Expected audio codec settings group");
+    }
+    fireEvent.click(within(audioCodecGroup).getAllByRole("button")[0]);
+    expect(await within(audioCodecGroup).findByRole("menuitemcheckbox", { name: "Opus" })).toBeInTheDocument();
+    expect(within(audioCodecGroup).getByRole("menuitemcheckbox", { name: "Vorbis" })).toBeInTheDocument();
+  });
 });
 
 describe("LibrariesPage desktop mode", () => {
