@@ -2054,9 +2054,17 @@ export function LibrariesPage() {
   function formatHistoryReconstructionStatus(result: HistoryReconstructionResult) {
     if (
       result.created_library_history_entries === 0 &&
+      result.updated_library_history_entries === 0 &&
       result.created_file_history_entries === 0
     ) {
       return t("libraries.historyRetention.reconstructNoChanges");
+    }
+    if (result.updated_library_history_entries > 0) {
+      return t("libraries.historyRetention.reconstructSuccessWithUpdates", {
+        libraryEntries: result.created_library_history_entries,
+        updatedLibraryEntries: result.updated_library_history_entries,
+        fileEntries: result.created_file_history_entries,
+      });
     }
     return t("libraries.historyRetention.reconstructSuccess", {
       libraryEntries: result.created_library_history_entries,
@@ -3169,6 +3177,7 @@ export function LibrariesPage() {
                     <span>
                       {t("libraries.historyRetention.progressEntries", {
                         libraryEntries: historyReconstruction.created_library_history_entries,
+                        updatedLibraryEntries: historyReconstruction.updated_library_history_entries,
                         fileEntries: historyReconstruction.created_file_history_entries,
                       })}
                     </span>

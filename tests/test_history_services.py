@@ -767,10 +767,11 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
             .order_by(MediaFileHistory.captured_at.asc(), MediaFileHistory.id.asc())
         ).all()
 
-    assert result.created_library_history_entries == 7
+    assert result.created_library_history_entries == 9
+    assert result.updated_library_history_entries == 1
     assert result.created_file_history_entries == 2
     assert result.oldest_reconstructed_snapshot_day == "2026-04-10"
-    assert result.newest_reconstructed_snapshot_day == "2026-04-16"
+    assert result.newest_reconstructed_snapshot_day == "2026-04-19"
     assert [row.snapshot_day for row in library_rows] == [
         "2026-04-10",
         "2026-04-11",
@@ -780,6 +781,8 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
         "2026-04-15",
         "2026-04-16",
         "2026-04-17",
+        "2026-04-18",
+        "2026-04-19",
     ]
     assert library_rows[0].snapshot["trend_metrics"]["total_files"] == 1
     assert library_rows[0].snapshot["trend_metrics"]["schema_version"] == 2
@@ -788,6 +791,17 @@ def test_reconstruct_history_from_media_files_backfills_missing_earlier_history(
     assert library_rows[5].snapshot["trend_metrics"]["total_files"] == 2
     assert library_rows[5].snapshot["trend_metrics"]["numeric_summaries"]["quality_score"]["count"] == 2
     assert library_rows[5].snapshot["scan_delta"]["new_files"] == 1
+    assert library_rows[7].snapshot["trend_metrics"]["schema_version"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["total_files"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["resolution_counts"] == {"4k": 2}
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["container"]["mkv"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["video_codec"]["hevc"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["hdr_type"]["HDR10"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["audio_codecs"]["truehd"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["audio_languages"]["en"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["category_counts"]["scan_status"]["ready"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["numeric_distributions"]["size"]["total"] == 2
+    assert library_rows[7].snapshot["trend_metrics"]["numeric_distributions"]["resolution_mp"]["total"] == 2
     assert file_rows[0].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction
     assert file_rows[0].relative_path == "older.mkv"
     assert file_rows[1].capture_reason == MediaFileHistoryCaptureReason.history_reconstruction

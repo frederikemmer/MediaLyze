@@ -306,6 +306,7 @@ class ScanRuntimeManager:
                 phase_completed=0,
                 created_file_history_entries=result.created_file_history_entries,
                 created_library_history_entries=result.created_library_history_entries,
+                updated_library_history_entries=result.updated_library_history_entries,
                 error=None,
                 result=result,
             )

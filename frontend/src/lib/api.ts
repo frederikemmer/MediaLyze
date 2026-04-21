@@ -478,6 +478,7 @@ export type HistoryReconstructionResult = {
   libraries_with_media: number;
   created_file_history_entries: number;
   created_library_history_entries: number;
+  updated_library_history_entries: number;
   oldest_reconstructed_snapshot_day: string | null;
   newest_reconstructed_snapshot_day: string | null;
 };
@@ -503,6 +504,7 @@ export type HistoryReconstructionStatus = {
   phase_completed: number;
   created_file_history_entries: number;
   created_library_history_entries: number;
+  updated_library_history_entries: number;
   result: HistoryReconstructionResult | null;
   error: string | null;
 };
