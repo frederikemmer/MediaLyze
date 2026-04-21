@@ -927,10 +927,6 @@
   min-width: 0;
 }
 
-.file-detail-path-card {
-  min-width: 0;
-}
-
 .file-detail-badge-tooltip-trigger,
 .file-detail-badge-tooltip-trigger.tooltip-trigger {
   display: inline-flex;

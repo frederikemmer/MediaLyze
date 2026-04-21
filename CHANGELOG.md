@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - cache the history storage forecast and refresh it in the background after scans, history maintenance, and on a periodic schedule
 - report scans with unreadable media files as completed with issues instead of failed when the scan itself finished successfully
 - keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
+- simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
 
 ## v0.8.2
 

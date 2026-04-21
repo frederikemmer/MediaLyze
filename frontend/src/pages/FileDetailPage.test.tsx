@@ -249,7 +249,7 @@ afterEach(() => {
 });
 
 describe("FileDetailPage", () => {
-  it("renders long paths as segmented chips with full-path and filename tooltips", async () => {
+  it("renders header badges and exposes the relative path in the title tooltip", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -258,18 +258,15 @@ describe("FileDetailPage", () => {
     const { container } = renderPage(file.id);
 
     expect(await screen.findByText("UHD")).toBeInTheDocument();
-    const segments = Array.from(container.querySelectorAll(".path-segment")).map((segment) => segment.textContent);
-    expect(segments).toEqual([
-      "Shows",
-      "Season01",
-      "A_Very_Long_Show_Name.2025.S01E01.With.An_Absurdly_Long_File_Name_That_Should_Not_Overflow_The_Layout.2160p.WEB-DL.DV.HEVC-GROUP.mkv",
-    ]);
+    expect(screen.getByText("10.0 GB")).toBeInTheDocument();
+    expect(screen.getAllByText("56m").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
+    expect(container.querySelector(".path-segment")).not.toBeInTheDocument();
+    expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show full relative path" }));
+    const pathTooltipTrigger = screen.getByRole("button", { name: "Show full relative path" });
+    fireEvent.mouseEnter(pathTooltipTrigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(file.relative_path);
-
-    fireEvent.click(screen.getByRole("button", { name: "Show full file name" }));
-    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.filename));
 
     fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
@@ -319,7 +316,7 @@ describe("FileDetailPage", () => {
 
     expect(await screen.findByText("UHD")).toBeInTheDocument();
     expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
-    expect(container.querySelectorAll(".path-segment")).toHaveLength(3);
+    expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();
   });
 

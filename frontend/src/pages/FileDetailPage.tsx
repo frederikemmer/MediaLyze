@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
-import { PathSegmentTrail } from "../components/PathSegmentTrail";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { api, type MediaFileDetail, type MediaFileHistory, type MediaFileQualityScoreDetail } from "../lib/api";
@@ -865,8 +864,8 @@ export function FileDetailPage() {
         </div>
         <div className="file-detail-title-row">
           <h2 className="file-detail-title">{file?.filename ?? t("fileDetail.loading")}</h2>
-          {file?.filename ? (
-            <TooltipTrigger ariaLabel={t("fileDetail.showFullFilename")} content={file.filename}>
+          {file?.relative_path ? (
+            <TooltipTrigger ariaLabel={t("fileDetail.showFullRelativePath")} content={file.relative_path}>
               ?
             </TooltipTrigger>
           ) : null}
@@ -885,31 +884,9 @@ export function FileDetailPage() {
             <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
           )}
           <span className="badge">{formatHdrType(file?.hdr_type) ?? t("fileTable.sdr")}</span>
-        </div>
-        <div className="card-grid grid">
-          <article className="media-card metric-card file-detail-path-card">
-            <div className="metric-card-label-row">
-              <p className="eyebrow">{t("fileDetail.relativePath")}</p>
-              {file?.relative_path ? (
-                <TooltipTrigger ariaLabel={t("fileDetail.showFullRelativePath")} content={file.relative_path}>
-                  ?
-                </TooltipTrigger>
-              ) : null}
-            </div>
-            {file?.relative_path ? <PathSegmentTrail value={file.relative_path} /> : <h3>…</h3>}
-          </article>
-          <article className="media-card metric-card metric-card-teal">
-            <p className="eyebrow">{t("fileDetail.size")}</p>
-            <h3>{formatBytes(file?.size_bytes ?? 0)}</h3>
-          </article>
-          <article className="media-card metric-card metric-card-blue">
-            <p className="eyebrow">{t("fileDetail.duration")}</p>
-            <h3>{formatDuration(file?.duration ?? 0)}</h3>
-          </article>
-          <article className="media-card metric-card">
-            <p className="eyebrow">{t("fileDetail.quality")}</p>
-            <h3>{file ? `${file.quality_score}/10` : "…"}</h3>
-          </article>
+          <span className="badge">{formatBytes(file?.size_bytes ?? 0)}</span>
+          <span className="badge">{formatDuration(file?.duration ?? 0)}</span>
+          <span className="badge">{file ? `${file.quality_score}/10` : "…"}</span>
         </div>
       </section>
 
