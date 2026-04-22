@@ -55,6 +55,7 @@ class CategoryValue:
 @dataclass(frozen=True)
 class ComparisonSourceRow:
     media_file_id: int
+    asset_name: str
     size: float | None
     duration: float | None
     quality_score: float | None
@@ -135,6 +136,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
     query = (
         select(
             MediaFile.id.label("media_file_id"),
+            MediaFile.filename.label("asset_name"),
             cast(MediaFile.size_bytes, Float).label("size"),
             cast(MediaFile.quality_score, Float).label("quality_score"),
             cast(MediaFormat.duration, Float).label("duration"),
@@ -160,6 +162,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
     return [
         ComparisonSourceRow(
             media_file_id=row.media_file_id,
+            asset_name=row.asset_name or str(row.media_file_id),
             size=row.size,
             duration=row.duration,
             quality_score=row.quality_score,
@@ -253,7 +256,7 @@ def _build_comparison(
     rows = _comparison_source_rows(db, library_id=library_id)
     total_files = len(rows)
 
-    included_rows: list[tuple[int, float | CategoryValue, float | CategoryValue]] = []
+    included_rows: list[tuple[int, str, float | CategoryValue, float | CategoryValue]] = []
     for row in rows:
         x_value = (
             _numeric_value(row, x_field)
@@ -267,7 +270,7 @@ def _build_comparison(
         )
         if x_value is None or y_value is None:
             continue
-        included_rows.append((row.media_file_id, x_value, y_value))
+        included_rows.append((row.media_file_id, row.asset_name, x_value, y_value))
 
     x_category_counts: dict[str, tuple[str, int]] = {}
     y_category_counts: dict[str, tuple[str, int]] = {}
@@ -275,7 +278,7 @@ def _build_comparison(
     bar_totals: dict[str, tuple[str, float, int]] = {}
     scatter_points: list[ComparisonScatterPoint] = []
 
-    for _media_file_id, x_value, y_value in included_rows:
+    for _media_file_id, asset_name, x_value, y_value in included_rows:
         if x_definition.kind == "numeric":
             x_bucket = _numeric_bucket(x_field, float(x_value))
             if x_bucket is None:
@@ -308,6 +311,7 @@ def _build_comparison(
             scatter_points.append(
                 ComparisonScatterPoint(
                     media_file_id=_media_file_id,
+                    asset_name=asset_name,
                     x_value=float(x_value),
                     y_value=float(y_value),
                 )

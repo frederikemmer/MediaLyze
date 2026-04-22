@@ -223,8 +223,8 @@ function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): 
       { x_key: "3600:5400", y_key: "500000000:1000000000", count: 1 },
     ],
     scatter_points: [
-      { media_file_id: 1, x_value: 3600, y_value: 1024 },
-      { media_file_id: 2, x_value: 4200, y_value: 1024 },
+      { media_file_id: 1, asset_name: "episode-01.mkv", x_value: 3600, y_value: 1024 },
+      { media_file_id: 2, asset_name: "episode-02.mkv", x_value: 4200, y_value: 1024 },
     ],
     bar_entries: [
       { x_key: "1800:3600", x_label: "1800:3600", value: 1024, count: 1 },
@@ -719,12 +719,12 @@ describe("LibraryDetailPage", () => {
         scatter_points:
           String(libraryId) === "131"
             ? [
-                { media_file_id: 1, x_value: 3600, y_value: 1024 },
-                { media_file_id: 2, x_value: 4200, y_value: 1024 },
+                { media_file_id: 1, asset_name: "episode-01.mkv", x_value: 3600, y_value: 1024 },
+                { media_file_id: 2, asset_name: "episode-02.mkv", x_value: 4200, y_value: 1024 },
               ]
             : [
-                { media_file_id: 3, x_value: 7200, y_value: 2048 },
-                { media_file_id: 4, x_value: 8400, y_value: 4096 },
+                { media_file_id: 3, asset_name: "episode-03.mkv", x_value: 7200, y_value: 2048 },
+                { media_file_id: 4, asset_name: "episode-04.mkv", x_value: 8400, y_value: 4096 },
               ],
       }),
     );
