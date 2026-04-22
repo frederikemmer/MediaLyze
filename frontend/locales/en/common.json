@@ -50,6 +50,11 @@
     "expandAria": "Expand {{title}}",
     "loading": "Loading..."
   },
+  "releaseNotes": {
+    "eyebrow": "Version {{version}}",
+    "title": "What's new",
+    "closeAria": "Close release notes"
+  },
   "libraries": {
     "configured": "Configured libraries",
     "fullScan": "full scan",

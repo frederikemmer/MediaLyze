@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { House, SearchX, Settings } from "lucide-react";
+import { House, SearchX, Settings, X } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { type ScanJob } from "../lib/api";
 import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
+import {
+  getCurrentReleaseNotes,
+  markReleaseNotesSeen,
+  shouldShowReleaseNotes,
+  type ReleaseNotes,
+} from "../lib/release-notes";
 import { useScanJobs } from "../lib/scan-jobs";
 
 function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
@@ -28,11 +34,18 @@ export function AppShell() {
   const { t } = useTranslation();
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
   const { appSettings, libraries, librariesLoaded, loadDashboard, loadLibraries } = useAppData();
+  const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
+  const [showReleaseNotes, setShowReleaseNotes] = useState(() => shouldShowReleaseNotes(APP_VERSION, releaseNotes));
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
   const showFullWidthAppShell = appSettings.feature_flags.show_full_width_app_shell;
+
+  function dismissReleaseNotes() {
+    markReleaseNotesSeen(APP_VERSION);
+    setShowReleaseNotes(false);
+  }
 
   useEffect(() => {
     if (librariesLoaded) {
@@ -154,6 +167,45 @@ export function AppShell() {
         ) : null}
         {syncError ? <div className="alert">{syncError}</div> : null}
       </header>
+      {showReleaseNotes && releaseNotes ? (
+        <div className="release-notes-backdrop" role="presentation">
+          <section
+            className="release-notes-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="release-notes-title"
+          >
+            <div className="release-notes-header">
+              <div>
+                <p className="eyebrow">{t("releaseNotes.eyebrow", { version: releaseNotes.version })}</p>
+                <h2 id="release-notes-title">{t("releaseNotes.title")}</h2>
+                {releaseNotes.date ? <p className="subtitle">{releaseNotes.date}</p> : null}
+              </div>
+              <button
+                type="button"
+                className="release-notes-close"
+                aria-label={t("releaseNotes.closeAria")}
+                onClick={dismissReleaseNotes}
+                autoFocus
+              >
+                <X aria-hidden="true" className="nav-icon" />
+              </button>
+            </div>
+            <div className="release-notes-content">
+              {releaseNotes.sections.map((section, sectionIndex) => (
+                <section key={`${section.title || "changes"}-${sectionIndex}`} className="release-notes-section">
+                  {section.title ? <h3>{section.title}</h3> : null}
+                  <ul>
+                    {section.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
       <Outlet />
     </div>
   );
