@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.8.4
+
+>2026-04-22
+
+### ✨ New
+
+- show a version-specific changelog dialog after updates, allow reopening it from the header version pill, and list previous releases from `CHANGELOG.md` in a collapsed release-history accordion
+- add GitHub repository and issue-report shortcuts to the changelog dialog
+- replace generic panel loading notices with the existing centered pinwheel loading indicator
+
+### 🐛 Bug fixes
+
+- preserve customized dashboard and library panel layouts across updates by avoiding automatic default-panel injection and avoiding write-back during layout reads ([#118](https://github.com/frederikemmer/MediaLyze/issues/118))
+- make the analyzed-files empty state compact and centered instead of showing a large notice box
+- keep the compact empty analyzed-files state stable while search filters are edited, avoiding spinner flicker and layout jumps
+- improve overall app performance
+
 ## v0.8.3
 
 >2026-04-22
@@ -19,7 +36,6 @@ All notable changes to this project will be documented in this file.
 - remove the stray dark-mode tooltip background behind the resolution badge on the file detail page
 - cache the history storage forecast and refresh it in the background after scans, history maintenance, and on a periodic schedule
 - report scans with unreadable media files as completed with issues instead of failed when the scan itself finished successfully
-- keep multi-line badges and file-detail path pills from turning into fully rounded capsules by using a fixed corner radius
 - simplify the file detail header by removing the main metric cards, moving size, duration, and quality into badges, and showing the relative path through the title tooltip
 - align the history-retention table row headers with the dark-mode settings design instead of rendering them as bright gray blocks
 - include all recognized video and audio codec options in quality-profile scoring and settings so Opus and other known codecs no longer fall back to neutral scoring
