@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
+- timespan picker for historic data
 - show a version-specific changelog dialog after updates, allow reopening it from the header version pill, and list previous releases from `CHANGELOG.md` in a collapsed release-history accordion
 - add GitHub repository and issue-report shortcuts to the changelog dialog
 - replace generic panel loading notices with the existing centered pinwheel loading indicator
