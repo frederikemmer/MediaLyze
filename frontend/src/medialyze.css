@@ -3610,6 +3610,21 @@ html[data-theme="dark"] {
     color: rgba(240, 236, 228, 0.9);
   }
 
+  .history-reconstruction-progress {
+    background: rgba(240, 236, 228, 0.045);
+    border-color: rgba(240, 236, 228, 0.08);
+    color: rgba(240, 236, 228, 0.9);
+  }
+
+  .history-reconstruction-progress .progress {
+    background: rgba(240, 236, 228, 0.1);
+  }
+
+  .history-reconstruction-progress-detail,
+  .history-reconstruction-progress-meta {
+    color: rgba(240, 236, 228, 0.68);
+  }
+
   .library-statistics-table tbody tr.is-drop-target td {
     background: rgba(27, 153, 139, 0.10);
   }
