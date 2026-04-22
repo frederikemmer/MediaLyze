@@ -3,6 +3,7 @@ ARG APP_VERSION=dev
 ENV VITE_APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./frontend/
+COPY CHANGELOG.md ./CHANGELOG.md
 WORKDIR /app/frontend
 RUN npm ci
 COPY frontend/ ./
