@@ -53,6 +53,12 @@
   "releaseNotes": {
     "eyebrow": "Version {{version}}",
     "title": "What's new",
+    "allVersions": "Release history",
+    "versionHeading": "Version {{version}}",
+    "current": "Current",
+    "openAria": "Show release notes for {{version}}",
+    "githubAria": "Open GitHub repository",
+    "reportIssueAria": "Report an issue",
     "closeAria": "Close release notes"
   },
   "libraries": {

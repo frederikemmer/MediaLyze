@@ -29,6 +29,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
+  border: 0;
   border-radius: 999px;
   background: rgba(31, 28, 22, 0.08);
   color: var(--muted);
@@ -36,6 +37,20 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  box-shadow: none;
+}
+
+.app-version:hover,
+.app-version:focus-visible {
+  color: var(--ink);
+  transform: none;
+  background: rgba(31, 28, 22, 0.12);
+  box-shadow: none;
+}
+
+.app-version:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 .media-nav-panel {
@@ -236,7 +251,16 @@
   margin-top: 6px;
 }
 
+.release-notes-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.release-notes-icon-link,
 .release-notes-close {
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -251,6 +275,8 @@
   box-shadow: none;
 }
 
+.release-notes-icon-link:hover,
+.release-notes-icon-link:focus-visible,
 .release-notes-close:hover,
 .release-notes-close:focus-visible {
   color: var(--ink);
@@ -259,13 +285,112 @@
   box-shadow: 0 10px 20px rgba(31, 28, 22, 0.10);
 }
 
+.release-notes-icon-link[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  max-width: 180px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(31, 28, 22, 0.94);
+  color: #fffaf3;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(50%, 3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.release-notes-icon-link[data-tooltip]:hover::after,
+.release-notes-icon-link[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(50%, 0);
+}
+
+.release-notes-github-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .release-notes-content {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  gap: 16px;
+  gap: 10px;
   padding-right: 4px;
   overscroll-behavior: contain;
+}
+
+.release-notes-version {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.release-notes-version-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: none;
+}
+
+.release-notes-version-toggle:hover,
+.release-notes-version-toggle:focus-visible {
+  transform: none;
+  box-shadow: none;
+}
+
+.release-notes-version-title,
+.release-notes-version-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.release-notes-version-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.release-notes-version-meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.release-notes-current-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(27, 153, 139, 0.14);
+  color: #0e6b62;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.release-notes-version-body {
+  display: grid;
+  gap: 16px;
 }
 
 .release-notes-section {
@@ -3932,6 +4057,12 @@ html[data-theme="dark"] {
     background: rgba(240, 236, 228, 0.10);
   }
 
+  .app-version:hover,
+  .app-version:focus-visible {
+    color: rgba(255, 250, 243, 0.98);
+    background: rgba(240, 236, 228, 0.14);
+  }
+
   .media-nav-icons,
   .media-nav-libraries {
     background: rgba(38, 35, 31, 0.64);
@@ -3953,16 +4084,33 @@ html[data-theme="dark"] {
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
   }
 
+  .release-notes-icon-link,
   .release-notes-close {
     background: rgba(38, 35, 31, 0.72);
     border-color: rgba(240, 236, 228, 0.10);
     color: rgba(240, 236, 228, 0.70);
   }
 
+  .release-notes-icon-link:hover,
+  .release-notes-icon-link:focus-visible,
   .release-notes-close:hover,
   .release-notes-close:focus-visible {
     background: rgba(240, 236, 228, 0.08);
     color: rgba(255, 250, 243, 0.98);
+  }
+
+  .release-notes-version {
+    background: rgba(38, 35, 31, 0.52);
+    border-color: rgba(240, 236, 228, 0.08);
+  }
+
+  .release-notes-version-toggle {
+    color: rgba(255, 250, 243, 0.98);
+  }
+
+  .release-notes-current-badge {
+    background: rgba(62, 197, 184, 0.14);
+    color: #3ec5b8;
   }
 
   .distribution-chart-mode-toggle {

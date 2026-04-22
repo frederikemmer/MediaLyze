@@ -15,7 +15,7 @@ export type ReleaseNotes = {
 
 export const RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY = "medialyze-release-notes-seen-version";
 
-function normalizeVersion(version: string): string {
+export function normalizeReleaseVersion(version: string): string {
   return version.trim().replace(/^v/i, "");
 }
 
@@ -29,29 +29,23 @@ function cleanMarkdownText(value: string): string {
 }
 
 export function parseReleaseNotes(markdown: string, version: string): ReleaseNotes | null {
-  const normalizedVersion = normalizeVersion(version);
+  const normalizedVersion = normalizeReleaseVersion(version);
   if (!normalizedVersion || normalizedVersion === "dev") {
     return null;
   }
 
-  const headingPattern = new RegExp(`^##\\s+v?${normalizedVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m");
-  const headingMatch = markdown.match(headingPattern);
-  if (!headingMatch || typeof headingMatch.index !== "number") {
-    return null;
-  }
+  return parseAllReleaseNotes(markdown).find((releaseNotes) => releaseNotes.version === normalizedVersion) ?? null;
+}
 
-  const sectionStart = headingMatch.index + headingMatch[0].length;
-  const nextHeadingMatch = markdown.slice(sectionStart).match(/^##\s+/m);
-  const sectionEnd = nextHeadingMatch?.index === undefined ? markdown.length : sectionStart + nextHeadingMatch.index;
-  const lines = markdown.slice(sectionStart, sectionEnd).split(/\r?\n/);
+function parseReleaseNotesBlock(version: string, block: string): ReleaseNotes | null {
   const releaseNotes: ReleaseNotes = {
-    version: normalizedVersion,
+    version,
     date: null,
     sections: [],
   };
   let currentSection: ReleaseNotesSection | null = null;
 
-  for (const rawLine of lines) {
+  for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) {
       continue;
@@ -83,20 +77,41 @@ export function parseReleaseNotes(markdown: string, version: string): ReleaseNot
   return releaseNotes.sections.some((section) => section.items.length > 0) ? releaseNotes : null;
 }
 
+export function parseAllReleaseNotes(markdown: string): ReleaseNotes[] {
+  const headingPattern = /^##\s+v([0-9][^\s]*)\s*$/gm;
+  const headings = [...markdown.matchAll(headingPattern)];
+  return headings.flatMap((heading, index) => {
+    if (typeof heading.index !== "number") {
+      return [];
+    }
+
+    const version = normalizeReleaseVersion(heading[1]);
+    const sectionStart = heading.index + heading[0].length;
+    const nextHeading = headings[index + 1];
+    const sectionEnd = typeof nextHeading?.index === "number" ? nextHeading.index : markdown.length;
+    const releaseNotes = parseReleaseNotesBlock(version, markdown.slice(sectionStart, sectionEnd));
+    return releaseNotes ? [releaseNotes] : [];
+  });
+}
+
 export function getCurrentReleaseNotes(): ReleaseNotes | null {
   return parseReleaseNotes(changelogMarkdown, APP_VERSION);
 }
 
+export function getAllReleaseNotes(): ReleaseNotes[] {
+  return parseAllReleaseNotes(changelogMarkdown);
+}
+
 export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNotes | null): boolean {
-  if (!releaseNotes || normalizeVersion(version) === "dev" || typeof window === "undefined") {
+  if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
     return false;
   }
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== normalizeVersion(version);
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
 }
 
 export function markReleaseNotesSeen(version: string): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, normalizeVersion(version));
+  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
 }

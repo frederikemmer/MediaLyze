@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY,
   markReleaseNotesSeen,
+  parseAllReleaseNotes,
   parseReleaseNotes,
   shouldShowReleaseNotes,
 } from "./release-notes";
@@ -38,6 +39,35 @@ describe("release notes", () => {
       date: "2026-04-22",
       sections: [{ title: "New", items: ["add one feature (#1)", "improve two"] }],
     });
+  });
+
+  it("parses all released changelog versions and ignores unreleased notes", () => {
+    const notes = parseAllReleaseNotes(
+      [
+        "# Changelog",
+        "",
+        "## vUnreleased",
+        "",
+        "- not ready",
+        "",
+        "## v1.2.3",
+        "",
+        "### New",
+        "",
+        "- current entry",
+        "",
+        "## v1.2.2",
+        "",
+        "### Bug fixes",
+        "",
+        "- older entry",
+      ].join("\n"),
+    );
+
+    expect(notes).toEqual([
+      { version: "1.2.3", date: null, sections: [{ title: "New", items: ["current entry"] }] },
+      { version: "1.2.2", date: null, sections: [{ title: "Bug fixes", items: ["older entry"] }] },
+    ]);
   });
 
   it("shows release notes once per non-dev version", () => {
