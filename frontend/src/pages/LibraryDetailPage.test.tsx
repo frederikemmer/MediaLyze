@@ -1648,6 +1648,39 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("keeps the caret position when editing table search inputs in the middle", async () => {
+    const libraryId = 515;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+    const fileSearchInput = screen.getByPlaceholderText("Search file and path") as HTMLInputElement;
+    fileSearchInput.focus();
+    fireEvent.change(fileSearchInput, {
+      target: { value: "epixsode", selectionStart: 4, selectionEnd: 4 },
+    });
+
+    await waitFor(() => expect(fileSearchInput.selectionStart).toBe(4));
+    expect(fileSearchInput.selectionEnd).toBe(4);
+
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /subtitle sources/i }));
+
+    const metadataSearchInput = screen.getByPlaceholderText("e.g. internal external") as HTMLInputElement;
+    metadataSearchInput.focus();
+    fireEvent.change(metadataSearchInput, {
+      target: { value: "internal xexternal", selectionStart: 10, selectionEnd: 10 },
+    });
+
+    await waitFor(() => expect(metadataSearchInput.selectionStart).toBe(10));
+    expect(metadataSearchInput.selectionEnd).toBe(10);
+  });
+
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
     window.localStorage.setItem(

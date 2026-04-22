@@ -9,12 +9,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, InputHTMLAttributes, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   startTransition,
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -142,6 +143,11 @@ type CachedFileList = {
 
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 
+type CaretStableSearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "type" | "value"> & {
+  value: string;
+  onValueChange: (value: string) => void;
+};
+
 type LibraryLayoutPanelDefinition =
   | {
       id: LibraryStatisticId;
@@ -206,6 +212,43 @@ let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
 const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
 const DEFAULT_COLUMN_RESIZE_MAX_PX = 960;
+
+function CaretStableSearchInput({ value, onValueChange, ...props }: CaretStableSearchInputProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectionRef = useRef<{ value: string; start: number | null; end: number | null } | null>(null);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const selection = selectionRef.current;
+    if (!input || !selection) {
+      return;
+    }
+    selectionRef.current = null;
+    if (document.activeElement !== input || input.value !== selection.value) {
+      return;
+    }
+    if (selection.start !== null && selection.end !== null) {
+      input.setSelectionRange(selection.start, selection.end);
+    }
+  }, [value]);
+
+  return (
+    <input
+      {...props}
+      ref={inputRef}
+      type="search"
+      value={value}
+      onChange={(event) => {
+        selectionRef.current = {
+          value: event.currentTarget.value,
+          start: event.currentTarget.selectionStart,
+          end: event.currentTarget.selectionEnd,
+        };
+        onValueChange(event.currentTarget.value);
+      }}
+    />
+  );
+}
 
 function compactValues(values: string[], limit = 4): string {
   if (values.length === 0) {
@@ -2478,16 +2521,10 @@ export function LibraryDetailPage() {
                           >
                             <BaseSearchIcon size={16} aria-hidden="true" />
                           </TooltipTrigger>
-                          <input
+                          <CaretStableSearchInput
                             id="library-file-search"
-                            type="search"
                             value={baseSearch}
-                            onChange={(event) => {
-                              const nextValue = event.target.value;
-                              startTransition(() => {
-                                setBaseSearch(nextValue);
-                              });
-                            }}
+                            onValueChange={setBaseSearch}
                             placeholder={t("libraryDetail.searchFields.file.placeholder")}
                             autoComplete="off"
                           />
@@ -2532,11 +2569,10 @@ export function LibraryDetailPage() {
                                       >
                                         <Icon size={16} />
                                       </TooltipTrigger>
-                                      <input
+                                      <CaretStableSearchInput
                                         id={`library-metadata-search-${field}`}
-                                        type="search"
                                         value={fieldValues[field] ?? ""}
-                                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
+                                        onValueChange={(nextValue) => updateMetadataFieldValue(field, nextValue)}
                                         placeholder={t(config.placeholderKey)}
                                         autoComplete="off"
                                       />
