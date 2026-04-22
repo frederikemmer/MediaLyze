@@ -252,12 +252,7 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const nextLayout = saveStatisticPanelLayout(
-      "dashboard",
-      DASHBOARD_LAYOUT_KEY,
-      getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions),
-      layoutOptions,
-    );
+    const nextLayout = getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions);
     setSavedLayout(nextLayout);
     setDraftLayout(cloneStatisticPanelLayout(nextLayout));
     setIsEditingLayout(false);

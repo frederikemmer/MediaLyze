@@ -806,6 +806,7 @@ describe("LibraryDetailPage", () => {
               renderer: "heatmap",
             },
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1423,6 +1424,7 @@ describe("LibraryDetailPage", () => {
             width: 1,
             height: 1,
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1599,6 +1601,7 @@ describe("LibraryDetailPage", () => {
             width: 1,
             height: 1,
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1688,6 +1691,7 @@ describe("LibraryDetailPage", () => {
       JSON.stringify({
         items: [
           { instanceId: "subtitle_sources", statisticId: "subtitle_sources", width: 1, height: 1 },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );

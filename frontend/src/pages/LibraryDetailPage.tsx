@@ -1687,12 +1687,7 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
-    const nextLayout = saveStatisticPanelLayout(
-      "library",
-      libraryId,
-      getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
-      statisticLayoutOptions,
-    );
+    const nextLayout = getStatisticPanelLayout("library", libraryId, statisticLayoutOptions);
     setSavedStatisticLayout(nextLayout);
     setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
     setIsEditingStatisticLayout(false);

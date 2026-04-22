@@ -8,6 +8,7 @@ import {
 import {
   addStatisticPanelLayoutItem,
   buildDefaultStatisticPanelLayout,
+  getStatisticPanelLayout,
   normalizeStatisticPanelLayout,
   resizeStatisticPanelLayoutItem,
 } from "./statistic-panel-layout";
@@ -104,25 +105,32 @@ describe("statistic panel layout", () => {
     ]);
   });
 
-  it("adds dashboard history when migrating older dashboard layouts", () => {
+  it("preserves older dashboard layouts without adding new default panels", () => {
     const layout = normalizeStatisticPanelLayout("dashboard", {
       version: 2,
       items: [{ instanceId: "size", statisticId: "size", width: 2, height: 2 }],
     });
 
-    expect(layout.items).toMatchObject([
-      { instanceId: "history", statisticId: "history", width: 4, height: 3 },
+    expect(layout.items).toEqual([
       { instanceId: "size", statisticId: "size", width: 2, height: 2 },
     ]);
   });
 
-  it("keeps dashboard history visible when migrating older empty dashboard layouts", () => {
+  it("preserves older empty dashboard layouts without restoring defaults", () => {
     const layout = normalizeStatisticPanelLayout("dashboard", { version: 2, items: [] });
 
-    expect(layout).toEqual({
-      version: 3,
-      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 3 }],
+    expect(layout).toEqual({ version: 3, items: [] });
+  });
+
+  it("preserves older library layouts without adding new default panels", () => {
+    const layout = normalizeStatisticPanelLayout("library", {
+      version: 2,
+      items: [{ instanceId: "size", statisticId: "size", width: 2, height: 2 }],
     });
+
+    expect(layout.items).toEqual([
+      { instanceId: "size", statisticId: "size", width: 2, height: 2 },
+    ]);
   });
 
   it("adds dashboard history back with its default editable size", () => {
@@ -217,5 +225,21 @@ describe("statistic panel layout", () => {
     const layout = normalizeStatisticPanelLayout("library", { items: [] });
 
     expect(layout).toEqual({ version: 3, items: [] });
+  });
+
+  it("normalizes stored layouts for display without overwriting the stored configuration", () => {
+    const storedLayout = {
+      version: 2,
+      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 9 }],
+    };
+    window.localStorage.setItem("medialyze-statistic-panel-layout-dashboard-main", JSON.stringify(storedLayout));
+
+    expect(getStatisticPanelLayout("dashboard", "main")).toEqual({
+      version: 3,
+      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 4 }],
+    });
+    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toBe(
+      JSON.stringify(storedLayout),
+    );
   });
 });
