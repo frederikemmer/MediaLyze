@@ -32,6 +32,10 @@ function formatAxisPercentage(value: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
 }
 
+function historyPercentageAxisBounds(displayMode: HistoryMetricDisplayMode) {
+  return displayMode === "percentage" ? { min: 0, max: 100 } : {};
+}
+
 function categoryCounts(
   point: LibraryHistoryPoint,
   categoryKey: string,
@@ -216,6 +220,7 @@ function HistoryTrendChartComponent({
           },
           yAxis: {
             type: "value",
+            ...historyPercentageAxisBounds(displayMode),
             axisLabel: {
               color: axisColor,
               fontSize: 12,
@@ -284,6 +289,7 @@ function HistoryTrendChartComponent({
         },
         yAxis: {
           type: "value",
+          ...historyPercentageAxisBounds(displayMode),
           axisLabel: {
             color: axisColor,
             fontSize: 12,
@@ -359,6 +365,7 @@ function HistoryTrendChartComponent({
       },
       yAxis: {
         type: "value",
+        ...historyPercentageAxisBounds(displayMode),
         axisLabel: {
           color: axisColor,
           fontSize: 12,

@@ -28,7 +28,10 @@ vi.mock("echarts-for-react", () => ({
     onEvents,
     style,
   }: {
-    option?: { series?: Array<{ data?: unknown[]; type?: string; areaStyle?: unknown; name?: string }> };
+    option?: {
+      series?: Array<{ data?: unknown[]; type?: string; areaStyle?: unknown; name?: string }>;
+      yAxis?: unknown;
+    };
     onEvents?: { click?: (params: { dataIndex: number }) => void };
     style?: { cursor?: string };
   }) =>
@@ -41,6 +44,7 @@ vi.mock("echarts-for-react", () => ({
         "data-series-count": String(option?.series?.length ?? 0),
         "data-series-has-area": JSON.stringify(option?.series?.map((series) => Boolean(series.areaStyle)) ?? []),
         "data-series-names": JSON.stringify(option?.series?.map((series) => series.name ?? "") ?? []),
+        "data-y-axis": JSON.stringify(option?.yAxis ?? null),
         "data-clickable": String(Boolean(onEvents?.click)),
         "data-cursor": style?.cursor ?? "",
         onClick: () => onEvents?.click?.({ dataIndex: 0 }),
