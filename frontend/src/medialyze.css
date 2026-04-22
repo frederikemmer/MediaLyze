@@ -369,12 +369,41 @@
   max-height: none;
 }
 
+.library-layout-panel-analyzed-files.is-empty-analyzed-files {
+  grid-row: span 1;
+  align-self: start;
+}
+
+.library-layout-panel-analyzed-files.is-empty-analyzed-files > .panel {
+  height: auto;
+}
+
+.library-layout-panel-analyzed-files.is-empty-analyzed-files .async-panel-body {
+  height: auto;
+  align-self: start;
+}
+
 .analyzed-files-panel-content {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   height: 100%;
+}
+
+.analyzed-files-panel-content.is-empty {
+  grid-template-rows: auto auto;
+  height: auto;
+}
+
+.analyzed-files-empty-state {
+  align-self: start;
+  justify-self: stretch;
+  padding: 4px 0 2.8em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .analyzed-files-title-addon {

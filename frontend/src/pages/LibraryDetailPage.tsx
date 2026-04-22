@@ -141,6 +141,11 @@ type CachedFileList = {
   items: MediaFileRow[];
 };
 
+type FilePageLoadBehavior = {
+  showFullLoader?: boolean;
+  showInlineRefresh?: boolean;
+};
+
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 
 type CaretStableSearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "type" | "value"> & {
@@ -1164,6 +1169,7 @@ export function LibraryDetailPage() {
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
   );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
+  const hasLoadedFilesOnceRef = useRef(false);
   const filesRef = useRef<MediaFileRow[]>([]);
   const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
   const pendingStatisticFocusFieldRef = useRef<LibraryFileMetadataSearchField | null>(null);
@@ -1436,7 +1442,12 @@ export function LibraryDetailPage() {
     }
   });
 
-  const loadFilesPage = useEffectEvent(async (offset: number, append: boolean, queryKey: string) => {
+  const loadFilesPage = useEffectEvent(async (
+    offset: number,
+    append: boolean,
+    queryKey: string,
+    behavior: FilePageLoadBehavior = {},
+  ) => {
     const cursor = append ? filesNextCursor : null;
     const requestKey = buildFilePageRequestKey(queryKey, cursor ?? offset);
     if (!inflightRequestGateRef.current.begin(requestKey)) {
@@ -1449,10 +1460,17 @@ export function LibraryDetailPage() {
 
     if (append) {
       setIsLoadingMore(true);
-    } else if (filesRef.current.length > 0 && previousLibraryIdRef.current === libraryId) {
-      setIsFilesRefreshing(true);
     } else {
-      setIsFilesLoading(true);
+      const transition = resolveFileLoadTransition({
+        hasCachedFiles: false,
+        currentFilesLength: filesRef.current.length,
+        isSameLibrary: previousLibraryIdRef.current === libraryId,
+        hasLoadedFilesOnce: hasLoadedFilesOnceRef.current,
+      });
+      const showFullLoader = behavior.showFullLoader ?? transition.showFullLoader;
+      const showInlineRefresh = behavior.showInlineRefresh ?? transition.showInlineRefresh;
+      setIsFilesLoading(showFullLoader);
+      setIsFilesRefreshing(showInlineRefresh);
     }
 
     try {
@@ -1471,6 +1489,9 @@ export function LibraryDetailPage() {
       }
 
       const nextItems = append ? mergeUniqueFiles(filesRef.current, payload.items) : payload.items;
+      if (!append) {
+        hasLoadedFilesOnceRef.current = true;
+      }
       libraryFileListCache.set(queryKey, {
         total: payload.total ?? filesTotal,
         nextCursor: payload.next_cursor,
@@ -1848,16 +1869,21 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
+    if (!isSameLibrary) {
+      hasLoadedFilesOnceRef.current = false;
+    }
     const currentFilesLength = filesRef.current.length;
     const transition = resolveFileLoadTransition({
       hasCachedFiles: Boolean(cachedFiles),
       currentFilesLength,
       isSameLibrary,
+      hasLoadedFilesOnce: hasLoadedFilesOnceRef.current,
     });
 
     setFilesError(null);
     setIsLoadingMore(false);
     if (cachedFiles) {
+      hasLoadedFilesOnceRef.current = true;
       setFiles(cachedFiles.items);
       setFilesTotal(cachedFiles.total);
       setFilesNextCursor(cachedFiles.nextCursor);
@@ -1865,7 +1891,7 @@ export function LibraryDetailPage() {
       setIsFilesLoading(false);
       setIsFilesRefreshing(true);
       previousLibraryIdRef.current = libraryId;
-      void loadFilesPage(0, false, fileQueryKey);
+      void loadFilesPage(0, false, fileQueryKey, { showFullLoader: false, showInlineRefresh: true });
       return;
     }
 
@@ -1879,7 +1905,10 @@ export function LibraryDetailPage() {
     setIsFilesRefreshing(transition.showInlineRefresh);
 
     previousLibraryIdRef.current = libraryId;
-    void loadFilesPage(0, false, fileQueryKey);
+    void loadFilesPage(0, false, fileQueryKey, {
+      showFullLoader: transition.showFullLoader,
+      showInlineRefresh: transition.showInlineRefresh,
+    });
   }, [fileQueryKey, libraryId]);
 
   useEffect(() => {
@@ -2197,6 +2226,12 @@ export function LibraryDetailPage() {
             const isCollapsedLargePanel =
               (panel.definition.kind === "history" && isHistoryPanelCollapsed) ||
               (panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed);
+            const isAnalyzedFilesEmptyState =
+              panel.definition.kind === "analyzed_files" &&
+              !isEditingTableView &&
+              !isFilesLoading &&
+              !filesError &&
+              files.length === 0;
             if (isCollapsedLargePanel) {
               collapsedPanelsBefore += 1;
             }
@@ -2210,6 +2245,7 @@ export function LibraryDetailPage() {
               panel.definition.kind === "analyzed_files" ? "library-layout-panel-analyzed-files" : "",
               panel.definition.kind === "history" && isHistoryPanelCollapsed ? "is-collapsed-panel" : "",
               panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed ? "is-collapsed-panel" : "",
+              isAnalyzedFilesEmptyState ? "is-empty-analyzed-files" : "",
               draggedStatisticPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetStatisticPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -2533,7 +2569,7 @@ export function LibraryDetailPage() {
                     ) : null
                   }
                 >
-                  <div className="analyzed-files-panel-content">
+                  <div className={`analyzed-files-panel-content${isAnalyzedFilesEmptyState ? " is-empty" : ""}`}>
                     {isEditingTableView ? (
                       <TableViewSettingsEditor
                         settings={draftTableViewSettings}
@@ -2598,7 +2634,7 @@ export function LibraryDetailPage() {
                             <span>{t("libraryDetail.loadingFiles")}</span>
                           </div>
                         ) : files.length === 0 ? (
-                          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
+                          <div className="analyzed-files-empty-state">{t("libraryDetail.noAnalyzedFiles")}</div>
                         ) : (
                           <div ref={dataTableShellRef} className="data-table-shell">
                             <div className="media-data-table" role="table" aria-rowcount={filesTotal ?? undefined}>

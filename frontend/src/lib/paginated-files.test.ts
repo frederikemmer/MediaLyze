@@ -54,6 +54,21 @@ describe("paginated file helpers", () => {
     });
   });
 
+  it("keeps an already loaded empty file list visible during same-library refreshes", () => {
+    expect(
+      resolveFileLoadTransition({
+        hasCachedFiles: false,
+        currentFilesLength: 0,
+        isSameLibrary: true,
+        hasLoadedFilesOnce: true,
+      }),
+    ).toEqual({
+      clearExisting: false,
+      showFullLoader: false,
+      showInlineRefresh: true,
+    });
+  });
+
   it("switches to a full loader when a different library has no cached rows", () => {
     expect(
       resolveFileLoadTransition({
