@@ -47,7 +47,8 @@
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",
-    "expandAria": "{{title}} ausklappen"
+    "expandAria": "{{title}} ausklappen",
+    "loading": "Wird geladen..."
   },
   "libraries": {
     "configured": "Konfigurierte Bibliotheken",

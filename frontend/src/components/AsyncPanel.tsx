@@ -2,6 +2,8 @@ import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
+
 type AsyncPanelProps = {
   title: string;
   subtitle?: string;
@@ -97,7 +99,12 @@ export function AsyncPanel({
       </div>
       {!isCollapsed ? (
         <div id={bodyId} className={`async-panel-body ${bodyClassName ?? ""}`.trim()}>
-          {loading ? <div className="notice">Loading…</div> : null}
+          {loading ? (
+            <div className="panel-loader" role="status" aria-live="polite">
+              <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
+              <span>{t("panel.loading")}</span>
+            </div>
+          ) : null}
           {error ? <div className="alert">{error}</div> : null}
           {!loading && !error ? children : null}
         </div>

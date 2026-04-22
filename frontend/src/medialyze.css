@@ -863,6 +863,11 @@
   min-height: 0;
 }
 
+.async-panel-body > .panel-loader {
+  align-self: center;
+  justify-self: stretch;
+}
+
 .panel-loader {
   display: grid;
   justify-items: center;
