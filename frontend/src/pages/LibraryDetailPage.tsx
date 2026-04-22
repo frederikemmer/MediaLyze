@@ -165,6 +165,7 @@ const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
 const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
+const HISTORY_RANGE_STORAGE_KEY = "medialyze-library-detail-history-range-selection";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
@@ -2290,6 +2291,7 @@ export function LibraryDetailPage() {
                   collapsed={isHistoryPanelCollapsed}
                   onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  rangeStorageKey={HISTORY_RANGE_STORAGE_KEY}
                   bodyId={`library-history-panel-body-${panel.item.instanceId}`}
                 />
               );

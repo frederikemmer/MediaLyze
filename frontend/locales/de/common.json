@@ -393,7 +393,20 @@
       "subtitle": "Taegliche Trend-Snapshots abgeschlossener Scans",
       "empty": "Verlaufstrends erscheinen nach dem naechsten abgeschlossenen Scan.",
       "controls": {
-        "metric": "Verlaufsmetrik auswaehlen"
+        "metric": "Verlaufsmetrik auswaehlen",
+        "range": "Verlaufszeitraum auswaehlen"
+      },
+      "range": {
+        "last7Days": "7 T",
+        "last30Days": "30 T",
+        "lastYear": "1 J",
+        "all": "Alle",
+        "custom": "Custom",
+        "previousMonth": "Vorheriger Monat",
+        "nextMonth": "Naechster Monat",
+        "cancel": "Abbrechen",
+        "apply": "Anwenden",
+        "empty": "Keine Verlaufsdaten im ausgewaehlten Zeitraum."
       },
       "tooltip": {
         "total": "Gesamt"
