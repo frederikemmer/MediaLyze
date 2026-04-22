@@ -47,7 +47,19 @@
   },
   "panel": {
     "collapseAria": "Collapse {{title}}",
-    "expandAria": "Expand {{title}}"
+    "expandAria": "Expand {{title}}",
+    "loading": "Loading..."
+  },
+  "releaseNotes": {
+    "eyebrow": "Version {{version}}",
+    "title": "What's new",
+    "allVersions": "Release history",
+    "versionHeading": "Version {{version}}",
+    "current": "Current",
+    "openAria": "Show release notes for {{version}}",
+    "githubAria": "Open GitHub repository",
+    "reportIssueAria": "Report an issue",
+    "closeAria": "Close release notes"
   },
   "libraries": {
     "configured": "Configured libraries",
@@ -393,7 +405,20 @@
       "subtitle": "Daily trend snapshots from finished scans",
       "empty": "History trends will appear after the next finished scan.",
       "controls": {
-        "metric": "Select history metric"
+        "metric": "Select history metric",
+        "range": "Select history range"
+      },
+      "range": {
+        "last7Days": "7d",
+        "last30Days": "30d",
+        "lastYear": "1y",
+        "all": "All",
+        "custom": "Custom",
+        "previousMonth": "Previous month",
+        "nextMonth": "Next month",
+        "cancel": "Cancel",
+        "apply": "Apply",
+        "empty": "No history data in the selected range."
       },
       "tooltip": {
         "total": "Total"

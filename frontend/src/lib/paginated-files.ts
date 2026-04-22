@@ -29,8 +29,9 @@ export function resolveFileLoadTransition(options: {
   hasCachedFiles: boolean;
   currentFilesLength: number;
   isSameLibrary: boolean;
+  hasLoadedFilesOnce?: boolean;
 }): FileLoadTransition {
-  const { hasCachedFiles, currentFilesLength, isSameLibrary } = options;
+  const { hasCachedFiles, currentFilesLength, isSameLibrary, hasLoadedFilesOnce = false } = options;
 
   if (hasCachedFiles) {
     return {
@@ -49,6 +50,14 @@ export function resolveFileLoadTransition(options: {
   }
 
   if (currentFilesLength > 0) {
+    return {
+      clearExisting: false,
+      showFullLoader: false,
+      showInlineRefresh: true,
+    };
+  }
+
+  if (hasLoadedFilesOnce) {
     return {
       clearExisting: false,
       showFullLoader: false,

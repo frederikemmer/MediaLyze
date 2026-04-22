@@ -9,12 +9,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, InputHTMLAttributes, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   startTransition,
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -140,7 +141,17 @@ type CachedFileList = {
   items: MediaFileRow[];
 };
 
+type FilePageLoadBehavior = {
+  showFullLoader?: boolean;
+  showInlineRefresh?: boolean;
+};
+
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
+
+type CaretStableSearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "type" | "value"> & {
+  value: string;
+  onValueChange: (value: string) => void;
+};
 
 type LibraryLayoutPanelDefinition =
   | {
@@ -165,6 +176,7 @@ const LOAD_MORE_THRESHOLD_ROWS = 40;
 const ROW_ESTIMATE_PX = 68;
 const OVERSCAN_ROWS = 12;
 const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
+const HISTORY_RANGE_STORAGE_KEY = "medialyze-library-detail-history-range-selection";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const HEADER_FONT_SIZE_PX = 12.48;
 const BODY_FONT_SIZE_PX = 16;
@@ -205,6 +217,43 @@ let measurementCanvasContext: CanvasRenderingContext2D | null | undefined;
 
 const DEFAULT_COLUMN_RESIZE_MIN_PX = 72;
 const DEFAULT_COLUMN_RESIZE_MAX_PX = 960;
+
+function CaretStableSearchInput({ value, onValueChange, ...props }: CaretStableSearchInputProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectionRef = useRef<{ value: string; start: number | null; end: number | null } | null>(null);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const selection = selectionRef.current;
+    if (!input || !selection) {
+      return;
+    }
+    selectionRef.current = null;
+    if (document.activeElement !== input || input.value !== selection.value) {
+      return;
+    }
+    if (selection.start !== null && selection.end !== null) {
+      input.setSelectionRange(selection.start, selection.end);
+    }
+  }, [value]);
+
+  return (
+    <input
+      {...props}
+      ref={inputRef}
+      type="search"
+      value={value}
+      onChange={(event) => {
+        selectionRef.current = {
+          value: event.currentTarget.value,
+          start: event.currentTarget.selectionStart,
+          end: event.currentTarget.selectionEnd,
+        };
+        onValueChange(event.currentTarget.value);
+      }}
+    />
+  );
+}
 
 function compactValues(values: string[], limit = 4): string {
   if (values.length === 0) {
@@ -1120,6 +1169,7 @@ export function LibraryDetailPage() {
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
   );
   const activeFileQueryKeyRef = useRef(fileQueryKey);
+  const hasLoadedFilesOnceRef = useRef(false);
   const filesRef = useRef<MediaFileRow[]>([]);
   const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
   const pendingStatisticFocusFieldRef = useRef<LibraryFileMetadataSearchField | null>(null);
@@ -1392,7 +1442,12 @@ export function LibraryDetailPage() {
     }
   });
 
-  const loadFilesPage = useEffectEvent(async (offset: number, append: boolean, queryKey: string) => {
+  const loadFilesPage = useEffectEvent(async (
+    offset: number,
+    append: boolean,
+    queryKey: string,
+    behavior: FilePageLoadBehavior = {},
+  ) => {
     const cursor = append ? filesNextCursor : null;
     const requestKey = buildFilePageRequestKey(queryKey, cursor ?? offset);
     if (!inflightRequestGateRef.current.begin(requestKey)) {
@@ -1405,10 +1460,17 @@ export function LibraryDetailPage() {
 
     if (append) {
       setIsLoadingMore(true);
-    } else if (filesRef.current.length > 0 && previousLibraryIdRef.current === libraryId) {
-      setIsFilesRefreshing(true);
     } else {
-      setIsFilesLoading(true);
+      const transition = resolveFileLoadTransition({
+        hasCachedFiles: false,
+        currentFilesLength: filesRef.current.length,
+        isSameLibrary: previousLibraryIdRef.current === libraryId,
+        hasLoadedFilesOnce: hasLoadedFilesOnceRef.current,
+      });
+      const showFullLoader = behavior.showFullLoader ?? transition.showFullLoader;
+      const showInlineRefresh = behavior.showInlineRefresh ?? transition.showInlineRefresh;
+      setIsFilesLoading(showFullLoader);
+      setIsFilesRefreshing(showInlineRefresh);
     }
 
     try {
@@ -1427,6 +1489,9 @@ export function LibraryDetailPage() {
       }
 
       const nextItems = append ? mergeUniqueFiles(filesRef.current, payload.items) : payload.items;
+      if (!append) {
+        hasLoadedFilesOnceRef.current = true;
+      }
       libraryFileListCache.set(queryKey, {
         total: payload.total ?? filesTotal,
         nextCursor: payload.next_cursor,
@@ -1622,12 +1687,7 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
-    const nextLayout = saveStatisticPanelLayout(
-      "library",
-      libraryId,
-      getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
-      statisticLayoutOptions,
-    );
+    const nextLayout = getStatisticPanelLayout("library", libraryId, statisticLayoutOptions);
     setSavedStatisticLayout(nextLayout);
     setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
     setIsEditingStatisticLayout(false);
@@ -1804,16 +1864,21 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedFiles = libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
+    if (!isSameLibrary) {
+      hasLoadedFilesOnceRef.current = false;
+    }
     const currentFilesLength = filesRef.current.length;
     const transition = resolveFileLoadTransition({
       hasCachedFiles: Boolean(cachedFiles),
       currentFilesLength,
       isSameLibrary,
+      hasLoadedFilesOnce: hasLoadedFilesOnceRef.current,
     });
 
     setFilesError(null);
     setIsLoadingMore(false);
     if (cachedFiles) {
+      hasLoadedFilesOnceRef.current = true;
       setFiles(cachedFiles.items);
       setFilesTotal(cachedFiles.total);
       setFilesNextCursor(cachedFiles.nextCursor);
@@ -1821,7 +1886,7 @@ export function LibraryDetailPage() {
       setIsFilesLoading(false);
       setIsFilesRefreshing(true);
       previousLibraryIdRef.current = libraryId;
-      void loadFilesPage(0, false, fileQueryKey);
+      void loadFilesPage(0, false, fileQueryKey, { showFullLoader: false, showInlineRefresh: true });
       return;
     }
 
@@ -1835,7 +1900,10 @@ export function LibraryDetailPage() {
     setIsFilesRefreshing(transition.showInlineRefresh);
 
     previousLibraryIdRef.current = libraryId;
-    void loadFilesPage(0, false, fileQueryKey);
+    void loadFilesPage(0, false, fileQueryKey, {
+      showFullLoader: transition.showFullLoader,
+      showInlineRefresh: transition.showInlineRefresh,
+    });
   }, [fileQueryKey, libraryId]);
 
   useEffect(() => {
@@ -2153,6 +2221,12 @@ export function LibraryDetailPage() {
             const isCollapsedLargePanel =
               (panel.definition.kind === "history" && isHistoryPanelCollapsed) ||
               (panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed);
+            const isAnalyzedFilesEmptyState =
+              panel.definition.kind === "analyzed_files" &&
+              !isEditingTableView &&
+              !isFilesLoading &&
+              !filesError &&
+              files.length === 0;
             if (isCollapsedLargePanel) {
               collapsedPanelsBefore += 1;
             }
@@ -2166,6 +2240,7 @@ export function LibraryDetailPage() {
               panel.definition.kind === "analyzed_files" ? "library-layout-panel-analyzed-files" : "",
               panel.definition.kind === "history" && isHistoryPanelCollapsed ? "is-collapsed-panel" : "",
               panel.definition.kind === "duplicates" && isDuplicatesPanelCollapsed ? "is-collapsed-panel" : "",
+              isAnalyzedFilesEmptyState ? "is-empty-analyzed-files" : "",
               draggedStatisticPanelId === panel.item.instanceId ? "is-dragging" : "",
               dropTargetStatisticPanelId === panel.item.instanceId ? "is-drop-target" : "",
             ]
@@ -2290,6 +2365,7 @@ export function LibraryDetailPage() {
                   collapsed={isHistoryPanelCollapsed}
                   onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  rangeStorageKey={HISTORY_RANGE_STORAGE_KEY}
                   bodyId={`library-history-panel-body-${panel.item.instanceId}`}
                 />
               );
@@ -2476,16 +2552,10 @@ export function LibraryDetailPage() {
                           >
                             <BaseSearchIcon size={16} aria-hidden="true" />
                           </TooltipTrigger>
-                          <input
+                          <CaretStableSearchInput
                             id="library-file-search"
-                            type="search"
                             value={baseSearch}
-                            onChange={(event) => {
-                              const nextValue = event.target.value;
-                              startTransition(() => {
-                                setBaseSearch(nextValue);
-                              });
-                            }}
+                            onValueChange={setBaseSearch}
                             placeholder={t("libraryDetail.searchFields.file.placeholder")}
                             autoComplete="off"
                           />
@@ -2494,7 +2564,7 @@ export function LibraryDetailPage() {
                     ) : null
                   }
                 >
-                  <div className="analyzed-files-panel-content">
+                  <div className={`analyzed-files-panel-content${isAnalyzedFilesEmptyState ? " is-empty" : ""}`}>
                     {isEditingTableView ? (
                       <TableViewSettingsEditor
                         settings={draftTableViewSettings}
@@ -2530,11 +2600,10 @@ export function LibraryDetailPage() {
                                       >
                                         <Icon size={16} />
                                       </TooltipTrigger>
-                                      <input
+                                      <CaretStableSearchInput
                                         id={`library-metadata-search-${field}`}
-                                        type="search"
                                         value={fieldValues[field] ?? ""}
-                                        onChange={(event) => updateMetadataFieldValue(field, event.target.value)}
+                                        onValueChange={(nextValue) => updateMetadataFieldValue(field, nextValue)}
                                         placeholder={t(config.placeholderKey)}
                                         autoComplete="off"
                                       />
@@ -2560,7 +2629,7 @@ export function LibraryDetailPage() {
                             <span>{t("libraryDetail.loadingFiles")}</span>
                           </div>
                         ) : files.length === 0 ? (
-                          <div className="notice">{t("libraryDetail.noAnalyzedFiles")}</div>
+                          <div className="analyzed-files-empty-state">{t("libraryDetail.noAnalyzedFiles")}</div>
                         ) : (
                           <div ref={dataTableShellRef} className="data-table-shell">
                             <div className="media-data-table" role="table" aria-rowcount={filesTotal ?? undefined}>

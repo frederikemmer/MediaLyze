@@ -72,6 +72,19 @@ function formatNumericValue(fieldId: ComparisonFieldId, value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
+function formatComparisonFieldName(fieldId: ComparisonFieldId, t: (key: string) => string): string {
+  return t(COMPARISON_FIELD_DEFINITIONS.find((field) => field.id === fieldId)?.labelKey ?? fieldId);
+}
+
+function escapeTooltipHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function ComparisonChartPanelComponent({
   comparison,
   selection,
@@ -146,12 +159,28 @@ function ComparisonChartPanelComponent({
             const y = Math.min(Math.max(mouseY - contentHeight - 18, 8), Math.max(8, viewHeight - contentHeight - 8));
             return [x, y];
           },
-          formatter: (params: { data?: [number, number] }) => {
+          formatter: (params: { data?: [number, number]; dataIndex?: number }) => {
             const point = params.data ?? [0, 0];
+            const scatterPoint = comparison.scatter_points?.[params.dataIndex ?? 0];
+            const xMetricLabel = formatComparisonFieldName(comparison.x_field, t);
+            const yMetricLabel = formatComparisonFieldName(comparison.y_field, t);
+            const xMetricValue = formatNumericValue(comparison.x_field, point[0]);
+            const yMetricValue = formatNumericValue(comparison.y_field, point[1]);
+            const assetName = scatterPoint?.asset_name?.trim() || `#${scatterPoint?.media_file_id ?? ""}`;
+            const assetNameMaxWidth = Math.max(
+              `${xMetricLabel} ${xMetricValue}`.length,
+              `${yMetricLabel} ${yMetricValue}`.length,
+              8,
+            );
             return [
-              `${t("comparisonChart.axes.x")}: ${formatNumericValue(comparison.x_field, point[0])}`,
-              `${t("comparisonChart.axes.y")}: ${formatNumericValue(comparison.y_field, point[1])}`,
-            ].join("<br/>");
+              '<div style="display:grid;gap:4px;">',
+              `<div style="max-width:${assetNameMaxWidth}ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;">${escapeTooltipHtml(assetName)}</div>`,
+              '<div style="display:grid;grid-template-columns:max-content auto;column-gap:10px;row-gap:2px;">',
+              `<span>${escapeTooltipHtml(xMetricLabel)}</span><span>${escapeTooltipHtml(xMetricValue)}</span>`,
+              `<span>${escapeTooltipHtml(yMetricLabel)}</span><span>${escapeTooltipHtml(yMetricValue)}</span>`,
+              "</div>",
+              "</div>",
+            ].join("");
           },
         },
         xAxis: {

@@ -53,6 +53,7 @@ import { isLibraryHistoryMetricId, type LibraryHistoryMetricId } from "../lib/hi
 const DASHBOARD_LAYOUT_KEY = "main";
 const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
 const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
+const DASHBOARD_HISTORY_RANGE_STORAGE_KEY = "medialyze-dashboard-history-range-selection";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const dashboardComparisonCache = new LruCache<string, ComparisonResponse>(24);
 type DashboardLayoutPanelDefinition =
@@ -251,12 +252,7 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const nextLayout = saveStatisticPanelLayout(
-      "dashboard",
-      DASHBOARD_LAYOUT_KEY,
-      getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions),
-      layoutOptions,
-    );
+    const nextLayout = getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions);
     setSavedLayout(nextLayout);
     setDraftLayout(cloneStatisticPanelLayout(nextLayout));
     setIsEditingLayout(false);
@@ -588,6 +584,7 @@ export function DashboardPage() {
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
                   title={t("dashboard.history.title")}
                   emptyMessage={t("dashboard.history.empty")}
+                  rangeStorageKey={DASHBOARD_HISTORY_RANGE_STORAGE_KEY}
                   bodyId="dashboard-history-panel-body"
                 />
               );

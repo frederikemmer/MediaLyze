@@ -66,6 +66,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
     assert payload.scatter_points is not None
     assert len(payload.scatter_points) == 2
     assert payload.scatter_points[0].media_file_id == first_file_id
+    assert payload.scatter_points[0].asset_name == "movie-one.mkv"
     assert payload.bar_entries is not None
     assert len(payload.bar_entries) == 1
     assert payload.bar_entries[0].value == 6_000_000_000
@@ -145,6 +146,7 @@ def test_dashboard_comparison_supports_resolution_mp_as_numeric_axis() -> None:
     assert payload.available_renderers == ["heatmap", "scatter", "bar"]
     assert payload.scatter_points is not None
     assert payload.scatter_points[0].x_value == 8.2944
+    assert payload.scatter_points[0].asset_name == "movie.mkv"
     assert payload.x_buckets[4].key == "8:12"
     assert payload.heatmap_cells[0].x_key == "8:12"
 

@@ -53,6 +53,7 @@ export type ComparisonHeatmapCell = {
 
 export type ComparisonScatterPoint = {
   media_file_id: number;
+  asset_name: string;
   x_value: number;
   y_value: number;
 };

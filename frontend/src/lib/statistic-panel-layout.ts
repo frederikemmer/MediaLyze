@@ -429,42 +429,9 @@ export function normalizeStatisticPanelLayout(
   }
 
   if (normalizedItems.length > 0) {
-    if (
-      scope === "dashboard" &&
-      (layoutVersion === null || layoutVersion < STATISTIC_PANEL_LAYOUT_VERSION) &&
-      !normalizedItems.some((item) => item.statisticId === "history")
-    ) {
-      normalizedItems.unshift(
-        buildPanelItem(scope, "history", "history", undefined, undefined, undefined, options),
-      );
-    }
-
-    if (scope === "library" && layoutVersion === null) {
-      const hasAnyExtraLibraryPanel = normalizedItems.some(
-        (item) =>
-          item.statisticId === "history" ||
-          item.statisticId === "duplicates" ||
-          item.statisticId === "analyzed_files",
-      );
-
-      if (!hasAnyExtraLibraryPanel) {
-        for (const extraDefinition of LIBRARY_EXTRA_LAYOUT_DEFINITIONS) {
-          normalizedItems.push(
-            buildPanelItem(scope, extraDefinition.id, extraDefinition.id, undefined, undefined, undefined, options),
-          );
-        }
-      }
-    }
-
     return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: normalizedItems };
   }
-  if (hasExplicitItems && candidateItems.length === 0) {
-    if (scope === "dashboard" && (layoutVersion === null || layoutVersion < STATISTIC_PANEL_LAYOUT_VERSION)) {
-      return {
-        version: STATISTIC_PANEL_LAYOUT_VERSION,
-        items: [buildPanelItem(scope, "history", "history", undefined, undefined, undefined, options)],
-      };
-    }
+  if (hasExplicitItems) {
     return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: [] };
   }
   return buildDefaultStatisticPanelLayout(scope, options);

@@ -248,6 +248,7 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
     assert payload["available_renderers"] == ["heatmap", "scatter", "bar"]
     assert payload["included_files"] == 1
     assert payload["scatter_points"][0]["media_file_id"] == media_file_id
+    assert payload["scatter_points"][0]["asset_name"] == "movie.mkv"
     assert payload["scatter_points"][0]["x_value"] == 5400.0
 
 

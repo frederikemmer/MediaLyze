@@ -223,8 +223,8 @@ function createComparisonResponse(overrides: Partial<ComparisonResponse> = {}): 
       { x_key: "3600:5400", y_key: "500000000:1000000000", count: 1 },
     ],
     scatter_points: [
-      { media_file_id: 1, x_value: 3600, y_value: 1024 },
-      { media_file_id: 2, x_value: 4200, y_value: 1024 },
+      { media_file_id: 1, asset_name: "episode-01.mkv", x_value: 3600, y_value: 1024 },
+      { media_file_id: 2, asset_name: "episode-02.mkv", x_value: 4200, y_value: 1024 },
     ],
     bar_entries: [
       { x_key: "1800:3600", x_label: "1800:3600", value: 1024, count: 1 },
@@ -719,12 +719,12 @@ describe("LibraryDetailPage", () => {
         scatter_points:
           String(libraryId) === "131"
             ? [
-                { media_file_id: 1, x_value: 3600, y_value: 1024 },
-                { media_file_id: 2, x_value: 4200, y_value: 1024 },
+                { media_file_id: 1, asset_name: "episode-01.mkv", x_value: 3600, y_value: 1024 },
+                { media_file_id: 2, asset_name: "episode-02.mkv", x_value: 4200, y_value: 1024 },
               ]
             : [
-                { media_file_id: 3, x_value: 7200, y_value: 2048 },
-                { media_file_id: 4, x_value: 8400, y_value: 4096 },
+                { media_file_id: 3, asset_name: "episode-03.mkv", x_value: 7200, y_value: 2048 },
+                { media_file_id: 4, asset_name: "episode-04.mkv", x_value: 8400, y_value: 4096 },
               ],
       }),
     );
@@ -806,6 +806,7 @@ describe("LibraryDetailPage", () => {
               renderer: "heatmap",
             },
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1423,6 +1424,7 @@ describe("LibraryDetailPage", () => {
             width: 1,
             height: 1,
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1599,6 +1601,7 @@ describe("LibraryDetailPage", () => {
             width: 1,
             height: 1,
           },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );
@@ -1648,6 +1651,39 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("keeps the caret position when editing table search inputs in the middle", async () => {
+    const libraryId = 515;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+    const fileSearchInput = screen.getByPlaceholderText("Search file and path") as HTMLInputElement;
+    fileSearchInput.focus();
+    fireEvent.change(fileSearchInput, {
+      target: { value: "epixsode", selectionStart: 4, selectionEnd: 4 },
+    });
+
+    await waitFor(() => expect(fileSearchInput.selectionStart).toBe(4));
+    expect(fileSearchInput.selectionEnd).toBe(4);
+
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /subtitle sources/i }));
+
+    const metadataSearchInput = screen.getByPlaceholderText("e.g. internal external") as HTMLInputElement;
+    metadataSearchInput.focus();
+    fireEvent.change(metadataSearchInput, {
+      target: { value: "internal xexternal", selectionStart: 10, selectionEnd: 10 },
+    });
+
+    await waitFor(() => expect(metadataSearchInput.selectionStart).toBe(10));
+    expect(metadataSearchInput.selectionEnd).toBe(10);
+  });
+
   it("applies subtitle source filters from statistic counts", async () => {
     const libraryId = 506;
     window.localStorage.setItem(
@@ -1655,6 +1691,7 @@ describe("LibraryDetailPage", () => {
       JSON.stringify({
         items: [
           { instanceId: "subtitle_sources", statisticId: "subtitle_sources", width: 1, height: 1 },
+          { instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 },
         ],
       }),
     );

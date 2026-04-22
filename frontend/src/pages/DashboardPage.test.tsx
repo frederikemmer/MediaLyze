@@ -144,8 +144,8 @@ function createComparisonResponse(): ComparisonResponse {
       { x_key: "3600:5400", y_key: "500000000:1000000000", count: 6 },
     ],
     scatter_points: [
-      { media_file_id: 1, x_value: 2400, y_value: 400000000 },
-      { media_file_id: 2, x_value: 4200, y_value: 900000000 },
+      { media_file_id: 1, asset_name: "movie-one.mkv", x_value: 2400, y_value: 400000000 },
+      { media_file_id: 2, asset_name: "movie-two.mkv", x_value: 4200, y_value: 900000000 },
     ],
     bar_entries: [
       { x_key: "1800:3600", x_label: "1800:3600", value: 400000000, count: 4 },
