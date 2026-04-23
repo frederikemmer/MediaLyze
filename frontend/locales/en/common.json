@@ -261,7 +261,23 @@
     "expandWidth": "Expand panel width",
     "shrinkWidth": "Shrink panel width",
     "expandHeight": "Expand panel height",
-    "shrinkHeight": "Shrink panel height"
+    "shrinkHeight": "Shrink panel height",
+    "migration": {
+      "title": "Layout updated",
+      "description": "Some saved layout settings could not be carried over after the update.",
+      "invalidJson": "The saved layout data could not be read, so the default layout is shown.",
+      "invalidLayout": "The saved layout format is no longer supported, so the default layout is shown.",
+      "invalidItem": "Entry {{position}} was skipped because it is not a valid panel.",
+      "unsupportedPanel": "Panel \"{{panel}}\" at position {{position}} is no longer available and was skipped.",
+      "duplicatePanel": "Duplicate panel \"{{panel}}\" was skipped.",
+      "duplicateInstance": "Panel \"{{panel}}\" used the duplicate layout ID \"{{instanceId}}\" and was skipped.",
+      "resizedPanel": "Panel \"{{panel}}\" {{axis}} was changed from {{requested}} to {{applied}}.",
+      "comparisonSelectionAdjusted": "Metric comparison \"{{instanceId}}\" now uses {{appliedSelection}} instead of the saved {{previousSelection}}.",
+      "axes": {
+        "width": "width",
+        "height": "height"
+      }
+    }
   },
   "libraryTypes": {
     "movies": "Movies",

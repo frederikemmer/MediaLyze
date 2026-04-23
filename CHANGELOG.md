@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- show a dashboard/library layout migration notice after updates when saved panel layout entries, sizes, or comparison selections cannot be carried over exactly
+
 ## v0.8.4
 
 >2026-04-22

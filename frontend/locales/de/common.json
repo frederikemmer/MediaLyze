@@ -261,7 +261,23 @@
     "expandWidth": "Panel breiter machen",
     "shrinkWidth": "Panel schmaler machen",
     "expandHeight": "Panel höher machen",
-    "shrinkHeight": "Panel niedriger machen"
+    "shrinkHeight": "Panel niedriger machen",
+    "migration": {
+      "title": "Layout aktualisiert",
+      "description": "Einige gespeicherte Layout-Einstellungen konnten nach dem Update nicht übernommen werden.",
+      "invalidJson": "Die gespeicherten Layout-Daten konnten nicht gelesen werden, daher wird das Standardlayout angezeigt.",
+      "invalidLayout": "Das gespeicherte Layout-Format wird nicht mehr unterstützt, daher wird das Standardlayout angezeigt.",
+      "invalidItem": "Eintrag {{position}} wurde übersprungen, weil er kein gültiges Panel ist.",
+      "unsupportedPanel": "Panel \"{{panel}}\" an Position {{position}} ist nicht mehr verfügbar und wurde übersprungen.",
+      "duplicatePanel": "Das doppelte Panel \"{{panel}}\" wurde übersprungen.",
+      "duplicateInstance": "Panel \"{{panel}}\" verwendete die doppelte Layout-ID \"{{instanceId}}\" und wurde übersprungen.",
+      "resizedPanel": "Bei Panel \"{{panel}}\" wurde {{axis}} von {{requested}} auf {{applied}} geändert.",
+      "comparisonSelectionAdjusted": "Metrikvergleich \"{{instanceId}}\" verwendet jetzt {{appliedSelection}} statt der gespeicherten Auswahl {{previousSelection}}.",
+      "axes": {
+        "width": "die Breite",
+        "height": "die Höhe"
+      }
+    }
   },
   "libraryTypes": {
     "movies": "Filme",

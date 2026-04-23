@@ -17,6 +17,7 @@ import { DistributionList } from "../components/DistributionList";
 import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
+import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPanelLayoutMigrationNotice";
 import { useAppData } from "../lib/app-data";
 import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
@@ -34,6 +35,7 @@ import {
   cloneStatisticPanelLayout,
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
+  getStatisticPanelLayoutReadResult,
   moveStatisticPanelLayoutItem,
   removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
@@ -146,11 +148,20 @@ export function DashboardPage() {
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
     [appSettings.feature_flags.unlimited_panel_size],
   );
-  const [savedLayout, setSavedLayout] = useState(() =>
-    getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions),
-  );
+  const initialLayoutResultRef = useRef<ReturnType<typeof getStatisticPanelLayoutReadResult> | null>(null);
+  if (initialLayoutResultRef.current === null) {
+    initialLayoutResultRef.current = getStatisticPanelLayoutReadResult(
+      "dashboard",
+      DASHBOARD_LAYOUT_KEY,
+      layoutOptions,
+    );
+  }
+  const [savedLayout, setSavedLayout] = useState(() => initialLayoutResultRef.current!.layout);
   const [draftLayout, setDraftLayout] = useState(() =>
-    cloneStatisticPanelLayout(getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions)),
+    cloneStatisticPanelLayout(initialLayoutResultRef.current!.layout),
+  );
+  const [layoutMigrationIssues, setLayoutMigrationIssues] = useState(
+    () => initialLayoutResultRef.current!.issues,
   );
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
@@ -252,9 +263,10 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const nextLayout = getStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions);
-    setSavedLayout(nextLayout);
-    setDraftLayout(cloneStatisticPanelLayout(nextLayout));
+    const nextLayoutResult = getStatisticPanelLayoutReadResult("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions);
+    setSavedLayout(nextLayoutResult.layout);
+    setDraftLayout(cloneStatisticPanelLayout(nextLayoutResult.layout));
+    setLayoutMigrationIssues(nextLayoutResult.issues);
     setIsEditingLayout(false);
     setDraggedPanelId(null);
     setDropTargetPanelId(null);
@@ -364,6 +376,7 @@ export function DashboardPage() {
     const normalized = saveStatisticPanelLayout("dashboard", DASHBOARD_LAYOUT_KEY, nextLayout, layoutOptions);
     setSavedLayout(normalized);
     setDraftLayout(cloneStatisticPanelLayout(normalized));
+    setLayoutMigrationIssues([]);
   }
 
   function updateLayout(transform: (current: typeof activeLayout) => typeof activeLayout, persistWhenViewing = false) {
@@ -547,6 +560,7 @@ export function DashboardPage() {
             value={formatDuration(dashboard?.totals.duration_seconds ?? 0)}
           />
         </div>
+        <StatisticPanelLayoutMigrationNotice scope="dashboard" issues={layoutMigrationIssues} />
       </section>
 
       <div className={`media-grid statistic-layout-grid${isEditingLayout ? " is-editing" : ""}`}>
