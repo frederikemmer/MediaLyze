@@ -82,12 +82,23 @@ class ScanDuplicatesSummaryRead(BaseModel):
     duplicate_files: int = 0
 
 
+class ScanPatternRecognitionSummaryRead(BaseModel):
+    analyze_bonus_content: bool = True
+    bonus_ignored_total: int = 0
+    bonus_pattern_hits: list[ScanPatternHitRead] = Field(default_factory=list)
+    series_detected: int = 0
+    seasons_detected: int = 0
+    episodes_classified: int = 0
+    classification_updated_files: int = 0
+
+
 class ScanSummaryRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     discovery: ScanDiscoverySummaryRead = Field(default_factory=ScanDiscoverySummaryRead)
     changes: ScanChangesSummaryRead = Field(default_factory=ScanChangesSummaryRead)
     analysis: ScanAnalysisSummaryRead = Field(default_factory=ScanAnalysisSummaryRead)
     duplicates: ScanDuplicatesSummaryRead = Field(default_factory=ScanDuplicatesSummaryRead)
+    pattern_recognition: ScanPatternRecognitionSummaryRead = Field(default_factory=ScanPatternRecognitionSummaryRead)
 
 
 class RecentScanJobRead(BaseModel):

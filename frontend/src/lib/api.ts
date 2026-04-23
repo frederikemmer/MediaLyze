@@ -281,6 +281,14 @@ export type MediaFileRow = {
   subtitle_languages: string[];
   subtitle_codecs: string[];
   subtitle_sources: string[];
+  content_category?: "main" | "bonus" | string;
+  series_id?: number | null;
+  series_title?: string | null;
+  season_id?: number | null;
+  season_number?: number | null;
+  episode_number?: number | null;
+  episode_number_end?: number | null;
+  episode_title?: string | null;
 };
 
 export type VideoStream = {
@@ -420,6 +428,37 @@ export type MediaFileHistory = {
   items: MediaFileHistoryEntry[];
 };
 
+export type MediaSeriesSummary = {
+  id: number;
+  library_id: number;
+  title: string;
+  normalized_title: string;
+  relative_path: string;
+  year: number | null;
+  season_count: number;
+  episode_count: number;
+  total_size_bytes: number;
+  total_duration_seconds: number;
+  last_analyzed_at: string | null;
+};
+
+export type MediaSeasonDetail = {
+  id: number;
+  library_id: number;
+  series_id: number;
+  season_number: number;
+  title: string;
+  relative_path: string;
+  episode_count: number;
+  total_size_bytes: number;
+  total_duration_seconds: number;
+  episodes: MediaFileRow[];
+};
+
+export type MediaSeriesDetail = MediaSeriesSummary & {
+  seasons: MediaSeasonDetail[];
+};
+
 export type BrowseResponse = {
   current_path: string;
   parent_path: string | null;
@@ -444,6 +483,22 @@ export type AppSettings = {
   ignore_patterns: string[];
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
+  pattern_recognition?: {
+    analyze_bonus_content: boolean;
+    show_season_patterns: {
+      series_folder_regexes: string[];
+      season_folder_regexes: string[];
+      episode_file_regexes?: string[];
+    };
+    bonus_content: {
+      user_folder_patterns: string[];
+      default_folder_patterns: string[];
+      effective_folder_patterns: string[];
+      user_file_patterns: string[];
+      default_file_patterns: string[];
+      effective_file_patterns: string[];
+    };
+  };
   resolution_categories?: ResolutionCategory[];
   scan_performance?: {
     scan_worker_count: number;
@@ -844,6 +899,10 @@ export const api = {
     request<LibraryStatistics>(`/libraries/${id}/statistics${buildPanelQuery(panels)}`, { signal }),
   libraryHistory: (id: string | number, signal?: AbortSignal) =>
     request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
+  librarySeries: (id: string | number, signal?: AbortSignal) =>
+    request<MediaSeriesSummary[]>(`/libraries/${id}/series`, { signal }),
+  librarySeriesDetail: (libraryId: string | number, seriesId: string | number, signal?: AbortSignal) =>
+    request<MediaSeriesDetail>(`/libraries/${libraryId}/series/${seriesId}`, { signal }),
   libraryComparison: (
     id: string | number,
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
@@ -907,6 +966,19 @@ export const api = {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
+    pattern_recognition?: {
+      analyze_bonus_content?: boolean;
+      show_season_patterns?: {
+        series_folder_regexes?: string[];
+        season_folder_regexes?: string[];
+      };
+      bonus_content?: {
+        user_folder_patterns?: string[];
+        default_folder_patterns?: string[];
+        user_file_patterns?: string[];
+        default_file_patterns?: string[];
+      };
+    };
     resolution_categories?: ResolutionCategory[];
     scan_performance?: {
       scan_worker_count?: number;

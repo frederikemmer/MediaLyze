@@ -18,6 +18,8 @@ from backend.app.models.entities import (
     MediaFile,
     MediaFileHistory,
     MediaFormat,
+    MediaSeason,
+    MediaSeries,
     SubtitleStream,
 )
 from backend.app.schemas.media import (
@@ -28,6 +30,9 @@ from backend.app.schemas.media import (
     MediaFileStreamDetails,
     MediaFileTablePage,
     MediaFileTableRow,
+    MediaSeasonDetailRead,
+    MediaSeriesDetailRead,
+    MediaSeriesSummaryRead,
 )
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services.app_settings import get_app_settings
@@ -88,6 +93,12 @@ CSV_EXPORT_HEADERS = [
     "mtime",
     "last_analyzed_at",
     "quality_score",
+    "content_category",
+    "series_title",
+    "season_number",
+    "episode_number",
+    "episode_number_end",
+    "episode_title",
 ]
 CSV_EXPORT_FILTER_LABELS = {
     "file_search": "file",
@@ -279,6 +290,14 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
             | {_normalize_subtitle_codec(subtitle.format) for subtitle in media_file.external_subtitles}
         ),
         subtitle_sources=_subtitle_sources(media_file),
+        content_category=getattr(media_file.content_category, "value", media_file.content_category or "main"),
+        series_id=media_file.series_id,
+        series_title=media_file.series.title if media_file.series else None,
+        season_id=media_file.season_id,
+        season_number=media_file.season.season_number if media_file.season else None,
+        episode_number=media_file.episode_number,
+        episode_number_end=media_file.episode_number_end,
+        episode_title=media_file.episode_title,
     )
 
 
@@ -507,6 +526,8 @@ def _load_media_files_by_ids(db: Session, selected_ids: list[int]) -> list[Media
             selectinload(MediaFile.audio_streams),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
+            selectinload(MediaFile.series),
+            selectinload(MediaFile.season),
         )
     ).all()
 
@@ -674,6 +695,12 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
         _stringify_export_scalar(row.mtime),
         _stringify_export_scalar(row.last_analyzed_at),
         row.quality_score,
+        row.content_category,
+        row.series_title or "",
+        _stringify_export_scalar(row.season_number),
+        _stringify_export_scalar(row.episode_number),
+        _stringify_export_scalar(row.episode_number_end),
+        row.episode_title or "",
     ]
 
 
@@ -815,6 +842,96 @@ def list_library_files(
     )
 
 
+def _series_summary_from_model(db: Session, series: MediaSeries, resolution_categories=None) -> MediaSeriesSummaryRead:
+    files = db.scalars(
+        select(MediaFile)
+        .where(MediaFile.series_id == series.id)
+        .options(
+            selectinload(MediaFile.media_format),
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+            selectinload(MediaFile.series),
+            selectinload(MediaFile.season),
+        )
+    ).all()
+    seasons = {file.season_id for file in files if file.season_id is not None}
+    return MediaSeriesSummaryRead(
+        id=series.id,
+        library_id=series.library_id,
+        title=series.title,
+        normalized_title=series.normalized_title,
+        relative_path=series.relative_path,
+        year=series.year,
+        season_count=len(seasons),
+        episode_count=len(files),
+        total_size_bytes=sum(file.size_bytes for file in files),
+        total_duration_seconds=sum((file.media_format.duration or 0) for file in files if file.media_format),
+        last_analyzed_at=max((file.last_analyzed_at for file in files if file.last_analyzed_at), default=None),
+    )
+
+
+def list_library_series(db: Session, library_id: int) -> list[MediaSeriesSummaryRead]:
+    series_entries = db.scalars(
+        select(MediaSeries)
+        .where(MediaSeries.library_id == library_id)
+        .order_by(MediaSeries.title.asc(), MediaSeries.id.asc())
+    ).all()
+    return [_series_summary_from_model(db, series) for series in series_entries]
+
+
+def get_library_series_detail(db: Session, library_id: int, series_id: int) -> MediaSeriesDetailRead | None:
+    series = db.scalar(
+        select(MediaSeries).where(MediaSeries.library_id == library_id, MediaSeries.id == series_id)
+    )
+    if series is None:
+        return None
+
+    resolution_categories = get_app_settings(db).resolution_categories
+    seasons = db.scalars(
+        select(MediaSeason)
+        .where(MediaSeason.library_id == library_id, MediaSeason.series_id == series_id)
+        .order_by(MediaSeason.season_number.asc(), MediaSeason.id.asc())
+    ).all()
+    season_payloads: list[MediaSeasonDetailRead] = []
+    for season in seasons:
+        files = db.scalars(
+            select(MediaFile)
+            .where(MediaFile.season_id == season.id)
+            .options(
+                selectinload(MediaFile.media_format),
+                selectinload(MediaFile.video_streams),
+                selectinload(MediaFile.audio_streams),
+                selectinload(MediaFile.subtitle_streams),
+                selectinload(MediaFile.external_subtitles),
+                selectinload(MediaFile.series),
+                selectinload(MediaFile.season),
+            )
+            .order_by(MediaFile.episode_number.asc(), MediaFile.relative_path.asc())
+        ).all()
+        rows = [_row_from_model(file, resolution_categories) for file in files]
+        season_payloads.append(
+            MediaSeasonDetailRead(
+                id=season.id,
+                library_id=season.library_id,
+                series_id=season.series_id,
+                season_number=season.season_number,
+                title=season.title,
+                relative_path=season.relative_path,
+                episode_count=len(rows),
+                total_size_bytes=sum(file.size_bytes for file in files),
+                total_duration_seconds=sum(
+                    (file.media_format.duration or 0) for file in files if file.media_format
+                ),
+                episodes=rows,
+            )
+        )
+
+    summary = _series_summary_from_model(db, series, resolution_categories)
+    return MediaSeriesDetailRead(**summary.model_dump(), seasons=season_payloads)
+
+
 def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
     media_file = db.scalar(
         select(MediaFile)
@@ -825,6 +942,8 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
             selectinload(MediaFile.audio_streams),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
+            selectinload(MediaFile.series),
+            selectinload(MediaFile.season),
         )
     )
     if not media_file:

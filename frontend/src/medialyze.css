@@ -2648,6 +2648,33 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   gap: 12px;
 }
 
+.pattern-recognition-doc-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.pattern-recognition-doc-row .field-hint {
+  margin: 0;
+}
+
+.pattern-recognition-doc-row a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 28, 22, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .ignore-pattern-section {
   display: grid;
   gap: 12px;
@@ -2670,6 +2697,25 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .ignore-pattern-section-toggle:hover {
   transform: none;
+}
+
+.ignore-pattern-section-toggle-plain {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.ignore-pattern-section-toggle-plain:hover,
+.ignore-pattern-section-toggle-plain:focus-visible {
+  background: transparent;
+  box-shadow: none;
+}
+
+.pattern-recognition-section {
+  gap: 14px;
 }
 
 .ignore-pattern-section-title {

@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { api, type AppSettings, type DashboardResponse, type LibrarySummary } from "./api";
+import { defaultPatternRecognitionSettings } from "./pattern-recognition";
 import { DEFAULT_RESOLUTION_CATEGORIES, normalizeResolutionCategories } from "./resolution-categories";
 
 type AppDataContextValue = {
@@ -43,10 +44,13 @@ const DEFAULT_HISTORY_RETENTION = {
   scan_history: { days: 30, storage_limit_gb: 0 },
 };
 
+const DEFAULT_PATTERN_RECOGNITION = defaultPatternRecognitionSettings();
+
 const DEFAULT_APP_SETTINGS: AppSettings = {
   ignore_patterns: [],
   user_ignore_patterns: [],
   default_ignore_patterns: [],
+  pattern_recognition: DEFAULT_PATTERN_RECOGNITION,
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   scan_performance: DEFAULT_SCAN_PERFORMANCE,
   history_retention: DEFAULT_HISTORY_RETENTION,
@@ -64,6 +68,26 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     ignore_patterns: payload?.ignore_patterns ?? [],
     user_ignore_patterns: payload?.user_ignore_patterns ?? [],
     default_ignore_patterns: payload?.default_ignore_patterns ?? [],
+    pattern_recognition: {
+      analyze_bonus_content:
+        payload?.pattern_recognition?.analyze_bonus_content ?? DEFAULT_PATTERN_RECOGNITION.analyze_bonus_content,
+      show_season_patterns: {
+        series_folder_regexes:
+          payload?.pattern_recognition?.show_season_patterns?.series_folder_regexes ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.series_folder_regexes,
+        season_folder_regexes:
+          payload?.pattern_recognition?.show_season_patterns?.season_folder_regexes ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.season_folder_regexes,
+      },
+      bonus_content: {
+        user_folder_patterns: payload?.pattern_recognition?.bonus_content?.user_folder_patterns ?? [],
+        default_folder_patterns: payload?.pattern_recognition?.bonus_content?.default_folder_patterns ?? [],
+        effective_folder_patterns: payload?.pattern_recognition?.bonus_content?.effective_folder_patterns ?? [],
+        user_file_patterns: payload?.pattern_recognition?.bonus_content?.user_file_patterns ?? [],
+        default_file_patterns: payload?.pattern_recognition?.bonus_content?.default_file_patterns ?? [],
+        effective_file_patterns: payload?.pattern_recognition?.bonus_content?.effective_file_patterns ?? [],
+      },
+    },
     resolution_categories: normalizeResolutionCategories(payload?.resolution_categories),
     scan_performance: {
       scan_worker_count: payload?.scan_performance?.scan_worker_count ?? DEFAULT_SCAN_PERFORMANCE.scan_worker_count,

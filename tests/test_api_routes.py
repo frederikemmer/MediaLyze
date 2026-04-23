@@ -17,10 +17,13 @@ from backend.app.models.entities import (
     Library,
     LibraryHistory,
     LibraryType,
+    MediaContentCategory,
     MediaFile,
     MediaFileHistory,
     MediaFileHistoryCaptureReason,
     MediaFormat,
+    MediaSeason,
+    MediaSeries,
     ScanJob,
     ScanMode,
     ScanStatus,
@@ -162,6 +165,93 @@ def test_library_files_route_accepts_bitrate_sort_keys() -> None:
     assert audio_bitrate_response.status_code == 200
     assert [item["filename"] for item in bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
     assert [item["filename"] for item in audio_bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
+
+
+def test_library_series_routes_return_recognized_hierarchy() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Shows",
+            path="/tmp/shows",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        series = MediaSeries(
+            library_id=library.id,
+            title="Example Show",
+            normalized_title="example show",
+            relative_path="Example Show (2024)",
+            year=2024,
+        )
+        db.add(series)
+        db.flush()
+        season = MediaSeason(
+            library_id=library.id,
+            series_id=series.id,
+            season_number=1,
+            title="Season 01",
+            relative_path="Example Show (2024)/Season 01",
+        )
+        db.add(season)
+        db.flush()
+        episode = MediaFile(
+            library_id=library.id,
+            relative_path="Example Show (2024)/Season 01/Example Show - S01E02 - Pilot.mkv",
+            filename="Example Show - S01E02 - Pilot.mkv",
+            extension="mkv",
+            size_bytes=4096,
+            mtime=1.0,
+            last_analyzed_at=datetime(2026, 4, 23, 10, 30, tzinfo=UTC),
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+            content_category=MediaContentCategory.main,
+            series_id=series.id,
+            season_id=season.id,
+            episode_number=2,
+            episode_title="Pilot",
+        )
+        db.add(episode)
+        db.flush()
+        db.add(MediaFormat(media_file_id=episode.id, duration=3600.0))
+        library_id = library.id
+        series_id = series.id
+        db.commit()
+
+        client = _build_test_app(db)
+        list_response = client.get(f"/api/libraries/{library_id}/series")
+        detail_response = client.get(f"/api/libraries/{library_id}/series/{series_id}")
+
+    assert list_response.status_code == 200
+    assert list_response.json() == [
+        {
+            "id": series_id,
+            "library_id": library_id,
+            "title": "Example Show",
+            "normalized_title": "example show",
+            "relative_path": "Example Show (2024)",
+            "year": 2024,
+            "season_count": 1,
+            "episode_count": 1,
+            "total_size_bytes": 4096,
+            "total_duration_seconds": 3600.0,
+            "last_analyzed_at": "2026-04-23T10:30:00Z",
+        }
+    ]
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["title"] == "Example Show"
+    assert detail_payload["seasons"][0]["title"] == "Season 01"
+    assert detail_payload["seasons"][0]["episode_count"] == 1
+    assert detail_payload["seasons"][0]["episodes"][0]["series_title"] == "Example Show"
+    assert detail_payload["seasons"][0]["episodes"][0]["season_number"] == 1
+    assert detail_payload["seasons"][0]["episodes"][0]["episode_number"] == 2
+    assert detail_payload["seasons"][0]["episodes"][0]["episode_title"] == "Pilot"
 
 
 def test_library_statistics_route_includes_numeric_distributions() -> None:
