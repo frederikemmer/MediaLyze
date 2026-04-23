@@ -670,6 +670,29 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("shows which persisted library layout entries could not be reused", async () => {
+    const libraryId = 122;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        items: [
+          { instanceId: "retired", statisticId: "retired_panel", width: 1, height: 1 },
+          { instanceId: "duplicates", statisticId: "duplicates", width: 2, height: 3 },
+        ],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("Layout updated")).toBeInTheDocument();
+    expect(screen.getByText(/Panel "retired_panel" at position 1 is no longer available/)).toBeInTheDocument();
+    expect(screen.getByText('Panel "Duplications" width was changed from 2 to 4.')).toBeInTheDocument();
+  });
+
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {
     const libraryId = 121;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });

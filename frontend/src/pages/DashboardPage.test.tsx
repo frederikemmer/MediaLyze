@@ -268,6 +268,30 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Internal")).toBeInTheDocument();
   });
 
+  it("shows which persisted dashboard layout entries could not be reused", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [
+          { instanceId: "legacy", statisticId: "legacy_metric", width: 1, height: 1 },
+          { instanceId: "size", statisticId: "size", width: 2, height: 8 },
+        ],
+      }),
+    );
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Layout updated")).toBeInTheDocument();
+    expect(screen.getByText(/Panel "legacy_metric" at position 1 is no longer available/)).toBeInTheDocument();
+    expect(screen.getByText('Panel "File size" height was changed from 8 to 4.')).toBeInTheDocument();
+  });
+
   it("renders numeric dashboard charts when enabled in settings", async () => {
     const settings = getLibraryStatisticsSettings();
     settings.visibility.size.dashboardEnabled = true;

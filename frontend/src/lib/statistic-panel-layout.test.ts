@@ -9,7 +9,9 @@ import {
   addStatisticPanelLayoutItem,
   buildDefaultStatisticPanelLayout,
   getStatisticPanelLayout,
+  getStatisticPanelLayoutReadResult,
   normalizeStatisticPanelLayout,
+  normalizeStatisticPanelLayoutWithIssues,
   resizeStatisticPanelLayoutItem,
 } from "./statistic-panel-layout";
 
@@ -241,5 +243,60 @@ describe("statistic panel layout", () => {
     expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toBe(
       JSON.stringify(storedLayout),
     );
+  });
+
+  it("reports layout parts that could not be carried over", () => {
+    const result = normalizeStatisticPanelLayoutWithIssues("dashboard", {
+      version: 2,
+      items: [
+        { instanceId: "old", statisticId: "legacy_metric", width: 1, height: 1 },
+        { instanceId: "size", statisticId: "size", width: 2, height: 7 },
+        { instanceId: "size-copy", statisticId: "size", width: 1, height: 1 },
+        { instanceId: "size", statisticId: "duration", width: 1, height: 1 },
+        {
+          instanceId: "comparison-1",
+          statisticId: "comparison",
+          width: 2,
+          height: 2,
+          comparisonSelection: {
+            xField: "removed_field",
+            yField: "container",
+            renderer: "scatter",
+          },
+        },
+      ],
+    });
+
+    expect(result.layout.items.map((item) => item.statisticId)).toEqual(["size", "comparison"]);
+    expect(result.issues).toContainEqual({ kind: "unsupported_panel", index: 0, statisticId: "legacy_metric" });
+    expect(result.issues).toContainEqual({
+      kind: "resized_panel",
+      statisticId: "size",
+      instanceId: "size",
+      axis: "height",
+      requested: 7,
+      applied: 4,
+    });
+    expect(result.issues).toContainEqual({ kind: "duplicate_panel", statisticId: "size" });
+    expect(result.issues).toContainEqual({
+      kind: "duplicate_instance",
+      statisticId: "duration",
+      instanceId: "size",
+    });
+    expect(result.issues).toContainEqual({
+      kind: "comparison_selection_adjusted",
+      instanceId: "comparison-1",
+      previousSelection: "removed_field / container / scatter",
+      appliedSelection: "duration / container / heatmap",
+    });
+  });
+
+  it("reports unreadable stored layout data", () => {
+    window.localStorage.setItem("medialyze-statistic-panel-layout-dashboard-main", "{broken");
+
+    const result = getStatisticPanelLayoutReadResult("dashboard", "main");
+
+    expect(result.layout).toEqual(buildDefaultStatisticPanelLayout("dashboard"));
+    expect(result.issues).toEqual([{ kind: "invalid_json" }]);
   });
 });

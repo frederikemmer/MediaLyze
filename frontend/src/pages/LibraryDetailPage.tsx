@@ -32,6 +32,7 @@ import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
+import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPanelLayoutMigrationNotice";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
 import { TooltipTrigger } from "../components/TooltipTrigger";
@@ -98,6 +99,7 @@ import {
   getStatisticPanelSizeConfigForItem,
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
+  getStatisticPanelLayoutReadResult,
   moveStatisticPanelLayoutItem,
   removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
@@ -898,11 +900,22 @@ export function LibraryDetailPage() {
   const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
-  const [savedStatisticLayout, setSavedStatisticLayout] = useState(() =>
-    getStatisticPanelLayout("library", libraryId, statisticLayoutOptions),
+  const initialStatisticLayoutResultRef = useRef<ReturnType<typeof getStatisticPanelLayoutReadResult> | null>(null);
+  if (initialStatisticLayoutResultRef.current === null) {
+    initialStatisticLayoutResultRef.current = getStatisticPanelLayoutReadResult(
+      "library",
+      libraryId,
+      statisticLayoutOptions,
+    );
+  }
+  const [savedStatisticLayout, setSavedStatisticLayout] = useState(
+    () => initialStatisticLayoutResultRef.current!.layout,
   );
   const [draftStatisticLayout, setDraftStatisticLayout] = useState(() =>
-    cloneStatisticPanelLayout(getStatisticPanelLayout("library", libraryId, statisticLayoutOptions)),
+    cloneStatisticPanelLayout(initialStatisticLayoutResultRef.current!.layout),
+  );
+  const [statisticLayoutMigrationIssues, setStatisticLayoutMigrationIssues] = useState(
+    () => initialStatisticLayoutResultRef.current!.issues,
   );
   const [isEditingStatisticLayout, setIsEditingStatisticLayout] = useState(false);
   const [draggedStatisticPanelId, setDraggedStatisticPanelId] = useState<string | null>(null);
@@ -1687,9 +1700,10 @@ export function LibraryDetailPage() {
   }, [libraryId]);
 
   useEffect(() => {
-    const nextLayout = getStatisticPanelLayout("library", libraryId, statisticLayoutOptions);
-    setSavedStatisticLayout(nextLayout);
-    setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayout));
+    const nextLayoutResult = getStatisticPanelLayoutReadResult("library", libraryId, statisticLayoutOptions);
+    setSavedStatisticLayout(nextLayoutResult.layout);
+    setDraftStatisticLayout(cloneStatisticPanelLayout(nextLayoutResult.layout));
+    setStatisticLayoutMigrationIssues(nextLayoutResult.issues);
     setIsEditingStatisticLayout(false);
     setDraggedStatisticPanelId(null);
     setDropTargetStatisticPanelId(null);
@@ -1997,6 +2011,7 @@ export function LibraryDetailPage() {
     const normalized = saveStatisticPanelLayout("library", libraryId, nextLayout, statisticLayoutOptions);
     setSavedStatisticLayout(normalized);
     setDraftStatisticLayout(cloneStatisticPanelLayout(normalized));
+    setStatisticLayoutMigrationIssues([]);
   }
 
   function persistTableViewSettings(nextSettings: LibraryStatisticsSettings) {
@@ -2204,6 +2219,7 @@ export function LibraryDetailPage() {
           <StatCard label={t("libraryDetail.lastScan")} value={formatDate(displayLibrary?.last_scan_at ?? null)} />
         </div>
         {summaryError && !displayLibrary ? <div className="notice">{summaryError}</div> : null}
+        <StatisticPanelLayoutMigrationNotice scope="library" issues={statisticLayoutMigrationIssues} />
         {isSummaryLoading && !displayLibrary ? (
           <div className="panel-loader">
             <LoaderPinwheelIcon className="panel-loader-icon" size={30} />

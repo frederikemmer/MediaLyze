@@ -3,7 +3,9 @@ import {
   type LibraryStatisticDefinition,
   type LibraryStatisticId,
 } from "./library-statistics-settings";
+import type { ComparisonFieldId, ComparisonRendererId } from "./api";
 import {
+  COMPARISON_FIELD_DEFINITIONS,
   getComparisonSelection,
   sanitizeComparisonRenderer,
   type ComparisonSelection,
@@ -31,9 +33,38 @@ export type StatisticPanelLayout = {
   items: StatisticPanelLayoutItem[];
 };
 
+export type StatisticPanelLayoutMigrationIssue =
+  | { kind: "invalid_json" }
+  | { kind: "invalid_layout" }
+  | { kind: "invalid_item"; index: number }
+  | { kind: "unsupported_panel"; index: number; statisticId: string }
+  | { kind: "duplicate_panel"; statisticId: StatisticPanelLayoutId }
+  | { kind: "duplicate_instance"; statisticId: StatisticPanelLayoutId; instanceId: string }
+  | {
+      kind: "resized_panel";
+      statisticId: StatisticPanelLayoutId;
+      instanceId: string;
+      axis: "width" | "height";
+      requested: number;
+      applied: number;
+    }
+  | {
+      kind: "comparison_selection_adjusted";
+      instanceId: string;
+      previousSelection: string;
+      appliedSelection: string;
+    };
+
+export type StatisticPanelLayoutReadResult = {
+  layout: StatisticPanelLayout;
+  issues: StatisticPanelLayoutMigrationIssue[];
+};
+
 const STORAGE_KEY_PREFIX = "medialyze-statistic-panel-layout";
 const STATISTIC_PANEL_LAYOUT_VERSION = 3;
 const MAX_PANEL_WIDTH_UNITS = 4;
+const COMPARISON_FIELD_IDS = new Set(COMPARISON_FIELD_DEFINITIONS.map((definition) => definition.id));
+const COMPARISON_RENDERER_IDS = new Set<ComparisonRendererId>(["heatmap", "scatter", "bar"]);
 
 export type StatisticPanelLayoutOptions = {
   unlimitedHeight?: boolean;
@@ -139,6 +170,13 @@ function getAllSupportedDefinitions(scope: StatisticPanelLayoutScope): Statistic
   }
 
   return [...statisticDefinitions, ...DASHBOARD_EXTRA_LAYOUT_DEFINITIONS];
+}
+
+export function getStatisticPanelLayoutPanelNameKey(
+  scope: StatisticPanelLayoutScope,
+  statisticId: string,
+): string | null {
+  return getAllSupportedDefinitions(scope).find((definition) => definition.id === statisticId)?.nameKey ?? null;
 }
 
 function getDefaultVisibleDefinitions(scope: StatisticPanelLayoutScope): LibraryStatisticDefinition[] {
@@ -269,19 +307,42 @@ function normalizeComparisonSelection(
   }
 
   const candidate = value as Partial<ComparisonSelection>;
-  const xField = typeof candidate.xField === "string" ? candidate.xField : fallback.xField;
-  const yField = typeof candidate.yField === "string" ? candidate.yField : fallback.yField;
+  const xField = isComparisonFieldId(candidate.xField) ? candidate.xField : fallback.xField;
+  const yField = isComparisonFieldId(candidate.yField) ? candidate.yField : fallback.yField;
   const renderer = sanitizeComparisonRenderer(
     xField,
     yField,
-    typeof candidate.renderer === "string" ? candidate.renderer : fallback.renderer,
+    isComparisonRendererId(candidate.renderer) ? candidate.renderer : fallback.renderer,
   );
 
   return { xField, yField, renderer };
 }
 
+function isComparisonFieldId(value: unknown): value is ComparisonFieldId {
+  return typeof value === "string" && COMPARISON_FIELD_IDS.has(value as ComparisonFieldId);
+}
+
+function isComparisonRendererId(value: unknown): value is ComparisonRendererId {
+  return typeof value === "string" && COMPARISON_RENDERER_IDS.has(value as ComparisonRendererId);
+}
+
 function buildDefaultInstanceId(statisticId: StatisticPanelLayoutId, comparisonIndex: number): string {
   return statisticId === "comparison" ? `comparison-${comparisonIndex}` : statisticId;
+}
+
+function formatStoredComparisonSelection(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const candidate = value as Partial<ComparisonSelection>;
+  const xField = typeof candidate.xField === "string" ? candidate.xField : "?";
+  const yField = typeof candidate.yField === "string" ? candidate.yField : "?";
+  const renderer = typeof candidate.renderer === "string" ? candidate.renderer : "?";
+  return `${xField} / ${yField} / ${renderer}`;
+}
+
+function formatComparisonSelection(selection: ComparisonSelection): string {
+  return `${selection.xField} / ${selection.yField} / ${selection.renderer}`;
 }
 
 function buildPanelItem(
@@ -368,10 +429,19 @@ export function normalizeStatisticPanelLayout(
   value: unknown,
   options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
+  return normalizeStatisticPanelLayoutWithIssues(scope, value, options).layout;
+}
+
+export function normalizeStatisticPanelLayoutWithIssues(
+  scope: StatisticPanelLayoutScope,
+  value: unknown,
+  options?: StatisticPanelLayoutOptions,
+): StatisticPanelLayoutReadResult {
   const supportedDefinitions = getAllSupportedDefinitions(scope);
   const supportedIds = new Set(supportedDefinitions.map((definition) => definition.id));
+  const issues: StatisticPanelLayoutMigrationIssue[] = [];
   if (!value || typeof value !== "object") {
-    return buildDefaultStatisticPanelLayout(scope, options);
+    return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [{ kind: "invalid_layout" }] };
   }
 
   const hasExplicitItems = Array.isArray((value as Partial<StatisticPanelLayout>).items);
@@ -385,18 +455,25 @@ export function normalizeStatisticPanelLayout(
   const normalizedItems: StatisticPanelLayoutItem[] = [];
   let comparisonIndex = 0;
 
-  for (const candidate of candidateItems) {
+  for (const [index, candidate] of candidateItems.entries()) {
     if (!candidate || typeof candidate !== "object") {
+      issues.push({ kind: "invalid_item", index });
       continue;
     }
 
     const statisticId = (candidate as Partial<StatisticPanelLayoutItem>).statisticId;
     if (typeof statisticId !== "string" || !supportedIds.has(statisticId as StatisticPanelLayoutId)) {
+      issues.push({
+        kind: "unsupported_panel",
+        index,
+        statisticId: typeof statisticId === "string" ? statisticId : `#${index + 1}`,
+      });
       continue;
     }
 
     if (statisticId !== "comparison") {
       if (seenSingleStatisticIds.has(statisticId as StatisticPanelLayoutId)) {
+        issues.push({ kind: "duplicate_panel", statisticId: statisticId as StatisticPanelLayoutId });
         continue;
       }
       seenSingleStatisticIds.add(statisticId as StatisticPanelLayoutId);
@@ -411,30 +488,76 @@ export function normalizeStatisticPanelLayout(
         ? rawInstanceId.trim()
         : fallbackInstanceId;
     if (seenInstanceIds.has(instanceId)) {
+      issues.push({
+        kind: "duplicate_instance",
+        statisticId: statisticId as StatisticPanelLayoutId,
+        instanceId,
+      });
       continue;
     }
     seenInstanceIds.add(instanceId);
 
-    normalizedItems.push(
-      buildPanelItem(
-        scope,
-        statisticId as StatisticPanelLayoutId,
-        instanceId,
-        (candidate as Partial<StatisticPanelLayoutItem>).comparisonSelection,
-        (candidate as Partial<StatisticPanelLayoutItem>).width,
-        (candidate as Partial<StatisticPanelLayoutItem>).height,
-        options,
-      ),
+    const normalizedItem = buildPanelItem(
+      scope,
+      statisticId as StatisticPanelLayoutId,
+      instanceId,
+      (candidate as Partial<StatisticPanelLayoutItem>).comparisonSelection,
+      (candidate as Partial<StatisticPanelLayoutItem>).width,
+      (candidate as Partial<StatisticPanelLayoutItem>).height,
+      options,
     );
+
+    const rawWidth = (candidate as Partial<StatisticPanelLayoutItem>).width;
+    if (typeof rawWidth === "number" && Number.isFinite(rawWidth) && Math.round(rawWidth) !== normalizedItem.width) {
+      issues.push({
+        kind: "resized_panel",
+        statisticId: statisticId as StatisticPanelLayoutId,
+        instanceId,
+        axis: "width",
+        requested: rawWidth,
+        applied: normalizedItem.width,
+      });
+    }
+
+    const rawHeight = (candidate as Partial<StatisticPanelLayoutItem>).height;
+    if (typeof rawHeight === "number" && Number.isFinite(rawHeight) && Math.round(rawHeight) !== normalizedItem.height) {
+      issues.push({
+        kind: "resized_panel",
+        statisticId: statisticId as StatisticPanelLayoutId,
+        instanceId,
+        axis: "height",
+        requested: rawHeight,
+        applied: normalizedItem.height,
+      });
+    }
+
+    const previousComparisonSelection = formatStoredComparisonSelection(
+      (candidate as Partial<StatisticPanelLayoutItem>).comparisonSelection,
+    );
+    if (
+      statisticId === "comparison" &&
+      previousComparisonSelection &&
+      normalizedItem.comparisonSelection &&
+      previousComparisonSelection !== formatComparisonSelection(normalizedItem.comparisonSelection)
+    ) {
+      issues.push({
+        kind: "comparison_selection_adjusted",
+        instanceId,
+        previousSelection: previousComparisonSelection,
+        appliedSelection: formatComparisonSelection(normalizedItem.comparisonSelection),
+      });
+    }
+
+    normalizedItems.push(normalizedItem);
   }
 
   if (normalizedItems.length > 0) {
-    return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: normalizedItems };
+    return { layout: { version: STATISTIC_PANEL_LAYOUT_VERSION, items: normalizedItems }, issues };
   }
   if (hasExplicitItems) {
-    return { version: STATISTIC_PANEL_LAYOUT_VERSION, items: [] };
+    return { layout: { version: STATISTIC_PANEL_LAYOUT_VERSION, items: [] }, issues };
   }
-  return buildDefaultStatisticPanelLayout(scope, options);
+  return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [{ kind: "invalid_layout" }] };
 }
 
 export function getStatisticPanelLayout(
@@ -442,19 +565,27 @@ export function getStatisticPanelLayout(
   pageKey: string,
   options?: StatisticPanelLayoutOptions,
 ): StatisticPanelLayout {
+  return getStatisticPanelLayoutReadResult(scope, pageKey, options).layout;
+}
+
+export function getStatisticPanelLayoutReadResult(
+  scope: StatisticPanelLayoutScope,
+  pageKey: string,
+  options?: StatisticPanelLayoutOptions,
+): StatisticPanelLayoutReadResult {
   if (typeof window === "undefined") {
-    return buildDefaultStatisticPanelLayout(scope, options);
+    return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [] };
   }
 
   const raw = window.localStorage.getItem(buildStorageKey(scope, pageKey));
   if (!raw) {
-    return buildDefaultStatisticPanelLayout(scope, options);
+    return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [] };
   }
 
   try {
-    return normalizeStatisticPanelLayout(scope, JSON.parse(raw), options);
+    return normalizeStatisticPanelLayoutWithIssues(scope, JSON.parse(raw), options);
   } catch {
-    return buildDefaultStatisticPanelLayout(scope, options);
+    return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [{ kind: "invalid_json" }] };
   }
 }
 

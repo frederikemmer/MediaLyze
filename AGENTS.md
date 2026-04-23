@@ -27,6 +27,7 @@ Important documentation rule:
 * prefer the actual repository code and GitHub release metadata over `CHANGELOG.md` when they disagree
 * `CHANGELOG.md` is currently incomplete on `dev` and does **not** fully reflect the already published `v0.2.0` release
 * `main` is the primary stable / release branch, while `dev` is the primary ongoing development branch
+* when changing user-visible behavior, fixes, migrations, or release-relevant internals, add a concise entry under `CHANGELOG.md` `vUnreleased` before finishing the task
 
 ---
 
@@ -490,6 +491,7 @@ Implemented UI behavior includes:
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * table-column visibility and per-column tooltip customization in the settings page's `Table View` section
 * inline statistic-panel layout editing on the dashboard and library detail pages, including add-panel menus, drag-and-drop reordering, per-panel resizing, and persisted per-page panel selections that are now managed directly on those pages instead of in Settings
+* dashboard and library layout migration notices that list saved panel layout entries, sizes, and comparison selections that could not be carried over exactly after an update
 * reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, duration, file size, bitrate, and audio bitrate
 * reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
