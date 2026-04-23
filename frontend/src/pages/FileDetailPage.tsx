@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { StreamDetailsList } from "../components/StreamDetailsList";
@@ -857,11 +857,6 @@ export function FileDetailPage() {
   return (
     <>
       <section className="panel stack">
-        <div className="detail-back">
-          <Link to={`/libraries/${file?.library_id ?? ""}`} className="badge">
-            {t("fileDetail.backToLibrary")}
-          </Link>
-        </div>
         <div className="file-detail-title-row">
           <h2 className="file-detail-title">{file?.filename ?? t("fileDetail.loading")}</h2>
           {file?.relative_path ? (
