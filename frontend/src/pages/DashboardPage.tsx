@@ -21,7 +21,7 @@ import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPane
 import { useAppData } from "../lib/app-data";
 import { api, type ComparisonResponse, type DashboardHistoryResponse } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
-import { collapseHdrDistribution } from "../lib/hdr";
+import { collapseHdrDistribution, formatHdrType } from "../lib/hdr";
 import { LruCache } from "../lib/lru-cache";
 import {
   getDashboardStatisticNumericDistribution,
@@ -90,6 +90,7 @@ function formatDashboardDistributionLabel(
   panelId: string,
   label: string,
   t: (key: string, options?: Record<string, unknown>) => string,
+  options?: { inDepthDolbyVisionProfiles?: boolean },
 ): string {
   if (panelId === "container") {
     return formatContainerLabel(label);
@@ -104,6 +105,9 @@ function formatDashboardDistributionLabel(
     if (label === "external") {
       return t("streamDetails.external");
     }
+  }
+  if (panelId === "hdr_type") {
+    return formatHdrType(label, options) ?? label;
   }
   return label;
 }
@@ -143,6 +147,7 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { appSettings, dashboard, dashboardLoaded, loadDashboard } = useAppData();
+  const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [error, setError] = useState<string | null>(null);
   const layoutOptions = useMemo(
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
@@ -600,6 +605,7 @@ export function DashboardPage() {
                   emptyMessage={t("dashboard.history.empty")}
                   rangeStorageKey={DASHBOARD_HISTORY_RANGE_STORAGE_KEY}
                   bodyId="dashboard-history-panel-body"
+                  inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
                 />
               );
             } else if (panel.definition.statisticDefinition.panelKind === "comparison") {
@@ -632,6 +638,7 @@ export function DashboardPage() {
                       ? (fileId) => navigate(`/files/${fileId}`)
                       : undefined
                   }
+                  inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
                 />
               );
             } else if (panel.definition.statisticDefinition.panelKind === "numeric-chart") {
@@ -654,7 +661,9 @@ export function DashboardPage() {
               const statisticDefinition = panel.definition.statisticDefinition;
               const items =
                 statisticDefinition.id === "hdr_type"
-                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition))
+                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition), {
+                      inDepthDolbyVisionProfiles,
+                    })
                   : getDashboardStatisticPanelItems(dashboard, statisticDefinition);
               const formattedItems = statisticDefinition.dashboardFormatKind
                 ? items.map((item) => ({
@@ -663,7 +672,9 @@ export function DashboardPage() {
                   }))
                 : items.map((item) => ({
                     ...item,
-                    label: formatDashboardDistributionLabel(statisticDefinition.id, item.label, t),
+                    label: formatDashboardDistributionLabel(statisticDefinition.id, item.label, t, {
+                      inDepthDolbyVisionProfiles,
+                    }),
                   }));
               content = (
                 <AsyncPanel

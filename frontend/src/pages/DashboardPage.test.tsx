@@ -32,6 +32,7 @@ function createAppSettings(): AppSettings {
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
       unlimited_panel_size: false,
+      in_depth_dolby_vision_profiles: false,
     },
   };
 }

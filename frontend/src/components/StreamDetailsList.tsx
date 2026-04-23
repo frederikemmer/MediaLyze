@@ -12,6 +12,7 @@ type StreamDetailsListProps = {
   isLoading?: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
   surface?: "tooltip" | "panel";
+  inDepthDolbyVisionProfiles?: boolean;
 };
 
 function formatTooltipLanguage(
@@ -80,6 +81,7 @@ function buildStreamRows(
   kind: StreamDetailsKind,
   detail: MediaFileStreamDetails,
   t: (key: string, options?: Record<string, unknown>) => string,
+  inDepthDolbyVisionProfiles = false,
 ): {
   title: string;
   count: number;
@@ -98,7 +100,10 @@ function buildStreamRows(
         key: `video-${stream.stream_index}`,
         lead: stream.codec ? formatCodecLabel(stream.codec, "video") : t("fileTable.na"),
         trail: formatTooltipResolution(stream.width, stream.height, t),
-        meta: [formatHdrType(stream.hdr_type) ?? t("fileTable.sdr"), ...(stream.profile ? [stream.profile] : [])],
+        meta: [
+          formatHdrType(stream.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr"),
+          ...(stream.profile ? [stream.profile] : []),
+        ],
       })),
     };
   }
@@ -154,6 +159,7 @@ export function StreamDetailsList({
   isLoading = false,
   t,
   surface = "tooltip",
+  inDepthDolbyVisionProfiles = false,
 }: StreamDetailsListProps): ReactNode {
   if (isLoading) {
     return t("streamDetails.loading");
@@ -162,7 +168,7 @@ export function StreamDetailsList({
     return t("streamDetails.unavailable");
   }
 
-  const { title, count, rows } = buildStreamRows(kind, detail, t);
+  const { title, count, rows } = buildStreamRows(kind, detail, t, inDepthDolbyVisionProfiles);
   if (rows.length === 0) {
     return t("streamDetails.none");
   }

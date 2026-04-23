@@ -16,6 +16,7 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { api, type MediaFileDetail, type MediaFileHistory, type MediaFileQualityScoreDetail } from "../lib/api";
+import { useAppData } from "../lib/app-data";
 import {
   type FileDetailPanelId,
   getFileDetailPanelSettings,
@@ -373,6 +374,7 @@ function formatHistoryFieldValue(
   key: string,
   value: unknown,
   t: (key: string, options?: Record<string, unknown>) => string,
+  inDepthDolbyVisionProfiles = false,
 ): string {
   if (value === null || value === undefined || value === "") {
     return t("fileTable.na");
@@ -396,7 +398,7 @@ function formatHistoryFieldValue(
     return formatCodecLabel(value, "video");
   }
   if (key.endsWith("hdr_type") && typeof value === "string") {
-    return formatHdrType(value) ?? value;
+    return formatHdrType(value, { inDepthDolbyVisionProfiles }) ?? value;
   }
   if (Array.isArray(value)) {
     return formatHistoryList(value, t("fileTable.na"));
@@ -411,6 +413,7 @@ function buildHistoryDiffMetrics(
   snapshot: FileHistoryEntry["snapshot"],
   previousSnapshot: FileHistoryEntry["snapshot"] | undefined,
   t: (key: string, options?: Record<string, unknown>) => string,
+  inDepthDolbyVisionProfiles = false,
 ): FileHistoryMetric[] {
   if (!previousSnapshot) {
     return [];
@@ -419,23 +422,34 @@ function buildHistoryDiffMetrics(
   const previous = flattenHistorySnapshot(previousSnapshot);
   const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])].sort();
 
-  return keys
-    .filter((key) => JSON.stringify(stableHistoryValue(current[key])) !== JSON.stringify(stableHistoryValue(previous[key])))
-    .map((key) => ({
+  return keys.reduce<FileHistoryMetric[]>((metrics, key) => {
+    if (JSON.stringify(stableHistoryValue(current[key])) === JSON.stringify(stableHistoryValue(previous[key]))) {
+      return metrics;
+    }
+    const value = formatHistoryFieldValue(key, current[key], t, inDepthDolbyVisionProfiles);
+    const previousValue = formatHistoryFieldValue(key, previous[key], t, inDepthDolbyVisionProfiles);
+    if (key.endsWith("hdr_type") && value === previousValue) {
+      return metrics;
+    }
+    metrics.push({
       key,
       label: formatHistoryFieldLabel(key),
-      value: formatHistoryFieldValue(key, current[key], t),
-      previousValue: formatHistoryFieldValue(key, previous[key], t),
+      value,
+      previousValue,
       changed: true,
-    }));
+    });
+    return metrics;
+  }, []);
 }
 
 function FileHistoryPanel({
   history,
   t,
+  inDepthDolbyVisionProfiles = false,
 }: {
   history: MediaFileHistory | null;
   t: (key: string, options?: Record<string, unknown>) => string;
+  inDepthDolbyVisionProfiles?: boolean;
 }): ReactNode {
   const items = history?.items ?? [];
   if (items.length === 0) {
@@ -458,7 +472,7 @@ function FileHistoryPanel({
         const entry = state.entry;
         const snapshot = entry.snapshot;
         const previousSnapshot = states[index + 1]?.entry.snapshot;
-        const metrics = buildHistoryDiffMetrics(snapshot, previousSnapshot, t);
+        const metrics = buildHistoryDiffMetrics(snapshot, previousSnapshot, t, inDepthDolbyVisionProfiles);
 
         return (
           <details className="file-history-entry" key={entry.id} open={index === 0}>
@@ -492,6 +506,8 @@ function FileHistoryPanel({
 export function FileDetailPage() {
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
+  const { appSettings } = useAppData();
+  const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [file, setFile] = useState<MediaFileDetail | null>(null);
   const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
   const [fileHistory, setFileHistory] = useState<MediaFileHistory | null>(null);
@@ -821,13 +837,27 @@ export function FileDetailPage() {
       title: t("fileDetail.history.title"),
       loading: !fileHistory && !fileHistoryError,
       error: fileHistoryError,
-      body: <FileHistoryPanel history={fileHistory} t={t} />,
+      body: (
+        <FileHistoryPanel
+          history={fileHistory}
+          t={t}
+          inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
+        />
+      ),
     },
     videoStreams: {
       title: t("fileDetail.videoStreams"),
       loading: !file && !error,
       error,
-      body: <StreamDetailsList kind="video" detail={file ?? undefined} t={t} surface="panel" />,
+      body: (
+        <StreamDetailsList
+          kind="video"
+          detail={file ?? undefined}
+          t={t}
+          surface="panel"
+          inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
+        />
+      ),
     },
     audioStreams: {
       title: t("fileDetail.audioStreams"),
@@ -878,7 +908,9 @@ export function FileDetailPage() {
           ) : (
             <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
           )}
-          <span className="badge">{formatHdrType(file?.hdr_type) ?? t("fileTable.sdr")}</span>
+          <span className="badge">
+            {formatHdrType(file?.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr")}
+          </span>
           <span className="badge">{formatBytes(file?.size_bytes ?? 0)}</span>
           <span className="badge">{formatDuration(file?.duration ?? 0)}</span>
           <span className="badge">{file ? `${file.quality_score}/10` : "…"}</span>

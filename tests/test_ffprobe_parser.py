@@ -211,6 +211,123 @@ def test_normalize_ffprobe_payload_extracts_dolby_vision_profile() -> None:
     assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 8"
 
 
+def test_normalize_ffprobe_payload_extracts_dolby_vision_profile_compatibility_id() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+                "side_data_list": [
+                    {
+                        "side_data_type": "DOVI configuration record",
+                        "dv_profile": 8,
+                        "dv_bl_signal_compatibility_id": 1,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 8.1"
+
+
+def test_normalize_ffprobe_payload_extracts_dolby_vision_codec_profile_marker() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "codec_tag_string": "dvh1.05.06",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 5 Level 6"
+
+
+def test_normalize_ffprobe_payload_extracts_dolby_vision_profile_7_layer_markers() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+                "tags": {"title": "Dolby Vision FEL"},
+                "side_data_list": [
+                    {
+                        "side_data_type": "DOVI configuration record",
+                        "dv_profile": 7,
+                        "dv_level": 6,
+                        "rpu_present_flag": 1,
+                        "el_present_flag": 1,
+                        "bl_present_flag": 1,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 7 Level 6 FEL"
+
+
+def test_normalize_ffprobe_payload_extracts_dolby_vision_profile_7_layer_flags() -> None:
+    payload = {
+        "format": {"format_name": "matroska"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main 10",
+                "width": 3840,
+                "height": 2160,
+                "color_transfer": "smpte2084",
+                "avg_frame_rate": "24/1",
+                "side_data_list": [
+                    {
+                        "side_data_type": "DOVI configuration record",
+                        "dv_profile": 7,
+                        "dv_level": 6,
+                        "rpu_present_flag": 1,
+                        "el_present_flag": 1,
+                        "bl_present_flag": 1,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.video_streams[0].hdr_type == "Dolby Vision Profile 7 Level 6 BL+EL+RPU"
+
+
 def test_normalize_ffprobe_payload_extracts_hdr10_plus() -> None:
     payload = {
         "format": {"format_name": "matroska"},

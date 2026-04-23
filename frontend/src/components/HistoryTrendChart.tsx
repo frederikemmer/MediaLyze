@@ -13,6 +13,7 @@ import {
   type HistoryMetricDisplayMode,
   type LibraryHistoryMetricId,
 } from "../lib/history-metrics";
+import { formatHdrType } from "../lib/hdr";
 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
@@ -21,6 +22,7 @@ type HistoryTrendChartProps = {
   resolutionCategories: LibraryHistoryResolutionCategory[];
   metricId: LibraryHistoryMetricId;
   displayMode?: HistoryMetricDisplayMode;
+  inDepthDolbyVisionProfiles?: boolean;
   resizeToken?: string;
 };
 
@@ -39,21 +41,33 @@ function historyPercentageAxisBounds(displayMode: HistoryMetricDisplayMode) {
 function categoryCounts(
   point: LibraryHistoryPoint,
   categoryKey: string,
+  inDepthDolbyVisionProfiles: boolean,
 ): Record<string, number> {
-  if (categoryKey === "resolution") {
-    return point.trend_metrics.category_counts?.resolution ?? point.trend_metrics.resolution_counts;
+  const counts =
+    categoryKey === "resolution"
+      ? point.trend_metrics.category_counts?.resolution ?? point.trend_metrics.resolution_counts
+      : point.trend_metrics.category_counts?.[categoryKey] ?? {};
+
+  if (categoryKey !== "hdr_type" || inDepthDolbyVisionProfiles) {
+    return counts;
   }
-  return point.trend_metrics.category_counts?.[categoryKey] ?? {};
+
+  return Object.entries(counts).reduce<Record<string, number>>((collapsed, [key, value]) => {
+    const collapsedKey = formatHdrType(key, { inDepthDolbyVisionProfiles }) ?? key;
+    collapsed[collapsedKey] = (collapsed[collapsedKey] ?? 0) + value;
+    return collapsed;
+  }, {});
 }
 
 function categorySeriesKeys(
   points: LibraryHistoryPoint[],
   categoryKey: string,
   resolutionCategories: LibraryHistoryResolutionCategory[],
+  inDepthDolbyVisionProfiles: boolean,
 ): string[] {
   const keys = new Set<string>();
   for (const point of points) {
-    for (const key of Object.keys(categoryCounts(point, categoryKey))) {
+    for (const key of Object.keys(categoryCounts(point, categoryKey, inDepthDolbyVisionProfiles))) {
       keys.add(key);
     }
   }
@@ -64,8 +78,14 @@ function categorySeriesKeys(
     ];
   }
   return [...keys].sort((left, right) => {
-    const leftTotal = points.reduce((sum, point) => sum + (categoryCounts(point, categoryKey)[left] ?? 0), 0);
-    const rightTotal = points.reduce((sum, point) => sum + (categoryCounts(point, categoryKey)[right] ?? 0), 0);
+    const leftTotal = points.reduce(
+      (sum, point) => sum + (categoryCounts(point, categoryKey, inDepthDolbyVisionProfiles)[left] ?? 0),
+      0,
+    );
+    const rightTotal = points.reduce(
+      (sum, point) => sum + (categoryCounts(point, categoryKey, inDepthDolbyVisionProfiles)[right] ?? 0),
+      0,
+    );
     return rightTotal - leftTotal || left.localeCompare(right);
   });
 }
@@ -98,6 +118,7 @@ function HistoryTrendChartComponent({
   resolutionCategories,
   metricId,
   displayMode = "count",
+  inDepthDolbyVisionProfiles = false,
   resizeToken,
 }: HistoryTrendChartProps) {
   const { t } = useTranslation();
@@ -178,7 +199,12 @@ function HistoryTrendChartComponent({
 
     if (metric.group === "distribution") {
       if ("categoryKey" in metric) {
-        const seriesKeys = categorySeriesKeys(points, metric.categoryKey, resolutionCategories);
+        const seriesKeys = categorySeriesKeys(
+          points,
+          metric.categoryKey,
+          resolutionCategories,
+          inDepthDolbyVisionProfiles,
+        );
         return {
           animation: false,
           grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
@@ -230,7 +256,7 @@ function HistoryTrendChartComponent({
             splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
           },
           series: seriesKeys.map((key) => ({
-            name: metric.formatCategory(key, resolutionCategories),
+            name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }),
             type: "line",
             stack: metric.id,
             showSymbol: points.length <= 1,
@@ -239,7 +265,7 @@ function HistoryTrendChartComponent({
             areaStyle: { opacity: 0.22 },
             emphasis: { focus: "series" },
             data: points.map((point) => {
-              const counts = categoryCounts(point, metric.categoryKey);
+              const counts = categoryCounts(point, metric.categoryKey, inDepthDolbyVisionProfiles);
               const count = counts[key] ?? 0;
               if (displayMode === "count") {
                 return count;
@@ -323,7 +349,12 @@ function HistoryTrendChartComponent({
       };
     }
 
-    const seriesKeys = categorySeriesKeys(points, metric.categoryKey, resolutionCategories);
+    const seriesKeys = categorySeriesKeys(
+      points,
+      metric.categoryKey,
+      resolutionCategories,
+      inDepthDolbyVisionProfiles,
+    );
     return {
       animation: false,
       grid: { top: 28, right: 12, bottom: 12, left: 12, containLabel: true },
@@ -375,7 +406,7 @@ function HistoryTrendChartComponent({
         splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
       },
       series: seriesKeys.map((key) => ({
-        name: metric.formatCategory(key, resolutionCategories),
+        name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }),
         type: "line",
         stack: metric.id,
         showSymbol: points.length <= 1,
@@ -384,7 +415,7 @@ function HistoryTrendChartComponent({
         areaStyle: { opacity: 0.22 },
         emphasis: { focus: "series" },
         data: points.map((point) => {
-          const counts = categoryCounts(point, metric.categoryKey);
+          const counts = categoryCounts(point, metric.categoryKey, inDepthDolbyVisionProfiles);
           const count = counts[key] ?? 0;
           if (displayMode === "count") {
             return count;
@@ -394,7 +425,18 @@ function HistoryTrendChartComponent({
         }),
       })),
     };
-  }, [axisColor, displayMode, fillColor, lineColor, metric, points, resolutionCategories, t, tooltipBase]);
+  }, [
+    axisColor,
+    displayMode,
+    fillColor,
+    inDepthDolbyVisionProfiles,
+    lineColor,
+    metric,
+    points,
+    resolutionCategories,
+    t,
+    tooltipBase,
+  ]);
 
   return (
     <ReactECharts
@@ -415,5 +457,6 @@ export const HistoryTrendChart = memo(
     previousProps.resolutionCategories === nextProps.resolutionCategories &&
     previousProps.metricId === nextProps.metricId &&
     previousProps.displayMode === nextProps.displayMode &&
+    previousProps.inDepthDolbyVisionProfiles === nextProps.inDepthDolbyVisionProfiles &&
     previousProps.resizeToken === nextProps.resizeToken,
 );

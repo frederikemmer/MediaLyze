@@ -11,6 +11,17 @@ from typing import Any
 from backend.app.services.languages import normalize_language_code
 
 
+@dataclass(slots=True)
+class DolbyVisionMetadata:
+    profile: int | None = None
+    level: int | None = None
+    compatibility_id: int | None = None
+    rpu_present: bool | None = None
+    enhancement_layer_present: bool | None = None
+    base_layer_present: bool | None = None
+    enhancement_layer_type: str | None = None
+
+
 def _safe_int(value: Any) -> int | None:
     if value in (None, "", "N/A"):
         return None
@@ -44,7 +55,62 @@ def _parse_frame_rate(value: str | None) -> float | None:
     return _safe_float(value)
 
 
-def _dolby_vision_profile(stream: dict[str, Any]) -> int | None:
+def _safe_bool(value: Any) -> bool | None:
+    if value in (None, "", "N/A"):
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "y"}:
+        return True
+    if normalized in {"0", "false", "no", "n"}:
+        return False
+    return None
+
+
+def _first_present_int(entry: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = _safe_int(entry.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _first_present_bool(entry: dict[str, Any], *keys: str) -> bool | None:
+    for key in keys:
+        value = _safe_bool(entry.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _dolby_vision_enhancement_layer_type(text: str) -> str | None:
+    normalized = text.lower()
+    if re.search(r"\bfel\b", normalized) or "full enhancement layer" in normalized:
+        return "FEL"
+    if re.search(r"\bmel\b", normalized) or "minimal enhancement layer" in normalized:
+        return "MEL"
+    return None
+
+
+def _dolby_vision_codec_profile_metadata(text: str) -> DolbyVisionMetadata | None:
+    match = re.search(r"\b(?:dvhe|dvh1)\.(\d{1,2})\.(\d{1,2})\b", text.lower())
+    if not match:
+        return None
+    return DolbyVisionMetadata(profile=int(match.group(1)), level=int(match.group(2)))
+
+
+def _dolby_vision_metadata(stream: dict[str, Any]) -> DolbyVisionMetadata | None:
+    metadata_text = _metadata_text(stream)
+    codec_metadata = _dolby_vision_codec_profile_metadata(metadata_text)
+    metadata = DolbyVisionMetadata(
+        profile=codec_metadata.profile if codec_metadata else None,
+        level=codec_metadata.level if codec_metadata else None,
+        enhancement_layer_type=_dolby_vision_enhancement_layer_type(metadata_text),
+    )
+    found_dovi_record = False
     side_data = stream.get("side_data_list") or []
     for entry in side_data:
         if not isinstance(entry, dict):
@@ -52,10 +118,70 @@ def _dolby_vision_profile(stream: dict[str, Any]) -> int | None:
         side_data_type = str(entry.get("side_data_type") or "").strip().lower()
         if "dovi configuration record" not in side_data_type:
             continue
-        profile = _safe_int(entry.get("dv_profile"))
-        if profile is not None:
-            return profile
+        found_dovi_record = True
+        profile = _first_present_int(entry, "dv_profile", "profile")
+        level = _first_present_int(entry, "dv_level", "level")
+        compatibility_id = _first_present_int(
+            entry,
+            "dv_bl_signal_compatibility_id",
+            "bl_signal_compatibility_id",
+            "compatibility_id",
+        )
+        metadata.profile = profile if profile is not None else metadata.profile
+        metadata.level = level if level is not None else metadata.level
+        metadata.compatibility_id = compatibility_id if compatibility_id is not None else metadata.compatibility_id
+        metadata.rpu_present = _first_present_bool(entry, "rpu_present_flag", "dv_rpu_present_flag")
+        metadata.enhancement_layer_present = _first_present_bool(
+            entry,
+            "el_present_flag",
+            "dv_el_present_flag",
+        )
+        metadata.base_layer_present = _first_present_bool(entry, "bl_present_flag", "dv_bl_present_flag")
+    has_metadata_value = any(
+        value is not None
+        for value in (
+            metadata.profile,
+            metadata.level,
+            metadata.compatibility_id,
+            metadata.rpu_present,
+            metadata.enhancement_layer_present,
+            metadata.base_layer_present,
+            metadata.enhancement_layer_type,
+        )
+    )
+    if found_dovi_record or (
+        has_metadata_value and re.search(r"\b(dovi|dolby vision|dvhe|dvh1)\b", metadata_text.lower())
+    ):
+        return metadata
     return None
+
+
+def _format_dolby_vision_hdr_type(metadata: DolbyVisionMetadata | None) -> str:
+    if metadata is None or metadata.profile is None:
+        return "Dolby Vision"
+
+    if metadata.profile == 8 and metadata.compatibility_id is not None:
+        label = f"Dolby Vision Profile 8.{metadata.compatibility_id}"
+    else:
+        label = f"Dolby Vision Profile {metadata.profile}"
+
+    if metadata.level is not None:
+        label = f"{label} Level {metadata.level}"
+
+    if metadata.profile == 7:
+        if metadata.enhancement_layer_type:
+            label = f"{label} {metadata.enhancement_layer_type}"
+        else:
+            layers = [
+                ("BL", metadata.base_layer_present),
+                ("EL", metadata.enhancement_layer_present),
+                ("RPU", metadata.rpu_present),
+            ]
+            present_layers = [name for name, present in layers if present]
+            if present_layers:
+                label = f"{label} {'+'.join(present_layers)}"
+
+    return label
 
 
 def _metadata_text(value: Any) -> str:
@@ -81,11 +207,15 @@ def _hdr_type(stream: dict[str, Any]) -> str | None:
     profile = (stream.get("profile") or "").lower()
     side_data = stream.get("side_data_list") or []
     side_data_text = _metadata_text(side_data).lower()
-    dolby_vision_profile = _dolby_vision_profile(stream)
+    dolby_vision_metadata = _dolby_vision_metadata(stream)
 
-    if dolby_vision_profile is not None:
-        return f"Dolby Vision Profile {dolby_vision_profile}"
-    if "dovi" in profile or "dovi" in side_data_text:
+    if dolby_vision_metadata is not None:
+        return _format_dolby_vision_hdr_type(dolby_vision_metadata)
+    if (
+        "dovi" in profile
+        or "dovi" in side_data_text
+        or re.search(r"\b(?:dolby vision|dvhe|dvh1)\b", _metadata_text(stream).lower())
+    ):
         return "Dolby Vision"
     if "arib-std-b67" in transfer:
         return "HLG"

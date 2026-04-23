@@ -5,7 +5,7 @@ import type {
   NumericDistributionMetricId,
 } from "./api";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDuration, formatSpatialAudioProfileLabel } from "./format";
-import { formatHdrType } from "./hdr";
+import { formatHdrType, type HdrDisplayOptions } from "./hdr";
 import { formatNumericDistributionBinLabel } from "./numeric-distributions";
 
 export type HistoryMetricGroupId = "summary" | "category" | "distribution";
@@ -54,7 +54,11 @@ export type HistoryMetricDefinition =
       group: "category";
       labelKey: string;
       categoryKey: string;
-      formatCategory: (value: string, resolutionCategories: LibraryHistoryResolutionCategory[]) => string;
+      formatCategory: (
+        value: string,
+        resolutionCategories: LibraryHistoryResolutionCategory[],
+        options?: HdrDisplayOptions,
+      ) => string;
     }
   | {
       id: LibraryHistoryMetricId;
@@ -68,7 +72,11 @@ export type HistoryMetricDefinition =
       group: "distribution";
       labelKey: string;
       categoryKey: string;
-      formatCategory: (value: string, resolutionCategories: LibraryHistoryResolutionCategory[]) => string;
+      formatCategory: (
+        value: string,
+        resolutionCategories: LibraryHistoryResolutionCategory[],
+        options?: HdrDisplayOptions,
+      ) => string;
     };
 
 type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
@@ -194,7 +202,7 @@ export const HISTORY_METRIC_DEFINITIONS: HistoryMetricDefinition[] = [
     group: "category",
     labelKey: "libraryDetail.history.metrics.hdr_type_mix",
     categoryKey: "hdr_type",
-    formatCategory: (value) => formatHdrType(value) ?? "SDR",
+    formatCategory: (value, _resolutionCategories, options) => formatHdrType(value, options) ?? "SDR",
   },
   {
     id: "audio_codecs_mix",

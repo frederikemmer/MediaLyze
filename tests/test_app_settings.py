@@ -69,6 +69,7 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
     assert loaded.feature_flags.unlimited_panel_size is False
+    assert loaded.feature_flags.in_depth_dolby_vision_profiles is False
 
 
 def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
@@ -86,6 +87,7 @@ def test_get_app_settings_defaults_full_width_shell_for_desktop_new_installation
     assert loaded.feature_flags.show_full_width_app_shell is True
     assert loaded.feature_flags.hide_quality_score_meter is False
     assert loaded.feature_flags.unlimited_panel_size is False
+    assert loaded.feature_flags.in_depth_dolby_vision_profiles is False
 
 
 def test_update_app_settings_can_disable_desktop_full_width_default(tmp_path) -> None:
@@ -124,6 +126,7 @@ def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(t
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
     assert loaded.feature_flags.unlimited_panel_size is False
+    assert loaded.feature_flags.in_depth_dolby_vision_profiles is False
 
 
 def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_path) -> None:
@@ -149,6 +152,7 @@ def test_get_app_settings_treats_legacy_ignore_patterns_as_user_patterns(tmp_pat
     assert loaded.feature_flags.show_full_width_app_shell is False
     assert loaded.feature_flags.hide_quality_score_meter is False
     assert loaded.feature_flags.unlimited_panel_size is False
+    assert loaded.feature_flags.in_depth_dolby_vision_profiles is False
 
 
 def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective_list(tmp_path) -> None:
@@ -176,6 +180,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
                     "show_full_width_app_shell": True,
                     "hide_quality_score_meter": True,
                     "unlimited_panel_size": True,
+                    "in_depth_dolby_vision_profiles": True,
                 },
             ),
             settings,
@@ -198,6 +203,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
     assert updated.feature_flags.show_full_width_app_shell is True
     assert updated.feature_flags.hide_quality_score_meter is True
     assert updated.feature_flags.unlimited_panel_size is True
+    assert updated.feature_flags.in_depth_dolby_vision_profiles is True
     assert loaded == updated
     assert stored is not None
     assert stored.value == {
@@ -219,6 +225,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "show_full_width_app_shell": True,
             "hide_quality_score_meter": True,
             "unlimited_panel_size": True,
+            "in_depth_dolby_vision_profiles": True,
         },
     }
 
@@ -247,6 +254,7 @@ def test_update_app_settings_accepts_legacy_ignore_pattern_payload_as_user_patte
     assert updated.feature_flags.show_full_width_app_shell is False
     assert updated.feature_flags.hide_quality_score_meter is False
     assert updated.feature_flags.unlimited_panel_size is False
+    assert updated.feature_flags.in_depth_dolby_vision_profiles is False
 
 
 def test_update_app_settings_supports_resolution_category_renames_and_remaps_quality_profiles(tmp_path) -> None:

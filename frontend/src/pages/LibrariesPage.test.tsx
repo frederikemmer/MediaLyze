@@ -61,6 +61,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
       unlimited_panel_size: false,
+      in_depth_dolby_vision_profiles: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -427,6 +428,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -440,6 +442,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -470,6 +473,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -483,6 +487,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -513,6 +518,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: true,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -526,6 +532,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -556,6 +563,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: true,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -569,6 +577,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: true,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -599,6 +608,52 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: true,
+          in_depth_dolby_vision_profiles: false,
+        },
+      }),
+    );
+  });
+
+  it("persists the in-depth Dolby Vision profiles feature flag", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: true,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("In-depth Dolby Vision profiles");
+    await screen.findByDisplayValue("movie.tmp");
+    await waitFor(() => expect(checkbox).toBeEnabled());
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: ["movie.tmp"],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
+        },
+        history_retention: {
+          file_history: { days: 30, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: true,
         },
       }),
     );
@@ -648,6 +703,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -691,6 +747,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -862,6 +919,7 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
