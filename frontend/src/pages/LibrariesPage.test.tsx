@@ -795,9 +795,11 @@ describe("LibrariesPage ignore patterns", () => {
     await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(historyStatusSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
     await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
-    expect(
-      await screen.findByText("Reconstructed 12 library snapshots and 4 initial file-history entries."),
-    ).toBeInTheDocument();
+    const reconstructionMessage = await screen.findByText(
+      "Reconstructed 12 library snapshots and 4 initial file-history entries.",
+    );
+    expect(reconstructionMessage).toBeInTheDocument();
+    expect(reconstructionMessage).toHaveClass("alert", "success");
   });
 
   it("persists history retention values and refreshes the storage forecast", async () => {

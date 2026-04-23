@@ -544,6 +544,7 @@ export function LibrariesPage() {
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
   const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
   const [historyRetentionStatus, setHistoryRetentionStatus] = useState<string | null>(null);
+  const [historyRetentionStatusTone, setHistoryRetentionStatusTone] = useState<"success" | "error">("error");
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
@@ -696,6 +697,7 @@ export function LibrariesPage() {
       const status = await api.reconstructHistory();
       setHistoryReconstruction(status);
     } catch (reason) {
+      setHistoryRetentionStatusTone("error");
       setHistoryRetentionStatus((reason as Error).message);
     }
   }
@@ -763,8 +765,10 @@ export function LibrariesPage() {
     if (hadActiveHistoryReconstructionRef.current && !isHistoryReconstructionActive) {
       if (historyReconstruction.status === "completed" && historyReconstruction.result) {
         void refreshHistoryStorage().catch(() => undefined);
+        setHistoryRetentionStatusTone("success");
         setHistoryRetentionStatus(formatHistoryReconstructionStatus(historyReconstruction.result));
       } else if (historyReconstruction.status === "failed") {
+        setHistoryRetentionStatusTone("error");
         setHistoryRetentionStatus(historyReconstruction.error ?? t("libraries.historyRetention.reconstructFailed"));
       }
     }
@@ -1529,6 +1533,7 @@ export function LibrariesPage() {
       const revertedInputs = historyRetentionInputsFromSettings(appHistoryRetention);
       historyRetentionInputsRef.current = revertedInputs;
       setHistoryRetentionInputs(revertedInputs);
+      setHistoryRetentionStatusTone("error");
       setHistoryRetentionStatus((reason as Error).message);
     } finally {
       setIsSavingHistoryRetention(false);
@@ -3219,7 +3224,11 @@ export function LibrariesPage() {
                   })}
                 </p>
               ) : null}
-              {historyRetentionStatus ? <div className="alert">{historyRetentionStatus}</div> : null}
+              {historyRetentionStatus ? (
+                <div className={`alert${historyRetentionStatusTone === "success" ? " success" : ""}`}>
+                  {historyRetentionStatus}
+                </div>
+              ) : null}
             </div>
           </AsyncPanel>
 
