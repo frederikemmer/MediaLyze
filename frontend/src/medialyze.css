@@ -2685,11 +2685,21 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   min-height: 34px;
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(31, 28, 22, 0.1);
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--ink);
+  border: 1px solid rgba(255, 107, 61, 0.3);
+  background: var(--accent);
+  color: #fffaf3;
   font-size: 0.82rem;
   font-weight: 600;
+  box-shadow: none;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.pattern-recognition-doc-row a:hover,
+.pattern-recognition-doc-row a:focus-visible {
+  background: #ff7a4f;
+  border-color: rgba(255, 107, 61, 0.42);
+  color: #fffaf3;
+  box-shadow: none;
 }
 
 .ignore-pattern-section {
@@ -2701,7 +2711,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: rgba(255, 255, 255, 0.55);
 }
 
-button.ignore-pattern-section-toggle {
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle {
   width: 100%;
   display: flex;
   align-items: center;
@@ -2709,6 +2719,7 @@ button.ignore-pattern-section-toggle {
   gap: 12px;
   padding: 0;
   border: 0;
+  border-color: transparent;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -2716,20 +2727,22 @@ button.ignore-pattern-section-toggle {
   text-align: left;
 }
 
-button.ignore-pattern-section-toggle:hover,
-button.ignore-pattern-section-toggle:focus-visible {
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle:hover,
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle:focus-visible {
   transform: none;
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
 }
 
-button.ignore-pattern-section-toggle-plain {
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle-plain {
   color: inherit;
 }
 
-button.ignore-pattern-section-toggle-plain:hover,
-button.ignore-pattern-section-toggle-plain:focus-visible {
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle-plain:hover,
+.ignore-pattern-section > button.secondary.ignore-pattern-section-toggle-plain:focus-visible {
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
 }
 

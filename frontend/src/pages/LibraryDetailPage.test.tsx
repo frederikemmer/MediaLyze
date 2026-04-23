@@ -300,6 +300,82 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
+function createGroupedSeriesFilesPage(libraryId: number): MediaFileTablePage {
+  return {
+    total: 2,
+    offset: 0,
+    limit: 200,
+    next_cursor: null,
+    has_more: false,
+    items: [
+      {
+        id: 11,
+        library_id: libraryId,
+        relative_path: "Example Show/Season 1/Example Show - S01E01.mkv",
+        filename: "Example Show - S01E01.mkv",
+        extension: "mkv",
+        size_bytes: 1_024,
+        mtime: 1,
+        last_seen_at: "2026-03-12T09:00:00Z",
+        last_analyzed_at: "2026-03-12T09:00:00Z",
+        scan_status: "ready",
+        quality_score: 8,
+        quality_score_raw: 82.4,
+        container: "mkv",
+        duration: 3600,
+        bitrate: 4_000_000,
+        audio_bitrate: 256_000,
+        video_codec: "h264",
+        resolution: "1920x1080",
+        resolution_category_label: "1080p",
+        hdr_type: null,
+        audio_codecs: ["aac"],
+        audio_spatial_profiles: [],
+        audio_languages: ["en"],
+        subtitle_languages: ["de", "en"],
+        subtitle_codecs: ["srt"],
+        subtitle_sources: ["external"],
+        series_id: 7,
+        series_title: "Example Show",
+        season_id: 13,
+        season_number: 1,
+      },
+      {
+        id: 12,
+        library_id: libraryId,
+        relative_path: "Example Show/Season 1/Example Show - S01E02.mkv",
+        filename: "Example Show - S01E02.mkv",
+        extension: "mkv",
+        size_bytes: 2_048,
+        mtime: 2,
+        last_seen_at: "2026-03-12T09:00:00Z",
+        last_analyzed_at: "2026-03-12T09:00:00Z",
+        scan_status: "ready",
+        quality_score: 7,
+        quality_score_raw: 74.1,
+        container: "mkv",
+        duration: 3500,
+        bitrate: 4_000_000,
+        audio_bitrate: 256_000,
+        video_codec: "h264",
+        resolution: "1920x1080",
+        resolution_category_label: "1080p",
+        hdr_type: null,
+        audio_codecs: ["aac"],
+        audio_spatial_profiles: [],
+        audio_languages: ["en"],
+        subtitle_languages: ["de", "en"],
+        subtitle_codecs: ["srt"],
+        subtitle_sources: ["external"],
+        series_id: 7,
+        series_title: "Example Show",
+        season_id: 13,
+        season_number: 1,
+      },
+    ],
+  };
+}
+
 function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
   const {
     feature_flags: overrideFeatureFlags = {},
@@ -464,6 +540,28 @@ describe("LibraryDetailPage", () => {
     expect(libraryComparisonSpy).toHaveBeenCalled();
     expect(libraryDuplicatesSpy).toHaveBeenCalled();
     expect(libraryFilesSpy).toHaveBeenCalled();
+  });
+
+  it("groups recognized series and seasons inside analyzed files without showing a series/files switch", async () => {
+    const libraryId = 141;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createGroupedSeriesFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Series$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Files$/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Example Show [1080p, SDR, H.264 / AVC] [de, en]" }),
+    ).toHaveTextContent("Example Show [1080p, SDR, H.264 / AVC] [de, en]");
+    expect(screen.getByRole("button", { name: "Season 1 [1080p, SDR, H.264 / AVC] [de, en]" })).toHaveTextContent(
+      "Season 1 [1080p, SDR, H.264 / AVC] [de, en]",
+    );
+    expect(screen.getByRole("link", { name: "Example Show - S01E01.mkv" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Example Show - S01E02.mkv" })).toBeInTheDocument();
   });
 
   it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {
@@ -1133,7 +1231,7 @@ describe("LibraryDetailPage", () => {
     renderPage(libraryId, { strictMode: true });
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
-    expect(await screen.findByText("H.264 / AVC")).toBeInTheDocument();
+    expect((await screen.findAllByText("H.264 / AVC")).length).toBeGreaterThan(0);
     expect(screen.queryByText("No analyzed data yet.")).not.toBeInTheDocument();
     expect(librarySummarySpy.mock.calls.length).toBeLessThanOrEqual(2);
     expect(libraryStatisticsSpy.mock.calls.length).toBeLessThanOrEqual(2);

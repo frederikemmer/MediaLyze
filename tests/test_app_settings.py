@@ -102,11 +102,13 @@ def test_update_app_settings_persists_pattern_recognition(tmp_path) -> None:
         )
         stored = db.get(AppSetting, "global")
 
-    assert updated.pattern_recognition.analyze_bonus_content is False
+    assert updated.pattern_recognition.analyze_bonus_content is True
     assert updated.pattern_recognition.bonus_content.effective_folder_patterns == ["*/Extras/*", "*/Specials/*"]
-    assert updated.pattern_recognition.bonus_content.effective_file_patterns == ["*-bonus.*", "*-trailer.*"]
+    assert updated.pattern_recognition.bonus_content.effective_file_patterns == []
     assert stored is not None
-    assert stored.value["pattern_recognition"]["analyze_bonus_content"] is False
+    assert stored.value["pattern_recognition"]["analyze_bonus_content"] is True
+    assert stored.value["pattern_recognition"]["bonus_content"]["user_file_patterns"] == []
+    assert stored.value["pattern_recognition"]["bonus_content"]["default_file_patterns"] == []
 
 
 def test_update_app_settings_rejects_invalid_pattern_recognition_regex(tmp_path) -> None:

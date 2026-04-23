@@ -30,27 +30,6 @@ DEFAULT_BONUS_FOLDER_NAMES: tuple[str, ...] = (
     "Season 00",
 )
 
-DEFAULT_BONUS_FILE_SUFFIXES: tuple[str, ...] = (
-    "-trailer",
-    ".trailer",
-    "_trailer",
-    " trailer",
-    "-sample",
-    ".sample",
-    "_sample",
-    " sample",
-    "-scene",
-    "-clip",
-    "-interview",
-    "-behindthescenes",
-    "-deleted",
-    "-deletedscene",
-    "-featurette",
-    "-short",
-    "-other",
-    "-extra",
-)
-
 DEFAULT_SHOW_SEASON_PATTERNS = ShowSeasonPatternSettings(
     series_folder_regexes=[
         r"^(?P<title>.+?)(?:\s+\((?P<year>\d{4})\))?(?:\s+\[[^\]]+\])?$",
@@ -135,18 +114,13 @@ def default_bonus_folder_patterns() -> list[str]:
     return patterns
 
 
-def default_bonus_file_patterns() -> list[str]:
-    return [f"*{suffix}.*" for suffix in DEFAULT_BONUS_FILE_SUFFIXES]
-
-
 def default_bonus_content_patterns() -> BonusContentPatternSettings:
     default_folder = default_bonus_folder_patterns()
-    default_file = default_bonus_file_patterns()
     return BonusContentPatternSettings(
         default_folder_patterns=default_folder,
         effective_folder_patterns=default_folder,
-        default_file_patterns=default_file,
-        effective_file_patterns=default_file,
+        default_file_patterns=[],
+        effective_file_patterns=[],
     )
 
 
@@ -191,10 +165,7 @@ def matching_bonus_patterns(
     if not candidates:
         return []
 
-    pattern_groups = [settings.bonus_content.effective_folder_patterns]
-    if not is_dir:
-        pattern_groups.append(settings.bonus_content.effective_file_patterns)
-    patterns = [pattern for group in pattern_groups for pattern in group]
+    patterns = settings.bonus_content.effective_folder_patterns
     return [
         pattern
         for pattern in patterns

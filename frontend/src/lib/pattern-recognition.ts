@@ -25,38 +25,12 @@ const DEFAULT_BONUS_FOLDER_NAMES = [
   "Season 00",
 ];
 
-const DEFAULT_BONUS_FILE_SUFFIXES = [
-  "-trailer",
-  ".trailer",
-  "_trailer",
-  " trailer",
-  "-sample",
-  ".sample",
-  "_sample",
-  " sample",
-  "-scene",
-  "-clip",
-  "-interview",
-  "-behindthescenes",
-  "-deleted",
-  "-deletedscene",
-  "-featurette",
-  "-short",
-  "-other",
-  "-extra",
-];
-
 export function defaultBonusFolderPatternInputs(): string[] {
   return DEFAULT_BONUS_FOLDER_NAMES.flatMap((name) => [`${name}/`, `${name}/*`, `*/${name}/`, `*/${name}/*`]);
 }
 
-export function defaultBonusFilePatternInputs(): string[] {
-  return DEFAULT_BONUS_FILE_SUFFIXES.map((suffix) => `*${suffix}.*`);
-}
-
 export function defaultPatternRecognitionSettings(): PatternRecognitionSettings {
   const defaultFolderPatterns = defaultBonusFolderPatternInputs();
-  const defaultFilePatterns = defaultBonusFilePatternInputs();
   return {
     analyze_bonus_content: true,
     show_season_patterns: DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
@@ -65,8 +39,8 @@ export function defaultPatternRecognitionSettings(): PatternRecognitionSettings 
       default_folder_patterns: defaultFolderPatterns,
       effective_folder_patterns: defaultFolderPatterns,
       user_file_patterns: [],
-      default_file_patterns: defaultFilePatterns,
-      effective_file_patterns: defaultFilePatterns,
+      default_file_patterns: [],
+      effective_file_patterns: [],
     },
   };
 }

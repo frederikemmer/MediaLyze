@@ -892,7 +892,9 @@ def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatc
     assert [subtitle.path for subtitle in subtitles] == ["movie.en.srt"]
 
 
-def test_scan_excludes_bonus_content_when_bonus_analysis_is_disabled(tmp_path: Path, monkeypatch) -> None:
+def test_scan_marks_bonus_content_from_bonus_folders_even_if_legacy_setting_disables_it(
+    tmp_path: Path, monkeypatch
+) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
     (media_dir / "movie.mkv").write_text("video")
@@ -937,9 +939,11 @@ def test_scan_excludes_bonus_content_when_bonus_analysis_is_disabled(tmp_path: P
         job = run_scan(db, settings, library.id, "incremental")
         indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
 
-    assert [media_file.relative_path for media_file in indexed_files] == ["movie.mkv"]
-    assert job.scan_summary["pattern_recognition"]["analyze_bonus_content"] is False
-    assert job.scan_summary["pattern_recognition"]["bonus_ignored_total"] == 1
+    assert [media_file.relative_path for media_file in indexed_files] == ["Extras/featurette.mkv", "movie.mkv"]
+    bonus = next(media_file for media_file in indexed_files if media_file.relative_path == "Extras/featurette.mkv")
+    assert getattr(bonus.content_category, "value", bonus.content_category) == "bonus"
+    assert job.scan_summary["pattern_recognition"]["analyze_bonus_content"] is True
+    assert job.scan_summary["pattern_recognition"]["bonus_ignored_total"] == 0
 
 
 def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypatch) -> None:
