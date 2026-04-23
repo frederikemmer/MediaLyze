@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - show a dashboard/library layout migration notice after updates when saved panel layout entries, sizes, or comparison selections cannot be carried over exactly
 
+### 🐛 Bug fixes
+
+- move the header version pill slightly upward so it visually aligns with the app title without changing its size
+
 ## v0.8.4
 
 >2026-04-22
