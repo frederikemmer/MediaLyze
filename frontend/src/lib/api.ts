@@ -469,6 +469,7 @@ export type AppSettings = {
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
     unlimited_panel_size: boolean;
+    in_depth_dolby_vision_profiles: boolean;
   };
 };
 
@@ -931,6 +932,7 @@ export const api = {
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;
       unlimited_panel_size?: boolean;
+      in_depth_dolby_vision_profiles?: boolean;
     };
   }) =>
     request<AppSettings>("/app-settings", {

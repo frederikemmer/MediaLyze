@@ -55,6 +55,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     show_full_width_app_shell: false,
     hide_quality_score_meter: false,
     unlimited_panel_size: false,
+    in_depth_dolby_vision_profiles: false,
   },
 };
 
@@ -96,6 +97,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       show_full_width_app_shell: payload?.feature_flags?.show_full_width_app_shell ?? false,
       hide_quality_score_meter: payload?.feature_flags?.hide_quality_score_meter ?? false,
       unlimited_panel_size: payload?.feature_flags?.unlimited_panel_size ?? false,
+      in_depth_dolby_vision_profiles: payload?.feature_flags?.in_depth_dolby_vision_profiles ?? false,
     },
   };
 }

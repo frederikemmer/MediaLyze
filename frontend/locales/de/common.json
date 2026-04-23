@@ -183,6 +183,7 @@
       "showFullWidthAppShell": "App-Shell auf volle Breite erweitern",
       "hideQualityScoreMeter": "Qualitäts-Score-Meter ausblenden",
       "unlimitedPanelSize": "Unbegrenzte Panel-Groesse",
+      "inDepthDolbyVisionProfiles": "Detaillierte Dolby-Vision-Profile",
       "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
       "showAnalyzedFilesCsvExportTooltip": "Zeigt den CSV-Export-Button in der Ansicht der analysierten Dateien fuer die aktuell gefilterte Ergebnismenge an.",
       "showFullWidthAppShellTooltipAria": "Feature Flag fuer die volle App-Shell-Breite erklaeren",
@@ -190,7 +191,9 @@
       "hideQualityScoreMeterTooltipAria": "Feature Flag fuer die Sichtbarkeit des Qualitäts-Score-Meters erklaeren",
       "hideQualityScoreMeterTooltip": "Blendet das balkenartige Score-Meter in der Tabelle der analysierten Dateien aus, laesst den numerischen Qualitäts-Score aber sichtbar.",
       "unlimitedPanelSizeTooltipAria": "Feature Flag fuer unbegrenzte Panel-Groesse erklaeren",
-      "unlimitedPanelSizeTooltip": "Hebt die aktuelle Begrenzung von 4 Reihen fuer Statistik-Panels im Dashboard und auf Bibliotheksseiten auf. Die Panel-Breite bleibt weiterhin durch das zugrunde liegende Grid begrenzt."
+      "unlimitedPanelSizeTooltip": "Hebt die aktuelle Begrenzung von 4 Reihen fuer Statistik-Panels im Dashboard und auf Bibliotheksseiten auf. Die Panel-Breite bleibt weiterhin durch das zugrunde liegende Grid begrenzt.",
+      "inDepthDolbyVisionProfilesTooltipAria": "Anzeige detaillierter Dolby-Vision-Profile erklaeren",
+      "inDepthDolbyVisionProfilesTooltip": "Zeigt erkannte Dolby-Vision-Profile, Level, Kompatibilitaet und Profile-7-Layerdetails, soweit ffprobe sie liefert.\n\nWenn deaktiviert, werden Dolby-Vision-Varianten fuer einfachere Dashboards, Tabellen und Dateidetails als Dolby Vision zusammengefasst."
     },
     "pathKinds": {
       "local": "Lokaler Pfad",

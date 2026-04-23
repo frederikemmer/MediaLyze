@@ -328,6 +328,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       show_full_width_app_shell: false,
       hide_quality_score_meter: false,
       unlimited_panel_size: false,
+      in_depth_dolby_vision_profiles: false,
       ...overrideFeatureFlags,
     },
     ...restOverrides,
@@ -1742,7 +1743,7 @@ describe("LibraryDetailPage", () => {
     );
   });
 
-  it("uses the exact hdr profile label as the filter value", async () => {
+  it("collapses Dolby Vision hdr profile filters by default", async () => {
     const libraryId = 507;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
@@ -1763,15 +1764,58 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision 8.1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision" }));
 
-    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision 8.1");
+    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("dv");
     await waitFor(() =>
       expect(libraryFilesSpy).toHaveBeenLastCalledWith(
         String(libraryId),
         expect.objectContaining({
           filters: expect.objectContaining({
-            hdr_type: "Dolby Vision 8.1",
+            hdr_type: "dv",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("uses the exact hdr profile label as the filter value when in-depth Dolby Vision profiles are enabled", async () => {
+    const libraryId = 508;
+    mockAppSettings({
+      feature_flags: {
+        show_analyzed_files_csv_export: true,
+        in_depth_dolby_vision_profiles: true,
+      },
+    });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(
+      api,
+      "libraryStatistics",
+    ).mockResolvedValue(
+      createLibraryStatistics({
+        hdr_distribution: [
+          { label: "Dolby Vision Profile 8.1", value: 1 },
+          { label: "Dolby Vision Profile 7 Level 6 FEL", value: 1 },
+        ],
+      }),
+    );
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision Profile 8.1" }),
+    );
+
+    expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision Profile 8.1");
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            hdr_type: "Dolby Vision Profile 8.1",
           }),
         }),
       ),

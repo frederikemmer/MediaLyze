@@ -183,6 +183,7 @@
       "showFullWidthAppShell": "Use full-width app shell",
       "hideQualityScoreMeter": "Hide quality score meter",
       "unlimitedPanelSize": "Unlimited panel size",
+      "inDepthDolbyVisionProfiles": "In-depth Dolby Vision profiles",
       "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
       "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set.",
       "showFullWidthAppShellTooltipAria": "Explain full-width app shell feature flag",
@@ -190,7 +191,9 @@
       "hideQualityScoreMeterTooltipAria": "Explain quality score meter visibility feature flag",
       "hideQualityScoreMeterTooltip": "Hides the bar-style score meter in the analyzed-files table while keeping the numeric quality score visible.",
       "unlimitedPanelSizeTooltipAria": "Explain unlimited panel size feature flag",
-      "unlimitedPanelSizeTooltip": "Removes the current 4-row panel-height cap in dashboard and library statistic layouts. Panel width still remains limited by the underlying grid."
+      "unlimitedPanelSizeTooltip": "Removes the current 4-row panel-height cap in dashboard and library statistic layouts. Panel width still remains limited by the underlying grid.",
+      "inDepthDolbyVisionProfilesTooltipAria": "Explain in-depth Dolby Vision profile display",
+      "inDepthDolbyVisionProfilesTooltip": "Shows detected Dolby Vision profile, level, compatibility, and Profile 7 layer details where ffprobe exposes them.\n\nWhen disabled, Dolby Vision variants are grouped as plain Dolby Vision for simpler dashboards, tables, and file details."
     },
     "pathKinds": {
       "local": "Local path",

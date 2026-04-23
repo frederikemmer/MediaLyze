@@ -527,6 +527,7 @@ export function LibrariesPage() {
   const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
   const [unlimitedPanelSize, setUnlimitedPanelSize] = useState(false);
+  const [inDepthDolbyVisionProfiles, setInDepthDolbyVisionProfiles] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
   const [parallelScanJobsInput, setParallelScanJobsInput] = useState("2");
   const [comparisonScatterPointLimitInput, setComparisonScatterPointLimitInput] = useState("5000");
@@ -591,6 +592,7 @@ export function LibrariesPage() {
     setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
     setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
+    setInDepthDolbyVisionProfiles(updated.feature_flags.in_depth_dolby_vision_profiles);
     const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
     scanWorkerCountInputRef.current = String(updatedScanPerformance.scan_worker_count);
     parallelScanJobsInputRef.current = String(updatedScanPerformance.parallel_scan_jobs);
@@ -962,6 +964,7 @@ export function LibrariesPage() {
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
     setUnlimitedPanelSize(appSettings.feature_flags.unlimited_panel_size);
+    setInDepthDolbyVisionProfiles(appSettings.feature_flags.in_depth_dolby_vision_profiles);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
     parallelScanJobsInputRef.current = String(appScanPerformance.parallel_scan_jobs);
     comparisonScatterPointLimitInputRef.current = String(appScanPerformance.comparison_scatter_point_limit);
@@ -1286,6 +1289,7 @@ export function LibrariesPage() {
         show_full_width_app_shell: nextShowFullWidthAppShell,
         hide_quality_score_meter: nextHideQualityScoreMeter,
         unlimited_panel_size: nextUnlimitedPanelSize,
+        in_depth_dolby_vision_profiles: inDepthDolbyVisionProfiles,
       },
     });
   }
@@ -1449,6 +1453,58 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setUnlimitedPanelSize(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
+  async function toggleInDepthDolbyVisionProfiles(enabled: boolean) {
+    const previousValue = inDepthDolbyVisionProfiles;
+    setInDepthDolbyVisionProfiles(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await api.updateAppSettings({
+        user_ignore_patterns: normalizeIgnorePatterns(userIgnorePatternInputs),
+        default_ignore_patterns: normalizeIgnorePatterns(defaultIgnorePatternInputs),
+        scan_performance: {
+          scan_worker_count: normalizeScanPerformanceInput(
+            scanWorkerCountInputRef.current,
+            appScanPerformance.scan_worker_count,
+            SCAN_WORKER_COUNT_MIN,
+            SCAN_WORKER_COUNT_MAX,
+          ),
+          parallel_scan_jobs: normalizeScanPerformanceInput(
+            parallelScanJobsInputRef.current,
+            appScanPerformance.parallel_scan_jobs,
+            PARALLEL_SCAN_JOB_COUNT_MIN,
+            PARALLEL_SCAN_JOB_COUNT_MAX,
+          ),
+          comparison_scatter_point_limit: normalizeScanPerformanceInput(
+            comparisonScatterPointLimitInputRef.current,
+            appScanPerformance.comparison_scatter_point_limit,
+            COMPARISON_SCATTER_POINT_LIMIT_MIN,
+            COMPARISON_SCATTER_POINT_LIMIT_MAX,
+          ),
+        },
+        history_retention: appHistoryRetention,
+        feature_flags: {
+          show_analyzed_files_csv_export: showAnalyzedFilesCsvExport,
+          show_full_width_app_shell: showFullWidthAppShell,
+          hide_quality_score_meter: hideQualityScoreMeter,
+          unlimited_panel_size: unlimitedPanelSize,
+          in_depth_dolby_vision_profiles: enabled,
+        },
+      });
+      applyUpdatedAppSettingsState(updated);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
+    } catch (reason) {
+      setInDepthDolbyVisionProfiles(previousValue);
       setFeatureFlagsStatus((reason as Error).message);
     } finally {
       setIsSavingFeatureFlags(false);
@@ -3641,6 +3697,25 @@ export function LibrariesPage() {
                   <TooltipTrigger
                     ariaLabel={t("libraries.featureFlags.unlimitedPanelSizeTooltipAria")}
                     content={t("libraries.featureFlags.unlimitedPanelSizeTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="in-depth-dolby-vision-profiles">
+                    <input
+                      id="in-depth-dolby-vision-profiles"
+                      type="checkbox"
+                      checked={inDepthDolbyVisionProfiles}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleInDepthDolbyVisionProfiles(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.inDepthDolbyVisionProfiles")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltipAria")}
+                    content={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltip")}
                     preserveLineBreaks
                   >
                     ?

@@ -37,6 +37,7 @@ type LibraryHistoryPanelProps = {
   metricLabel?: string;
   rangeStorageKey?: string;
   bodyId?: string;
+  inDepthDolbyVisionProfiles?: boolean;
 };
 
 const HISTORY_GROUP_ICONS = {
@@ -201,6 +202,7 @@ export function LibraryHistoryPanel({
   metricLabel,
   rangeStorageKey = DEFAULT_HISTORY_RANGE_STORAGE_KEY,
   bodyId = "library-history-panel-body",
+  inDepthDolbyVisionProfiles = false,
 }: LibraryHistoryPanelProps) {
   const { t, i18n } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -647,7 +649,8 @@ export function LibraryHistoryPanel({
             resolutionCategories={resolutionCategories}
             metricId={selectedMetric}
             displayMode={displayMode}
-            resizeToken={`${selectedMetric}:${displayMode}:${rangeSelection.mode}:${filteredHistoryPoints.length}`}
+            inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
+            resizeToken={`${selectedMetric}:${displayMode}:${rangeSelection.mode}:${filteredHistoryPoints.length}:${inDepthDolbyVisionProfiles ? "dv-full" : "dv-basic"}`}
           />
         </div>
       )}

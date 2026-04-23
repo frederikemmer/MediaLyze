@@ -37,6 +37,7 @@ type ComparisonChartPanelProps = {
   onChangeRenderer: (renderer: ComparisonRendererId) => void;
   onOpenFile?: (fileId: number) => void;
   onSelectFilters?: (filters: Partial<Record<ComparisonFieldId, string>>) => void;
+  inDepthDolbyVisionProfiles?: boolean;
 };
 
 type RendererDefinition = {
@@ -97,6 +98,7 @@ function ComparisonChartPanelComponent({
   onChangeRenderer,
   onOpenFile,
   onSelectFilters,
+  inDepthDolbyVisionProfiles = false,
 }: ComparisonChartPanelProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -224,7 +226,13 @@ function ComparisonChartPanelComponent({
 
     if (selectedRenderer === "bar" && comparison.bar_entries) {
       const labelsByKey = new Map(
-        comparison.x_buckets.map((bucket) => [bucket.key, formatComparisonBucketLabel(comparison.x_field, bucket, t)] as const),
+        comparison.x_buckets.map(
+          (bucket) =>
+            [
+              bucket.key,
+              formatComparisonBucketLabel(comparison.x_field, bucket, t, { inDepthDolbyVisionProfiles }),
+            ] as const,
+        ),
       );
       return {
         animation: false,
@@ -279,8 +287,12 @@ function ComparisonChartPanelComponent({
       };
     }
 
-    const xLabels = comparison.x_buckets.map((bucket) => formatComparisonBucketLabel(comparison.x_field, bucket, t));
-    const yLabels = comparison.y_buckets.map((bucket) => formatComparisonBucketLabel(comparison.y_field, bucket, t));
+    const xLabels = comparison.x_buckets.map((bucket) =>
+      formatComparisonBucketLabel(comparison.x_field, bucket, t, { inDepthDolbyVisionProfiles }),
+    );
+    const yLabels = comparison.y_buckets.map((bucket) =>
+      formatComparisonBucketLabel(comparison.y_field, bucket, t, { inDepthDolbyVisionProfiles }),
+    );
     const xIndexByKey = new Map(comparison.x_buckets.map((bucket, index) => [bucket.key, index] as const));
     const yIndexByKey = new Map(comparison.y_buckets.map((bucket, index) => [bucket.key, index] as const));
     const maxCount = Math.max(0, ...comparison.heatmap_cells.map((cell) => cell.count));
@@ -352,6 +364,7 @@ function ComparisonChartPanelComponent({
     comparison,
     fillColor,
     highlightColor,
+    inDepthDolbyVisionProfiles,
     lineColor,
     selectedRenderer,
     t,

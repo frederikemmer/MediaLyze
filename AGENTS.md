@@ -535,14 +535,15 @@ Current app feature flags include:
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
 * `unlimited_panel_size`
+* `in_depth_dolby_vision_profiles`
 
 These flags currently control:
 
-* Dolby Vision profile variants are displayed directly in statistics and metadata views when they are present in stored analysis data
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
+* whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
 
 ---
 
@@ -594,6 +595,7 @@ Important current payload concepts:
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
 * `feature_flags.unlimited_panel_size`
+* `feature_flags.in_depth_dolby_vision_profiles`
 
 `history_retention` currently applies to three buckets:
 

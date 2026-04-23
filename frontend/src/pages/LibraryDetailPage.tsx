@@ -416,6 +416,7 @@ export function buildFileColumns(
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
   hideQualityScoreMeter: boolean,
+  inDepthDolbyVisionProfiles = false,
 ): FileColumnDefinition[] {
   return [
     {
@@ -466,6 +467,7 @@ export function buildFileColumns(
                 detail={streamDetailCache[file.id]}
                 isLoading={Boolean(streamDetailLoading[file.id])}
                 t={t}
+                inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
               />
             }
             onOpen={() => loadStreamDetail(file.id)}
@@ -488,9 +490,11 @@ export function buildFileColumns(
     {
       key: "hdr_type",
       labelKey: "fileTable.hdr",
-      sizing: { mode: "content", minPx: 72, maxPx: 92 },
-      measureValue: (file) => formatHdrType(file.hdr_type) ?? t("fileTable.sdr"),
-      render: (file) => formatHdrType(file.hdr_type) ?? t("fileTable.sdr"),
+      sizing: { mode: "content", minPx: 72, maxPx: inDepthDolbyVisionProfiles ? 220 : 104 },
+      measureValue: (file) =>
+        formatHdrType(file.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr"),
+      render: (file) =>
+        formatHdrType(file.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr"),
     },
     {
       key: "duration",
@@ -983,6 +987,7 @@ export function LibraryDetailPage() {
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
+  const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -1035,9 +1040,11 @@ export function LibraryDetailPage() {
         loadStreamDetail,
         tooltipEnabledColumns,
         hideQualityScoreMeter,
+        inDepthDolbyVisionProfiles,
       ),
     [
       hideQualityScoreMeter,
+      inDepthDolbyVisionProfiles,
       loadQualityScoreDetail,
       loadStreamDetail,
       qualityScoreDetails,
@@ -2293,6 +2300,7 @@ export function LibraryDetailPage() {
                   onSelectFilters={(filters) =>
                     applyMetadataFilters(filters as Partial<Record<LibraryFileMetadataSearchField, string>>)
                   }
+                  inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
                 />
               );
             } else if (
@@ -2331,12 +2339,16 @@ export function LibraryDetailPage() {
               const statisticDefinition = panel.definition.statisticDefinition;
               const items =
                 statisticDefinition.id === "hdr_type"
-                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition))
+                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition), {
+                      inDepthDolbyVisionProfiles,
+                    })
                   : getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition);
               const formattedItems: DistributionListEntry[] = items.map((item) => {
                 const rawLabel = item.label;
                 const filterValue = item.filter_value ?? rawLabel;
-                const label = statisticDefinition.panelFormatKind
+                const label = statisticDefinition.id === "hdr_type"
+                  ? formatHdrType(rawLabel, { inDepthDolbyVisionProfiles }) ?? rawLabel
+                  : statisticDefinition.panelFormatKind
                   ? formatCodecLabel(rawLabel, statisticDefinition.panelFormatKind)
                   : rawLabel;
                 const isApplied = hasSearchValueTokens(fieldValues[statisticDefinition.id], filterValue);
@@ -2383,6 +2395,7 @@ export function LibraryDetailPage() {
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
                   rangeStorageKey={HISTORY_RANGE_STORAGE_KEY}
                   bodyId={`library-history-panel-body-${panel.item.instanceId}`}
+                  inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
                 />
               );
             } else if (panel.definition.kind === "duplicates") {

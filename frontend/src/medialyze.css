@@ -477,6 +477,20 @@
   z-index: 40;
 }
 
+.alert {
+  padding: 12px 14px;
+  border: 1px solid rgba(201, 88, 54, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 245, 240, 0.92);
+  color: #9b3d22;
+}
+
+.alert.success {
+  border-color: rgba(39, 148, 107, 0.24);
+  background: rgba(226, 246, 239, 0.92);
+  color: #16785d;
+}
+
 .statistic-layout-action-button {
   position: relative;
   overflow: hidden;
@@ -4093,6 +4107,18 @@ html[data-theme="dark"] {
   .statistic-layout-migration-notice {
     border-color: rgba(255, 107, 61, 0.36);
     background: rgba(62, 44, 34, 0.72);
+  }
+
+  .alert {
+    border-color: rgba(255, 107, 61, 0.28);
+    background: rgba(78, 43, 34, 0.72);
+    color: #f2aa91;
+  }
+
+  .alert.success {
+    border-color: rgba(91, 167, 76, 0.32);
+    background: rgba(31, 72, 54, 0.72);
+    color: #9fd18f;
   }
 
   .app-version {

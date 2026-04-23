@@ -159,6 +159,7 @@ export function formatComparisonBucketLabel(
   fieldId: ComparisonFieldId,
   bucket: ComparisonBucket,
   t: TranslationFn,
+  options?: { inDepthDolbyVisionProfiles?: boolean },
 ): string {
   if (getComparisonFieldDefinition(fieldId).kind === "numeric") {
     if (fieldId === "resolution_mp") {
@@ -187,7 +188,7 @@ export function formatComparisonBucketLabel(
     return formatCodecLabel(bucket.label, "video");
   }
   if (fieldId === "hdr_type") {
-    return formatHdrType(bucket.label) ?? "Unknown";
+    return formatHdrType(bucket.label, options) ?? "Unknown";
   }
   return bucket.label;
 }
