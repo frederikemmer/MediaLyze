@@ -362,6 +362,8 @@
       "loading": "Serien werden geladen...",
       "viewSeries": "Serien",
       "viewFiles": "Dateien",
+      "seasonTitle": "Staffel {{season}}",
+      "specials": "Specials",
       "seasonCount": "{{count}} Staffeln",
       "episodeCount": "{{count}} Episoden",
       "seasons": "Staffeln",
