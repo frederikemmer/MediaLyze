@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- remove the redundant Back to library button from the file detail page now that library navigation is available in the header menu
 - move the header version pill slightly upward so it visually aligns with the app title without changing its size
 
 ## v0.8.4

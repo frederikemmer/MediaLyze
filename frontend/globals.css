@@ -319,13 +319,6 @@ h3 {
   gap: 10px;
 }
 
-.detail-back {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .notice,
 .alert {
   border-radius: 14px;
@@ -375,8 +368,7 @@ h3 {
 
 @media (max-width: 900px) {
 
-  .app-header,
-  .detail-back {
+  .app-header {
     flex-direction: column;
     align-items: stretch;
   }
