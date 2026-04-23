@@ -192,6 +192,7 @@ export type QualityBreakdown = {
 };
 
 export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
+export type LibraryType = "movies" | "series" | "mixed" | "other";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
@@ -223,7 +224,7 @@ export type LibrarySummary = {
   id: number;
   name: string;
   path: string;
-  type: "movies" | "series" | "mixed" | "other";
+  type: LibraryType;
   last_scan_at: string | null;
   scan_mode: "manual" | "scheduled" | "watch";
   duplicate_detection_mode: DuplicateDetectionMode;
@@ -1014,7 +1015,7 @@ export const api = {
   createLibrary: (payload: {
     name: string;
     path: string;
-    type: string;
+    type: LibraryType;
     scan_mode: string;
     duplicate_detection_mode?: DuplicateDetectionMode;
     scan_config?: Record<string, number>;
@@ -1029,6 +1030,7 @@ export const api = {
     libraryId: string | number,
     payload: {
       name?: string;
+      type?: LibraryType;
       scan_mode?: string;
       duplicate_detection_mode?: DuplicateDetectionMode;
       scan_config?: Record<string, number>;

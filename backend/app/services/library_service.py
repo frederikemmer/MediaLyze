@@ -219,6 +219,8 @@ def update_library_settings(
         if not next_name:
             raise ValueError("Library name must not be empty")
         library.name = next_name
+    if payload.type is not None:
+        library.type = payload.type
 
     if payload.scan_mode is not None:
         library.scan_mode, library.scan_config = _normalize_library_scan_settings(

@@ -19,6 +19,7 @@ class LibraryCreate(BaseModel):
 
 class LibraryUpdate(BaseModel):
     name: str | None = None
+    type: LibraryType | None = None
     scan_mode: ScanMode | None = None
     duplicate_detection_mode: DuplicateDetectionMode | None = None
     scan_config: dict = Field(default_factory=dict)

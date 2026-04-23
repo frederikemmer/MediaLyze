@@ -1970,6 +1970,17 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   max-width: 100%;
 }
 
+.library-title-inline-editor {
+  display: flex;
+  flex: 1 1 260px;
+  min-width: min(280px, 100%);
+}
+
+.library-title-input {
+  width: 100%;
+  margin: 0;
+}
+
 .library-title-main .tooltip-trigger {
   align-self: center;
 }
@@ -1978,6 +1989,12 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   align-self: center;
   flex: 1 1 180px;
   min-width: 0;
+}
+
+.library-title-type-select {
+  width: auto;
+  min-width: 140px;
+  max-width: 100%;
 }
 
 .library-title-actions {

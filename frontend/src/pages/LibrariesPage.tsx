@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -16,6 +16,7 @@ import {
   type HistoryReconstructionStatus,
   type HistoryReconstructionResult,
   type HistoryStorage,
+  type LibraryType,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -49,7 +50,7 @@ import { useTheme, type ThemePreference } from "../lib/theme";
 type CreateLibraryForm = {
   name: string;
   path: string;
-  type: string;
+  type: LibraryType;
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
 };
@@ -75,6 +76,11 @@ type LibrarySettingsForm = {
   interval_minutes: number;
   debounce_seconds: number;
   quality_profile: QualityProfile;
+};
+
+type LibraryIdentityForm = {
+  name: string;
+  type: LibraryType;
 };
 
 type IgnorePatternGroup = "user" | "default";
@@ -332,6 +338,13 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
   };
 }
 
+function toLibraryIdentityForm(library: LibrarySummary): LibraryIdentityForm {
+  return {
+    name: library.name,
+    type: library.type,
+  };
+}
+
 function buildScanConfig(settings: LibrarySettingsForm): Record<string, number> {
   if (settings.scan_mode === "scheduled") {
     return { interval_minutes: settings.interval_minutes };
@@ -571,6 +584,8 @@ export function LibrariesPage() {
   const [qualityLanguageErrors, setQualityLanguageErrors] = useState<Record<string, string | null>>({});
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
+  const [libraryIdentityForms, setLibraryIdentityForms] = useState<Record<number, LibraryIdentityForm>>({});
+  const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
@@ -650,6 +665,7 @@ export function LibrariesPage() {
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
+  const libraryNameInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
@@ -1255,23 +1271,95 @@ export function LibrariesPage() {
     }
   }
 
-  async function renameLibrary(library: LibrarySummary) {
-    const nextName = window.prompt(t("libraries.renamePrompt"), library.name);
-    if (nextName === null) {
+  function startEditingLibraryIdentity(library: LibrarySummary) {
+    setLibraryIdentityForms((current) => ({
+      ...current,
+      [library.id]: toLibraryIdentityForm(library),
+    }));
+    setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
+    window.requestAnimationFrame(() => {
+      const input = libraryNameInputRefs.current[library.id];
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  function stopEditingLibraryIdentity(libraryId: number) {
+    setLibraryIdentityForms((current) => {
+      const next = { ...current };
+      delete next[libraryId];
+      return next;
+    });
+    setLibraryIdentityPending((current) => {
+      if (!(libraryId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[libraryId];
+      return next;
+    });
+  }
+
+  function updateLibraryIdentityForm(libraryId: number, patch: Partial<LibraryIdentityForm>) {
+    setLibraryIdentityForms((current) => {
+      const existing = current[libraryId];
+      if (!existing) {
+        return current;
+      }
+      return {
+        ...current,
+        [libraryId]: {
+          ...existing,
+          ...patch,
+        },
+      };
+    });
+  }
+
+  async function saveLibraryIdentity(library: LibrarySummary) {
+    const draft = libraryIdentityForms[library.id] ?? toLibraryIdentityForm(library);
+    const trimmedName = draft.name.trim();
+    if (!trimmedName) {
+      setLibraryMessages((messages) => ({ ...messages, [library.id]: t("libraries.nameRequired") }));
+      return;
+    }
+    if (trimmedName === library.name && draft.type === library.type) {
+      stopEditingLibraryIdentity(library.id);
       return;
     }
 
-    const trimmedName = nextName.trim();
-    if (!trimmedName || trimmedName === library.name) {
-      return;
-    }
-
+    setLibraryIdentityPending((current) => ({ ...current, [library.id]: true }));
     try {
-      const updated = await api.updateLibrarySettings(library.id, { name: trimmedName });
+      const updated = await api.updateLibrarySettings(library.id, {
+        name: trimmedName,
+        type: draft.type,
+      });
       upsertLibrary(updated);
+      stopEditingLibraryIdentity(library.id);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+    } finally {
+      setLibraryIdentityPending((current) => {
+        const next = { ...current };
+        delete next[library.id];
+        return next;
+      });
+    }
+  }
+
+  function handleLibraryIdentityEditorKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    library: LibrarySummary,
+  ) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      stopEditingLibraryIdentity(library.id);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveLibraryIdentity(library);
     }
   }
 
@@ -1289,6 +1377,7 @@ export function LibrariesPage() {
         delete next[libraryId];
         return next;
       });
+      stopEditingLibraryIdentity(libraryId);
       await refresh();
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
@@ -3069,18 +3158,43 @@ export function LibrariesPage() {
           >
             <div className="listing">
               {!libraries.length ? <div className="notice">{t("libraries.addFirstLibrary")}</div> : null}
-              {libraries.map((library) => (
-                <div className="media-card library-settings-card" key={library.id}>
+              {libraries.map((library) => {
+                const identityForm = libraryIdentityForms[library.id];
+                const isEditingLibraryIdentity = Boolean(identityForm);
+                const isSavingLibraryIdentity = Boolean(libraryIdentityPending[library.id]);
+                const canSaveLibraryIdentity = Boolean(identityForm?.name.trim());
+
+                return (
+                  <div className="media-card library-settings-card" key={library.id}>
                   <div className="library-settings-header">
                     <div className="item-meta">
                       <div className="library-title-row">
                         <div className="library-title-meta">
                           <div className="library-title-main">
-                            <h3>
-                              <Link to={`/libraries/${library.id}`} className="file-link">
-                                {library.name}
-                              </Link>
-                            </h3>
+                            {isEditingLibraryIdentity ? (
+                              <div className="library-title-inline-editor">
+                                <input
+                                  ref={(node) => {
+                                    libraryNameInputRefs.current[library.id] = node;
+                                  }}
+                                  type="text"
+                                  className="library-title-input"
+                                  value={identityForm?.name ?? ""}
+                                  aria-label={t("libraries.editNameAria", { name: library.name })}
+                                  disabled={isSavingLibraryIdentity}
+                                  onChange={(event) =>
+                                    updateLibraryIdentityForm(library.id, { name: event.target.value })
+                                  }
+                                  onKeyDown={(event) => handleLibraryIdentityEditorKeyDown(event, library)}
+                                />
+                              </div>
+                            ) : (
+                              <h3>
+                                <Link to={`/libraries/${library.id}`} className="file-link">
+                                  {library.name}
+                                </Link>
+                              </h3>
+                            )}
                             <TooltipTrigger
                               ariaLabel={t("libraries.detailsTooltipAria", { name: library.name })}
                               align="start"
@@ -3099,7 +3213,25 @@ export function LibrariesPage() {
                               }
                             />
                             <div className="meta-tags library-title-tags">
-                              <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
+                              {isEditingLibraryIdentity ? (
+                                <select
+                                  className="library-title-type-select"
+                                  value={identityForm?.type ?? library.type}
+                                  aria-label={t("libraries.editTypeAria", { name: library.name })}
+                                  disabled={isSavingLibraryIdentity}
+                                  onChange={(event) =>
+                                    updateLibraryIdentityForm(library.id, { type: event.target.value as LibraryType })
+                                  }
+                                  onKeyDown={(event) => handleLibraryIdentityEditorKeyDown(event, library)}
+                                >
+                                  <option value="movies">{t("libraryTypes.movies")}</option>
+                                  <option value="series">{t("libraryTypes.series")}</option>
+                                  <option value="mixed">{t("libraryTypes.mixed")}</option>
+                                  <option value="other">{t("libraryTypes.other")}</option>
+                                </select>
+                              ) : (
+                                <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
+                              )}
                               <span className="badge">{t(`scanModes.${library.scan_mode}`)}</span>
                               {activeJobs
                                 .filter((job) => job.library_id === library.id)
@@ -3130,15 +3262,40 @@ export function LibrariesPage() {
                           >
                             <DashboardVisibilityIcon visible={library.show_on_dashboard} />
                           </button>
-                          <button
-                            type="button"
-                            className="secondary icon-only-button"
-                            aria-label={t("libraries.renameAria", { name: library.name })}
-                            title={t("libraries.renameTooltip")}
-                            onClick={() => void renameLibrary(library)}
-                          >
-                            <Pencil aria-hidden="true" className="nav-icon" />
-                          </button>
+                          {isEditingLibraryIdentity ? (
+                            <>
+                              <button
+                                type="button"
+                                className="secondary icon-only-button"
+                                aria-label={t("libraries.saveEditAria", { name: library.name })}
+                                title={t("libraries.saveEditTooltip")}
+                                disabled={isSavingLibraryIdentity || !canSaveLibraryIdentity}
+                                onClick={() => void saveLibraryIdentity(library)}
+                              >
+                                <Check aria-hidden="true" className="nav-icon" />
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary icon-only-button"
+                                aria-label={t("libraries.cancelEditAria", { name: library.name })}
+                                title={t("libraries.cancelEditTooltip")}
+                                disabled={isSavingLibraryIdentity}
+                                onClick={() => stopEditingLibraryIdentity(library.id)}
+                              >
+                                <X aria-hidden="true" className="nav-icon" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="secondary icon-only-button"
+                              aria-label={t("libraries.renameAria", { name: library.name })}
+                              title={t("libraries.renameTooltip")}
+                              onClick={() => startEditingLibraryIdentity(library)}
+                            >
+                              <Pencil aria-hidden="true" className="nav-icon" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="secondary icon-only-button"
@@ -3282,8 +3439,9 @@ export function LibrariesPage() {
                     {qualitySectionOpen[library.id] ? renderQualitySettings(library) : null}
                   </div>
                   {libraryMessages[library.id] ? <div className="alert">{libraryMessages[library.id]}</div> : null}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </AsyncPanel>
 
@@ -3845,7 +4003,7 @@ export function LibrariesPage() {
                 <select
                   id="library-type"
                   value={form.type}
-                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType }))}
                 >
                   <option value="movies">{t("libraryTypes.movies")}</option>
                   <option value="series">{t("libraryTypes.series")}</option>

@@ -1413,6 +1413,33 @@ describe("LibrariesPage settings panels", () => {
     expect(await screen.findByRole("button", { name: "Show library Movies on dashboard" })).toBeInTheDocument();
   });
 
+  it("edits library name and type inline from the library header", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const promptSpy = vi.spyOn(window, "prompt").mockImplementation(() => null);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
+      createLibrarySummary({
+        name: "Shows",
+        type: "series",
+      }),
+    );
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit library Movies" }));
+
+    expect(promptSpy).not.toHaveBeenCalled();
+
+    const nameInput = screen.getByRole("textbox", { name: "Edit name for library Movies" });
+    const typeSelect = screen.getByRole("combobox", { name: "Edit type for library Movies" });
+    fireEvent.change(nameInput, { target: { value: "Shows" } });
+    fireEvent.change(typeSelect, { target: { value: "series" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes for library Movies" }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { name: "Shows", type: "series" }));
+    expect(await screen.findByRole("link", { name: "Shows" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit library Shows" })).toBeInTheDocument();
+  });
+
   it("shows the recent scan logs panel expanded by default", async () => {
     renderPage();
 
