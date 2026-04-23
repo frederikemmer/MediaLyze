@@ -123,6 +123,14 @@ class MediaFileTableRow(BaseModel):
     subtitle_languages: list[str] = Field(default_factory=list)
     subtitle_codecs: list[str] = Field(default_factory=list)
     subtitle_sources: list[str] = Field(default_factory=list)
+    content_category: str = "main"
+    series_id: int | None = None
+    series_title: str | None = None
+    season_id: int | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
+    episode_number_end: int | None = None
+    episode_title: str | None = None
 
 
 class MediaFileDetail(MediaFileTableRow):
@@ -176,6 +184,37 @@ class MediaFileHistoryRead(BaseModel):
     relative_path: str
     total: int
     items: list[MediaFileHistoryEntryRead]
+
+
+class MediaSeriesSummaryRead(BaseModel):
+    id: int
+    library_id: int
+    title: str
+    normalized_title: str
+    relative_path: str
+    year: int | None = None
+    season_count: int = 0
+    episode_count: int = 0
+    total_size_bytes: int = 0
+    total_duration_seconds: float = 0
+    last_analyzed_at: UtcDateTime | None = None
+
+
+class MediaSeasonDetailRead(BaseModel):
+    id: int
+    library_id: int
+    series_id: int
+    season_number: int
+    title: str
+    relative_path: str
+    episode_count: int = 0
+    total_size_bytes: int = 0
+    total_duration_seconds: float = 0
+    episodes: list[MediaFileTableRow] = Field(default_factory=list)
+
+
+class MediaSeriesDetailRead(MediaSeriesSummaryRead):
+    seasons: list[MediaSeasonDetailRead] = Field(default_factory=list)
 
 
 class DashboardResponse(BaseModel):

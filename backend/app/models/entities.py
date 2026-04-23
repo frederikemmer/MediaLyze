@@ -69,6 +69,11 @@ class MediaFileHistoryCaptureReason(str, Enum):
     history_reconstruction = "history_reconstruction"
 
 
+class MediaContentCategory(str, Enum):
+    main = "main"
+    bonus = "bonus"
+
+
 class Library(TimestampMixin, Base):
     __tablename__ = "libraries"
 
@@ -111,6 +116,11 @@ class Library(TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    series_entries: Mapped[list[MediaSeries]] = relationship(
+        back_populates="library",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class AppSetting(Base):
@@ -118,6 +128,45 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class MediaSeries(TimestampMixin, Base):
+    __tablename__ = "media_series"
+    __table_args__ = (
+        Index("ix_media_series_library_normalized_title", "library_id", "normalized_title"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    normalized_title: Mapped[str] = mapped_column(String(512), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    library: Mapped[Library] = relationship(back_populates="series_entries")
+    seasons: Mapped[list[MediaSeason]] = relationship(
+        back_populates="series",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    media_files: Mapped[list[MediaFile]] = relationship(back_populates="series")
+
+
+class MediaSeason(TimestampMixin, Base):
+    __tablename__ = "media_seasons"
+    __table_args__ = (
+        Index("ix_media_seasons_series_number", "series_id", "season_number"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    series_id: Mapped[int] = mapped_column(ForeignKey("media_series.id", ondelete="CASCADE"), nullable=False)
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+
+    series: Mapped[MediaSeries] = relationship(back_populates="seasons")
+    media_files: Mapped[list[MediaFile]] = relationship(back_populates="season")
 
 
 class MediaFile(Base):
@@ -140,6 +189,9 @@ class MediaFile(Base):
         Index("ix_media_files_library_primary_video_codec", "library_id", "primary_video_codec"),
         Index("ix_media_files_library_resolution_pixels", "library_id", "primary_video_resolution_pixels"),
         Index("ix_media_files_library_primary_video_hdr_type", "library_id", "primary_video_hdr_type"),
+        Index("ix_media_files_library_content_category", "library_id", "content_category"),
+        Index("ix_media_files_series_id", "series_id"),
+        Index("ix_media_files_season_id", "season_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -185,8 +237,21 @@ class MediaFile(Base):
     has_internal_subtitles: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     has_external_subtitles: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     search_fields_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_category: Mapped[MediaContentCategory] = mapped_column(
+        SqlEnum(MediaContentCategory, native_enum=False),
+        default=MediaContentCategory.main,
+        nullable=False,
+    )
+    series_id: Mapped[int | None] = mapped_column(ForeignKey("media_series.id", ondelete="SET NULL"), nullable=True)
+    season_id: Mapped[int | None] = mapped_column(ForeignKey("media_seasons.id", ondelete="SET NULL"), nullable=True)
+    episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_number_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    recognition_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     library: Mapped[Library] = relationship(back_populates="media_files")
+    series: Mapped[MediaSeries | None] = relationship(back_populates="media_files")
+    season: Mapped[MediaSeason | None] = relationship(back_populates="media_files")
     media_format: Mapped[MediaFormat | None] = relationship(
         back_populates="media_file",
         cascade="all, delete-orphan",

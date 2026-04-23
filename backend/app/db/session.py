@@ -85,6 +85,13 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "has_internal_subtitles": "ALTER TABLE media_files ADD COLUMN has_internal_subtitles BOOLEAN NOT NULL DEFAULT 0",
         "has_external_subtitles": "ALTER TABLE media_files ADD COLUMN has_external_subtitles BOOLEAN NOT NULL DEFAULT 0",
         "search_fields_version": "ALTER TABLE media_files ADD COLUMN search_fields_version INTEGER NOT NULL DEFAULT 0",
+        "content_category": "ALTER TABLE media_files ADD COLUMN content_category VARCHAR(16) NOT NULL DEFAULT 'main'",
+        "series_id": "ALTER TABLE media_files ADD COLUMN series_id INTEGER",
+        "season_id": "ALTER TABLE media_files ADD COLUMN season_id INTEGER",
+        "episode_number": "ALTER TABLE media_files ADD COLUMN episode_number INTEGER",
+        "episode_number_end": "ALTER TABLE media_files ADD COLUMN episode_number_end INTEGER",
+        "episode_title": "ALTER TABLE media_files ADD COLUMN episode_title VARCHAR(512)",
+        "recognition_details": "ALTER TABLE media_files ADD COLUMN recognition_details JSON",
     },
     "media_formats": {
         "bit_rate": "ALTER TABLE media_formats ADD COLUMN bit_rate INTEGER",
@@ -149,9 +156,14 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
         "ON media_files (library_id, primary_video_resolution_pixels)"
     ),
     (
-        "CREATE INDEX IF NOT EXISTS ix_media_files_library_primary_video_hdr_type "
-        "ON media_files (library_id, primary_video_hdr_type)"
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_primary_video_hdr_type "
+    "ON media_files (library_id, primary_video_hdr_type)"
     ),
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_category ON media_files (library_id, content_category)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_series_id ON media_files (series_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_season_id ON media_files (season_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_series_library_normalized_title ON media_series (library_id, normalized_title)",
+    "CREATE INDEX IF NOT EXISTS ix_media_seasons_series_number ON media_seasons (series_id, season_number)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_filename_signature ON media_files (library_id, filename_signature)",
     (
         "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_hash "

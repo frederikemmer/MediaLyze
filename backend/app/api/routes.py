@@ -19,6 +19,8 @@ from backend.app.schemas.media import (
     MediaFileDetail,
     MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
+    MediaSeriesDetailRead,
+    MediaSeriesSummaryRead,
     MediaFileStreamDetails,
     MediaFileTablePage,
 )
@@ -55,6 +57,8 @@ from backend.app.services.media_service import (
     get_media_file_history,
     get_media_file_quality_score_detail,
     get_media_file_stream_details,
+    get_library_series_detail,
+    list_library_series,
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
@@ -355,6 +359,25 @@ def library_scan_jobs(
     if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
     return list_library_scan_jobs(db, library_id, limit)
+
+
+@router.get("/libraries/{library_id}/series", response_model=list[MediaSeriesSummaryRead])
+def library_series(library_id: int, db: Session = Depends(get_db_session)) -> list[MediaSeriesSummaryRead]:
+    if not library_exists(db, library_id):
+        raise HTTPException(status_code=404, detail="Library not found")
+    return list_library_series(db, library_id)
+
+
+@router.get("/libraries/{library_id}/series/{series_id}", response_model=MediaSeriesDetailRead)
+def library_series_detail(
+    library_id: int,
+    series_id: int,
+    db: Session = Depends(get_db_session),
+) -> MediaSeriesDetailRead:
+    payload = get_library_series_detail(db, library_id, series_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Series not found")
+    return payload
 
 
 @router.patch("/libraries/{library_id}", response_model=LibrarySummary)

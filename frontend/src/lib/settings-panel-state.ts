@@ -1,10 +1,10 @@
 export type SettingsPanelId =
   | "configuredLibraries"
   | "historyRetention"
+  | "patternRecognition"
   | "recentScanLogs"
   | "resolutionCategories"
   | "createLibrary"
-  | "ignorePatterns"
   | "appSettings";
 
 export type SettingsPanelState = Record<SettingsPanelId, boolean>;
@@ -14,10 +14,10 @@ const STORAGE_KEY = "medialyze-settings-panel-state";
 const DEFAULT_STATE: SettingsPanelState = {
   configuredLibraries: true,
   historyRetention: true,
+  patternRecognition: true,
   recentScanLogs: true,
   resolutionCategories: true,
   createLibrary: true,
-  ignorePatterns: true,
   appSettings: true,
 };
 
@@ -35,6 +35,12 @@ function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
       "historyRetention" in value && typeof value.historyRetention === "boolean"
         ? value.historyRetention
         : DEFAULT_STATE.historyRetention,
+    patternRecognition:
+      "patternRecognition" in value && typeof value.patternRecognition === "boolean"
+        ? value.patternRecognition
+        : "ignorePatterns" in value && typeof value.ignorePatterns === "boolean"
+          ? value.ignorePatterns
+          : DEFAULT_STATE.patternRecognition,
     recentScanLogs:
       "recentScanLogs" in value && typeof value.recentScanLogs === "boolean"
         ? value.recentScanLogs
@@ -47,10 +53,6 @@ function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
       "createLibrary" in value && typeof value.createLibrary === "boolean"
         ? value.createLibrary
         : DEFAULT_STATE.createLibrary,
-    ignorePatterns:
-      "ignorePatterns" in value && typeof value.ignorePatterns === "boolean"
-        ? value.ignorePatterns
-        : DEFAULT_STATE.ignorePatterns,
     appSettings:
       "appSettings" in value && typeof value.appSettings === "boolean"
         ? value.appSettings

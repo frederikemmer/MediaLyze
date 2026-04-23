@@ -21,6 +21,8 @@ from backend.app.models.entities import (
     LibraryType,
     MediaFile,
     MediaFileHistory,
+    MediaSeason,
+    MediaSeries,
     ScanMode,
     ScanStatus,
     SubtitleStream,
@@ -888,6 +890,103 @@ def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatc
     assert job.files_total == 1
     assert [media_file.relative_path for media_file in indexed_files] == ["movie.mkv"]
     assert [subtitle.path for subtitle in subtitles] == ["movie.en.srt"]
+
+
+def test_scan_excludes_bonus_content_when_bonus_analysis_is_disabled(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "movie.mkv").write_text("video")
+    extras_dir = media_dir / "Extras"
+    extras_dir.mkdir()
+    (extras_dir / "featurette.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {"format_name": "matroska", "duration": "60.0", "bit_rate": "1000", "probe_score": 100},
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "user_ignore_patterns": [],
+                    "default_ignore_patterns": [],
+                    "pattern_recognition": {
+                        "analyze_bonus_content": False,
+                        "bonus_content": {
+                            "user_folder_patterns": ["*/extras/*"],
+                            "default_folder_patterns": [],
+                            "user_file_patterns": [],
+                            "default_file_patterns": [],
+                        },
+                    },
+                },
+            )
+        )
+        library = Library(name="Movies", path=str(media_dir), type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+
+    assert [media_file.relative_path for media_file in indexed_files] == ["movie.mkv"]
+    assert job.scan_summary["pattern_recognition"]["analyze_bonus_content"] is False
+    assert job.scan_summary["pattern_recognition"]["bonus_ignored_total"] == 1
+
+
+def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    show_dir = media_dir / "Example Show (2024)"
+    season_dir = show_dir / "Season 01"
+    specials_dir = show_dir / "Specials"
+    season_dir.mkdir(parents=True)
+    specials_dir.mkdir(parents=True)
+    (season_dir / "Pilot.mkv").write_text("video")
+    (specials_dir / "Behind the scenes.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {"format_name": "matroska", "duration": "60.0", "bit_rate": "1000", "probe_score": 100},
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1)
+
+    with session_factory() as db:
+        db.add(AppSetting(key="global", value={"user_ignore_patterns": [], "default_ignore_patterns": []}))
+        library = Library(name="Shows", path=str(media_dir), type=LibraryType.series, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        series_entries = db.scalars(select(MediaSeries)).all()
+        season_entries = db.scalars(select(MediaSeason)).all()
+
+    episode = next(media_file for media_file in files if media_file.relative_path.endswith("Pilot.mkv"))
+    bonus = next(media_file for media_file in files if media_file.relative_path.endswith("Behind the scenes.mkv"))
+    assert episode.series_id is not None
+    assert episode.season_id is not None
+    assert episode.episode_number is None
+    assert getattr(episode.content_category, "value", episode.content_category) == "main"
+    assert getattr(bonus.content_category, "value", bonus.content_category) == "bonus"
+    assert bonus.series_id is None
+    assert len(series_entries) == 1
+    assert len(season_entries) == 1
+    assert job.scan_summary["pattern_recognition"]["series_detected"] == 1
+    assert job.scan_summary["pattern_recognition"]["seasons_detected"] == 1
+    assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 1
 
 
 def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_path: Path, monkeypatch) -> None:

@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { FileDetailPage } from "./pages/FileDetailPage";
 import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryDetailPage } from "./pages/LibraryDetailPage";
+import { SeriesDetailPage } from "./pages/SeriesDetailPage";
 
 export function App() {
   return (
@@ -18,6 +19,7 @@ export function App() {
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/settings" element={<LibrariesPage />} />
+              <Route path="/libraries/:libraryId/series/:seriesId" element={<SeriesDetailPage />} />
               <Route path="/libraries/:libraryId" element={<LibraryDetailPage />} />
               <Route path="/files/:fileId" element={<FileDetailPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

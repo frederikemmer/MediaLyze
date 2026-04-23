@@ -1,5 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  ChevronDown,
+  ChevronRight,
   PanelBottomClose,
   PanelLeftClose,
   PanelRightClose,
@@ -47,6 +49,8 @@ import {
   type MediaFileQualityScoreDetail,
   type MediaFileRow,
   type MediaFileSortKey,
+  type MediaSeriesDetail,
+  type MediaSeriesSummary,
   type MediaFileStreamDetails,
 } from "../lib/api";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
@@ -902,6 +906,10 @@ export function LibraryDetailPage() {
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
   const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
+  const [seriesSummaries, setSeriesSummaries] = useState<MediaSeriesSummary[]>([]);
+  const [seriesDetails, setSeriesDetails] = useState<Record<number, MediaSeriesDetail>>({});
+  const [expandedSeriesIds, setExpandedSeriesIds] = useState<Record<number, boolean>>({});
+  const [expandedSeasonIds, setExpandedSeasonIds] = useState<Record<number, boolean>>({});
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
   const initialStatisticLayoutResultRef = useRef<ReturnType<typeof getStatisticPanelLayoutReadResult> | null>(null);
@@ -941,11 +949,13 @@ export function LibraryDetailPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
   const [duplicateGroupsError, setDuplicateGroupsError] = useState<string | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const [isStatisticsLoading, setIsStatisticsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isSeriesLoading, setIsSeriesLoading] = useState(false);
   const [isDuplicateGroupsLoading, setIsDuplicateGroupsLoading] = useState(true);
   const [isFilesLoading, setIsFilesLoading] = useState(true);
   const [isFilesRefreshing, setIsFilesRefreshing] = useState(false);
@@ -979,11 +989,13 @@ export function LibraryDetailPage() {
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
   const [streamDetails, setStreamDetails] = useState<Record<number, MediaFileStreamDetails>>({});
   const [streamDetailsLoading, setStreamDetailsLoading] = useState<Record<number, boolean>>({});
+  const [libraryView, setLibraryView] = useState<"series" | "files">("files");
   const { activeJobs } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
+  const supportsSeriesView = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
@@ -1209,6 +1221,7 @@ export function LibraryDetailPage() {
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
+  const seriesAbortRef = useRef<AbortController | null>(null);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
@@ -1430,6 +1443,52 @@ export function LibraryDetailPage() {
       if (showLoading) {
         setIsHistoryLoading(false);
       }
+    }
+  });
+
+  const loadLibrarySeries = useEffectEvent(async (showLoading = false) => {
+    seriesAbortRef.current?.abort();
+    const controller = new AbortController();
+    seriesAbortRef.current = controller;
+
+    if (showLoading) {
+      setIsSeriesLoading(true);
+    }
+
+    try {
+      const payload = await api.librarySeries(libraryId, controller.signal);
+      setSeriesSummaries(payload);
+      setSeriesError(null);
+      if (payload.length > 0 && libraryView === "files") {
+        setLibraryView("series");
+      }
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      setSeriesError((reason as Error).message);
+    } finally {
+      if (seriesAbortRef.current === controller) {
+        seriesAbortRef.current = null;
+      }
+      if (showLoading) {
+        setIsSeriesLoading(false);
+      }
+    }
+  });
+
+  const toggleSeriesExpansion = useEffectEvent(async (seriesId: number) => {
+    const expanded = !expandedSeriesIds[seriesId];
+    setExpandedSeriesIds((current) => ({ ...current, [seriesId]: expanded }));
+    if (!expanded || seriesDetails[seriesId]) {
+      return;
+    }
+    try {
+      const detail = await api.librarySeriesDetail(libraryId, seriesId);
+      setSeriesDetails((current) => ({ ...current, [seriesId]: detail }));
+      setSeriesError(null);
+    } catch (reason) {
+      setSeriesError((reason as Error).message);
     }
   });
 
@@ -1795,18 +1854,34 @@ export function LibraryDetailPage() {
     setComparisonLoadingByPanel({});
     setLibrarySummary(cachedSummary);
     setLibraryHistory(cachedHistory);
+    setSeriesSummaries([]);
+    setSeriesDetails({});
+    setExpandedSeriesIds({});
+    setExpandedSeasonIds({});
+    setLibraryView("files");
     setDuplicateGroups(cachedDuplicateGroups);
     setSummaryError(null);
     setHistoryError(null);
+    setSeriesError(null);
     setDuplicateGroupsError(null);
     setIsSummaryLoading(cachedSummary === null);
     setIsHistoryLoading(cachedHistory === null);
+    setIsSeriesLoading(Boolean(cachedSummary && (cachedSummary.type === "series" || cachedSummary.type === "mixed")));
     setIsDuplicateGroupsLoading(cachedDuplicateGroups === null);
 
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryHistory(cachedHistory === null);
+    if (cachedSummary?.type === "series" || cachedSummary?.type === "mixed") {
+      void loadLibrarySeries(true);
+    }
     void loadDuplicateGroups(cachedDuplicateGroups === null);
   }, [libraryId]);
+
+  useEffect(() => {
+    if (displayLibrary?.type === "series" || displayLibrary?.type === "mixed") {
+      void loadLibrarySeries(seriesSummaries.length === 0);
+    }
+  }, [displayLibrary?.type, libraryId]);
 
   useEffect(() => {
     const statisticsCacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
@@ -1965,6 +2040,8 @@ export function LibraryDetailPage() {
       }
       libraryDuplicateGroupsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
+      setSeriesSummaries([]);
+      setSeriesDetails({});
       setQualityScoreDetails({});
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
@@ -2168,6 +2245,110 @@ export function LibraryDetailPage() {
     );
   }
 
+  function renderSeriesTree() {
+    return (
+      <AsyncPanel
+        title={t("libraryDetail.series.title")}
+        loading={isSeriesLoading}
+        error={seriesError}
+        bodyClassName="async-panel-body-scroll"
+      >
+        {seriesSummaries.length === 0 && !isSeriesLoading ? (
+          <div className="notice">{t("libraryDetail.series.empty")}</div>
+        ) : (
+          <div className="duplicate-group-list">
+            {seriesSummaries.map((series) => {
+              const expanded = Boolean(expandedSeriesIds[series.id]);
+              const detail = seriesDetails[series.id];
+              return (
+                <div className="media-card duplicate-group-card" key={series.id}>
+                  <div className="scan-log-summary">
+                    <div className="scan-log-summary-head">
+                      <div className="scan-log-summary-copy">
+                        <strong>
+                          <Link to={`/libraries/${libraryId}/series/${series.id}`} className="file-link">
+                            {series.title}
+                          </Link>
+                        </strong>
+                        <span>{series.relative_path}</span>
+                      </div>
+                      <div className="meta-tags">
+                        <span className="badge">{t("libraryDetail.series.seasonCount", { count: series.season_count })}</span>
+                        <span className="badge">{t("libraryDetail.series.episodeCount", { count: series.episode_count })}</span>
+                        <span className="badge">{formatBytes(series.total_size_bytes)}</span>
+                        <button
+                          type="button"
+                          className="secondary icon-only-button"
+                          aria-expanded={expanded}
+                          aria-label={t(expanded ? "panel.collapseAria" : "panel.expandAria", { title: series.title })}
+                          onClick={() => void toggleSeriesExpansion(series.id)}
+                        >
+                          {expanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {expanded ? (
+                    detail ? (
+                      <div className="scan-log-path-list duplicate-group-items-scroll">
+                        {detail.seasons.map((season) => {
+                          const seasonExpanded = Boolean(expandedSeasonIds[season.id]);
+                          return (
+                            <div className="scan-log-pattern-card" key={season.id}>
+                              <button
+                                type="button"
+                                className="scan-log-collapse-toggle"
+                                aria-expanded={seasonExpanded}
+                                onClick={() =>
+                                  setExpandedSeasonIds((current) => ({
+                                    ...current,
+                                    [season.id]: !current[season.id],
+                                  }))
+                                }
+                              >
+                                <span className="scan-log-collapse-copy">
+                                  <strong>{season.title}</strong>
+                                  <span>{season.relative_path}</span>
+                                </span>
+                                <span className="scan-log-collapse-meta">
+                                  <span className="badge">{season.episode_count}</span>
+                                  {seasonExpanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
+                                </span>
+                              </button>
+                              {seasonExpanded ? (
+                                <div className="scan-log-path-list">
+                                  {season.episodes.map((episode) => (
+                                    <div className="scan-log-detail-title" key={episode.id}>
+                                      <Link to={`/files/${episode.id}`} className="file-link">
+                                        {episode.episode_number
+                                          ? `E${String(episode.episode_number).padStart(2, "0")} ${episode.episode_title ?? episode.filename}`
+                                          : episode.filename}
+                                      </Link>
+                                      <code className="scan-log-path">{episode.relative_path}</code>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="panel-loader">
+                        <LoaderPinwheelIcon className="panel-loader-icon" size={24} />
+                        <span>{t("libraryDetail.series.loading")}</span>
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </AsyncPanel>
+    );
+  }
+
   return (
     <>
       <section className="panel stack statistic-layout-header-panel">
@@ -2225,6 +2406,24 @@ export function LibraryDetailPage() {
           />
           <StatCard label={t("libraryDetail.lastScan")} value={formatDate(displayLibrary?.last_scan_at ?? null)} />
         </div>
+        {supportsSeriesView ? (
+          <div className="statistic-layout-toolbar">
+            <button
+              type="button"
+              className={libraryView === "series" ? "primary" : "secondary"}
+              onClick={() => setLibraryView("series")}
+            >
+              {t("libraryDetail.series.viewSeries")}
+            </button>
+            <button
+              type="button"
+              className={libraryView === "files" ? "primary" : "secondary"}
+              onClick={() => setLibraryView("files")}
+            >
+              {t("libraryDetail.series.viewFiles")}
+            </button>
+          </div>
+        ) : null}
         {summaryError && !displayLibrary ? <div className="notice">{summaryError}</div> : null}
         <StatisticPanelLayoutMigrationNotice scope="library" issues={statisticLayoutMigrationIssues} />
         {isSummaryLoading && !displayLibrary ? (
@@ -2235,6 +2434,9 @@ export function LibraryDetailPage() {
         ) : null}
       </section>
 
+      {supportsSeriesView && libraryView === "series" ? renderSeriesTree() : null}
+
+      {supportsSeriesView && libraryView === "series" ? null : (
       <div className={`media-grid statistic-layout-grid${isEditingStatisticLayout ? " is-editing" : ""}`}>
         {(() => {
           let collapsedPanelsBefore = 0;
@@ -2802,6 +3004,7 @@ export function LibraryDetailPage() {
           });
         })()}
       </div>
+      )}
     </>
   );
 }

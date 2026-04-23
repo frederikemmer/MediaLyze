@@ -434,6 +434,54 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
+  it("persists bonus-content recognition settings through app settings", async () => {
+    const patternRecognition = {
+      analyze_bonus_content: true,
+      show_season_patterns: {
+        series_folder_regexes: ["^(?<title>.+)$"],
+        season_folder_regexes: ["^Season (?<season>\\d+)$"],
+      },
+      bonus_content: {
+        user_folder_patterns: ["Custom Extras/*"],
+        default_folder_patterns: ["extras/*"],
+        effective_folder_patterns: ["Custom Extras/*", "extras/*"],
+        user_file_patterns: ["*-custom-extra.*"],
+        default_file_patterns: ["*-trailer.*"],
+        effective_file_patterns: ["*-custom-extra.*", "*-trailer.*"],
+      },
+    };
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        pattern_recognition: {
+          ...patternRecognition,
+          analyze_bonus_content: false,
+        },
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings({ pattern_recognition: patternRecognition }));
+
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("Analyze bonus content");
+    await screen.findByDisplayValue("Custom Extras/*");
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        pattern_recognition: {
+          analyze_bonus_content: false,
+          show_season_patterns: patternRecognition.show_season_patterns,
+          bonus_content: {
+            user_folder_patterns: ["Custom Extras/*"],
+            default_folder_patterns: ["extras/*"],
+            user_file_patterns: ["*-custom-extra.*"],
+            default_file_patterns: ["*-trailer.*"],
+          },
+        },
+      }),
+    );
+  });
+
   it("persists the analyzed files CSV export feature flag", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
@@ -1202,20 +1250,31 @@ describe("LibrariesPage settings panels", () => {
 
     const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
     const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
+    const patternRecognitionToggle = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
     const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
+    const resolutionPanel = resolutionCategoriesToggle.closest(".async-panel");
+    const patternRecognitionPanel = patternRecognitionToggle.closest(".async-panel");
 
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
     expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
+    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "true");
     expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
+    expect(resolutionPanel).not.toBeNull();
+    expect(patternRecognitionPanel).not.toBeNull();
+    expect(within(resolutionPanel as HTMLElement).getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
+    expect(within(patternRecognitionPanel as HTMLElement).getByText("Ignore patterns")).toBeInTheDocument();
+    expect(within(patternRecognitionPanel as HTMLElement).getByText("Custom ignore patterns")).toBeInTheDocument();
   });
 
-  it("places the history retention panel between resolution categories and recent scan logs", async () => {
+  it("places the pattern recognition panel between resolution categories and history retention", async () => {
     renderPage();
 
     const resolutionPanel = (await screen.findByRole("button", { name: /^resolution categories$/i })).closest(
+      ".async-panel",
+    ) as HTMLElement | null;
+    const patternRecognitionPanel = screen.getByRole("button", { name: /^folder & pattern recognition$/i }).closest(
       ".async-panel",
     ) as HTMLElement | null;
     const historyRetentionPanel = screen.getByRole("button", { name: /^history retention$/i }).closest(
@@ -1226,14 +1285,16 @@ describe("LibrariesPage settings panels", () => {
     ) as HTMLElement | null;
 
     expect(resolutionPanel).not.toBeNull();
+    expect(patternRecognitionPanel).not.toBeNull();
     expect(historyRetentionPanel).not.toBeNull();
     expect(recentScanLogsPanel).not.toBeNull();
 
-    if (!resolutionPanel || !historyRetentionPanel || !recentScanLogsPanel) {
+    if (!resolutionPanel || !patternRecognitionPanel || !historyRetentionPanel || !recentScanLogsPanel) {
       return;
     }
 
-    expect(resolutionPanel.compareDocumentPosition(historyRetentionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(resolutionPanel.compareDocumentPosition(patternRecognitionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(patternRecognitionPanel.compareDocumentPosition(historyRetentionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(historyRetentionPanel.compareDocumentPosition(recentScanLogsPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -1254,13 +1315,13 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
-    const ignorePatternsToggle = screen.getByRole("button", { name: /^ignore patterns$/i });
+    const patternRecognitionToggle = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
     const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
     const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
     const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
 
     expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
-    expect(ignorePatternsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "false");
     expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
     expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "false");
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
@@ -1280,10 +1341,10 @@ describe("LibrariesPage settings panels", () => {
       JSON.stringify({
         configuredLibraries: true,
         historyRetention: true,
+        patternRecognition: true,
         recentScanLogs: true,
         resolutionCategories: true,
         createLibrary: true,
-        ignorePatterns: true,
         appSettings: false,
       }),
     );

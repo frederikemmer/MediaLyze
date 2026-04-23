@@ -13,8 +13,15 @@ from backend.app.schemas.app_settings import (
     FeatureFlagsRead,
     HistoryRetentionBucketRead,
     HistoryRetentionRead,
+    PatternRecognitionSettings,
     ResolutionCategory,
     ScanPerformanceRead,
+)
+from backend.app.services.pattern_recognition import (
+    default_pattern_recognition_settings,
+    merge_pattern_lists,
+    normalize_pattern_list,
+    validate_pattern_recognition_settings,
 )
 from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.resolution_categories import (
@@ -78,6 +85,59 @@ def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
 
 def _default_history_retention() -> HistoryRetentionRead:
     return HistoryRetentionRead()
+
+
+def _deserialize_pattern_recognition(payload: Any) -> PatternRecognitionSettings:
+    candidate = payload if isinstance(payload, dict) else {}
+    defaults = default_pattern_recognition_settings()
+    show_candidate = candidate.get("show_season_patterns")
+    show_payload = show_candidate if isinstance(show_candidate, dict) else {}
+    bonus_candidate = candidate.get("bonus_content")
+    bonus_payload = bonus_candidate if isinstance(bonus_candidate, dict) else {}
+
+    user_folder_patterns = normalize_pattern_list(bonus_payload.get("user_folder_patterns"))
+    default_folder_patterns = normalize_pattern_list(
+        bonus_payload.get("default_folder_patterns")
+        if isinstance(bonus_payload.get("default_folder_patterns"), list)
+        else defaults.bonus_content.default_folder_patterns
+    )
+    user_file_patterns = normalize_pattern_list(bonus_payload.get("user_file_patterns"))
+    default_file_patterns = normalize_pattern_list(
+        bonus_payload.get("default_file_patterns")
+        if isinstance(bonus_payload.get("default_file_patterns"), list)
+        else defaults.bonus_content.default_file_patterns
+    )
+
+    result = PatternRecognitionSettings(
+        analyze_bonus_content=bool(candidate.get("analyze_bonus_content", defaults.analyze_bonus_content)),
+        show_season_patterns={
+            "series_folder_regexes": normalize_pattern_list(
+                show_payload.get("series_folder_regexes")
+                if isinstance(show_payload.get("series_folder_regexes"), list)
+                else defaults.show_season_patterns.series_folder_regexes
+            ),
+            "season_folder_regexes": normalize_pattern_list(
+                show_payload.get("season_folder_regexes")
+                if isinstance(show_payload.get("season_folder_regexes"), list)
+                else defaults.show_season_patterns.season_folder_regexes
+            ),
+            "episode_file_regexes": normalize_pattern_list(
+                show_payload.get("episode_file_regexes")
+                if isinstance(show_payload.get("episode_file_regexes"), list)
+                else defaults.show_season_patterns.episode_file_regexes
+            ),
+        },
+        bonus_content={
+            "user_folder_patterns": user_folder_patterns,
+            "default_folder_patterns": default_folder_patterns,
+            "effective_folder_patterns": merge_pattern_lists(user_folder_patterns, default_folder_patterns),
+            "user_file_patterns": user_file_patterns,
+            "default_file_patterns": default_file_patterns,
+            "effective_file_patterns": merge_pattern_lists(user_file_patterns, default_file_patterns),
+        },
+    )
+    validate_pattern_recognition_settings(result)
+    return result
 
 
 def _deserialize_feature_flags(payload: Any, settings: Settings) -> FeatureFlagsRead:
@@ -152,6 +212,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
     feature_flags = _deserialize_feature_flags(payload.get("feature_flags"), settings)
     scan_performance = _deserialize_scan_performance(payload.get("scan_performance"), settings)
     history_retention = _deserialize_history_retention(payload.get("history_retention"))
+    pattern_recognition = _deserialize_pattern_recognition(payload.get("pattern_recognition"))
     resolution_categories_payload = payload.get("resolution_categories")
     normalized_resolution_categories = normalize_resolution_categories(
         resolution_categories_payload if isinstance(resolution_categories_payload, list) else None
@@ -161,6 +222,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         ignore_patterns=_merge_ignore_patterns(normalized_user, normalized_default),
         user_ignore_patterns=normalized_user,
         default_ignore_patterns=normalized_default,
+        pattern_recognition=pattern_recognition,
         resolution_categories=normalized_resolution_categories,
         feature_flags=feature_flags,
         scan_performance=scan_performance,
@@ -176,6 +238,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
             user_ignore_patterns=[],
             default_ignore_patterns=_seeded_default_ignore_patterns(resolved_settings),
+            pattern_recognition=default_pattern_recognition_settings(),
             resolution_categories=default_resolution_categories(),
             feature_flags=_default_feature_flags(resolved_settings),
             scan_performance=_default_scan_performance(resolved_settings),
@@ -258,6 +321,42 @@ def update_app_settings(
     next_scan_performance = current.scan_performance.model_copy(
         update=payload.scan_performance.model_dump(exclude_none=True) if payload.scan_performance is not None else {}
     )
+    next_pattern_recognition = current.pattern_recognition.model_copy(deep=True)
+    if payload.pattern_recognition is not None:
+        pattern_payload = payload.pattern_recognition
+        if pattern_payload.analyze_bonus_content is not None:
+            next_pattern_recognition.analyze_bonus_content = pattern_payload.analyze_bonus_content
+        if pattern_payload.show_season_patterns is not None:
+            show_updates = pattern_payload.show_season_patterns.model_dump(exclude_none=True)
+            next_pattern_recognition.show_season_patterns = (
+                next_pattern_recognition.show_season_patterns.model_copy(update=show_updates)
+            )
+        if pattern_payload.bonus_content is not None:
+            bonus_updates = pattern_payload.bonus_content.model_dump(exclude_none=True)
+            next_bonus = next_pattern_recognition.bonus_content.model_copy(update=bonus_updates)
+            next_bonus.user_folder_patterns = normalize_pattern_list(next_bonus.user_folder_patterns)
+            next_bonus.default_folder_patterns = normalize_pattern_list(next_bonus.default_folder_patterns)
+            next_bonus.user_file_patterns = normalize_pattern_list(next_bonus.user_file_patterns)
+            next_bonus.default_file_patterns = normalize_pattern_list(next_bonus.default_file_patterns)
+            next_bonus.effective_folder_patterns = merge_pattern_lists(
+                next_bonus.user_folder_patterns,
+                next_bonus.default_folder_patterns,
+            )
+            next_bonus.effective_file_patterns = merge_pattern_lists(
+                next_bonus.user_file_patterns,
+                next_bonus.default_file_patterns,
+            )
+            next_pattern_recognition.bonus_content = next_bonus
+        next_pattern_recognition.show_season_patterns.series_folder_regexes = normalize_pattern_list(
+            next_pattern_recognition.show_season_patterns.series_folder_regexes
+        )
+        next_pattern_recognition.show_season_patterns.season_folder_regexes = normalize_pattern_list(
+            next_pattern_recognition.show_season_patterns.season_folder_regexes
+        )
+        next_pattern_recognition.show_season_patterns.episode_file_regexes = normalize_pattern_list(
+            next_pattern_recognition.show_season_patterns.episode_file_regexes
+        )
+        validate_pattern_recognition_settings(next_pattern_recognition)
     history_retention_updates = {}
     if payload.history_retention is not None:
         for key in ("file_history", "library_history", "scan_history"):
@@ -284,7 +383,7 @@ def update_app_settings(
         setting = AppSetting(key=APP_SETTINGS_KEY, value={})
         db.add(setting)
 
-    setting.value = {
+    next_value = {
         "user_ignore_patterns": next_user_ignore_patterns,
         "default_ignore_patterns": next_default_ignore_patterns,
         "resolution_categories": [item.model_dump(mode="json") for item in next_resolution_categories],
@@ -292,6 +391,10 @@ def update_app_settings(
         "scan_performance": next_scan_performance.model_dump(mode="json"),
         "history_retention": next_history_retention.model_dump(mode="json"),
     }
+    existing_value = setting.value if isinstance(setting.value, dict) else {}
+    if payload.pattern_recognition is not None or "pattern_recognition" in existing_value:
+        next_value["pattern_recognition"] = next_pattern_recognition.model_dump(mode="json")
+    setting.value = next_value
     db.commit()
     db.refresh(setting)
     result = _deserialize_app_settings(setting.value, settings or get_settings())

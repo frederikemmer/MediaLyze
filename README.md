@@ -184,7 +184,7 @@ Scan parallelism is configured in the UI under `Settings -> App settings -> Scan
 MediaLyze exposes separate limits for per-scan analysis workers and parallel library scans so you can tune throughput without editing compose or env files.
 
 Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, `*/.deletedByTMM/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
-See [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for a short guide.
+See [docs/patterns.md](docs/patterns.md) for series, bonus, and ignore-pattern rules, or [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for ignore-only examples.
 
 ## Tech Stack
 

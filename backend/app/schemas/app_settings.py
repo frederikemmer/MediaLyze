@@ -75,10 +75,51 @@ class HistoryRetentionUpdate(BaseModel):
     scan_history: HistoryRetentionBucketUpdate | None = None
 
 
+class ShowSeasonPatternSettings(BaseModel):
+    series_folder_regexes: list[str] = Field(default_factory=list)
+    season_folder_regexes: list[str] = Field(default_factory=list)
+    episode_file_regexes: list[str] = Field(default_factory=list)
+
+
+class ShowSeasonPatternSettingsUpdate(BaseModel):
+    series_folder_regexes: list[str] | None = None
+    season_folder_regexes: list[str] | None = None
+    episode_file_regexes: list[str] | None = None
+
+
+class BonusContentPatternSettings(BaseModel):
+    user_folder_patterns: list[str] = Field(default_factory=list)
+    default_folder_patterns: list[str] = Field(default_factory=list)
+    effective_folder_patterns: list[str] = Field(default_factory=list)
+    user_file_patterns: list[str] = Field(default_factory=list)
+    default_file_patterns: list[str] = Field(default_factory=list)
+    effective_file_patterns: list[str] = Field(default_factory=list)
+
+
+class BonusContentPatternSettingsUpdate(BaseModel):
+    user_folder_patterns: list[str] | None = None
+    default_folder_patterns: list[str] | None = None
+    user_file_patterns: list[str] | None = None
+    default_file_patterns: list[str] | None = None
+
+
+class PatternRecognitionSettings(BaseModel):
+    analyze_bonus_content: bool = True
+    show_season_patterns: ShowSeasonPatternSettings = Field(default_factory=ShowSeasonPatternSettings)
+    bonus_content: BonusContentPatternSettings = Field(default_factory=BonusContentPatternSettings)
+
+
+class PatternRecognitionSettingsUpdate(BaseModel):
+    analyze_bonus_content: bool | None = None
+    show_season_patterns: ShowSeasonPatternSettingsUpdate | None = None
+    bonus_content: BonusContentPatternSettingsUpdate | None = None
+
+
 class AppSettingsRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     user_ignore_patterns: list[str] = Field(default_factory=list)
     default_ignore_patterns: list[str] = Field(default_factory=list)
+    pattern_recognition: PatternRecognitionSettings = Field(default_factory=PatternRecognitionSettings)
     resolution_categories: list[ResolutionCategory] = Field(default_factory=list)
     feature_flags: FeatureFlagsRead = Field(default_factory=FeatureFlagsRead)
     scan_performance: ScanPerformanceRead = Field(default_factory=ScanPerformanceRead)
@@ -89,6 +130,7 @@ class AppSettingsUpdate(BaseModel):
     ignore_patterns: list[str] | None = None
     user_ignore_patterns: list[str] | None = None
     default_ignore_patterns: list[str] | None = None
+    pattern_recognition: PatternRecognitionSettingsUpdate | None = None
     resolution_categories: list[ResolutionCategory] | None = None
     feature_flags: FeatureFlagsUpdate | None = None
     scan_performance: ScanPerformanceUpdate | None = None

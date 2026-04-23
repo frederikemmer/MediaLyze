@@ -1310,6 +1310,12 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "mtime",
         "last_analyzed_at",
         "quality_score",
+        "content_category",
+        "series_title",
+        "season_number",
+        "episode_number",
+        "episode_number_end",
+        "episode_title",
     ]
     assert len(data_rows) == 252
     assert data_rows[0][0] == "episode-002.mkv"
@@ -1320,6 +1326,8 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert data_rows[0][8] == "aac"
     assert data_rows[0][12] == "srt"
     assert data_rows[0][13] == "external | internal"
+    assert data_rows[0][17] == "main"
+    assert data_rows[0][18:] == ["", "", "", "", ""]
     assert data_rows[-1][0] == "episode-504.mkv"
 
 

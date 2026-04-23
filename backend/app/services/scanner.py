@@ -22,9 +22,12 @@ from backend.app.models.entities import (
     ExternalSubtitle,
     JobStatus,
     Library,
+    MediaContentCategory,
     MediaFile,
     MediaFileHistoryCaptureReason,
     MediaFormat,
+    MediaSeason,
+    MediaSeries,
     ScanJob,
     ScanStatus,
     ScanTriggerSource,
@@ -48,6 +51,12 @@ from backend.app.services.quality import (
     build_quality_score_input,
     build_quality_score_input_from_media_file,
     calculate_quality_score,
+)
+from backend.app.services.pattern_recognition import (
+    PathRecognition,
+    matches_bonus_path,
+    matching_bonus_patterns,
+    recognize_media_path,
 )
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.subtitles import (
@@ -88,6 +97,8 @@ class DiscoveryResult:
     ignored_dir_total: int = 0
     ignored_file_total: int = 0
     ignored_pattern_hits: dict[str, PatternHit] = field(default_factory=dict)
+    bonus_ignored_total: int = 0
+    bonus_pattern_hits: dict[str, PatternHit] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -222,6 +233,18 @@ def _record_pattern_hits(
             hit.truncated_count += 1
 
 
+def _pattern_hits_as_list(pattern_hits: dict[str, PatternHit]) -> list[dict[str, int | str | list[str]]]:
+    return [
+        {
+            "pattern": pattern,
+            "count": hit.count,
+            "paths": hit.paths,
+            "truncated_count": hit.truncated_count,
+        }
+        for pattern, hit in sorted(pattern_hits.items(), key=lambda entry: entry[0].lower())
+    ]
+
+
 def _coerce_trigger_details(trigger_details: dict | None) -> dict:
     return dict(trigger_details or {})
 
@@ -291,6 +314,7 @@ def _stream_media_files(
     *,
     discovery: DiscoveryResult,
     ignore_patterns: tuple[str, ...] = (),
+    pattern_recognition_settings=None,
     should_cancel: Callable[[], bool] | None = None,
 ):
     suffixes = {extension.lower() for extension in allowed_extensions}
@@ -312,6 +336,17 @@ def _stream_media_files(
                 discovery.ignored_dir_total += 1
                 _record_pattern_hits(relative_path, matches, discovery.ignored_pattern_hits)
                 continue
+            if (
+                pattern_recognition_settings is not None
+                and not pattern_recognition_settings.analyze_bonus_content
+                and matches_bonus_path(relative_path, pattern_recognition_settings, is_dir=True)
+            ):
+                bonus_matches = matching_bonus_patterns(relative_path, pattern_recognition_settings, is_dir=True)
+                discovery.ignored_total += 1
+                discovery.ignored_dir_total += 1
+                discovery.bonus_ignored_total += 1
+                _record_pattern_hits(relative_path, bonus_matches, discovery.bonus_pattern_hits)
+                continue
             visible_dirnames.append(dirname)
 
         dirnames[:] = sorted(visible_dirnames, key=str.lower)
@@ -327,6 +362,17 @@ def _stream_media_files(
                 discovery.ignored_total += 1
                 discovery.ignored_file_total += 1
                 _record_pattern_hits(relative_path, matches, discovery.ignored_pattern_hits)
+                continue
+            if (
+                pattern_recognition_settings is not None
+                and not pattern_recognition_settings.analyze_bonus_content
+                and matches_bonus_path(relative_path, pattern_recognition_settings)
+            ):
+                bonus_matches = matching_bonus_patterns(relative_path, pattern_recognition_settings)
+                discovery.ignored_total += 1
+                discovery.ignored_file_total += 1
+                discovery.bonus_ignored_total += 1
+                _record_pattern_hits(relative_path, bonus_matches, discovery.bonus_pattern_hits)
                 continue
             if file_path.suffix.lower() in suffixes:
                 discovery.file_count += 1
@@ -496,6 +542,128 @@ def _analyze_path(
     return payload, subtitles
 
 
+def _get_or_create_series(db: Session, library: Library, recognition: PathRecognition) -> MediaSeries | None:
+    if not recognition.series_title or not recognition.series_normalized_title or not recognition.series_relative_path:
+        return None
+    series = db.scalar(
+        select(MediaSeries).where(
+            MediaSeries.library_id == library.id,
+            MediaSeries.normalized_title == recognition.series_normalized_title,
+            MediaSeries.relative_path == recognition.series_relative_path,
+        )
+    )
+    if series is None:
+        series = MediaSeries(
+            library_id=library.id,
+            title=recognition.series_title,
+            normalized_title=recognition.series_normalized_title,
+            relative_path=recognition.series_relative_path,
+            year=recognition.series_year,
+        )
+        db.add(series)
+        db.flush()
+    else:
+        series.title = recognition.series_title
+        series.year = recognition.series_year
+    return series
+
+
+def _get_or_create_season(
+    db: Session,
+    library: Library,
+    series: MediaSeries,
+    recognition: PathRecognition,
+) -> MediaSeason | None:
+    if recognition.season_number is None or not recognition.season_title or not recognition.season_relative_path:
+        return None
+    season = db.scalar(
+        select(MediaSeason).where(
+            MediaSeason.library_id == library.id,
+            MediaSeason.series_id == series.id,
+            MediaSeason.season_number == recognition.season_number,
+        )
+    )
+    if season is None:
+        season = MediaSeason(
+            library_id=library.id,
+            series_id=series.id,
+            season_number=recognition.season_number,
+            title=recognition.season_title,
+            relative_path=recognition.season_relative_path,
+        )
+        db.add(season)
+        db.flush()
+    else:
+        season.title = recognition.season_title
+        season.relative_path = recognition.season_relative_path
+    return season
+
+
+def _apply_path_recognition(
+    db: Session,
+    library: Library,
+    media_file: MediaFile,
+    recognition: PathRecognition,
+) -> bool:
+    before = (
+        media_file.content_category,
+        media_file.series_id,
+        media_file.season_id,
+        media_file.episode_number,
+        media_file.episode_number_end,
+        media_file.episode_title,
+        media_file.recognition_details,
+    )
+    media_file.content_category = (
+        MediaContentCategory.bonus if recognition.is_bonus else MediaContentCategory.main
+    )
+    media_file.series_id = None
+    media_file.season_id = None
+    media_file.episode_number = None
+    media_file.episode_number_end = None
+    media_file.episode_title = None
+    media_file.recognition_details = {
+        "matched_patterns": list(recognition.matched_patterns),
+    } if recognition.matched_patterns else None
+
+    if not recognition.is_bonus and recognition.is_episode:
+        series = _get_or_create_series(db, library, recognition)
+        season = _get_or_create_season(db, library, series, recognition) if series else None
+        media_file.series_id = series.id if series else None
+        media_file.season_id = season.id if season else None
+        media_file.episode_number = recognition.episode_number
+        media_file.episode_number_end = recognition.episode_number_end
+        media_file.episode_title = recognition.episode_title
+        media_file.recognition_details = {
+            "series_relative_path": recognition.series_relative_path,
+            "season_relative_path": recognition.season_relative_path,
+        }
+
+    after = (
+        media_file.content_category,
+        media_file.series_id,
+        media_file.season_id,
+        media_file.episode_number,
+        media_file.episode_number_end,
+        media_file.episode_title,
+        media_file.recognition_details,
+    )
+    return before != after
+
+
+def _cleanup_empty_series_entries(db: Session, library_id: int) -> None:
+    for season in db.scalars(select(MediaSeason).where(MediaSeason.library_id == library_id)).all():
+        has_files = db.scalar(select(MediaFile.id).where(MediaFile.season_id == season.id).limit(1))
+        if has_files is None:
+            db.delete(season)
+    db.flush()
+    for series in db.scalars(select(MediaSeries).where(MediaSeries.library_id == library_id)).all():
+        has_files = db.scalar(select(MediaFile.id).where(MediaFile.series_id == series.id).limit(1))
+        if has_files is None:
+            db.delete(series)
+    db.flush()
+
+
 def _visible_external_subtitles(
     file_path: Path,
     library_root: Path,
@@ -582,6 +750,15 @@ def _empty_scan_summary(ignore_patterns: tuple[str, ...] = ()) -> dict:
             "failed_files_truncated_count": 0,
             "duplicate_groups": 0,
             "duplicate_files": 0,
+        },
+        "pattern_recognition": {
+            "analyze_bonus_content": True,
+            "bonus_ignored_total": 0,
+            "bonus_pattern_hits": [],
+            "series_detected": 0,
+            "seasons_detected": 0,
+            "episodes_classified": 0,
+            "classification_updated_files": 0,
         },
     }
 
@@ -788,6 +965,7 @@ def run_scan(
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
     app_settings = get_app_settings(db, settings)
     ignore_patterns = tuple(app_settings.ignore_patterns)
+    pattern_recognition_settings = app_settings.pattern_recognition
     duplicate_strategy = get_duplicate_detection_strategy(library.duplicate_detection_mode)
     new_files = SampledPathList()
     modified_files = SampledPathList()
@@ -799,6 +977,10 @@ def run_scan(
     analyzed_successfully = 0
     duplicate_processed_successfully = 0
     duplicate_processing_failed = 0
+    classification_updated_files = 0
+    episodes_classified = 0
+    recognized_series_ids: set[int] = set()
+    recognized_season_ids: set[int] = set()
 
     def _missing_rename_candidates() -> list[MediaFile]:
         return [
@@ -965,7 +1147,29 @@ def run_scan(
                 "duplicate_files": duplicate_files,
                 **duplicate_failed_files.as_dict(),
             },
+            "pattern_recognition": {
+                "analyze_bonus_content": pattern_recognition_settings.analyze_bonus_content,
+                "bonus_ignored_total": discovery.bonus_ignored_total,
+                "bonus_pattern_hits": _pattern_hits_as_list(discovery.bonus_pattern_hits),
+                "series_detected": len(recognized_series_ids),
+                "seasons_detected": len(recognized_season_ids),
+                "episodes_classified": episodes_classified,
+                "classification_updated_files": classification_updated_files,
+            },
         }
+
+    def _recognize_media_file(media_file: MediaFile, relative_path: str) -> None:
+        nonlocal classification_updated_files
+        nonlocal episodes_classified
+        recognition = recognize_media_path(relative_path, library.type, pattern_recognition_settings)
+        if _apply_path_recognition(db, library, media_file, recognition):
+            classification_updated_files += 1
+        if media_file.series_id is not None:
+            recognized_series_ids.add(media_file.series_id)
+        if media_file.season_id is not None:
+            recognized_season_ids.add(media_file.season_id)
+        if media_file.series_id is not None and media_file.season_id is not None:
+            episodes_classified += 1
 
     discovery = DiscoveryResult(files=[], collect_files=False)
     seen_relative_paths: set[str] = set()
@@ -1150,6 +1354,7 @@ def run_scan(
             settings.allowed_media_extensions,
             discovery=discovery,
             ignore_patterns=ignore_patterns,
+            pattern_recognition_settings=pattern_recognition_settings,
             should_cancel=_should_cancel,
         ):
             file_path = discovered_media_file.path
@@ -1174,6 +1379,7 @@ def run_scan(
                     )
                     db.add(media_file)
                     db.flush()
+                    _recognize_media_file(media_file, relative_path)
                     new_files.add(relative_path)
                 else:
                     existing_by_path.pop(rename_candidate.relative_path, None)
@@ -1185,6 +1391,7 @@ def run_scan(
                     media_file.mtime = stat.st_mtime
                     media_file.last_seen_at = utc_now()
                     media_file.scan_status = ScanStatus.pending
+                    _recognize_media_file(media_file, relative_path)
                     modified_files.add(relative_path)
                 queued_work_total += 1
                 queued_for_analysis += 1
@@ -1218,6 +1425,7 @@ def run_scan(
                 media_file.size_bytes = stat.st_size
                 media_file.mtime = stat.st_mtime
                 media_file.last_seen_at = utc_now()
+                _recognize_media_file(media_file, relative_path)
                 needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
                 needs_analysis = (
                     changed
@@ -1268,6 +1476,7 @@ def run_scan(
                 deleted_files.add(relative_path)
         if stale_ids:
             db.execute(delete(MediaFile).where(MediaFile.id.in_(stale_ids)))
+        _cleanup_empty_series_entries(db, library.id)
 
         _commit_scan_progress(include_duplicate_counts=False)
         discovery_progress_counter = 0
