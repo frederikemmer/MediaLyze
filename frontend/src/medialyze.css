@@ -3753,9 +3753,6 @@ html[data-theme="dark"] .file-history-old-value {
 }
 
 .media-data-table-head {
-  position: sticky;
-  top: 0;
-  z-index: 4;
   background: #f6f1ea;
 }
 
@@ -3779,23 +3776,7 @@ html[data-theme="dark"] .file-history-old-value {
   position: absolute;
   left: 0;
   width: 100%;
-  background: transparent;
-}
-
-.media-data-body-row.is-group-row {
-  border: 1px solid rgba(27, 153, 139, 0.16);
-  border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    0 1px 2px rgba(14, 107, 98, 0.04);
-}
-
-.media-data-body-row.is-series-row {
-  background: rgba(27, 153, 139, 0.11);
-}
-
-.media-data-body-row.is-season-row {
-  background: rgba(27, 153, 139, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .media-data-body-row:hover .media-data-cell {
@@ -3803,7 +3784,7 @@ html[data-theme="dark"] .file-history-old-value {
 }
 
 .media-data-body-row.is-group-row:hover .media-data-cell {
-  background: rgba(27, 153, 139, 0.04);
+  background: rgba(246, 241, 234, 0.96);
 }
 
 .media-data-cell {
@@ -3815,7 +3796,9 @@ html[data-theme="dark"] .file-history-old-value {
 }
 
 .media-data-header-cell {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   background: #f6f1ea;
 }
 
@@ -3828,12 +3811,12 @@ html[data-theme="dark"] .file-history-old-value {
 
 .media-data-cell.is-group-cell,
 .media-data-cell.is-group-cell.is-sticky {
-  background: transparent;
-  border-bottom-color: rgba(14, 107, 98, 0.14);
+  background: rgba(246, 241, 234, 0.96);
 }
 
 .media-data-header-cell.is-sticky {
-  z-index: 5;
+  left: 0;
+  z-index: 6;
   background: #f6f1ea;
 }
 
@@ -3966,7 +3949,7 @@ body.is-column-resizing {
 
 .media-tree-copy {
   display: grid;
-  gap: 0;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -3975,15 +3958,6 @@ body.is-column-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.media-data-body-row.is-series-row .media-tree-title {
-  font-size: 1.18rem;
-  line-height: 1.15;
-}
-
-.media-data-body-row.is-season-row .media-tree-title {
-  font-size: 1rem;
 }
 
 .media-tree-summary {
@@ -4578,22 +4552,7 @@ html[data-theme="dark"] {
   }
 
   .media-data-body-row {
-    background: transparent;
-  }
-
-  .media-data-body-row.is-series-row {
-    background: rgba(27, 153, 139, 0.18);
-  }
-
-  .media-data-body-row.is-season-row {
-    background: rgba(27, 153, 139, 0.12);
-  }
-
-  .media-data-body-row.is-group-row {
-    border-color: rgba(62, 197, 184, 0.2);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 1px 2px rgba(0, 0, 0, 0.14);
+    background: rgba(38, 35, 31, 0.72);
   }
 
   .media-data-body-row:hover .media-data-cell {
@@ -4601,7 +4560,7 @@ html[data-theme="dark"] {
   }
 
   .media-data-body-row.is-group-row:hover .media-data-cell {
-    background: rgba(62, 197, 184, 0.06);
+    background: rgba(46, 43, 39, 0.96);
   }
 
   .media-data-cell {
@@ -4614,8 +4573,7 @@ html[data-theme="dark"] {
 
   .media-data-cell.is-group-cell,
   .media-data-cell.is-group-cell.is-sticky {
-    background: transparent;
-    border-bottom-color: rgba(62, 197, 184, 0.16);
+    background: rgba(46, 43, 39, 0.96);
   }
 
   .column-toggle {

@@ -3127,6 +3127,9 @@ export function LibraryDetailPage() {
                           <div className="analyzed-files-empty-state">{t("libraryDetail.noAnalyzedFiles")}</div>
                         ) : (
                           <div ref={dataTableShellRef} className="data-table-shell">
+                            <span className="sr-only">
+                              {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotalLabel })}
+                            </span>
                             <div className="media-data-table" role="table" aria-rowcount={analyzedTableRows.length}>
                               <div className="media-data-table-head" role="rowgroup">
                                 <div className="media-data-row media-data-head-row" role="row" style={{ gridTemplateColumns: columnTemplate }}>
@@ -3199,12 +3202,6 @@ export function LibraryDetailPage() {
                                   );
                                 })}
                               </div>
-                            </div>
-                            <div className="data-table-footer">
-                              <span className="media-meta">
-                                {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotalLabel })}
-                              </span>
-                              {isLoadingMore || isFilesRefreshing ? <span className="media-meta">{t("libraryDetail.loadingMore")}</span> : null}
                             </div>
                           </div>
                         )}
