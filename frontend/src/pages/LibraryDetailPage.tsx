@@ -217,7 +217,7 @@ type VisibleLibraryLayoutPanel = {
 
 const PAGE_SIZE = 200;
 const LOAD_MORE_THRESHOLD_ROWS = 40;
-const ROW_ESTIMATE_PX = 68;
+const ROW_ESTIMATE_PX = 54;
 const OVERSCAN_ROWS = 12;
 const FALLBACK_VISIBLE_ROWS = 50;
 const HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-library-detail-history-selected-metric";
@@ -1651,6 +1651,10 @@ export function LibraryDetailPage() {
         index,
         start: index * ROW_ESTIMATE_PX,
       }));
+
+  useLayoutEffect(() => {
+    rowVirtualizer.measure();
+  }, [analyzedTableRows.length, columnTemplate, rowVirtualizer]);
 
   const toggleMetadataField = useEffectEvent((field: LibraryFileMetadataSearchField) => {
     startTransition(() => {
@@ -3171,7 +3175,9 @@ export function LibraryDetailPage() {
                                   return (
                                     <div
                                       key={row.row_key}
-                                      className={`media-data-row media-data-body-row${isGroupedAnalyzedFilesRow(row) ? " is-group-row" : ""}`}
+                                      className={`media-data-row media-data-body-row${
+                                        isGroupedAnalyzedFilesRow(row) ? ` is-group-row is-${row.kind}-row` : ""
+                                      }`}
                                       role="row"
                                       data-index={virtualRow.index}
                                       ref={rowVirtualizer.measureElement}
