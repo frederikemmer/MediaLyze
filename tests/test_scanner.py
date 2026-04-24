@@ -30,6 +30,7 @@ from backend.app.models.entities import (
 from backend.app.services import scanner as scanner_service
 from backend.app.services.library_service import get_library_statistics
 from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.pattern_recognition import default_pattern_recognition_settings, recognize_media_path
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
@@ -991,6 +992,33 @@ def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypa
     assert job.scan_summary["pattern_recognition"]["series_detected"] == 1
     assert job.scan_summary["pattern_recognition"]["seasons_detected"] == 1
     assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 1
+
+
+def test_recognize_media_path_accepts_season_folder_suffix_metadata() -> None:
+    settings = default_pattern_recognition_settings()
+
+    plain = recognize_media_path(
+        "SERIENNAME2/Staffel 2/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+    with_year = recognize_media_path(
+        "SERIENNAME3/Staffel 5 (2026)/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+    with_year_and_tags = recognize_media_path(
+        "SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264] [ger, eng, ita, fra]/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert plain.series_title == "SERIENNAME2"
+    assert plain.season_number == 2
+    assert with_year.series_title == "SERIENNAME3"
+    assert with_year.season_number == 5
+    assert with_year_and_tags.series_title == "SERIENNAME1"
+    assert with_year_and_tags.season_number == 4
 
 
 def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_path: Path, monkeypatch) -> None:

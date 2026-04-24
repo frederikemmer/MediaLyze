@@ -14,14 +14,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - replace the library rename browser prompt with inline editing in Settings so library name and library type can be changed together from the library card header
-- remove the library-detail `Series / Files` mode switch and group recognized series and seasons directly inside the analyzed-files table view for series and mixed libraries
-- remove the redundant Back to library button from the file detail page now that library navigation is available in the header menu
-- render the history reconstruction completion notice with the positive design color instead of the alert color
 - move the header version pill slightly upward so it visually aligns with the app title without changing its size
-- remove the extra boxed button chrome from pattern-recognition and ignore-pattern section headers so titles like `Series folder regexes` render as plain headings
-- hide the library-details tooltip trigger and scan-mode badge while a library card is being edited so the inline name/type controls keep a stable layout
-- restyle the pattern-docs shortcut in settings to use the app's orange accent without the large CTA-style shadow so it reads cleanly in dark mode
-- simplify pattern-recognition settings by making bonus-content analysis always active, removing bonus-file detection, adding a restore-defaults action for ignore patterns, and merging the separate default/custom bonus and ignore-pattern editors into single combined sections
 
 ## v0.8.4
 

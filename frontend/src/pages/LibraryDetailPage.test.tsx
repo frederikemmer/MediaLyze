@@ -554,14 +554,92 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Series$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Files$/ })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Example Show [1080p, SDR, H.264 / AVC] [de, en]" }),
-    ).toHaveTextContent("Example Show [1080p, SDR, H.264 / AVC] [de, en]");
-    expect(screen.getByRole("button", { name: "Season 1 [1080p, SDR, H.264 / AVC] [de, en]" })).toHaveTextContent(
-      "Season 1 [1080p, SDR, H.264 / AVC] [de, en]",
-    );
+    const seriesButton = screen.getByRole("button", { name: "Example Show 1 seasons 2 episodes" });
+    expect(seriesButton).toHaveTextContent("Example Show");
+    expect(seriesButton).not.toHaveTextContent("[1080p, SDR, H.264 / AVC] [de, en]");
+    expect(screen.queryByRole("button", { name: "Season 1 2 episodes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Example Show - S01E01.mkv" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Example Show - S01E02.mkv" })).not.toBeInTheDocument();
+
+    fireEvent.click(seriesButton);
+
+    const seasonButton = screen.getByRole("button", { name: "Season 1 2 episodes" });
+    expect(seasonButton).toHaveTextContent("Season 1");
+    expect(seasonButton).not.toHaveTextContent("[1080p, SDR, H.264 / AVC] [de, en]");
+    expect(screen.queryByRole("link", { name: "Example Show - S01E01.mkv" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Example Show - S01E02.mkv" })).not.toBeInTheDocument();
+
+    fireEvent.click(seasonButton);
+
     expect(screen.getByRole("link", { name: "Example Show - S01E01.mkv" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Example Show - S01E02.mkv" })).toBeInTheDocument();
+  });
+
+  it("averages grouped quality and bitrate metrics in the analyzed-files table", () => {
+    const columns = buildFileColumns(
+      i18next.t.bind(i18next),
+      {},
+      {},
+      {},
+      {},
+      vi.fn(),
+      vi.fn(),
+      new Set(),
+      false,
+    );
+    const qualityColumn = columns.find((column) => column.key === "quality_score");
+    const bitrateColumn = columns.find((column) => column.key === "bitrate");
+    const audioBitrateColumn = columns.find((column) => column.key === "audio_bitrate");
+
+    if (!qualityColumn || !bitrateColumn || !audioBitrateColumn) {
+      throw new Error("expected grouped metric columns");
+    }
+
+    const groupedRow = {
+      kind: "series" as const,
+      row_key: "series-7",
+      tree_depth: 0,
+      title: "Example Show",
+      subtitle: null,
+      episode_count: 2,
+      season_count: 1,
+      expanded: false,
+      onToggle: vi.fn(),
+      metrics: {
+        size_bytes: 3072,
+        duration: 7100,
+        container: "mkv",
+        video_codec: "h264",
+        resolution: "1080p",
+        resolution_category_label: "1080p",
+        hdr_type: "sdr",
+        bitrate: 4_500_000,
+        audio_bitrate: 224_000,
+        audio_codecs: ["aac"],
+        audio_spatial_profiles: [],
+        audio_languages: ["en"],
+        subtitle_languages: ["de", "en"],
+        subtitle_codecs: ["srt"],
+        subtitle_sources: ["external"],
+        quality_score: 7.5,
+      },
+    };
+
+    render(
+      <table>
+        <tbody>
+          <tr>
+            <td>{qualityColumn.render(groupedRow)}</td>
+            <td>{bitrateColumn.render(groupedRow)}</td>
+            <td>{audioBitrateColumn.render(groupedRow)}</td>
+          </tr>
+        </tbody>
+      </table>,
+    );
+
+    expect(screen.getByText("7.5/10")).toBeInTheDocument();
+    expect(screen.getByText("4.5 Mb/s")).toBeInTheDocument();
+    expect(screen.getByText("224 kb/s")).toBeInTheDocument();
   });
 
   it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {

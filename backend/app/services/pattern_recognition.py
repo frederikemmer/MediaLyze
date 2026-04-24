@@ -35,7 +35,7 @@ DEFAULT_SHOW_SEASON_PATTERNS = ShowSeasonPatternSettings(
         r"^(?P<title>.+?)(?:\s+\((?P<year>\d{4})\))?(?:\s+\[[^\]]+\])?$",
     ],
     season_folder_regexes=[
-        r"^(?:Season|Staffel)\s*(?P<season>\d{1,3})$",
+        r"^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$",
     ],
     episode_file_regexes=[],
 )

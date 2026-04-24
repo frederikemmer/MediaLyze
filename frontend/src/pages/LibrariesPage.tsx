@@ -3624,7 +3624,7 @@ export function LibrariesPage() {
                   {renderPatternRecognitionList(
                     "season_folder_regexes",
                     t("libraries.patternRecognition.seasonFolderRegexes"),
-                    String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})$`,
+                    String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
                   )}
                 </div>
               </div>

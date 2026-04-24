@@ -356,6 +356,14 @@ function commonArray(values: string[][]): string[] {
     : [];
 }
 
+function averageNumber(values: Array<number | null | undefined>): number | null {
+  const presentValues = values.filter((value): value is number => value != null);
+  if (presentValues.length === 0) {
+    return null;
+  }
+  return presentValues.reduce((sum, value) => sum + value, 0) / presentValues.length;
+}
+
 function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyzedFilesMetrics {
   return {
     size_bytes: files.reduce((sum, file) => sum + file.size_bytes, 0),
@@ -371,15 +379,15 @@ function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyze
       (value) => !value,
     ),
     hdr_type: commonScalar(files.map((file) => file.hdr_type ?? "sdr"), () => false),
-    bitrate: commonScalar(files.map((file) => file.bitrate), (value) => value == null),
-    audio_bitrate: commonScalar(files.map((file) => file.audio_bitrate), (value) => value == null),
+    bitrate: averageNumber(files.map((file) => file.bitrate)),
+    audio_bitrate: averageNumber(files.map((file) => file.audio_bitrate)),
     audio_codecs: commonArray(files.map((file) => file.audio_codecs)),
     audio_spatial_profiles: commonArray(files.map((file) => file.audio_spatial_profiles)),
     audio_languages: commonArray(files.map((file) => file.audio_languages)),
     subtitle_languages: commonArray(files.map((file) => file.subtitle_languages)),
     subtitle_codecs: commonArray(files.map((file) => file.subtitle_codecs)),
     subtitle_sources: commonArray(files.map((file) => file.subtitle_sources)),
-    quality_score: commonScalar(files.map((file) => file.quality_score), () => false),
+    quality_score: averageNumber(files.map((file) => file.quality_score)),
   };
 }
 
@@ -471,7 +479,7 @@ function buildGroupedAnalyzedRows(
       continue;
     }
 
-    const seriesExpanded = expandedSeriesIds[entry.series_id] ?? true;
+    const seriesExpanded = expandedSeriesIds[entry.series_id] ?? false;
     rows.push({
       kind: "series",
       row_key: `series-${entry.series_id}`,
@@ -491,7 +499,7 @@ function buildGroupedAnalyzedRows(
 
     for (const season of entry.seasons) {
       const seasonKey = `series-${entry.series_id}-season-${season.season_id ?? season.season_number ?? 0}`;
-      const seasonExpanded = expandedSeasonKeys[seasonKey] ?? true;
+      const seasonExpanded = expandedSeasonKeys[seasonKey] ?? false;
       rows.push({
         kind: "season",
         row_key: seasonKey,
@@ -530,33 +538,24 @@ function buildGroupedAnalyzedRows(
   return rows;
 }
 
-function buildGroupedRowSummary(
+function buildGroupedRowAriaLabel(
   row: GroupedAnalyzedFilesRow,
   t: (key: string, options?: Record<string, unknown>) => string,
-  inDepthDolbyVisionProfiles: boolean,
-): string[] {
-  const videoSummary = [
-    row.metrics.resolution,
-    row.metrics.hdr_type === "sdr"
-      ? t("fileTable.sdr")
-      : (formatHdrType(row.metrics.hdr_type, { inDepthDolbyVisionProfiles }) ?? row.metrics.hdr_type),
-    row.metrics.video_codec ? formatCodecLabel(row.metrics.video_codec, "video") : null,
-  ].filter((value): value is string => Boolean(value));
-  const subtitleSummary = row.metrics.subtitle_languages;
-  const summaryParts: string[] = [];
-  if (videoSummary.length > 0) {
-    summaryParts.push(`[${videoSummary.join(", ")}]`);
+): string {
+  const parts = [row.title];
+  if (row.kind === "series" && row.season_count) {
+    parts.push(t("libraryDetail.series.seasonCount", { count: row.season_count }));
   }
-  if (subtitleSummary.length > 0) {
-    summaryParts.push(`[${subtitleSummary.join(", ")}]`);
+  parts.push(t("libraryDetail.series.episodeCount", { count: row.episode_count }));
+  return parts.join(" ");
+}
+
+function formatGroupedQualityScore(score: number | null, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (score === null) {
+    return t("fileTable.na");
   }
-  if (summaryParts.length === 0) {
-    summaryParts.push(t("libraryDetail.series.episodeCount", { count: row.episode_count }));
-    if (row.kind === "series" && row.season_count) {
-      summaryParts.unshift(t("libraryDetail.series.seasonCount", { count: row.season_count }));
-    }
-  }
-  return summaryParts;
+  const rounded = Math.round(score * 10) / 10;
+  return Number.isInteger(rounded) ? `${rounded.toFixed(0)}/10` : `${rounded.toFixed(1)}/10`;
 }
 
 function scoreMeterLabel(score: number): string {
@@ -756,17 +755,13 @@ export function buildFileColumns(
             type="button"
             className="media-tree-cell-button"
             aria-expanded={row.expanded}
-            aria-label={[row.title, ...buildGroupedRowSummary(row, t, inDepthDolbyVisionProfiles)].join(" ")}
+            aria-label={buildGroupedRowAriaLabel(row, t)}
             onClick={row.onToggle}
           >
             <span className={`media-tree-indent media-tree-indent-${rowDepth(row)}`} aria-hidden="true" />
             {row.expanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
             <span className="media-tree-copy">
               <strong className="media-tree-title">{row.title}</strong>
-              <span className="media-tree-summary">
-                {" "}
-                {buildGroupedRowSummary(row, t, inDepthDolbyVisionProfiles).join(" ")}
-              </span>
             </span>
           </button>
         ) : (
@@ -1120,9 +1115,7 @@ export function buildFileColumns(
       sizing: { mode: "content", minPx: 120, maxPx: 120 },
       measureValue: (row) =>
         isGroupedAnalyzedFilesRow(row)
-          ? row.metrics.quality_score === null
-            ? t("fileTable.na")
-            : `${row.metrics.quality_score}/10`
+          ? formatGroupedQualityScore(row.metrics.quality_score, t)
           : `${row.quality_score}/10`,
       render: (row) => (
         !isGroupedAnalyzedFilesRow(row) && tooltipEnabledColumns.has("quality_score") ? (
@@ -1145,7 +1138,7 @@ export function buildFileColumns(
             </div>
           </TooltipTrigger>
         ) : isGroupedAnalyzedFilesRow(row) ? (
-          row.metrics.quality_score === null ? t("fileTable.na") : <strong>{row.metrics.quality_score}/10</strong>
+          <strong>{formatGroupedQualityScore(row.metrics.quality_score, t)}</strong>
         ) : (
           <div className="score-cell">
             <strong>{row.quality_score}/10</strong>
@@ -2263,7 +2256,7 @@ export function LibraryDetailPage() {
       const next = { ...current };
       for (const file of files) {
         if (file.series_id && next[file.series_id] === undefined) {
-          next[file.series_id] = true;
+          next[file.series_id] = false;
           changed = true;
         }
       }
@@ -2279,7 +2272,7 @@ export function LibraryDetailPage() {
         }
         const seasonKey = `series-${file.series_id}-season-${file.season_id ?? file.season_number ?? 0}`;
         if (next[seasonKey] === undefined) {
-          next[seasonKey] = true;
+          next[seasonKey] = false;
           changed = true;
         }
       }
