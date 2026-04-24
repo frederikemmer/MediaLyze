@@ -2635,14 +2635,10 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
-    if (!lastVirtualRow || !hasMoreFiles || isFilesLoading || isLoadingMore) {
+    if (groupedAnalyzedFilesEnabled || !lastVirtualRow || !hasMoreFiles || isFilesLoading || isLoadingMore) {
       return;
     }
     if (lastVirtualRow.index < analyzedTableRows.length - LOAD_MORE_THRESHOLD_ROWS) {
-      return;
-    }
-    if (groupedAnalyzedFilesEnabled) {
-      void loadGroupedFilesPage(groupedTopLevelRows.length, true, fileQueryKey);
       return;
     }
     void loadFilesPage(files.length, true, fileQueryKey);
@@ -2656,6 +2652,38 @@ export function LibraryDetailPage() {
     isFilesLoading,
     isLoadingMore,
     virtualRows,
+  ]);
+
+  useEffect(() => {
+    if (!groupedAnalyzedFilesEnabled || !hasMoreFiles || isFilesLoading || isLoadingMore) {
+      return;
+    }
+    const scrollElement = dataTableShellRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const maybeLoadMore = () => {
+      const remaining = scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+      if (remaining > 640 || isFilesLoading || isLoadingMore || !hasMoreFiles) {
+        return;
+      }
+      void loadGroupedFilesPage(groupedTopLevelRows.length, true, fileQueryKey);
+    };
+
+    maybeLoadMore();
+    scrollElement.addEventListener("scroll", maybeLoadMore, { passive: true });
+    return () => {
+      scrollElement.removeEventListener("scroll", maybeLoadMore);
+    };
+  }, [
+    fileQueryKey,
+    groupedAnalyzedFilesEnabled,
+    groupedTopLevelRows.length,
+    hasMoreFiles,
+    isFilesLoading,
+    isLoadingMore,
+    loadGroupedFilesPage,
   ]);
 
   useEffect(() => {
@@ -3414,41 +3442,62 @@ export function LibraryDetailPage() {
                               </div>
 
                               <div
-                                className="media-data-table-body"
+                                className={`media-data-table-body${groupedAnalyzedFilesEnabled ? " is-static-body" : ""}`}
                                 role="rowgroup"
-                                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                                style={groupedAnalyzedFilesEnabled ? undefined : { height: `${rowVirtualizer.getTotalSize()}px` }}
                               >
-                                {renderedRows.map((virtualRow) => {
-                                  const row = analyzedTableRows[virtualRow.index];
-                                  if (!row) {
-                                    return null;
-                                  }
-                                  return (
-                                    <div
-                                      key={row.row_key}
-                                      className={`media-data-row media-data-body-row${
-                                        isGroupedAnalyzedFilesRow(row) ? ` is-group-row is-${row.kind}-row` : ""
-                                      }`}
-                                      role="row"
-                                      data-index={virtualRow.index}
-                                      ref={rowVirtualizer.measureElement}
-                                      style={{
-                                        gridTemplateColumns: columnTemplate,
-                                        transform: `translateY(${virtualRow.start}px)`,
-                                      }}
-                                    >
-                                      {activeColumns.map((column) => (
+                                {groupedAnalyzedFilesEnabled
+                                  ? analyzedTableRows.map((row) => (
+                                      <div
+                                        key={row.row_key}
+                                        className={`media-data-row media-data-body-row is-static-row${
+                                          isGroupedAnalyzedFilesRow(row) ? ` is-group-row is-${row.kind}-row` : ""
+                                        }`}
+                                        role="row"
+                                        style={{ gridTemplateColumns: columnTemplate }}
+                                      >
+                                        {activeColumns.map((column) => (
+                                          <div
+                                            key={column.key}
+                                            className={`media-data-cell${column.sticky ? " is-sticky" : ""}${isGroupedAnalyzedFilesRow(row) ? " is-group-cell" : ""}`}
+                                            role="cell"
+                                          >
+                                            {column.render(row)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ))
+                                  : renderedRows.map((virtualRow) => {
+                                      const row = analyzedTableRows[virtualRow.index];
+                                      if (!row) {
+                                        return null;
+                                      }
+                                      return (
                                         <div
-                                          key={column.key}
-                                          className={`media-data-cell${column.sticky ? " is-sticky" : ""}${isGroupedAnalyzedFilesRow(row) ? " is-group-cell" : ""}`}
-                                          role="cell"
+                                          key={row.row_key}
+                                          className={`media-data-row media-data-body-row${
+                                            isGroupedAnalyzedFilesRow(row) ? ` is-group-row is-${row.kind}-row` : ""
+                                          }`}
+                                          role="row"
+                                          data-index={virtualRow.index}
+                                          ref={rowVirtualizer.measureElement}
+                                          style={{
+                                            gridTemplateColumns: columnTemplate,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                          }}
                                         >
-                                          {column.render(row)}
+                                          {activeColumns.map((column) => (
+                                            <div
+                                              key={column.key}
+                                              className={`media-data-cell${column.sticky ? " is-sticky" : ""}${isGroupedAnalyzedFilesRow(row) ? " is-group-cell" : ""}`}
+                                              role="cell"
+                                            >
+                                              {column.render(row)}
+                                            </div>
+                                          ))}
                                         </div>
-                                      ))}
-                                    </div>
-                                  );
-                                })}
+                                      );
+                                    })}
                               </div>
                             </div>
                           </div>

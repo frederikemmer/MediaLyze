@@ -3772,12 +3772,23 @@ html[data-theme="dark"] .file-history-old-value {
   position: relative;
 }
 
+.media-data-table-body.is-static-body {
+  position: static;
+}
+
 .media-data-body-row {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.media-data-body-row.is-static-row {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none !important;
 }
 
 .media-data-body-row:hover .media-data-cell {
