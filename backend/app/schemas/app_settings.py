@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 
@@ -75,13 +77,24 @@ class HistoryRetentionUpdate(BaseModel):
     scan_history: HistoryRetentionBucketUpdate | None = None
 
 
+class ShowSeasonRecognitionMode(str, Enum):
+    folder_depth = "folder_depth"
+    regex = "regex"
+
+
 class ShowSeasonPatternSettings(BaseModel):
+    recognition_mode: ShowSeasonRecognitionMode = ShowSeasonRecognitionMode.folder_depth
+    series_folder_depth: int = Field(default=1, ge=1, le=16)
+    season_folder_depth: int = Field(default=2, ge=1, le=16)
     series_folder_regexes: list[str] = Field(default_factory=list)
     season_folder_regexes: list[str] = Field(default_factory=list)
     episode_file_regexes: list[str] = Field(default_factory=list)
 
 
 class ShowSeasonPatternSettingsUpdate(BaseModel):
+    recognition_mode: ShowSeasonRecognitionMode | None = None
+    series_folder_depth: int | None = Field(default=None, ge=1, le=16)
+    season_folder_depth: int | None = Field(default=None, ge=1, le=16)
     series_folder_regexes: list[str] | None = None
     season_folder_regexes: list[str] | None = None
     episode_file_regexes: list[str] | None = None

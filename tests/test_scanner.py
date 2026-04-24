@@ -1021,6 +1021,23 @@ def test_recognize_media_path_accepts_season_folder_suffix_metadata() -> None:
     assert with_year_and_tags.season_number == 4
 
 
+def test_recognize_media_path_uses_configured_folder_depth_mode() -> None:
+    settings = default_pattern_recognition_settings()
+    settings.show_season_patterns.series_folder_depth = 2
+    settings.show_season_patterns.season_folder_depth = 3
+
+    recognized = recognize_media_path(
+        "TV/SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264]/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert recognized.series_title == "SERIENNAME1"
+    assert recognized.series_relative_path == "TV/SERIENNAME1"
+    assert recognized.season_relative_path == "TV/SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264]"
+    assert recognized.season_number == 4
+
+
 def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()

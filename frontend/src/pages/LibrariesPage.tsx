@@ -108,6 +108,14 @@ function normalizePatternRecognitionInputs(settings?: PatternRecognitionSettings
   return {
     ...next,
     analyze_bonus_content: true,
+    show_season_patterns: {
+      ...DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
+      ...next.show_season_patterns,
+      series_folder_regexes:
+        next.show_season_patterns?.series_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.series_folder_regexes,
+      season_folder_regexes:
+        next.show_season_patterns?.season_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.season_folder_regexes,
+    },
   };
 }
 
@@ -2044,6 +2052,9 @@ export function LibrariesPage() {
         pattern_recognition: {
           analyze_bonus_content: true,
           show_season_patterns: {
+            recognition_mode: normalizedSettings.show_season_patterns.recognition_mode,
+            series_folder_depth: normalizedSettings.show_season_patterns.series_folder_depth,
+            season_folder_depth: normalizedSettings.show_season_patterns.season_folder_depth,
             series_folder_regexes: normalizedSettings.show_season_patterns.series_folder_regexes,
             season_folder_regexes: normalizedSettings.show_season_patterns.season_folder_regexes,
           },
@@ -2132,6 +2143,33 @@ export function LibrariesPage() {
     setDefaultIgnorePatternInputs(defaultPatterns);
     setIgnorePatternDraft("");
     await flushIgnorePatternsSave([], defaultPatterns);
+  }
+
+  async function updateShowSeasonRecognitionMode(mode: "folder_depth" | "regex") {
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      show_season_patterns: {
+        ...patternRecognitionInputs.show_season_patterns,
+        recognition_mode: mode,
+      },
+    });
+  }
+
+  async function updateShowSeasonDepth(key: "series_folder_depth" | "season_folder_depth", value: number) {
+    const nextShowSeasonPatterns = {
+      ...patternRecognitionInputs.show_season_patterns,
+      [key]: value,
+    };
+    if (key === "series_folder_depth" && nextShowSeasonPatterns.season_folder_depth <= value) {
+      nextShowSeasonPatterns.season_folder_depth = value + 1;
+    }
+    if (key === "season_folder_depth" && value <= nextShowSeasonPatterns.series_folder_depth) {
+      nextShowSeasonPatterns.series_folder_depth = Math.max(1, value - 1);
+    }
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      show_season_patterns: nextShowSeasonPatterns,
+    });
   }
 
   function renderScanPathList(
@@ -3615,18 +3653,70 @@ export function LibrariesPage() {
                   </button>
                 </div>
                 <p className="field-hint">{t("libraries.patternRecognition.showSeasonHint")}</p>
-                <div className="ignore-pattern-sections">
-                  {renderPatternRecognitionList(
-                    "series_folder_regexes",
-                    t("libraries.patternRecognition.seriesFolderRegexes"),
-                    String.raw`^(?P<title>.+?)$`,
-                  )}
-                  {renderPatternRecognitionList(
-                    "season_folder_regexes",
-                    t("libraries.patternRecognition.seasonFolderRegexes"),
-                    String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
-                  )}
+                <div className="field" style={{ marginTop: "0.75rem" }}>
+                  <label>
+                    <span>{t("libraries.patternRecognition.modeLabel")}</span>
+                    <select
+                      value={patternRecognitionInputs.show_season_patterns.recognition_mode}
+                      disabled={isSavingPatternRecognition}
+                      onChange={(event) =>
+                        void updateShowSeasonRecognitionMode(event.currentTarget.value as "folder_depth" | "regex")
+                      }
+                    >
+                      <option value="folder_depth">{t("libraries.patternRecognition.modeFolderDepth")}</option>
+                      <option value="regex">{t("libraries.patternRecognition.modeRegex")}</option>
+                    </select>
+                  </label>
                 </div>
+                {patternRecognitionInputs.show_season_patterns.recognition_mode === "folder_depth" ? (
+                  <div className="inline-form-grid">
+                    <label>
+                      <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
+                      <select
+                        value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
+                        disabled={isSavingPatternRecognition}
+                        onChange={(event) =>
+                          void updateShowSeasonDepth("series_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                        }
+                      >
+                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                          <option key={`series-depth-${depth}`} value={depth}>
+                            {depth}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
+                      <select
+                        value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
+                        disabled={isSavingPatternRecognition}
+                        onChange={(event) =>
+                          void updateShowSeasonDepth("season_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                        }
+                      >
+                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                          <option key={`season-depth-${depth}`} value={depth}>
+                            {depth}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="ignore-pattern-sections">
+                    {renderPatternRecognitionList(
+                      "series_folder_regexes",
+                      t("libraries.patternRecognition.seriesFolderRegexes"),
+                      String.raw`^(?P<title>.+?)$`,
+                    )}
+                    {renderPatternRecognitionList(
+                      "season_folder_regexes",
+                      t("libraries.patternRecognition.seasonFolderRegexes"),
+                      String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="field">

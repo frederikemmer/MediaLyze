@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - add a Folder & pattern recognition settings panel with configurable show/season, bonus-content, and ignore-pattern rules; bonus content can now be excluded from scans or retained as classified bonus media, and Shows/Mixed libraries gain series, season, and episode recognition with tree/detail views ([#74](https://github.com/frederikemmer/MediaLyze/issues/74))
 - make the pattern-rule sections individually collapsible, link to the pattern documentation from settings, and classify all videos inside recognized season folders as episodes without requiring configurable episode filename regexes
+- add a `Folder depth` show/season recognition mode with configurable series and season depths, make it the default, and only show regex inputs when the regex mode is selected
 - show a dashboard/library layout migration notice after updates when saved panel layout entries, sizes, or comparison selections cannot be carried over exactly
 - add an in-depth Dolby Vision profiles feature flag that keeps the default UI collapsed to plain Dolby Vision while optionally showing detected profile, compatibility, level, and Profile 7 layer details
 

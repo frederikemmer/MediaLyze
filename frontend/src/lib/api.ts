@@ -487,6 +487,9 @@ export type AppSettings = {
   pattern_recognition?: {
     analyze_bonus_content: boolean;
     show_season_patterns: {
+      recognition_mode: "folder_depth" | "regex";
+      series_folder_depth: number;
+      season_folder_depth: number;
       series_folder_regexes: string[];
       season_folder_regexes: string[];
       episode_file_regexes?: string[];
@@ -970,6 +973,9 @@ export const api = {
     pattern_recognition?: {
       analyze_bonus_content?: boolean;
       show_season_patterns?: {
+        recognition_mode?: "folder_depth" | "regex";
+        series_folder_depth?: number;
+        season_folder_depth?: number;
         series_folder_regexes?: string[];
         season_folder_regexes?: string[];
       };

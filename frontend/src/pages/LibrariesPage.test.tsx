@@ -45,6 +45,26 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     ignore_patterns: ["movie.tmp", "*/@eaDir/*"],
     user_ignore_patterns: ["movie.tmp"],
     default_ignore_patterns: ["*/@eaDir/*"],
+    pattern_recognition: {
+      analyze_bonus_content: true,
+      show_season_patterns: {
+        recognition_mode: "folder_depth",
+        series_folder_depth: 1,
+        season_folder_depth: 2,
+        series_folder_regexes: ["^(?P<title>.+?)(?:\\s+\\((?P<year>\\d{4})\\))?(?:\\s+\\[[^\\]]+\\])?$"],
+        season_folder_regexes: [
+          "^(?:Season|Staffel)\\s*(?P<season>\\d{1,3})(?:\\s+\\([^)]*\\))?(?:\\s+\\[[^\\]]+\\])*$",
+        ],
+      },
+      bonus_content: {
+        user_folder_patterns: [],
+        default_folder_patterns: ["extras/*"],
+        effective_folder_patterns: ["extras/*"],
+        user_file_patterns: [],
+        default_file_patterns: [],
+        effective_file_patterns: [],
+      },
+    },
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
@@ -470,6 +490,9 @@ describe("LibrariesPage ignore patterns", () => {
     const patternRecognition = {
       analyze_bonus_content: true,
       show_season_patterns: {
+        recognition_mode: "folder_depth" as const,
+        series_folder_depth: 1,
+        season_folder_depth: 2,
         series_folder_regexes: ["^(?<title>.+)$"],
         season_folder_regexes: ["^Season (?<season>\\d+)$"],
       },
@@ -510,6 +533,75 @@ describe("LibrariesPage ignore patterns", () => {
         },
       }),
     );
+  });
+
+  it("defaults show and season recognition to folder depth and hides regex inputs", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+
+    renderPage();
+
+    expect(await screen.findByDisplayValue("Folder depth")).toBeInTheDocument();
+    expect(screen.getByLabelText("Series folder depth")).toHaveValue("1");
+    expect(screen.getByLabelText("Season folder depth")).toHaveValue("2");
+    expect(screen.queryByText("Series folder regexes")).not.toBeInTheDocument();
+    expect(screen.queryByText("Season folder regexes")).not.toBeInTheDocument();
+  });
+
+  it("switches show and season recognition to regex mode and persists the selection", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        pattern_recognition: {
+          analyze_bonus_content: true,
+          show_season_patterns: {
+            recognition_mode: "regex",
+            series_folder_depth: 1,
+            season_folder_depth: 2,
+            series_folder_regexes: ["^(?<title>.+)$"],
+            season_folder_regexes: ["^Season (?<season>\\d+)$"],
+          },
+          bonus_content: {
+            user_folder_patterns: [],
+            default_folder_patterns: ["extras/*"],
+            effective_folder_patterns: ["extras/*"],
+            user_file_patterns: [],
+            default_file_patterns: [],
+            effective_file_patterns: [],
+          },
+        },
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+
+    renderPage();
+
+    fireEvent.change(await screen.findByDisplayValue("Folder depth"), { target: { value: "regex" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        pattern_recognition: {
+          analyze_bonus_content: true,
+          show_season_patterns: {
+            recognition_mode: "regex",
+            series_folder_depth: 1,
+            season_folder_depth: 2,
+            series_folder_regexes: [
+              "^(?P<title>.+?)(?:\\s+\\((?P<year>\\d{4})\\))?(?:\\s+\\[[^\\]]+\\])?$",
+            ],
+            season_folder_regexes: [
+              "^(?:Season|Staffel)\\s*(?P<season>\\d{1,3})(?:\\s+\\([^)]*\\))?(?:\\s+\\[[^\\]]+\\])*$",
+            ],
+          },
+          bonus_content: {
+            user_folder_patterns: [],
+            default_folder_patterns: expect.any(Array),
+            user_file_patterns: [],
+            default_file_patterns: [],
+          },
+        },
+      }),
+    );
+
+    expect(updateSpy).toHaveBeenCalledTimes(1);
   });
 
   it("persists the analyzed files CSV export feature flag", async () => {

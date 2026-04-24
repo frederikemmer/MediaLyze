@@ -104,6 +104,15 @@ def _deserialize_pattern_recognition(payload: Any) -> PatternRecognitionSettings
     result = PatternRecognitionSettings(
         analyze_bonus_content=True,
         show_season_patterns={
+            "recognition_mode": show_payload.get("recognition_mode")
+            if isinstance(show_payload.get("recognition_mode"), str)
+            else defaults.show_season_patterns.recognition_mode,
+            "series_folder_depth": int(
+                show_payload.get("series_folder_depth", defaults.show_season_patterns.series_folder_depth)
+            ),
+            "season_folder_depth": int(
+                show_payload.get("season_folder_depth", defaults.show_season_patterns.season_folder_depth)
+            ),
             "series_folder_regexes": normalize_pattern_list(
                 show_payload.get("series_folder_regexes")
                 if isinstance(show_payload.get("series_folder_regexes"), list)
