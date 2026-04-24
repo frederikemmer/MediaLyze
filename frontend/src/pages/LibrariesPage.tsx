@@ -3624,6 +3624,14 @@ export function LibrariesPage() {
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
             subtitle={t("libraries.patternRecognition.subtitle")}
+            titleAddon={
+              <TooltipTrigger
+                ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
+                content={t("libraries.ignorePatternsHint")}
+              >
+                ?
+              </TooltipTrigger>
+            }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
             collapseState={{
@@ -3641,7 +3649,16 @@ export function LibrariesPage() {
               </div>
               <div className="field">
                 <div className="distribution-copy">
-                  <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
+                  <div className="field-label-row">
+                    <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.patternRecognition.showSeasonTooltipAria")}
+                      content={t("libraries.patternRecognition.showSeasonHint")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
                   <button
                     type="button"
                     className="secondary small"
@@ -3652,7 +3669,6 @@ export function LibrariesPage() {
                     {t("libraries.patternRecognition.restoreDefaults")}
                   </button>
                 </div>
-                <p className="field-hint">{t("libraries.patternRecognition.showSeasonHint")}</p>
                 <div className="field" style={{ marginTop: "0.75rem" }}>
                   <label>
                     <span>{t("libraries.patternRecognition.modeLabel")}</span>
@@ -3721,7 +3737,16 @@ export function LibrariesPage() {
 
               <div className="field">
                 <div className="distribution-copy">
-                  <strong>{t("libraries.patternRecognition.bonusTitle")}</strong>
+                  <div className="field-label-row">
+                    <strong>{t("libraries.patternRecognition.bonusTitle")}</strong>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.patternRecognition.bonusTooltipAria")}
+                      content={t("libraries.patternRecognition.bonusHint")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
                   <button
                     type="button"
                     className="secondary small"
@@ -3731,7 +3756,6 @@ export function LibrariesPage() {
                     {t("libraries.patternRecognition.restoreBonusDefaults")}
                   </button>
                 </div>
-                <p className="field-hint">{t("libraries.patternRecognition.bonusHint")}</p>
                 <div className="ignore-pattern-sections">
                   {renderPatternRecognitionList(
                     "bonus_folder_patterns",
@@ -3769,7 +3793,6 @@ export function LibrariesPage() {
                     "ignore-patterns",
                   )}
                 </div>
-                <p className="field-hint">{t("libraries.ignorePatternsHint")}</p>
               </div>
               {isSavingPatternRecognition || isSavingIgnorePatterns ? (
                 <p className="field-hint">{t("libraries.patternRecognition.saving")}</p>
