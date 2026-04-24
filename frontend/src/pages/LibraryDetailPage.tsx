@@ -43,12 +43,16 @@ import {
   api,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type GroupedMediaTableEntry,
+  type GroupedMediaTablePage,
+  type GroupedSeriesTableRow,
   type LibraryHistoryResponse,
   type LibraryStatistics,
   type LibrarySummary,
   type MediaFileQualityScoreDetail,
   type MediaFileRow,
   type MediaFileSortKey,
+  type MediaSeriesGroupedDetail,
   type MediaFileStreamDetails,
 } from "../lib/api";
 import { formatBitrate, formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
@@ -146,6 +150,9 @@ type GroupedAnalyzedFilesRow = {
   expanded: boolean;
   onToggle: () => void;
   metrics: GroupedAnalyzedFilesMetrics;
+  loadingChildren?: boolean;
+  loadingLabel?: string | null;
+  errorMessage?: string | null;
 };
 
 type TreeFileRow = MediaFileRow & {
@@ -183,6 +190,13 @@ type CachedFileList = {
   nextCursor: string | null;
   hasMore: boolean;
   items: MediaFileRow[];
+};
+
+type CachedGroupedFileList = {
+  total: number | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  items: GroupedMediaTableEntry[];
 };
 
 type FilePageLoadBehavior = {
@@ -236,6 +250,8 @@ const libraryHistoryCache = new LruCache<string, LibraryHistoryResponse>(16);
 const libraryComparisonCache = new LruCache<string, ComparisonResponse>(48);
 const libraryDuplicateGroupsCache = new LruCache<string, DuplicateGroupPage>(16);
 const libraryFileListCache = new LruCache<string, CachedFileList>(12);
+const libraryGroupedFileListCache = new LruCache<string, CachedGroupedFileList>(12);
+const librarySeriesGroupedDetailCache = new LruCache<string, MediaSeriesGroupedDetail>(64);
 const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryLayoutPanelDefinition>([
   ...LIBRARY_STATISTIC_DEFINITIONS.map(
     (definition) =>
@@ -364,6 +380,27 @@ function averageNumber(values: Array<number | null | undefined>): number | null 
   return presentValues.reduce((sum, value) => sum + value, 0) / presentValues.length;
 }
 
+function groupedEntryKey(entry: GroupedMediaTableEntry): string {
+  return entry.kind === "series" ? `series-${entry.series_id}` : `file-${entry.file.id}`;
+}
+
+function mergeUniqueGroupedEntries(
+  currentEntries: GroupedMediaTableEntry[],
+  nextEntries: GroupedMediaTableEntry[],
+): GroupedMediaTableEntry[] {
+  const seenKeys = new Set(currentEntries.map((entry) => groupedEntryKey(entry)));
+  const merged = [...currentEntries];
+  for (const entry of nextEntries) {
+    const key = groupedEntryKey(entry);
+    if (seenKeys.has(key)) {
+      continue;
+    }
+    seenKeys.add(key);
+    merged.push(entry);
+  }
+  return merged;
+}
+
 function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyzedFilesMetrics {
   return {
     size_bytes: files.reduce((sum, file) => sum + file.size_bytes, 0),
@@ -391,83 +428,38 @@ function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyze
   };
 }
 
-type TopLevelGroupedEntry =
-  | {
-      kind: "series";
-      series_id: number;
-      title: string;
-      seasons: Array<{
-        season_id: number | null;
-        season_number: number | null;
-        title: string;
-        files: MediaFileRow[];
-      }>;
-      loose_files: MediaFileRow[];
-      files: MediaFileRow[];
-    }
-  | {
-      kind: "file";
-      file: MediaFileRow;
-    };
+function buildGroupedAnalyzedFilesMetricsFromSeries(entry: GroupedSeriesTableRow): GroupedAnalyzedFilesMetrics {
+  return {
+    size_bytes: entry.total_size_bytes,
+    duration: entry.total_duration_seconds,
+    container: null,
+    video_codec: null,
+    resolution: null,
+    resolution_category_label: null,
+    hdr_type: null,
+    bitrate: entry.bitrate_average,
+    audio_bitrate: entry.audio_bitrate_average,
+    audio_codecs: [],
+    audio_spatial_profiles: [],
+    audio_languages: [],
+    subtitle_languages: [],
+    subtitle_codecs: [],
+    subtitle_sources: [],
+    quality_score: entry.quality_score_average,
+  };
+}
 
 function buildGroupedAnalyzedRows(
-  files: MediaFileRow[],
+  topLevelEntries: GroupedMediaTableEntry[],
+  seriesDetailsById: Record<number, MediaSeriesGroupedDetail>,
+  loadingSeriesDetailsById: Record<number, boolean>,
+  seriesDetailErrorById: Record<number, string | null>,
   expandedSeriesIds: Record<number, boolean>,
   expandedSeasonKeys: Record<string, boolean>,
   toggleSeries: (seriesId: number) => void,
   toggleSeason: (seasonKey: string) => void,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): AnalyzedTableRow[] {
-  const topLevelEntries: TopLevelGroupedEntry[] = [];
-  const seriesMap = new Map<number, Extract<TopLevelGroupedEntry, { kind: "series" }>>();
-
-  for (const file of files) {
-    if (!file.series_id || !file.series_title) {
-      topLevelEntries.push({ kind: "file", file });
-      continue;
-    }
-
-    let seriesEntry = seriesMap.get(file.series_id);
-    if (!seriesEntry) {
-      seriesEntry = {
-        kind: "series",
-        series_id: file.series_id,
-        title: file.series_title,
-        seasons: [],
-        loose_files: [],
-        files: [],
-      };
-      seriesMap.set(file.series_id, seriesEntry);
-      topLevelEntries.push(seriesEntry);
-    }
-
-    seriesEntry.files.push(file);
-
-    if (file.season_id || file.season_number !== null) {
-      const seasonKey = `${file.season_id ?? "season"}:${file.season_number ?? 0}`;
-      let seasonEntry = seriesEntry.seasons.find(
-        (season) => `${season.season_id ?? "season"}:${season.season_number ?? 0}` === seasonKey,
-      );
-      if (!seasonEntry) {
-        const seasonNumber = file.season_number ?? 0;
-        seasonEntry = {
-          season_id: file.season_id ?? null,
-          season_number: file.season_number ?? null,
-          title:
-            seasonNumber > 0
-              ? t("libraryDetail.series.seasonTitle", { season: seasonNumber })
-              : t("libraryDetail.series.specials"),
-          files: [],
-        };
-        seriesEntry.seasons.push(seasonEntry);
-      }
-      seasonEntry.files.push(file);
-      continue;
-    }
-
-    seriesEntry.loose_files.push(file);
-  }
-
   const rows: AnalyzedTableRow[] = [];
   for (const entry of topLevelEntries) {
     if (entry.kind === "file") {
@@ -479,6 +471,7 @@ function buildGroupedAnalyzedRows(
       continue;
     }
 
+    const detail = seriesDetailsById[entry.series_id];
     const seriesExpanded = expandedSeriesIds[entry.series_id] ?? false;
     rows.push({
       kind: "series",
@@ -486,19 +479,22 @@ function buildGroupedAnalyzedRows(
       tree_depth: 0,
       title: entry.title,
       subtitle: null,
-      episode_count: entry.files.length,
-      season_count: entry.seasons.length,
+      episode_count: entry.episode_count,
+      season_count: entry.season_count,
       expanded: seriesExpanded,
       onToggle: () => toggleSeries(entry.series_id),
-      metrics: buildGroupedAnalyzedFilesMetrics(entry.files),
+      metrics: buildGroupedAnalyzedFilesMetricsFromSeries(entry),
+      loadingChildren: loadingSeriesDetailsById[entry.series_id] ?? false,
+      loadingLabel: loadingSeriesDetailsById[entry.series_id] ? t("libraryDetail.loadingFiles") : null,
+      errorMessage: seriesDetailErrorById[entry.series_id] ?? null,
     });
 
-    if (!seriesExpanded) {
+    if (!seriesExpanded || !detail) {
       continue;
     }
 
-    for (const season of entry.seasons) {
-      const seasonKey = `series-${entry.series_id}-season-${season.season_id ?? season.season_number ?? 0}`;
+    for (const season of detail.seasons) {
+      const seasonKey = `series-${entry.series_id}-season-${season.id ?? season.season_number ?? 0}`;
       const seasonExpanded = expandedSeasonKeys[seasonKey] ?? false;
       rows.push({
         kind: "season",
@@ -506,18 +502,18 @@ function buildGroupedAnalyzedRows(
         tree_depth: 1,
         title: season.title,
         subtitle: null,
-        episode_count: season.files.length,
+        episode_count: season.episode_count,
         season_count: null,
         expanded: seasonExpanded,
         onToggle: () => toggleSeason(seasonKey),
-        metrics: buildGroupedAnalyzedFilesMetrics(season.files),
+        metrics: buildGroupedAnalyzedFilesMetrics(season.episodes),
       });
 
       if (!seasonExpanded) {
         continue;
       }
 
-      for (const file of season.files) {
+      for (const file of season.episodes) {
         rows.push({
           ...file,
           row_key: `file-${file.id}`,
@@ -526,7 +522,7 @@ function buildGroupedAnalyzedRows(
       }
     }
 
-    for (const file of entry.loose_files) {
+    for (const file of detail.episodes_without_season) {
       rows.push({
         ...file,
         row_key: `file-${file.id}`,
@@ -762,6 +758,8 @@ export function buildFileColumns(
             {row.expanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
             <span className="media-tree-copy">
               <strong className="media-tree-title">{row.title}</strong>
+              {row.loadingChildren ? <span className="media-tree-subtitle">{row.loadingLabel}</span> : null}
+              {!row.loadingChildren && row.errorMessage ? <span className="media-tree-subtitle">{row.errorMessage}</span> : null}
             </span>
           </button>
         ) : (
@@ -1282,6 +1280,14 @@ function buildLibraryComparisonQueryKey(libraryId: string, selection: Comparison
   return `${libraryId}:${selection.xField}:${selection.yField}`;
 }
 
+function buildLibrarySeriesGroupedDetailCacheKey(
+  libraryId: string,
+  seriesId: number,
+  searchFilterKey: string,
+): string {
+  return `${libraryId}:${seriesId}:${searchFilterKey}`;
+}
+
 function buildLibraryTableViewSettingsScope(libraryId: string): string {
   return `library-${libraryId}`;
 }
@@ -1334,6 +1340,10 @@ export function LibraryDetailPage() {
   );
   const [isEditingTableView, setIsEditingTableView] = useState(false);
   const [files, setFiles] = useState<MediaFileRow[]>([]);
+  const [groupedTopLevelRows, setGroupedTopLevelRows] = useState<GroupedMediaTableEntry[]>([]);
+  const [expandedSeriesDetailsById, setExpandedSeriesDetailsById] = useState<Record<number, MediaSeriesGroupedDetail>>({});
+  const [loadingSeriesDetailsById, setLoadingSeriesDetailsById] = useState<Record<number, boolean>>({});
+  const [seriesDetailErrorById, setSeriesDetailErrorById] = useState<Record<number, string | null>>({});
   const [filesTotal, setFilesTotal] = useState<number | null>(null);
   const [filesNextCursor, setFilesNextCursor] = useState<string | null>(null);
   const [hasMoreFilePages, setHasMoreFilePages] = useState(false);
@@ -1524,17 +1534,30 @@ export function LibraryDetailPage() {
     () =>
       groupedAnalyzedFilesEnabled
         ? buildGroupedAnalyzedRows(
-            files,
+            groupedTopLevelRows,
+            expandedSeriesDetailsById,
+            loadingSeriesDetailsById,
+            seriesDetailErrorById,
             expandedGroupedSeriesIds,
             expandedGroupedSeasonKeys,
             (seriesId) =>
-              setExpandedGroupedSeriesIds((current) => ({ ...current, [seriesId]: !(current[seriesId] ?? true) })),
+              setExpandedGroupedSeriesIds((current) => ({ ...current, [seriesId]: !(current[seriesId] ?? false) })),
             (seasonKey) =>
-              setExpandedGroupedSeasonKeys((current) => ({ ...current, [seasonKey]: !(current[seasonKey] ?? true) })),
+              setExpandedGroupedSeasonKeys((current) => ({ ...current, [seasonKey]: !(current[seasonKey] ?? false) })),
             t,
           )
         : files.map((file) => ({ ...file, row_key: `file-${file.id}`, tree_depth: 0 })),
-    [expandedGroupedSeasonKeys, expandedGroupedSeriesIds, files, groupedAnalyzedFilesEnabled, t],
+    [
+      expandedGroupedSeasonKeys,
+      expandedGroupedSeriesIds,
+      expandedSeriesDetailsById,
+      files,
+      groupedAnalyzedFilesEnabled,
+      groupedTopLevelRows,
+      loadingSeriesDetailsById,
+      seriesDetailErrorById,
+      t,
+    ],
   );
   const columnTemplate = useMemo(
     () => buildColumnTemplate(activeColumns, analyzedTableRows, t, columnWidthOverrides),
@@ -1608,6 +1631,7 @@ export function LibraryDetailPage() {
   const activeFileQueryKeyRef = useRef(fileQueryKey);
   const hasLoadedFilesOnceRef = useRef(false);
   const filesRef = useRef<MediaFileRow[]>([]);
+  const groupedTopLevelRowsRef = useRef<GroupedMediaTableEntry[]>([]);
   const analyzedFilesPanelRef = useRef<HTMLDivElement | null>(null);
   const pendingStatisticFocusFieldRef = useRef<LibraryFileMetadataSearchField | null>(null);
   const dataTableShellRef = useRef<HTMLDivElement | null>(null);
@@ -1630,10 +1654,12 @@ export function LibraryDetailPage() {
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
   const filesAbortRef = useRef<AbortController | null>(null);
   const filesCountAbortRef = useRef<AbortController | null>(null);
+  const seriesDetailAbortRef = useRef<Map<number, AbortController>>(new Map());
   const exportAbortRef = useRef<AbortController | null>(null);
   const hasMoreFiles = hasMoreFilePages;
+  const visibleSourceLength = groupedAnalyzedFilesEnabled ? groupedTopLevelRows.length : files.length;
   const filesTotalLabel = filesTotal === null ? "..." : String(filesTotal);
-  const filesTotalAriaCount = filesTotal ?? files.length;
+  const filesTotalAriaCount = filesTotal ?? visibleSourceLength;
   const rowVirtualizer = useVirtualizer({
     count: analyzedTableRows.length,
     getScrollElement: () => dataTableShellRef.current,
@@ -2010,6 +2036,137 @@ export function LibraryDetailPage() {
     }
   });
 
+  const loadGroupedFilesPage = useEffectEvent(async (
+    offset: number,
+    append: boolean,
+    queryKey: string,
+    behavior: FilePageLoadBehavior = {},
+  ) => {
+    const cursor = append ? filesNextCursor : null;
+    const requestKey = buildFilePageRequestKey(`grouped:${queryKey}`, cursor ?? offset);
+    if (!inflightRequestGateRef.current.begin(requestKey)) {
+      return;
+    }
+
+    filesAbortRef.current?.abort();
+    const controller = new AbortController();
+    filesAbortRef.current = controller;
+
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      const transition = resolveFileLoadTransition({
+        hasCachedFiles: false,
+        currentFilesLength: groupedTopLevelRowsRef.current.length,
+        isSameLibrary: previousLibraryIdRef.current === libraryId,
+        hasLoadedFilesOnce: hasLoadedFilesOnceRef.current,
+      });
+      const showFullLoader = behavior.showFullLoader ?? transition.showFullLoader;
+      const showInlineRefresh = behavior.showInlineRefresh ?? transition.showInlineRefresh;
+      setIsFilesLoading(showFullLoader);
+      setIsFilesRefreshing(showInlineRefresh);
+    }
+
+    try {
+      const payload = await api.libraryGroupedFiles(libraryId, {
+        offset: cursor ? 0 : offset,
+        limit: PAGE_SIZE,
+        cursor,
+        includeTotal: true,
+        filters: deferredAppliedSearchFilters,
+        sortKey,
+        sortDirection,
+        signal: controller.signal,
+      });
+      if (activeFileQueryKeyRef.current !== queryKey) {
+        return;
+      }
+
+      const nextItems = append
+        ? mergeUniqueGroupedEntries(groupedTopLevelRowsRef.current, payload.items)
+        : payload.items;
+      if (!append) {
+        hasLoadedFilesOnceRef.current = true;
+      }
+      libraryGroupedFileListCache.set(queryKey, {
+        total: payload.total,
+        nextCursor: payload.next_cursor,
+        hasMore: payload.has_more,
+        items: nextItems,
+      });
+      startTransition(() => {
+        setGroupedTopLevelRows(nextItems);
+        setFilesTotal(payload.total);
+        setFilesNextCursor(payload.next_cursor);
+        setHasMoreFilePages(payload.has_more);
+      });
+      setFilesError(null);
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      if (activeFileQueryKeyRef.current === queryKey) {
+        setFilesError((reason as Error).message);
+      }
+    } finally {
+      inflightRequestGateRef.current.end(requestKey);
+      if (filesAbortRef.current === controller) {
+        filesAbortRef.current = null;
+      }
+      if (append) {
+        setIsLoadingMore(false);
+      } else {
+        setIsFilesLoading(false);
+        setIsFilesRefreshing(false);
+      }
+    }
+  });
+
+  const loadGroupedSeriesDetail = useEffectEvent(async (seriesId: number, queryKey: string) => {
+    const cacheKey = buildLibrarySeriesGroupedDetailCacheKey(libraryId, seriesId, deferredAppliedSearchFilterKey);
+    const cachedDetail = librarySeriesGroupedDetailCache.get(cacheKey);
+    if (cachedDetail) {
+      setExpandedSeriesDetailsById((current) => (current[seriesId] ? current : { ...current, [seriesId]: cachedDetail }));
+      setSeriesDetailErrorById((current) => ({ ...current, [seriesId]: null }));
+      return;
+    }
+
+    if (loadingSeriesDetailsById[seriesId]) {
+      return;
+    }
+
+    seriesDetailAbortRef.current.get(seriesId)?.abort();
+    const controller = new AbortController();
+    seriesDetailAbortRef.current.set(seriesId, controller);
+    setLoadingSeriesDetailsById((current) => ({ ...current, [seriesId]: true }));
+    setSeriesDetailErrorById((current) => ({ ...current, [seriesId]: null }));
+
+    try {
+      const payload = await api.librarySeriesGroupedDetail(libraryId, seriesId, {
+        filters: deferredAppliedSearchFilters,
+        signal: controller.signal,
+      });
+      if (activeFileQueryKeyRef.current !== queryKey) {
+        return;
+      }
+      librarySeriesGroupedDetailCache.set(cacheKey, payload);
+      setExpandedSeriesDetailsById((current) => ({ ...current, [seriesId]: payload }));
+      setSeriesDetailErrorById((current) => ({ ...current, [seriesId]: null }));
+    } catch (reason) {
+      if ((reason as Error).name === "AbortError") {
+        return;
+      }
+      if (activeFileQueryKeyRef.current === queryKey) {
+        setSeriesDetailErrorById((current) => ({ ...current, [seriesId]: (reason as Error).message }));
+      }
+    } finally {
+      if (seriesDetailAbortRef.current.get(seriesId) === controller) {
+        seriesDetailAbortRef.current.delete(seriesId);
+      }
+      setLoadingSeriesDetailsById((current) => ({ ...current, [seriesId]: false }));
+    }
+  });
+
   const exportCsv = useEffectEvent(async () => {
     if (!displayLibrary || hasInvalidSearchField || isExporting) {
       return;
@@ -2165,6 +2322,10 @@ export function LibraryDetailPage() {
   }, [files]);
 
   useEffect(() => {
+    groupedTopLevelRowsRef.current = groupedTopLevelRows;
+  }, [groupedTopLevelRows]);
+
+  useEffect(() => {
     if (!pickerOpen) {
       return;
     }
@@ -2225,6 +2386,10 @@ export function LibraryDetailPage() {
     setComparisonLoadingByPanel({});
     setLibrarySummary(cachedSummary);
     setLibraryHistory(cachedHistory);
+    setGroupedTopLevelRows([]);
+    setExpandedSeriesDetailsById({});
+    setLoadingSeriesDetailsById({});
+    setSeriesDetailErrorById({});
     setExpandedGroupedSeriesIds({});
     setExpandedGroupedSeasonKeys({});
     setDuplicateGroups(cachedDuplicateGroups);
@@ -2258,9 +2423,9 @@ export function LibraryDetailPage() {
     setExpandedGroupedSeriesIds((current) => {
       let changed = false;
       const next = { ...current };
-      for (const file of files) {
-        if (file.series_id && next[file.series_id] === undefined) {
-          next[file.series_id] = false;
+      for (const entry of groupedTopLevelRows) {
+        if (entry.kind === "series" && next[entry.series_id] === undefined) {
+          next[entry.series_id] = false;
           changed = true;
         }
       }
@@ -2270,19 +2435,42 @@ export function LibraryDetailPage() {
     setExpandedGroupedSeasonKeys((current) => {
       let changed = false;
       const next = { ...current };
-      for (const file of files) {
-        if (!file.series_id || (file.season_id == null && file.season_number == null)) {
-          continue;
-        }
-        const seasonKey = `series-${file.series_id}-season-${file.season_id ?? file.season_number ?? 0}`;
-        if (next[seasonKey] === undefined) {
+      for (const detail of Object.values(expandedSeriesDetailsById)) {
+        for (const season of detail.seasons) {
+          const seasonKey = `series-${detail.id}-season-${season.id ?? season.season_number ?? 0}`;
+          if (next[seasonKey] !== undefined) {
+            continue;
+          }
           next[seasonKey] = false;
           changed = true;
         }
       }
       return changed ? next : current;
     });
-  }, [files, groupedAnalyzedFilesEnabled]);
+  }, [expandedSeriesDetailsById, groupedAnalyzedFilesEnabled, groupedTopLevelRows]);
+
+  useEffect(() => {
+    if (!groupedAnalyzedFilesEnabled) {
+      return;
+    }
+    for (const [seriesIdKey, expanded] of Object.entries(expandedGroupedSeriesIds)) {
+      if (!expanded) {
+        continue;
+      }
+      const seriesId = Number(seriesIdKey);
+      if (!Number.isFinite(seriesId) || expandedSeriesDetailsById[seriesId] || loadingSeriesDetailsById[seriesId]) {
+        continue;
+      }
+      void loadGroupedSeriesDetail(seriesId, fileQueryKey);
+    }
+  }, [
+    expandedGroupedSeriesIds,
+    expandedSeriesDetailsById,
+    fileQueryKey,
+    groupedAnalyzedFilesEnabled,
+    loadGroupedSeriesDetail,
+    loadingSeriesDetailsById,
+  ]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
     const activeIds = new Set(comparisonPanels.map(({ item }) => item.instanceId));
@@ -2349,12 +2537,14 @@ export function LibraryDetailPage() {
   }, [comparisonPanelsKey, libraryId]);
 
   useEffect(() => {
-    const cachedFiles = libraryFileListCache.get(fileQueryKey);
+    const cachedFiles = groupedAnalyzedFilesEnabled
+      ? libraryGroupedFileListCache.get(fileQueryKey)
+      : libraryFileListCache.get(fileQueryKey);
     const isSameLibrary = previousLibraryIdRef.current === libraryId;
     if (!isSameLibrary) {
       hasLoadedFilesOnceRef.current = false;
     }
-    const currentFilesLength = filesRef.current.length;
+    const currentFilesLength = groupedAnalyzedFilesEnabled ? groupedTopLevelRowsRef.current.length : filesRef.current.length;
     const transition = resolveFileLoadTransition({
       hasCachedFiles: Boolean(cachedFiles),
       currentFilesLength,
@@ -2366,19 +2556,31 @@ export function LibraryDetailPage() {
     setIsLoadingMore(false);
     if (cachedFiles) {
       hasLoadedFilesOnceRef.current = true;
-      setFiles(cachedFiles.items);
+      if (groupedAnalyzedFilesEnabled) {
+        setGroupedTopLevelRows(cachedFiles.items as GroupedMediaTableEntry[]);
+      } else {
+        setFiles(cachedFiles.items as MediaFileRow[]);
+      }
       setFilesTotal(cachedFiles.total);
       setFilesNextCursor(cachedFiles.nextCursor);
       setHasMoreFilePages(cachedFiles.hasMore);
       setIsFilesLoading(false);
       setIsFilesRefreshing(true);
       previousLibraryIdRef.current = libraryId;
-      void loadFilesPage(0, false, fileQueryKey, { showFullLoader: false, showInlineRefresh: true });
+      if (groupedAnalyzedFilesEnabled) {
+        void loadGroupedFilesPage(0, false, fileQueryKey, { showFullLoader: false, showInlineRefresh: true });
+      } else {
+        void loadFilesPage(0, false, fileQueryKey, { showFullLoader: false, showInlineRefresh: true });
+      }
       return;
     }
 
     if (transition.clearExisting) {
       setFiles([]);
+      setGroupedTopLevelRows([]);
+      setExpandedSeriesDetailsById({});
+      setLoadingSeriesDetailsById({});
+      setSeriesDetailErrorById({});
       setFilesTotal(null);
       setFilesNextCursor(null);
       setHasMoreFilePages(false);
@@ -2387,11 +2589,18 @@ export function LibraryDetailPage() {
     setIsFilesRefreshing(transition.showInlineRefresh);
 
     previousLibraryIdRef.current = libraryId;
-    void loadFilesPage(0, false, fileQueryKey, {
-      showFullLoader: transition.showFullLoader,
-      showInlineRefresh: transition.showInlineRefresh,
-    });
-  }, [fileQueryKey, libraryId]);
+    if (groupedAnalyzedFilesEnabled) {
+      void loadGroupedFilesPage(0, false, fileQueryKey, {
+        showFullLoader: transition.showFullLoader,
+        showInlineRefresh: transition.showInlineRefresh,
+      });
+    } else {
+      void loadFilesPage(0, false, fileQueryKey, {
+        showFullLoader: transition.showFullLoader,
+        showInlineRefresh: transition.showInlineRefresh,
+      });
+    }
+  }, [fileQueryKey, groupedAnalyzedFilesEnabled, libraryId]);
 
   useEffect(() => {
     if (!dataTableShellRef.current) {
@@ -2417,8 +2626,22 @@ export function LibraryDetailPage() {
     if (lastVirtualRow.index < analyzedTableRows.length - LOAD_MORE_THRESHOLD_ROWS) {
       return;
     }
+    if (groupedAnalyzedFilesEnabled) {
+      void loadGroupedFilesPage(groupedTopLevelRows.length, true, fileQueryKey);
+      return;
+    }
     void loadFilesPage(files.length, true, fileQueryKey);
-  }, [analyzedTableRows.length, fileQueryKey, files.length, hasMoreFiles, isFilesLoading, isLoadingMore, virtualRows]);
+  }, [
+    analyzedTableRows.length,
+    fileQueryKey,
+    files.length,
+    groupedAnalyzedFilesEnabled,
+    groupedTopLevelRows.length,
+    hasMoreFiles,
+    isFilesLoading,
+    isLoadingMore,
+    virtualRows,
+  ]);
 
   useEffect(() => {
     if (hadActiveJobRef.current && !activeJob) {
@@ -2431,13 +2654,18 @@ export function LibraryDetailPage() {
       }
       libraryDuplicateGroupsCache.delete(libraryId);
       libraryFileListCache.delete(fileQueryKey);
+      libraryGroupedFileListCache.delete(fileQueryKey);
       setQualityScoreDetails({});
       setQualityScoreLoading({});
       void loadLibrarySummary(false);
       void loadLibraryStatistics(false);
       void loadLibraryHistory(false);
       void loadDuplicateGroups(false);
-      void loadFilesPage(0, false, fileQueryKey);
+      if (groupedAnalyzedFilesEnabled) {
+        void loadGroupedFilesPage(0, false, fileQueryKey);
+      } else {
+        void loadFilesPage(0, false, fileQueryKey);
+      }
       syncComparisonPanels(true);
     }
     hadActiveJobRef.current = Boolean(activeJob);
@@ -2445,6 +2673,7 @@ export function LibraryDetailPage() {
     activeJob,
     comparisonPanelsKey,
     fileQueryKey,
+    groupedAnalyzedFilesEnabled,
     libraryId,
     visibleLibraryStatisticPanelIdsKey,
   ]);
@@ -2461,6 +2690,10 @@ export function LibraryDetailPage() {
       duplicateGroupsAbortRef.current?.abort();
       filesAbortRef.current?.abort();
       filesCountAbortRef.current?.abort();
+      for (const controller of seriesDetailAbortRef.current.values()) {
+        controller.abort();
+      }
+      seriesDetailAbortRef.current.clear();
       exportAbortRef.current?.abort();
       inflightRequestGateRef.current.reset();
     };
@@ -2715,7 +2948,7 @@ export function LibraryDetailPage() {
               !isEditingTableView &&
               !isFilesLoading &&
               !filesError &&
-              files.length === 0;
+              visibleSourceLength === 0;
             if (isCollapsedLargePanel) {
               collapsedPanelsBefore += 1;
             }
@@ -3118,17 +3351,17 @@ export function LibraryDetailPage() {
                             </div>
                           ) : null}
                         </div>
-                        {isFilesLoading && files.length === 0 ? (
+                        {isFilesLoading && visibleSourceLength === 0 ? (
                           <div className="panel-loader">
                             <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
                             <span>{t("libraryDetail.loadingFiles")}</span>
                           </div>
-                        ) : files.length === 0 ? (
+                        ) : visibleSourceLength === 0 ? (
                           <div className="analyzed-files-empty-state">{t("libraryDetail.noAnalyzedFiles")}</div>
                         ) : (
                           <div ref={dataTableShellRef} className="data-table-shell">
                             <span className="sr-only">
-                              {t("libraryDetail.renderedEntries", { rendered: files.length, total: filesTotalLabel })}
+                              {t("libraryDetail.renderedEntries", { rendered: visibleSourceLength, total: filesTotalLabel })}
                             </span>
                             <div className="media-data-table" role="table" aria-rowcount={analyzedTableRows.length}>
                               <div className="media-data-table-head" role="rowgroup">

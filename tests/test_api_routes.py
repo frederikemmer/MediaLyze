@@ -254,6 +254,86 @@ def test_library_series_routes_return_recognized_hierarchy() -> None:
     assert detail_payload["seasons"][0]["episodes"][0]["episode_title"] == "Pilot"
 
 
+def test_grouped_library_file_routes_return_top_level_rows_and_series_detail() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Shows",
+            path="/tmp/grouped-routes",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        series = MediaSeries(
+            library_id=library.id,
+            title="Example Show",
+            normalized_title="example show",
+            relative_path="Example Show",
+            year=2024,
+        )
+        db.add(series)
+        db.flush()
+        season = MediaSeason(
+            library_id=library.id,
+            series_id=series.id,
+            season_number=1,
+            title="Season 1",
+            relative_path="Example Show/Season 1",
+        )
+        db.add(season)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Example Show/Season 1/Example Show - S01E01.mkv",
+                    filename="Example Show - S01E01.mkv",
+                    extension="mkv",
+                    size_bytes=1024,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=8,
+                    duration_seconds=3600,
+                    bitrate=4_000_000,
+                    audio_bitrate=256_000,
+                    series_id=series.id,
+                    season_id=season.id,
+                    episode_number=1,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="standalone.mkv",
+                    filename="standalone.mkv",
+                    extension="mkv",
+                    size_bytes=512,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=6,
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        grouped_response = client.get(f"/api/libraries/{library.id}/files/grouped")
+        detail_response = client.get(f"/api/libraries/{library.id}/series/{series.id}/grouped-detail")
+
+    assert grouped_response.status_code == 200
+    grouped_payload = grouped_response.json()
+    assert grouped_payload["total"] == 2
+    assert [item["kind"] for item in grouped_payload["items"]] == ["series", "file"]
+    assert grouped_payload["items"][0]["title"] == "Example Show"
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["episode_count"] == 1
+    assert detail_payload["seasons"][0]["episodes"][0]["filename"] == "Example Show - S01E01.mkv"
+
+
 def test_library_statistics_route_includes_numeric_distributions() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

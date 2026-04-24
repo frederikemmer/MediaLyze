@@ -12,6 +12,8 @@ from backend.app.models.entities import (
     Library,
     LibraryType,
     MediaFile,
+    MediaSeason,
+    MediaSeries,
     MediaFormat,
     ScanMode,
     ScanStatus,
@@ -20,7 +22,12 @@ from backend.app.models.entities import (
 )
 from backend.app.services.library_service import get_library_statistics
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
-from backend.app.services.media_service import generate_library_files_csv_export, list_library_files
+from backend.app.services.media_service import (
+    generate_library_files_csv_export,
+    get_grouped_library_series_detail,
+    list_grouped_library_files,
+    list_library_files,
+)
 
 
 def _collect_csv_export_text(chunks) -> str:
@@ -1585,3 +1592,122 @@ def test_list_library_files_matches_deduplicated_codec_and_source_statistics() -
     assert audio_codec_page.total == 1
     assert subtitle_codec_page.total == 1
     assert subtitle_source_page.total == 1
+
+
+def test_grouped_library_files_page_counts_top_level_entries_and_loads_series_detail() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Shows",
+            path="/tmp/grouped-shows",
+            type=LibraryType.series,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        series = MediaSeries(
+            library_id=library.id,
+            title="Example Show",
+            normalized_title="example show",
+            relative_path="Example Show",
+            year=2024,
+        )
+        db.add(series)
+        db.flush()
+
+        season = MediaSeason(
+            library_id=library.id,
+            series_id=series.id,
+            season_number=1,
+            title="Season 1",
+            relative_path="Example Show/Season 1",
+        )
+        db.add(season)
+        db.flush()
+
+        episode_one = MediaFile(
+            library_id=library.id,
+            relative_path="Example Show/Season 1/Example Show - S01E01.mkv",
+            filename="Example Show - S01E01.mkv",
+            extension="mkv",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=8,
+            duration_seconds=3600,
+            bitrate=4_000_000,
+            audio_bitrate=256_000,
+            primary_video_codec="h264",
+            primary_video_width=1920,
+            primary_video_height=1080,
+            primary_video_resolution_pixels=1920 * 1080,
+            series_id=series.id,
+            season_id=season.id,
+            episode_number=1,
+        )
+        episode_two = MediaFile(
+            library_id=library.id,
+            relative_path="Example Show/Season 1/Example Show - S01E02.mkv",
+            filename="Example Show - S01E02.mkv",
+            extension="mkv",
+            size_bytes=2048,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=7,
+            duration_seconds=3500,
+            bitrate=5_000_000,
+            audio_bitrate=384_000,
+            primary_video_codec="h264",
+            primary_video_width=1920,
+            primary_video_height=1080,
+            primary_video_resolution_pixels=1920 * 1080,
+            series_id=series.id,
+            season_id=season.id,
+            episode_number=2,
+        )
+        loose_file = MediaFile(
+            library_id=library.id,
+            relative_path="bonus/interview.mkv",
+            filename="interview.mkv",
+            extension="mkv",
+            size_bytes=512,
+            mtime=3.0,
+            scan_status=ScanStatus.ready,
+            quality_score=6,
+        )
+        db.add_all([episode_one, episode_two, loose_file])
+        db.flush()
+        db.add_all(
+            [
+                MediaFormat(media_file_id=episode_one.id, duration=3600, bit_rate=4_000_000),
+                MediaFormat(media_file_id=episode_two.id, duration=3500, bit_rate=5_000_000),
+                AudioStream(media_file_id=episode_one.id, stream_index=1, codec="aac", bit_rate=256_000),
+                AudioStream(media_file_id=episode_two.id, stream_index=1, codec="aac", bit_rate=384_000),
+            ]
+        )
+        db.commit()
+
+        grouped_page = list_grouped_library_files(db, library.id, limit=50)
+        grouped_detail = get_grouped_library_series_detail(db, library.id, series.id)
+
+    assert grouped_page.total == 2
+    assert [item.kind for item in grouped_page.items] == ["file", "series"]
+    series_row = next(item for item in grouped_page.items if item.kind == "series")
+    assert series_row.episode_count == 2
+    assert series_row.season_count == 1
+    assert series_row.total_size_bytes == 3072
+    assert series_row.quality_score_average == 7.5
+    assert series_row.bitrate_average == 4_500_000
+    assert series_row.audio_bitrate_average == 320_000
+    assert grouped_detail is not None
+    assert grouped_detail.episode_count == 2
+    assert grouped_detail.seasons[0].episode_count == 2
+    assert [episode.filename for episode in grouped_detail.seasons[0].episodes] == [
+        "Example Show - S01E01.mkv",
+        "Example Show - S01E02.mkv",
+    ]

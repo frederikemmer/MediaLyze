@@ -460,6 +460,43 @@ export type MediaSeriesDetail = MediaSeriesSummary & {
   seasons: MediaSeasonDetail[];
 };
 
+export type GroupedSeriesTableRow = {
+  kind: "series";
+  series_id: number;
+  title: string;
+  relative_path: string;
+  year: number | null;
+  season_count: number;
+  episode_count: number;
+  total_size_bytes: number;
+  total_duration_seconds: number;
+  quality_score_average: number | null;
+  bitrate_average: number | null;
+  audio_bitrate_average: number | null;
+  children_loaded: boolean;
+};
+
+export type GroupedLooseFileTableRow = {
+  kind: "file";
+  file: MediaFileRow;
+};
+
+export type GroupedMediaTableEntry = GroupedSeriesTableRow | GroupedLooseFileTableRow;
+
+export type GroupedMediaTablePage = {
+  total: number | null;
+  offset: number;
+  limit: number;
+  next_cursor: string | null;
+  has_more: boolean;
+  items: GroupedMediaTableEntry[];
+};
+
+export type MediaSeriesGroupedDetail = MediaSeriesSummary & {
+  seasons: MediaSeasonDetail[];
+  episodes_without_season: MediaFileRow[];
+};
+
 export type BrowseResponse = {
   current_path: string;
   parent_path: string | null;
@@ -907,6 +944,15 @@ export const api = {
     request<MediaSeriesSummary[]>(`/libraries/${id}/series`, { signal }),
   librarySeriesDetail: (libraryId: string | number, seriesId: string | number, signal?: AbortSignal) =>
     request<MediaSeriesDetail>(`/libraries/${libraryId}/series/${seriesId}`, { signal }),
+  librarySeriesGroupedDetail: (
+    libraryId: string | number,
+    seriesId: string | number,
+    params?: Omit<LibraryFilesRequestParams, "offset" | "limit" | "cursor" | "sortKey" | "sortDirection" | "includeTotal">,
+  ) =>
+    request<MediaSeriesGroupedDetail>(
+      buildLibraryFilesPath(libraryId, params as LibraryFilesRequestParams | undefined, `/series/${seriesId}/grouped-detail`),
+      { signal: params?.signal },
+    ),
   libraryComparison: (
     id: string | number,
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
@@ -933,6 +979,10 @@ export const api = {
   },
   libraryFiles: (id: string | number, params?: LibraryFilesRequestParams) =>
     request<MediaFileTablePage>(buildLibraryFilesPath(id, params), {
+      signal: params?.signal,
+    }),
+  libraryGroupedFiles: (id: string | number, params?: LibraryFilesRequestParams) =>
+    request<GroupedMediaTablePage>(buildLibraryFilesPath(id, params, "/files/grouped"), {
       signal: params?.signal,
     }),
   downloadLibraryFilesCsv: async (

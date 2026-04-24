@@ -17,9 +17,11 @@ import {
   type AppSettings,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type GroupedMediaTablePage,
   type LibraryHistoryResponse,
   type LibraryStatistics,
   type LibrarySummary,
+  type MediaSeriesGroupedDetail,
   type MediaFileStreamDetails,
   type MediaFileTablePage,
 } from "../lib/api";
@@ -39,12 +41,12 @@ Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   value: scrollIntoViewMock,
 });
 
-function createLibrarySummary(id: number): LibrarySummary {
+function createLibrarySummary(id: number, overrides: Partial<LibrarySummary> = {}): LibrarySummary {
   return {
     id,
     name: `Series ${id}`,
     path: `/media/series-${id}`,
-    type: "series",
+    type: "movies",
     last_scan_at: "2026-03-12T09:00:00Z",
     scan_mode: "manual",
     duplicate_detection_mode: "off",
@@ -58,6 +60,7 @@ function createLibrarySummary(id: number): LibrarySummary {
     total_duration_seconds: 7200,
     ready_files: 2,
     pending_files: 0,
+    ...overrides,
   };
 }
 
@@ -300,79 +303,126 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
   };
 }
 
-function createGroupedSeriesFilesPage(libraryId: number): MediaFileTablePage {
+function createGroupedSeriesFilesPage(libraryId: number): GroupedMediaTablePage {
   return {
-    total: 2,
+    total: 1,
     offset: 0,
     limit: 200,
     next_cursor: null,
     has_more: false,
     items: [
       {
-        id: 11,
-        library_id: libraryId,
-        relative_path: "Example Show/Season 1/Example Show - S01E01.mkv",
-        filename: "Example Show - S01E01.mkv",
-        extension: "mkv",
-        size_bytes: 1_024,
-        mtime: 1,
-        last_seen_at: "2026-03-12T09:00:00Z",
-        last_analyzed_at: "2026-03-12T09:00:00Z",
-        scan_status: "ready",
-        quality_score: 8,
-        quality_score_raw: 82.4,
-        container: "mkv",
-        duration: 3600,
-        bitrate: 4_000_000,
-        audio_bitrate: 256_000,
-        video_codec: "h264",
-        resolution: "1920x1080",
-        resolution_category_label: "1080p",
-        hdr_type: null,
-        audio_codecs: ["aac"],
-        audio_spatial_profiles: [],
-        audio_languages: ["en"],
-        subtitle_languages: ["de", "en"],
-        subtitle_codecs: ["srt"],
-        subtitle_sources: ["external"],
+        kind: "series",
         series_id: 7,
-        series_title: "Example Show",
-        season_id: 13,
-        season_number: 1,
-      },
-      {
-        id: 12,
-        library_id: libraryId,
-        relative_path: "Example Show/Season 1/Example Show - S01E02.mkv",
-        filename: "Example Show - S01E02.mkv",
-        extension: "mkv",
-        size_bytes: 2_048,
-        mtime: 2,
-        last_seen_at: "2026-03-12T09:00:00Z",
-        last_analyzed_at: "2026-03-12T09:00:00Z",
-        scan_status: "ready",
-        quality_score: 7,
-        quality_score_raw: 74.1,
-        container: "mkv",
-        duration: 3500,
-        bitrate: 4_000_000,
-        audio_bitrate: 256_000,
-        video_codec: "h264",
-        resolution: "1920x1080",
-        resolution_category_label: "1080p",
-        hdr_type: null,
-        audio_codecs: ["aac"],
-        audio_spatial_profiles: [],
-        audio_languages: ["en"],
-        subtitle_languages: ["de", "en"],
-        subtitle_codecs: ["srt"],
-        subtitle_sources: ["external"],
-        series_id: 7,
-        series_title: "Example Show",
-        season_id: 13,
-        season_number: 1,
+        title: "Example Show",
+        relative_path: "Example Show",
+        year: 2024,
+        season_count: 1,
+        episode_count: 2,
+        total_size_bytes: 3072,
+        total_duration_seconds: 7100,
+        quality_score_average: 7.5,
+        bitrate_average: 4_000_000,
+        audio_bitrate_average: 256_000,
+        children_loaded: false,
       },
     ],
+  };
+}
+
+function createGroupedSeriesDetail(libraryId: number): MediaSeriesGroupedDetail {
+  return {
+    id: 7,
+    library_id: libraryId,
+    title: "Example Show",
+    normalized_title: "example show",
+    relative_path: "Example Show",
+    year: 2024,
+    season_count: 1,
+    episode_count: 2,
+    total_size_bytes: 3072,
+    total_duration_seconds: 7100,
+    last_analyzed_at: "2026-03-12T09:00:00Z",
+    seasons: [
+      {
+        id: 13,
+        library_id: libraryId,
+        series_id: 7,
+        season_number: 1,
+        title: "Season 1",
+        relative_path: "Example Show/Season 1",
+        episode_count: 2,
+        total_size_bytes: 3072,
+        total_duration_seconds: 7100,
+        episodes: [
+          {
+            id: 11,
+            library_id: libraryId,
+            relative_path: "Example Show/Season 1/Example Show - S01E01.mkv",
+            filename: "Example Show - S01E01.mkv",
+            extension: "mkv",
+            size_bytes: 1_024,
+            mtime: 1,
+            last_seen_at: "2026-03-12T09:00:00Z",
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+            scan_status: "ready",
+            quality_score: 8,
+            quality_score_raw: 82.4,
+            container: "mkv",
+            duration: 3600,
+            bitrate: 4_000_000,
+            audio_bitrate: 256_000,
+            video_codec: "h264",
+            resolution: "1920x1080",
+            resolution_category_label: "1080p",
+            hdr_type: null,
+            audio_codecs: ["aac"],
+            audio_spatial_profiles: [],
+            audio_languages: ["en"],
+            subtitle_languages: ["de", "en"],
+            subtitle_codecs: ["srt"],
+            subtitle_sources: ["external"],
+            series_id: 7,
+            series_title: "Example Show",
+            season_id: 13,
+            season_number: 1,
+          },
+          {
+            id: 12,
+            library_id: libraryId,
+            relative_path: "Example Show/Season 1/Example Show - S01E02.mkv",
+            filename: "Example Show - S01E02.mkv",
+            extension: "mkv",
+            size_bytes: 2_048,
+            mtime: 2,
+            last_seen_at: "2026-03-12T09:00:00Z",
+            last_analyzed_at: "2026-03-12T09:00:00Z",
+            scan_status: "ready",
+            quality_score: 7,
+            quality_score_raw: 74.1,
+            container: "mkv",
+            duration: 3500,
+            bitrate: 4_000_000,
+            audio_bitrate: 256_000,
+            video_codec: "h264",
+            resolution: "1920x1080",
+            resolution_category_label: "1080p",
+            hdr_type: null,
+            audio_codecs: ["aac"],
+            audio_spatial_profiles: [],
+            audio_languages: ["en"],
+            subtitle_languages: ["de", "en"],
+            subtitle_codecs: ["srt"],
+            subtitle_sources: ["external"],
+            series_id: 7,
+            series_title: "Example Show",
+            season_id: 13,
+            season_number: 1,
+          },
+        ],
+      },
+    ],
+    episodes_without_season: [],
   };
 }
 
@@ -518,6 +568,22 @@ beforeEach(() => {
   vi.spyOn(api, "libraryComparison").mockResolvedValue(createComparisonResponse());
   vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
   vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+  vi.spyOn(api, "libraryGroupedFiles").mockResolvedValue({ total: 0, offset: 0, limit: 200, next_cursor: null, has_more: false, items: [] });
+  vi.spyOn(api, "librarySeriesGroupedDetail").mockResolvedValue({
+    id: 0,
+    library_id: 0,
+    title: "",
+    normalized_title: "",
+    relative_path: "",
+    year: null,
+    season_count: 0,
+    episode_count: 0,
+    total_size_bytes: 0,
+    total_duration_seconds: 0,
+    last_analyzed_at: null,
+    seasons: [],
+    episodes_without_season: [],
+  });
 });
 
 describe("LibraryDetailPage", () => {
@@ -545,13 +611,14 @@ describe("LibraryDetailPage", () => {
   it("groups recognized series and seasons inside analyzed files without showing a series/files switch", async () => {
     const libraryId = 141;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
-    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId, { type: "series" }));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
-    vi.spyOn(api, "libraryFiles").mockResolvedValue(createGroupedSeriesFilesPage(libraryId));
+    vi.spyOn(api, "libraryGroupedFiles").mockResolvedValue(createGroupedSeriesFilesPage(libraryId));
+    const seriesDetailSpy = vi.spyOn(api, "librarySeriesGroupedDetail").mockResolvedValue(createGroupedSeriesDetail(libraryId));
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
+    expect(await screen.findByText("1 of 1 entries rendered")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Series$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Files$/ })).not.toBeInTheDocument();
     const seriesButton = screen.getByRole("button", { name: "Example Show 1 seasons 2 episodes" });
@@ -562,6 +629,8 @@ describe("LibraryDetailPage", () => {
     expect(screen.queryByRole("link", { name: "Example Show - S01E02.mkv" })).not.toBeInTheDocument();
 
     fireEvent.click(seriesButton);
+
+    await waitFor(() => expect(seriesDetailSpy).toHaveBeenCalled());
 
     const seasonButton = screen.getByRole("button", { name: "Season 1 2 episodes" });
     expect(seasonButton).toHaveTextContent("Season 1");

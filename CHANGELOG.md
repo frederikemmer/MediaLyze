@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - replace the library rename browser prompt with inline editing in Settings so library name and library type can be changed together from the library card header
 - move the header version pill slightly upward so it visually aligns with the app title without changing its size
+- make grouped series table views page by visible top-level rows instead of hidden episodes and lazy-load expanded series details so scrolling stays responsive in large libraries
 
 ## v0.8.4
 
