@@ -3774,6 +3774,7 @@ html[data-theme="dark"] .file-history-old-value {
 
 .media-data-body-row {
   position: absolute;
+  top: 0;
   left: 0;
   width: 100%;
   background: rgba(255, 255, 255, 0.72);
@@ -3789,7 +3790,7 @@ html[data-theme="dark"] .file-history-old-value {
 
 .media-data-cell {
   min-width: 0;
-  padding: 12px 10px;
+  padding: 10px 10px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid rgba(31, 28, 22, 0.08);
@@ -3933,6 +3934,7 @@ body.is-column-resizing {
   gap: 8px;
   width: 100%;
   padding: 0;
+  min-height: 0;
   border: 0;
   background: transparent;
   color: inherit;

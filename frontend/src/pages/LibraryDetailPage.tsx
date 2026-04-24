@@ -1559,6 +1559,17 @@ export function LibraryDetailPage() {
       t,
     ],
   );
+  const analyzedTableRowMeasurementKey = useMemo(
+    () =>
+      analyzedTableRows
+        .map((row) =>
+          isGroupedAnalyzedFilesRow(row)
+            ? `${row.row_key}:${row.expanded ? 1 : 0}:${row.loadingChildren ? 1 : 0}:${row.errorMessage ?? ""}`
+            : row.row_key,
+        )
+        .join("|"),
+    [analyzedTableRows],
+  );
   const columnTemplate = useMemo(
     () => buildColumnTemplate(activeColumns, analyzedTableRows, t, columnWidthOverrides),
     [activeColumns, analyzedTableRows, columnWidthOverrides, t],
@@ -1680,7 +1691,11 @@ export function LibraryDetailPage() {
 
   useLayoutEffect(() => {
     rowVirtualizer.measure();
-  }, [analyzedTableRows.length, columnTemplate, rowVirtualizer]);
+    const frame = requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [analyzedTableRowMeasurementKey, columnTemplate, rowVirtualizer]);
 
   const toggleMetadataField = useEffectEvent((field: LibraryFileMetadataSearchField) => {
     startTransition(() => {
@@ -2616,7 +2631,7 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     rowVirtualizer.measure();
-  }, [activeColumnSignature, analyzedTableRows.length, columnTemplate, rowVirtualizer]);
+  }, [activeColumnSignature, analyzedTableRowMeasurementKey, columnTemplate, rowVirtualizer]);
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
