@@ -72,20 +72,32 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       analyze_bonus_content:
         payload?.pattern_recognition?.analyze_bonus_content ?? DEFAULT_PATTERN_RECOGNITION.analyze_bonus_content,
       show_season_patterns: {
+        recognition_mode:
+          payload?.pattern_recognition?.show_season_patterns?.recognition_mode ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.recognition_mode,
+        series_folder_depth:
+          payload?.pattern_recognition?.show_season_patterns?.series_folder_depth ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.series_folder_depth,
+        season_folder_depth:
+          payload?.pattern_recognition?.show_season_patterns?.season_folder_depth ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.season_folder_depth,
         series_folder_regexes:
           payload?.pattern_recognition?.show_season_patterns?.series_folder_regexes ??
           DEFAULT_PATTERN_RECOGNITION.show_season_patterns.series_folder_regexes,
         season_folder_regexes:
           payload?.pattern_recognition?.show_season_patterns?.season_folder_regexes ??
           DEFAULT_PATTERN_RECOGNITION.show_season_patterns.season_folder_regexes,
+        episode_file_regexes:
+          payload?.pattern_recognition?.show_season_patterns?.episode_file_regexes ??
+          DEFAULT_PATTERN_RECOGNITION.show_season_patterns.episode_file_regexes,
       },
       bonus_content: {
         user_folder_patterns: payload?.pattern_recognition?.bonus_content?.user_folder_patterns ?? [],
         default_folder_patterns: payload?.pattern_recognition?.bonus_content?.default_folder_patterns ?? [],
         effective_folder_patterns: payload?.pattern_recognition?.bonus_content?.effective_folder_patterns ?? [],
-        user_file_patterns: payload?.pattern_recognition?.bonus_content?.user_file_patterns ?? [],
-        default_file_patterns: payload?.pattern_recognition?.bonus_content?.default_file_patterns ?? [],
-        effective_file_patterns: payload?.pattern_recognition?.bonus_content?.effective_file_patterns ?? [],
+        user_file_patterns: [],
+        default_file_patterns: [],
+        effective_file_patterns: [],
       },
     },
     resolution_categories: normalizeResolutionCategories(payload?.resolution_categories),

@@ -30,6 +30,7 @@ from backend.app.models.entities import (
 from backend.app.services import scanner as scanner_service
 from backend.app.services.library_service import get_library_statistics
 from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.pattern_recognition import default_pattern_recognition_settings, recognize_media_path
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import run_scan
 from backend.app.utils.time import utc_now
@@ -892,7 +893,9 @@ def test_scan_merges_user_and_default_ignore_patterns(tmp_path: Path, monkeypatc
     assert [subtitle.path for subtitle in subtitles] == ["movie.en.srt"]
 
 
-def test_scan_excludes_bonus_content_when_bonus_analysis_is_disabled(tmp_path: Path, monkeypatch) -> None:
+def test_scan_marks_bonus_content_from_bonus_folders_even_if_legacy_setting_disables_it(
+    tmp_path: Path, monkeypatch
+) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
     (media_dir / "movie.mkv").write_text("video")
@@ -937,9 +940,11 @@ def test_scan_excludes_bonus_content_when_bonus_analysis_is_disabled(tmp_path: P
         job = run_scan(db, settings, library.id, "incremental")
         indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
 
-    assert [media_file.relative_path for media_file in indexed_files] == ["movie.mkv"]
-    assert job.scan_summary["pattern_recognition"]["analyze_bonus_content"] is False
-    assert job.scan_summary["pattern_recognition"]["bonus_ignored_total"] == 1
+    assert [media_file.relative_path for media_file in indexed_files] == ["Extras/featurette.mkv", "movie.mkv"]
+    bonus = next(media_file for media_file in indexed_files if media_file.relative_path == "Extras/featurette.mkv")
+    assert getattr(bonus.content_category, "value", bonus.content_category) == "bonus"
+    assert job.scan_summary["pattern_recognition"]["analyze_bonus_content"] is True
+    assert job.scan_summary["pattern_recognition"]["bonus_ignored_total"] == 0
 
 
 def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypatch) -> None:
@@ -987,6 +992,50 @@ def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypa
     assert job.scan_summary["pattern_recognition"]["series_detected"] == 1
     assert job.scan_summary["pattern_recognition"]["seasons_detected"] == 1
     assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 1
+
+
+def test_recognize_media_path_accepts_season_folder_suffix_metadata() -> None:
+    settings = default_pattern_recognition_settings()
+
+    plain = recognize_media_path(
+        "SERIENNAME2/Staffel 2/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+    with_year = recognize_media_path(
+        "SERIENNAME3/Staffel 5 (2026)/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+    with_year_and_tags = recognize_media_path(
+        "SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264] [ger, eng, ita, fra]/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert plain.series_title == "SERIENNAME2"
+    assert plain.season_number == 2
+    assert with_year.series_title == "SERIENNAME3"
+    assert with_year.season_number == 5
+    assert with_year_and_tags.series_title == "SERIENNAME1"
+    assert with_year_and_tags.season_number == 4
+
+
+def test_recognize_media_path_uses_configured_folder_depth_mode() -> None:
+    settings = default_pattern_recognition_settings()
+    settings.show_season_patterns.series_folder_depth = 2
+    settings.show_season_patterns.season_folder_depth = 3
+
+    recognized = recognize_media_path(
+        "TV/SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264]/Folge 01.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert recognized.series_title == "SERIENNAME1"
+    assert recognized.series_relative_path == "TV/SERIENNAME1"
+    assert recognized.season_relative_path == "TV/SERIENNAME1/Staffel 4 (2026) [1080p, SDR, h264]"
+    assert recognized.season_number == 4
 
 
 def test_incremental_scan_updates_existing_files_when_size_or_mtime_changes(tmp_path: Path, monkeypatch) -> None:

@@ -101,16 +101,18 @@ def _deserialize_pattern_recognition(payload: Any) -> PatternRecognitionSettings
         if isinstance(bonus_payload.get("default_folder_patterns"), list)
         else defaults.bonus_content.default_folder_patterns
     )
-    user_file_patterns = normalize_pattern_list(bonus_payload.get("user_file_patterns"))
-    default_file_patterns = normalize_pattern_list(
-        bonus_payload.get("default_file_patterns")
-        if isinstance(bonus_payload.get("default_file_patterns"), list)
-        else defaults.bonus_content.default_file_patterns
-    )
-
     result = PatternRecognitionSettings(
-        analyze_bonus_content=bool(candidate.get("analyze_bonus_content", defaults.analyze_bonus_content)),
+        analyze_bonus_content=True,
         show_season_patterns={
+            "recognition_mode": show_payload.get("recognition_mode")
+            if isinstance(show_payload.get("recognition_mode"), str)
+            else defaults.show_season_patterns.recognition_mode,
+            "series_folder_depth": int(
+                show_payload.get("series_folder_depth", defaults.show_season_patterns.series_folder_depth)
+            ),
+            "season_folder_depth": int(
+                show_payload.get("season_folder_depth", defaults.show_season_patterns.season_folder_depth)
+            ),
             "series_folder_regexes": normalize_pattern_list(
                 show_payload.get("series_folder_regexes")
                 if isinstance(show_payload.get("series_folder_regexes"), list)
@@ -131,9 +133,9 @@ def _deserialize_pattern_recognition(payload: Any) -> PatternRecognitionSettings
             "user_folder_patterns": user_folder_patterns,
             "default_folder_patterns": default_folder_patterns,
             "effective_folder_patterns": merge_pattern_lists(user_folder_patterns, default_folder_patterns),
-            "user_file_patterns": user_file_patterns,
-            "default_file_patterns": default_file_patterns,
-            "effective_file_patterns": merge_pattern_lists(user_file_patterns, default_file_patterns),
+            "user_file_patterns": [],
+            "default_file_patterns": [],
+            "effective_file_patterns": [],
         },
     )
     validate_pattern_recognition_settings(result)
@@ -324,8 +326,6 @@ def update_app_settings(
     next_pattern_recognition = current.pattern_recognition.model_copy(deep=True)
     if payload.pattern_recognition is not None:
         pattern_payload = payload.pattern_recognition
-        if pattern_payload.analyze_bonus_content is not None:
-            next_pattern_recognition.analyze_bonus_content = pattern_payload.analyze_bonus_content
         if pattern_payload.show_season_patterns is not None:
             show_updates = pattern_payload.show_season_patterns.model_dump(exclude_none=True)
             next_pattern_recognition.show_season_patterns = (
@@ -336,27 +336,25 @@ def update_app_settings(
             next_bonus = next_pattern_recognition.bonus_content.model_copy(update=bonus_updates)
             next_bonus.user_folder_patterns = normalize_pattern_list(next_bonus.user_folder_patterns)
             next_bonus.default_folder_patterns = normalize_pattern_list(next_bonus.default_folder_patterns)
-            next_bonus.user_file_patterns = normalize_pattern_list(next_bonus.user_file_patterns)
-            next_bonus.default_file_patterns = normalize_pattern_list(next_bonus.default_file_patterns)
+            next_bonus.user_file_patterns = []
+            next_bonus.default_file_patterns = []
             next_bonus.effective_folder_patterns = merge_pattern_lists(
                 next_bonus.user_folder_patterns,
                 next_bonus.default_folder_patterns,
             )
-            next_bonus.effective_file_patterns = merge_pattern_lists(
-                next_bonus.user_file_patterns,
-                next_bonus.default_file_patterns,
-            )
+            next_bonus.effective_file_patterns = []
             next_pattern_recognition.bonus_content = next_bonus
-        next_pattern_recognition.show_season_patterns.series_folder_regexes = normalize_pattern_list(
-            next_pattern_recognition.show_season_patterns.series_folder_regexes
-        )
-        next_pattern_recognition.show_season_patterns.season_folder_regexes = normalize_pattern_list(
-            next_pattern_recognition.show_season_patterns.season_folder_regexes
-        )
-        next_pattern_recognition.show_season_patterns.episode_file_regexes = normalize_pattern_list(
-            next_pattern_recognition.show_season_patterns.episode_file_regexes
-        )
-        validate_pattern_recognition_settings(next_pattern_recognition)
+    next_pattern_recognition.analyze_bonus_content = True
+    next_pattern_recognition.show_season_patterns.series_folder_regexes = normalize_pattern_list(
+        next_pattern_recognition.show_season_patterns.series_folder_regexes
+    )
+    next_pattern_recognition.show_season_patterns.season_folder_regexes = normalize_pattern_list(
+        next_pattern_recognition.show_season_patterns.season_folder_regexes
+    )
+    next_pattern_recognition.show_season_patterns.episode_file_regexes = normalize_pattern_list(
+        next_pattern_recognition.show_season_patterns.episode_file_regexes
+    )
+    validate_pattern_recognition_settings(next_pattern_recognition)
     history_retention_updates = {}
     if payload.history_retention is not None:
         for key in ("file_history", "library_history", "scan_history"):

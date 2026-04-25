@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -16,6 +16,7 @@ import {
   type HistoryReconstructionStatus,
   type HistoryReconstructionResult,
   type HistoryStorage,
+  type LibraryType,
   type LibrarySummary,
   type PathInspection,
   type QualityProfile,
@@ -28,7 +29,6 @@ import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../li
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
   DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
-  defaultBonusFilePatternInputs,
   defaultBonusFolderPatternInputs,
   defaultPatternRecognitionSettings,
   type PatternRecognitionSettings,
@@ -49,7 +49,7 @@ import { useTheme, type ThemePreference } from "../lib/theme";
 type CreateLibraryForm = {
   name: string;
   path: string;
-  type: string;
+  type: LibraryType;
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
 };
@@ -77,34 +77,47 @@ type LibrarySettingsForm = {
   quality_profile: QualityProfile;
 };
 
-type IgnorePatternGroup = "user" | "default";
-
-type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
+type LibraryIdentityForm = {
+  name: string;
+  type: LibraryType;
+};
 
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 
-type PatternListKey =
+type IgnorePatternGroup = "user" | "default";
+
+type PatternSectionKey =
   | "series_folder_regexes"
   | "season_folder_regexes"
-  | "bonus_user_folder_patterns"
-  | "bonus_default_folder_patterns"
-  | "bonus_user_file_patterns"
-  | "bonus_default_file_patterns";
+  | "bonus_folder_patterns";
 
-type PatternRecognitionSectionState = Record<PatternListKey, boolean>;
+type PatternRecognitionSectionState = Record<PatternSectionKey, boolean>;
 
 const PATTERN_RECOGNITION_SECTION_STORAGE_KEY = "medialyze-pattern-recognition-sections";
 
 const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState = {
   series_folder_regexes: true,
   season_folder_regexes: true,
-  bonus_user_folder_patterns: true,
-  bonus_default_folder_patterns: false,
-  bonus_user_file_patterns: true,
-  bonus_default_file_patterns: false,
+  bonus_folder_patterns: true,
 };
 
 const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";
+
+function normalizePatternRecognitionInputs(settings?: PatternRecognitionSettings | null): PatternRecognitionSettings {
+  const next = settings ?? DEFAULT_PATTERN_RECOGNITION_INPUTS;
+  return {
+    ...next,
+    analyze_bonus_content: true,
+    show_season_patterns: {
+      ...DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
+      ...next.show_season_patterns,
+      series_folder_regexes:
+        next.show_season_patterns?.series_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.series_folder_regexes,
+      season_folder_regexes:
+        next.show_season_patterns?.season_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.season_folder_regexes,
+    },
+  };
+}
 
 function normalizePatternRecognitionSectionState(value: unknown): PatternRecognitionSectionState {
   const state = { ...DEFAULT_PATTERN_RECOGNITION_SECTION_STATE };
@@ -112,10 +125,17 @@ function normalizePatternRecognitionSectionState(value: unknown): PatternRecogni
     return state;
   }
 
-  const candidate = value as Partial<Record<PatternListKey, unknown>>;
-  for (const key of Object.keys(state) as PatternListKey[]) {
+  const candidate = value as Partial<Record<PatternSectionKey, unknown> & Record<string, unknown>>;
+  for (const key of Object.keys(state) as PatternSectionKey[]) {
     if (typeof candidate[key] === "boolean") {
       state[key] = candidate[key];
+    }
+  }
+  if (typeof candidate.bonus_folder_patterns !== "boolean") {
+    const legacyExpanded =
+      candidate.bonus_user_folder_patterns === true || candidate.bonus_default_folder_patterns === true;
+    if (legacyExpanded) {
+      state.bonus_folder_patterns = true;
     }
   }
   return state;
@@ -329,6 +349,13 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
+  };
+}
+
+function toLibraryIdentityForm(library: LibrarySummary): LibraryIdentityForm {
+  return {
+    name: library.name,
+    type: library.type,
   };
 }
 
@@ -571,6 +598,8 @@ export function LibrariesPage() {
   const [qualityLanguageErrors, setQualityLanguageErrors] = useState<Record<string, string | null>>({});
   const autoSaveTimers = useRef<Record<number, number>>({});
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
+  const [libraryIdentityForms, setLibraryIdentityForms] = useState<Record<number, LibraryIdentityForm>>({});
+  const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
   const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
@@ -590,17 +619,14 @@ export function LibrariesPage() {
   const [libraryPathInspections, setLibraryPathInspections] = useState<Record<number, PathInspection | null>>({});
   const [userIgnorePatternInputs, setUserIgnorePatternInputs] = useState<string[]>([]);
   const [defaultIgnorePatternInputs, setDefaultIgnorePatternInputs] = useState<string[]>([]);
-  const [ignorePatternDrafts, setIgnorePatternDrafts] = useState<IgnorePatternDrafts>({ user: "", default: "" });
+  const [ignorePatternDraft, setIgnorePatternDraft] = useState("");
   const [patternRecognitionInputs, setPatternRecognitionInputs] = useState<PatternRecognitionSettings>(
-    appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS,
+    normalizePatternRecognitionInputs(appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS),
   );
-  const [patternRecognitionDrafts, setPatternRecognitionDrafts] = useState<Record<PatternListKey, string>>({
+  const [patternRecognitionDrafts, setPatternRecognitionDrafts] = useState<Record<PatternSectionKey, string>>({
     series_folder_regexes: "",
     season_folder_regexes: "",
-    bonus_user_folder_patterns: "",
-    bonus_default_folder_patterns: "",
-    bonus_user_file_patterns: "",
-    bonus_default_file_patterns: "",
+    bonus_folder_patterns: "",
   });
   const [ignorePatternSectionState, setIgnorePatternSectionState] = useState(() => getIgnorePatternSectionState());
   const [patternRecognitionSectionState, setPatternRecognitionSectionState] = useState(() =>
@@ -650,6 +676,8 @@ export function LibrariesPage() {
   const ignorePatternsRequestId = useRef(0);
   const ignorePatternsSuccessId = useRef(0);
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
+  const seededDefaultIgnorePatterns = useRef<string[] | null>(null);
+  const libraryNameInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
@@ -694,7 +722,7 @@ export function LibrariesPage() {
     setHistoryRetentionInputs(nextHistoryRetentionInputs);
     persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
-    setPatternRecognitionInputs(updated.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS);
+    setPatternRecognitionInputs(normalizePatternRecognitionInputs(updated.pattern_recognition));
     setAppSettings(updated);
   }
 
@@ -1045,11 +1073,14 @@ export function LibrariesPage() {
     const persisted = toPersistedIgnorePatterns(appSettings);
     const persistedResolution = normalizeResolutionCategories(appSettings.resolution_categories);
     persistedIgnorePatterns.current = persisted;
+    if (seededDefaultIgnorePatterns.current === null) {
+      seededDefaultIgnorePatterns.current = [...persisted.default];
+    }
     persistedResolutionCategories.current = persistedResolution;
     ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
     setUserIgnorePatternInputs(persisted.user);
     setDefaultIgnorePatternInputs(persisted.default);
-    setPatternRecognitionInputs(appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS);
+    setPatternRecognitionInputs(normalizePatternRecognitionInputs(appSettings.pattern_recognition));
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
@@ -1255,23 +1286,95 @@ export function LibrariesPage() {
     }
   }
 
-  async function renameLibrary(library: LibrarySummary) {
-    const nextName = window.prompt(t("libraries.renamePrompt"), library.name);
-    if (nextName === null) {
+  function startEditingLibraryIdentity(library: LibrarySummary) {
+    setLibraryIdentityForms((current) => ({
+      ...current,
+      [library.id]: toLibraryIdentityForm(library),
+    }));
+    setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
+    window.requestAnimationFrame(() => {
+      const input = libraryNameInputRefs.current[library.id];
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  function stopEditingLibraryIdentity(libraryId: number) {
+    setLibraryIdentityForms((current) => {
+      const next = { ...current };
+      delete next[libraryId];
+      return next;
+    });
+    setLibraryIdentityPending((current) => {
+      if (!(libraryId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[libraryId];
+      return next;
+    });
+  }
+
+  function updateLibraryIdentityForm(libraryId: number, patch: Partial<LibraryIdentityForm>) {
+    setLibraryIdentityForms((current) => {
+      const existing = current[libraryId];
+      if (!existing) {
+        return current;
+      }
+      return {
+        ...current,
+        [libraryId]: {
+          ...existing,
+          ...patch,
+        },
+      };
+    });
+  }
+
+  async function saveLibraryIdentity(library: LibrarySummary) {
+    const draft = libraryIdentityForms[library.id] ?? toLibraryIdentityForm(library);
+    const trimmedName = draft.name.trim();
+    if (!trimmedName) {
+      setLibraryMessages((messages) => ({ ...messages, [library.id]: t("libraries.nameRequired") }));
+      return;
+    }
+    if (trimmedName === library.name && draft.type === library.type) {
+      stopEditingLibraryIdentity(library.id);
       return;
     }
 
-    const trimmedName = nextName.trim();
-    if (!trimmedName || trimmedName === library.name) {
-      return;
-    }
-
+    setLibraryIdentityPending((current) => ({ ...current, [library.id]: true }));
     try {
-      const updated = await api.updateLibrarySettings(library.id, { name: trimmedName });
+      const updated = await api.updateLibrarySettings(library.id, {
+        name: trimmedName,
+        type: draft.type,
+      });
       upsertLibrary(updated);
+      stopEditingLibraryIdentity(library.id);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+    } finally {
+      setLibraryIdentityPending((current) => {
+        const next = { ...current };
+        delete next[library.id];
+        return next;
+      });
+    }
+  }
+
+  function handleLibraryIdentityEditorKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    library: LibrarySummary,
+  ) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      stopEditingLibraryIdentity(library.id);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveLibraryIdentity(library);
     }
   }
 
@@ -1289,6 +1392,7 @@ export function LibrariesPage() {
         delete next[libraryId];
         return next;
       });
+      stopEditingLibraryIdentity(libraryId);
       await refresh();
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
@@ -1301,14 +1405,14 @@ export function LibrariesPage() {
     setIgnorePatternSectionState(saveIgnorePatternSectionState(nextState));
   }
 
-  function toggleIgnorePatternSection(section: "customExpanded" | "defaultsExpanded") {
+  function toggleIgnorePatternSection() {
     persistIgnorePatternSectionStateValue({
       ...ignorePatternSectionState,
-      [section]: !ignorePatternSectionState[section],
+      combinedExpanded: !ignorePatternSectionState.combinedExpanded,
     });
   }
 
-  function togglePatternRecognitionSection(section: PatternListKey) {
+  function togglePatternRecognitionSection(section: PatternSectionKey) {
     setPatternRecognitionSectionState((current) =>
       savePatternRecognitionSectionState({
         ...current,
@@ -1842,8 +1946,8 @@ export function LibrariesPage() {
     await saveResolutionCategories(nextDrafts);
   }
 
-  function scheduleIgnorePatternsSave(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
-    setUserIgnorePatternInputs(nextUserPatterns);
+  function scheduleIgnorePatternsSave(nextPatterns: string[], nextDefaultPatterns: string[] = []) {
+    setUserIgnorePatternInputs(nextPatterns);
     setDefaultIgnorePatternInputs(nextDefaultPatterns);
     setIgnorePatternsStatus(null);
     if (ignorePatternsSaveTimer.current) {
@@ -1851,89 +1955,66 @@ export function LibrariesPage() {
     }
     ignorePatternsSaveTimer.current = window.setTimeout(() => {
       ignorePatternsSaveTimer.current = null;
-      void persistIgnorePatterns(nextUserPatterns, nextDefaultPatterns);
+      void persistIgnorePatterns(nextPatterns, nextDefaultPatterns);
     }, 450);
   }
 
-  function flushIgnorePatternsSave(nextUserPatterns: string[], nextDefaultPatterns: string[]) {
+  function flushIgnorePatternsSave(nextPatterns: string[], nextDefaultPatterns: string[] = []) {
     if (ignorePatternsSaveTimer.current) {
       window.clearTimeout(ignorePatternsSaveTimer.current);
       ignorePatternsSaveTimer.current = null;
     }
-    return persistIgnorePatterns(nextUserPatterns, nextDefaultPatterns);
+    return persistIgnorePatterns(nextPatterns, nextDefaultPatterns);
   }
 
-  async function addIgnorePattern(group: IgnorePatternGroup) {
-    const candidate = ignorePatternDrafts[group].trim();
+  async function addIgnorePattern() {
+    const candidate = ignorePatternDraft.trim();
     if (!candidate) {
       return;
     }
-    const nextUserPatterns = group === "user" ? [...userIgnorePatternInputs, candidate] : userIgnorePatternInputs;
-    const nextDefaultPatterns =
-      group === "default" ? [...defaultIgnorePatternInputs, candidate] : defaultIgnorePatternInputs;
-    const updated = await flushIgnorePatternsSave(nextUserPatterns, nextDefaultPatterns);
+    const updated = await flushIgnorePatternsSave([...combinedIgnorePatterns(), candidate]);
     if (updated) {
-      setIgnorePatternDrafts((current) => ({ ...current, [group]: "" }));
+      setIgnorePatternDraft("");
     }
   }
 
-  async function removeIgnorePattern(group: IgnorePatternGroup, index: number) {
-    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
-    const nextPatterns = sourcePatterns.filter((_, rowIndex) => rowIndex !== index);
-    if (group === "user") {
-      setUserIgnorePatternInputs(nextPatterns);
-      await flushIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
-      return;
-    }
-    setDefaultIgnorePatternInputs(nextPatterns);
-    await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
+  async function removeIgnorePattern(index: number) {
+    const nextPatterns = combinedIgnorePatterns().filter((_, rowIndex) => rowIndex !== index);
+    setUserIgnorePatternInputs(nextPatterns);
+    setDefaultIgnorePatternInputs([]);
+    await flushIgnorePatternsSave(nextPatterns);
   }
 
-  function updateIgnorePattern(group: IgnorePatternGroup, index: number, value: string) {
-    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
-    const nextPatterns = sourcePatterns.map((pattern, rowIndex) => (rowIndex === index ? value : pattern));
-    if (group === "user") {
-      scheduleIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
-      return;
-    }
-    scheduleIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
+  function updateIgnorePattern(index: number, value: string) {
+    const nextPatterns = combinedIgnorePatterns().map((pattern, rowIndex) => (rowIndex === index ? value : pattern));
+    scheduleIgnorePatternsSave(nextPatterns);
   }
 
-  async function finalizeIgnorePatternEdit(group: IgnorePatternGroup, index: number) {
-    const sourcePatterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
+  async function finalizeIgnorePatternEdit(index: number) {
+    const sourcePatterns = combinedIgnorePatterns();
     const currentValue = sourcePatterns[index];
     if (currentValue === undefined) {
       return;
     }
     const nextPatterns = sourcePatterns.map((pattern, rowIndex) => (rowIndex === index ? pattern.trim() : pattern));
-    if (group === "user") {
-      setUserIgnorePatternInputs(nextPatterns);
-      await flushIgnorePatternsSave(nextPatterns, defaultIgnorePatternInputs);
-      return;
-    }
-    setDefaultIgnorePatternInputs(nextPatterns);
-    await flushIgnorePatternsSave(userIgnorePatternInputs, nextPatterns);
+    setUserIgnorePatternInputs(nextPatterns);
+    setDefaultIgnorePatternInputs([]);
+    await flushIgnorePatternsSave(nextPatterns);
   }
 
-  function patternListValue(settings: PatternRecognitionSettings, key: PatternListKey): string[] {
+  function patternListValue(settings: PatternRecognitionSettings, key: PatternSectionKey): string[] {
     switch (key) {
       case "series_folder_regexes":
       case "season_folder_regexes":
         return settings.show_season_patterns[key];
-      case "bonus_user_folder_patterns":
-        return settings.bonus_content.user_folder_patterns;
-      case "bonus_default_folder_patterns":
-        return settings.bonus_content.default_folder_patterns;
-      case "bonus_user_file_patterns":
-        return settings.bonus_content.user_file_patterns;
-      case "bonus_default_file_patterns":
-        return settings.bonus_content.default_file_patterns;
+      case "bonus_folder_patterns":
+        return [...settings.bonus_content.user_folder_patterns, ...settings.bonus_content.default_folder_patterns];
     }
   }
 
   function updatePatternListValue(
     settings: PatternRecognitionSettings,
-    key: PatternListKey,
+    key: PatternSectionKey,
     patterns: string[],
   ): PatternRecognitionSettings {
     if (key === "series_folder_regexes" || key === "season_folder_regexes") {
@@ -1945,38 +2026,43 @@ export function LibrariesPage() {
         },
       };
     }
-    const bonusKeyMap = {
-      bonus_user_folder_patterns: "user_folder_patterns",
-      bonus_default_folder_patterns: "default_folder_patterns",
-      bonus_user_file_patterns: "user_file_patterns",
-      bonus_default_file_patterns: "default_file_patterns",
-    } as const;
+    const nextPatterns = patterns.map((pattern) => pattern.trim());
     return {
       ...settings,
+      analyze_bonus_content: true,
       bonus_content: {
         ...settings.bonus_content,
-        [bonusKeyMap[key]]: patterns,
+        user_folder_patterns: nextPatterns,
+        default_folder_patterns: [],
+        effective_folder_patterns: nextPatterns,
+        user_file_patterns: [],
+        default_file_patterns: [],
+        effective_file_patterns: [],
       },
     };
   }
 
   async function savePatternRecognition(nextSettings: PatternRecognitionSettings) {
-    setPatternRecognitionInputs(nextSettings);
+    const normalizedSettings = normalizePatternRecognitionInputs(nextSettings);
+    setPatternRecognitionInputs(normalizedSettings);
     setIsSavingPatternRecognition(true);
     setPatternRecognitionStatus(null);
     try {
       const updated = await api.updateAppSettings({
         pattern_recognition: {
-          analyze_bonus_content: nextSettings.analyze_bonus_content,
+          analyze_bonus_content: true,
           show_season_patterns: {
-            series_folder_regexes: nextSettings.show_season_patterns.series_folder_regexes,
-            season_folder_regexes: nextSettings.show_season_patterns.season_folder_regexes,
+            recognition_mode: normalizedSettings.show_season_patterns.recognition_mode,
+            series_folder_depth: normalizedSettings.show_season_patterns.series_folder_depth,
+            season_folder_depth: normalizedSettings.show_season_patterns.season_folder_depth,
+            series_folder_regexes: normalizedSettings.show_season_patterns.series_folder_regexes,
+            season_folder_regexes: normalizedSettings.show_season_patterns.season_folder_regexes,
           },
           bonus_content: {
-            user_folder_patterns: nextSettings.bonus_content.user_folder_patterns,
-            default_folder_patterns: nextSettings.bonus_content.default_folder_patterns,
-            user_file_patterns: nextSettings.bonus_content.user_file_patterns,
-            default_file_patterns: nextSettings.bonus_content.default_file_patterns,
+            user_folder_patterns: normalizedSettings.bonus_content.user_folder_patterns,
+            default_folder_patterns: normalizedSettings.bonus_content.default_folder_patterns,
+            user_file_patterns: [],
+            default_file_patterns: [],
           },
         },
       });
@@ -1987,14 +2073,14 @@ export function LibrariesPage() {
       setHistoryRetentionStatus(null);
       setResolutionCategoriesStatus(null);
     } catch (reason) {
-      setPatternRecognitionInputs(appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS);
+      setPatternRecognitionInputs(normalizePatternRecognitionInputs(appSettings.pattern_recognition));
       setPatternRecognitionStatus((reason as Error).message);
     } finally {
       setIsSavingPatternRecognition(false);
     }
   }
 
-  async function addPatternRecognitionEntry(key: PatternListKey) {
+  async function addPatternRecognitionEntry(key: PatternSectionKey) {
     const candidate = patternRecognitionDrafts[key].trim();
     if (!candidate) {
       return;
@@ -2008,12 +2094,12 @@ export function LibrariesPage() {
     setPatternRecognitionDrafts((current) => ({ ...current, [key]: "" }));
   }
 
-  async function removePatternRecognitionEntry(key: PatternListKey, index: number) {
+  async function removePatternRecognitionEntry(key: PatternSectionKey, index: number) {
     const nextPatterns = patternListValue(patternRecognitionInputs, key).filter((_, rowIndex) => rowIndex !== index);
     await savePatternRecognition(updatePatternListValue(patternRecognitionInputs, key, nextPatterns));
   }
 
-  function updatePatternRecognitionEntry(key: PatternListKey, index: number, value: string) {
+  function updatePatternRecognitionEntry(key: PatternSectionKey, index: number, value: string) {
     const nextPatterns = patternListValue(patternRecognitionInputs, key).map((pattern, rowIndex) =>
       rowIndex === index ? value : pattern,
     );
@@ -2021,7 +2107,7 @@ export function LibrariesPage() {
     setPatternRecognitionStatus(null);
   }
 
-  async function finalizePatternRecognitionEntry(key: PatternListKey, index: number) {
+  async function finalizePatternRecognitionEntry(key: PatternSectionKey, index: number) {
     const nextPatterns = patternListValue(patternRecognitionInputs, key).map((pattern, rowIndex) =>
       rowIndex === index ? pattern.trim() : pattern,
     );
@@ -2037,7 +2123,6 @@ export function LibrariesPage() {
 
   async function restoreDefaultBonusPatterns() {
     const defaultFolderPatterns = defaultBonusFolderPatternInputs();
-    const defaultFilePatterns = defaultBonusFilePatternInputs();
     await savePatternRecognition({
       ...patternRecognitionInputs,
       bonus_content: {
@@ -2046,9 +2131,44 @@ export function LibrariesPage() {
         default_folder_patterns: defaultFolderPatterns,
         effective_folder_patterns: defaultFolderPatterns,
         user_file_patterns: [],
-        default_file_patterns: defaultFilePatterns,
-        effective_file_patterns: defaultFilePatterns,
+        default_file_patterns: [],
+        effective_file_patterns: [],
       },
+    });
+  }
+
+  async function restoreDefaultIgnorePatterns() {
+    const defaultPatterns = [...(seededDefaultIgnorePatterns.current ?? appSettings.default_ignore_patterns ?? [])];
+    setUserIgnorePatternInputs([]);
+    setDefaultIgnorePatternInputs(defaultPatterns);
+    setIgnorePatternDraft("");
+    await flushIgnorePatternsSave([], defaultPatterns);
+  }
+
+  async function updateShowSeasonRecognitionMode(mode: "folder_depth" | "regex") {
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      show_season_patterns: {
+        ...patternRecognitionInputs.show_season_patterns,
+        recognition_mode: mode,
+      },
+    });
+  }
+
+  async function updateShowSeasonDepth(key: "series_folder_depth" | "season_folder_depth", value: number) {
+    const nextShowSeasonPatterns = {
+      ...patternRecognitionInputs.show_season_patterns,
+      [key]: value,
+    };
+    if (key === "series_folder_depth" && nextShowSeasonPatterns.season_folder_depth <= value) {
+      nextShowSeasonPatterns.season_folder_depth = value + 1;
+    }
+    if (key === "season_folder_depth" && value <= nextShowSeasonPatterns.series_folder_depth) {
+      nextShowSeasonPatterns.series_folder_depth = Math.max(1, value - 1);
+    }
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      show_season_patterns: nextShowSeasonPatterns,
     });
   }
 
@@ -2454,24 +2574,21 @@ export function LibrariesPage() {
     return null;
   }
 
-  function renderIgnorePatternSection(
-    group: IgnorePatternGroup,
-    title: string,
-    expanded: boolean,
-    toggleKey: "customExpanded" | "defaultsExpanded",
-    inputId: string,
-  ) {
-    const patterns = group === "user" ? userIgnorePatternInputs : defaultIgnorePatternInputs;
-    const draftValue = ignorePatternDrafts[group];
+  function combinedIgnorePatterns(): string[] {
+    return [...userIgnorePatternInputs, ...defaultIgnorePatternInputs];
+  }
+
+  function renderIgnorePatternSection(title: string, expanded: boolean, inputId: string) {
+    const patterns = combinedIgnorePatterns();
     const ToggleIcon = expanded ? ChevronDown : ChevronRight;
 
     return (
-      <div className="ignore-pattern-section" key={group}>
+      <div className="ignore-pattern-section">
         <button
           type="button"
           className="secondary ignore-pattern-section-toggle"
           aria-expanded={expanded}
-          onClick={() => toggleIgnorePatternSection(toggleKey)}
+          onClick={() => toggleIgnorePatternSection()}
         >
           <span className="ignore-pattern-section-title">{title}</span>
           <span className="ignore-pattern-section-meta">
@@ -2485,9 +2602,9 @@ export function LibrariesPage() {
               <input
                 id={inputId}
                 type="text"
-                value={draftValue}
+                value={ignorePatternDraft}
                 onChange={(event) => {
-                  setIgnorePatternDrafts((current) => ({ ...current, [group]: event.target.value }));
+                  setIgnorePatternDraft(event.target.value);
                   setIgnorePatternsStatus(null);
                 }}
                 placeholder={t("libraries.ignorePatternsPlaceholder")}
@@ -2497,20 +2614,20 @@ export function LibrariesPage() {
                 type="button"
                 className="secondary icon-only-button"
                 aria-label={t("libraries.ignorePatternsAddAria")}
-                disabled={isSavingIgnorePatterns || !draftValue.trim()}
-                onClick={() => void addIgnorePattern(group)}
+                disabled={isSavingIgnorePatterns || !ignorePatternDraft.trim()}
+                onClick={() => void addIgnorePattern()}
               >
                 <Plus aria-hidden="true" className="nav-icon" />
               </button>
             </div>
             <div className="ignore-patterns-stack">
               {patterns.map((pattern, index) => (
-                <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${group}-ignore-pattern-${index}`}>
+                <div className="ignore-pattern-row ignore-pattern-row-saved" key={`ignore-pattern-${index}`}>
                   <input
                     type="text"
                     value={pattern}
-                    onChange={(event) => updateIgnorePattern(group, index, event.target.value)}
-                    onBlur={() => void finalizeIgnorePatternEdit(group, index)}
+                    onChange={(event) => updateIgnorePattern(index, event.target.value)}
+                    onBlur={() => void finalizeIgnorePatternEdit(index)}
                     spellCheck={false}
                   />
                   <button
@@ -2518,7 +2635,7 @@ export function LibrariesPage() {
                     className="secondary icon-only-button"
                     aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
                     disabled={isSavingIgnorePatterns}
-                    onClick={() => void removeIgnorePattern(group, index)}
+                    onClick={() => void removeIgnorePattern(index)}
                   >
                     <Trash2 aria-hidden="true" className="nav-icon" />
                   </button>
@@ -2532,7 +2649,7 @@ export function LibrariesPage() {
   }
 
   function renderPatternRecognitionList(
-    key: PatternListKey,
+    key: PatternSectionKey,
     title: string,
     placeholder: string,
   ) {
@@ -3069,38 +3186,85 @@ export function LibrariesPage() {
           >
             <div className="listing">
               {!libraries.length ? <div className="notice">{t("libraries.addFirstLibrary")}</div> : null}
-              {libraries.map((library) => (
-                <div className="media-card library-settings-card" key={library.id}>
+              {libraries.map((library) => {
+                const identityForm = libraryIdentityForms[library.id];
+                const isEditingLibraryIdentity = Boolean(identityForm);
+                const isSavingLibraryIdentity = Boolean(libraryIdentityPending[library.id]);
+                const canSaveLibraryIdentity = Boolean(identityForm?.name.trim());
+
+                return (
+                  <div className="media-card library-settings-card" key={library.id}>
                   <div className="library-settings-header">
                     <div className="item-meta">
                       <div className="library-title-row">
                         <div className="library-title-meta">
                           <div className="library-title-main">
-                            <h3>
-                              <Link to={`/libraries/${library.id}`} className="file-link">
-                                {library.name}
-                              </Link>
-                            </h3>
-                            <TooltipTrigger
-                              ariaLabel={t("libraries.detailsTooltipAria", { name: library.name })}
-                              align="start"
-                              maxWidth={420}
-                              tooltipClassName="library-details-tooltip"
-                              content={
-                                <div className="library-details-tooltip-content">
-                                  <p className="library-details-tooltip-path">{library.path}</p>
-                                  <div className="library-details-tooltip-stats">
-                                    <span>{library.file_count} {t("libraries.files").toLowerCase()}</span>
-                                    <span>{formatBytes(library.total_size_bytes)}</span>
-                                    <span>{formatDuration(library.total_duration_seconds)}</span>
-                                    <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
+                            {isEditingLibraryIdentity ? (
+                              <div className="library-title-inline-editor">
+                                <input
+                                  ref={(node) => {
+                                    libraryNameInputRefs.current[library.id] = node;
+                                  }}
+                                  type="text"
+                                  className="library-title-input"
+                                  value={identityForm?.name ?? ""}
+                                  aria-label={t("libraries.editNameAria", { name: library.name })}
+                                  disabled={isSavingLibraryIdentity}
+                                  onChange={(event) =>
+                                    updateLibraryIdentityForm(library.id, { name: event.target.value })
+                                  }
+                                  onKeyDown={(event) => handleLibraryIdentityEditorKeyDown(event, library)}
+                                />
+                              </div>
+                            ) : (
+                              <h3>
+                                <Link to={`/libraries/${library.id}`} className="file-link">
+                                  {library.name}
+                                </Link>
+                              </h3>
+                            )}
+                            {!isEditingLibraryIdentity ? (
+                              <TooltipTrigger
+                                ariaLabel={t("libraries.detailsTooltipAria", { name: library.name })}
+                                align="start"
+                                maxWidth={420}
+                                tooltipClassName="library-details-tooltip"
+                                content={
+                                  <div className="library-details-tooltip-content">
+                                    <p className="library-details-tooltip-path">{library.path}</p>
+                                    <div className="library-details-tooltip-stats">
+                                      <span>{library.file_count} {t("libraries.files").toLowerCase()}</span>
+                                      <span>{formatBytes(library.total_size_bytes)}</span>
+                                      <span>{formatDuration(library.total_duration_seconds)}</span>
+                                      <span>{t("libraries.lastScan")}: {formatDate(library.last_scan_at)}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              }
-                            />
+                                }
+                              />
+                            ) : null}
                             <div className="meta-tags library-title-tags">
-                              <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
-                              <span className="badge">{t(`scanModes.${library.scan_mode}`)}</span>
+                              {isEditingLibraryIdentity ? (
+                                <select
+                                  className="library-title-type-select"
+                                  value={identityForm?.type ?? library.type}
+                                  aria-label={t("libraries.editTypeAria", { name: library.name })}
+                                  disabled={isSavingLibraryIdentity}
+                                  onChange={(event) =>
+                                    updateLibraryIdentityForm(library.id, { type: event.target.value as LibraryType })
+                                  }
+                                  onKeyDown={(event) => handleLibraryIdentityEditorKeyDown(event, library)}
+                                >
+                                  <option value="movies">{t("libraryTypes.movies")}</option>
+                                  <option value="series">{t("libraryTypes.series")}</option>
+                                  <option value="mixed">{t("libraryTypes.mixed")}</option>
+                                  <option value="other">{t("libraryTypes.other")}</option>
+                                </select>
+                              ) : (
+                                <span className="badge">{t(`libraryTypes.${library.type}`)}</span>
+                              )}
+                              {!isEditingLibraryIdentity ? (
+                                <span className="badge">{t(`scanModes.${library.scan_mode}`)}</span>
+                              ) : null}
                               {activeJobs
                                 .filter((job) => job.library_id === library.id)
                                 .map((job) => (
@@ -3130,15 +3294,40 @@ export function LibrariesPage() {
                           >
                             <DashboardVisibilityIcon visible={library.show_on_dashboard} />
                           </button>
-                          <button
-                            type="button"
-                            className="secondary icon-only-button"
-                            aria-label={t("libraries.renameAria", { name: library.name })}
-                            title={t("libraries.renameTooltip")}
-                            onClick={() => void renameLibrary(library)}
-                          >
-                            <Pencil aria-hidden="true" className="nav-icon" />
-                          </button>
+                          {isEditingLibraryIdentity ? (
+                            <>
+                              <button
+                                type="button"
+                                className="secondary icon-only-button"
+                                aria-label={t("libraries.saveEditAria", { name: library.name })}
+                                title={t("libraries.saveEditTooltip")}
+                                disabled={isSavingLibraryIdentity || !canSaveLibraryIdentity}
+                                onClick={() => void saveLibraryIdentity(library)}
+                              >
+                                <Check aria-hidden="true" className="nav-icon" />
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary icon-only-button"
+                                aria-label={t("libraries.cancelEditAria", { name: library.name })}
+                                title={t("libraries.cancelEditTooltip")}
+                                disabled={isSavingLibraryIdentity}
+                                onClick={() => stopEditingLibraryIdentity(library.id)}
+                              >
+                                <X aria-hidden="true" className="nav-icon" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="secondary icon-only-button"
+                              aria-label={t("libraries.renameAria", { name: library.name })}
+                              title={t("libraries.renameTooltip")}
+                              onClick={() => startEditingLibraryIdentity(library)}
+                            >
+                              <Pencil aria-hidden="true" className="nav-icon" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="secondary icon-only-button"
@@ -3282,8 +3471,9 @@ export function LibrariesPage() {
                     {qualitySectionOpen[library.id] ? renderQualitySettings(library) : null}
                   </div>
                   {libraryMessages[library.id] ? <div className="alert">{libraryMessages[library.id]}</div> : null}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </AsyncPanel>
 
@@ -3434,6 +3624,14 @@ export function LibrariesPage() {
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
             subtitle={t("libraries.patternRecognition.subtitle")}
+            titleAddon={
+              <TooltipTrigger
+                ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
+                content={t("libraries.ignorePatternsHint")}
+              >
+                ?
+              </TooltipTrigger>
+            }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
             collapseState={{
@@ -3451,7 +3649,16 @@ export function LibrariesPage() {
               </div>
               <div className="field">
                 <div className="distribution-copy">
-                  <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
+                  <div className="field-label-row">
+                    <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.patternRecognition.showSeasonTooltipAria")}
+                      content={t("libraries.patternRecognition.showSeasonHint")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
                   <button
                     type="button"
                     className="secondary small"
@@ -3462,24 +3669,84 @@ export function LibrariesPage() {
                     {t("libraries.patternRecognition.restoreDefaults")}
                   </button>
                 </div>
-                <p className="field-hint">{t("libraries.patternRecognition.showSeasonHint")}</p>
-                <div className="ignore-pattern-sections">
-                  {renderPatternRecognitionList(
-                    "series_folder_regexes",
-                    t("libraries.patternRecognition.seriesFolderRegexes"),
-                    String.raw`^(?P<title>.+?)$`,
-                  )}
-                  {renderPatternRecognitionList(
-                    "season_folder_regexes",
-                    t("libraries.patternRecognition.seasonFolderRegexes"),
-                    String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})$`,
-                  )}
+                <div className="field" style={{ marginTop: "0.75rem" }}>
+                  <label>
+                    <span>{t("libraries.patternRecognition.modeLabel")}</span>
+                    <select
+                      value={patternRecognitionInputs.show_season_patterns.recognition_mode}
+                      disabled={isSavingPatternRecognition}
+                      onChange={(event) =>
+                        void updateShowSeasonRecognitionMode(event.currentTarget.value as "folder_depth" | "regex")
+                      }
+                    >
+                      <option value="folder_depth">{t("libraries.patternRecognition.modeFolderDepth")}</option>
+                      <option value="regex">{t("libraries.patternRecognition.modeRegex")}</option>
+                    </select>
+                  </label>
                 </div>
+                {patternRecognitionInputs.show_season_patterns.recognition_mode === "folder_depth" ? (
+                  <div className="inline-form-grid">
+                    <label>
+                      <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
+                      <select
+                        value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
+                        disabled={isSavingPatternRecognition}
+                        onChange={(event) =>
+                          void updateShowSeasonDepth("series_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                        }
+                      >
+                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                          <option key={`series-depth-${depth}`} value={depth}>
+                            {depth}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
+                      <select
+                        value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
+                        disabled={isSavingPatternRecognition}
+                        onChange={(event) =>
+                          void updateShowSeasonDepth("season_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                        }
+                      >
+                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                          <option key={`season-depth-${depth}`} value={depth}>
+                            {depth}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="ignore-pattern-sections">
+                    {renderPatternRecognitionList(
+                      "series_folder_regexes",
+                      t("libraries.patternRecognition.seriesFolderRegexes"),
+                      String.raw`^(?P<title>.+?)$`,
+                    )}
+                    {renderPatternRecognitionList(
+                      "season_folder_regexes",
+                      t("libraries.patternRecognition.seasonFolderRegexes"),
+                      String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="field">
                 <div className="distribution-copy">
-                  <strong>{t("libraries.patternRecognition.bonusTitle")}</strong>
+                  <div className="field-label-row">
+                    <strong>{t("libraries.patternRecognition.bonusTitle")}</strong>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.patternRecognition.bonusTooltipAria")}
+                      content={t("libraries.patternRecognition.bonusHint")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
                   <button
                     type="button"
                     className="secondary small"
@@ -3489,73 +3756,43 @@ export function LibrariesPage() {
                     {t("libraries.patternRecognition.restoreBonusDefaults")}
                   </button>
                 </div>
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={patternRecognitionInputs.analyze_bonus_content}
-                    disabled={isSavingPatternRecognition}
-                    onChange={(event) =>
-                      void savePatternRecognition({
-                        ...patternRecognitionInputs,
-                        analyze_bonus_content: event.currentTarget.checked,
-                      })
-                    }
-                  />
-                  <span>{t("libraries.patternRecognition.analyzeBonusContent")}</span>
-                </label>
-                <p className="field-hint">{t("libraries.patternRecognition.bonusHint")}</p>
                 <div className="ignore-pattern-sections">
                   {renderPatternRecognitionList(
-                    "bonus_user_folder_patterns",
-                    t("libraries.patternRecognition.customBonusFolders"),
+                    "bonus_folder_patterns",
+                    t("libraries.patternRecognition.bonusFolders"),
                     "*/extras/*",
-                  )}
-                  {renderPatternRecognitionList(
-                    "bonus_default_folder_patterns",
-                    t("libraries.patternRecognition.defaultBonusFolders"),
-                    "*/trailers/*",
-                  )}
-                  {renderPatternRecognitionList(
-                    "bonus_user_file_patterns",
-                    t("libraries.patternRecognition.customBonusFiles"),
-                    "*-trailer.*",
-                  )}
-                  {renderPatternRecognitionList(
-                    "bonus_default_file_patterns",
-                    t("libraries.patternRecognition.defaultBonusFiles"),
-                    "*-sample.*",
                   )}
                 </div>
               </div>
 
               <div className="field">
-                <div className="field-label-row">
-                  <strong>{t("libraries.ignorePatternsTitle")}</strong>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.ignorePatternsTooltipAria")}
-                    content={t("libraries.ignorePatternsTooltip")}
-                    preserveLineBreaks
+                <div className="distribution-copy">
+                  <div className="field-label-row">
+                    <strong>{t("libraries.ignorePatternsTitle")}</strong>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.ignorePatternsTooltipAria")}
+                      content={t("libraries.ignorePatternsTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary small"
+                    disabled={isSavingIgnorePatterns}
+                    onClick={() => void restoreDefaultIgnorePatterns()}
                   >
-                    ?
-                  </TooltipTrigger>
+                    {t("libraries.restoreIgnoreDefaults")}
+                  </button>
                 </div>
                 <div className="ignore-pattern-sections">
                   {renderIgnorePatternSection(
-                    "user",
-                    t("libraries.ignorePatternsCustomTitle"),
-                    ignorePatternSectionState.customExpanded,
-                    "customExpanded",
-                    "custom-ignore-patterns",
-                  )}
-                  {renderIgnorePatternSection(
-                    "default",
-                    t("libraries.ignorePatternsDefaultTitle"),
-                    ignorePatternSectionState.defaultsExpanded,
-                    "defaultsExpanded",
-                    "default-ignore-patterns",
+                    t("libraries.ignorePatternsTitle"),
+                    ignorePatternSectionState.combinedExpanded,
+                    "ignore-patterns",
                   )}
                 </div>
-                <p className="field-hint">{t("libraries.ignorePatternsHint")}</p>
               </div>
               {isSavingPatternRecognition || isSavingIgnorePatterns ? (
                 <p className="field-hint">{t("libraries.patternRecognition.saving")}</p>
@@ -3845,7 +4082,7 @@ export function LibrariesPage() {
                 <select
                   id="library-type"
                   value={form.type}
-                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType }))}
                 >
                   <option value="movies">{t("libraryTypes.movies")}</option>
                   <option value="series">{t("libraryTypes.series")}</option>
