@@ -1,13 +1,11 @@
 export type IgnorePatternSectionState = {
-  customExpanded: boolean;
-  defaultsExpanded: boolean;
+  combinedExpanded: boolean;
 };
 
 const STORAGE_KEY = "medialyze-ignore-pattern-sections";
 
 const DEFAULT_STATE: IgnorePatternSectionState = {
-  customExpanded: true,
-  defaultsExpanded: false,
+  combinedExpanded: true,
 };
 
 function normalizeSectionState(value: unknown): IgnorePatternSectionState {
@@ -15,18 +13,17 @@ function normalizeSectionState(value: unknown): IgnorePatternSectionState {
     return DEFAULT_STATE;
   }
 
-  const customExpanded =
-    "customExpanded" in value && typeof value.customExpanded === "boolean"
-      ? value.customExpanded
-      : DEFAULT_STATE.customExpanded;
-  const defaultsExpanded =
-    "defaultsExpanded" in value && typeof value.defaultsExpanded === "boolean"
-      ? value.defaultsExpanded
-      : DEFAULT_STATE.defaultsExpanded;
+  const combinedExpanded =
+    "combinedExpanded" in value && typeof value.combinedExpanded === "boolean"
+      ? value.combinedExpanded
+      : ("customExpanded" in value && typeof value.customExpanded === "boolean"
+          ? value.customExpanded
+          : ("defaultsExpanded" in value && typeof value.defaultsExpanded === "boolean"
+              ? value.defaultsExpanded
+              : DEFAULT_STATE.combinedExpanded));
 
   return {
-    customExpanded,
-    defaultsExpanded,
+    combinedExpanded,
   };
 }
 

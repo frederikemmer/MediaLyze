@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -215,6 +215,47 @@ class MediaSeasonDetailRead(BaseModel):
 
 class MediaSeriesDetailRead(MediaSeriesSummaryRead):
     seasons: list[MediaSeasonDetailRead] = Field(default_factory=list)
+
+
+class GroupedSeriesTableRowRead(BaseModel):
+    kind: Literal["series"]
+    series_id: int
+    title: str
+    relative_path: str
+    year: int | None = None
+    season_count: int = 0
+    episode_count: int = 0
+    total_size_bytes: int = 0
+    total_duration_seconds: float = 0
+    quality_score_average: float | None = None
+    bitrate_average: float | None = None
+    audio_bitrate_average: float | None = None
+    children_loaded: bool = False
+
+
+class GroupedLooseFileTableRowRead(BaseModel):
+    kind: Literal["file"]
+    file: MediaFileTableRow
+
+
+GroupedMediaTableEntryRead = Annotated[
+    GroupedSeriesTableRowRead | GroupedLooseFileTableRowRead,
+    Field(discriminator="kind"),
+]
+
+
+class GroupedMediaTablePageRead(BaseModel):
+    total: int | None
+    offset: int
+    limit: int
+    next_cursor: str | None = None
+    has_more: bool = False
+    items: list[GroupedMediaTableEntryRead]
+
+
+class MediaSeriesGroupedDetailRead(MediaSeriesSummaryRead):
+    seasons: list[MediaSeasonDetailRead] = Field(default_factory=list)
+    episodes_without_season: list[MediaFileTableRow] = Field(default_factory=list)
 
 
 class DashboardResponse(BaseModel):

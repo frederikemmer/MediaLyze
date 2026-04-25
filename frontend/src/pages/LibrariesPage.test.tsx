@@ -45,6 +45,26 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     ignore_patterns: ["movie.tmp", "*/@eaDir/*"],
     user_ignore_patterns: ["movie.tmp"],
     default_ignore_patterns: ["*/@eaDir/*"],
+    pattern_recognition: {
+      analyze_bonus_content: true,
+      show_season_patterns: {
+        recognition_mode: "folder_depth",
+        series_folder_depth: 1,
+        season_folder_depth: 2,
+        series_folder_regexes: ["^(?P<title>.+?)(?:\\s+\\((?P<year>\\d{4})\\))?(?:\\s+\\[[^\\]]+\\])?$"],
+        season_folder_regexes: [
+          "^(?:Season|Staffel)\\s*(?P<season>\\d{1,3})(?:\\s+\\([^)]*\\))?(?:\\s+\\[[^\\]]+\\])*$",
+        ],
+      },
+      bonus_content: {
+        user_folder_patterns: [],
+        default_folder_patterns: ["extras/*"],
+        effective_folder_patterns: ["extras/*"],
+        user_file_patterns: [],
+        default_file_patterns: [],
+        effective_file_patterns: [],
+      },
+    },
     scan_performance: {
       scan_worker_count: 4,
       parallel_scan_jobs: 2,
@@ -363,47 +383,40 @@ afterEach(() => {
 });
 
 describe("LibrariesPage ignore patterns", () => {
-  it("shows custom patterns expanded and default patterns collapsed by default", async () => {
+  it("shows the combined ignore-pattern section expanded by default", async () => {
     renderPage();
 
-    const customToggle = await screen.findByRole("button", { name: /custom ignore patterns/i });
-    const defaultToggle = screen.getByRole("button", { name: /default ignore patterns/i });
+    const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
 
-    expect(customToggle).toHaveAttribute("aria-expanded", "true");
-    expect(defaultToggle).toHaveAttribute("aria-expanded", "false");
+    expect(combinedToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Add a new ignore pattern")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("*/@eaDir/*")).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue("*/@eaDir/*")).toBeInTheDocument();
   });
 
   it("restores the persisted collapse state from localStorage", async () => {
     window.localStorage.setItem(
       "medialyze-ignore-pattern-sections",
-      JSON.stringify({ customExpanded: false, defaultsExpanded: true }),
+      JSON.stringify({ combinedExpanded: false }),
     );
 
     renderPage();
 
-    const customToggle = await screen.findByRole("button", { name: /custom ignore patterns/i });
-    const defaultToggle = screen.getByRole("button", { name: /default ignore patterns/i });
+    const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
 
-    expect(customToggle).toHaveAttribute("aria-expanded", "false");
-    expect(defaultToggle).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByDisplayValue("*/@eaDir/*")).toBeInTheDocument();
+    expect(combinedToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByDisplayValue("*/@eaDir/*")).not.toBeInTheDocument();
   });
 
-  it("sends custom and default ignore patterns separately when editing defaults", async () => {
+  it("saves combined ignore patterns through the shared section", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         ignore_patterns: ["movie.tmp", "*/#recycle/*"],
-        user_ignore_patterns: ["movie.tmp"],
-        default_ignore_patterns: ["*/#recycle/*"],
+        user_ignore_patterns: ["movie.tmp", "*/#recycle/*"],
+        default_ignore_patterns: [],
       }),
     );
 
     renderPage();
-
-    const defaultToggle = await screen.findByRole("button", { name: /default ignore patterns/i });
-    fireEvent.click(defaultToggle);
 
     const defaultInput = await screen.findByDisplayValue("*/@eaDir/*");
     fireEvent.change(defaultInput, { target: { value: "*/#recycle/*" } });
@@ -411,8 +424,8 @@ describe("LibrariesPage ignore patterns", () => {
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith({
-        user_ignore_patterns: ["movie.tmp"],
-        default_ignore_patterns: ["*/#recycle/*"],
+        user_ignore_patterns: ["movie.tmp", "*/#recycle/*"],
+        default_ignore_patterns: [],
         scan_performance: {
           scan_worker_count: 4,
           parallel_scan_jobs: 2,
@@ -434,10 +447,52 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
-  it("persists bonus-content recognition settings through app settings", async () => {
+  it("restores built-in ignore defaults from the shared section", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        ignore_patterns: ["*/@eaDir/*"],
+        user_ignore_patterns: [],
+        default_ignore_patterns: ["*/@eaDir/*"],
+      }),
+    );
+
+    renderPage();
+
+    const restoreButton = await screen.findByRole("button", { name: "Restore ignore defaults" });
+    fireEvent.click(restoreButton);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        user_ignore_patterns: [],
+        default_ignore_patterns: ["*/@eaDir/*"],
+        scan_performance: {
+          scan_worker_count: 4,
+          parallel_scan_jobs: 2,
+          comparison_scatter_point_limit: 5000,
+        },
+        history_retention: {
+          file_history: { days: 30, storage_limit_gb: 0 },
+          library_history: { days: 365, storage_limit_gb: 0 },
+          scan_history: { days: 30, storage_limit_gb: 0 },
+        },
+        feature_flags: {
+          show_analyzed_files_csv_export: false,
+          show_full_width_app_shell: false,
+          hide_quality_score_meter: false,
+          unlimited_panel_size: false,
+          in_depth_dolby_vision_profiles: false,
+        },
+      }),
+    );
+  });
+
+  it("persists bonus-content folder recognition settings through app settings", async () => {
     const patternRecognition = {
       analyze_bonus_content: true,
       show_season_patterns: {
+        recognition_mode: "folder_depth" as const,
+        series_folder_depth: 1,
+        season_folder_depth: 2,
         series_folder_regexes: ["^(?<title>.+)$"],
         season_folder_regexes: ["^Season (?<season>\\d+)$"],
       },
@@ -445,41 +500,108 @@ describe("LibrariesPage ignore patterns", () => {
         user_folder_patterns: ["Custom Extras/*"],
         default_folder_patterns: ["extras/*"],
         effective_folder_patterns: ["Custom Extras/*", "extras/*"],
-        user_file_patterns: ["*-custom-extra.*"],
-        default_file_patterns: ["*-trailer.*"],
-        effective_file_patterns: ["*-custom-extra.*", "*-trailer.*"],
+        user_file_patterns: [],
+        default_file_patterns: [],
+        effective_file_patterns: [],
       },
     };
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
-        pattern_recognition: {
-          ...patternRecognition,
-          analyze_bonus_content: false,
-        },
+        pattern_recognition: patternRecognition,
       }),
     );
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings({ pattern_recognition: patternRecognition }));
 
     renderPage();
 
-    const checkbox = await screen.findByLabelText("Analyze bonus content");
     await screen.findByDisplayValue("Custom Extras/*");
-    fireEvent.click(checkbox);
+    const bonusInput = screen.getByDisplayValue("Custom Extras/*");
+    fireEvent.change(bonusInput, { target: { value: "Featurettes/*" } });
+    fireEvent.blur(bonusInput);
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith({
         pattern_recognition: {
-          analyze_bonus_content: false,
+          analyze_bonus_content: true,
           show_season_patterns: patternRecognition.show_season_patterns,
           bonus_content: {
-            user_folder_patterns: ["Custom Extras/*"],
-            default_folder_patterns: ["extras/*"],
-            user_file_patterns: ["*-custom-extra.*"],
-            default_file_patterns: ["*-trailer.*"],
+            user_folder_patterns: ["Featurettes/*", "extras/*"],
+            default_folder_patterns: [],
+            user_file_patterns: [],
+            default_file_patterns: [],
           },
         },
       }),
     );
+  });
+
+  it("defaults show and season recognition to folder depth and hides regex inputs", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+
+    renderPage();
+
+    expect(await screen.findByDisplayValue("Folder depth")).toBeInTheDocument();
+    expect(screen.getByLabelText("Series folder depth")).toHaveValue("1");
+    expect(screen.getByLabelText("Season folder depth")).toHaveValue("2");
+    expect(screen.queryByText("Series folder regexes")).not.toBeInTheDocument();
+    expect(screen.queryByText("Season folder regexes")).not.toBeInTheDocument();
+  });
+
+  it("switches show and season recognition to regex mode and persists the selection", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        pattern_recognition: {
+          analyze_bonus_content: true,
+          show_season_patterns: {
+            recognition_mode: "regex",
+            series_folder_depth: 1,
+            season_folder_depth: 2,
+            series_folder_regexes: ["^(?<title>.+)$"],
+            season_folder_regexes: ["^Season (?<season>\\d+)$"],
+          },
+          bonus_content: {
+            user_folder_patterns: [],
+            default_folder_patterns: ["extras/*"],
+            effective_folder_patterns: ["extras/*"],
+            user_file_patterns: [],
+            default_file_patterns: [],
+            effective_file_patterns: [],
+          },
+        },
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+
+    renderPage();
+
+    fireEvent.change(await screen.findByDisplayValue("Folder depth"), { target: { value: "regex" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        pattern_recognition: {
+          analyze_bonus_content: true,
+          show_season_patterns: {
+            recognition_mode: "regex",
+            series_folder_depth: 1,
+            season_folder_depth: 2,
+            series_folder_regexes: [
+              "^(?P<title>.+?)(?:\\s+\\((?P<year>\\d{4})\\))?(?:\\s+\\[[^\\]]+\\])?$",
+            ],
+            season_folder_regexes: [
+              "^(?:Season|Staffel)\\s*(?P<season>\\d{1,3})(?:\\s+\\([^)]*\\))?(?:\\s+\\[[^\\]]+\\])*$",
+            ],
+          },
+          bonus_content: {
+            user_folder_patterns: [],
+            default_folder_patterns: expect.any(Array),
+            user_file_patterns: [],
+            default_file_patterns: [],
+          },
+        },
+      }),
+    );
+
+    expect(updateSpy).toHaveBeenCalledTimes(1);
   });
 
   it("persists the analyzed files CSV export feature flag", async () => {
@@ -1264,8 +1386,10 @@ describe("LibrariesPage settings panels", () => {
     expect(resolutionPanel).not.toBeNull();
     expect(patternRecognitionPanel).not.toBeNull();
     expect(within(resolutionPanel as HTMLElement).getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
-    expect(within(patternRecognitionPanel as HTMLElement).getByText("Ignore patterns")).toBeInTheDocument();
-    expect(within(patternRecognitionPanel as HTMLElement).getByText("Custom ignore patterns")).toBeInTheDocument();
+    expect(
+      within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: /^Ignore patterns\d+$/i }),
+    ).toBeInTheDocument();
+    expect(within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: "Restore ignore defaults" })).toBeInTheDocument();
   });
 
   it("places the pattern recognition panel between resolution categories and history retention", async () => {
@@ -1413,6 +1537,33 @@ describe("LibrariesPage settings panels", () => {
     expect(await screen.findByRole("button", { name: "Show library Movies on dashboard" })).toBeInTheDocument();
   });
 
+  it("edits library name and type inline from the library header", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const promptSpy = vi.spyOn(window, "prompt").mockImplementation(() => null);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
+      createLibrarySummary({
+        name: "Shows",
+        type: "series",
+      }),
+    );
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit library Movies" }));
+
+    expect(promptSpy).not.toHaveBeenCalled();
+
+    const nameInput = screen.getByRole("textbox", { name: "Edit name for library Movies" });
+    const typeSelect = screen.getByRole("combobox", { name: "Edit type for library Movies" });
+    fireEvent.change(nameInput, { target: { value: "Shows" } });
+    fireEvent.change(typeSelect, { target: { value: "series" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes for library Movies" }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { name: "Shows", type: "series" }));
+    expect(await screen.findByRole("link", { name: "Shows" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit library Shows" })).toBeInTheDocument();
+  });
+
   it("shows the recent scan logs panel expanded by default", async () => {
     renderPage();
 
@@ -1457,9 +1608,10 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(jobButton);
 
     await waitFor(() => expect(detailSpy).toHaveBeenCalledWith(14));
-    expect(await screen.findAllByText("Ignore patterns")).toHaveLength(2);
+    const ignoreSections = await screen.findAllByText("Ignore patterns");
+    expect(ignoreSections.length).toBeGreaterThanOrEqual(2);
     expect(await screen.findByText("Duplicate processing")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByText("Ignore patterns")[1]);
+    fireEvent.click(ignoreSections.at(-1) as HTMLElement);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByText("Files that could not be analyzed"));
     expect(await screen.findByText("ffprobe exploded")).toBeInTheDocument();

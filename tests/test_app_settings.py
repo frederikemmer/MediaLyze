@@ -71,6 +71,9 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.feature_flags.unlimited_panel_size is False
     assert loaded.feature_flags.in_depth_dolby_vision_profiles is False
     assert loaded.pattern_recognition.analyze_bonus_content is True
+    assert loaded.pattern_recognition.show_season_patterns.recognition_mode.value == "folder_depth"
+    assert loaded.pattern_recognition.show_season_patterns.series_folder_depth == 1
+    assert loaded.pattern_recognition.show_season_patterns.season_folder_depth == 2
     assert "*/Specials/*" in loaded.pattern_recognition.bonus_content.effective_folder_patterns
     assert "*/Season 00/*" in loaded.pattern_recognition.bonus_content.effective_folder_patterns
     assert loaded.pattern_recognition.show_season_patterns.episode_file_regexes == []
@@ -87,6 +90,9 @@ def test_update_app_settings_persists_pattern_recognition(tmp_path) -> None:
                 pattern_recognition={
                     "analyze_bonus_content": False,
                     "show_season_patterns": {
+                        "recognition_mode": "regex",
+                        "series_folder_depth": 1,
+                        "season_folder_depth": 2,
                         "series_folder_regexes": [r"^(?P<title>.+)$"],
                         "season_folder_regexes": [r"^Season (?P<season>\d+)$"],
                     },
@@ -102,11 +108,14 @@ def test_update_app_settings_persists_pattern_recognition(tmp_path) -> None:
         )
         stored = db.get(AppSetting, "global")
 
-    assert updated.pattern_recognition.analyze_bonus_content is False
+    assert updated.pattern_recognition.analyze_bonus_content is True
+    assert updated.pattern_recognition.show_season_patterns.recognition_mode.value == "regex"
     assert updated.pattern_recognition.bonus_content.effective_folder_patterns == ["*/Extras/*", "*/Specials/*"]
-    assert updated.pattern_recognition.bonus_content.effective_file_patterns == ["*-bonus.*", "*-trailer.*"]
+    assert updated.pattern_recognition.bonus_content.effective_file_patterns == []
     assert stored is not None
-    assert stored.value["pattern_recognition"]["analyze_bonus_content"] is False
+    assert stored.value["pattern_recognition"]["analyze_bonus_content"] is True
+    assert stored.value["pattern_recognition"]["bonus_content"]["user_file_patterns"] == []
+    assert stored.value["pattern_recognition"]["bonus_content"]["default_file_patterns"] == []
 
 
 def test_update_app_settings_rejects_invalid_pattern_recognition_regex(tmp_path) -> None:
@@ -120,6 +129,7 @@ def test_update_app_settings_rejects_invalid_pattern_recognition_regex(tmp_path)
                 AppSettingsUpdate(
                     pattern_recognition={
                         "show_season_patterns": {
+                            "recognition_mode": "regex",
                             "season_folder_regexes": ["("],
                         },
                     },
@@ -130,6 +140,31 @@ def test_update_app_settings_rejects_invalid_pattern_recognition_regex(tmp_path)
             assert "Invalid season folder regex" in str(exc)
         else:
             raise AssertionError("invalid regex should be rejected")
+
+
+def test_update_app_settings_rejects_invalid_folder_depth_order(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        try:
+            update_app_settings(
+                db,
+                AppSettingsUpdate(
+                    pattern_recognition={
+                        "show_season_patterns": {
+                            "recognition_mode": "folder_depth",
+                            "series_folder_depth": 2,
+                            "season_folder_depth": 2,
+                        },
+                    },
+                ),
+                settings,
+            )
+        except ValueError as exc:
+            assert "Season folder depth must be greater" in str(exc)
+        else:
+            raise AssertionError("invalid folder depth order should be rejected")
 
 
 def test_built_in_default_ignore_patterns_include_tmm_recycle_folder() -> None:
