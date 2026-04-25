@@ -77,57 +77,6 @@ class HistoryRetentionUpdate(BaseModel):
     scan_history: HistoryRetentionBucketUpdate | None = None
 
 
-class ShowSeasonRecognitionMode(str, Enum):
-    folder_depth = "folder_depth"
-    regex = "regex"
-
-
-class ShowSeasonPatternSettings(BaseModel):
-    recognition_mode: ShowSeasonRecognitionMode = ShowSeasonRecognitionMode.folder_depth
-    series_folder_depth: int = Field(default=1, ge=1, le=16)
-    season_folder_depth: int = Field(default=2, ge=1, le=16)
-    series_folder_regexes: list[str] = Field(default_factory=list)
-    season_folder_regexes: list[str] = Field(default_factory=list)
-    episode_file_regexes: list[str] = Field(default_factory=list)
-
-
-class ShowSeasonPatternSettingsUpdate(BaseModel):
-    recognition_mode: ShowSeasonRecognitionMode | None = None
-    series_folder_depth: int | None = Field(default=None, ge=1, le=16)
-    season_folder_depth: int | None = Field(default=None, ge=1, le=16)
-    series_folder_regexes: list[str] | None = None
-    season_folder_regexes: list[str] | None = None
-    episode_file_regexes: list[str] | None = None
-
-
-class BonusContentPatternSettings(BaseModel):
-    user_folder_patterns: list[str] = Field(default_factory=list)
-    default_folder_patterns: list[str] = Field(default_factory=list)
-    effective_folder_patterns: list[str] = Field(default_factory=list)
-    user_file_patterns: list[str] = Field(default_factory=list)
-    default_file_patterns: list[str] = Field(default_factory=list)
-    effective_file_patterns: list[str] = Field(default_factory=list)
-
-
-class BonusContentPatternSettingsUpdate(BaseModel):
-    user_folder_patterns: list[str] | None = None
-    default_folder_patterns: list[str] | None = None
-    user_file_patterns: list[str] | None = None
-    default_file_patterns: list[str] | None = None
-
-
-class PatternRecognitionSettings(BaseModel):
-    analyze_bonus_content: bool = True
-    show_season_patterns: ShowSeasonPatternSettings = Field(default_factory=ShowSeasonPatternSettings)
-    bonus_content: BonusContentPatternSettings = Field(default_factory=BonusContentPatternSettings)
-
-
-class PatternRecognitionSettingsUpdate(BaseModel):
-    analyze_bonus_content: bool | None = None
-    show_season_patterns: ShowSeasonPatternSettingsUpdate | None = None
-    bonus_content: BonusContentPatternSettingsUpdate | None = None
-
-
 class AppSettingsRead(BaseModel):
     ignore_patterns: list[str] = Field(default_factory=list)
     user_ignore_patterns: list[str] = Field(default_factory=list)

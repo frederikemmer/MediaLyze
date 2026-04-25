@@ -28,12 +28,6 @@ import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
-  DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
-  defaultBonusFolderPatternInputs,
-  defaultPatternRecognitionSettings,
-  type PatternRecognitionSettings,
-} from "../lib/pattern-recognition";
-import {
   getSettingsPanelState,
   saveSettingsPanelState,
   type SettingsPanelId,
@@ -86,85 +80,9 @@ type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 
 type IgnorePatternGroup = "user" | "default";
 
-type PatternSectionKey =
-  | "series_folder_regexes"
-  | "season_folder_regexes"
-  | "bonus_folder_patterns";
+type IgnorePatternDrafts = Record<IgnorePatternGroup, string>;
 
-type PatternRecognitionSectionState = Record<PatternSectionKey, boolean>;
-
-const PATTERN_RECOGNITION_SECTION_STORAGE_KEY = "medialyze-pattern-recognition-sections";
-
-const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState = {
-  series_folder_regexes: true,
-  season_folder_regexes: true,
-  bonus_folder_patterns: true,
-};
-
-const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";
-
-function normalizePatternRecognitionInputs(settings?: PatternRecognitionSettings | null): PatternRecognitionSettings {
-  const next = settings ?? DEFAULT_PATTERN_RECOGNITION_INPUTS;
-  return {
-    ...next,
-    analyze_bonus_content: true,
-    show_season_patterns: {
-      ...DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
-      ...next.show_season_patterns,
-      series_folder_regexes:
-        next.show_season_patterns?.series_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.series_folder_regexes,
-      season_folder_regexes:
-        next.show_season_patterns?.season_folder_regexes ?? DEFAULT_SHOW_SEASON_PATTERN_INPUTS.season_folder_regexes,
-    },
-  };
-}
-
-function normalizePatternRecognitionSectionState(value: unknown): PatternRecognitionSectionState {
-  const state = { ...DEFAULT_PATTERN_RECOGNITION_SECTION_STATE };
-  if (!value || typeof value !== "object") {
-    return state;
-  }
-
-  const candidate = value as Partial<Record<PatternSectionKey, unknown> & Record<string, unknown>>;
-  for (const key of Object.keys(state) as PatternSectionKey[]) {
-    if (typeof candidate[key] === "boolean") {
-      state[key] = candidate[key];
-    }
-  }
-  if (typeof candidate.bonus_folder_patterns !== "boolean") {
-    const legacyExpanded =
-      candidate.bonus_user_folder_patterns === true || candidate.bonus_default_folder_patterns === true;
-    if (legacyExpanded) {
-      state.bonus_folder_patterns = true;
-    }
-  }
-  return state;
-}
-
-function getPatternRecognitionSectionState(): PatternRecognitionSectionState {
-  if (typeof window === "undefined") {
-    return DEFAULT_PATTERN_RECOGNITION_SECTION_STATE;
-  }
-
-  const raw = window.localStorage.getItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY);
-  if (!raw) {
-    return DEFAULT_PATTERN_RECOGNITION_SECTION_STATE;
-  }
-
-  try {
-    return normalizePatternRecognitionSectionState(JSON.parse(raw));
-  } catch {
-    return DEFAULT_PATTERN_RECOGNITION_SECTION_STATE;
-  }
-}
-
-function savePatternRecognitionSectionState(state: PatternRecognitionSectionState): PatternRecognitionSectionState {
-  const normalized = normalizePatternRecognitionSectionState(state);
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY, JSON.stringify(normalized));
-  }
-  return normalized;
-}
+type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 const VIDEO_CODEC_OPTIONS = ["mpeg2video", "mpeg4", "vc1", "mjpeg", "h264", "vp9", "hevc", "prores", "av1"];
 const AUDIO_CHANNEL_OPTIONS = ["mono", "stereo", "5.1", "7.1"];
 const AUDIO_CODEC_OPTIONS = [
@@ -619,15 +537,7 @@ export function LibrariesPage() {
   const [libraryPathInspections, setLibraryPathInspections] = useState<Record<number, PathInspection | null>>({});
   const [userIgnorePatternInputs, setUserIgnorePatternInputs] = useState<string[]>([]);
   const [defaultIgnorePatternInputs, setDefaultIgnorePatternInputs] = useState<string[]>([]);
-  const [ignorePatternDraft, setIgnorePatternDraft] = useState("");
-  const [patternRecognitionInputs, setPatternRecognitionInputs] = useState<PatternRecognitionSettings>(
-    normalizePatternRecognitionInputs(appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS),
-  );
-  const [patternRecognitionDrafts, setPatternRecognitionDrafts] = useState<Record<PatternSectionKey, string>>({
-    series_folder_regexes: "",
-    season_folder_regexes: "",
-    bonus_folder_patterns: "",
-  });
+  const [ignorePatternDrafts, setIgnorePatternDrafts] = useState<IgnorePatternDrafts>({ user: "", default: "" });
   const [ignorePatternSectionState, setIgnorePatternSectionState] = useState(() => getIgnorePatternSectionState());
   const [patternRecognitionSectionState, setPatternRecognitionSectionState] = useState(() =>
     getPatternRecognitionSectionState(),
@@ -722,7 +632,6 @@ export function LibrariesPage() {
     setHistoryRetentionInputs(nextHistoryRetentionInputs);
     persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
-    setPatternRecognitionInputs(normalizePatternRecognitionInputs(updated.pattern_recognition));
     setAppSettings(updated);
   }
 
@@ -1080,7 +989,6 @@ export function LibrariesPage() {
     ignorePatternsSuccessId.current = ignorePatternsRequestId.current;
     setUserIgnorePatternInputs(persisted.user);
     setDefaultIgnorePatternInputs(persisted.default);
-    setPatternRecognitionInputs(normalizePatternRecognitionInputs(appSettings.pattern_recognition));
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
@@ -1413,6 +1321,15 @@ export function LibrariesPage() {
   }
 
   function togglePatternRecognitionSection(section: PatternSectionKey) {
+    setPatternRecognitionSectionState((current) =>
+      savePatternRecognitionSectionState({
+        ...current,
+        [section]: !current[section],
+      }),
+    );
+  }
+
+  function togglePatternRecognitionSection(section: PatternListKey) {
     setPatternRecognitionSectionState((current) =>
       savePatternRecognitionSectionState({
         ...current,
@@ -2172,6 +2089,143 @@ export function LibrariesPage() {
     });
   }
 
+  function patternListValue(settings: PatternRecognitionSettings, key: PatternListKey): string[] {
+    switch (key) {
+      case "series_folder_regexes":
+      case "season_folder_regexes":
+        return settings.show_season_patterns[key];
+      case "bonus_user_folder_patterns":
+        return settings.bonus_content.user_folder_patterns;
+      case "bonus_default_folder_patterns":
+        return settings.bonus_content.default_folder_patterns;
+      case "bonus_user_file_patterns":
+        return settings.bonus_content.user_file_patterns;
+      case "bonus_default_file_patterns":
+        return settings.bonus_content.default_file_patterns;
+    }
+  }
+
+  function updatePatternListValue(
+    settings: PatternRecognitionSettings,
+    key: PatternListKey,
+    patterns: string[],
+  ): PatternRecognitionSettings {
+    if (key === "series_folder_regexes" || key === "season_folder_regexes") {
+      return {
+        ...settings,
+        show_season_patterns: {
+          ...settings.show_season_patterns,
+          [key]: patterns,
+        },
+      };
+    }
+    const bonusKeyMap = {
+      bonus_user_folder_patterns: "user_folder_patterns",
+      bonus_default_folder_patterns: "default_folder_patterns",
+      bonus_user_file_patterns: "user_file_patterns",
+      bonus_default_file_patterns: "default_file_patterns",
+    } as const;
+    return {
+      ...settings,
+      bonus_content: {
+        ...settings.bonus_content,
+        [bonusKeyMap[key]]: patterns,
+      },
+    };
+  }
+
+  async function savePatternRecognition(nextSettings: PatternRecognitionSettings) {
+    setPatternRecognitionInputs(nextSettings);
+    setIsSavingPatternRecognition(true);
+    setPatternRecognitionStatus(null);
+    try {
+      const updated = await api.updateAppSettings({
+        pattern_recognition: {
+          analyze_bonus_content: nextSettings.analyze_bonus_content,
+          show_season_patterns: {
+            series_folder_regexes: nextSettings.show_season_patterns.series_folder_regexes,
+            season_folder_regexes: nextSettings.show_season_patterns.season_folder_regexes,
+          },
+          bonus_content: {
+            user_folder_patterns: nextSettings.bonus_content.user_folder_patterns,
+            default_folder_patterns: nextSettings.bonus_content.default_folder_patterns,
+            user_file_patterns: nextSettings.bonus_content.user_file_patterns,
+            default_file_patterns: nextSettings.bonus_content.default_file_patterns,
+          },
+        },
+      });
+      applyUpdatedAppSettingsState(updated);
+      setIgnorePatternsStatus(null);
+      setFeatureFlagsStatus(null);
+      setScanPerformanceStatus(null);
+      setHistoryRetentionStatus(null);
+      setResolutionCategoriesStatus(null);
+    } catch (reason) {
+      setPatternRecognitionInputs(appSettings.pattern_recognition ?? DEFAULT_PATTERN_RECOGNITION_INPUTS);
+      setPatternRecognitionStatus((reason as Error).message);
+    } finally {
+      setIsSavingPatternRecognition(false);
+    }
+  }
+
+  async function addPatternRecognitionEntry(key: PatternListKey) {
+    const candidate = patternRecognitionDrafts[key].trim();
+    if (!candidate) {
+      return;
+    }
+    const nextSettings = updatePatternListValue(
+      patternRecognitionInputs,
+      key,
+      [...patternListValue(patternRecognitionInputs, key), candidate],
+    );
+    await savePatternRecognition(nextSettings);
+    setPatternRecognitionDrafts((current) => ({ ...current, [key]: "" }));
+  }
+
+  async function removePatternRecognitionEntry(key: PatternListKey, index: number) {
+    const nextPatterns = patternListValue(patternRecognitionInputs, key).filter((_, rowIndex) => rowIndex !== index);
+    await savePatternRecognition(updatePatternListValue(patternRecognitionInputs, key, nextPatterns));
+  }
+
+  function updatePatternRecognitionEntry(key: PatternListKey, index: number, value: string) {
+    const nextPatterns = patternListValue(patternRecognitionInputs, key).map((pattern, rowIndex) =>
+      rowIndex === index ? value : pattern,
+    );
+    setPatternRecognitionInputs(updatePatternListValue(patternRecognitionInputs, key, nextPatterns));
+    setPatternRecognitionStatus(null);
+  }
+
+  async function finalizePatternRecognitionEntry(key: PatternListKey, index: number) {
+    const nextPatterns = patternListValue(patternRecognitionInputs, key).map((pattern, rowIndex) =>
+      rowIndex === index ? pattern.trim() : pattern,
+    );
+    await savePatternRecognition(updatePatternListValue(patternRecognitionInputs, key, nextPatterns));
+  }
+
+  async function restoreDefaultShowSeasonPatterns() {
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      show_season_patterns: DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
+    });
+  }
+
+  async function restoreDefaultBonusPatterns() {
+    const defaultFolderPatterns = defaultBonusFolderPatternInputs();
+    const defaultFilePatterns = defaultBonusFilePatternInputs();
+    await savePatternRecognition({
+      ...patternRecognitionInputs,
+      bonus_content: {
+        ...patternRecognitionInputs.bonus_content,
+        user_folder_patterns: [],
+        default_folder_patterns: defaultFolderPatterns,
+        effective_folder_patterns: defaultFolderPatterns,
+        user_file_patterns: [],
+        default_file_patterns: defaultFilePatterns,
+        effective_file_patterns: defaultFilePatterns,
+      },
+    });
+  }
+
   function renderScanPathList(
     title: string,
     count: number,
@@ -2650,6 +2704,80 @@ export function LibrariesPage() {
 
   function renderPatternRecognitionList(
     key: PatternSectionKey,
+    title: string,
+    placeholder: string,
+  ) {
+    const patterns = patternListValue(patternRecognitionInputs, key);
+    const draftValue = patternRecognitionDrafts[key];
+    const expanded = patternRecognitionSectionState[key];
+    const ToggleIcon = expanded ? ChevronDown : ChevronRight;
+    return (
+      <div className="ignore-pattern-section pattern-recognition-section" key={key}>
+        <button
+          type="button"
+          className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain"
+          aria-expanded={expanded}
+          onClick={() => togglePatternRecognitionSection(key)}
+        >
+          <span className="ignore-pattern-section-title">{title}</span>
+          <span className="ignore-pattern-section-meta">
+            <span className="badge">{patterns.length}</span>
+            <ToggleIcon aria-hidden="true" className="nav-icon" />
+          </span>
+        </button>
+        {expanded ? (
+          <div className="ignore-pattern-section-body">
+            <div className="ignore-pattern-row ignore-pattern-row-draft">
+              <input
+                type="text"
+                value={draftValue}
+                onChange={(event) => {
+                  setPatternRecognitionDrafts((current) => ({ ...current, [key]: event.target.value }));
+                  setPatternRecognitionStatus(null);
+                }}
+                placeholder={placeholder}
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="secondary icon-only-button"
+                aria-label={t("libraries.patternRecognition.addPattern")}
+                disabled={isSavingPatternRecognition || !draftValue.trim()}
+                onClick={() => void addPatternRecognitionEntry(key)}
+              >
+                <Plus aria-hidden="true" className="nav-icon" />
+              </button>
+            </div>
+            <div className="ignore-patterns-stack">
+              {patterns.map((pattern, index) => (
+                <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${key}-${index}`}>
+                  <input
+                    type="text"
+                    value={pattern}
+                    onChange={(event) => updatePatternRecognitionEntry(key, index, event.target.value)}
+                    onBlur={() => void finalizePatternRecognitionEntry(key, index)}
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-only-button"
+                    aria-label={t("libraries.patternRecognition.removePattern", { index: index + 1 })}
+                    disabled={isSavingPatternRecognition}
+                    onClick={() => void removePatternRecognitionEntry(key, index)}
+                  >
+                    <Trash2 aria-hidden="true" className="nav-icon" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderPatternRecognitionList(
+    key: PatternListKey,
     title: string,
     placeholder: string,
   ) {
@@ -3618,188 +3746,6 @@ export function LibrariesPage() {
                 </p>
               ) : null}
               {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
-            </div>
-          </AsyncPanel>
-
-          <AsyncPanel
-            title={t("libraries.patternRecognition.title")}
-            subtitle={t("libraries.patternRecognition.subtitle")}
-            titleAddon={
-              <TooltipTrigger
-                ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
-                content={t("libraries.ignorePatternsHint")}
-              >
-                ?
-              </TooltipTrigger>
-            }
-            loading={isLoadingIgnorePatterns}
-            error={ignorePatternsLoadError}
-            collapseState={{
-              collapsed: !settingsPanelState.patternRecognition,
-              onToggle: () => toggleSettingsPanel("patternRecognition"),
-              bodyId: "pattern-recognition-panel-body",
-            }}
-          >
-            <div className="settings-sidebar-stack">
-              <div className="pattern-recognition-doc-row">
-                <p className="field-hint">{t("libraries.patternRecognition.docsHint")}</p>
-                <a href={PATTERN_DOCS_URL} target="_blank" rel="noreferrer" className="secondary small">
-                  {t("libraries.patternRecognition.docsLink")}
-                </a>
-              </div>
-              <div className="field">
-                <div className="distribution-copy">
-                  <div className="field-label-row">
-                    <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.patternRecognition.showSeasonTooltipAria")}
-                      content={t("libraries.patternRecognition.showSeasonHint")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary small"
-                    aria-label={t("libraries.patternRecognition.restoreShowSeasonDefaults")}
-                    disabled={isSavingPatternRecognition}
-                    onClick={() => void restoreDefaultShowSeasonPatterns()}
-                  >
-                    {t("libraries.patternRecognition.restoreDefaults")}
-                  </button>
-                </div>
-                <div className="field" style={{ marginTop: "0.75rem" }}>
-                  <label>
-                    <span>{t("libraries.patternRecognition.modeLabel")}</span>
-                    <select
-                      value={patternRecognitionInputs.show_season_patterns.recognition_mode}
-                      disabled={isSavingPatternRecognition}
-                      onChange={(event) =>
-                        void updateShowSeasonRecognitionMode(event.currentTarget.value as "folder_depth" | "regex")
-                      }
-                    >
-                      <option value="folder_depth">{t("libraries.patternRecognition.modeFolderDepth")}</option>
-                      <option value="regex">{t("libraries.patternRecognition.modeRegex")}</option>
-                    </select>
-                  </label>
-                </div>
-                {patternRecognitionInputs.show_season_patterns.recognition_mode === "folder_depth" ? (
-                  <div className="inline-form-grid">
-                    <label>
-                      <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
-                      <select
-                        value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
-                        disabled={isSavingPatternRecognition}
-                        onChange={(event) =>
-                          void updateShowSeasonDepth("series_folder_depth", Number.parseInt(event.currentTarget.value, 10))
-                        }
-                      >
-                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
-                          <option key={`series-depth-${depth}`} value={depth}>
-                            {depth}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
-                      <select
-                        value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
-                        disabled={isSavingPatternRecognition}
-                        onChange={(event) =>
-                          void updateShowSeasonDepth("season_folder_depth", Number.parseInt(event.currentTarget.value, 10))
-                        }
-                      >
-                        {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
-                          <option key={`season-depth-${depth}`} value={depth}>
-                            {depth}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : (
-                  <div className="ignore-pattern-sections">
-                    {renderPatternRecognitionList(
-                      "series_folder_regexes",
-                      t("libraries.patternRecognition.seriesFolderRegexes"),
-                      String.raw`^(?P<title>.+?)$`,
-                    )}
-                    {renderPatternRecognitionList(
-                      "season_folder_regexes",
-                      t("libraries.patternRecognition.seasonFolderRegexes"),
-                      String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="field">
-                <div className="distribution-copy">
-                  <div className="field-label-row">
-                    <strong>{t("libraries.patternRecognition.bonusTitle")}</strong>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.patternRecognition.bonusTooltipAria")}
-                      content={t("libraries.patternRecognition.bonusHint")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary small"
-                    disabled={isSavingPatternRecognition}
-                    onClick={() => void restoreDefaultBonusPatterns()}
-                  >
-                    {t("libraries.patternRecognition.restoreBonusDefaults")}
-                  </button>
-                </div>
-                <div className="ignore-pattern-sections">
-                  {renderPatternRecognitionList(
-                    "bonus_folder_patterns",
-                    t("libraries.patternRecognition.bonusFolders"),
-                    "*/extras/*",
-                  )}
-                </div>
-              </div>
-
-              <div className="field">
-                <div className="distribution-copy">
-                  <div className="field-label-row">
-                    <strong>{t("libraries.ignorePatternsTitle")}</strong>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.ignorePatternsTooltipAria")}
-                      content={t("libraries.ignorePatternsTooltip")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary small"
-                    disabled={isSavingIgnorePatterns}
-                    onClick={() => void restoreDefaultIgnorePatterns()}
-                  >
-                    {t("libraries.restoreIgnoreDefaults")}
-                  </button>
-                </div>
-                <div className="ignore-pattern-sections">
-                  {renderIgnorePatternSection(
-                    t("libraries.ignorePatternsTitle"),
-                    ignorePatternSectionState.combinedExpanded,
-                    "ignore-patterns",
-                  )}
-                </div>
-              </div>
-              {isSavingPatternRecognition || isSavingIgnorePatterns ? (
-                <p className="field-hint">{t("libraries.patternRecognition.saving")}</p>
-              ) : null}
-              {patternRecognitionStatus || ignorePatternsStatus ? (
-                <div className="alert">{patternRecognitionStatus ?? ignorePatternsStatus}</div>
-              ) : null}
             </div>
           </AsyncPanel>
 

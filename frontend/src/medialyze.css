@@ -2665,43 +2665,6 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   gap: 12px;
 }
 
-.pattern-recognition-doc-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.pattern-recognition-doc-row .field-hint {
-  margin: 0;
-}
-
-.pattern-recognition-doc-row a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 107, 61, 0.3);
-  background: var(--accent);
-  color: #fffaf3;
-  font-size: 0.82rem;
-  font-weight: 600;
-  box-shadow: none;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.pattern-recognition-doc-row a:hover,
-.pattern-recognition-doc-row a:focus-visible {
-  background: #ff7a4f;
-  border-color: rgba(255, 107, 61, 0.42);
-  color: #fffaf3;
-  box-shadow: none;
-}
-
 .ignore-pattern-section {
   display: grid;
   gap: 12px;
@@ -2743,6 +2706,25 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .ignore-pattern-section > button.secondary.ignore-pattern-section-toggle-plain:focus-visible {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
+}
+
+.pattern-recognition-section {
+  gap: 14px;
+}
+
+.ignore-pattern-section-toggle-plain {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.ignore-pattern-section-toggle-plain:hover,
+.ignore-pattern-section-toggle-plain:focus-visible {
+  background: transparent;
   box-shadow: none;
 }
 

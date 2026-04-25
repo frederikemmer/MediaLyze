@@ -441,7 +441,6 @@ describe("LibrariesPage ignore patterns", () => {
           show_full_width_app_shell: false,
           hide_quality_score_meter: false,
           unlimited_panel_size: false,
-          in_depth_dolby_vision_profiles: false,
         },
       }),
     );
@@ -1383,16 +1382,10 @@ describe("LibrariesPage settings panels", () => {
     expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
-    expect(resolutionPanel).not.toBeNull();
-    expect(patternRecognitionPanel).not.toBeNull();
-    expect(within(resolutionPanel as HTMLElement).getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
-    expect(
-      within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: /^Ignore patterns\d+$/i }),
-    ).toBeInTheDocument();
-    expect(within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: "Restore ignore defaults" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
   });
 
-  it("places the pattern recognition panel between resolution categories and history retention", async () => {
+  it("places the history retention panel between resolution categories and recent scan logs", async () => {
     renderPage();
 
     const resolutionPanel = (await screen.findByRole("button", { name: /^resolution categories$/i })).closest(

@@ -429,74 +429,6 @@ export type MediaFileHistory = {
   items: MediaFileHistoryEntry[];
 };
 
-export type MediaSeriesSummary = {
-  id: number;
-  library_id: number;
-  title: string;
-  normalized_title: string;
-  relative_path: string;
-  year: number | null;
-  season_count: number;
-  episode_count: number;
-  total_size_bytes: number;
-  total_duration_seconds: number;
-  last_analyzed_at: string | null;
-};
-
-export type MediaSeasonDetail = {
-  id: number;
-  library_id: number;
-  series_id: number;
-  season_number: number;
-  title: string;
-  relative_path: string;
-  episode_count: number;
-  total_size_bytes: number;
-  total_duration_seconds: number;
-  episodes: MediaFileRow[];
-};
-
-export type MediaSeriesDetail = MediaSeriesSummary & {
-  seasons: MediaSeasonDetail[];
-};
-
-export type GroupedSeriesTableRow = {
-  kind: "series";
-  series_id: number;
-  title: string;
-  relative_path: string;
-  year: number | null;
-  season_count: number;
-  episode_count: number;
-  total_size_bytes: number;
-  total_duration_seconds: number;
-  quality_score_average: number | null;
-  bitrate_average: number | null;
-  audio_bitrate_average: number | null;
-  children_loaded: boolean;
-};
-
-export type GroupedLooseFileTableRow = {
-  kind: "file";
-  file: MediaFileRow;
-};
-
-export type GroupedMediaTableEntry = GroupedSeriesTableRow | GroupedLooseFileTableRow;
-
-export type GroupedMediaTablePage = {
-  total: number | null;
-  offset: number;
-  limit: number;
-  next_cursor: string | null;
-  has_more: boolean;
-  items: GroupedMediaTableEntry[];
-};
-
-export type MediaSeriesGroupedDetail = MediaSeriesSummary & {
-  seasons: MediaSeasonDetail[];
-  episodes_without_season: MediaFileRow[];
-};
-
 export type BrowseResponse = {
   current_path: string;
   parent_path: string | null;
@@ -521,25 +453,6 @@ export type AppSettings = {
   ignore_patterns: string[];
   user_ignore_patterns: string[];
   default_ignore_patterns: string[];
-  pattern_recognition?: {
-    analyze_bonus_content: boolean;
-    show_season_patterns: {
-      recognition_mode: "folder_depth" | "regex";
-      series_folder_depth: number;
-      season_folder_depth: number;
-      series_folder_regexes: string[];
-      season_folder_regexes: string[];
-      episode_file_regexes?: string[];
-    };
-    bonus_content: {
-      user_folder_patterns: string[];
-      default_folder_patterns: string[];
-      effective_folder_patterns: string[];
-      user_file_patterns: string[];
-      default_file_patterns: string[];
-      effective_file_patterns: string[];
-    };
-  };
   resolution_categories?: ResolutionCategory[];
   scan_performance?: {
     scan_worker_count: number;
@@ -940,19 +853,6 @@ export const api = {
     request<LibraryStatistics>(`/libraries/${id}/statistics${buildPanelQuery(panels)}`, { signal }),
   libraryHistory: (id: string | number, signal?: AbortSignal) =>
     request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
-  librarySeries: (id: string | number, signal?: AbortSignal) =>
-    request<MediaSeriesSummary[]>(`/libraries/${id}/series`, { signal }),
-  librarySeriesDetail: (libraryId: string | number, seriesId: string | number, signal?: AbortSignal) =>
-    request<MediaSeriesDetail>(`/libraries/${libraryId}/series/${seriesId}`, { signal }),
-  librarySeriesGroupedDetail: (
-    libraryId: string | number,
-    seriesId: string | number,
-    params?: Omit<LibraryFilesRequestParams, "offset" | "limit" | "cursor" | "sortKey" | "sortDirection" | "includeTotal">,
-  ) =>
-    request<MediaSeriesGroupedDetail>(
-      buildLibraryFilesPath(libraryId, params as LibraryFilesRequestParams | undefined, `/series/${seriesId}/grouped-detail`),
-      { signal: params?.signal },
-    ),
   libraryComparison: (
     id: string | number,
     params: { xField: ComparisonFieldId; yField: ComparisonFieldId; signal?: AbortSignal },
@@ -1020,22 +920,6 @@ export const api = {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
     default_ignore_patterns?: string[];
-    pattern_recognition?: {
-      analyze_bonus_content?: boolean;
-      show_season_patterns?: {
-        recognition_mode?: "folder_depth" | "regex";
-        series_folder_depth?: number;
-        season_folder_depth?: number;
-        series_folder_regexes?: string[];
-        season_folder_regexes?: string[];
-      };
-      bonus_content?: {
-        user_folder_patterns?: string[];
-        default_folder_patterns?: string[];
-        user_file_patterns?: string[];
-        default_file_patterns?: string[];
-      };
-    };
     resolution_categories?: ResolutionCategory[];
     scan_performance?: {
       scan_worker_count?: number;

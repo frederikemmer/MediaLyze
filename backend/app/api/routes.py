@@ -20,9 +20,6 @@ from backend.app.schemas.media import (
     MediaFileDetail,
     MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
-    MediaSeriesGroupedDetailRead,
-    MediaSeriesDetailRead,
-    MediaSeriesSummaryRead,
     MediaFileStreamDetails,
     MediaFileTablePage,
 )
@@ -59,10 +56,6 @@ from backend.app.services.media_service import (
     get_media_file_history,
     get_media_file_quality_score_detail,
     get_media_file_stream_details,
-    get_grouped_library_series_detail,
-    get_library_series_detail,
-    list_grouped_library_files,
-    list_library_series,
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
@@ -363,80 +356,6 @@ def library_scan_jobs(
     if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
     return list_library_scan_jobs(db, library_id, limit)
-
-
-@router.get("/libraries/{library_id}/series", response_model=list[MediaSeriesSummaryRead])
-def library_series(library_id: int, db: Session = Depends(get_db_session)) -> list[MediaSeriesSummaryRead]:
-    if not library_exists(db, library_id):
-        raise HTTPException(status_code=404, detail="Library not found")
-    return list_library_series(db, library_id)
-
-
-@router.get("/libraries/{library_id}/series/{series_id}", response_model=MediaSeriesDetailRead)
-def library_series_detail(
-    library_id: int,
-    series_id: int,
-    db: Session = Depends(get_db_session),
-) -> MediaSeriesDetailRead:
-    payload = get_library_series_detail(db, library_id, series_id)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="Series not found")
-    return payload
-
-
-@router.get("/libraries/{library_id}/series/{series_id}/grouped-detail", response_model=MediaSeriesGroupedDetailRead)
-def library_series_grouped_detail(
-    library_id: int,
-    series_id: int,
-    search: str = Query(default="", max_length=200),
-    file_search: str = Query(default="", max_length=200),
-    search_container: str = Query(default="", max_length=64),
-    search_size: str = Query(default="", max_length=64),
-    search_quality_score: str = Query(default="", max_length=32),
-    search_bitrate: str = Query(default="", max_length=64),
-    search_audio_bitrate: str = Query(default="", max_length=64),
-    search_video_codec: str = Query(default="", max_length=200),
-    search_resolution: str = Query(default="", max_length=64),
-    search_hdr_type: str = Query(default="", max_length=200),
-    search_duration: str = Query(default="", max_length=64),
-    search_audio_codecs: str = Query(default="", max_length=200),
-    search_audio_spatial_profiles: str = Query(default="", max_length=200),
-    search_audio_languages: str = Query(default="", max_length=200),
-    search_subtitle_languages: str = Query(default="", max_length=200),
-    search_subtitle_codecs: str = Query(default="", max_length=200),
-    search_subtitle_sources: str = Query(default="", max_length=64),
-    db: Session = Depends(get_db_session),
-) -> MediaSeriesGroupedDetailRead:
-    try:
-        payload = get_grouped_library_series_detail(
-            db,
-            library_id,
-            series_id,
-            search=search,
-            search_filters=_library_file_search_filters(
-                file_search=file_search,
-                search_container=search_container,
-                search_size=search_size,
-                search_quality_score=search_quality_score,
-                search_bitrate=search_bitrate,
-                search_audio_bitrate=search_audio_bitrate,
-                search_video_codec=search_video_codec,
-                search_resolution=search_resolution,
-                search_hdr_type=search_hdr_type,
-                search_duration=search_duration,
-                search_audio_codecs=search_audio_codecs,
-                search_audio_spatial_profiles=search_audio_spatial_profiles,
-                search_audio_languages=search_audio_languages,
-                search_subtitle_languages=search_subtitle_languages,
-                search_subtitle_codecs=search_subtitle_codecs,
-                search_subtitle_sources=search_subtitle_sources,
-            ),
-        )
-    except SearchValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if payload is None:
-        raise HTTPException(status_code=404, detail="Series not found")
-    return payload
 
 
 @router.patch("/libraries/{library_id}", response_model=LibrarySummary)
