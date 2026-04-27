@@ -33,60 +33,69 @@ Bring your own auth (for now).
 
 - Technical media analysis powered by `ffprobe`
 - Full and incremental scans using `path + size + mtime`
+- historical analysis
+- many different charts for all metrics
 - Normalized formats, streams, subtitles, scan jobs, and quality scores (feel free to suggest improvements)
-- Detection of internal and external subtitle files
-- Native desktop packaging for Windows, macOS, and Linux in addition to the Docker/web deployment path
+- recognize shows, seasons, bonus content
 - Ignore files and folders with simple glob patterns such as `*.nfo` or `*/Extras/*`
-- SQLite with WAL mode and indexed filter fields
-- FastAPI backend with a React + Vite frontend
-- Docker-first deployment with a read-only media mount
+- Native desktop packaging for Windows, macOS, and Linux in addition to the Docker/web deployment path
+- and more
 
 ## Screenshots
 
 <table>
   <tr>
-    <td><img alt="Dashboard view" src="docs/images/Library.png"></td>
-    <td><img alt="Settings view" src="docs/images/Library-Tableview.png"></td>
+    <td><img alt="Dashboard view" src="docs/images/Dashboard_historic.png"></td>
+    <td><img alt="Library edit" src="docs/images/Library_edit.png"></td>
   </tr>
   <tr>
-    <td><img alt="Dashboard view" src="docs/images/Library-Darkmode.png"></td>
-    <td><img alt="Settings view" src="docs/images/Settings-Logs-Ignored.png"></td>
+    <td><img alt="Library Tableview" src="docs/images/Library_Tableview.png"></td>
+    <td><img alt="Settings historic data" src="docs/images/Settings_historic_data.png"></td>
   </tr>
 </table>
 
 ## Quick Start
 
-### Run the published image
+### Docker Compose
 
-using docker-compose:
-```bash
-cd docker
-cp .env.example .env
-```
-with production ready:
+use the production ready docker compose file:
 [docker-compose.yaml](docker/docker-compose.yaml)
-___
 
-using docker run:
-```bash
-mkdir -p ./config
+```docker
+services:
+  medialyze:
+    image: ghcr.io/frederikemmer/medialyze:latest
+    container_name: medialyze
+    ports:
+      - 8080:8080
+    environment:
+      # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
+      TZ: UTC
+    volumes:
+      - ./config:/config
+      # use .env or change "./media" to the path of your media directory
+      - ./media:/media:ro
 
-docker run -d \
-  --name medialyze \
-  -p 8080:8080 \
-  -e TZ=UTC \
-  -v "$(pwd)/config:/config" \
-  -v "/path/to/your/media:/media:ro" \
-  ghcr.io/frederikemmer/medialyze:latest
+      # additional media mounts, if needed. Extend this pattern if needed:
+      # /PATH/TO/MEDIA1:/media/MEDIA1:ro
 ```
+
+can be extended by .env using:
+[docker-compose-ENV.yaml](docker/docker-compose-ENV.yaml)
+and 
+[env.example](docker/env.example)
+
 
 Open `http://localhost:8080`.
-The container serves plain HTTP on port `8080`; if you want HTTPS, terminate it in a reverse proxy.
+The container serves plain HTTP on port `8080` by default - if you want HTTPS, terminate it in a reverse proxy.
+
+#### Configuration through [Docker configuration](#docker-configuration)
+
+---
 
 ### Desktop app
 
-The `dev` branch also contains a native desktop distribution path built with Electron.
-Desktop builds run the same FastAPI + React stack locally with a local SQLite database and `ffprobe`.
+Built with Electron, desktop builds run the same FastAPI + React stack locally with a local SQLite database and `ffprobe`.
 
 Desktop behavior:
 
@@ -100,14 +109,14 @@ Release artifacts are packaged as:
 - macOS: `.dmg`
 - Linux: `AppImage`
 
-Published GitHub releases attach those desktop installers directly as release assets.
-All desktop icons are generated from [`frontend/public/favicon.svg`](frontend/public/favicon.svg), so the web favicon and native app icons stay aligned.
+---
 
 ### Build locally
 
+run:
 ```bash
-cp docker/.env.example .env
-docker compose up --build
+cp docker/env.example .env
+docker compose -f docker-compose-dev.yaml up --build
 ```
 
 The default container setup mounts:
@@ -115,7 +124,7 @@ The default container setup mounts:
 - `./config` to `/config`
 - `./media` to `/media` as read-only
 
-If you want a different external port, set `HOST_PORT` in `.env`.
+If you want a different media-path, or external port change `env.example` or `.env`.
 
 ## Local Development
 
@@ -157,7 +166,7 @@ npm run dev
 Local desktop development expects `ffprobe` in your `PATH`.
 For packaged `.app`, `.dmg`, `.exe`, and `AppImage` builds, see [docs/build_desktop.md](docs/build_desktop.md).
 
-## Configuration
+## Docker configuration
 
 Relevant environment variables:
 
@@ -201,7 +210,7 @@ MediaLyze is an open-source project under active development. The current focus 
 
 ### mentioned on
 
->[selfh.st](https://selfh.st/weekly/2026-03-13/)
+>[selfh.st](https://selfh.st/weekly/2026-03-13/)\
 >[ServersatHome](https://www.youtube.com/watch?v=LU5q0GzsAIk)
 
 ## Star History
