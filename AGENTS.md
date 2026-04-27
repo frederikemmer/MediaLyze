@@ -884,6 +884,7 @@ Current release behavior:
 * official images are published to GHCR
 * the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
 * the desktop-release workflow can also be dispatched manually for an existing release tag, optionally building from a different git ref while still uploading assets to the original release tag
+* desktop release assets now use stable versionless filenames per platform so documentation can link through `releases/latest/download/...` to the newest published desktop installers
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
 * when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch
