@@ -3,14 +3,16 @@ services:
     image: ghcr.io/frederikemmer/medialyze:latest
     container_name: medialyze
     ports:
-      - 8080:8080
+      - "${HOST_PORT:-8080}:8080"
+    env_file:
+      - .env
     environment:
       # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
-      TZ: UTC
+      TZ: ${TZ:-UTC}
     volumes:
-      - ./config:/config
-      # use .env or change "./media" to the path of your media directory
-      - ./media:/media:ro
-
+      - ${CONFIG_HOST_DIR:-./config}:/config
+      # use .env or change "${MEDIA_HOST_DIR:-./media}" to the path of your media directory
+      - ${MEDIA_HOST_DIR:-./media}:/media:ro
+      
       # additional media mounts, if needed. Extend this pattern if needed:
       # /PATH/TO/MEDIA1:/media/MEDIA1:ro
