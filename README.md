@@ -20,6 +20,15 @@
   MediaLyze focuses (for now) on just analysis, not playback, scraping, or file modification, READ ONLY on your files!
 </p>
 
+## Desktop Downloads
+
+| Platform | Download |
+| --- | --- |
+| macOS Apple Silicon | [Download](https://github.com/frederikemmer/MediaLyze/releases/latest/download/MediaLyze-arm64.dmg) |
+| Linux | [Download](https://github.com/frederikemmer/MediaLyze/releases/latest/download/MediaLyze.AppImage) |
+| Windows | [Download](https://github.com/frederikemmer/MediaLyze/releases/latest/download/MediaLyze.Setup.exe) |
+| All release assets | [Open latest release](https://github.com/frederikemmer/MediaLyze/releases/latest) |
+
 ![MediaLyze dashboard](docs/images/Dashboard.png)
 
 ## Why MediaLyze

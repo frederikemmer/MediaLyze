@@ -58,7 +58,7 @@ npm --prefix desktop run dist
 
 Additional output:
 
-- installer: `dist/desktop-app/MediaLyze-*.dmg`
+- installer: `dist/desktop-app/MediaLyze-arm64.dmg`
 
 ## Windows
 
@@ -92,7 +92,7 @@ npm run dist
 
 Output:
 
-- installer: `dist/desktop-app/MediaLyze Setup *.exe`
+- installer: `dist/desktop-app/MediaLyze.Setup.exe`
 
 If you want the unpacked desktop app directory instead of the installer:
 

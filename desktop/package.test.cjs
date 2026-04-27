@@ -12,6 +12,24 @@ test("desktop packaged app includes all runtime CommonJS entry files", () => {
   );
 });
 
+test("desktop packaging uses stable release artifact names", () => {
+  assert.equal(
+    packageJson.build?.mac?.artifactName,
+    "${productName}-arm64.${ext}",
+    "Expected macOS desktop artifact name to stay stable"
+  );
+  assert.equal(
+    packageJson.build?.linux?.artifactName,
+    "${productName}.${ext}",
+    "Expected Linux desktop artifact name to stay stable"
+  );
+  assert.equal(
+    packageJson.build?.win?.artifactName,
+    "${productName}.Setup.${ext}",
+    "Expected Windows desktop artifact name to stay stable"
+  );
+});
+
 function expectEntries(actualEntries, requiredEntries) {
   for (const entry of requiredEntries) {
     assert.equal(
