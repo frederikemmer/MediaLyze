@@ -129,28 +129,43 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
+      - name: Verify desktop artifact name
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            ubuntu-latest)
+              expected="dist/desktop-app/MediaLyze.AppImage"
+              ;;
+            macos-latest)
+              expected="dist/desktop-app/MediaLyze-arm64.dmg"
+              ;;
+            windows-latest)
+              expected="dist/desktop-app/MediaLyze.Setup.exe"
+              ;;
+          esac
+
+          if [[ ! -f "$expected" ]]; then
+            echo "Expected desktop artifact not found: $expected" >&2
+            echo "Available files:" >&2
+            ls -la dist/desktop-app >&2
+            exit 1
+          fi
+
       - name: Upload desktop asset to GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          shopt -s nullglob
-          assets=()
           case "${{ matrix.os }}" in
             ubuntu-latest)
-              assets=(dist/desktop-app/*.AppImage)
+              asset="dist/desktop-app/MediaLyze.AppImage"
               ;;
             macos-latest)
-              assets=(dist/desktop-app/*.dmg)
+              asset="dist/desktop-app/MediaLyze-arm64.dmg"
               ;;
             windows-latest)
-              assets=(dist/desktop-app/*.exe)
+              asset="dist/desktop-app/MediaLyze.Setup.exe"
               ;;
           esac
 
-          if [[ ${#assets[@]} -eq 0 ]]; then
-            echo "No desktop artifacts found for ${{ matrix.os }}" >&2
-            exit 1
-          fi
-
-          gh release upload "${{ env.RELEASE_TAG }}" "${assets[@]}" --clobber
+          gh release upload "${{ env.RELEASE_TAG }}" "$asset" --clobber
