@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.9.1
+
+>2026-04-30
+
 ### ✨ New
 
 - add stable desktop release asset names so README download links can point at `releases/latest/download/...` and always fetch the newest published desktop build
