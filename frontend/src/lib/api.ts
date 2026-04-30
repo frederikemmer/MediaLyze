@@ -23,6 +23,8 @@ export type NumericDistribution = {
   bins: NumericDistributionBin[];
 };
 
+type ScanConfigValue = string | number;
+
 export type ComparisonFieldId =
   | "size"
   | "duration"
@@ -226,9 +228,9 @@ export type LibrarySummary = {
   path: string;
   type: LibraryType;
   last_scan_at: string | null;
-  scan_mode: "manual" | "scheduled" | "watch";
+  scan_mode: "manual" | "scheduled" | "scheduled_daily" | "watch";
   duplicate_detection_mode: DuplicateDetectionMode;
-  scan_config: Record<string, number>;
+  scan_config: Record<string, ScanConfigValue>;
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
@@ -1074,7 +1076,7 @@ export const api = {
     type: LibraryType;
     scan_mode: string;
     duplicate_detection_mode?: DuplicateDetectionMode;
-    scan_config?: Record<string, number>;
+    scan_config?: Record<string, ScanConfigValue>;
     quality_profile?: QualityProfile;
     show_on_dashboard?: boolean;
   }) =>
@@ -1089,7 +1091,7 @@ export const api = {
       type?: LibraryType;
       scan_mode?: string;
       duplicate_detection_mode?: DuplicateDetectionMode;
-      scan_config?: Record<string, number>;
+      scan_config?: Record<string, ScanConfigValue>;
       quality_profile?: QualityProfile;
       show_on_dashboard?: boolean;
     },

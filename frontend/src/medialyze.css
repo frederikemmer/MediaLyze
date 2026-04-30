@@ -1176,7 +1176,7 @@
 
 .stat-card {
   min-height: 76px;
-  padding: 8px 14px 4px;
+  padding: 8px 14px 0;
   gap: 0;
 }
 
