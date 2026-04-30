@@ -32,6 +32,7 @@ class LibraryType(str, Enum):
 class ScanMode(str, Enum):
     manual = "manual"
     scheduled = "scheduled"
+    scheduled_daily = "scheduled_daily"
     watch = "watch"
 
 

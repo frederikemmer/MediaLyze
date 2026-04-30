@@ -91,6 +91,9 @@
     },
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
+    "scheduledTime": "Scan-Uhrzeit",
+    "scheduledTimeTooltipAria": "Geplante Scan-Uhrzeit erklaeren",
+    "scheduledTimeTooltip": "Lege die Uhrzeit fest, zu der der taegliche Scan startet. Verwende das 24-Stunden-Format (HH:MM), z. B. 02:00 oder 14:30.\n\nStelle sicher, dass die Umgebungsvariable TZ in deiner docker-compose- oder env-Datei korrekt gesetzt ist, damit der Scan zur gewuenschten Ortszeit laeuft.",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
     "scanNowTooltip": "Einen inkrementellen Scan einreihen",
@@ -326,7 +329,8 @@
   },
   "scanModes": {
     "manual": "Manuell",
-    "scheduled": "Geplant",
+    "scheduled": "Zeitintervall",
+    "scheduled_daily": "Geplant",
     "watch": "Überwacht"
   },
   "sort": {
@@ -597,6 +601,7 @@
     "triggerWatchdog": "Watchdog",
     "triggerManualSummary": "Manuell durch den Benutzer ausgelöst.",
     "triggerScheduledSummary": "Durch das geplante Intervall alle {{minutes}} Minuten ausgelöst.",
+    "triggerScheduledDailySummary": "Durch den taeglichen Zeitplan um {{time}} Uhr ausgeloest.",
     "triggerWatchdogSummary": "Nach {{count}} Watchdog-Dateisystemereignissen ausgelöst.",
     "outcomeSuccessful": "Erfolgreich",
     "outcomeCompletedWithIssues": "Abgeschlossen mit Problemen",

@@ -91,6 +91,9 @@
     },
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
+    "scheduledTime": "Scan time",
+    "scheduledTimeTooltipAria": "Explain scheduled scan time",
+    "scheduledTimeTooltip": "Set the time of day at which the daily scan starts. Use 24-hour format (HH:MM), e.g. 02:00 or 14:30.\n\nMake sure the TZ environment variable is configured correctly in your docker-compose or env file so the scan runs at the intended local time.",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
     "scanNowTooltip": "Queue an incremental scan",
@@ -326,7 +329,8 @@
   },
   "scanModes": {
     "manual": "Manual",
-    "scheduled": "Scheduled",
+    "scheduled": "Time Interval",
+    "scheduled_daily": "Scheduled",
     "watch": "Watch"
   },
   "sort": {
@@ -597,6 +601,7 @@
     "triggerWatchdog": "Watchdog",
     "triggerManualSummary": "Started manually by the user.",
     "triggerScheduledSummary": "Started by the scheduled interval every {{minutes}} minutes.",
+    "triggerScheduledDailySummary": "Started by the daily schedule at {{time}}.",
     "triggerWatchdogSummary": "Started after {{count}} watchdog file events.",
     "outcomeSuccessful": "Successful",
     "outcomeCompletedWithIssues": "Completed with issues",

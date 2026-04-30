@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - add stable desktop release asset names so README download links can point at `releases/latest/download/...` and always fetch the newest published desktop build
+- add a **Scheduled** scan mode that runs a daily incremental scan at a configurable time of day (HH:MM); the existing interval-based mode is renamed to **Time Interval** in the UI; a tooltip in the time picker explains that only one scan per 24 hours is currently supported and that the `TZ` environment variable should be set correctly ([#124](https://github.com/frederikemmer/MediaLyze/issues/124))
 
 ## v0.9.0
 

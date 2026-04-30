@@ -74,6 +74,7 @@ type LibrarySettingsForm = {
   duplicate_detection_mode: DuplicateDetectionMode;
   interval_minutes: number;
   debounce_seconds: number;
+  scheduled_time: string;
   quality_profile: QualityProfile;
 };
 
@@ -348,6 +349,7 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
     duplicate_detection_mode: library.duplicate_detection_mode,
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
+    scheduled_time: String(library.scan_config.scheduled_time ?? "02:00"),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
   };
 }
@@ -359,9 +361,12 @@ function toLibraryIdentityForm(library: LibrarySummary): LibraryIdentityForm {
   };
 }
 
-function buildScanConfig(settings: LibrarySettingsForm): Record<string, number> {
+function buildScanConfig(settings: LibrarySettingsForm): Record<string, number | string> {
   if (settings.scan_mode === "scheduled") {
     return { interval_minutes: settings.interval_minutes };
+  }
+  if (settings.scan_mode === "scheduled_daily") {
+    return { scheduled_time: settings.scheduled_time || "02:00" };
   }
   if (settings.scan_mode === "watch") {
     return { debounce_seconds: settings.debounce_seconds };
@@ -379,6 +384,7 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
     current.duplicate_detection_mode === settings.duplicate_detection_mode &&
     current.interval_minutes === settings.interval_minutes &&
     current.debounce_seconds === settings.debounce_seconds &&
+    current.scheduled_time === settings.scheduled_time &&
     JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
   );
 }
@@ -516,7 +522,12 @@ function summarizeTriggerDetails(
   job: RecentScanJob | ScanJobDetail,
 ) {
   if (job.trigger_source === "scheduled") {
-    const intervalMinutes = Number((job as ScanJobDetail).trigger_details?.interval_minutes ?? 0);
+    const triggerDetails = (job as ScanJobDetail).trigger_details ?? {};
+    const scheduledTime = triggerDetails.scheduled_time as string | undefined;
+    const intervalMinutes = Number(triggerDetails.interval_minutes ?? 0);
+    if (scheduledTime) {
+      return t("scanLogs.triggerScheduledDailySummary", { time: scheduledTime });
+    }
     return intervalMinutes > 0
       ? t("scanLogs.triggerScheduledSummary", { minutes: intervalMinutes })
       : t("scanLogs.triggerScheduled");
@@ -1141,6 +1152,7 @@ export function LibrariesPage() {
       duplicate_detection_mode: "off",
       interval_minutes: 60,
       debounce_seconds: 15,
+      scheduled_time: "02:00",
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
     };
     const inspection = libraryPathInspections[libraryId];
@@ -3372,6 +3384,7 @@ export function LibrariesPage() {
                       >
                         <option value="manual">{t("scanModes.manual")}</option>
                         <option value="scheduled">{t("scanModes.scheduled")}</option>
+                        <option value="scheduled_daily">{t("scanModes.scheduled_daily")}</option>
                         <option
                           value="watch"
                           disabled={Boolean(desktopApp && libraryPathInspections[library.id] && !libraryPathInspections[library.id]?.watch_supported)}
@@ -3427,6 +3440,29 @@ export function LibrariesPage() {
                           onChange={(event) =>
                             updateLibraryForm(library.id, {
                               interval_minutes: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                    ) : null}
+                    {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "scheduled_daily" ? (
+                      <div className="field">
+                        <div className="field-label-row">
+                          <label htmlFor={`scheduled-time-${library.id}`}>{t("libraries.scheduledTime")}</label>
+                          <TooltipTrigger
+                            ariaLabel={t("libraries.scheduledTimeTooltipAria")}
+                            content={t("libraries.scheduledTimeTooltip")}
+                          >
+                            ?
+                          </TooltipTrigger>
+                        </div>
+                        <input
+                          id={`scheduled-time-${library.id}`}
+                          type="time"
+                          value={settingsForms[library.id]?.scheduled_time ?? "02:00"}
+                          onChange={(event) =>
+                            updateLibraryForm(library.id, {
+                              scheduled_time: event.target.value,
                             })
                           }
                         />
