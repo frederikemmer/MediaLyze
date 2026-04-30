@@ -23,6 +23,7 @@ class FeatureFlagsRead(BaseModel):
     show_analyzed_files_csv_export: bool = False
     show_full_width_app_shell: bool = False
     hide_quality_score_meter: bool = False
+    show_music_quality_score: bool = False
     unlimited_panel_size: bool = False
     in_depth_dolby_vision_profiles: bool = False
 
@@ -31,6 +32,7 @@ class FeatureFlagsUpdate(BaseModel):
     show_analyzed_files_csv_export: bool | None = None
     show_full_width_app_shell: bool | None = None
     hide_quality_score_meter: bool | None = None
+    show_music_quality_score: bool | None = None
     unlimited_panel_size: bool | None = None
     in_depth_dolby_vision_profiles: bool | None = None
 

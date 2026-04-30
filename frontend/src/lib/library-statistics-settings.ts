@@ -87,7 +87,20 @@ export type LibraryStatisticsSettings = {
 };
 
 const STORAGE_KEY = "medialyze-library-statistics-settings";
-const VIDEO_ONLY_STATISTIC_IDS = new Set<LibraryStatisticId>(["video_codec", "resolution", "hdr_type", "bitrate"]);
+const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
+  "video_codec",
+  "resolution",
+  "hdr_type",
+  "bitrate",
+  "audio_bitrate",
+  "subtitle_languages",
+  "subtitle_codecs",
+  "subtitle_sources",
+  "audio_languages",
+]);
+type MusicVisibilityOptions = {
+  showMusicQualityScore?: boolean;
+};
 
 function buildStorageKey(storageScope?: string): string {
   return storageScope ? `${STORAGE_KEY}-${storageScope}` : STORAGE_KEY;
@@ -535,12 +548,13 @@ export function getOrderedLibraryStatisticDefinitions(settings: LibraryStatistic
 export function getVisibleLibraryStatisticPanels(
   settings: LibraryStatisticsSettings,
   libraryType?: LibraryType | null,
+  options?: MusicVisibilityOptions,
 ): LibraryStatisticDefinition[] {
   return getOrderedLibraryStatisticDefinitions(settings).filter(
     (definition) =>
       definition.supportsPanel &&
       settings.visibility[definition.id].panelEnabled &&
-      isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
+      isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType, options),
   );
 }
 
@@ -555,13 +569,14 @@ export function getVisibleDashboardStatisticPanels(
 export function getVisibleLibraryStatisticTableColumns(
   settings: LibraryStatisticsSettings,
   libraryType?: LibraryType | null,
+  options?: MusicVisibilityOptions,
 ): MediaFileSortKey[] {
   return getOrderedLibraryStatisticDefinitions(settings)
     .filter(
       (definition) =>
         definition.supportsTable &&
         settings.visibility[definition.id].tableEnabled &&
-        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
+        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType, options),
     )
     .map((definition) => definition.tableColumnKey)
     .filter((column): column is MediaFileSortKey => typeof column === "string");
@@ -570,13 +585,14 @@ export function getVisibleLibraryStatisticTableColumns(
 export function getEnabledLibraryStatisticTableTooltipColumns(
   settings: LibraryStatisticsSettings,
   libraryType?: LibraryType | null,
+  options?: MusicVisibilityOptions,
 ): MediaFileSortKey[] {
   return getOrderedLibraryStatisticDefinitions(settings)
     .filter(
       (definition) =>
         definition.supportsTableTooltip &&
         settings.visibility[definition.id].tableTooltipEnabled &&
-        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
+        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType, options),
     )
     .map((definition) => definition.tableColumnKey)
     .filter((column): column is MediaFileSortKey => typeof column === "string");
@@ -585,11 +601,15 @@ export function getEnabledLibraryStatisticTableTooltipColumns(
 export function isLibraryStatisticDefinitionVisibleForLibraryType(
   definition: LibraryStatisticDefinition,
   libraryType?: LibraryType | null,
+  options?: MusicVisibilityOptions,
 ): boolean {
   if (libraryType !== "music") {
     return true;
   }
-  return !VIDEO_ONLY_STATISTIC_IDS.has(definition.id);
+  if (definition.id === "quality_score" && options?.showMusicQualityScore !== true) {
+    return false;
+  }
+  return !MUSIC_HIDDEN_STATISTIC_IDS.has(definition.id);
 }
 
 export function getLibraryStatisticPanelItems(

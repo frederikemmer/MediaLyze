@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - make file discovery library-type-aware so **Movies** and **Shows** libraries scan only video files, **Music** libraries scan only audio files, and **Mixed**/**Other** libraries scan both
 - filter analyzed-files table columns by library type to hide video-exclusive fields (video codec, resolution, HDR type, bitrate) when viewing Music libraries
 - filter library and dashboard statistic panels as well as comparison axis selectors by effective library types so music-only views hide video-exclusive metrics and fields
+- add richer music-stream metadata extraction and storage for bit depth, bit-rate mode, compression mode, replay gain, replay-gain peak, writing library, and MD5-unencoded payload values
+- make bitrate metrics and sorting/filtering fall back to summed audio-stream bitrate when container bitrate metadata is missing, so pure music libraries populate bitrate views consistently
+- hide subtitle-language, subtitle-codec, subtitle-source, audio-language, and audio-bitrate statistic panels for pure music libraries while keeping the generic bitrate panel visible
+- add a new app feature flag to optionally show quality-score metrics in pure music libraries; by default these metrics remain hidden in music-only contexts
+- rename the music-context audio-codec metric label to **Formats & Codecs** in library and dashboard views
 
 ## v0.9.1
 

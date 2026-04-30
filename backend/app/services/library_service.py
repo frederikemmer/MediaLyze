@@ -47,7 +47,16 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
 }
-_VIDEO_ONLY_PANEL_IDS = {"video_codec", "resolution", "hdr_type", "bitrate"}
+_MUSIC_HIDDEN_PANEL_IDS = {
+    "video_codec",
+    "resolution",
+    "hdr_type",
+    "audio_bitrate",
+    "subtitle_languages",
+    "subtitle_codecs",
+    "subtitle_sources",
+    "audio_languages",
+}
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -401,7 +410,7 @@ def get_library_statistics(
     if library is None:
         return None
 
-    hidden_panel_ids = _VIDEO_ONLY_PANEL_IDS if library.type == "music" else set()
+    hidden_panel_ids = _MUSIC_HIDDEN_PANEL_IDS if library.type == "music" else set()
 
     def wants(panel_id: str) -> bool:
         return (panel_filter is None or panel_id in panel_filter) and panel_id not in hidden_panel_ids

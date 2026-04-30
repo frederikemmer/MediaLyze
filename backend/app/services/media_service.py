@@ -274,8 +274,8 @@ def _subtitle_sources(media_file: MediaFile) -> list[str]:
 def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaFileTableRow:
     primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
     duration = media_file.media_format.duration if media_file.media_format else None
-    bitrate = media_file.media_format.bit_rate if media_file.media_format else None
     audio_bitrate = sum(max(stream.bit_rate or 0, 0) for stream in media_file.audio_streams) or None
+    bitrate = (media_file.media_format.bit_rate if media_file.media_format else None) or audio_bitrate
     resolution = None
     if primary_video and primary_video.width and primary_video.height:
         resolution = f"{primary_video.width}x{primary_video.height}"
@@ -525,7 +525,7 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "resolution": resolution_pixels,
         "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
         "duration": func.coalesce(MediaFile.duration_seconds, 0),
-        "bitrate": func.coalesce(cast(MediaFile.bitrate, Float), 0),
+        "bitrate": func.coalesce(cast(MediaFile.bitrate, Float), cast(MediaFile.audio_bitrate, Float), 0),
         "audio_bitrate": func.coalesce(cast(MediaFile.audio_bitrate, Float), 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
         "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
@@ -615,7 +615,7 @@ def _build_library_file_id_query(
         audio_aggregates,
         subtitle_aggregates,
         search_filters,
-        bitrate_expression=MediaFile.bitrate,
+        bitrate_expression=func.coalesce(MediaFile.bitrate, MediaFile.audio_bitrate),
         audio_bitrate_expression=MediaFile.audio_bitrate,
         duration_expression=MediaFile.duration_seconds,
         resolution_categories=get_app_settings(db).resolution_categories,

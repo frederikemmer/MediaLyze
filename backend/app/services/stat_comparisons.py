@@ -178,7 +178,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
             cast(MediaFile.size_bytes, Float).label("size"),
             cast(MediaFile.quality_score, Float).label("quality_score"),
             cast(MediaFormat.duration, Float).label("duration"),
-            cast(bitrate_value_expression(), Float).label("bitrate"),
+            cast(func.coalesce(bitrate_value_expression(), audio_bitrate_expression), Float).label("bitrate"),
             cast(audio_bitrate_expression, Float).label("audio_bitrate"),
             MediaFile.extension.label("container"),
             primary_video_streams.c.codec.label("video_codec"),

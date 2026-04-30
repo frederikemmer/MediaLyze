@@ -318,9 +318,24 @@ export type AudioStream = {
   channel_layout: string | null;
   sample_rate: number | null;
   bit_rate: number | null;
+  bit_depth?: number | null;
+  bit_rate_mode?: string | null;
+  compression_mode?: string | null;
+  replay_gain?: string | null;
+  replay_gain_peak?: string | null;
+  writing_library?: string | null;
+  md5_unencoded?: string | null;
   language: string | null;
   default_flag: boolean;
   forced_flag: boolean;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  album_artist?: string | null;
+  genre?: string | null;
+  date?: string | null;
+  disc?: string | null;
+  composer?: string | null;
 };
 
 export type SubtitleStream = {
@@ -566,6 +581,7 @@ export type AppSettings = {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
+    show_music_quality_score: boolean;
     unlimited_panel_size: boolean;
     in_depth_dolby_vision_profiles: boolean;
   };
@@ -1062,6 +1078,7 @@ export const api = {
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;
+      show_music_quality_score?: boolean;
       unlimited_panel_size?: boolean;
       in_depth_dolby_vision_profiles?: boolean;
     };

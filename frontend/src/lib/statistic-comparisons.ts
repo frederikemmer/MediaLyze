@@ -11,6 +11,9 @@ import { formatHdrType } from "./hdr";
 import { buildNumericDistributionFilterExpression, formatNumericDistributionBinLabel } from "./numeric-distributions";
 
 type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
+type MusicComparisonVisibilityOptions = {
+  showMusicQualityScore?: boolean;
+};
 
 export type ComparisonScope = "dashboard" | "library";
 export type ComparisonSelection = {
@@ -139,18 +142,28 @@ export function sanitizeComparisonRenderer(
 
 export function getComparisonFieldDefinitionsForLibraryType(
   libraryType?: LibraryType | null,
+  options?: MusicComparisonVisibilityOptions,
 ): ComparisonFieldDefinition[] {
   if (libraryType !== "music") {
     return COMPARISON_FIELD_DEFINITIONS;
   }
-  return COMPARISON_FIELD_DEFINITIONS.filter((definition) => !VIDEO_ONLY_COMPARISON_FIELDS.has(definition.id));
+  return COMPARISON_FIELD_DEFINITIONS.filter((definition) => {
+    if (VIDEO_ONLY_COMPARISON_FIELDS.has(definition.id)) {
+      return false;
+    }
+    if (definition.id === "quality_score" && options?.showMusicQualityScore !== true) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export function normalizeComparisonSelectionForLibraryType(
   selection: ComparisonSelection,
   libraryType?: LibraryType | null,
+  options?: MusicComparisonVisibilityOptions,
 ): ComparisonSelection {
-  const availableFields = getComparisonFieldDefinitionsForLibraryType(libraryType);
+  const availableFields = getComparisonFieldDefinitionsForLibraryType(libraryType, options);
   if (availableFields.length < 2) {
     return selection;
   }

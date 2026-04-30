@@ -705,8 +705,10 @@ export function buildFileColumns(
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
   hideQualityScoreMeter: boolean,
+  libraryType?: string | null,
   inDepthDolbyVisionProfiles = false,
 ): FileColumnDefinition[] {
+  const audioCodecsLabelKey = libraryType === "music" ? "fileTable.formatsAndCodecs" : "fileTable.audioCodecs";
   function textOrNa(value: string | null | undefined): string {
     return value ? value : t("fileTable.na");
   }
@@ -872,7 +874,7 @@ export function buildFileColumns(
     },
     {
       key: "audio_codecs",
-      labelKey: "fileTable.audioCodecs",
+      labelKey: audioCodecsLabelKey,
       sizing: { mode: "content", minPx: 132, maxPx: 220 },
       measureValue: (row) =>
         renderCompactValue(
@@ -1398,6 +1400,7 @@ export function LibraryDetailPage() {
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
   const activeLibraryType = displayLibrary?.type;
+  const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
   const supportsSeriesGrouping = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
@@ -1440,8 +1443,13 @@ export function LibraryDetailPage() {
     }
   });
   const tooltipEnabledColumns = useMemo(
-    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings, activeLibraryType)),
-    [savedTableViewSettings, activeLibraryType],
+    () =>
+      new Set<FileColumnKey>(
+        getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings, activeLibraryType, {
+          showMusicQualityScore,
+        }),
+      ),
+    [savedTableViewSettings, activeLibraryType, showMusicQualityScore],
   );
   const fileColumns = useMemo(
     () => {
@@ -1455,11 +1463,17 @@ export function LibraryDetailPage() {
         loadStreamDetail,
         tooltipEnabledColumns,
         hideQualityScoreMeter,
+        activeLibraryType,
         inDepthDolbyVisionProfiles,
       );
       // Filter columns by library type
       if (activeLibraryType) {
-        return allColumns.filter((col) => shouldShowField(col.key, activeLibraryType));
+        return allColumns.filter((col) => {
+          if (activeLibraryType === "music" && col.key === "quality_score" && !showMusicQualityScore) {
+            return false;
+          }
+          return shouldShowField(col.key, activeLibraryType);
+        });
       }
       return allColumns;
     },
@@ -1475,17 +1489,18 @@ export function LibraryDetailPage() {
       t,
       tooltipEnabledColumns,
       activeLibraryType,
+      showMusicQualityScore,
     ],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
-    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings, activeLibraryType),
-    [savedTableViewSettings, activeLibraryType],
+    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings, activeLibraryType, { showMusicQualityScore }),
+    [savedTableViewSettings, activeLibraryType, showMusicQualityScore],
   );
   const availableComparisonFields = useMemo(
-    () => getComparisonFieldDefinitionsForLibraryType(activeLibraryType),
-    [activeLibraryType],
+    () => getComparisonFieldDefinitionsForLibraryType(activeLibraryType, { showMusicQualityScore }),
+    [activeLibraryType, showMusicQualityScore],
   );
   const visibleLayoutPanels = useMemo(
     () =>
@@ -1497,14 +1512,16 @@ export function LibraryDetailPage() {
           }
           if (
             definition.kind === "statistic" &&
-            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType)
+            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType, {
+              showMusicQualityScore,
+            })
           ) {
             return null;
           }
           return { item, definition };
         })
         .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
-    [activeStatisticLayout.items, activeLibraryType],
+    [activeStatisticLayout.items, activeLibraryType, showMusicQualityScore],
   );
   const visibleLibraryStatisticPanelIds = useMemo(
     () =>
@@ -1530,11 +1547,13 @@ export function LibraryDetailPage() {
       comparisonPanels
         .map(({ item }) => {
           const selection = item.comparisonSelection ?? getComparisonSelection("library");
-          const normalizedSelection = normalizeComparisonSelectionForLibraryType(selection, activeLibraryType);
+          const normalizedSelection = normalizeComparisonSelectionForLibraryType(selection, activeLibraryType, {
+            showMusicQualityScore,
+          });
           return `${item.instanceId}:${normalizedSelection.xField}:${normalizedSelection.yField}`;
         })
         .join("|"),
-    [comparisonPanels, activeLibraryType],
+    [comparisonPanels, activeLibraryType, showMusicQualityScore],
   );
   const availableStatisticPanelDefinitions = useMemo(
     () =>
@@ -1543,9 +1562,11 @@ export function LibraryDetailPage() {
         if (!panelDefinition || panelDefinition.kind !== "statistic") {
           return true;
         }
-        return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType);
+        return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType, {
+          showMusicQualityScore,
+        });
       }),
-    [draftStatisticLayout, activeLibraryType],
+    [draftStatisticLayout, activeLibraryType, showMusicQualityScore],
   );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
@@ -2534,6 +2555,7 @@ export function LibraryDetailPage() {
       const selection = normalizeComparisonSelectionForLibraryType(
         item.comparisonSelection ?? getComparisonSelection("library"),
         activeLibraryType,
+        { showMusicQualityScore },
       );
       const queryKey = buildLibraryComparisonQueryKey(libraryId, selection);
       const cachedComparison = !force ? libraryComparisonCache.get(queryKey) ?? null : null;
@@ -2728,6 +2750,7 @@ export function LibraryDetailPage() {
         const selection = normalizeComparisonSelectionForLibraryType(
           item.comparisonSelection ?? getComparisonSelection("library"),
           activeLibraryType,
+          { showMusicQualityScore },
         );
         libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
       }
@@ -2846,6 +2869,7 @@ export function LibraryDetailPage() {
           renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
         },
         activeLibraryType,
+        { showMusicQualityScore },
       ),
     );
     updateStatisticLayout(
@@ -3060,6 +3084,7 @@ export function LibraryDetailPage() {
               const selection = normalizeComparisonSelectionForLibraryType(
                 panel.item.comparisonSelection ?? getComparisonSelection("library"),
                 activeLibraryType,
+                { showMusicQualityScore },
               );
               content = (
                 <ComparisonChartPanel
@@ -3126,6 +3151,10 @@ export function LibraryDetailPage() {
               }
             } else if (panel.definition.kind === "statistic") {
               const statisticDefinition = panel.definition.statisticDefinition;
+              const panelTitle =
+                activeLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                  ? t("libraryDetail.formatsAndCodecs")
+                  : t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
                   ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition), {
@@ -3163,7 +3192,7 @@ export function LibraryDetailPage() {
               });
               content = (
                 <AsyncPanel
-                  title={t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey)}
+                  title={panelTitle}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
                   bodyClassName="async-panel-body-scroll"

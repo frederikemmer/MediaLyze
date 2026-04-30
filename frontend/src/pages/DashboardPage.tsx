@@ -155,9 +155,10 @@ export function DashboardPage() {
     [libraries],
   );
   const effectiveDashboardLibraryType = dashboardLibraryTypes.length === 1 ? dashboardLibraryTypes[0] : null;
+  const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
   const availableComparisonFields = useMemo(
-    () => getComparisonFieldDefinitionsForLibraryType(effectiveDashboardLibraryType),
-    [effectiveDashboardLibraryType],
+    () => getComparisonFieldDefinitionsForLibraryType(effectiveDashboardLibraryType, { showMusicQualityScore }),
+    [effectiveDashboardLibraryType, showMusicQualityScore],
   );
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [error, setError] = useState<string | null>(null);
@@ -210,14 +211,16 @@ export function DashboardPage() {
           }
           if (
             definition.kind === "statistic" &&
-            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, effectiveDashboardLibraryType)
+            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, effectiveDashboardLibraryType, {
+              showMusicQualityScore,
+            })
           ) {
             return null;
           }
           return { item, definition };
         })
         .filter((entry): entry is VisibleDashboardPanel => Boolean(entry)),
-    [activeLayout.items, effectiveDashboardLibraryType],
+    [activeLayout.items, effectiveDashboardLibraryType, showMusicQualityScore],
   );
   const comparisonPanels = useMemo(
     () => visiblePanels.filter((panel) => panel.item.statisticId === "comparison"),
@@ -238,11 +241,12 @@ export function DashboardPage() {
           const selection = normalizeComparisonSelectionForLibraryType(
             item.comparisonSelection ?? getComparisonSelection("dashboard"),
             effectiveDashboardLibraryType,
+            { showMusicQualityScore },
           );
           return `${item.instanceId}:${selection.xField}:${selection.yField}`;
         })
         .join("|"),
-    [comparisonPanels, effectiveDashboardLibraryType],
+    [comparisonPanels, effectiveDashboardLibraryType, showMusicQualityScore],
   );
   const availablePanelDefinitions = useMemo(
     () =>
@@ -254,9 +258,10 @@ export function DashboardPage() {
         return isLibraryStatisticDefinitionVisibleForLibraryType(
           panelDefinition.statisticDefinition,
           effectiveDashboardLibraryType,
+          { showMusicQualityScore },
         );
       }),
-    [draftLayout, effectiveDashboardLibraryType],
+    [draftLayout, effectiveDashboardLibraryType, showMusicQualityScore],
   );
 
   useEffect(() => {
@@ -336,6 +341,7 @@ export function DashboardPage() {
       const selection = normalizeComparisonSelectionForLibraryType(
         item.comparisonSelection ?? getComparisonSelection("dashboard"),
         effectiveDashboardLibraryType,
+        { showMusicQualityScore },
       );
       const queryKey = buildComparisonQueryKey(selection);
       const cachedComparison = !force ? dashboardComparisonCache.get(queryKey) ?? null : null;
@@ -396,6 +402,7 @@ export function DashboardPage() {
         const selection = normalizeComparisonSelectionForLibraryType(
           item.comparisonSelection ?? getComparisonSelection("dashboard"),
           effectiveDashboardLibraryType,
+          { showMusicQualityScore },
         );
         dashboardComparisonCache.delete(buildComparisonQueryKey(selection));
       }
@@ -444,6 +451,7 @@ export function DashboardPage() {
           renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
         },
         effectiveDashboardLibraryType,
+        { showMusicQualityScore },
       ),
     );
     updateLayout(
@@ -655,6 +663,7 @@ export function DashboardPage() {
               const selection = normalizeComparisonSelectionForLibraryType(
                 panel.item.comparisonSelection ?? getComparisonSelection("dashboard"),
                 effectiveDashboardLibraryType,
+                { showMusicQualityScore },
               );
               content = (
                 <ComparisonChartPanel
@@ -706,6 +715,10 @@ export function DashboardPage() {
               );
             } else {
               const statisticDefinition = panel.definition.statisticDefinition;
+              const panelTitle =
+                effectiveDashboardLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                  ? t("dashboard.formatsAndCodecs")
+                  : t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
                   ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition), {
@@ -725,7 +738,7 @@ export function DashboardPage() {
                   }));
               content = (
                 <AsyncPanel
-                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
+                  title={panelTitle}
                   loading={!dashboard && !error}
                   error={error}
                   bodyClassName="async-panel-body-scroll"

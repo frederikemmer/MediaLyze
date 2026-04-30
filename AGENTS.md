@@ -264,6 +264,12 @@ Current normalized audio stream fields include:
 * language
 * default flag
 * forced flag
+* bit depth (when available)
+* bit rate mode (when available)
+* compression mode (when available)
+* replay gain metadata (when available)
+* writing library tag (when available)
+* MD5 unencoded payload tag (when available)
 
 **Music-specific metadata fields** (extracted from audio file tags):
 
@@ -550,6 +556,7 @@ Current app feature flags include:
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
+* `show_music_quality_score`
 * `unlimited_panel_size`
 * `in_depth_dolby_vision_profiles`
 
@@ -558,6 +565,7 @@ These flags currently control:
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* whether music-only library contexts show quality-score metrics and columns
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 * whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
 
@@ -610,6 +618,7 @@ Important current payload concepts:
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
+* `feature_flags.show_music_quality_score`
 * `feature_flags.unlimited_panel_size`
 * `feature_flags.in_depth_dolby_vision_profiles`
 

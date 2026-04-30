@@ -432,6 +432,13 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
             channel_layout=stream.channel_layout,
             sample_rate=stream.sample_rate,
             bit_rate=stream.bit_rate,
+            bit_depth=stream.bit_depth,
+            bit_rate_mode=stream.bit_rate_mode,
+            compression_mode=stream.compression_mode,
+            replay_gain=stream.replay_gain,
+            replay_gain_peak=stream.replay_gain_peak,
+            writing_library=stream.writing_library,
+            md5_unencoded=stream.md5_unencoded,
             language=stream.language,
             default_flag=stream.default_flag,
             forced_flag=stream.forced_flag,
@@ -482,8 +489,10 @@ def _joined_unique(values: list[str]) -> str:
 def _update_media_file_search_fields(media_file: MediaFile) -> None:
     primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
     media_file.duration_seconds = media_file.media_format.duration if media_file.media_format else None
-    media_file.bitrate = media_file.media_format.bit_rate if media_file.media_format else None
     media_file.audio_bitrate = sum(max(stream.bit_rate or 0, 0) for stream in media_file.audio_streams) or None
+    media_file.bitrate = (
+        media_file.media_format.bit_rate if media_file.media_format and media_file.media_format.bit_rate else media_file.audio_bitrate
+    )
     media_file.primary_video_codec = primary_video.codec if primary_video else None
     media_file.primary_video_width = primary_video.width if primary_video else None
     media_file.primary_video_height = primary_video.height if primary_video else None

@@ -663,6 +663,7 @@ export function LibrariesPage() {
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
+  const [showMusicQualityScore, setShowMusicQualityScore] = useState(false);
   const [unlimitedPanelSize, setUnlimitedPanelSize] = useState(false);
   const [inDepthDolbyVisionProfiles, setInDepthDolbyVisionProfiles] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
@@ -732,6 +733,7 @@ export function LibrariesPage() {
     setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+    setShowMusicQualityScore(updated.feature_flags.show_music_quality_score);
     setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
     setInDepthDolbyVisionProfiles(updated.feature_flags.in_depth_dolby_vision_profiles);
     const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
@@ -1109,6 +1111,7 @@ export function LibrariesPage() {
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
+    setShowMusicQualityScore(appSettings.feature_flags.show_music_quality_score);
     setUnlimitedPanelSize(appSettings.feature_flags.unlimited_panel_size);
     setInDepthDolbyVisionProfiles(appSettings.feature_flags.in_depth_dolby_vision_profiles);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
@@ -1527,6 +1530,7 @@ export function LibrariesPage() {
         COMPARISON_SCATTER_POINT_LIMIT_MAX,
       ),
     },
+    nextShowMusicQualityScore = showMusicQualityScore,
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
@@ -1538,6 +1542,7 @@ export function LibrariesPage() {
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
         show_full_width_app_shell: nextShowFullWidthAppShell,
         hide_quality_score_meter: nextHideQualityScoreMeter,
+        show_music_quality_score: nextShowMusicQualityScore,
         unlimited_panel_size: nextUnlimitedPanelSize,
         in_depth_dolby_vision_profiles: inDepthDolbyVisionProfiles,
       },
@@ -1682,6 +1687,38 @@ export function LibrariesPage() {
     }
   }
 
+  async function toggleShowMusicQualityScore(enabled: boolean) {
+    const previousValue = showMusicQualityScore;
+    setShowMusicQualityScore(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
+        unlimitedPanelSize,
+        undefined,
+        undefined,
+        undefined,
+        enabled,
+      );
+      applyUpdatedAppSettingsState(updated);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
+    } catch (reason) {
+      setShowMusicQualityScore(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
   async function toggleUnlimitedPanelSize(enabled: boolean) {
     const previousValue = unlimitedPanelSize;
     setUnlimitedPanelSize(enabled);
@@ -1744,6 +1781,7 @@ export function LibrariesPage() {
           show_analyzed_files_csv_export: showAnalyzedFilesCsvExport,
           show_full_width_app_shell: showFullWidthAppShell,
           hide_quality_score_meter: hideQualityScoreMeter,
+          show_music_quality_score: showMusicQualityScore,
           unlimited_panel_size: unlimitedPanelSize,
           in_depth_dolby_vision_profiles: enabled,
         },
@@ -4439,6 +4477,25 @@ export function LibrariesPage() {
                   <TooltipTrigger
                     ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
                     content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="show-music-quality-score">
+                    <input
+                      id="show-music-quality-score"
+                      type="checkbox"
+                      checked={showMusicQualityScore}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleShowMusicQualityScore(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.showMusicQualityScore")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showMusicQualityScoreTooltipAria")}
+                    content={t("libraries.featureFlags.showMusicQualityScoreTooltip")}
                     preserveLineBreaks
                   >
                     ?
