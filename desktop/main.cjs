@@ -173,15 +173,15 @@ function createMainWindow(port) {
   void mainWindow.loadURL(`http://127.0.0.1:${port}`);
 }
 
-ipcMain.handle("medialyze:select-library-path", async () => {
+ipcMain.handle("medialyze:select-library-paths", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: "Select library folder",
-    properties: ["openDirectory"],
+    properties: ["openDirectory", "multiSelections"],
   });
   if (result.canceled) {
-    return null;
+    return [];
   }
-  return result.filePaths[0] ?? null;
+  return result.filePaths;
 });
 
 async function launchDesktopApp() {

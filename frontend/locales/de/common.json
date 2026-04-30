@@ -707,7 +707,10 @@
   },
   "pathBrowser": {
     "selected": "Ausgewählt",
-    "up": "Hoch"
+    "up": "Hoch",
+    "addCurrent": "Aktuellen Ordner hinzufügen",
+    "remove": "Entfernen",
+    "noneSelected": "Keine Ordner ausgewählt"
   },
   "language": {
     "en": "English",

@@ -1285,7 +1285,7 @@ describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
       isDesktop: () => true,
-      selectLibraryPath: vi.fn().mockResolvedValue("/mnt/media"),
+      selectLibraryPaths: vi.fn().mockResolvedValue(["/mnt/media"]),
     };
 
     renderPage();
@@ -1298,7 +1298,7 @@ describe("LibrariesPage desktop mode", () => {
   it("falls back to scheduled scans when watch is selected for a network path", async () => {
     window.medialyzeDesktop = {
       isDesktop: () => true,
-      selectLibraryPath: vi.fn().mockResolvedValue("/mnt/network-media"),
+      selectLibraryPaths: vi.fn().mockResolvedValue(["/mnt/network-media"]),
     };
     vi.spyOn(api, "libraries").mockResolvedValue([
       createLibrarySummary({ path: "/mnt/network-media", scan_mode: "manual" }),

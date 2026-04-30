@@ -159,6 +159,18 @@ def _library_root(library: Library) -> Path:
     return Path(library.path)
 
 
+def _selected_scan_roots(library: Library) -> list[Path]:
+    root = _library_root(library)
+    selected_paths = [
+        str(path).strip().replace("\\", "/").strip("/")
+        for path in (library.scan_config or {}).get("selected_paths") or []
+        if str(path).strip()
+    ]
+    if not selected_paths:
+        return [root]
+    return [root / Path(relative_path) for relative_path in selected_paths]
+
+
 def _rename_similarity_score(
     old_relative_path: str,
     new_relative_path: str,
@@ -294,6 +306,7 @@ def _iter_media_files(
     allowed_extensions: tuple[str, ...],
     *,
     ignore_patterns: tuple[str, ...] = (),
+    relative_root: Path | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> DiscoveryResult:
     result = DiscoveryResult(files=[])
@@ -302,6 +315,7 @@ def _iter_media_files(
         allowed_extensions,
         discovery=result,
         ignore_patterns=ignore_patterns,
+        relative_root=relative_root,
         should_cancel=should_cancel,
     ):
         pass
@@ -314,10 +328,12 @@ def _stream_media_files(
     *,
     discovery: DiscoveryResult,
     ignore_patterns: tuple[str, ...] = (),
+    relative_root: Path | None = None,
     pattern_recognition_settings=None,
     should_cancel: Callable[[], bool] | None = None,
 ):
     suffixes = {extension.lower() for extension in allowed_extensions}
+    effective_relative_root = relative_root or root
 
     for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         if should_cancel and should_cancel():
@@ -329,7 +345,7 @@ def _stream_media_files(
             candidate = current_root_path / dirname
             if candidate.is_symlink():
                 continue
-            relative_path = candidate.relative_to(root).as_posix()
+            relative_path = candidate.relative_to(effective_relative_root).as_posix()
             matches = _matching_ignore_patterns(relative_path, ignore_patterns, is_dir=True)
             if matches:
                 discovery.ignored_total += 1
@@ -356,7 +372,7 @@ def _stream_media_files(
             file_path = current_root_path / filename
             if file_path.is_symlink():
                 continue
-            relative_path = file_path.relative_to(root).as_posix()
+            relative_path = file_path.relative_to(effective_relative_root).as_posix()
             matches = _matching_ignore_patterns(relative_path, ignore_patterns)
             if matches:
                 discovery.ignored_total += 1
@@ -939,6 +955,7 @@ def run_scan(
         raise ValueError(f"Library {library_id} not found")
 
     root = _library_root(library)
+    scan_roots = _selected_scan_roots(library)
     job = existing_job or ScanJob(
         library_id=library_id,
         status=JobStatus.running,
@@ -1349,122 +1366,126 @@ def run_scan(
                 _poll_completed_work(wait_for_completion=True)
             pending[executor.submit(_safe_process_work, work)] = work
 
-        for discovered_media_file in _stream_media_files(
-            root,
-            settings.allowed_media_extensions,
-            discovery=discovery,
-            ignore_patterns=ignore_patterns,
-            pattern_recognition_settings=pattern_recognition_settings,
-            should_cancel=_should_cancel,
-        ):
-            file_path = discovered_media_file.path
-            relative_path = file_path.relative_to(root).as_posix()
-            seen_relative_paths.add(relative_path)
-            discovery_progress_counter += 1
-            stat = file_path.stat()
-            media_file = existing_by_path.get(relative_path)
+        for scan_root in scan_roots:
+            if not scan_root.exists() or not scan_root.is_dir():
+                continue
+            for discovered_media_file in _stream_media_files(
+                scan_root,
+                settings.allowed_media_extensions,
+                discovery=discovery,
+                ignore_patterns=ignore_patterns,
+                relative_root=root,
+                pattern_recognition_settings=pattern_recognition_settings,
+                should_cancel=_should_cancel,
+            ):
+                file_path = discovered_media_file.path
+                relative_path = file_path.relative_to(root).as_posix()
+                seen_relative_paths.add(relative_path)
+                discovery_progress_counter += 1
+                stat = file_path.stat()
+                media_file = existing_by_path.get(relative_path)
 
-            if media_file is None:
-                rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
-                if rename_candidate is None:
-                    media_file = MediaFile(
-                        library_id=library.id,
-                        relative_path=relative_path,
-                        filename=file_path.name,
-                        extension=file_path.suffix.lower().lstrip("."),
-                        size_bytes=stat.st_size,
-                        mtime=stat.st_mtime,
-                        last_seen_at=utc_now(),
-                        scan_status=ScanStatus.pending,
+                if media_file is None:
+                    rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
+                    if rename_candidate is None:
+                        media_file = MediaFile(
+                            library_id=library.id,
+                            relative_path=relative_path,
+                            filename=file_path.name,
+                            extension=file_path.suffix.lower().lstrip("."),
+                            size_bytes=stat.st_size,
+                            mtime=stat.st_mtime,
+                            last_seen_at=utc_now(),
+                            scan_status=ScanStatus.pending,
+                        )
+                        db.add(media_file)
+                        db.flush()
+                        _recognize_media_file(media_file, relative_path)
+                        new_files.add(relative_path)
+                    else:
+                        existing_by_path.pop(rename_candidate.relative_path, None)
+                        media_file = rename_candidate
+                        media_file.relative_path = relative_path
+                        media_file.filename = file_path.name
+                        media_file.extension = file_path.suffix.lower().lstrip(".")
+                        media_file.size_bytes = stat.st_size
+                        media_file.mtime = stat.st_mtime
+                        media_file.last_seen_at = utc_now()
+                        media_file.scan_status = ScanStatus.pending
+                        _recognize_media_file(media_file, relative_path)
+                        modified_files.add(relative_path)
+                    queued_work_total += 1
+                    queued_for_analysis += 1
+                    queued_for_duplicate_processing += 1
+                    _submit_work(
+                        QueuedMediaWork(
+                            media_file=media_file,
+                            path=file_path,
+                            needs_analysis=True,
+                            needs_duplicate_processing=True,
+                        )
                     )
-                    db.add(media_file)
-                    db.flush()
-                    _recognize_media_file(media_file, relative_path)
-                    new_files.add(relative_path)
                 else:
-                    existing_by_path.pop(rename_candidate.relative_path, None)
-                    media_file = rename_candidate
-                    media_file.relative_path = relative_path
+                    changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
+                    analysis_incomplete = media_file.id in incomplete_analysis_ids
+                    external_subtitles_changed = False
+                    if not changed and scan_type != "full" and not analysis_incomplete:
+                        current_external_subtitles = _visible_external_subtitles(
+                            file_path,
+                            root,
+                            settings.subtitle_extensions,
+                            ignore_patterns,
+                            sibling_filenames=discovered_media_file.sibling_filenames,
+                        )
+                        external_subtitles_changed = (
+                            _external_subtitle_signature(current_external_subtitles)
+                            != _external_subtitle_signature(media_file.external_subtitles)
+                        )
                     media_file.filename = file_path.name
                     media_file.extension = file_path.suffix.lower().lstrip(".")
                     media_file.size_bytes = stat.st_size
                     media_file.mtime = stat.st_mtime
                     media_file.last_seen_at = utc_now()
-                    media_file.scan_status = ScanStatus.pending
                     _recognize_media_file(media_file, relative_path)
-                    modified_files.add(relative_path)
-                queued_work_total += 1
-                queued_for_analysis += 1
-                queued_for_duplicate_processing += 1
-                _submit_work(
-                    QueuedMediaWork(
-                        media_file=media_file,
-                        path=file_path,
-                        needs_analysis=True,
-                        needs_duplicate_processing=True,
+                    needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
+                    needs_analysis = (
+                        changed
+                        or scan_type == "full"
+                        or analysis_incomplete
+                        or external_subtitles_changed
                     )
-                )
-            else:
-                changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
-                analysis_incomplete = media_file.id in incomplete_analysis_ids
-                external_subtitles_changed = False
-                if not changed and scan_type != "full" and not analysis_incomplete:
-                    current_external_subtitles = _visible_external_subtitles(
-                        file_path,
-                        root,
-                        settings.subtitle_extensions,
-                        ignore_patterns,
-                        sibling_filenames=discovered_media_file.sibling_filenames,
-                    )
-                    external_subtitles_changed = (
-                        _external_subtitle_signature(current_external_subtitles)
-                        != _external_subtitle_signature(media_file.external_subtitles)
-                    )
-                media_file.filename = file_path.name
-                media_file.extension = file_path.suffix.lower().lstrip(".")
-                media_file.size_bytes = stat.st_size
-                media_file.mtime = stat.st_mtime
-                media_file.last_seen_at = utc_now()
-                _recognize_media_file(media_file, relative_path)
-                needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
-                needs_analysis = (
-                    changed
-                    or scan_type == "full"
-                    or analysis_incomplete
-                    or external_subtitles_changed
-                )
-                if needs_analysis or needs_duplicate_processing:
-                    if changed or external_subtitles_changed:
-                        modified_files.add(relative_path)
-                    elif analysis_incomplete:
-                        reanalyzed_incomplete_files += 1
-                    if needs_analysis:
-                        media_file.scan_status = ScanStatus.pending
+                    if needs_analysis or needs_duplicate_processing:
+                        if changed or external_subtitles_changed:
+                            modified_files.add(relative_path)
+                        elif analysis_incomplete:
+                            reanalyzed_incomplete_files += 1
+                        if needs_analysis:
+                            media_file.scan_status = ScanStatus.pending
+                        else:
+                            unchanged_files += 1
+
+                        queued_work_total += 1
+                        if needs_analysis:
+                            queued_for_analysis += 1
+                        if needs_duplicate_processing:
+                            queued_for_duplicate_processing += 1
+                        _submit_work(
+                            QueuedMediaWork(
+                                media_file=media_file,
+                                path=file_path,
+                                needs_analysis=needs_analysis,
+                                needs_duplicate_processing=needs_duplicate_processing,
+                            )
+                        )
                     else:
                         unchanged_files += 1
 
-                    queued_work_total += 1
-                    if needs_analysis:
-                        queued_for_analysis += 1
-                    if needs_duplicate_processing:
-                        queued_for_duplicate_processing += 1
-                    _submit_work(
-                        QueuedMediaWork(
-                            media_file=media_file,
-                            path=file_path,
-                            needs_analysis=needs_analysis,
-                            needs_duplicate_processing=needs_duplicate_processing,
-                        )
-                    )
-                else:
-                    unchanged_files += 1
-
-            _poll_completed_work(wait_for_completion=False)
-            if discovery_progress_counter >= discovery_progress_interval:
-                _commit_scan_progress(include_duplicate_counts=False)
-                discovery_progress_counter = 0
-                if _should_cancel():
-                    raise ScanCanceled()
+                _poll_completed_work(wait_for_completion=False)
+                if discovery_progress_counter >= discovery_progress_interval:
+                    _commit_scan_progress(include_duplicate_counts=False)
+                    discovery_progress_counter = 0
+                    if _should_cancel():
+                        raise ScanCanceled()
 
         stale_ids = [
             media_file.id

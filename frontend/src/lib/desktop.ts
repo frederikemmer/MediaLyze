@@ -1,6 +1,6 @@
 export type DesktopBridge = {
   isDesktop: () => boolean;
-  selectLibraryPath: () => Promise<string | null>;
+  selectLibraryPaths: () => Promise<string[]>;
 };
 
 export function getDesktopBridge(): DesktopBridge | null {

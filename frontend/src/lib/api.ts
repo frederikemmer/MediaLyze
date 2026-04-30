@@ -1073,6 +1073,7 @@ export const api = {
   createLibrary: (payload: {
     name: string;
     path: string;
+    paths?: string[];
     type: LibraryType;
     scan_mode: string;
     duplicate_detection_mode?: DuplicateDetectionMode;

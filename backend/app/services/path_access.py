@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+from collections.abc import Sequence
 from pathlib import Path, PureWindowsPath
 import re
 
@@ -148,6 +149,41 @@ def resolve_library_path(settings: Settings, path_value: str) -> Path:
     if not safe_path.exists() or not safe_path.is_dir():
         raise ValueError("Library path must exist as a directory under MEDIA_ROOT")
     return safe_path
+
+
+def resolve_library_paths(settings: Settings, path_values: Sequence[str]) -> tuple[Path, list[str]]:
+    resolved_paths: list[Path] = []
+    seen_paths: set[str] = set()
+
+    for raw_value in path_values:
+        candidate = str(raw_value or "").strip()
+        if not candidate:
+            continue
+        resolved = resolve_library_path(settings, candidate)
+        normalized = str(resolved)
+        if normalized in seen_paths:
+            continue
+        resolved_paths.append(resolved)
+        seen_paths.add(normalized)
+
+    if not resolved_paths:
+        raise ValueError("At least one library path must be selected")
+
+    for index, path in enumerate(resolved_paths):
+        for other in resolved_paths[index + 1 :]:
+            if path == other or path in other.parents or other in path.parents:
+                raise ValueError("Selected library paths must not overlap")
+
+    if len(resolved_paths) == 1:
+        return resolved_paths[0], []
+
+    try:
+        root_path = Path(os.path.commonpath([str(path) for path in resolved_paths]))
+    except ValueError as exc:
+        raise ValueError("Selected library paths must share a common parent directory") from exc
+
+    selected_paths = [path.relative_to(root_path).as_posix() for path in resolved_paths]
+    return root_path, selected_paths
 
 
 def is_watch_supported_for_library(settings: Settings, path_value: str) -> bool:

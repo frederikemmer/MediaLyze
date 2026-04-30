@@ -2,7 +2,7 @@ declare const __APP_VERSION__: string;
 
 type MediaLyzeDesktopBridge = {
   isDesktop: () => boolean;
-  selectLibraryPath: () => Promise<string | null>;
+  selectLibraryPaths: () => Promise<string[]>;
 };
 
 interface Window {

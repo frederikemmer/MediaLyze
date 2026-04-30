@@ -49,6 +49,7 @@ import { useTheme, type ThemePreference } from "../lib/theme";
 type CreateLibraryForm = {
   name: string;
   path: string;
+  paths: string[];
   type: LibraryType;
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
@@ -57,6 +58,7 @@ type CreateLibraryForm = {
 const EMPTY_FORM: CreateLibraryForm = {
   name: "",
   path: ".",
+  paths: [],
   type: "mixed",
   scan_mode: "manual",
   duplicate_detection_mode: "off",
@@ -67,6 +69,17 @@ function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
     ...EMPTY_FORM,
     path: isDesktop ? "" : EMPTY_FORM.path,
   };
+}
+
+function appendSelectedLibraryPaths(currentPaths: string[], nextPaths: string[]): string[] {
+  const merged = [...currentPaths];
+  for (const candidate of nextPaths) {
+    const normalized = candidate.trim();
+    if (normalized && !merged.includes(normalized)) {
+      merged.push(normalized);
+    }
+  }
+  return merged;
 }
 
 type LibrarySettingsForm = {
@@ -909,7 +922,7 @@ export function LibrariesPage() {
 
   useEffect(() => {
     setForm((current) =>
-      current.path === EMPTY_FORM.path || current.path === ""
+      (current.path === EMPTY_FORM.path || current.path === "") && current.paths.length === 0
         ? createEmptyForm(desktopApp)
         : current
     );
@@ -1121,7 +1134,12 @@ export function LibrariesPage() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      const created = await api.createLibrary(form);
+      const selectedPaths = form.paths.length ? form.paths : (form.path.trim() ? [form.path.trim()] : []);
+      const created = await api.createLibrary({
+        ...form,
+        path: selectedPaths[0] ?? form.path,
+        paths: selectedPaths,
+      });
       upsertLibrary(created);
       setForm(createEmptyForm(desktopApp));
       setFormPathInspection(null);
@@ -1134,12 +1152,28 @@ export function LibrariesPage() {
     }
   }
 
-  async function selectDesktopLibraryPath() {
-    const selectedPath = await desktopBridge?.selectLibraryPath();
-    if (!selectedPath) {
+  function addDesktopLibraryPath() {
+    const nextPath = form.path.trim();
+    if (!nextPath) {
       return;
     }
-    setForm((current) => ({ ...current, path: selectedPath }));
+    setForm((current) => ({
+      ...current,
+      paths: appendSelectedLibraryPaths(current.paths, [nextPath]),
+    }));
+    setSubmitError(null);
+  }
+
+  async function selectDesktopLibraryPaths() {
+    const selectedPaths = await desktopBridge?.selectLibraryPaths();
+    if (!(selectedPaths && selectedPaths.length)) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      path: selectedPaths[selectedPaths.length - 1] ?? current.path,
+      paths: appendSelectedLibraryPaths(current.paths, selectedPaths),
+    }));
     setSubmitError(null);
   }
 
@@ -4143,10 +4177,36 @@ export function LibrariesPage() {
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => void selectDesktopLibraryPath()}
+                        onClick={addDesktopLibraryPath}
+                      >
+                        {t("pathBrowser.addCurrent")}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void selectDesktopLibraryPaths()}
                       >
                         {t("libraries.chooseFolder")}
                       </button>
+                    </div>
+                    <div className="path-browser-selected-list">
+                      {form.paths.length ? form.paths.map((path) => (
+                        <span key={path} className="path-browser-selected-item">
+                          <span className="badge">{path}</span>
+                          <button
+                            type="button"
+                            className="ghost small"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                paths: current.paths.filter((candidate) => candidate !== path),
+                              }))
+                            }
+                          >
+                            {t("pathBrowser.remove")}
+                          </button>
+                        </span>
+                      )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
                     </div>
                     {formPathInspection ? (
                       <div className="meta-row">
@@ -4165,7 +4225,21 @@ export function LibrariesPage() {
               ) : (
                 <PathBrowser
                   value={form.path}
+                  selectedPaths={form.paths}
                   onChange={(path) => setForm((current) => ({ ...current, path }))}
+                  onAddPath={(path) =>
+                    setForm((current) => ({
+                      ...current,
+                      path,
+                      paths: appendSelectedLibraryPaths(current.paths, [path]),
+                    }))
+                  }
+                  onRemovePath={(path) =>
+                    setForm((current) => ({
+                      ...current,
+                      paths: current.paths.filter((candidate) => candidate !== path),
+                    }))
+                  }
                 />
               )}
               <button type="submit" className="history-retention-primary-button" disabled={submitting}>

@@ -142,6 +142,76 @@ def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch
     assert created_executor_sizes == [5]
 
 
+def test_run_scan_limits_discovery_to_selected_paths_and_keeps_directory_in_relative_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    library_root = tmp_path / "library-root"
+    selected_a = library_root / "Movies A"
+    selected_b = library_root / "Movies B"
+    ignored_dir = library_root / "Ignore Me"
+    selected_a.mkdir(parents=True)
+    selected_b.mkdir()
+    ignored_dir.mkdir()
+    (selected_a / "movie-a.mkv").write_text("video-a")
+    (selected_b / "movie-b.mkv").write_text("video-b")
+    (ignored_dir / "movie-c.mkv").write_text("video-c")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "matroska",
+            "duration": "60.0",
+            "bit_rate": "1000",
+            "probe_score": 100,
+        },
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "24/1",
+            }
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(library_root),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={"selected_paths": ["Movies A", "Movies B"]},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+
+        scanned_paths = db.scalars(
+            select(MediaFile.relative_path)
+            .where(MediaFile.library_id == library.id)
+            .order_by(MediaFile.relative_path.asc())
+        ).all()
+
+    assert scanned_paths == ["Movies A/movie-a.mkv", "Movies B/movie-b.mkv"]
+
+
 def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()

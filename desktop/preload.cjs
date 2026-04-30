@@ -2,5 +2,5 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("medialyzeDesktop", {
   isDesktop: () => true,
-  selectLibraryPath: () => ipcRenderer.invoke("medialyze:select-library-path"),
+  selectLibraryPaths: () => ipcRenderer.invoke("medialyze:select-library-paths"),
 });
