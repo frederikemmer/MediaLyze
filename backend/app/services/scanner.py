@@ -15,7 +15,7 @@ import traceback
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.core.config import Settings
+from backend.app.core.config import Settings, get_allowed_media_extensions
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import (
     AudioStream,
@@ -435,6 +435,15 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
             language=stream.language,
             default_flag=stream.default_flag,
             forced_flag=stream.forced_flag,
+            # Music-specific metadata
+            title=stream.title,
+            artist=stream.artist,
+            album=stream.album,
+            album_artist=stream.album_artist,
+            genre=stream.genre,
+            date=stream.date,
+            disc=stream.disc,
+            composer=stream.composer,
         )
         for stream in normalized.audio_streams
     ]
@@ -1371,7 +1380,7 @@ def run_scan(
                 continue
             for discovered_media_file in _stream_media_files(
                 scan_root,
-                settings.allowed_media_extensions,
+                get_allowed_media_extensions(library.type),
                 discovery=discovery,
                 ignore_patterns=ignore_patterns,
                 relative_root=root,

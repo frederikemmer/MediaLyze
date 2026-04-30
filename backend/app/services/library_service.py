@@ -47,6 +47,7 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
 }
+_VIDEO_ONLY_PANEL_IDS = {"video_codec", "resolution", "hdr_type", "bitrate"}
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -396,11 +397,14 @@ def get_library_statistics(
     if cached is not None:
         return cached
 
-    if not library_exists(db, library_id):
+    library = db.get(Library, library_id)
+    if library is None:
         return None
 
+    hidden_panel_ids = _VIDEO_ONLY_PANEL_IDS if library.type == "music" else set()
+
     def wants(panel_id: str) -> bool:
-        return panel_filter is None or panel_id in panel_filter
+        return (panel_filter is None or panel_id in panel_filter) and panel_id not in hidden_panel_ids
 
     app_settings = load_app_settings(db)
     primary_video_streams = (

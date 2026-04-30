@@ -194,7 +194,7 @@ export type QualityBreakdown = {
 };
 
 export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
-export type LibraryType = "movies" | "series" | "mixed" | "other";
+export type LibraryType = "movies" | "series" | "music" | "mixed" | "other";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,

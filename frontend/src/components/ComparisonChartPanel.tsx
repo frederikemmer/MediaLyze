@@ -19,6 +19,7 @@ import {
   formatComparisonBucketLabel,
   getAvailableComparisonRenderers,
   isComparisonFieldFilterable,
+  type ComparisonFieldDefinition,
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { AsyncPanel } from "./AsyncPanel";
@@ -38,6 +39,7 @@ type ComparisonChartPanelProps = {
   onOpenFile?: (fileId: number) => void;
   onSelectFilters?: (filters: Partial<Record<ComparisonFieldId, string>>) => void;
   inDepthDolbyVisionProfiles?: boolean;
+  availableFields?: ComparisonFieldDefinition[];
 };
 
 type RendererDefinition = {
@@ -99,6 +101,7 @@ function ComparisonChartPanelComponent({
   onOpenFile,
   onSelectFilters,
   inDepthDolbyVisionProfiles = false,
+  availableFields = COMPARISON_FIELD_DEFINITIONS,
 }: ComparisonChartPanelProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -479,7 +482,7 @@ function ComparisonChartPanelComponent({
                 value={selection.yField}
                 onChange={(event) => onChangeYField(event.target.value as ComparisonFieldId)}
               >
-                {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                {availableFields.map((field) => (
                   <option key={field.id} value={field.id} disabled={field.id === selection.xField}>
                     {t(field.labelKey)}
                   </option>
@@ -502,7 +505,7 @@ function ComparisonChartPanelComponent({
                 value={selection.xField}
                 onChange={(event) => onChangeXField(event.target.value as ComparisonFieldId)}
               >
-                {COMPARISON_FIELD_DEFINITIONS.map((field) => (
+                {availableFields.map((field) => (
                   <option key={field.id} value={field.id} disabled={field.id === selection.yField}>
                     {t(field.labelKey)}
                   </option>

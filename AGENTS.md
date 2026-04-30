@@ -2,7 +2,7 @@
 
 **Project:** MediaLyze  
 **Repository Type:** Open-source self-hosted media analysis tool  
-**Primary Goal:** Analyze large video media collections with `ffprobe`, persist normalized technical metadata in SQLite, and expose performant inspection, statistics, and scan-management workflows through a FastAPI + React application.
+**Primary Goal:** Analyze large video and audio media collections with `ffprobe`, persist normalized technical metadata in SQLite, and expose performant inspection, statistics, and scan-management workflows through a FastAPI + React application.
 
 ---
 
@@ -19,6 +19,7 @@ Current baseline:
 
 Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
 
+* basic audio-file support with Music library type, type-aware file discovery, and music metadata extraction (title, artist, album, etc.)
 * path-browser filtering for placeholder directories such as `cdrom`, `floppy`, and `usb` when they are only container-exposed shadow directories
 * broader HDR10+ detection from additional ffprobe side-data metadata variants
 
@@ -33,14 +34,15 @@ Important documentation rule:
 
 # 2. Product Scope
 
-MediaLyze is a **self-hosted technical media analyzer** for video collections.  
+MediaLyze is a **self-hosted technical media analyzer** for video and audio collections.  
 It focuses on file analysis, scan orchestration, metadata normalization, and library statistics.
 
 ## 2.1 Implemented Now
 
 MediaLyze currently implements:
 
-* library creation, update, rename, and deletion
+* library creation, update, rename, and deletion with library types (movies, series, music, mixed, other) and type-aware media discovery
+* basic audio-file support including extraction of music metadata (title, artist, album, etc.) from audio streams
 * per-library dashboard visibility toggles that can exclude selected libraries from dashboard statistics and comparison panels
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
@@ -105,6 +107,7 @@ Supported library types:
 ```text
 movies
 series
+music
 mixed
 other
 ```
@@ -261,6 +264,19 @@ Current normalized audio stream fields include:
 * language
 * default flag
 * forced flag
+
+**Music-specific metadata fields** (extracted from audio file tags):
+
+* title
+* artist
+* album
+* album_artist
+* genre
+* date
+* disc
+* composer
+
+All music-specific fields are optional and extracted from ffprobe tag metadata.
 
 ## 4.4 Subtitle Streams
 

@@ -3302,6 +3302,7 @@ export function LibrariesPage() {
                                 >
                                   <option value="movies">{t("libraryTypes.movies")}</option>
                                   <option value="series">{t("libraryTypes.series")}</option>
+                                  <option value="music">{t("libraryTypes.music")}</option>
                                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                                   <option value="other">{t("libraryTypes.other")}</option>
                                 </select>
@@ -4156,6 +4157,7 @@ export function LibrariesPage() {
                 >
                   <option value="movies">{t("libraryTypes.movies")}</option>
                   <option value="series">{t("libraryTypes.series")}</option>
+                  <option value="music">{t("libraryTypes.music")}</option>
                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                   <option value="other">{t("libraryTypes.other")}</option>
                 </select>

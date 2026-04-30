@@ -1,5 +1,6 @@
 import type {
   DashboardResponse,
+  LibraryType,
   LibraryStatistics,
   MediaFileSortKey,
   NumericDistribution,
@@ -86,6 +87,7 @@ export type LibraryStatisticsSettings = {
 };
 
 const STORAGE_KEY = "medialyze-library-statistics-settings";
+const VIDEO_ONLY_STATISTIC_IDS = new Set<LibraryStatisticId>(["video_codec", "resolution", "hdr_type", "bitrate"]);
 
 function buildStorageKey(storageScope?: string): string {
   return storageScope ? `${STORAGE_KEY}-${storageScope}` : STORAGE_KEY;
@@ -532,9 +534,13 @@ export function getOrderedLibraryStatisticDefinitions(settings: LibraryStatistic
 
 export function getVisibleLibraryStatisticPanels(
   settings: LibraryStatisticsSettings,
+  libraryType?: LibraryType | null,
 ): LibraryStatisticDefinition[] {
   return getOrderedLibraryStatisticDefinitions(settings).filter(
-    (definition) => definition.supportsPanel && settings.visibility[definition.id].panelEnabled,
+    (definition) =>
+      definition.supportsPanel &&
+      settings.visibility[definition.id].panelEnabled &&
+      isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
   );
 }
 
@@ -548,20 +554,42 @@ export function getVisibleDashboardStatisticPanels(
 
 export function getVisibleLibraryStatisticTableColumns(
   settings: LibraryStatisticsSettings,
+  libraryType?: LibraryType | null,
 ): MediaFileSortKey[] {
   return getOrderedLibraryStatisticDefinitions(settings)
-    .filter((definition) => definition.supportsTable && settings.visibility[definition.id].tableEnabled)
+    .filter(
+      (definition) =>
+        definition.supportsTable &&
+        settings.visibility[definition.id].tableEnabled &&
+        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
+    )
     .map((definition) => definition.tableColumnKey)
     .filter((column): column is MediaFileSortKey => typeof column === "string");
 }
 
 export function getEnabledLibraryStatisticTableTooltipColumns(
   settings: LibraryStatisticsSettings,
+  libraryType?: LibraryType | null,
 ): MediaFileSortKey[] {
   return getOrderedLibraryStatisticDefinitions(settings)
-    .filter((definition) => definition.supportsTableTooltip && settings.visibility[definition.id].tableTooltipEnabled)
+    .filter(
+      (definition) =>
+        definition.supportsTableTooltip &&
+        settings.visibility[definition.id].tableTooltipEnabled &&
+        isLibraryStatisticDefinitionVisibleForLibraryType(definition, libraryType),
+    )
     .map((definition) => definition.tableColumnKey)
     .filter((column): column is MediaFileSortKey => typeof column === "string");
+}
+
+export function isLibraryStatisticDefinitionVisibleForLibraryType(
+  definition: LibraryStatisticDefinition,
+  libraryType?: LibraryType | null,
+): boolean {
+  if (libraryType !== "music") {
+    return true;
+  }
+  return !VIDEO_ONLY_STATISTIC_IDS.has(definition.id);
 }
 
 export function getLibraryStatisticPanelItems(

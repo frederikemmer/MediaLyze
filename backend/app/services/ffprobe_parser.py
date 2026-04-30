@@ -340,6 +340,15 @@ class NormalizedAudioStream:
     language: str | None
     default_flag: bool
     forced_flag: bool
+    # Music-specific metadata
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    album_artist: str | None = None
+    genre: str | None = None
+    date: str | None = None
+    disc: str | None = None
+    composer: str | None = None
 
 
 @dataclass(slots=True)
@@ -441,6 +450,15 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     language=normalize_language_code(tags.get("language")),
                     default_flag=bool(disposition.get("default")),
                     forced_flag=bool(disposition.get("forced")),
+                    # Music-specific metadata from tags
+                    title=tags.get("title"),
+                    artist=tags.get("artist"),
+                    album=tags.get("album"),
+                    album_artist=tags.get("album_artist"),
+                    genre=tags.get("genre"),
+                    date=tags.get("date"),
+                    disc=tags.get("disc"),
+                    composer=tags.get("composer"),
                 )
             )
         elif codec_type == "subtitle":

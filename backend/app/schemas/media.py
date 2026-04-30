@@ -74,6 +74,15 @@ class AudioStreamRead(BaseModel):
     language: str | None
     default_flag: bool
     forced_flag: bool
+    # Music-specific metadata
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    album_artist: str | None = None
+    genre: str | None = None
+    date: str | None = None
+    disc: str | None = None
+    composer: str | None = None
 
 
 class SubtitleStreamRead(BaseModel):

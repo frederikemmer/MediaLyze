@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 CONTAINER_LABELS: dict[str, str] = {
+    # Video containers
     "mkv": "MKV",
     "mp4": "MP4",
     "avi": "AVI",
@@ -15,6 +16,14 @@ CONTAINER_LABELS: dict[str, str] = {
     "mpg": "MPG",
     "ogm": "OGM",
     "asf": "ASF",
+    # Audio containers
+    "mp3": "MP3",
+    "flac": "FLAC",
+    "m4a": "M4A",
+    "aac": "AAC",
+    "opus": "Opus",
+    "wav": "WAV",
+    "wma": "WMA",
 }
 
 

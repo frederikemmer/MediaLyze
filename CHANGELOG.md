@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add **Music** library type and basic audio-file support for `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, and `.wma` files ([#76](https://github.com/frederikemmer/MediaLyze/issues/76))
+- extract and persist music-specific metadata tags (title, artist, album, album artist, genre, date, disc, composer) from audio files when scanning
+- make file discovery library-type-aware so **Movies** and **Shows** libraries scan only video files, **Music** libraries scan only audio files, and **Mixed**/**Other** libraries scan both
+- filter analyzed-files table columns by library type to hide video-exclusive fields (video codec, resolution, HDR type, bitrate) when viewing Music libraries
+- filter library and dashboard statistic panels as well as comparison axis selectors by effective library types so music-only views hide video-exclusive metrics and fields
+
 ## v0.9.1
 
 >2026-04-30

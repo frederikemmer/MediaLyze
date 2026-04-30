@@ -3,6 +3,7 @@ import type {
   ComparisonFieldId,
   ComparisonFieldKind,
   ComparisonRendererId,
+  LibraryType,
   NumericDistributionMetricId,
 } from "./api";
 import { formatCodecLabel, formatContainerLabel } from "./format";
@@ -59,6 +60,13 @@ const DEFAULT_SELECTION: ComparisonSelection = {
   yField: "size",
   renderer: "heatmap",
 };
+const VIDEO_ONLY_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
+  "bitrate",
+  "resolution_mp",
+  "video_codec",
+  "resolution",
+  "hdr_type",
+]);
 
 export function getComparisonFieldDefinition(fieldId: ComparisonFieldId): ComparisonFieldDefinition {
   return FIELD_MAP.get(fieldId) ?? FIELD_MAP.get(DEFAULT_SELECTION.xField)!;
@@ -127,6 +135,41 @@ export function sanitizeComparisonRenderer(
 ): ComparisonRendererId {
   const available = getAvailableComparisonRenderers(xField, yField);
   return available.includes(renderer) ? renderer : available[0];
+}
+
+export function getComparisonFieldDefinitionsForLibraryType(
+  libraryType?: LibraryType | null,
+): ComparisonFieldDefinition[] {
+  if (libraryType !== "music") {
+    return COMPARISON_FIELD_DEFINITIONS;
+  }
+  return COMPARISON_FIELD_DEFINITIONS.filter((definition) => !VIDEO_ONLY_COMPARISON_FIELDS.has(definition.id));
+}
+
+export function normalizeComparisonSelectionForLibraryType(
+  selection: ComparisonSelection,
+  libraryType?: LibraryType | null,
+): ComparisonSelection {
+  const availableFields = getComparisonFieldDefinitionsForLibraryType(libraryType);
+  if (availableFields.length < 2) {
+    return selection;
+  }
+
+  const availableFieldIds = new Set(availableFields.map((field) => field.id));
+  const firstField = availableFields[0].id;
+  const secondField = availableFields[1].id;
+
+  const xField = availableFieldIds.has(selection.xField) ? selection.xField : firstField;
+  let yField = availableFieldIds.has(selection.yField) ? selection.yField : secondField;
+  if (xField === yField) {
+    yField = availableFields.find((field) => field.id !== xField)?.id ?? secondField;
+  }
+
+  return {
+    xField,
+    yField,
+    renderer: sanitizeComparisonRenderer(xField, yField, selection.renderer),
+  };
 }
 
 export function isComparisonFieldFilterable(fieldId: ComparisonFieldId): boolean {

@@ -6,6 +6,28 @@ from enum import Enum
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Media extension groups by type
+VIDEO_EXTENSIONS = (
+    ".mkv",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".m4v",
+    ".ts",
+    ".m2ts",
+    ".wmv",
+)
+
+AUDIO_EXTENSIONS = (
+    ".mp3",
+    ".flac",
+    ".m4a",
+    ".aac",
+    ".opus",
+    ".wav",
+    ".wma",
+)
+
 
 class RuntimeMode(str, Enum):
     server = "server"
@@ -55,16 +77,7 @@ class Settings(BaseSettings):
     ffprobe_worker_count: int = 4
     scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False
-    allowed_media_extensions: tuple[str, ...] = (
-        ".mkv",
-        ".mp4",
-        ".avi",
-        ".mov",
-        ".m4v",
-        ".ts",
-        ".m2ts",
-        ".wmv",
-    )
+    allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx")
 
     @model_validator(mode="after")
@@ -98,3 +111,20 @@ def get_settings() -> Settings:
     if settings.runtime_mode == RuntimeMode.server:
         settings.media_root.mkdir(parents=True, exist_ok=True)
     return settings
+
+
+def get_allowed_media_extensions(library_type: str) -> tuple[str, ...]:
+    """Return allowed media extensions based on library type.
+    
+    Args:
+        library_type: One of "movies", "series", "music", "mixed", "other"
+        
+    Returns:
+        Tuple of allowed file extensions for the library type
+    """
+    if library_type == "music":
+        return AUDIO_EXTENSIONS
+    elif library_type in ("movies", "series"):
+        return VIDEO_EXTENSIONS
+    else:  # "mixed" or "other"
+        return VIDEO_EXTENSIONS + AUDIO_EXTENSIONS

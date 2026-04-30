@@ -4,6 +4,7 @@ import {
   getEnabledLibraryStatisticTableTooltipColumns,
   getVisibleDashboardStatisticPanels,
   getLibraryStatisticsSettings,
+  getVisibleLibraryStatisticPanels,
   getVisibleLibraryStatisticTableColumns,
   moveLibraryStatistic,
   saveLibraryStatisticsSettings,
@@ -183,5 +184,20 @@ describe("library statistics settings", () => {
 
     expect(updated.order[0]).toBe("quality_score");
     expect(reloaded.order[0]).toBe("quality_score");
+  });
+
+  it("filters video-exclusive table and panel entries for music libraries", () => {
+    const settings = getLibraryStatisticsSettings();
+
+    expect(getVisibleLibraryStatisticTableColumns(settings, "music")).not.toContain("video_codec");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "music")).not.toContain("resolution");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "music")).not.toContain("hdr_type");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "music")).not.toContain("bitrate");
+
+    const visiblePanelIds = getVisibleLibraryStatisticPanels(settings, "music").map((entry) => entry.id);
+    expect(visiblePanelIds).not.toContain("video_codec");
+    expect(visiblePanelIds).not.toContain("resolution");
+    expect(visiblePanelIds).not.toContain("hdr_type");
+    expect(visiblePanelIds).not.toContain("bitrate");
   });
 });
