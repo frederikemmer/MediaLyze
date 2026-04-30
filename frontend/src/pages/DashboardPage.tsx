@@ -247,11 +247,12 @@ export function DashboardPage() {
   const availablePanelDefinitions = useMemo(
     () =>
       getAvailableStatisticPanelDefinitions("dashboard", draftLayout).filter((definition) => {
-        if (definition.kind !== "statistic") {
+        const panelDefinition = dashboardLayoutPanelDefinitionMap.get(definition.id);
+        if (!panelDefinition || panelDefinition.kind !== "statistic") {
           return true;
         }
         return isLibraryStatisticDefinitionVisibleForLibraryType(
-          definition.statisticDefinition,
+          panelDefinition.statisticDefinition,
           effectiveDashboardLibraryType,
         );
       }),

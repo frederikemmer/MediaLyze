@@ -1539,10 +1539,11 @@ export function LibraryDetailPage() {
   const availableStatisticPanelDefinitions = useMemo(
     () =>
       getAvailableStatisticPanelDefinitions("library", draftStatisticLayout).filter((definition) => {
-        if (definition.kind !== "statistic") {
+        const panelDefinition = libraryLayoutPanelDefinitionMap.get(definition.id);
+        if (!panelDefinition || panelDefinition.kind !== "statistic") {
           return true;
         }
-        return isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType);
+        return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType);
       }),
     [draftStatisticLayout, activeLibraryType],
   );
