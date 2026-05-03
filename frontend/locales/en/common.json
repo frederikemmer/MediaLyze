@@ -27,6 +27,7 @@
     "resolutions": "Resolutions",
     "hdrCoverage": "HDR coverage",
     "audioCodecs": "Audio codecs",
+    "formatsAndCodecs": "Formats & codecs",
     "containers": "Containers",
     "sizeDistribution": "File size",
     "durationDistribution": "Duration",
@@ -91,6 +92,9 @@
     },
     "intervalMinutes": "Interval in minutes",
     "debounceSeconds": "Debounce in seconds",
+    "scheduledTime": "Scan time",
+    "scheduledTimeTooltipAria": "Explain scheduled scan time",
+    "scheduledTimeTooltip": "Set the time of day at which the daily scan starts. Use 24-hour format (HH:MM), e.g. 02:00 or 14:30.\n\nMake sure the TZ environment variable is configured correctly in your docker-compose or env file so the scan runs at the intended local time.",
     "watchUnavailableNetwork": "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
     "scanNow": "Manual scan",
     "scanNowTooltip": "Queue an incremental scan",
@@ -218,6 +222,7 @@
       "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
       "showFullWidthAppShell": "Use full-width app shell",
       "hideQualityScoreMeter": "Hide quality score meter",
+      "showMusicQualityScore": "Show quality score in music libraries",
       "unlimitedPanelSize": "Unlimited panel size",
       "inDepthDolbyVisionProfiles": "In-depth Dolby Vision profiles",
       "showAnalyzedFilesCsvExportTooltipAria": "Explain analyzed-files CSV export feature flag",
@@ -226,6 +231,8 @@
       "showFullWidthAppShellTooltip": "Expands the main .media-app-shell container from its default max-width to the full available page width.",
       "hideQualityScoreMeterTooltipAria": "Explain quality score meter visibility feature flag",
       "hideQualityScoreMeterTooltip": "Hides the bar-style score meter in the analyzed-files table while keeping the numeric quality score visible.",
+      "showMusicQualityScoreTooltipAria": "Explain music quality score visibility feature flag",
+      "showMusicQualityScoreTooltip": "Shows quality score metrics for pure music libraries. Disabled by default because scoring currently targets video-focused quality categories.",
       "unlimitedPanelSizeTooltipAria": "Explain unlimited panel size feature flag",
       "unlimitedPanelSizeTooltip": "Removes the current 4-row panel-height cap in dashboard and library statistic layouts. Panel width still remains limited by the underlying grid.",
       "inDepthDolbyVisionProfilesTooltipAria": "Explain in-depth Dolby Vision profile display",
@@ -321,12 +328,14 @@
   "libraryTypes": {
     "movies": "Movies",
     "series": "Shows",
+    "music": "Music (alpha)",
     "mixed": "Mixed",
     "other": "Other"
   },
   "scanModes": {
     "manual": "Manual",
-    "scheduled": "Scheduled",
+    "scheduled": "Time Interval",
+    "scheduled_daily": "Scheduled",
     "watch": "Watch"
   },
   "sort": {
@@ -353,6 +362,7 @@
     "audioBitrateDistribution": "Audio bitrate",
     "comparisonPanel": "Metric comparison",
     "audioCodecs": "Audio codecs",
+    "formatsAndCodecs": "Formats & codecs",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
     "subtitleLanguages": "Subtitle languages",
@@ -597,6 +607,7 @@
     "triggerWatchdog": "Watchdog",
     "triggerManualSummary": "Started manually by the user.",
     "triggerScheduledSummary": "Started by the scheduled interval every {{minutes}} minutes.",
+    "triggerScheduledDailySummary": "Started by the daily schedule at {{time}}.",
     "triggerWatchdogSummary": "Started after {{count}} watchdog file events.",
     "outcomeSuccessful": "Successful",
     "outcomeCompletedWithIssues": "Completed with issues",
@@ -648,6 +659,7 @@
     "bitrate": "Bitrate",
     "audioBitrate": "Audio bitrate",
     "audioCodecs": "Audio codecs",
+    "formatsAndCodecs": "Formats & codecs",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
     "subtitleLanguages": "Sub languages",
@@ -702,7 +714,10 @@
   },
   "pathBrowser": {
     "selected": "Selected",
-    "up": "Up"
+    "up": "Up",
+    "addCurrent": "Add current folder",
+    "remove": "Remove",
+    "noneSelected": "No folders selected"
   },
   "language": {
     "en": "English",

@@ -153,7 +153,7 @@ class ScanRuntimeManager:
                 self._remove_watch_observer(library_id)
                 return
 
-            if active_library.scan_mode == ScanMode.scheduled:
+            if active_library.scan_mode in (ScanMode.scheduled, ScanMode.scheduled_daily):
                 self._ensure_scheduled_job(active_library)
             else:
                 self._remove_scheduled_job(library_id)
@@ -432,22 +432,48 @@ class ScanRuntimeManager:
         timer.start()
 
     def _ensure_scheduled_job(self, library: Library) -> None:
-        interval_minutes = int((library.scan_config or {}).get("interval_minutes", 60))
-        self.scheduler.add_job(
-            self.request_scan,
-            trigger="interval",
-            minutes=interval_minutes,
-            kwargs={
-                "library_id": library.id,
-                "scan_type": "incremental",
-                "trigger_source": ScanTriggerSource.scheduled,
-                "trigger_details": {"interval_minutes": interval_minutes},
-            },
-            id=self._scheduled_job_id(library.id),
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-        )
+        if library.scan_mode == ScanMode.scheduled_daily:
+            scheduled_time = str((library.scan_config or {}).get("scheduled_time", "02:00"))
+            try:
+                hour_str, minute_str = scheduled_time.split(":", 1)
+                hour = max(0, min(23, int(hour_str)))
+                minute = max(0, min(59, int(minute_str)))
+            except (ValueError, AttributeError):
+                hour, minute = 2, 0
+            normalized_time = f"{hour:02d}:{minute:02d}"
+            self.scheduler.add_job(
+                self.request_scan,
+                trigger="cron",
+                hour=hour,
+                minute=minute,
+                kwargs={
+                    "library_id": library.id,
+                    "scan_type": "incremental",
+                    "trigger_source": ScanTriggerSource.scheduled,
+                    "trigger_details": {"scheduled_time": normalized_time},
+                },
+                id=self._scheduled_job_id(library.id),
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+        else:
+            interval_minutes = int((library.scan_config or {}).get("interval_minutes", 60))
+            self.scheduler.add_job(
+                self.request_scan,
+                trigger="interval",
+                minutes=interval_minutes,
+                kwargs={
+                    "library_id": library.id,
+                    "scan_type": "incremental",
+                    "trigger_source": ScanTriggerSource.scheduled,
+                    "trigger_details": {"interval_minutes": interval_minutes},
+                },
+                id=self._scheduled_job_id(library.id),
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
 
     def _ensure_history_maintenance_job(self) -> None:
         self.scheduler.add_job(

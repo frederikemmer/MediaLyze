@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import PurePosixPath
 
 from sqlalchemy import case, delete, distinct, func, literal, select, union_all
 from sqlalchemy.orm import Session
@@ -25,7 +26,7 @@ from backend.app.services.app_settings import get_app_settings as load_app_setti
 from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.numeric_distributions import build_numeric_distributions
-from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path
+from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path, resolve_library_paths
 from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
@@ -35,6 +36,7 @@ from backend.app.services.video_queries import primary_video_streams_subquery
 
 DEFAULT_SCAN_CONFIG = {
     "interval_minutes": 60,
+    "scheduled_time": "02:00",
     "debounce_seconds": 15,
 }
 
@@ -44,6 +46,16 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "size": "size",
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
+}
+_MUSIC_HIDDEN_PANEL_IDS = {
+    "video_codec",
+    "resolution",
+    "hdr_type",
+    "audio_bitrate",
+    "subtitle_languages",
+    "subtitle_codecs",
+    "subtitle_sources",
+    "audio_languages",
 }
 
 
@@ -139,9 +151,15 @@ def _count_distinct_normalized_languages(
 def normalize_scan_config(scan_mode, scan_config: dict | None) -> dict:
     candidate = dict(scan_config or {})
     normalized = deepcopy(DEFAULT_SCAN_CONFIG)
+    selected_paths: list[str] = []
 
     interval_minutes = candidate.get("interval_minutes", normalized["interval_minutes"])
+    scheduled_time = str(candidate.get("scheduled_time", normalized["scheduled_time"]) or normalized["scheduled_time"])
     debounce_seconds = candidate.get("debounce_seconds", normalized["debounce_seconds"])
+    for raw_path in candidate.get("selected_paths") or []:
+        normalized_path = PurePosixPath(str(raw_path).strip().replace("\\", "/")).as_posix().strip("/")
+        if normalized_path and normalized_path not in selected_paths:
+            selected_paths.append(normalized_path)
 
     try:
         normalized["interval_minutes"] = max(5, int(interval_minutes))
@@ -149,16 +167,33 @@ def normalize_scan_config(scan_mode, scan_config: dict | None) -> dict:
         normalized["interval_minutes"] = DEFAULT_SCAN_CONFIG["interval_minutes"]
 
     try:
+        hour_str, minute_str = scheduled_time.split(":", 1)
+        normalized["scheduled_time"] = f"{max(0, min(23, int(hour_str))):02d}:{max(0, min(59, int(minute_str))):02d}"
+    except (AttributeError, TypeError, ValueError):
+        normalized["scheduled_time"] = DEFAULT_SCAN_CONFIG["scheduled_time"]
+
+    try:
         normalized["debounce_seconds"] = max(3, int(debounce_seconds))
     except (TypeError, ValueError):
         normalized["debounce_seconds"] = DEFAULT_SCAN_CONFIG["debounce_seconds"]
 
     if scan_mode == "manual":
-        return {}
+        return {"selected_paths": selected_paths} if selected_paths else {}
     if scan_mode == "scheduled":
-        return {"interval_minutes": normalized["interval_minutes"]}
+        result = {"interval_minutes": normalized["interval_minutes"]}
+        if selected_paths:
+            result["selected_paths"] = selected_paths
+        return result
+    if scan_mode == "scheduled_daily":
+        result = {"scheduled_time": normalized["scheduled_time"]}
+        if selected_paths:
+            result["selected_paths"] = selected_paths
+        return result
     if scan_mode == "watch":
-        return {"debounce_seconds": normalized["debounce_seconds"]}
+        result = {"debounce_seconds": normalized["debounce_seconds"]}
+        if selected_paths:
+            result["selected_paths"] = selected_paths
+        return result
     return normalized
 
 
@@ -168,20 +203,31 @@ def _normalize_library_scan_settings(
     scan_mode,
     scan_config: dict | None,
 ) -> tuple:
-    if scan_mode == "watch" and not is_watch_supported_for_library(settings, path_value):
-        return "scheduled", normalize_scan_config("scheduled", {"interval_minutes": 60})
+    normalized_scan_config = normalize_scan_config(scan_mode, scan_config)
+    selected_paths = normalized_scan_config.get("selected_paths") or []
+    if scan_mode == "watch" and (selected_paths or not is_watch_supported_for_library(settings, path_value)):
+        fallback_config = dict(normalized_scan_config)
+        fallback_config["interval_minutes"] = 60
+        return "scheduled", normalize_scan_config("scheduled", fallback_config)
     return scan_mode, normalize_scan_config(scan_mode, scan_config)
 
 
 def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> Library:
     cache_key = str(id(db.get_bind()))
     app_settings = load_app_settings(db, settings)
-    safe_path = resolve_library_path(settings, payload.path)
+    if payload.paths:
+        safe_path, selected_paths = resolve_library_paths(settings, payload.paths)
+    else:
+        safe_path = resolve_library_path(settings, payload.path)
+        selected_paths = []
+    initial_scan_config = dict(payload.scan_config or {})
+    if selected_paths:
+        initial_scan_config["selected_paths"] = selected_paths
     scan_mode, scan_config = _normalize_library_scan_settings(
         settings,
         str(safe_path),
         payload.scan_mode,
-        payload.scan_config,
+        initial_scan_config,
     )
     library = Library(
         name=payload.name,
@@ -223,11 +269,13 @@ def update_library_settings(
         library.type = payload.type
 
     if payload.scan_mode is not None:
+        next_scan_config = dict(library.scan_config or {})
+        next_scan_config.update(payload.scan_config or {})
         library.scan_mode, library.scan_config = _normalize_library_scan_settings(
             settings,
             library.path,
             payload.scan_mode,
-            payload.scan_config,
+            next_scan_config,
         )
     if payload.duplicate_detection_mode is not None:
         library.duplicate_detection_mode = payload.duplicate_detection_mode
@@ -358,11 +406,14 @@ def get_library_statistics(
     if cached is not None:
         return cached
 
-    if not library_exists(db, library_id):
+    library = db.get(Library, library_id)
+    if library is None:
         return None
 
+    hidden_panel_ids = _MUSIC_HIDDEN_PANEL_IDS if library.type == "music" else set()
+
     def wants(panel_id: str) -> bool:
-        return panel_filter is None or panel_id in panel_filter
+        return (panel_filter is None or panel_id in panel_filter) and panel_id not in hidden_panel_ids
 
     app_settings = load_app_settings(db)
     primary_video_streams = (

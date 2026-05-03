@@ -155,6 +155,41 @@ def test_create_library_defaults_duplicate_detection_mode_to_off(tmp_path) -> No
     assert library.show_on_dashboard is True
 
 
+def test_create_library_with_multiple_paths_uses_common_root_and_selected_paths(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+    common_root = tmp_path / "collections"
+    first_dir = common_root / "Movies A"
+    second_dir = common_root / "Movies B"
+    first_dir.mkdir(parents=True)
+    second_dir.mkdir()
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Movies",
+                path=str(first_dir),
+                paths=[str(first_dir), str(second_dir)],
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+
+    assert library.path == str(common_root)
+    assert library.scan_config == {"selected_paths": ["Movies A", "Movies B"]}
+
+
 def test_update_library_settings_can_change_duplicate_detection_mode() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

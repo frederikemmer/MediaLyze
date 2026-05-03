@@ -1175,8 +1175,8 @@
 }
 
 .stat-card {
-  min-height: 76px;
-  padding: 8px 14px 4px;
+  min-height: 0;
+  padding: 8px 14px;
   gap: 0;
 }
 
@@ -2618,7 +2618,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .desktop-path-row {
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
 }
 
@@ -2640,6 +2640,58 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .path-entry.active {
   background: rgba(255, 107, 61, 0.14);
   border-color: rgba(255, 107, 61, 0.24);
+}
+
+.path-browser-selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.path-browser-selected-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.path-browser-selected-item > span:first-child {
+  padding: 3px 8px;
+}
+
+.path-browser-pill-divider {
+  width: 1px;
+  align-self: stretch;
+  background-color: currentColor;
+  opacity: 0.25;
+  flex-shrink: 0;
+}
+
+.path-browser-pill-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  border-radius: 0;
+}
+
+.path-browser-pill-remove:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.toolbar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .scan-settings-form {

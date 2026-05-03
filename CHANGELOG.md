@@ -4,9 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.0
+
+>2026-05-03
+
+### ✨ New
+
+- add **Music** library type and basic audio-file support for `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, and `.wma` files ([#76](https://github.com/frederikemmer/MediaLyze/issues/76))
+- extract and persist music-specific metadata tags (title, artist, album, album artist, genre, date, disc, composer) from audio files when scanning
+- make file discovery library-type-aware so **Movies** and **Shows** libraries scan only video files, **Music** libraries scan only audio files, and **Mixed**/**Other** libraries scan both
+- filter analyzed-files table columns by library type to hide video-exclusive fields (video codec, resolution, HDR type, bitrate) when viewing Music libraries
+- filter library and dashboard statistic panels as well as comparison axis selectors by effective library types so music-only views hide video-exclusive metrics and fields
+- add richer music-stream metadata extraction and storage for bit depth, bit-rate mode, compression mode, replay gain, replay-gain peak, writing library, and MD5-unencoded payload values
+- make bitrate metrics and sorting/filtering fall back to summed audio-stream bitrate when container bitrate metadata is missing, so pure music libraries populate bitrate views consistently
+- hide subtitle-language, subtitle-codec, subtitle-source, audio-language, and audio-bitrate statistic panels for pure music libraries while keeping the generic bitrate panel visible
+- add a new app feature flag to optionally show quality-score metrics in pure music libraries; by default these metrics remain hidden in music-only contexts
+- rename the music-context audio-codec metric label to **Formats & Codecs** in library and dashboard views
+
+### 🐛 Bug fixes
+
+- fix backend startup failure on Python 3.12 where `NormalizedAudioStream` dataclass field ordering triggered `TypeError: non-default argument 'language' follows default argument`, which could prevent Docker containers from starting
+
+## v0.9.1
+
+>2026-04-30
+
 ### ✨ New
 
 - add stable desktop release asset names so README download links can point at `releases/latest/download/...` and always fetch the newest published desktop build
+- add a **Scheduled** scan mode that runs a daily incremental scan at a configurable time of day (HH:MM); the existing interval-based mode is renamed to **Time Interval** in the UI; a tooltip in the time picker explains that only one scan per 24 hours is currently supported and that the `TZ` environment variable should be set correctly ([#124](https://github.com/frederikemmer/MediaLyze/issues/124))
+- allow creating one library from multiple selected directories; MediaLyze stores a shared root internally, scans only the selected directories, and keeps the selected directory names in analyzed file relative paths instead of stripping them away
 
 ## v0.9.0
 

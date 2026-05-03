@@ -49,6 +49,7 @@ import { useTheme, type ThemePreference } from "../lib/theme";
 type CreateLibraryForm = {
   name: string;
   path: string;
+  paths: string[];
   type: LibraryType;
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
@@ -57,6 +58,7 @@ type CreateLibraryForm = {
 const EMPTY_FORM: CreateLibraryForm = {
   name: "",
   path: ".",
+  paths: [],
   type: "mixed",
   scan_mode: "manual",
   duplicate_detection_mode: "off",
@@ -69,11 +71,23 @@ function createEmptyForm(isDesktop: boolean): CreateLibraryForm {
   };
 }
 
+function appendSelectedLibraryPaths(currentPaths: string[], nextPaths: string[]): string[] {
+  const merged = [...currentPaths];
+  for (const candidate of nextPaths) {
+    const normalized = candidate.trim();
+    if (normalized && !merged.includes(normalized)) {
+      merged.push(normalized);
+    }
+  }
+  return merged;
+}
+
 type LibrarySettingsForm = {
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
   interval_minutes: number;
   debounce_seconds: number;
+  scheduled_time: string;
   quality_profile: QualityProfile;
 };
 
@@ -348,6 +362,7 @@ function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
     duplicate_detection_mode: library.duplicate_detection_mode,
     interval_minutes: Number(library.scan_config.interval_minutes ?? 60),
     debounce_seconds: Number(library.scan_config.debounce_seconds ?? 15),
+    scheduled_time: String(library.scan_config.scheduled_time ?? "02:00"),
     quality_profile: cloneQualityProfile(library.quality_profile ?? DEFAULT_QUALITY_PROFILE),
   };
 }
@@ -359,9 +374,12 @@ function toLibraryIdentityForm(library: LibrarySummary): LibraryIdentityForm {
   };
 }
 
-function buildScanConfig(settings: LibrarySettingsForm): Record<string, number> {
+function buildScanConfig(settings: LibrarySettingsForm): Record<string, number | string> {
   if (settings.scan_mode === "scheduled") {
     return { interval_minutes: settings.interval_minutes };
+  }
+  if (settings.scan_mode === "scheduled_daily") {
+    return { scheduled_time: settings.scheduled_time || "02:00" };
   }
   if (settings.scan_mode === "watch") {
     return { debounce_seconds: settings.debounce_seconds };
@@ -379,6 +397,7 @@ function settingsMatchLibrary(library: LibrarySummary, settings: LibrarySettings
     current.duplicate_detection_mode === settings.duplicate_detection_mode &&
     current.interval_minutes === settings.interval_minutes &&
     current.debounce_seconds === settings.debounce_seconds &&
+    current.scheduled_time === settings.scheduled_time &&
     JSON.stringify(current.quality_profile) === JSON.stringify(settings.quality_profile)
   );
 }
@@ -516,7 +535,12 @@ function summarizeTriggerDetails(
   job: RecentScanJob | ScanJobDetail,
 ) {
   if (job.trigger_source === "scheduled") {
-    const intervalMinutes = Number((job as ScanJobDetail).trigger_details?.interval_minutes ?? 0);
+    const triggerDetails = (job as ScanJobDetail).trigger_details ?? {};
+    const scheduledTime = triggerDetails.scheduled_time as string | undefined;
+    const intervalMinutes = Number(triggerDetails.interval_minutes ?? 0);
+    if (scheduledTime) {
+      return t("scanLogs.triggerScheduledDailySummary", { time: scheduledTime });
+    }
     return intervalMinutes > 0
       ? t("scanLogs.triggerScheduledSummary", { minutes: intervalMinutes })
       : t("scanLogs.triggerScheduled");
@@ -639,6 +663,7 @@ export function LibrariesPage() {
   const [showAnalyzedFilesCsvExport, setShowAnalyzedFilesCsvExport] = useState(false);
   const [showFullWidthAppShell, setShowFullWidthAppShell] = useState(false);
   const [hideQualityScoreMeter, setHideQualityScoreMeter] = useState(false);
+  const [showMusicQualityScore, setShowMusicQualityScore] = useState(false);
   const [unlimitedPanelSize, setUnlimitedPanelSize] = useState(false);
   const [inDepthDolbyVisionProfiles, setInDepthDolbyVisionProfiles] = useState(false);
   const [scanWorkerCountInput, setScanWorkerCountInput] = useState("4");
@@ -708,6 +733,7 @@ export function LibrariesPage() {
     setShowAnalyzedFilesCsvExport(updated.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(updated.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(updated.feature_flags.hide_quality_score_meter);
+    setShowMusicQualityScore(updated.feature_flags.show_music_quality_score);
     setUnlimitedPanelSize(updated.feature_flags.unlimited_panel_size);
     setInDepthDolbyVisionProfiles(updated.feature_flags.in_depth_dolby_vision_profiles);
     const updatedScanPerformance = updated.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
@@ -898,7 +924,7 @@ export function LibrariesPage() {
 
   useEffect(() => {
     setForm((current) =>
-      current.path === EMPTY_FORM.path || current.path === ""
+      (current.path === EMPTY_FORM.path || current.path === "") && current.paths.length === 0
         ? createEmptyForm(desktopApp)
         : current
     );
@@ -1085,6 +1111,7 @@ export function LibrariesPage() {
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
     setHideQualityScoreMeter(appSettings.feature_flags.hide_quality_score_meter);
+    setShowMusicQualityScore(appSettings.feature_flags.show_music_quality_score);
     setUnlimitedPanelSize(appSettings.feature_flags.unlimited_panel_size);
     setInDepthDolbyVisionProfiles(appSettings.feature_flags.in_depth_dolby_vision_profiles);
     scanWorkerCountInputRef.current = String(appScanPerformance.scan_worker_count);
@@ -1110,7 +1137,12 @@ export function LibrariesPage() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      const created = await api.createLibrary(form);
+      const selectedPaths = form.paths.length ? form.paths : (form.path.trim() ? [form.path.trim()] : []);
+      const created = await api.createLibrary({
+        ...form,
+        path: selectedPaths[0] ?? form.path,
+        paths: selectedPaths,
+      });
       upsertLibrary(created);
       setForm(createEmptyForm(desktopApp));
       setFormPathInspection(null);
@@ -1123,12 +1155,28 @@ export function LibrariesPage() {
     }
   }
 
-  async function selectDesktopLibraryPath() {
-    const selectedPath = await desktopBridge?.selectLibraryPath();
-    if (!selectedPath) {
+  function addDesktopLibraryPath() {
+    const nextPath = form.path.trim();
+    if (!nextPath) {
       return;
     }
-    setForm((current) => ({ ...current, path: selectedPath }));
+    setForm((current) => ({
+      ...current,
+      paths: appendSelectedLibraryPaths(current.paths, [nextPath]),
+    }));
+    setSubmitError(null);
+  }
+
+  async function selectDesktopLibraryPaths() {
+    const selectedPaths = await desktopBridge?.selectLibraryPaths();
+    if (!(selectedPaths && selectedPaths.length)) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      path: selectedPaths[selectedPaths.length - 1] ?? current.path,
+      paths: appendSelectedLibraryPaths(current.paths, selectedPaths),
+    }));
     setSubmitError(null);
   }
 
@@ -1141,6 +1189,7 @@ export function LibrariesPage() {
       duplicate_detection_mode: "off",
       interval_minutes: 60,
       debounce_seconds: 15,
+      scheduled_time: "02:00",
       quality_profile: cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
     };
     const inspection = libraryPathInspections[libraryId];
@@ -1481,6 +1530,7 @@ export function LibrariesPage() {
         COMPARISON_SCATTER_POINT_LIMIT_MAX,
       ),
     },
+    nextShowMusicQualityScore = showMusicQualityScore,
   ) {
     return api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
@@ -1492,6 +1542,7 @@ export function LibrariesPage() {
         show_analyzed_files_csv_export: nextShowAnalyzedFilesCsvExport,
         show_full_width_app_shell: nextShowFullWidthAppShell,
         hide_quality_score_meter: nextHideQualityScoreMeter,
+        show_music_quality_score: nextShowMusicQualityScore,
         unlimited_panel_size: nextUnlimitedPanelSize,
         in_depth_dolby_vision_profiles: inDepthDolbyVisionProfiles,
       },
@@ -1636,6 +1687,38 @@ export function LibrariesPage() {
     }
   }
 
+  async function toggleShowMusicQualityScore(enabled: boolean) {
+    const previousValue = showMusicQualityScore;
+    setShowMusicQualityScore(enabled);
+    setFeatureFlagsStatus(null);
+    setIsSavingFeatureFlags(true);
+    try {
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
+        unlimitedPanelSize,
+        undefined,
+        undefined,
+        undefined,
+        enabled,
+      );
+      applyUpdatedAppSettingsState(updated);
+      setFeatureFlagsStatus(null);
+      setIgnorePatternsStatus(null);
+      setScanPerformanceStatus(null);
+      setHistoryRetentionStatus(null);
+      void refreshHistoryStorage().catch(() => undefined);
+    } catch (reason) {
+      setShowMusicQualityScore(previousValue);
+      setFeatureFlagsStatus((reason as Error).message);
+    } finally {
+      setIsSavingFeatureFlags(false);
+    }
+  }
+
   async function toggleUnlimitedPanelSize(enabled: boolean) {
     const previousValue = unlimitedPanelSize;
     setUnlimitedPanelSize(enabled);
@@ -1698,6 +1781,7 @@ export function LibrariesPage() {
           show_analyzed_files_csv_export: showAnalyzedFilesCsvExport,
           show_full_width_app_shell: showFullWidthAppShell,
           hide_quality_score_meter: hideQualityScoreMeter,
+          show_music_quality_score: showMusicQualityScore,
           unlimited_panel_size: unlimitedPanelSize,
           in_depth_dolby_vision_profiles: enabled,
         },
@@ -3256,6 +3340,7 @@ export function LibrariesPage() {
                                 >
                                   <option value="movies">{t("libraryTypes.movies")}</option>
                                   <option value="series">{t("libraryTypes.series")}</option>
+                                  <option value="music">{t("libraryTypes.music")}</option>
                                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                                   <option value="other">{t("libraryTypes.other")}</option>
                                 </select>
@@ -3372,6 +3457,7 @@ export function LibrariesPage() {
                       >
                         <option value="manual">{t("scanModes.manual")}</option>
                         <option value="scheduled">{t("scanModes.scheduled")}</option>
+                        <option value="scheduled_daily">{t("scanModes.scheduled_daily")}</option>
                         <option
                           value="watch"
                           disabled={Boolean(desktopApp && libraryPathInspections[library.id] && !libraryPathInspections[library.id]?.watch_supported)}
@@ -3427,6 +3513,29 @@ export function LibrariesPage() {
                           onChange={(event) =>
                             updateLibraryForm(library.id, {
                               interval_minutes: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                    ) : null}
+                    {(settingsForms[library.id]?.scan_mode ?? library.scan_mode) === "scheduled_daily" ? (
+                      <div className="field">
+                        <div className="field-label-row">
+                          <label htmlFor={`scheduled-time-${library.id}`}>{t("libraries.scheduledTime")}</label>
+                          <TooltipTrigger
+                            ariaLabel={t("libraries.scheduledTimeTooltipAria")}
+                            content={t("libraries.scheduledTimeTooltip")}
+                          >
+                            ?
+                          </TooltipTrigger>
+                        </div>
+                        <input
+                          id={`scheduled-time-${library.id}`}
+                          type="time"
+                          value={settingsForms[library.id]?.scheduled_time ?? "02:00"}
+                          onChange={(event) =>
+                            updateLibraryForm(library.id, {
+                              scheduled_time: event.target.value,
                             })
                           }
                         />
@@ -4086,6 +4195,7 @@ export function LibrariesPage() {
                 >
                   <option value="movies">{t("libraryTypes.movies")}</option>
                   <option value="series">{t("libraryTypes.series")}</option>
+                  <option value="music">{t("libraryTypes.music")}</option>
                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                   <option value="other">{t("libraryTypes.other")}</option>
                 </select>
@@ -4107,10 +4217,36 @@ export function LibrariesPage() {
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => void selectDesktopLibraryPath()}
+                        onClick={addDesktopLibraryPath}
+                      >
+                        {t("pathBrowser.addCurrent")}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void selectDesktopLibraryPaths()}
                       >
                         {t("libraries.chooseFolder")}
                       </button>
+                    </div>
+                    <div className="path-browser-selected-list">
+                      {form.paths.length ? form.paths.map((path) => (
+                        <span key={path} className="path-browser-selected-item">
+                          <span className="badge">{path}</span>
+                          <button
+                            type="button"
+                            className="ghost small"
+                            onClick={() =>
+                              setForm((current) => ({
+                                ...current,
+                                paths: current.paths.filter((candidate) => candidate !== path),
+                              }))
+                            }
+                          >
+                            {t("pathBrowser.remove")}
+                          </button>
+                        </span>
+                      )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
                     </div>
                     {formPathInspection ? (
                       <div className="meta-row">
@@ -4129,7 +4265,21 @@ export function LibrariesPage() {
               ) : (
                 <PathBrowser
                   value={form.path}
+                  selectedPaths={form.paths}
                   onChange={(path) => setForm((current) => ({ ...current, path }))}
+                  onAddPath={(path) =>
+                    setForm((current) => ({
+                      ...current,
+                      path,
+                      paths: appendSelectedLibraryPaths(current.paths, [path]),
+                    }))
+                  }
+                  onRemovePath={(path) =>
+                    setForm((current) => ({
+                      ...current,
+                      paths: current.paths.filter((candidate) => candidate !== path),
+                    }))
+                  }
                 />
               )}
               <button type="submit" className="history-retention-primary-button" disabled={submitting}>
@@ -4327,6 +4477,25 @@ export function LibrariesPage() {
                   <TooltipTrigger
                     ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
                     content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
+                <div className="app-settings-flag-row">
+                  <label className="app-settings-flag-toggle" htmlFor="show-music-quality-score">
+                    <input
+                      id="show-music-quality-score"
+                      type="checkbox"
+                      checked={showMusicQualityScore}
+                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                      onChange={(event) => void toggleShowMusicQualityScore(event.target.checked)}
+                    />
+                    <span>{t("libraries.featureFlags.showMusicQualityScore")}</span>
+                  </label>
+                  <TooltipTrigger
+                    ariaLabel={t("libraries.featureFlags.showMusicQualityScoreTooltipAria")}
+                    content={t("libraries.featureFlags.showMusicQualityScoreTooltip")}
                     preserveLineBreaks
                   >
                     ?

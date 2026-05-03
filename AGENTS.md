@@ -2,7 +2,7 @@
 
 **Project:** MediaLyze  
 **Repository Type:** Open-source self-hosted media analysis tool  
-**Primary Goal:** Analyze large video media collections with `ffprobe`, persist normalized technical metadata in SQLite, and expose performant inspection, statistics, and scan-management workflows through a FastAPI + React application.
+**Primary Goal:** Analyze large video and audio media collections with `ffprobe`, persist normalized technical metadata in SQLite, and expose performant inspection, statistics, and scan-management workflows through a FastAPI + React application.
 
 ---
 
@@ -19,6 +19,7 @@ Current baseline:
 
 Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
 
+* basic audio-file support with Music library type, type-aware file discovery, and music metadata extraction (title, artist, album, etc.)
 * path-browser filtering for placeholder directories such as `cdrom`, `floppy`, and `usb` when they are only container-exposed shadow directories
 * broader HDR10+ detection from additional ffprobe side-data metadata variants
 
@@ -33,14 +34,15 @@ Important documentation rule:
 
 # 2. Product Scope
 
-MediaLyze is a **self-hosted technical media analyzer** for video collections.  
+MediaLyze is a **self-hosted technical media analyzer** for video and audio collections.  
 It focuses on file analysis, scan orchestration, metadata normalization, and library statistics.
 
 ## 2.1 Implemented Now
 
 MediaLyze currently implements:
 
-* library creation, update, rename, and deletion
+* library creation, update, rename, and deletion with library types (movies, series, music, mixed, other) and type-aware media discovery
+* basic audio-file support including extraction of music metadata (title, artist, album, etc.) from audio streams
 * per-library dashboard visibility toggles that can exclude selected libraries from dashboard statistics and comparison panels
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
@@ -105,6 +107,7 @@ Supported library types:
 ```text
 movies
 series
+music
 mixed
 other
 ```
@@ -261,6 +264,25 @@ Current normalized audio stream fields include:
 * language
 * default flag
 * forced flag
+* bit depth (when available)
+* bit rate mode (when available)
+* compression mode (when available)
+* replay gain metadata (when available)
+* writing library tag (when available)
+* MD5 unencoded payload tag (when available)
+
+**Music-specific metadata fields** (extracted from audio file tags):
+
+* title
+* artist
+* album
+* album_artist
+* genre
+* date
+* disc
+* composer
+
+All music-specific fields are optional and extracted from ffprobe tag metadata.
 
 ## 4.4 Subtitle Streams
 
@@ -534,6 +556,7 @@ Current app feature flags include:
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
+* `show_music_quality_score`
 * `unlimited_panel_size`
 * `in_depth_dolby_vision_profiles`
 
@@ -542,6 +565,7 @@ These flags currently control:
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
 * whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* whether music-only library contexts show quality-score metrics and columns
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 * whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
 
@@ -594,6 +618,7 @@ Important current payload concepts:
 * `feature_flags.show_analyzed_files_csv_export`
 * `feature_flags.show_full_width_app_shell`
 * `feature_flags.hide_quality_score_meter`
+* `feature_flags.show_music_quality_score`
 * `feature_flags.unlimited_panel_size`
 * `feature_flags.in_depth_dolby_vision_profiles`
 

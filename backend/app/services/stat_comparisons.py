@@ -80,10 +80,48 @@ COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition]
     "resolution": ComparisonFieldDefinition(field_id="resolution", kind="category"),
     "hdr_type": ComparisonFieldDefinition(field_id="hdr_type", kind="category"),
 }
+VIDEO_ONLY_COMPARISON_FIELDS: Final[set[ComparisonFieldId]] = {
+    "bitrate",
+    "resolution_mp",
+    "video_codec",
+    "resolution",
+    "hdr_type",
+}
+MUSIC_ALLOWED_COMPARISON_FALLBACK: Final[list[ComparisonFieldId]] = [
+    "duration",
+    "size",
+    "quality_score",
+    "audio_bitrate",
+    "container",
+]
 NUMERIC_BUCKET_CONFIGS = {
     config.metric_id: config
     for config in NUMERIC_DISTRIBUTION_CONFIGS
 }
+
+
+def _normalize_library_comparison_fields(
+    *,
+    library_type: str,
+    x_field: ComparisonFieldId,
+    y_field: ComparisonFieldId,
+) -> tuple[ComparisonFieldId, ComparisonFieldId]:
+    if library_type != "music":
+        return x_field, y_field
+
+    allowed_fields = [
+        field_id
+        for field_id in COMPARISON_FIELD_DEFINITIONS.keys()
+        if field_id not in VIDEO_ONLY_COMPARISON_FIELDS
+    ]
+    first_fallback = next((field for field in MUSIC_ALLOWED_COMPARISON_FALLBACK if field in allowed_fields), "duration")
+    second_fallback = next((field for field in allowed_fields if field != first_fallback), "size")
+
+    normalized_x = x_field if x_field in allowed_fields else first_fallback
+    normalized_y = y_field if y_field in allowed_fields else second_fallback
+    if normalized_x == normalized_y:
+        normalized_y = next((field for field in allowed_fields if field != normalized_x), second_fallback)
+    return normalized_x, normalized_y
 
 
 def _normalized_text(value: str | None, fallback: str) -> str:
@@ -140,7 +178,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
             cast(MediaFile.size_bytes, Float).label("size"),
             cast(MediaFile.quality_score, Float).label("quality_score"),
             cast(MediaFormat.duration, Float).label("duration"),
-            cast(bitrate_value_expression(), Float).label("bitrate"),
+            cast(func.coalesce(bitrate_value_expression(), audio_bitrate_expression), Float).label("bitrate"),
             cast(audio_bitrate_expression, Float).label("audio_bitrate"),
             MediaFile.extension.label("container"),
             primary_video_streams.c.codec.label("video_codec"),
@@ -409,8 +447,14 @@ def get_library_comparison(
     cached = stats_cache.get_library_comparison(cache_key, library_id, x_field, y_field)
     if cached is not None:
         return cached
-    if db.get(Library, library_id) is None:
+    library = db.get(Library, library_id)
+    if library is None:
         return None
-    payload = _build_comparison(db, x_field=x_field, y_field=y_field, library_id=library_id)
+    normalized_x_field, normalized_y_field = _normalize_library_comparison_fields(
+        library_type=library.type,
+        x_field=x_field,
+        y_field=y_field,
+    )
+    payload = _build_comparison(db, x_field=normalized_x_field, y_field=normalized_y_field, library_id=library_id)
     stats_cache.set_library_comparison(cache_key, library_id, x_field, y_field, payload)
     return payload

@@ -151,6 +151,7 @@ def _deserialize_feature_flags(payload: Any, settings: Settings) -> FeatureFlags
         ),
         show_full_width_app_shell=bool(candidate.get("show_full_width_app_shell", defaults.show_full_width_app_shell)),
         hide_quality_score_meter=bool(candidate.get("hide_quality_score_meter", defaults.hide_quality_score_meter)),
+        show_music_quality_score=bool(candidate.get("show_music_quality_score", defaults.show_music_quality_score)),
         unlimited_panel_size=bool(candidate.get("unlimited_panel_size", defaults.unlimited_panel_size)),
         in_depth_dolby_vision_profiles=bool(
             candidate.get(

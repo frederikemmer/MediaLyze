@@ -340,6 +340,22 @@ class NormalizedAudioStream:
     language: str | None
     default_flag: bool
     forced_flag: bool
+    bit_depth: int | None = None
+    bit_rate_mode: str | None = None
+    compression_mode: str | None = None
+    replay_gain: str | None = None
+    replay_gain_peak: str | None = None
+    writing_library: str | None = None
+    md5_unencoded: str | None = None
+    # Music-specific metadata
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    album_artist: str | None = None
+    genre: str | None = None
+    date: str | None = None
+    disc: str | None = None
+    composer: str | None = None
 
 
 @dataclass(slots=True)
@@ -438,9 +454,25 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     channel_layout=stream.get("channel_layout"),
                     sample_rate=_safe_int(stream.get("sample_rate")),
                     bit_rate=_safe_int(stream.get("bit_rate")),
+                    bit_depth=_safe_int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample")),
+                    bit_rate_mode=tags.get("bit_rate_mode") or tags.get("bitrate_mode"),
+                    compression_mode=tags.get("compression_mode"),
+                    replay_gain=tags.get("replaygain_track_gain") or tags.get("replay_gain"),
+                    replay_gain_peak=tags.get("replaygain_track_peak") or tags.get("replay_gain_peak"),
+                    writing_library=tags.get("encoder") or tags.get("writing_library"),
+                    md5_unencoded=tags.get("md5") or tags.get("MD5") or tags.get("md5_unencoded"),
                     language=normalize_language_code(tags.get("language")),
                     default_flag=bool(disposition.get("default")),
                     forced_flag=bool(disposition.get("forced")),
+                    # Music-specific metadata from tags
+                    title=tags.get("title"),
+                    artist=tags.get("artist"),
+                    album=tags.get("album"),
+                    album_artist=tags.get("album_artist"),
+                    genre=tags.get("genre"),
+                    date=tags.get("date"),
+                    disc=tags.get("disc"),
+                    composer=tags.get("composer"),
                 )
             )
         elif codec_type == "subtitle":

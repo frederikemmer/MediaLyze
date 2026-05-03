@@ -319,6 +319,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "show_analyzed_files_csv_export": True,
             "show_full_width_app_shell": True,
             "hide_quality_score_meter": True,
+            "show_music_quality_score": False,
             "unlimited_panel_size": True,
             "in_depth_dolby_vision_profiles": True,
         },

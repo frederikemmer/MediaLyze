@@ -26,6 +26,7 @@ import { LruCache } from "../lib/lru-cache";
 import {
   getDashboardStatisticNumericDistribution,
   getDashboardStatisticPanelItems,
+  isLibraryStatisticDefinitionVisibleForLibraryType,
   LIBRARY_STATISTIC_DEFINITIONS,
   type LibraryStatisticDefinition,
 } from "../lib/library-statistics-settings";
@@ -44,7 +45,9 @@ import {
   type StatisticPanelLayoutId,
 } from "../lib/statistic-panel-layout";
 import {
+  getComparisonFieldDefinitionsForLibraryType,
   getComparisonSelection,
+  normalizeComparisonSelectionForLibraryType,
   sanitizeComparisonRenderer,
   saveComparisonSelection,
   type ComparisonSelection,
@@ -146,7 +149,17 @@ type VisibleDashboardPanel = {
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { appSettings, dashboard, dashboardLoaded, loadDashboard } = useAppData();
+  const { appSettings, dashboard, dashboardLoaded, libraries, loadDashboard } = useAppData();
+  const dashboardLibraryTypes = useMemo(
+    () => [...new Set(libraries.filter((library) => library.show_on_dashboard).map((library) => library.type))],
+    [libraries],
+  );
+  const effectiveDashboardLibraryType = dashboardLibraryTypes.length === 1 ? dashboardLibraryTypes[0] : null;
+  const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
+  const availableComparisonFields = useMemo(
+    () => getComparisonFieldDefinitionsForLibraryType(effectiveDashboardLibraryType, { showMusicQualityScore }),
+    [effectiveDashboardLibraryType, showMusicQualityScore],
+  );
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [error, setError] = useState<string | null>(null);
   const layoutOptions = useMemo(
@@ -196,10 +209,18 @@ export function DashboardPage() {
           if (!definition) {
             return null;
           }
+          if (
+            definition.kind === "statistic" &&
+            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, effectiveDashboardLibraryType, {
+              showMusicQualityScore,
+            })
+          ) {
+            return null;
+          }
           return { item, definition };
         })
         .filter((entry): entry is VisibleDashboardPanel => Boolean(entry)),
-    [activeLayout.items],
+    [activeLayout.items, effectiveDashboardLibraryType, showMusicQualityScore],
   );
   const comparisonPanels = useMemo(
     () => visiblePanels.filter((panel) => panel.item.statisticId === "comparison"),
@@ -217,15 +238,30 @@ export function DashboardPage() {
     () =>
       comparisonPanels
         .map(({ item }) => {
-          const selection = item.comparisonSelection ?? getComparisonSelection("dashboard");
+          const selection = normalizeComparisonSelectionForLibraryType(
+            item.comparisonSelection ?? getComparisonSelection("dashboard"),
+            effectiveDashboardLibraryType,
+            { showMusicQualityScore },
+          );
           return `${item.instanceId}:${selection.xField}:${selection.yField}`;
         })
         .join("|"),
-    [comparisonPanels],
+    [comparisonPanels, effectiveDashboardLibraryType, showMusicQualityScore],
   );
   const availablePanelDefinitions = useMemo(
-    () => getAvailableStatisticPanelDefinitions("dashboard", draftLayout),
-    [draftLayout],
+    () =>
+      getAvailableStatisticPanelDefinitions("dashboard", draftLayout).filter((definition) => {
+        const panelDefinition = dashboardLayoutPanelDefinitionMap.get(definition.id);
+        if (!panelDefinition || panelDefinition.kind !== "statistic") {
+          return true;
+        }
+        return isLibraryStatisticDefinitionVisibleForLibraryType(
+          panelDefinition.statisticDefinition,
+          effectiveDashboardLibraryType,
+          { showMusicQualityScore },
+        );
+      }),
+    [draftLayout, effectiveDashboardLibraryType, showMusicQualityScore],
   );
 
   useEffect(() => {
@@ -302,7 +338,11 @@ export function DashboardPage() {
     }
 
     for (const { item } of comparisonPanels) {
-      const selection = item.comparisonSelection ?? getComparisonSelection("dashboard");
+      const selection = normalizeComparisonSelectionForLibraryType(
+        item.comparisonSelection ?? getComparisonSelection("dashboard"),
+        effectiveDashboardLibraryType,
+        { showMusicQualityScore },
+      );
       const queryKey = buildComparisonQueryKey(selection);
       const cachedComparison = !force ? dashboardComparisonCache.get(queryKey) ?? null : null;
 
@@ -359,7 +399,11 @@ export function DashboardPage() {
         .catch((reason: Error) => setError(reason.message));
       void loadDashboardHistory(false);
       for (const { item } of comparisonPanels) {
-        const selection = item.comparisonSelection ?? getComparisonSelection("dashboard");
+        const selection = normalizeComparisonSelectionForLibraryType(
+          item.comparisonSelection ?? getComparisonSelection("dashboard"),
+          effectiveDashboardLibraryType,
+          { showMusicQualityScore },
+        );
         dashboardComparisonCache.delete(buildComparisonQueryKey(selection));
       }
       syncComparisonPanels(true);
@@ -399,10 +443,17 @@ export function DashboardPage() {
   }
 
   function updateComparisonSelection(instanceId: string, nextSelection: ComparisonSelection) {
-    const normalized = saveComparisonSelection("dashboard", {
-      ...nextSelection,
-      renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
-    });
+    const normalized = saveComparisonSelection(
+      "dashboard",
+      normalizeComparisonSelectionForLibraryType(
+        {
+          ...nextSelection,
+          renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
+        },
+        effectiveDashboardLibraryType,
+        { showMusicQualityScore },
+      ),
+    );
     updateLayout(
       (current) =>
         updateStatisticPanelLayoutComparisonSelection("dashboard", current, instanceId, normalized),
@@ -609,11 +660,16 @@ export function DashboardPage() {
                 />
               );
             } else if (panel.definition.statisticDefinition.panelKind === "comparison") {
-              const selection = panel.item.comparisonSelection ?? getComparisonSelection("dashboard");
+              const selection = normalizeComparisonSelectionForLibraryType(
+                panel.item.comparisonSelection ?? getComparisonSelection("dashboard"),
+                effectiveDashboardLibraryType,
+                { showMusicQualityScore },
+              );
               content = (
                 <ComparisonChartPanel
                   comparison={comparisonByPanel[panel.item.instanceId] ?? null}
                   selection={selection}
+                  availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
@@ -659,6 +715,10 @@ export function DashboardPage() {
               );
             } else {
               const statisticDefinition = panel.definition.statisticDefinition;
+              const panelTitle =
+                effectiveDashboardLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                  ? t("dashboard.formatsAndCodecs")
+                  : t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
                   ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition), {
@@ -678,7 +738,7 @@ export function DashboardPage() {
                   }));
               content = (
                 <AsyncPanel
-                  title={t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey)}
+                  title={panelTitle}
                   loading={!dashboard && !error}
                   error={error}
                   bodyClassName="async-panel-body-scroll"

@@ -62,6 +62,41 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
     assert normalized.subtitle_streams[0].subtitle_type == "text"
 
 
+def test_normalize_ffprobe_payload_extracts_music_tag_metadata() -> None:
+    payload = {
+        "format": {"format_name": "mp3"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "mp3",
+                "tags": {
+                    "title": "Song A",
+                    "artist": "Artist A",
+                    "album": "Album A",
+                    "album_artist": "Album Artist A",
+                    "genre": "Rock",
+                    "date": "2026",
+                    "disc": "1/2",
+                    "composer": "Composer A",
+                },
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+    stream = normalized.audio_streams[0]
+
+    assert stream.title == "Song A"
+    assert stream.artist == "Artist A"
+    assert stream.album == "Album A"
+    assert stream.album_artist == "Album Artist A"
+    assert stream.genre == "Rock"
+    assert stream.date == "2026"
+    assert stream.disc == "1/2"
+    assert stream.composer == "Composer A"
+
+
 def test_normalize_ffprobe_payload_extracts_spatial_audio_profiles() -> None:
     payload = {
         "format": {"format_name": "matroska"},

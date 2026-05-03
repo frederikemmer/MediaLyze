@@ -71,9 +71,25 @@ class AudioStreamRead(BaseModel):
     channel_layout: str | None
     sample_rate: int | None
     bit_rate: int | None
+    bit_depth: int | None = None
+    bit_rate_mode: str | None = None
+    compression_mode: str | None = None
+    replay_gain: str | None = None
+    replay_gain_peak: str | None = None
+    writing_library: str | None = None
+    md5_unencoded: str | None = None
     language: str | None
     default_flag: bool
     forced_flag: bool
+    # Music-specific metadata
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    album_artist: str | None = None
+    genre: str | None = None
+    date: str | None = None
+    disc: str | None = None
+    composer: str | None = None
 
 
 class SubtitleStreamRead(BaseModel):

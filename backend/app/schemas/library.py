@@ -9,6 +9,7 @@ from backend.app.schemas._time import UtcDateTime
 class LibraryCreate(BaseModel):
     name: str
     path: str
+    paths: list[str] = Field(default_factory=list)
     type: LibraryType
     scan_mode: ScanMode = ScanMode.manual
     duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.off

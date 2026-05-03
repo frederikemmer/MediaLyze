@@ -39,6 +39,7 @@ import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
+import { shouldShowField } from "../lib/media-fields-catalog";
 import {
   api,
   type ComparisonResponse,
@@ -76,6 +77,7 @@ import {
   buildDefaultLibraryStatisticsSettings,
   cloneLibraryStatisticsSettings,
   getEnabledLibraryStatisticTableTooltipColumns,
+  isLibraryStatisticDefinitionVisibleForLibraryType,
   LIBRARY_STATISTIC_DEFINITIONS,
   getLibraryStatisticNumericDistribution,
   getLibraryStatisticPanelItems,
@@ -87,7 +89,9 @@ import {
 } from "../lib/library-statistics-settings";
 import { buildNumericDistributionFilterExpression } from "../lib/numeric-distributions";
 import {
+  getComparisonFieldDefinitionsForLibraryType,
   getComparisonSelection,
+  normalizeComparisonSelectionForLibraryType,
   sanitizeComparisonRenderer,
   saveComparisonSelection,
   type ComparisonSelection,
@@ -701,8 +705,10 @@ export function buildFileColumns(
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
   hideQualityScoreMeter: boolean,
+  libraryType?: string | null,
   inDepthDolbyVisionProfiles = false,
 ): FileColumnDefinition[] {
+  const audioCodecsLabelKey = libraryType === "music" ? "fileTable.formatsAndCodecs" : "fileTable.audioCodecs";
   function textOrNa(value: string | null | undefined): string {
     return value ? value : t("fileTable.na");
   }
@@ -868,7 +874,7 @@ export function buildFileColumns(
     },
     {
       key: "audio_codecs",
-      labelKey: "fileTable.audioCodecs",
+      labelKey: audioCodecsLabelKey,
       sizing: { mode: "content", minPx: 132, maxPx: 220 },
       measureValue: (row) =>
         renderCompactValue(
@@ -1393,6 +1399,8 @@ export function LibraryDetailPage() {
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
+  const activeLibraryType = displayLibrary?.type;
+  const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
   const supportsSeriesGrouping = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
@@ -1435,12 +1443,17 @@ export function LibraryDetailPage() {
     }
   });
   const tooltipEnabledColumns = useMemo(
-    () => new Set<FileColumnKey>(getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings)),
-    [savedTableViewSettings],
+    () =>
+      new Set<FileColumnKey>(
+        getEnabledLibraryStatisticTableTooltipColumns(savedTableViewSettings, activeLibraryType, {
+          showMusicQualityScore,
+        }),
+      ),
+    [savedTableViewSettings, activeLibraryType, showMusicQualityScore],
   );
   const fileColumns = useMemo(
-    () =>
-      buildFileColumns(
+    () => {
+      const allColumns = buildFileColumns(
         t,
         qualityScoreDetails,
         qualityScoreLoading,
@@ -1450,8 +1463,20 @@ export function LibraryDetailPage() {
         loadStreamDetail,
         tooltipEnabledColumns,
         hideQualityScoreMeter,
+        activeLibraryType,
         inDepthDolbyVisionProfiles,
-      ),
+      );
+      // Filter columns by library type
+      if (activeLibraryType) {
+        return allColumns.filter((col) => {
+          if (activeLibraryType === "music" && col.key === "quality_score" && !showMusicQualityScore) {
+            return false;
+          }
+          return shouldShowField(col.key, activeLibraryType);
+        });
+      }
+      return allColumns;
+    },
     [
       hideQualityScoreMeter,
       inDepthDolbyVisionProfiles,
@@ -1463,13 +1488,19 @@ export function LibraryDetailPage() {
       streamDetailsLoading,
       t,
       tooltipEnabledColumns,
+      activeLibraryType,
+      showMusicQualityScore,
     ],
   );
   const baseSearchConfig = useMemo(() => getLibraryFileSearchConfig("file"), []);
   const BaseSearchIcon = baseSearchConfig.icon;
   const visibleStatisticColumns = useMemo(
-    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings),
-    [savedTableViewSettings],
+    () => getVisibleLibraryStatisticTableColumns(savedTableViewSettings, activeLibraryType, { showMusicQualityScore }),
+    [savedTableViewSettings, activeLibraryType, showMusicQualityScore],
+  );
+  const availableComparisonFields = useMemo(
+    () => getComparisonFieldDefinitionsForLibraryType(activeLibraryType, { showMusicQualityScore }),
+    [activeLibraryType, showMusicQualityScore],
   );
   const visibleLayoutPanels = useMemo(
     () =>
@@ -1479,10 +1510,18 @@ export function LibraryDetailPage() {
           if (!definition) {
             return null;
           }
+          if (
+            definition.kind === "statistic" &&
+            !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType, {
+              showMusicQualityScore,
+            })
+          ) {
+            return null;
+          }
           return { item, definition };
         })
         .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
-    [activeStatisticLayout.items],
+    [activeStatisticLayout.items, activeLibraryType, showMusicQualityScore],
   );
   const visibleLibraryStatisticPanelIds = useMemo(
     () =>
@@ -1508,14 +1547,26 @@ export function LibraryDetailPage() {
       comparisonPanels
         .map(({ item }) => {
           const selection = item.comparisonSelection ?? getComparisonSelection("library");
-          return `${item.instanceId}:${selection.xField}:${selection.yField}`;
+          const normalizedSelection = normalizeComparisonSelectionForLibraryType(selection, activeLibraryType, {
+            showMusicQualityScore,
+          });
+          return `${item.instanceId}:${normalizedSelection.xField}:${normalizedSelection.yField}`;
         })
         .join("|"),
-    [comparisonPanels],
+    [comparisonPanels, activeLibraryType, showMusicQualityScore],
   );
   const availableStatisticPanelDefinitions = useMemo(
-    () => getAvailableStatisticPanelDefinitions("library", draftStatisticLayout),
-    [draftStatisticLayout],
+    () =>
+      getAvailableStatisticPanelDefinitions("library", draftStatisticLayout).filter((definition) => {
+        const panelDefinition = libraryLayoutPanelDefinitionMap.get(definition.id);
+        if (!panelDefinition || panelDefinition.kind !== "statistic") {
+          return true;
+        }
+        return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType, {
+          showMusicQualityScore,
+        });
+      }),
+    [draftStatisticLayout, activeLibraryType, showMusicQualityScore],
   );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
@@ -2501,7 +2552,11 @@ export function LibraryDetailPage() {
     }
 
     for (const { item } of comparisonPanels) {
-      const selection = item.comparisonSelection ?? getComparisonSelection("library");
+      const selection = normalizeComparisonSelectionForLibraryType(
+        item.comparisonSelection ?? getComparisonSelection("library"),
+        activeLibraryType,
+        { showMusicQualityScore },
+      );
       const queryKey = buildLibraryComparisonQueryKey(libraryId, selection);
       const cachedComparison = !force ? libraryComparisonCache.get(queryKey) ?? null : null;
 
@@ -2692,7 +2747,11 @@ export function LibraryDetailPage() {
       libraryStatisticsCache.delete(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
       libraryHistoryCache.delete(libraryId);
       for (const { item } of comparisonPanels) {
-        const selection = item.comparisonSelection ?? getComparisonSelection("library");
+        const selection = normalizeComparisonSelectionForLibraryType(
+          item.comparisonSelection ?? getComparisonSelection("library"),
+          activeLibraryType,
+          { showMusicQualityScore },
+        );
         libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
       }
       libraryDuplicateGroupsCache.delete(libraryId);
@@ -2714,6 +2773,7 @@ export function LibraryDetailPage() {
     hadActiveJobRef.current = Boolean(activeJob);
   }, [
     activeJob,
+    activeLibraryType,
     comparisonPanelsKey,
     fileQueryKey,
     groupedAnalyzedFilesEnabled,
@@ -2801,10 +2861,17 @@ export function LibraryDetailPage() {
   }
 
   function updateComparisonSelection(instanceId: string, nextSelection: ComparisonSelection) {
-    const normalized = saveComparisonSelection("library", {
-      ...nextSelection,
-      renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
-    });
+    const normalized = saveComparisonSelection(
+      "library",
+      normalizeComparisonSelectionForLibraryType(
+        {
+          ...nextSelection,
+          renderer: sanitizeComparisonRenderer(nextSelection.xField, nextSelection.yField, nextSelection.renderer),
+        },
+        activeLibraryType,
+        { showMusicQualityScore },
+      ),
+    );
     updateStatisticLayout(
       (current) =>
         updateStatisticPanelLayoutComparisonSelection("library", current, instanceId, normalized),
@@ -3014,11 +3081,16 @@ export function LibraryDetailPage() {
 
             let content: ReactNode;
             if (panel.definition.kind === "statistic" && panel.definition.statisticDefinition.panelKind === "comparison") {
-              const selection = panel.item.comparisonSelection ?? getComparisonSelection("library");
+              const selection = normalizeComparisonSelectionForLibraryType(
+                panel.item.comparisonSelection ?? getComparisonSelection("library"),
+                activeLibraryType,
+                { showMusicQualityScore },
+              );
               content = (
                 <ComparisonChartPanel
                   comparison={comparisonByPanel[panel.item.instanceId] ?? null}
                   selection={selection}
+                  availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
@@ -3079,6 +3151,10 @@ export function LibraryDetailPage() {
               }
             } else if (panel.definition.kind === "statistic") {
               const statisticDefinition = panel.definition.statisticDefinition;
+              const panelTitle =
+                activeLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                  ? t("libraryDetail.formatsAndCodecs")
+                  : t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
                   ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition), {
@@ -3116,7 +3192,7 @@ export function LibraryDetailPage() {
               });
               content = (
                 <AsyncPanel
-                  title={t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey)}
+                  title={panelTitle}
                   loading={isStatisticsLoading && !libraryStatistics && !statisticsError}
                   error={statisticsError}
                   bodyClassName="async-panel-body-scroll"

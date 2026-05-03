@@ -23,6 +23,8 @@ export type NumericDistribution = {
   bins: NumericDistributionBin[];
 };
 
+type ScanConfigValue = string | number;
+
 export type ComparisonFieldId =
   | "size"
   | "duration"
@@ -192,7 +194,7 @@ export type QualityBreakdown = {
 };
 
 export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
-export type LibraryType = "movies" | "series" | "mixed" | "other";
+export type LibraryType = "movies" | "series" | "music" | "mixed" | "other";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
@@ -226,9 +228,9 @@ export type LibrarySummary = {
   path: string;
   type: LibraryType;
   last_scan_at: string | null;
-  scan_mode: "manual" | "scheduled" | "watch";
+  scan_mode: "manual" | "scheduled" | "scheduled_daily" | "watch";
   duplicate_detection_mode: DuplicateDetectionMode;
-  scan_config: Record<string, number>;
+  scan_config: Record<string, ScanConfigValue>;
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
@@ -316,9 +318,24 @@ export type AudioStream = {
   channel_layout: string | null;
   sample_rate: number | null;
   bit_rate: number | null;
+  bit_depth?: number | null;
+  bit_rate_mode?: string | null;
+  compression_mode?: string | null;
+  replay_gain?: string | null;
+  replay_gain_peak?: string | null;
+  writing_library?: string | null;
+  md5_unencoded?: string | null;
   language: string | null;
   default_flag: boolean;
   forced_flag: boolean;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  album_artist?: string | null;
+  genre?: string | null;
+  date?: string | null;
+  disc?: string | null;
+  composer?: string | null;
 };
 
 export type SubtitleStream = {
@@ -564,6 +581,7 @@ export type AppSettings = {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
     hide_quality_score_meter: boolean;
+    show_music_quality_score: boolean;
     unlimited_panel_size: boolean;
     in_depth_dolby_vision_profiles: boolean;
   };
@@ -1060,6 +1078,7 @@ export const api = {
       show_analyzed_files_csv_export?: boolean;
       show_full_width_app_shell?: boolean;
       hide_quality_score_meter?: boolean;
+      show_music_quality_score?: boolean;
       unlimited_panel_size?: boolean;
       in_depth_dolby_vision_profiles?: boolean;
     };
@@ -1071,10 +1090,11 @@ export const api = {
   createLibrary: (payload: {
     name: string;
     path: string;
+    paths?: string[];
     type: LibraryType;
     scan_mode: string;
     duplicate_detection_mode?: DuplicateDetectionMode;
-    scan_config?: Record<string, number>;
+    scan_config?: Record<string, ScanConfigValue>;
     quality_profile?: QualityProfile;
     show_on_dashboard?: boolean;
   }) =>
@@ -1089,7 +1109,7 @@ export const api = {
       type?: LibraryType;
       scan_mode?: string;
       duplicate_detection_mode?: DuplicateDetectionMode;
-      scan_config?: Record<string, number>;
+      scan_config?: Record<string, ScanConfigValue>;
       quality_profile?: QualityProfile;
       show_on_dashboard?: boolean;
     },

@@ -25,6 +25,7 @@ class TimestampMixin:
 class LibraryType(str, Enum):
     movies = "movies"
     series = "series"
+    music = "music"
     mixed = "mixed"
     other = "other"
 
@@ -32,6 +33,7 @@ class LibraryType(str, Enum):
 class ScanMode(str, Enum):
     manual = "manual"
     scheduled = "scheduled"
+    scheduled_daily = "scheduled_daily"
     watch = "watch"
 
 
@@ -349,9 +351,25 @@ class AudioStream(Base):
     channel_layout: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bit_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bit_rate_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    compression_mode: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    replay_gain: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    replay_gain_peak: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    writing_library: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    md5_unencoded: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     default_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     forced_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Music-specific metadata
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    artist: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    album: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    album_artist: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    genre: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    disc: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    composer: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     media_file: Mapped[MediaFile] = relationship(back_populates="audio_streams")
 

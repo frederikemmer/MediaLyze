@@ -27,6 +27,7 @@
     "resolutions": "Auflösungen",
     "hdrCoverage": "HDR-Abdeckung",
     "audioCodecs": "Audio-Codecs",
+    "formatsAndCodecs": "Formate & Codecs",
     "containers": "Container",
     "sizeDistribution": "Dateigroesse",
     "durationDistribution": "Dauer",
@@ -91,6 +92,9 @@
     },
     "intervalMinutes": "Intervall in Minuten",
     "debounceSeconds": "Debounce in Sekunden",
+    "scheduledTime": "Scan-Uhrzeit",
+    "scheduledTimeTooltipAria": "Geplante Scan-Uhrzeit erklaeren",
+    "scheduledTimeTooltip": "Lege die Uhrzeit fest, zu der der taegliche Scan startet. Verwende das 24-Stunden-Format (HH:MM), z. B. 02:00 oder 14:30.\n\nStelle sicher, dass die Umgebungsvariable TZ in deiner docker-compose- oder env-Datei korrekt gesetzt ist, damit der Scan zur gewuenschten Ortszeit laeuft.",
     "watchUnavailableNetwork": "Der Watch-Modus ist nur fuer lokale Pfade verfuegbar. MediaLyze faellt fuer Netzwerkpfade auf geplante Scans zurueck.",
     "scanNow": "Manueller Scan",
     "scanNowTooltip": "Einen inkrementellen Scan einreihen",
@@ -218,6 +222,7 @@
       "showAnalyzedFilesCsvExport": "CSV-Export bei analysierten Dateien anzeigen",
       "showFullWidthAppShell": "App-Shell auf volle Breite erweitern",
       "hideQualityScoreMeter": "Qualitäts-Score-Meter ausblenden",
+      "showMusicQualityScore": "Qualitäts-Score in Musik-Bibliotheken anzeigen",
       "unlimitedPanelSize": "Unbegrenzte Panel-Groesse",
       "inDepthDolbyVisionProfiles": "Detaillierte Dolby-Vision-Profile",
       "showAnalyzedFilesCsvExportTooltipAria": "Feature Flag fuer den CSV-Export erklaeren",
@@ -226,6 +231,8 @@
       "showFullWidthAppShellTooltip": "Erweitert den Hauptcontainer .media-app-shell von seiner Standard-Maximalbreite auf die volle verfuegbare Seitenbreite.",
       "hideQualityScoreMeterTooltipAria": "Feature Flag fuer die Sichtbarkeit des Qualitäts-Score-Meters erklaeren",
       "hideQualityScoreMeterTooltip": "Blendet das balkenartige Score-Meter in der Tabelle der analysierten Dateien aus, laesst den numerischen Qualitäts-Score aber sichtbar.",
+      "showMusicQualityScoreTooltipAria": "Feature Flag fuer Qualitaets-Score in Musik-Bibliotheken erklaeren",
+      "showMusicQualityScoreTooltip": "Zeigt Qualitaets-Score-Metriken in reinen Musik-Bibliotheken an. Standardmaessig deaktiviert, da die aktuelle Bewertung vorrangig auf videozentrierte Qualitaetskategorien ausgelegt ist.",
       "unlimitedPanelSizeTooltipAria": "Feature Flag fuer unbegrenzte Panel-Groesse erklaeren",
       "unlimitedPanelSizeTooltip": "Hebt die aktuelle Begrenzung von 4 Reihen fuer Statistik-Panels im Dashboard und auf Bibliotheksseiten auf. Die Panel-Breite bleibt weiterhin durch das zugrunde liegende Grid begrenzt.",
       "inDepthDolbyVisionProfilesTooltipAria": "Anzeige detaillierter Dolby-Vision-Profile erklaeren",
@@ -321,12 +328,14 @@
   "libraryTypes": {
     "movies": "Filme",
     "series": "Serien",
+    "music": "Musik (alpha)",
     "mixed": "Gemischt",
     "other": "Andere"
   },
   "scanModes": {
     "manual": "Manuell",
-    "scheduled": "Geplant",
+    "scheduled": "Zeitintervall",
+    "scheduled_daily": "Geplant",
     "watch": "Überwacht"
   },
   "sort": {
@@ -353,6 +362,7 @@
     "audioBitrateDistribution": "Audio-Bitrate",
     "comparisonPanel": "Metrikvergleich",
     "audioCodecs": "Audio-Codecs",
+    "formatsAndCodecs": "Formate & Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "Untertitel-Sprachen",
@@ -597,6 +607,7 @@
     "triggerWatchdog": "Watchdog",
     "triggerManualSummary": "Manuell durch den Benutzer ausgelöst.",
     "triggerScheduledSummary": "Durch das geplante Intervall alle {{minutes}} Minuten ausgelöst.",
+    "triggerScheduledDailySummary": "Durch den taeglichen Zeitplan um {{time}} Uhr ausgeloest.",
     "triggerWatchdogSummary": "Nach {{count}} Watchdog-Dateisystemereignissen ausgelöst.",
     "outcomeSuccessful": "Erfolgreich",
     "outcomeCompletedWithIssues": "Abgeschlossen mit Problemen",
@@ -648,6 +659,7 @@
     "bitrate": "Bitrate",
     "audioBitrate": "Audio-Bitrate",
     "audioCodecs": "Audio-Codecs",
+    "formatsAndCodecs": "Formate & Codecs",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
     "subtitleLanguages": "UT-Sprachen",
@@ -702,7 +714,10 @@
   },
   "pathBrowser": {
     "selected": "Ausgewählt",
-    "up": "Hoch"
+    "up": "Hoch",
+    "addCurrent": "Aktuellen Ordner hinzufügen",
+    "remove": "Entfernen",
+    "noneSelected": "Keine Ordner ausgewählt"
   },
   "language": {
     "en": "English",
