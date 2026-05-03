@@ -328,7 +328,7 @@
   "libraryTypes": {
     "movies": "Movies",
     "series": "Shows",
-    "music": "Music",
+    "music": "Music (alpha)",
     "mixed": "Mixed",
     "other": "Other"
   },

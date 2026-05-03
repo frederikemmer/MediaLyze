@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.0
+
+>2026-05-03
+
 ### ✨ New
 
 - add **Music** library type and basic audio-file support for `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, and `.wma` files ([#76](https://github.com/frederikemmer/MediaLyze/issues/76))
