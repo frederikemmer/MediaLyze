@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - add a new app feature flag to optionally show quality-score metrics in pure music libraries; by default these metrics remain hidden in music-only contexts
 - rename the music-context audio-codec metric label to **Formats & Codecs** in library and dashboard views
 
+### 🐛 Bug fixes
+
+- fix backend startup failure on Python 3.12 where `NormalizedAudioStream` dataclass field ordering triggered `TypeError: non-default argument 'language' follows default argument`, which could prevent Docker containers from starting
+
 ## v0.9.1
 
 >2026-04-30
