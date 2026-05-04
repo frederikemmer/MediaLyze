@@ -23,6 +23,39 @@ function packagedFfprobeCandidates(resourcesPath, platform = process.platform) {
   ];
 }
 
+function packagedFfprobeLibraryCandidates(resourcesPath) {
+  return [
+    path.join(resourcesPath, "backend", "ffprobe", "lib"),
+    path.join(resourcesPath, "ffprobe", "lib"),
+  ];
+}
+
+function resolveFfprobeLibraryPath({
+  isPackaged,
+  resourcesPath,
+  platform = process.platform,
+  exists = existsSync,
+} = {}) {
+  if (!isPackaged || platform !== "linux" || !resourcesPath) {
+    return null;
+  }
+
+  for (const candidate of packagedFfprobeLibraryCandidates(resourcesPath)) {
+    if (exists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function prependLibraryPath(libraryPath, existingValue) {
+  if (!libraryPath) {
+    return existingValue;
+  }
+  return [libraryPath, existingValue].filter(Boolean).join(":");
+}
+
 function resolveFfprobePath({
   isPackaged,
   resourcesPath,
@@ -52,6 +85,9 @@ function resolveFfprobePath({
 
 module.exports = {
   bundledFfprobeName,
+  packagedFfprobeLibraryCandidates,
   packagedFfprobeCandidates,
+  prependLibraryPath,
+  resolveFfprobeLibraryPath,
   resolveFfprobePath,
 };

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.1
+
+>2026-05-04
+
+- bundle Linux desktop `ffprobe` shared-library dependencies into AppImage builds and load them at runtime so scans no longer fail when the host distribution has incompatible FFmpeg library versions ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+
 ## v0.10.0
 
 >2026-05-03
