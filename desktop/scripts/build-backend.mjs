@@ -144,6 +144,97 @@ export function parseOtoolRpaths(stdout) {
   return rpaths;
 }
 
+export function parseLddDependencies(stdout) {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const linkedMatch = line.match(/^[^\s]+ => (\/[^\s]+) \(/);
+      if (linkedMatch) {
+        return linkedMatch[1];
+      }
+      const directMatch = line.match(/^(\/[^\s]+) \(/);
+      if (directMatch) {
+        return directMatch[1];
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function defaultInspectElfBinary(binaryPath) {
+  const dependencyResult = runCommand("ldd", [binaryPath]);
+  return {
+    dependencies: parseLddDependencies(dependencyResult.stdout ?? ""),
+  };
+}
+
+function isLinuxRuntimeDependency(candidate, pathLib = path) {
+  const basename = pathLib.basename(candidate);
+  return (
+    basename.startsWith("ld-linux") ||
+    /^lib(c|m|dl|pthread|rt|resolv|nsl|util|gcc_s)\.so/.test(basename)
+  );
+}
+
+export function bundleLinuxFfprobeDependencies(
+  bundleDir,
+  executablePath,
+  {
+    copy = cpSync,
+    exists = existsSync,
+    inspectBinary = defaultInspectElfBinary,
+    mkdir = mkdirSync,
+    pathLib = path,
+    realpath = realpathSync,
+    sourceExecutablePath = executablePath,
+  } = {}
+) {
+  const libDir = pathLib.join(bundleDir, "lib");
+  const pendingBinaries = [sourceExecutablePath];
+  const inspected = new Set();
+  const copiedLibraries = new Map();
+
+  while (pendingBinaries.length > 0) {
+    const sourcePath = pendingBinaries.pop();
+    const realSourcePath = realpath(sourcePath);
+    if (inspected.has(realSourcePath)) {
+      continue;
+    }
+    inspected.add(realSourcePath);
+
+    const inspection = inspectBinary(sourcePath);
+    for (const dependency of inspection.dependencies) {
+      if (isLinuxRuntimeDependency(dependency, pathLib) || !exists(dependency)) {
+        continue;
+      }
+
+      const realDependency = realpath(dependency);
+      if (copiedLibraries.has(realDependency)) {
+        continue;
+      }
+
+      mkdir(libDir, { recursive: true });
+      const bundledDependency = pathLib.join(
+        libDir,
+        pathLib.basename(realDependency)
+      );
+      copy(realDependency, bundledDependency);
+      copiedLibraries.set(realDependency, bundledDependency);
+      pendingBinaries.push(realDependency);
+    }
+  }
+
+  for (const bundledDependency of copiedLibraries.values()) {
+    if (!exists(bundledDependency)) {
+      throw new Error(
+        `Bundled ffprobe dependency missing after copy: ${bundledDependency}`
+      );
+    }
+  }
+}
+
 function defaultInspectMachOBinary(binaryPath) {
   const dependencyResult = runCommand("otool", ["-L", binaryPath]);
   const loadCommandResult = runCommand("otool", ["-l", binaryPath]);
@@ -362,8 +453,15 @@ export function bundleFfprobe(outputPath, options = {}) {
   if (source.kind === "directory") {
     cpSync(source.sourcePath, targetDir, { recursive: true });
     const bundledExecutable = path.join(targetDir, source.executableName);
-    if ((options.platform ?? process.platform) === "darwin") {
+    const platform = options.platform ?? process.platform;
+    if (platform === "darwin") {
       bundleMacosFfprobeDependencies(targetDir, bundledExecutable, {
+        ...options,
+        sourceExecutablePath: path.join(source.sourcePath, source.executableName),
+      });
+    }
+    if (platform === "linux") {
+      bundleLinuxFfprobeDependencies(targetDir, bundledExecutable, {
         ...options,
         sourceExecutablePath: path.join(source.sourcePath, source.executableName),
       });
@@ -379,8 +477,15 @@ export function bundleFfprobe(outputPath, options = {}) {
     sourceExecutable,
     targetExecutable
   );
-  if ((options.platform ?? process.platform) === "darwin") {
+  const platform = options.platform ?? process.platform;
+  if (platform === "darwin") {
     bundleMacosFfprobeDependencies(targetDir, targetExecutable, {
+      ...options,
+      sourceExecutablePath: sourceExecutable,
+    });
+  }
+  if (platform === "linux") {
+    bundleLinuxFfprobeDependencies(targetDir, targetExecutable, {
       ...options,
       sourceExecutablePath: sourceExecutable,
     });

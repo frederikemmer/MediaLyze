@@ -23,6 +23,46 @@ function packagedFfprobeCandidates(resourcesPath, platform = process.platform) {
   ];
 }
 
+function packagedFfprobeLibraryCandidates(resourcesPath) {
+  return [
+    path.join(resourcesPath, "backend", "ffprobe", "lib"),
+    path.join(resourcesPath, "ffprobe", "lib"),
+  ];
+}
+
+function resolveFfprobeLibraryPath({
+  isPackaged,
+  resourcesPath,
+  platform = process.platform,
+  exists = existsSync,
+} = {}) {
+  if (!isPackaged || platform !== "linux" || !resourcesPath) {
+    return null;
+  }
+
+  for (const candidate of packagedFfprobeLibraryCandidates(resourcesPath)) {
+    if (exists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function prependLibraryPath(libraryPath, existingValue) {
+  if (!libraryPath) {
+    return existingValue;
+  }
+  return [libraryPath, existingValue].filter(Boolean).join(":");
+}
+
+function isPackagedFfprobePath(candidate, resourcesPath, platform = process.platform) {
+  if (!candidate || !resourcesPath) {
+    return false;
+  }
+  return packagedFfprobeCandidates(resourcesPath, platform).includes(candidate);
+}
+
 function resolveFfprobePath({
   isPackaged,
   resourcesPath,
@@ -50,8 +90,47 @@ function resolveFfprobePath({
   return "ffprobe";
 }
 
+function resolveFfprobeEnvironment({
+  isPackaged,
+  resourcesPath,
+  env = process.env,
+  platform = process.platform,
+  exists = existsSync,
+} = {}) {
+  const ffprobePath = resolveFfprobePath({
+    isPackaged,
+    resourcesPath,
+    env,
+    platform,
+    exists,
+  });
+  const resolvedEnv = {
+    FFPROBE_PATH: ffprobePath,
+  };
+
+  if (isPackagedFfprobePath(ffprobePath, resourcesPath, platform)) {
+    const libraryPath = resolveFfprobeLibraryPath({
+      isPackaged,
+      resourcesPath,
+      platform,
+      exists,
+    });
+    const ldLibraryPath = prependLibraryPath(libraryPath, env.LD_LIBRARY_PATH);
+    if (ldLibraryPath) {
+      resolvedEnv.LD_LIBRARY_PATH = ldLibraryPath;
+    }
+  }
+
+  return resolvedEnv;
+}
+
 module.exports = {
   bundledFfprobeName,
+  isPackagedFfprobePath,
+  packagedFfprobeLibraryCandidates,
   packagedFfprobeCandidates,
+  prependLibraryPath,
+  resolveFfprobeEnvironment,
+  resolveFfprobeLibraryPath,
   resolveFfprobePath,
 };

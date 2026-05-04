@@ -105,6 +105,42 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Linux AppImage ffprobe bundle
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="dist/desktop-app/MediaLyze.AppImage"
+          chmod +x "$appimage"
+          rm -rf squashfs-root
+          "$appimage" --appimage-extract >/dev/null
+
+          ffprobe_dir="squashfs-root/resources/backend/ffprobe"
+          ffprobe_bin="$ffprobe_dir/ffprobe"
+          ffprobe_lib="$ffprobe_dir/lib"
+
+          if [[ ! -x "$ffprobe_bin" ]]; then
+            echo "Bundled ffprobe executable is missing from AppImage: $ffprobe_bin" >&2
+            exit 1
+          fi
+
+          if [[ ! -d "$ffprobe_lib" ]]; then
+            echo "Bundled ffprobe library directory is missing from AppImage: $ffprobe_lib" >&2
+            exit 1
+          fi
+
+          if ! find "$ffprobe_lib" -maxdepth 1 -type f -name 'libavdevice.so*' | grep -q .; then
+            echo "Bundled ffprobe library directory does not contain libavdevice.so*" >&2
+            find "$ffprobe_lib" -maxdepth 1 -type f -printf '%f\n' >&2
+            exit 1
+          fi
+
+          if LD_LIBRARY_PATH="$PWD/$ffprobe_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$ffprobe_bin" | grep -q 'not found'; then
+            echo "Bundled ffprobe still has unresolved shared-library dependencies." >&2
+            LD_LIBRARY_PATH="$PWD/$ffprobe_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$ffprobe_bin" >&2
+            exit 1
+          fi
+
       - name: Upload Linux desktop artifact
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4

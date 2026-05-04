@@ -3,7 +3,9 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { resolveFfprobePath } = require("./ffprobe-paths.cjs");
+const {
+  resolveFfprobeEnvironment,
+} = require("./ffprobe-paths.cjs");
 
 let mainWindow = null;
 let backendProcess = null;
@@ -115,21 +117,23 @@ function startBackend(port) {
   const launch = resolveBackendCommand();
   const configPath = app.getPath("userData");
   const isPackagedWindows = app.isPackaged && process.platform === "win32";
+  const backendEnv = {
+    ...process.env,
+    MEDIALYZE_RUNTIME: "desktop",
+    APP_HOST: "127.0.0.1",
+    APP_PORT: String(port),
+    CONFIG_PATH: configPath,
+    FRONTEND_DIST_PATH: resolveFrontendDistPath(),
+    ...resolveFfprobeEnvironment({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+    }),
+    PYTHONUNBUFFERED: "1",
+  };
+
   backendProcess = spawn(launch.command, launch.args, {
     cwd: launch.cwd,
-    env: {
-      ...process.env,
-      MEDIALYZE_RUNTIME: "desktop",
-      APP_HOST: "127.0.0.1",
-      APP_PORT: String(port),
-      CONFIG_PATH: configPath,
-      FRONTEND_DIST_PATH: resolveFrontendDistPath(),
-      FFPROBE_PATH: resolveFfprobePath({
-        isPackaged: app.isPackaged,
-        resourcesPath: process.resourcesPath,
-      }),
-      PYTHONUNBUFFERED: "1",
-    },
+    env: backendEnv,
     stdio: isPackagedWindows ? "ignore" : "inherit",
     windowsHide: isPackagedWindows,
   });
