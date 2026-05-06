@@ -163,10 +163,22 @@ jobs:
 
           ffprobe_dir="squashfs-root/resources/backend/ffprobe"
           ffprobe_bin="$ffprobe_dir/ffprobe"
+          ffprobe_launcher="$ffprobe_dir/ffprobe-medialyze"
           ffprobe_lib="$ffprobe_dir/lib"
 
           if [[ ! -x "$ffprobe_bin" ]]; then
             echo "Bundled ffprobe executable is missing from AppImage: $ffprobe_bin" >&2
+            exit 1
+          fi
+
+          if [[ ! -x "$ffprobe_launcher" ]]; then
+            echo "Bundled ffprobe launcher is missing from AppImage: $ffprobe_launcher" >&2
+            exit 1
+          fi
+
+          if ! grep -q 'LD_LIBRARY_PATH="$SELF_DIR/lib' "$ffprobe_launcher"; then
+            echo "Bundled ffprobe launcher does not set LD_LIBRARY_PATH from its own lib directory." >&2
+            sed -n '1,40p' "$ffprobe_launcher" >&2
             exit 1
           fi
 
@@ -186,6 +198,8 @@ jobs:
             LD_LIBRARY_PATH="$PWD/$ffprobe_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$ffprobe_bin" >&2
             exit 1
           fi
+
+          "$ffprobe_launcher" -version >/dev/null
 
       - name: Upload desktop asset to GitHub release
         shell: bash

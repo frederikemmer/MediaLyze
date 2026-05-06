@@ -15,11 +15,13 @@ import {
   bundleLinuxFfprobeDependencies,
   bundleMacosFfprobeDependencies,
   bundleFfprobe,
+  bundledFfprobeLauncherName,
   bundledFfprobeName,
   parseLddDependencies,
   parseOtoolDependencies,
   parseOtoolRpaths,
   resolveBundledFfprobeSource,
+  writeLinuxFfprobeLauncher,
 } from "./build-backend.mjs";
 
 function withTempDir(fn) {
@@ -126,6 +128,29 @@ test("bundleFfprobe includes Linux ffprobe shared-library dependencies", () => {
       readFileSync(path.join(outputDir, "ffprobe", "lib", "libavdevice.so.60"), "utf8"),
       "avdevice"
     );
+    assert.equal(
+      existsSync(path.join(outputDir, "ffprobe", bundledFfprobeLauncherName("linux"))),
+      true
+    );
+  });
+});
+
+test("writeLinuxFfprobeLauncher writes executable wrapper with bundled library path", () => {
+  withTempDir((tempDir) => {
+    const bundleDir = path.join(tempDir, "ffprobe");
+    mkdirSync(bundleDir, { recursive: true });
+    const chmodCalls = [];
+    const launcherPath = writeLinuxFfprobeLauncher(bundleDir, "ffprobe", {
+      chmod: (...args) => {
+        chmodCalls.push(args);
+      },
+    });
+
+    const content = readFileSync(launcherPath, "utf8");
+    assert.equal(path.basename(launcherPath), bundledFfprobeLauncherName("linux"));
+    assert.match(content, /LD_LIBRARY_PATH="\$SELF_DIR\/lib/);
+    assert.match(content, /exec "\$SELF_DIR\/ffprobe" "\$@"/);
+    assert.deepEqual(chmodCalls, [[launcherPath, 0o755]]);
   });
 });
 

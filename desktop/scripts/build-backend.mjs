@@ -1,10 +1,12 @@
 import {
   cpSync,
   existsSync,
+  chmodSync,
   mkdirSync,
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +21,10 @@ const specDir = path.join(repoRoot, "dist", "pyinstaller-spec");
 
 export function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
+}
+
+export function bundledFfprobeLauncherName(platform = process.platform) {
+  return platform === "linux" ? "ffprobe-medialyze" : bundledFfprobeName(platform);
 }
 
 function runCommand(command, args, options = {}) {
@@ -233,6 +239,30 @@ export function bundleLinuxFfprobeDependencies(
       );
     }
   }
+}
+
+export function writeLinuxFfprobeLauncher(
+  bundleDir,
+  executableName = bundledFfprobeName("linux"),
+  {
+    chmod = chmodSync,
+    pathLib = path,
+    writeFile = writeFileSync,
+  } = {}
+) {
+  const launcherName = bundledFfprobeLauncherName("linux");
+  const launcherPath = pathLib.join(bundleDir, launcherName);
+  writeFile(
+    launcherPath,
+    `#!/bin/sh
+set -eu
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export LD_LIBRARY_PATH="$SELF_DIR/lib\${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$SELF_DIR/${executableName}" "$@"
+`
+  );
+  chmod(launcherPath, 0o755);
+  return launcherPath;
 }
 
 function defaultInspectMachOBinary(binaryPath) {
@@ -465,6 +495,7 @@ export function bundleFfprobe(outputPath, options = {}) {
         ...options,
         sourceExecutablePath: path.join(source.sourcePath, source.executableName),
       });
+      writeLinuxFfprobeLauncher(targetDir, source.executableName, options);
     }
     return bundledExecutable;
   }
@@ -489,6 +520,7 @@ export function bundleFfprobe(outputPath, options = {}) {
       ...options,
       sourceExecutablePath: sourceExecutable,
     });
+    writeLinuxFfprobeLauncher(targetDir, source.executableName, options);
   }
   return targetExecutable;
 }

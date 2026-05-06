@@ -12,6 +12,11 @@ let backendProcess = null;
 let quitting = false;
 let backendPort = null;
 
+if (process.argv.includes("--version")) {
+  console.log(app.getVersion());
+  app.exit(0);
+}
+
 function repoRoot() {
   return path.resolve(__dirname, "..");
 }

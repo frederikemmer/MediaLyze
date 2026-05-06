@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.2
+
+>2026-05-06
+
+- route packaged Linux desktop analysis through a bundled `ffprobe` launcher that sets its own library path before executing `ffprobe`, preventing AppImage scans from falling back to incompatible host FFmpeg libraries; `FFPROBE_PATH` still supports explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+- make `MediaLyze.AppImage --version` print the packaged desktop app version so users can verify the exact AppImage build they are running ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+
 ## v0.10.1
 
 >2026-05-04
