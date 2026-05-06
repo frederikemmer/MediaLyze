@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  bundledFfprobeLauncherName,
   isPackagedFfprobePath,
   packagedFfprobeLibraryCandidates,
   packagedFfprobeCandidates,
@@ -10,6 +11,12 @@ const {
   resolveFfprobeLibraryPath,
   resolveFfprobePath,
 } = require("./ffprobe-paths.cjs");
+
+test("bundledFfprobeLauncherName uses a Linux wrapper", () => {
+  assert.equal(bundledFfprobeLauncherName("linux"), "ffprobe-medialyze");
+  assert.equal(bundledFfprobeLauncherName("darwin"), "ffprobe");
+  assert.equal(bundledFfprobeLauncherName("win32"), "ffprobe.exe");
+});
 
 test("resolveFfprobePath prefers an explicit existing override in packaged mode", () => {
   const resolved = resolveFfprobePath({
@@ -23,16 +30,16 @@ test("resolveFfprobePath prefers an explicit existing override in packaged mode"
 });
 
 test("resolveFfprobePath falls back to bundled packaged candidates", () => {
-  const candidates = packagedFfprobeCandidates("/app/resources", "win32");
+  const candidates = packagedFfprobeCandidates("/app/resources", "linux");
   const resolved = resolveFfprobePath({
     isPackaged: true,
     resourcesPath: "/app/resources",
-    platform: "win32",
+    platform: "linux",
     env: {},
-    exists: (candidate) => candidate === candidates[1],
+    exists: (candidate) => candidate === candidates[0],
   });
 
-  assert.equal(resolved, candidates[1]);
+  assert.equal(resolved, candidates[0]);
 });
 
 test("resolveFfprobePath keeps an explicit override when packaged candidates are missing", () => {
@@ -139,5 +146,23 @@ test("resolveFfprobeEnvironment adds bundled libraries for bundled Linux ffprobe
   assert.deepEqual(resolved, {
     FFPROBE_PATH: ffprobeCandidates[0],
     LD_LIBRARY_PATH: `${libraryCandidates[0]}:/usr/local/lib`,
+  });
+});
+
+test("resolveFfprobeEnvironment falls back to bundled binary when wrapper is missing", () => {
+  const ffprobeCandidates = packagedFfprobeCandidates("/app/resources", "linux");
+  const libraryCandidates = packagedFfprobeLibraryCandidates("/app/resources");
+  const resolved = resolveFfprobeEnvironment({
+    isPackaged: true,
+    resourcesPath: "/app/resources",
+    platform: "linux",
+    env: {},
+    exists: (candidate) =>
+      candidate === ffprobeCandidates[1] || candidate === libraryCandidates[0],
+  });
+
+  assert.deepEqual(resolved, {
+    FFPROBE_PATH: ffprobeCandidates[1],
+    LD_LIBRARY_PATH: libraryCandidates[0],
   });
 });

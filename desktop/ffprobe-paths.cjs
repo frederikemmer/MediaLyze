@@ -5,6 +5,10 @@ function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
 }
 
+function bundledFfprobeLauncherName(platform = process.platform) {
+  return platform === "linux" ? "ffprobe-medialyze" : bundledFfprobeName(platform);
+}
+
 function normalizeEnvPath(value) {
   if (typeof value !== "string") {
     return null;
@@ -15,11 +19,13 @@ function normalizeEnvPath(value) {
 
 function packagedFfprobeCandidates(resourcesPath, platform = process.platform) {
   const executableName = bundledFfprobeName(platform);
+  const launcherName = bundledFfprobeLauncherName(platform);
+  const names = launcherName === executableName ? [executableName] : [launcherName, executableName];
   return [
-    path.join(resourcesPath, "backend", "ffprobe", executableName),
-    path.join(resourcesPath, "backend", "ffprobe", "bin", executableName),
-    path.join(resourcesPath, "ffprobe", executableName),
-    path.join(resourcesPath, "ffprobe", "bin", executableName),
+    ...names.map((name) => path.join(resourcesPath, "backend", "ffprobe", name)),
+    ...names.map((name) => path.join(resourcesPath, "backend", "ffprobe", "bin", name)),
+    ...names.map((name) => path.join(resourcesPath, "ffprobe", name)),
+    ...names.map((name) => path.join(resourcesPath, "ffprobe", "bin", name)),
   ];
 }
 
@@ -125,6 +131,7 @@ function resolveFfprobeEnvironment({
 }
 
 module.exports = {
+  bundledFfprobeLauncherName,
   bundledFfprobeName,
   isPackagedFfprobePath,
   packagedFfprobeLibraryCandidates,
