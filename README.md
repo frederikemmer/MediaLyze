@@ -137,6 +137,8 @@ If you want a different media-path, or external port change `env.example` or `.e
 
 ## Local Development
 
+For a single-command local dev setup, use `scripts/dev-local.sh` on macOS/Linux or `scripts/dev-local.ps1` on Windows.
+
 ### Backend
 
 ```bash
@@ -155,6 +157,28 @@ npm run dev
 ```
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8080`.
+
+### Combined startup scripts
+
+macOS/Linux:
+
+```bash
+./scripts/dev-local.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\dev-local.ps1
+```
+
+Both scripts expect:
+
+- `.venv` with `pip install -e .[dev]`
+- `frontend/node_modules` from `npm --prefix frontend install`
+- a valid `MEDIA_ROOT` directory, defaulting to your Desktop if not overridden
+
+They start the backend with reload enabled, wait for `/api/health`, then launch the Vite dev server in the foreground.
 
 ### Desktop
 

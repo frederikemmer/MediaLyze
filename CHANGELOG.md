@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - allow duplicate groups to be marked as not duplicates so they stay hidden from normal duplicate views while remaining restorable from the duplicates panel
 - add a dashboard history metric that shows each visible library's file-count share over time
+- add a Windows `scripts/dev-local.ps1` helper that mirrors the existing local realtime development startup flow by booting the reloading backend, waiting for `/api/health`, and then launching the frontend dev server
 
 ## v0.10.3
 
