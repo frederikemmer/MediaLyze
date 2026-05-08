@@ -3264,6 +3264,16 @@ export function LibraryDetailPage() {
                 />
               );
             } else if (panel.definition.kind === "duplicates") {
+              const duplicatePanelShownGroupCount = duplicateGroups
+                ? duplicateGroups.total_groups + (showSuppressedDuplicateGroups ? duplicateGroups.suppressed_group_count : 0)
+                : 0;
+              const duplicatePanelCanExpand = Boolean(
+                duplicateGroupsError ||
+                  (isDuplicateGroupsLoading && !duplicateGroups) ||
+                  (duplicateGroups && duplicateGroups.items.length > 0),
+              );
+              const duplicatePanelCollapsed = !duplicatePanelCanExpand || isDuplicatesPanelCollapsed;
+              const hasSuppressedDuplicateGroups = Boolean(duplicateGroups && duplicateGroups.suppressed_group_count > 0);
               content = (
                 <AsyncPanel
                   title={t("libraryDetail.duplicates.title")}
@@ -3272,21 +3282,29 @@ export function LibraryDetailPage() {
                   bodyClassName="async-panel-body-scroll"
                   collapseActions={
                     <div className="duplicate-panel-title-actions">
-                      {duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null}
-                      {!isDuplicatesPanelCollapsed ? (
-                        duplicateGroups && duplicateGroups.suppressed_group_count > 0 ? (
-                          <button
-                            type="button"
-                            className="duplicate-suppressed-toggle"
-                            onClick={() => setShowSuppressedDuplicateGroups((current) => !current)}
-                          >
-                            {showSuppressedDuplicateGroups
-                              ? t("libraryDetail.duplicates.hideSuppressed")
-                              : t("libraryDetail.duplicates.showSuppressed")}
-                          </button>
-                        ) : null
+                      {duplicateGroups && duplicatePanelShownGroupCount > 0 ? (
+                        <span className="badge">{duplicatePanelShownGroupCount}</span>
                       ) : null}
-                      {!isDuplicatesPanelCollapsed ? (
+                      {hasSuppressedDuplicateGroups ? (
+                        <button
+                          type="button"
+                          className="duplicate-suppressed-toggle"
+                          onClick={() => {
+                            setShowSuppressedDuplicateGroups((current) => {
+                              const next = !current;
+                              if (next) {
+                                setIsDuplicatesPanelCollapsed(false);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {showSuppressedDuplicateGroups
+                            ? t("libraryDetail.duplicates.hideSuppressed")
+                            : t("libraryDetail.duplicates.showSuppressed")}
+                        </button>
+                      ) : null}
+                      {duplicatePanelCanExpand && !duplicatePanelCollapsed ? (
                         <div className="data-table-search-layout duplicate-search-layout">
                           <div className="metadata-search-control duplicate-search-control">
                             <span className="metadata-search-icon-button" aria-hidden="true">
@@ -3318,8 +3336,13 @@ export function LibraryDetailPage() {
                   }
                   collapseButtonClassName="async-panel-toggle-icon-button-flat"
                   collapseState={{
-                    collapsed: isDuplicatesPanelCollapsed,
-                    onToggle: () => setIsDuplicatesPanelCollapsed((current) => !current),
+                    collapsed: duplicatePanelCollapsed,
+                    disabled: !duplicatePanelCanExpand,
+                    onToggle: () => {
+                      if (duplicatePanelCanExpand) {
+                        setIsDuplicatesPanelCollapsed((current) => !current);
+                      }
+                    },
                     bodyId: "library-duplicates-panel-body",
                   }}
                 >

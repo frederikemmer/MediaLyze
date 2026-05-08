@@ -1533,15 +1533,17 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByRole("button", { name: "Duplications" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
-    expect(await screen.findByText("No duplicate groups found yet.")).toBeInTheDocument();
+    const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
+    expect(duplicatesToggle).toBeDisabled();
+    expect(screen.queryByText("No duplicate groups found yet.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
     await waitFor(() => expect(api.activeScanJobs).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(libraryDuplicatesSpy).toHaveBeenCalledTimes(1));
 
     fireEvent.focus(window);
 
     await waitFor(() => expect(libraryDuplicatesSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
     expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
   });
 

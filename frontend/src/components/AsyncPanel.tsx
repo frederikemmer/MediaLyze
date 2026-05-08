@@ -20,6 +20,7 @@ type AsyncPanelProps = {
     collapsed: boolean;
     onToggle: () => void;
     bodyId?: string;
+    disabled?: boolean;
   };
   children: ReactNode;
 };
@@ -43,6 +44,7 @@ export function AsyncPanel({
   const generatedBodyId = useId();
   const bodyId = collapseState?.bodyId ?? `async-panel-body-${generatedBodyId}`;
   const isCollapsed = collapseState?.collapsed ?? false;
+  const collapseDisabled = collapseState?.disabled ?? false;
   const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
   const hasHeaderLead = Boolean(collapseState || title || titleAddon || subtitle || subtitleAddon);
 
@@ -60,29 +62,32 @@ export function AsyncPanel({
                       className={`async-panel-toggle${collapseActions ? " has-collapse-actions" : ""}`}
                       aria-expanded={!isCollapsed}
                       aria-controls={bodyId}
+                      disabled={collapseDisabled}
                       onClick={collapseState.onToggle}
                     >
                       <span>{title}</span>
-                      {!collapseActions ? <ToggleIcon aria-hidden="true" className="nav-icon" /> : null}
+                      {!collapseActions && !collapseDisabled ? <ToggleIcon aria-hidden="true" className="nav-icon" /> : null}
                     </button>
                   </h2>
                   {collapseActions ? (
                     <div className="async-panel-toggle-actions">
                       {collapseActions}
-                      <button
-                        type="button"
-                        className={`secondary icon-only-button async-panel-toggle-icon-button${collapseButtonClassName ? ` ${collapseButtonClassName}` : ""}`}
-                        aria-label={
-                          isCollapsed
-                            ? t("panel.expandAria", { title })
-                            : t("panel.collapseAria", { title })
-                        }
-                        aria-expanded={!isCollapsed}
-                        aria-controls={bodyId}
-                        onClick={collapseState.onToggle}
-                      >
-                        <ToggleIcon aria-hidden="true" className="nav-icon" />
-                      </button>
+                      {!collapseDisabled ? (
+                        <button
+                          type="button"
+                          className={`secondary icon-only-button async-panel-toggle-icon-button${collapseButtonClassName ? ` ${collapseButtonClassName}` : ""}`}
+                          aria-label={
+                            isCollapsed
+                              ? t("panel.expandAria", { title })
+                              : t("panel.collapseAria", { title })
+                          }
+                          aria-expanded={!isCollapsed}
+                          aria-controls={bodyId}
+                          onClick={collapseState.onToggle}
+                        >
+                          <ToggleIcon aria-hidden="true" className="nav-icon" />
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </>

@@ -618,6 +618,14 @@
   overflow: hidden;
 }
 
+.library-layout-panel-duplicates .panel-header {
+  margin-bottom: 6px;
+}
+
+.library-layout-panel-duplicates .async-panel-toggle-actions {
+  gap: 4px;
+}
+
 .library-layout-panel-history .library-history-chart-shell {
   height: 100%;
   min-height: 0;
@@ -2397,7 +2405,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .duplicate-group-card {
   display: grid;
-  gap: 12px;
+  gap: 6px;
 }
 
 .duplicate-group-card.is-suppressed {
@@ -3490,14 +3498,14 @@ html[data-theme="dark"] .file-history-old-value {
 }
 
 .duplicate-search-layout {
-  --search-control-width: clamp(15rem, 30vw, 24rem);
+  --search-control-width: clamp(15rem, 28vw, 24rem);
 }
 
 .duplicate-panel-title-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3507,6 +3515,8 @@ html[data-theme="dark"] .file-history-old-value {
 
 .duplicate-panel-title-actions .duplicate-search-layout {
   margin-left: 0;
+  flex: 0 1 var(--search-control-width);
+  width: min(100%, var(--search-control-width));
 }
 
 .duplicate-suppressed-toggle {
