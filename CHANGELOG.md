@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.3
+
+>2026-05-08
+
+- replace the Linux desktop AppImage `ffprobe` bundle with a pinned static `ffprobe` build so media scans no longer depend on host or bundled FFmpeg shared-library resolution; `FFPROBE_PATH` remains available for explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+
 ## v0.10.2
 
 >2026-05-06

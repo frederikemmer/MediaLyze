@@ -12,16 +12,12 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  bundleLinuxFfprobeDependencies,
   bundleMacosFfprobeDependencies,
   bundleFfprobe,
-  bundledFfprobeLauncherName,
   bundledFfprobeName,
-  parseLddDependencies,
   parseOtoolDependencies,
   parseOtoolRpaths,
   resolveBundledFfprobeSource,
-  writeLinuxFfprobeLauncher,
 } from "./build-backend.mjs";
 
 function withTempDir(fn) {
@@ -94,63 +90,30 @@ test("bundleFfprobe creates the expected ffprobe folder structure", () => {
   });
 });
 
-test("bundleFfprobe includes Linux ffprobe shared-library dependencies", () => {
+test("bundleFfprobe copies Linux ffprobe without shared libraries or wrapper", () => {
   withTempDir((tempDir) => {
     const sourceBinary = path.join(tempDir, "source", "ffprobe");
-    const sourceLib = path.join(tempDir, "system-lib", "libavdevice.so.60");
     const outputDir = path.join(tempDir, "desktop-backend");
     mkdirSync(path.dirname(sourceBinary), { recursive: true });
-    mkdirSync(path.dirname(sourceLib), { recursive: true });
     mkdirSync(outputDir, { recursive: true });
     writeFileSync(sourceBinary, "ffprobe-binary");
-    writeFileSync(sourceLib, "avdevice");
 
-    bundleFfprobe(outputDir, {
+    const bundledExecutable = bundleFfprobe(outputDir, {
       env: { MEDIALYZE_FFPROBE_DIR: sourceBinary },
       platform: "linux",
       realpath: (candidate) => candidate,
-      inspectBinary: (candidate) => {
-        if (candidate === sourceBinary) {
-          return {
-            dependencies: [sourceLib],
-          };
-        }
-        if (candidate === sourceLib) {
-          return {
-            dependencies: [],
-          };
-        }
-        throw new Error(`Unexpected inspect target: ${candidate}`);
-      },
     });
 
     assert.equal(
-      readFileSync(path.join(outputDir, "ffprobe", "lib", "libavdevice.so.60"), "utf8"),
-      "avdevice"
+      bundledExecutable,
+      path.join(outputDir, "ffprobe", bundledFfprobeName("linux"))
     );
     assert.equal(
-      existsSync(path.join(outputDir, "ffprobe", bundledFfprobeLauncherName("linux"))),
-      true
+      readFileSync(path.join(outputDir, "ffprobe", "ffprobe"), "utf8"),
+      "ffprobe-binary"
     );
-  });
-});
-
-test("writeLinuxFfprobeLauncher writes executable wrapper with bundled library path", () => {
-  withTempDir((tempDir) => {
-    const bundleDir = path.join(tempDir, "ffprobe");
-    mkdirSync(bundleDir, { recursive: true });
-    const chmodCalls = [];
-    const launcherPath = writeLinuxFfprobeLauncher(bundleDir, "ffprobe", {
-      chmod: (...args) => {
-        chmodCalls.push(args);
-      },
-    });
-
-    const content = readFileSync(launcherPath, "utf8");
-    assert.equal(path.basename(launcherPath), bundledFfprobeLauncherName("linux"));
-    assert.match(content, /LD_LIBRARY_PATH="\$SELF_DIR\/lib/);
-    assert.match(content, /exec "\$SELF_DIR\/ffprobe" "\$@"/);
-    assert.deepEqual(chmodCalls, [[launcherPath, 0o755]]);
+    assert.equal(existsSync(path.join(outputDir, "ffprobe", "lib")), false);
+    assert.equal(existsSync(path.join(outputDir, "ffprobe", "ffprobe-medialyze")), false);
   });
 });
 
@@ -179,77 +142,6 @@ Load command 12
 `);
 
   assert.deepEqual(rpaths, ["@loader_path/../lib", "/opt/homebrew/lib"]);
-});
-
-test("parseLddDependencies extracts linked ELF library paths", () => {
-  const dependencies = parseLddDependencies(`linux-vdso.so.1 (0x00007ffc2b1f9000)
-\tlibavdevice.so.60 => /lib/x86_64-linux-gnu/libavdevice.so.60 (0x00007f95aeb00000)
-\tlibmissing.so.1 => not found
-\t/lib64/ld-linux-x86-64.so.2 (0x00007f95b0400000)
-`);
-
-  assert.deepEqual(dependencies, [
-    "/lib/x86_64-linux-gnu/libavdevice.so.60",
-    "/lib64/ld-linux-x86-64.so.2",
-  ]);
-});
-
-test("bundleLinuxFfprobeDependencies copies non-runtime ELF dependencies recursively", () => {
-  const pathLib = path.posix;
-  const bundleDir = "/bundle/ffprobe";
-  const libDir = pathLib.join(bundleDir, "lib");
-  const executablePath = pathLib.join(bundleDir, "ffprobe");
-  const sourceExecutablePath = "/source/ffprobe";
-  const avdevicePath = "/lib/x86_64-linux-gnu/libavdevice.so.60";
-  const avutilPath = "/lib/x86_64-linux-gnu/libavutil.so.58";
-  const libcPath = "/lib/x86_64-linux-gnu/libc.so.6";
-  const loaderPath = "/lib64/ld-linux-x86-64.so.2";
-
-  const directories = new Set([bundleDir, "/source", "/lib/x86_64-linux-gnu", "/lib64"]);
-  const files = new Map([
-    [executablePath, "ffprobe-binary"],
-    [sourceExecutablePath, "ffprobe-source"],
-    [avdevicePath, "avdevice"],
-    [avutilPath, "avutil"],
-    [libcPath, "libc"],
-    [loaderPath, "loader"],
-  ]);
-
-  bundleLinuxFfprobeDependencies(bundleDir, executablePath, {
-    sourceExecutablePath,
-    pathLib,
-    copy: (sourcePath, targetPath) => {
-      files.set(targetPath, files.get(sourcePath) ?? "");
-    },
-    exists: (candidate) => files.has(candidate) || directories.has(candidate),
-    inspectBinary: (candidate) => {
-      if (candidate === sourceExecutablePath) {
-        return {
-          dependencies: [avdevicePath, loaderPath],
-        };
-      }
-      if (candidate === avdevicePath) {
-        return {
-          dependencies: [avutilPath, libcPath],
-        };
-      }
-      if (candidate === avutilPath) {
-        return {
-          dependencies: [libcPath],
-        };
-      }
-      throw new Error(`Unexpected inspect target: ${candidate}`);
-    },
-    mkdir: (directoryPath) => {
-      directories.add(directoryPath);
-    },
-    realpath: (candidate) => candidate,
-  });
-
-  assert.equal(files.get(pathLib.join(libDir, "libavdevice.so.60")), "avdevice");
-  assert.equal(files.get(pathLib.join(libDir, "libavutil.so.58")), "avutil");
-  assert.equal(files.has(pathLib.join(libDir, "libc.so.6")), false);
-  assert.equal(files.has(pathLib.join(libDir, "ld-linux-x86-64.so.2")), false);
 });
 
 test(
