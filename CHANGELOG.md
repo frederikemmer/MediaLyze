@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.10.4
+
+>2026-05-08
+
 ### ✨ New
 
 - allow duplicate groups to be marked as not duplicates so they stay hidden from normal duplicate views while remaining restorable from the duplicates panel
