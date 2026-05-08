@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - add a dashboard history metric that shows each visible library's file-count share over time
 - add a Windows `scripts/dev-local.ps1` helper that mirrors the existing local realtime development startup flow by booting the reloading backend, waiting for `/api/health`, and then launching the frontend dev server
 
+### 🐛 Bug fixes
+
+- harden Windows desktop GitHub Actions builds by retrying the Electron packaging step when upstream `electron-builder` NSIS resource downloads fail transiently with HTTP 502 responses
+
 ## v0.10.3
 
 >2026-05-08

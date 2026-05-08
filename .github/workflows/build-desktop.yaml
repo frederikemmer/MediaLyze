@@ -123,10 +123,37 @@ jobs:
           MEDIALYZE_FFPROBE_DIR: ${{ github.workspace }}/dist/ffprobe-bundle
 
       - name: Build desktop release
+        if: matrix.os != 'windows-latest'
         run: npm run dist -- --publish never
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Build desktop release on Windows with retry
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          $ErrorActionPreference = "Stop"
+          $maxAttempts = 3
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Windows desktop build attempt $attempt of $maxAttempts"
+
+            npm run dist -- --publish never
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -ge $maxAttempts) {
+              throw "Windows desktop build failed after $maxAttempts attempts."
+            }
+
+            Write-Warning "Windows desktop build failed on attempt $attempt with exit code $LASTEXITCODE. Retrying after 15 seconds."
+            Start-Sleep -Seconds 15
+          }
 
       - name: Verify desktop artifact name
         shell: bash
