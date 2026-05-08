@@ -525,6 +525,7 @@
         "average_duration_seconds": "Average duration",
         "average_quality_score": "Average quality score",
         "average_resolution_mp": "Average resolution MP",
+        "library_mix": "Library mix",
         "container_mix": "Container mix",
         "video_codec_mix": "Video codec mix",
         "hdr_type_mix": "Dynamic range mix",

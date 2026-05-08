@@ -11,6 +11,7 @@ describe("history metrics", () => {
   it("groups summary, category, and distribution metrics", () => {
     expect(HISTORY_METRIC_GROUPS.map((group) => group.id)).toEqual(["summary", "category", "distribution"]);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "average_quality_score")).toBe(true);
+    expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "library_mix")).toBe(true);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "container_mix")).toBe(true);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "resolution_distribution")).toBe(true);
     expect(HISTORY_METRIC_DEFINITIONS.some((definition) => definition.id === "resolution_mp_distribution")).toBe(true);
@@ -21,6 +22,7 @@ describe("history metrics", () => {
 
   it("validates stored metric ids", () => {
     expect(isLibraryHistoryMetricId("average_quality_score")).toBe(true);
+    expect(isLibraryHistoryMetricId("library_mix")).toBe(true);
     expect(isLibraryHistoryMetricId("resolution_distribution")).toBe(true);
     expect(isLibraryHistoryMetricId("quality_score_distribution")).toBe(true);
     expect(isLibraryHistoryMetricId("ready_files")).toBe(false);

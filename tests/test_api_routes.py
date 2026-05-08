@@ -487,11 +487,13 @@ def test_dashboard_history_route_returns_visible_library_aggregation() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["visible_library_ids"] == [visible_library_id]
+    assert payload["visible_libraries"] == [{"id": visible_library_id, "name": "Visible history"}]
     assert payload["oldest_snapshot_day"] == "2026-04-10"
     assert payload["newest_snapshot_day"] == "2026-04-10"
     assert payload["points"][0]["trend_metrics"]["total_files"] == 2
     assert payload["points"][0]["trend_metrics"]["resolution_counts"] == {"4k": 2}
     assert payload["points"][0]["trend_metrics"]["category_counts"]["resolution"] == {"4k": 2}
+    assert payload["points"][0]["trend_metrics"]["category_counts"]["library"] == {str(visible_library_id): 2}
     assert payload["points"][0]["trend_metrics"]["numeric_summaries"]["bitrate"]["average"] == 8_000_000
 
 

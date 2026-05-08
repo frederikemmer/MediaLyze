@@ -38,6 +38,7 @@ type LibraryHistoryPanelProps = {
   rangeStorageKey?: string;
   bodyId?: string;
   inDepthDolbyVisionProfiles?: boolean;
+  showLibraryMix?: boolean;
 };
 
 const HISTORY_GROUP_ICONS = {
@@ -203,6 +204,7 @@ export function LibraryHistoryPanel({
   rangeStorageKey = DEFAULT_HISTORY_RANGE_STORAGE_KEY,
   bodyId = "library-history-panel-body",
   inDepthDolbyVisionProfiles = false,
+  showLibraryMix = false,
 }: LibraryHistoryPanelProps) {
   const { t, i18n } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -230,6 +232,11 @@ export function LibraryHistoryPanel({
     () => getHistoryMetricDefinition(selectedMetric),
     [selectedMetric],
   );
+  const availableMetricDefinitions = useMemo(
+    () =>
+      HISTORY_METRIC_DEFINITIONS.filter((definition) => showLibraryMix || definition.id !== "library_mix"),
+    [showLibraryMix],
+  );
   const SelectedMetricIcon = HISTORY_GROUP_ICONS[selectedMetricDefinition.group];
   const resolutionCategories = useMemo(
     () =>
@@ -242,6 +249,9 @@ export function LibraryHistoryPanel({
       })),
     [currentResolutionCategoryIdSet, history?.resolution_categories, t],
   );
+  const libraryCategories = "visible_libraries" in (history ?? {})
+    ? (history as DashboardHistoryResponse).visible_libraries ?? []
+    : [];
   const filteredHistoryPoints = useMemo(
     () => filterHistoryPoints(history?.points ?? [], rangeSelection),
     [history?.points, rangeSelection],
@@ -597,7 +607,7 @@ export function LibraryHistoryPanel({
                 >
                   {HISTORY_METRIC_GROUPS.map((group) => {
                     const GroupIcon = HISTORY_GROUP_ICONS[group.id];
-                    const metrics = HISTORY_METRIC_DEFINITIONS.filter((definition) => definition.group === group.id);
+                    const metrics = availableMetricDefinitions.filter((definition) => definition.group === group.id);
                     return (
                       <div key={group.id} className="library-history-picker-group">
                         <div className="library-history-picker-group-label">
@@ -647,6 +657,7 @@ export function LibraryHistoryPanel({
           <HistoryTrendChart
             points={filteredHistoryPoints}
             resolutionCategories={resolutionCategories}
+            libraryCategories={libraryCategories}
             metricId={selectedMetric}
             displayMode={displayMode}
             inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}

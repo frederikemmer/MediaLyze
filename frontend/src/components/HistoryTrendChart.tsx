@@ -6,7 +6,7 @@ import { GridComponent, LegendComponent, TooltipComponent } from "echarts/compon
 import { CanvasRenderer } from "echarts/renderers";
 import { useTranslation } from "react-i18next";
 
-import type { LibraryHistoryPoint, LibraryHistoryResolutionCategory } from "../lib/api";
+import type { DashboardHistoryLibrary, LibraryHistoryPoint, LibraryHistoryResolutionCategory } from "../lib/api";
 import {
   formatHistoryMetricValue,
   getHistoryMetricDefinition,
@@ -20,6 +20,7 @@ echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, Canvas
 type HistoryTrendChartProps = {
   points: LibraryHistoryPoint[];
   resolutionCategories: LibraryHistoryResolutionCategory[];
+  libraryCategories?: DashboardHistoryLibrary[];
   metricId: LibraryHistoryMetricId;
   displayMode?: HistoryMetricDisplayMode;
   inDepthDolbyVisionProfiles?: boolean;
@@ -63,6 +64,7 @@ function categorySeriesKeys(
   points: LibraryHistoryPoint[],
   categoryKey: string,
   resolutionCategories: LibraryHistoryResolutionCategory[],
+  libraryCategories: DashboardHistoryLibrary[],
   inDepthDolbyVisionProfiles: boolean,
 ): string[] {
   const keys = new Set<string>();
@@ -75,6 +77,12 @@ function categorySeriesKeys(
     return [
       ...resolutionCategories.map((category) => category.id).filter((id) => keys.has(id)),
       ...[...keys].filter((id) => !resolutionCategories.some((category) => category.id === id)).sort(),
+    ];
+  }
+  if (categoryKey === "library") {
+    return [
+      ...libraryCategories.map((library) => String(library.id)).filter((id) => keys.has(id)),
+      ...[...keys].filter((id) => !libraryCategories.some((library) => String(library.id) === id)).sort(),
     ];
   }
   return [...keys].sort((left, right) => {
@@ -116,6 +124,7 @@ function findDistributionBin(point: LibraryHistoryPoint, distributionKey: string
 function HistoryTrendChartComponent({
   points,
   resolutionCategories,
+  libraryCategories = [],
   metricId,
   displayMode = "count",
   inDepthDolbyVisionProfiles = false,
@@ -203,6 +212,7 @@ function HistoryTrendChartComponent({
           points,
           metric.categoryKey,
           resolutionCategories,
+          libraryCategories,
           inDepthDolbyVisionProfiles,
         );
         return {
@@ -256,7 +266,7 @@ function HistoryTrendChartComponent({
             splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
           },
           series: seriesKeys.map((key) => ({
-            name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }),
+            name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }, libraryCategories),
             type: "line",
             stack: metric.id,
             showSymbol: points.length <= 1,
@@ -353,6 +363,7 @@ function HistoryTrendChartComponent({
       points,
       metric.categoryKey,
       resolutionCategories,
+      libraryCategories,
       inDepthDolbyVisionProfiles,
     );
     return {
@@ -406,7 +417,7 @@ function HistoryTrendChartComponent({
         splitLine: { lineStyle: { color: lineColor, opacity: 0.08 } },
       },
       series: seriesKeys.map((key) => ({
-        name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }),
+        name: metric.formatCategory(key, resolutionCategories, { inDepthDolbyVisionProfiles }, libraryCategories),
         type: "line",
         stack: metric.id,
         showSymbol: points.length <= 1,
@@ -433,6 +444,7 @@ function HistoryTrendChartComponent({
     lineColor,
     metric,
     points,
+    libraryCategories,
     resolutionCategories,
     t,
     tooltipBase,
@@ -455,6 +467,7 @@ export const HistoryTrendChart = memo(
   (previousProps, nextProps) =>
     previousProps.points === nextProps.points &&
     previousProps.resolutionCategories === nextProps.resolutionCategories &&
+    previousProps.libraryCategories === nextProps.libraryCategories &&
     previousProps.metricId === nextProps.metricId &&
     previousProps.displayMode === nextProps.displayMode &&
     previousProps.inDepthDolbyVisionProfiles === nextProps.inDepthDolbyVisionProfiles &&

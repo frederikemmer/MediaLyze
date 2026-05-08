@@ -259,16 +259,21 @@ def test_get_dashboard_history_aggregates_visible_libraries() -> None:
         payload = get_dashboard_history(db)
 
     assert payload.visible_library_ids == [visible_library.id]
+    assert [item.model_dump() for item in payload.visible_libraries] == [
+        {"id": visible_library.id, "name": "Visible"},
+    ]
     assert payload.oldest_snapshot_day == "2026-03-24"
     assert payload.newest_snapshot_day == "2026-03-25"
     assert [point.snapshot_day for point in payload.points] == ["2026-03-24", "2026-03-25"]
     assert payload.points[0].trend_metrics.total_files == 2
     assert payload.points[0].trend_metrics.resolution_counts == {"4k": 2}
+    assert payload.points[0].trend_metrics.category_counts["library"] == {str(visible_library.id): 2}
     assert payload.points[0].trend_metrics.average_bitrate == 8_000_000.0
     assert payload.points[0].trend_metrics.totals["total_size_bytes"] == 3_000
     assert payload.points[0].trend_metrics.totals["total_duration_seconds"] == 10_800.0
     assert payload.points[0].trend_metrics.numeric_summaries["size"].average == 1_500.0
     assert payload.points[0].trend_metrics.numeric_summaries["resolution_mp"].average == 8.2944
+    assert payload.points[1].trend_metrics.category_counts["library"] == {str(visible_library.id): 3}
 
 
 def test_build_library_history_snapshot_includes_trend_metrics() -> None:

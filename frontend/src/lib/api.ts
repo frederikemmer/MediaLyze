@@ -124,6 +124,11 @@ export type LibraryHistoryResolutionCategory = {
   label: string;
 };
 
+export type DashboardHistoryLibrary = {
+  id: number;
+  name: string;
+};
+
 export type LibraryHistoryResponse = {
   generated_at: string;
   library_id: number;
@@ -140,6 +145,7 @@ export type DashboardHistoryResponse = {
   resolution_categories: LibraryHistoryResolutionCategory[];
   points: LibraryHistoryPoint[];
   visible_library_ids: number[];
+  visible_libraries: DashboardHistoryLibrary[];
 };
 
 export type QualityCategoryConfig = {

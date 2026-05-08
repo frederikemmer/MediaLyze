@@ -525,6 +525,7 @@
         "average_duration_seconds": "Durchschnittliche Dauer",
         "average_quality_score": "Durchschnittlicher Qualitaets-Score",
         "average_resolution_mp": "Durchschnittliche Aufloesung in MP",
+        "library_mix": "Mediatheken-Mix",
         "container_mix": "Container-Mix",
         "video_codec_mix": "Video-Codec-Mix",
         "hdr_type_mix": "Dynamikumfang-Mix",

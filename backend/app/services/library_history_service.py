@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.entities import Library, LibraryHistory
 from backend.app.schemas.library_history import (
+    DashboardHistoryLibraryRead,
     DashboardHistoryResponse,
     LibraryHistoryNumericSummaryRead,
     LibraryHistoryPointRead,
@@ -483,11 +484,12 @@ def get_dashboard_history(db: Session) -> DashboardHistoryResponse:
         return cached
 
     resolution_categories = _resolution_categories(db)
-    visible_library_ids = db.scalars(
-        select(Library.id)
+    visible_libraries = db.execute(
+        select(Library.id, Library.name)
         .where(Library.show_on_dashboard.is_(True))
         .order_by(Library.id.asc())
     ).all()
+    visible_library_ids = [int(row.id) for row in visible_libraries]
     points_by_day: OrderedDict[str, dict] = OrderedDict()
 
     rows = db.scalars(
@@ -525,6 +527,9 @@ def get_dashboard_history(db: Session) -> DashboardHistoryResponse:
             aggregate_counts = aggregate["category_counts"].setdefault(metric_id, {})
             for value_key, count in counts.items():
                 aggregate_counts[value_key] = aggregate_counts.get(value_key, 0) + count
+        library_counts = aggregate["category_counts"].setdefault("library", {})
+        library_key = str(row.library_id)
+        library_counts[library_key] = library_counts.get(library_key, 0) + metrics.total_files
         for metric_id, distribution in metrics.numeric_distributions.items():
             _add_numeric_distribution(aggregate["numeric_distributions"], metric_id, distribution)
 
@@ -561,6 +566,10 @@ def get_dashboard_history(db: Session) -> DashboardHistoryResponse:
         ],
         points=points,
         visible_library_ids=visible_library_ids,
+        visible_libraries=[
+            DashboardHistoryLibraryRead(id=int(row.id), name=row.name)
+            for row in visible_libraries
+        ],
     )
     stats_cache.set_dashboard_history(cache_key, payload)
     return payload

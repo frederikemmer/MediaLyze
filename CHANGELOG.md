@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - allow duplicate groups to be marked as not duplicates so they stay hidden from normal duplicate views while remaining restorable from the duplicates panel
+- add a dashboard history metric that shows each visible library's file-count share over time
 
 ## v0.10.3
 
