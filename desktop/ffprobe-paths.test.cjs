@@ -27,7 +27,7 @@ test("resolveFfprobePath falls back to bundled packaged candidates", () => {
     exists: (candidate) => candidate === candidates[0],
   });
 
-  assert.equal(resolved, "/app/resources/backend/ffprobe/ffprobe");
+  assert.equal(resolved, candidates[0]);
 });
 
 test("resolveFfprobePath keeps an explicit override when packaged candidates are missing", () => {
