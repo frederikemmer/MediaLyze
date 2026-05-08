@@ -487,11 +487,13 @@ def test_dashboard_history_route_returns_visible_library_aggregation() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["visible_library_ids"] == [visible_library_id]
+    assert payload["visible_libraries"] == [{"id": visible_library_id, "name": "Visible history"}]
     assert payload["oldest_snapshot_day"] == "2026-04-10"
     assert payload["newest_snapshot_day"] == "2026-04-10"
     assert payload["points"][0]["trend_metrics"]["total_files"] == 2
     assert payload["points"][0]["trend_metrics"]["resolution_counts"] == {"4k": 2}
     assert payload["points"][0]["trend_metrics"]["category_counts"]["resolution"] == {"4k": 2}
+    assert payload["points"][0]["trend_metrics"]["category_counts"]["library"] == {str(visible_library_id): 2}
     assert payload["points"][0]["trend_metrics"]["numeric_summaries"]["bitrate"]["average"] == 8_000_000
 
 
@@ -1200,6 +1202,8 @@ def test_library_duplicates_route_returns_empty_page_when_detection_is_off() -> 
         "mode": "off",
         "total_groups": 0,
         "duplicate_file_count": 0,
+        "include_suppressed": False,
+        "suppressed_group_count": 0,
         "offset": 0,
         "limit": 25,
         "items": [],
@@ -1284,3 +1288,109 @@ def test_library_duplicates_route_returns_both_group_types_for_combined_mode() -
     assert [item["mode"] for item in payload["items"]] == ["filehash", "filename"]
     assert payload["items"][0]["signature"] == "deadbeef"
     assert payload["items"][1]["signature"] == "movie name 2024"
+
+
+def test_library_duplicate_suppression_routes_hide_and_restore_groups() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Suppressed Movies",
+            path="/tmp/suppressed-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="Movie.Name.2024.mkv",
+                    filename="Movie.Name.2024.mkv",
+                    extension="mkv",
+                    size_bytes=10,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie_name_2024.mp4",
+                    filename="movie_name_2024.mp4",
+                    extension="mp4",
+                    size_bytes=12,
+                    mtime=1.0,
+                    filename_signature="movie name 2024",
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        create_response = client.post(
+            f"/api/libraries/{library.id}/duplicates/suppressions",
+            json={"mode": "filename", "signature": "movie name 2024"},
+        )
+        visible_response = client.get(f"/api/libraries/{library.id}/duplicates")
+        hidden_response = client.get(f"/api/libraries/{library.id}/duplicates?include_suppressed=true")
+        delete_response = client.delete(
+            f"/api/libraries/{library.id}/duplicates/suppressions",
+            params={"mode": "filename", "signature": "movie name 2024"},
+        )
+        restored_response = client.get(f"/api/libraries/{library.id}/duplicates")
+
+    assert create_response.status_code == 201
+    assert create_response.json()["signature"] == "movie name 2024"
+    assert visible_response.status_code == 200
+    assert visible_response.json()["total_groups"] == 0
+    assert visible_response.json()["duplicate_file_count"] == 0
+    assert visible_response.json()["suppressed_group_count"] == 1
+    assert visible_response.json()["items"] == []
+    assert hidden_response.status_code == 200
+    assert hidden_response.json()["include_suppressed"] is True
+    assert hidden_response.json()["items"][0]["suppressed"] is True
+    assert hidden_response.json()["items"][0]["signature"] == "movie name 2024"
+    assert delete_response.status_code == 204
+    assert restored_response.json()["total_groups"] == 1
+    assert restored_response.json()["duplicate_file_count"] == 2
+    assert restored_response.json()["suppressed_group_count"] == 0
+
+
+def test_library_duplicate_suppression_routes_validate_inputs() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Validation Movies",
+            path="/tmp/validation-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        client = _build_test_app(db)
+        unknown_response = client.post(
+            "/api/libraries/999/duplicates/suppressions",
+            json={"mode": "filename", "signature": "movie name 2024"},
+        )
+        empty_response = client.post(
+            f"/api/libraries/{library.id}/duplicates/suppressions",
+            json={"mode": "filename", "signature": "   "},
+        )
+        invalid_mode_response = client.post(
+            f"/api/libraries/{library.id}/duplicates/suppressions",
+            json={"mode": "both", "signature": "movie name 2024"},
+        )
+
+    assert unknown_response.status_code == 404
+    assert empty_response.status_code == 400
+    assert invalid_mode_response.status_code == 400

@@ -12,6 +12,7 @@ const historyPoints: LibraryHistoryPoint[] = [
     trend_metrics: {
       total_files: 10,
       resolution_counts: { "4k": 2, "1080p": 8 },
+      category_counts: { library: { "1": 4, "2": 6 } },
       average_bitrate: null,
       average_audio_bitrate: null,
       average_duration_seconds: null,
@@ -32,6 +33,7 @@ const historyPoints: LibraryHistoryPoint[] = [
     trend_metrics: {
       total_files: 12,
       resolution_counts: { "4k": 3, "1080p": 9 },
+      category_counts: { library: { "1": 5, "2": 7 } },
       average_bitrate: null,
       average_audio_bitrate: null,
       average_duration_seconds: null,
@@ -88,5 +90,25 @@ describe("HistoryTrendChart", () => {
     );
 
     expect(renderedYAxis()).not.toHaveProperty("max");
+  });
+
+  it("uses dashboard library names for library mix series", () => {
+    render(
+      <HistoryTrendChart
+        points={historyPoints}
+        resolutionCategories={[]}
+        libraryCategories={[
+          { id: 1, name: "Movies" },
+          { id: 2, name: "Shows" },
+        ]}
+        metricId="library_mix"
+        displayMode="count"
+      />,
+    );
+
+    expect(JSON.parse(screen.getByTestId("echarts-react").getAttribute("data-series-names") ?? "[]")).toEqual([
+      "Movies",
+      "Shows",
+    ]);
   });
 });

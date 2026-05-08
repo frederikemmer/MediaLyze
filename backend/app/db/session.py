@@ -211,6 +211,14 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
         "ON library_history (library_id, snapshot_day)"
     ),
     "CREATE INDEX IF NOT EXISTS ix_library_history_captured_at ON library_history (captured_at)",
+    (
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_duplicate_group_suppressions_library_mode_signature "
+        "ON duplicate_group_suppressions (library_id, mode, signature)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS ix_duplicate_group_suppressions_library_mode "
+        "ON duplicate_group_suppressions (library_id, mode)"
+    ),
 )
 
 

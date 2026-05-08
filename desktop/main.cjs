@@ -3,9 +3,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const {
-  resolveFfprobeEnvironment,
-} = require("./ffprobe-paths.cjs");
+const { resolveFfprobePath } = require("./ffprobe-paths.cjs");
 
 let mainWindow = null;
 let backendProcess = null;
@@ -129,7 +127,7 @@ function startBackend(port) {
     APP_PORT: String(port),
     CONFIG_PATH: configPath,
     FRONTEND_DIST_PATH: resolveFrontendDistPath(),
-    ...resolveFfprobeEnvironment({
+    FFPROBE_PATH: resolveFfprobePath({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
     }),

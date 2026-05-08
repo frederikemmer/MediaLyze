@@ -111,6 +111,44 @@ Typical output:
 
 - unpacked app directory: `dist/desktop-app/win-unpacked/`
 
+## Linux
+
+Prerequisites:
+
+- Python 3.12
+- Node.js 22
+- build tools for the static `ffprobe` build:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential ca-certificates curl nasm pkg-config xz-utils musl-tools binutils
+```
+
+Build a release AppImage:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev] pyinstaller
+
+cd frontend
+npm ci
+npm run build
+
+cd ..
+desktop/scripts/build-linux-static-ffprobe.sh
+
+cd desktop
+npm ci
+
+MEDIALYZE_FFPROBE_DIR="$(cd ../dist/ffprobe-bundle && pwd)" npm run build:backend
+npm run dist
+```
+
+Output:
+
+- AppImage: `dist/desktop-app/MediaLyze.AppImage`
+
 ## Notes
 
 - `npm run build:backend` creates the packaged Python sidecar in `dist/desktop-backend/`.

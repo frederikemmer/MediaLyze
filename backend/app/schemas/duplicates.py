@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from backend.app.models.entities import DuplicateDetectionMode
@@ -16,6 +18,7 @@ class DuplicateGroupRead(BaseModel):
     label: str
     file_count: int
     total_size_bytes: int
+    suppressed: bool = False
     items: list[DuplicateGroupFileRead] = Field(default_factory=list)
 
 
@@ -23,6 +26,21 @@ class DuplicateGroupPageRead(BaseModel):
     mode: DuplicateDetectionMode
     total_groups: int = 0
     duplicate_file_count: int = 0
+    include_suppressed: bool = False
+    suppressed_group_count: int = 0
     offset: int = 0
     limit: int = 25
     items: list[DuplicateGroupRead] = Field(default_factory=list)
+
+
+class DuplicateSuppressionCreate(BaseModel):
+    mode: DuplicateDetectionMode
+    signature: str
+
+
+class DuplicateSuppressionRead(BaseModel):
+    id: int
+    library_id: int
+    mode: DuplicateDetectionMode
+    signature: str
+    created_at: datetime

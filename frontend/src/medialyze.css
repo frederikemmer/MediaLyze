@@ -618,6 +618,14 @@
   overflow: hidden;
 }
 
+.library-layout-panel-duplicates .panel-header {
+  margin-bottom: 6px;
+}
+
+.library-layout-panel-duplicates .async-panel-toggle-actions {
+  gap: 4px;
+}
+
 .library-layout-panel-history .library-history-chart-shell {
   height: 100%;
   min-height: 0;
@@ -2397,7 +2405,12 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .duplicate-group-card {
   display: grid;
-  gap: 12px;
+  gap: 6px;
+}
+
+.duplicate-group-card.is-suppressed {
+  border-color: rgba(31, 28, 22, 0.16);
+  background: rgba(31, 28, 22, 0.035);
 }
 
 .duplicate-group-summary {
@@ -2406,6 +2419,36 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.duplicate-group-summary-main {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  flex: 1 1 18rem;
+}
+
+.duplicate-group-action {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.duplicate-group-action:hover,
+.duplicate-group-action:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  transform: none;
+}
+
+.duplicate-group-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .duplicate-group-items-scroll {
@@ -3455,14 +3498,14 @@ html[data-theme="dark"] .file-history-old-value {
 }
 
 .duplicate-search-layout {
-  --search-control-width: clamp(15rem, 30vw, 24rem);
+  --search-control-width: clamp(15rem, 28vw, 24rem);
 }
 
 .duplicate-panel-title-actions {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3472,6 +3515,30 @@ html[data-theme="dark"] .file-history-old-value {
 
 .duplicate-panel-title-actions .duplicate-search-layout {
   margin-left: 0;
+  flex: 0 1 var(--search-control-width);
+  width: min(100%, var(--search-control-width));
+}
+
+.duplicate-suppressed-toggle {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.duplicate-suppressed-toggle:hover,
+.duplicate-suppressed-toggle:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  transform: none;
 }
 
 .search-filter-picker {

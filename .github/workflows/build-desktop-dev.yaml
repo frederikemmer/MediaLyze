@@ -47,13 +47,12 @@ jobs:
         run: npm test
         working-directory: desktop
 
-      - name: Install ffmpeg on Linux
+      - name: Build static ffprobe on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          mkdir -p dist/ffprobe-bundle
-          cp "$(command -v ffprobe)" dist/ffprobe-bundle/ffprobe
+          sudo apt-get install -y build-essential ca-certificates curl nasm pkg-config xz-utils musl-tools binutils
+          desktop/scripts/build-linux-static-ffprobe.sh
 
       - name: Install ffmpeg on macOS
         if: matrix.os == 'macos-latest'
@@ -78,10 +77,37 @@ jobs:
           MEDIALYZE_FFPROBE_DIR: ${{ github.workspace }}/dist/ffprobe-bundle
 
       - name: Build desktop release artifacts
+        if: matrix.os != 'windows-latest'
         run: npm run dist -- --publish never
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Build desktop release artifacts on Windows with retry
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          $ErrorActionPreference = "Stop"
+          $maxAttempts = 3
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Windows desktop build attempt $attempt of $maxAttempts"
+
+            npm run dist -- --publish never
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -ge $maxAttempts) {
+              throw "Windows desktop build failed after $maxAttempts attempts."
+            }
+
+            Write-Warning "Windows desktop build failed on attempt $attempt with exit code $LASTEXITCODE. Retrying after 15 seconds."
+            Start-Sleep -Seconds 15
+          }
 
       - name: Verify desktop artifact name
         shell: bash
@@ -117,43 +143,45 @@ jobs:
 
           ffprobe_dir="squashfs-root/resources/backend/ffprobe"
           ffprobe_bin="$ffprobe_dir/ffprobe"
-          ffprobe_launcher="$ffprobe_dir/ffprobe-medialyze"
-          ffprobe_lib="$ffprobe_dir/lib"
 
           if [[ ! -x "$ffprobe_bin" ]]; then
             echo "Bundled ffprobe executable is missing from AppImage: $ffprobe_bin" >&2
             exit 1
           fi
 
-          if [[ ! -x "$ffprobe_launcher" ]]; then
-            echo "Bundled ffprobe launcher is missing from AppImage: $ffprobe_launcher" >&2
+          if [[ -e "$ffprobe_dir/ffprobe-medialyze" ]]; then
+            echo "Linux AppImage must not bundle the old ffprobe wrapper." >&2
             exit 1
           fi
 
-          if ! grep -q 'LD_LIBRARY_PATH="$SELF_DIR/lib' "$ffprobe_launcher"; then
-            echo "Bundled ffprobe launcher does not set LD_LIBRARY_PATH from its own lib directory." >&2
-            sed -n '1,40p' "$ffprobe_launcher" >&2
+          if find "$ffprobe_dir" -type f -name 'libav*.so*' | grep -q .; then
+            echo "Linux AppImage must not bundle dynamic FFmpeg shared libraries." >&2
+            find "$ffprobe_dir" -type f -name 'libav*.so*' >&2
             exit 1
           fi
 
-          if [[ ! -d "$ffprobe_lib" ]]; then
-            echo "Bundled ffprobe library directory is missing from AppImage: $ffprobe_lib" >&2
+          if readelf -d "$ffprobe_bin" | grep -q '(NEEDED)'; then
+            echo "Bundled ffprobe is dynamically linked; expected static binary." >&2
+            readelf -d "$ffprobe_bin" >&2
             exit 1
           fi
 
-          if ! find "$ffprobe_lib" -maxdepth 1 -type f -name 'libavdevice.so*' | grep -q .; then
-            echo "Bundled ffprobe library directory does not contain libavdevice.so*" >&2
-            find "$ffprobe_lib" -maxdepth 1 -type f -printf '%f\n' >&2
-            exit 1
-          fi
+          "$ffprobe_bin" -version >/dev/null
 
-          if LD_LIBRARY_PATH="$PWD/$ffprobe_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$ffprobe_bin" | grep -q 'not found'; then
-            echo "Bundled ffprobe still has unresolved shared-library dependencies." >&2
-            LD_LIBRARY_PATH="$PWD/$ffprobe_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$ffprobe_bin" >&2
-            exit 1
-          fi
+          python3 - <<'PY'
+          import wave
+          from pathlib import Path
 
-          "$ffprobe_launcher" -version >/dev/null
+          path = Path("dist/ffprobe-smoke.wav")
+          with wave.open(str(path), "w") as wav:
+              wav.setnchannels(1)
+              wav.setsampwidth(2)
+              wav.setframerate(8000)
+              wav.writeframes(b"\x00\x00" * 8000)
+          PY
+
+          "$ffprobe_bin" -v error -print_format json -show_format -show_streams dist/ffprobe-smoke.wav >/tmp/ffprobe-smoke.json
+          grep -q '"codec_name": "pcm_s16le"' /tmp/ffprobe-smoke.json
 
       - name: Upload Linux desktop artifact
         if: matrix.os == 'ubuntu-latest'

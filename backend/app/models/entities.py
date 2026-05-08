@@ -113,6 +113,11 @@ class Library(TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    duplicate_group_suppressions: Mapped[list[DuplicateGroupSuppression]] = relationship(
+        back_populates="library",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     library_history_entries: Mapped[list[LibraryHistory]] = relationship(
         back_populates="library",
         cascade="all, delete-orphan",
@@ -130,6 +135,30 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class DuplicateGroupSuppression(TimestampMixin, Base):
+    __tablename__ = "duplicate_group_suppressions"
+    __table_args__ = (
+        Index(
+            "ix_duplicate_group_suppressions_library_mode_signature",
+            "library_id",
+            "mode",
+            "signature",
+            unique=True,
+        ),
+        Index("ix_duplicate_group_suppressions_library_mode", "library_id", "mode"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    mode: Mapped[DuplicateDetectionMode] = mapped_column(
+        SqlEnum(DuplicateDetectionMode, native_enum=False),
+        nullable=False,
+    )
+    signature: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    library: Mapped[Library] = relationship(back_populates="duplicate_group_suppressions")
 
 
 class MediaSeries(TimestampMixin, Base):

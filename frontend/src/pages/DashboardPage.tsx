@@ -657,6 +657,7 @@ export function DashboardPage() {
                   rangeStorageKey={DASHBOARD_HISTORY_RANGE_STORAGE_KEY}
                   bodyId="dashboard-history-panel-body"
                   inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
+                  showLibraryMix
                 />
               );
             } else if (panel.definition.statisticDefinition.panelKind === "comparison") {

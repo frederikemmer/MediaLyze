@@ -162,6 +162,10 @@ function createDashboardHistory(): DashboardHistoryResponse {
     oldest_snapshot_day: "2026-04-17",
     newest_snapshot_day: "2026-04-18",
     visible_library_ids: [1, 2],
+    visible_libraries: [
+      { id: 1, name: "Movies" },
+      { id: 2, name: "Shows" },
+    ],
     resolution_categories: [
       { id: "4k", label: "4k" },
       { id: "1080p", label: "1080p" },
@@ -172,6 +176,7 @@ function createDashboardHistory(): DashboardHistoryResponse {
         trend_metrics: {
           total_files: 8,
           resolution_counts: { "4k": 3, "1080p": 5 },
+          category_counts: { library: { "1": 3, "2": 5 } },
           average_bitrate: 8_000_000,
           average_audio_bitrate: 512_000,
           average_duration_seconds: 4_200,
@@ -183,6 +188,7 @@ function createDashboardHistory(): DashboardHistoryResponse {
         trend_metrics: {
           total_files: 10,
           resolution_counts: { "4k": 4, "1080p": 6 },
+          category_counts: { library: { "1": 4, "2": 6 } },
           average_bitrate: 8_500_000,
           average_audio_bitrate: 576_000,
           average_duration_seconds: 4_500,
@@ -494,6 +500,8 @@ describe("DashboardPage", () => {
     expect(historyToggle).toBeInTheDocument();
     expect(historyToggle.closest(".statistic-layout-panel-shell")).not.toBeNull();
     expect(screen.getByLabelText("Select history metric")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select history metric"));
+    expect(screen.getByRole("menuitemradio", { name: "Library mix" })).toBeInTheDocument();
     expect(screen.queryByText("Daily trend snapshots from finished scans")).not.toBeInTheDocument();
   });
 });

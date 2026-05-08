@@ -1,4 +1,5 @@
 import type {
+  DashboardHistoryLibrary,
   LibraryHistoryResolutionCategory,
   LibraryHistoryTrendMetrics,
   NumericDistributionBin,
@@ -22,6 +23,7 @@ export type LibraryHistoryMetricId =
   | "average_audio_bitrate"
   | "average_quality_score"
   | "average_resolution_mp"
+  | "library_mix"
   | "resolution_mix"
   | "container_mix"
   | "video_codec_mix"
@@ -58,6 +60,7 @@ export type HistoryMetricDefinition =
         value: string,
         resolutionCategories: LibraryHistoryResolutionCategory[],
         options?: HdrDisplayOptions,
+        libraryCategories?: DashboardHistoryLibrary[],
       ) => string;
     }
   | {
@@ -76,6 +79,7 @@ export type HistoryMetricDefinition =
         value: string,
         resolutionCategories: LibraryHistoryResolutionCategory[],
         options?: HdrDisplayOptions,
+        libraryCategories?: DashboardHistoryLibrary[],
       ) => string;
     };
 
@@ -97,6 +101,19 @@ function formatResolutionCategory(value: string, resolutionCategories: LibraryHi
 
 function formatPlain(value: string): string {
   return value || "unknown";
+}
+
+function formatLibraryCategory(
+  value: string,
+  _resolutionCategories: LibraryHistoryResolutionCategory[],
+  _options?: HdrDisplayOptions,
+  libraryCategories: DashboardHistoryLibrary[] = [],
+): string {
+  const libraryId = Number(value);
+  if (!Number.isFinite(libraryId)) {
+    return value;
+  }
+  return libraryCategories.find((library) => library.id === libraryId)?.name ?? value;
 }
 
 function formatResolutionMpBin(bin: NumericDistributionBin): string {
@@ -175,6 +192,13 @@ export const HISTORY_METRIC_DEFINITIONS: HistoryMetricDefinition[] = [
     labelKey: "libraryDetail.history.metrics.average_resolution_mp",
     valueKind: "megapixels",
     value: (metrics) => numericAverage(metrics, "resolution_mp"),
+  },
+  {
+    id: "library_mix",
+    group: "category",
+    labelKey: "libraryDetail.history.metrics.library_mix",
+    categoryKey: "library",
+    formatCategory: formatLibraryCategory,
   },
   {
     id: "resolution_mix",

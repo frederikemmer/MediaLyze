@@ -9,6 +9,11 @@ class LibraryHistoryResolutionCategoryRead(BaseModel):
     label: str
 
 
+class DashboardHistoryLibraryRead(BaseModel):
+    id: int
+    name: str
+
+
 class LibraryHistoryNumericSummaryRead(BaseModel):
     count: int = 0
     sum: float = 0.0
@@ -50,3 +55,4 @@ class LibraryHistoryResponse(HistoryTimelineResponse):
 
 class DashboardHistoryResponse(HistoryTimelineResponse):
     visible_library_ids: list[int] = Field(default_factory=list)
+    visible_libraries: list[DashboardHistoryLibraryRead] = Field(default_factory=list)
