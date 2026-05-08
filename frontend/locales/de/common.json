@@ -477,7 +477,14 @@
       "fileCount": "{{count}} Dateien",
       "searchPlaceholder": "Duplikate durchsuchen",
       "searchLabel": "Duplikate durchsuchen",
-      "clearSearch": "Duplikat-Suche loeschen"
+      "clearSearch": "Duplikat-Suche loeschen",
+      "showSuppressed": "Ausgeblendete anzeigen",
+      "hideSuppressed": "Ausgeblendete ausblenden",
+      "suppressedBadge": "Ausgeblendet",
+      "markNotDuplicate": "Als kein Duplikat markieren",
+      "restoreDuplicate": "Duplikatgruppe wiederherstellen",
+      "suppressFailed": "Die Duplikatgruppe konnte nicht als kein Duplikat markiert werden.",
+      "restoreFailed": "Die Duplikatgruppe konnte nicht wiederhergestellt werden."
     },
     "history": {
       "title": "Mediathekverlauf",

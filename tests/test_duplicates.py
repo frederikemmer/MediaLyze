@@ -12,6 +12,8 @@ from backend.app.services.duplicates import (
     FilenameDuplicateDetectionStrategy,
     get_duplicate_detection_strategy,
     list_library_duplicate_groups,
+    suppress_duplicate_group,
+    unsuppress_duplicate_group,
 )
 
 
@@ -246,3 +248,123 @@ def test_combined_duplicate_detection_groups_include_filename_and_filehash_match
     assert groups.items[1].signature == "movie name 2024"
     assert {item.filename for item in groups.items[0].items} == {"hash-a.mkv", "totally-different-name.mp4"}
     assert {item.filename for item in groups.items[1].items} == {"Movie.Name.2024.mkv", "movie_name_2024.mp4"}
+
+
+def test_duplicate_suppression_hides_and_restores_filename_groups(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    files = [library_dir / "Movie.Name.2024.mkv", library_dir / "movie_name_2024.mp4"]
+    for file_path in files:
+        file_path.write_text(file_path.name)
+
+    strategy = get_duplicate_detection_strategy(DuplicateDetectionMode.filename)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(library_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.filename,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for file_path in files:
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=file_path.name,
+                filename=file_path.name,
+                extension=file_path.suffix.lstrip("."),
+                size_bytes=file_path.stat().st_size,
+                mtime=file_path.stat().st_mtime,
+            )
+            strategy.apply_payload(media_file, strategy.build_payload(file_path))
+            db.add(media_file)
+
+        db.commit()
+        suppression = suppress_duplicate_group(db, library.id, DuplicateDetectionMode.filename, "movie name 2024")
+        groups = list_library_duplicate_groups(db, library.id)
+        groups_with_suppressed = list_library_duplicate_groups(db, library.id, include_suppressed=True)
+        restored = unsuppress_duplicate_group(db, library.id, DuplicateDetectionMode.filename, "movie name 2024")
+        restored_groups = list_library_duplicate_groups(db, library.id)
+
+    assert suppression is not None
+    assert groups.total_groups == 0
+    assert groups.duplicate_file_count == 0
+    assert groups.suppressed_group_count == 1
+    assert groups.items == []
+    assert groups_with_suppressed.total_groups == 0
+    assert groups_with_suppressed.duplicate_file_count == 0
+    assert groups_with_suppressed.suppressed_group_count == 1
+    assert groups_with_suppressed.items[0].suppressed is True
+    assert groups_with_suppressed.items[0].signature == "movie name 2024"
+    assert restored is True
+    assert restored_groups.total_groups == 1
+    assert restored_groups.duplicate_file_count == 2
+    assert restored_groups.suppressed_group_count == 0
+
+
+def test_duplicate_suppression_is_mode_specific_for_combined_detection(tmp_path: Path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    filename_a = library_dir / "Movie.Name.2024.mkv"
+    filename_b = library_dir / "movie_name_2024.mp4"
+    hash_a = library_dir / "hash-a.mkv"
+    hash_b = library_dir / "totally-different-name.mp4"
+    filename_a.write_text("cut-a")
+    filename_b.write_text("cut-b")
+    hash_a.write_text("same-content")
+    hash_b.write_text("same-content")
+
+    strategy = get_duplicate_detection_strategy(DuplicateDetectionMode.both)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(library_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for file_path in (filename_a, filename_b, hash_a, hash_b):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=file_path.name,
+                filename=file_path.name,
+                extension=file_path.suffix.lstrip("."),
+                size_bytes=file_path.stat().st_size,
+                mtime=file_path.stat().st_mtime,
+            )
+            strategy.apply_payload(media_file, strategy.build_payload(file_path))
+            db.add(media_file)
+
+        db.commit()
+        original = list_library_duplicate_groups(db, library.id)
+        filehash_signature = next(group.signature for group in original.items if group.mode == DuplicateDetectionMode.filehash)
+        suppress_duplicate_group(db, library.id, DuplicateDetectionMode.filehash, filehash_signature)
+        visible = list_library_duplicate_groups(db, library.id)
+        with_suppressed = list_library_duplicate_groups(db, library.id, include_suppressed=True)
+        suppress_duplicate_group(db, library.id, DuplicateDetectionMode.filehash, filehash_signature)
+        idempotent = list_library_duplicate_groups(db, library.id)
+
+    assert visible.total_groups == 1
+    assert visible.duplicate_file_count == 2
+    assert visible.items[0].mode == DuplicateDetectionMode.filename
+    assert visible.items[0].signature == "movie name 2024"
+    assert with_suppressed.suppressed_group_count == 1
+    assert [group.suppressed for group in with_suppressed.items] == [True, False]
+    assert idempotent.suppressed_group_count == 1

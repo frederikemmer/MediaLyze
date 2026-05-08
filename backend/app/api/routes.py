@@ -10,7 +10,11 @@ from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
-from backend.app.schemas.duplicates import DuplicateGroupPageRead
+from backend.app.schemas.duplicates import (
+    DuplicateGroupPageRead,
+    DuplicateSuppressionCreate,
+    DuplicateSuppressionRead,
+)
 from backend.app.schemas.history import HistoryReconstructionStatusRead, HistoryStorageRead
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
@@ -35,11 +39,15 @@ from backend.app.schemas.scan import (
     ScanJobRead,
     ScanRequest,
 )
-from backend.app.models.entities import Library, ScanJob, ScanTriggerSource
+from backend.app.models.entities import DuplicateDetectionMode, Library, ScanJob, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
-from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.duplicates import (
+    list_library_duplicate_groups,
+    suppress_duplicate_group,
+    unsuppress_duplicate_group,
+)
 from backend.app.services.history_storage import get_cached_history_storage
 from backend.app.services.history_retention import has_active_scan_jobs
 from backend.app.services.library_history_service import get_dashboard_history, get_library_history
@@ -338,12 +346,53 @@ def library_duplicates(
     library_id: int,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=200),
+    include_suppressed: bool = Query(default=False),
     db: Session = Depends(get_db_session),
 ) -> DuplicateGroupPageRead:
     try:
-        return list_library_duplicate_groups(db, library_id, offset=offset, limit=limit)
+        return list_library_duplicate_groups(
+            db,
+            library_id,
+            offset=offset,
+            limit=limit,
+            include_suppressed=include_suppressed,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Library not found") from exc
+
+
+@router.post(
+    "/libraries/{library_id}/duplicates/suppressions",
+    response_model=DuplicateSuppressionRead,
+    status_code=201,
+)
+def library_duplicate_suppression_create(
+    library_id: int,
+    payload: DuplicateSuppressionCreate,
+    db: Session = Depends(get_db_session),
+) -> DuplicateSuppressionRead:
+    try:
+        suppression = suppress_duplicate_group(db, library_id, payload.mode, payload.signature)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if suppression is None:
+        raise HTTPException(status_code=404, detail="Library not found")
+    return suppression
+
+
+@router.delete("/libraries/{library_id}/duplicates/suppressions", status_code=204)
+def library_duplicate_suppression_delete(
+    library_id: int,
+    mode: DuplicateDetectionMode = Query(...),
+    signature: str = Query(...),
+    db: Session = Depends(get_db_session),
+) -> None:
+    try:
+        deleted = unsuppress_duplicate_group(db, library_id, mode, signature)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Library not found")
 
 
 @router.get("/libraries/{library_id}/history", response_model=LibraryHistoryResponse)

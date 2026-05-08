@@ -2400,12 +2400,47 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   gap: 12px;
 }
 
+.duplicate-group-card.is-suppressed {
+  border-color: rgba(31, 28, 22, 0.16);
+  background: rgba(31, 28, 22, 0.035);
+}
+
 .duplicate-group-summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.duplicate-group-summary-main {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  flex: 1 1 18rem;
+}
+
+.duplicate-group-action {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.duplicate-group-action:hover,
+.duplicate-group-action:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  transform: none;
+}
+
+.duplicate-group-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .duplicate-group-items-scroll {
@@ -3461,7 +3496,7 @@ html[data-theme="dark"] .file-history-old-value {
 .duplicate-panel-title-actions {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
 }
@@ -3472,6 +3507,28 @@ html[data-theme="dark"] .file-history-old-value {
 
 .duplicate-panel-title-actions .duplicate-search-layout {
   margin-left: 0;
+}
+
+.duplicate-suppressed-toggle {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid rgba(31, 28, 22, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.duplicate-suppressed-toggle:hover,
+.duplicate-suppressed-toggle:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  transform: none;
 }
 
 .search-filter-picker {

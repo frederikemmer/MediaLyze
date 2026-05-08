@@ -764,6 +764,7 @@ export type DuplicateGroup = {
   label: string;
   file_count: number;
   total_size_bytes: number;
+  suppressed: boolean;
   items: DuplicateGroupFile[];
 };
 
@@ -771,9 +772,16 @@ export type DuplicateGroupPage = {
   mode: DuplicateDetectionMode;
   total_groups: number;
   duplicate_file_count: number;
+  include_suppressed: boolean;
+  suppressed_group_count: number;
   offset: number;
   limit: number;
   items: DuplicateGroup[];
+};
+
+export type DuplicateSuppressionPayload = {
+  mode: Exclude<DuplicateDetectionMode, "off" | "both">;
+  signature: string;
 };
 
 export type ScanCancelResponse = {
@@ -981,7 +989,7 @@ export const api = {
     ),
   libraryDuplicates: (
     id: string | number,
-    params?: { offset?: number; limit?: number; signal?: AbortSignal },
+    params?: { offset?: number; limit?: number; includeSuppressed?: boolean; signal?: AbortSignal },
   ) => {
     const searchParams = new URLSearchParams();
     if (params?.offset !== undefined) {
@@ -990,9 +998,25 @@ export const api = {
     if (params?.limit !== undefined) {
       searchParams.set("limit", String(params.limit));
     }
+    if (params?.includeSuppressed !== undefined) {
+      searchParams.set("include_suppressed", params.includeSuppressed ? "true" : "false");
+    }
     const query = searchParams.toString();
     return request<DuplicateGroupPage>(`/libraries/${id}/duplicates${query ? `?${query}` : ""}`, {
       signal: params?.signal,
+    });
+  },
+  suppressDuplicateGroup: (id: string | number, payload: DuplicateSuppressionPayload) =>
+    request<void>(`/libraries/${id}/duplicates/suppressions`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  unsuppressDuplicateGroup: (id: string | number, payload: DuplicateSuppressionPayload) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set("mode", payload.mode);
+    searchParams.set("signature", payload.signature);
+    return request<void>(`/libraries/${id}/duplicates/suppressions?${searchParams.toString()}`, {
+      method: "DELETE",
     });
   },
   libraryFiles: (id: string | number, params?: LibraryFilesRequestParams) =>

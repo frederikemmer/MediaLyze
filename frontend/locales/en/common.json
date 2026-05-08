@@ -477,7 +477,14 @@
       "fileCount": "{{count}} files",
       "searchPlaceholder": "Search duplicates",
       "searchLabel": "Search duplicates",
-      "clearSearch": "Clear duplicate search"
+      "clearSearch": "Clear duplicate search",
+      "showSuppressed": "Show hidden",
+      "hideSuppressed": "Hide hidden",
+      "suppressedBadge": "Hidden",
+      "markNotDuplicate": "Mark as not duplicate",
+      "restoreDuplicate": "Restore duplicate group",
+      "suppressFailed": "Could not mark the duplicate group as not duplicate.",
+      "restoreFailed": "Could not restore the duplicate group."
     },
     "history": {
       "title": "Media library history",

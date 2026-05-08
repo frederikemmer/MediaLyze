@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- allow duplicate groups to be marked as not duplicates so they stay hidden from normal duplicate views while remaining restorable from the duplicates panel
+
 ## v0.10.3
 
 >2026-05-08
+
+### 🐛 Bug fixes
 
 - replace the Linux desktop AppImage `ffprobe` bundle with a pinned static `ffprobe` build so media scans no longer depend on host or bundled FFmpeg shared-library resolution; `FFPROBE_PATH` remains available for explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
 
@@ -14,12 +20,16 @@ All notable changes to this project will be documented in this file.
 
 >2026-05-06
 
+### 🐛 Bug fixes
+
 - route packaged Linux desktop analysis through a bundled `ffprobe` launcher that sets its own library path before executing `ffprobe`, preventing AppImage scans from falling back to incompatible host FFmpeg libraries; `FFPROBE_PATH` still supports explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
 - make `MediaLyze.AppImage --version` print the packaged desktop app version so users can verify the exact AppImage build they are running ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
 
 ## v0.10.1
 
 >2026-05-04
+
+### 🐛 Bug fixes
 
 - bundle Linux desktop `ffprobe` shared-library dependencies into AppImage builds and load them at runtime so scans no longer fail when the host distribution has incompatible FFmpeg library versions ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
 

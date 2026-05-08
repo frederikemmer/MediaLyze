@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  EyeOff,
   PanelBottomClose,
   PanelLeftClose,
   PanelRightClose,
@@ -9,6 +10,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 import type { CSSProperties, InputHTMLAttributes, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -1298,6 +1300,14 @@ function buildLibraryTableViewSettingsScope(libraryId: string): string {
   return `library-${libraryId}`;
 }
 
+function buildDuplicateGroupsCacheKey(libraryId: string, includeSuppressed: boolean): string {
+  return `${libraryId}:${includeSuppressed ? "with-suppressed" : "visible"}`;
+}
+
+function buildDuplicateGroupKey(mode: string, signature: string): string {
+  return `${mode}:${signature}`;
+}
+
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
@@ -1315,6 +1325,8 @@ export function LibraryDetailPage() {
   const [expandedGroupedSeasonKeys, setExpandedGroupedSeasonKeys] = useState<Record<string, boolean>>({});
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroupPage | null>(null);
   const [duplicateSearch, setDuplicateSearch] = useState("");
+  const [showSuppressedDuplicateGroups, setShowSuppressedDuplicateGroups] = useState(false);
+  const [duplicateSuppressionPendingKey, setDuplicateSuppressionPendingKey] = useState<string | null>(null);
   const initialStatisticLayoutResultRef = useRef<ReturnType<typeof getStatisticPanelLayoutReadResult> | null>(null);
   if (initialStatisticLayoutResultRef.current === null) {
     initialStatisticLayoutResultRef.current = getStatisticPanelLayoutReadResult(
@@ -1965,8 +1977,13 @@ export function LibraryDetailPage() {
     }
 
     try {
-      const payload = await api.libraryDuplicates(libraryId, { offset: 0, limit: 25, signal: controller.signal });
-      libraryDuplicateGroupsCache.set(libraryId, payload);
+      const payload = await api.libraryDuplicates(libraryId, {
+        offset: 0,
+        limit: 25,
+        includeSuppressed: showSuppressedDuplicateGroups,
+        signal: controller.signal,
+      });
+      libraryDuplicateGroupsCache.set(buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups), payload);
       setDuplicateGroups(payload);
       setDuplicateGroupsError(null);
     } catch (reason) {
@@ -1981,6 +1998,34 @@ export function LibraryDetailPage() {
       if (showLoading) {
         setIsDuplicateGroupsLoading(false);
       }
+    }
+  });
+
+  const toggleDuplicateSuppression = useEffectEvent(async (
+    mode: "filename" | "filehash",
+    signature: string,
+    suppressed: boolean,
+  ) => {
+    const pendingKey = buildDuplicateGroupKey(mode, signature);
+    setDuplicateSuppressionPendingKey(pendingKey);
+    try {
+      if (suppressed) {
+        await api.unsuppressDuplicateGroup(libraryId, { mode, signature });
+      } else {
+        await api.suppressDuplicateGroup(libraryId, { mode, signature });
+      }
+      libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, false));
+      libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, true));
+      await loadDuplicateGroups(false);
+      setDuplicateGroupsError(null);
+    } catch {
+      setDuplicateGroupsError(
+        suppressed
+          ? t("libraryDetail.duplicates.restoreFailed")
+          : t("libraryDetail.duplicates.suppressFailed"),
+      );
+    } finally {
+      setDuplicateSuppressionPendingKey(null);
     }
   });
 
@@ -2445,7 +2490,8 @@ export function LibraryDetailPage() {
   useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
-    const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(libraryId) ?? null;
+    const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups);
+    const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(duplicateGroupsCacheKey) ?? null;
 
     setComparisonByPanel({});
     setComparisonErrorByPanel({});
@@ -2469,7 +2515,7 @@ export function LibraryDetailPage() {
     void loadLibrarySummary(cachedSummary === null);
     void loadLibraryHistory(cachedHistory === null);
     void loadDuplicateGroups(cachedDuplicateGroups === null);
-  }, [libraryId]);
+  }, [libraryId, showSuppressedDuplicateGroups]);
 
   useEffect(() => {
     const statisticsCacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
@@ -2754,7 +2800,8 @@ export function LibraryDetailPage() {
         );
         libraryComparisonCache.delete(buildLibraryComparisonQueryKey(libraryId, selection));
       }
-      libraryDuplicateGroupsCache.delete(libraryId);
+      libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, false));
+      libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, true));
       libraryFileListCache.delete(fileQueryKey);
       libraryGroupedFileListCache.delete(fileQueryKey);
       setQualityScoreDetails({});
@@ -3227,6 +3274,19 @@ export function LibraryDetailPage() {
                     <div className="duplicate-panel-title-actions">
                       {duplicateGroups ? <span className="badge">{duplicateGroups.total_groups}</span> : null}
                       {!isDuplicatesPanelCollapsed ? (
+                        duplicateGroups && duplicateGroups.suppressed_group_count > 0 ? (
+                          <button
+                            type="button"
+                            className="duplicate-suppressed-toggle"
+                            onClick={() => setShowSuppressedDuplicateGroups((current) => !current)}
+                          >
+                            {showSuppressedDuplicateGroups
+                              ? t("libraryDetail.duplicates.hideSuppressed")
+                              : t("libraryDetail.duplicates.showSuppressed")}
+                          </button>
+                        ) : null
+                      ) : null}
+                      {!isDuplicatesPanelCollapsed ? (
                         <div className="data-table-search-layout duplicate-search-layout">
                           <div className="metadata-search-control duplicate-search-control">
                             <span className="metadata-search-icon-button" aria-hidden="true">
@@ -3266,14 +3326,51 @@ export function LibraryDetailPage() {
                   {duplicateGroups && filteredDuplicateGroups.length > 0 ? (
                     <div className="duplicate-group-list">
                       {filteredDuplicateGroups.map((group) => (
-                        <div key={`${group.mode}:${group.signature}`} className="media-card duplicate-group-card">
+                        <div
+                          key={`${group.mode}:${group.signature}`}
+                          className={`media-card duplicate-group-card${group.suppressed ? " is-suppressed" : ""}`}
+                        >
                           <div className="duplicate-group-summary">
-                            <div className="meta-tags">
-                              <span className="badge">{t(`libraries.duplicateDetectionModes.${group.mode}`)}</span>
-                              <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
-                              <span className="badge">{formatBytes(group.total_size_bytes)}</span>
+                            <div className="duplicate-group-summary-main">
+                              <div className="meta-tags">
+                                <span className="badge">{t(`libraries.duplicateDetectionModes.${group.mode}`)}</span>
+                                <span className="badge">{t("libraryDetail.duplicates.fileCount", { count: group.file_count })}</span>
+                                <span className="badge">{formatBytes(group.total_size_bytes)}</span>
+                                {group.suppressed ? (
+                                  <span className="badge">{t("libraryDetail.duplicates.suppressedBadge")}</span>
+                                ) : null}
+                              </div>
+                              <code className="scan-log-path">{group.signature}</code>
                             </div>
-                            <code className="scan-log-path">{group.signature}</code>
+                            {group.mode === "filename" || group.mode === "filehash" ? (
+                              <button
+                                type="button"
+                                className="icon-only-button duplicate-group-action"
+                                aria-label={
+                                  group.suppressed
+                                    ? t("libraryDetail.duplicates.restoreDuplicate")
+                                    : t("libraryDetail.duplicates.markNotDuplicate")
+                                }
+                                title={
+                                  group.suppressed
+                                    ? t("libraryDetail.duplicates.restoreDuplicate")
+                                    : t("libraryDetail.duplicates.markNotDuplicate")
+                                }
+                                disabled={
+                                  duplicateSuppressionPendingKey ===
+                                  buildDuplicateGroupKey(group.mode as "filename" | "filehash", group.signature)
+                                }
+                                onClick={() => {
+                                  void toggleDuplicateSuppression(
+                                    group.mode as "filename" | "filehash",
+                                    group.signature,
+                                    group.suppressed,
+                                  );
+                                }}
+                              >
+                                {group.suppressed ? <Undo2 size={17} aria-hidden="true" /> : <EyeOff size={17} aria-hidden="true" />}
+                              </button>
+                            ) : null}
                           </div>
                           <div className="scan-log-path-list duplicate-group-items-scroll">
                             {group.items.map((item) => (
