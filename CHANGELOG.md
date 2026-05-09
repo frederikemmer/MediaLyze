@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 - harden Windows desktop GitHub Actions builds by retrying the Electron packaging step when upstream `electron-builder` NSIS resource downloads fail transiently with HTTP 502 responses
 
+### 🐛 Bug fixes
+
+- regenerate favicon and Apple touch PNG assets from the vector source at their native target sizes so higher-resolution icons no longer appear pixelated
+
 ## v0.10.3
 
 >2026-05-08
