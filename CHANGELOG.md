@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
+- rename the release-notes dialog title to "Release history" and remove the smaller header label above it
+- match the Settings history reconstruction button sizing to the full-scan action button
+- move the Folder & pattern recognition header tooltip to the left of the collapse button
+
 ## v0.10.4
 
 >2026-05-08

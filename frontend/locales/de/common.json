@@ -52,14 +52,13 @@
     "loading": "Wird geladen..."
   },
   "releaseNotes": {
-    "eyebrow": "Version {{version}}",
-    "title": "Was ist neu",
-    "allVersions": "Versionsverlauf",
+    "title": "Versionsverlauf",
     "versionHeading": "Version {{version}}",
     "current": "Aktuell",
     "openAria": "Versionshinweise fuer {{version}} anzeigen",
     "githubAria": "GitHub-Repository oeffnen",
     "reportIssueAria": "Issue melden",
+    "donateAria": "MediaLyze unterstuetzen",
     "closeAria": "Versionshinweise schliessen"
   },
   "libraries": {

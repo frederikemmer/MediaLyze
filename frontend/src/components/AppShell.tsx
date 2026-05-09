@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bug, ChevronDown, ChevronRight, House, SearchX, Settings, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Gift, House, SearchX, Settings, X } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
@@ -20,6 +20,7 @@ import { useScanJobs } from "../lib/scan-jobs";
 
 const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
+const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
 
 function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
   if (job.phase_label === "Discovering files") {
@@ -200,11 +201,6 @@ export function AppShell() {
           >
             <div className="release-notes-header">
               <div>
-                <p className="eyebrow">
-                  {releaseNotes
-                    ? t("releaseNotes.eyebrow", { version: releaseNotes.version })
-                  : t("releaseNotes.allVersions")}
-                </p>
                 <h2 id="release-notes-title">{t("releaseNotes.title")}</h2>
               </div>
               <div className="release-notes-actions">
@@ -217,6 +213,16 @@ export function AppShell() {
                   data-tooltip={t("releaseNotes.reportIssueAria")}
                 >
                   <Bug aria-hidden="true" className="nav-icon" />
+                </a>
+                <a
+                  className="release-notes-icon-link"
+                  href={GITHUB_SPONSORS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={t("releaseNotes.donateAria")}
+                  data-tooltip={t("releaseNotes.donateAria")}
+                >
+                  <Gift aria-hidden="true" className="nav-icon" />
                 </a>
                 <a
                   className="release-notes-icon-link"

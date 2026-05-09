@@ -3733,7 +3733,7 @@ export function LibrariesPage() {
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
             subtitle={t("libraries.patternRecognition.subtitle")}
-            titleAddon={
+            collapseActions={
               <TooltipTrigger
                 ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
                 content={t("libraries.ignorePatternsHint")}
@@ -3743,6 +3743,7 @@ export function LibrariesPage() {
             }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
             collapseState={{
               collapsed: !settingsPanelState.patternRecognition,
               onToggle: () => toggleSettingsPanel("patternRecognition"),
@@ -3918,7 +3919,7 @@ export function LibrariesPage() {
               <div className="history-retention-title-actions">
                 <button
                   type="button"
-                  className="history-retention-primary-button"
+                  className="small history-retention-primary-button"
                   onClick={() => void reconstructHistory()}
                   disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
                 >

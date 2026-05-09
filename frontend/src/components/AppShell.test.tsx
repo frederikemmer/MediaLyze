@@ -78,7 +78,7 @@ describe("AppShell", () => {
   it("shows release notes for the current version until dismissed", async () => {
     renderShell();
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
     expect(screen.getAllByText("Version 0.8.3").length).toBeGreaterThan(0);
     expect(screen.getByText(/default the full-width app shell feature flag/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /version 0\.8\.2/i })).toBeInTheDocument();
@@ -91,12 +91,12 @@ describe("AppShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
     expect(window.localStorage.getItem("medialyze-release-notes-seen-version")).toBe("0.8.3");
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
     expect(screen.getByText(/default the full-width app shell feature flag/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open GitHub repository" })).toHaveAttribute(
       "href",
@@ -114,10 +114,18 @@ describe("AppShell", () => {
       "data-tooltip",
       "Report an issue",
     );
+    expect(screen.getByRole("link", { name: "Support MediaLyze" })).toHaveAttribute(
+      "href",
+      "https://github.com/sponsors/frederikemmer",
+    );
+    expect(screen.getByRole("link", { name: "Support MediaLyze" })).toHaveAttribute(
+      "data-tooltip",
+      "Support MediaLyze",
+    );
 
     fireEvent.mouseDown(document.querySelector(".release-notes-backdrop")!);
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
   });
 
   it("does not show already dismissed release notes for the current version", async () => {
@@ -126,11 +134,11 @@ describe("AppShell", () => {
     renderShell();
 
     await waitFor(() => expect(api.libraries).toHaveBeenCalled());
-    expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
   });
 
   it("applies the full-width shell class when the feature flag is enabled", async () => {
