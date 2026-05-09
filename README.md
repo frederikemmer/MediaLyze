@@ -63,6 +63,14 @@ Bring your own auth (for now).
   </tr>
 </table>
 
+## Support MediaLyze
+
+If you find MediaLyze useful and would like to support ongoing development, you can do so here:
+
+[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=DEINE_PAYPAL_BUTTON_ID)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-181717?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/frederikemmer)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/medialyze)
+
 ## Quick Start
 
 ### Docker Compose
