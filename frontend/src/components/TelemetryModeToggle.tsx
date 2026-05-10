@@ -69,7 +69,6 @@ export function TelemetryModeToggle({
         const isSelected = selectedMode === option.mode;
         const isPending = pendingMode === option.mode;
         const label = t(option.labelKey);
-        const tooltip = `${t(option.tooltipTitleKey)}\n${t(option.tooltipKey)}`;
         return (
           <button
             key={option.mode}
@@ -77,8 +76,8 @@ export function TelemetryModeToggle({
             className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}`.trim()}
             aria-label={label}
             aria-pressed={isSelected}
-            data-tooltip={tooltip}
-            title={tooltip}
+            data-tooltip-title={t(option.tooltipTitleKey)}
+            data-tooltip-body={t(option.tooltipKey)}
             disabled={disabled}
             onClick={() => onChange(option.mode)}
           >

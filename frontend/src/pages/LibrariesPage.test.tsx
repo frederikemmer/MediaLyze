@@ -1534,7 +1534,24 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
+    const offButtons = await screen.findAllByRole("button", { name: "Telemetry off" });
+    expect(offButtons[0]).toHaveAttribute("data-tooltip-title", "Telemetry off");
+    expect(offButtons[0]).toHaveAttribute("data-tooltip-body", "No telemetry payloads are sent.");
+
     const minimalButtons = await screen.findAllByRole("button", { name: "Minimal telemetry" });
+    expect(minimalButtons[0]).toHaveAttribute("data-tooltip-title", "Minimal telemetry");
+    expect(minimalButtons[0]).toHaveAttribute(
+      "data-tooltip-body",
+      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+    );
+
+    const enabledButtons = await screen.findAllByRole("button", { name: "Help the dev" });
+    expect(enabledButtons[0]).toHaveAttribute("data-tooltip-title", "Help the dev");
+    expect(enabledButtons[0]).toHaveAttribute(
+      "data-tooltip-body",
+      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+    );
+
     fireEvent.click(minimalButtons[0]);
 
     await waitFor(() =>

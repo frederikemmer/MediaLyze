@@ -753,7 +753,7 @@
     "mode": {
       "off": "Telemetry off",
       "minimal": "Minimal telemetry",
-      "enabled": "Anonymous metrics"
+      "enabled": "Help the dev"
     },
     "modeTooltipTitles": {
       "off": "Telemetry off",

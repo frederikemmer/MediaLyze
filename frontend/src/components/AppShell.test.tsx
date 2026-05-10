@@ -169,8 +169,21 @@ describe("AppShell", () => {
     renderShell();
 
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
-    const enabledButton = screen.getByRole("button", { name: "Anonymous metrics" });
+    const enabledButton = screen.getByRole("button", { name: "Help the dev" });
     expect(enabledButton).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Telemetry off" })).toHaveAttribute(
+      "data-tooltip-body",
+      "No telemetry payloads are sent.",
+    );
+    expect(screen.getByRole("button", { name: "Minimal telemetry" })).toHaveAttribute(
+      "data-tooltip-body",
+      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+    );
+    expect(enabledButton).toHaveAttribute("data-tooltip-title", "Help the dev");
+    expect(enabledButton).toHaveAttribute(
+      "data-tooltip-body",
+      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+    );
 
     fireEvent.click(enabledButton);
 

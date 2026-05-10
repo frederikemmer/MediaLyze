@@ -17,3 +17,4 @@ config/
 .env
 media/
 .local-config
+.codex

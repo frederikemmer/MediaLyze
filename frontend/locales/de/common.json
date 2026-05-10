@@ -753,7 +753,7 @@
     "mode": {
       "off": "Telemetrie aus",
       "minimal": "Minimale Telemetrie",
-      "enabled": "Anonyme Metriken"
+      "enabled": "Hilf dem Entwickler"
     },
     "modeTooltipTitles": {
       "off": "Telemetrie aus",

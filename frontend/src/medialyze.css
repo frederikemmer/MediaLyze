@@ -3009,7 +3009,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .telemetry-mode-button {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3082,12 +3082,12 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: linear-gradient(180deg, rgba(236, 253, 243, 1), rgba(220, 250, 230, 0.96));
 }
 
-.telemetry-mode-button[data-tooltip]::after {
-  content: attr(data-tooltip);
+.telemetry-mode-button[data-tooltip-title]::after {
+  content: attr(data-tooltip-title) "\A" attr(data-tooltip-body);
   position: absolute;
   top: calc(100% + 10px);
   left: 0;
-  z-index: 4;
+  z-index: 1000;
   width: min(340px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   padding: 8px 10px;
@@ -3107,8 +3107,8 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
-.telemetry-mode-button[data-tooltip]:hover::after,
-.telemetry-mode-button[data-tooltip]:focus-visible::after {
+.telemetry-mode-button[data-tooltip-title]:hover::after,
+.telemetry-mode-button[data-tooltip-title]:focus-visible::after {
   opacity: 1;
   transform: translateY(2px);
 }
