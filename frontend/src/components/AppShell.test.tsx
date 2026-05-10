@@ -42,6 +42,11 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       in_depth_dolby_vision_profiles: false,
       ...overrideFeatureFlags,
     },
+    telemetry: {
+      mode: "off",
+      environment_disabled: false,
+      last_user_visible_payload: null,
+    },
     ...restOverrides,
   };
 }
@@ -139,6 +144,42 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+  });
+
+  it("updates telemetry mode from the release notes toggle", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "none",
+          environment_disabled: false,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "enabled",
+          environment_disabled: false,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    const enabledButton = screen.getByRole("button", { name: "Anonymous metrics" });
+    expect(enabledButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(enabledButton);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        telemetry: { mode: "enabled" },
+      }),
+    );
+    await waitFor(() => expect(enabledButton).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("applies the full-width shell class when the feature flag is enabled", async () => {

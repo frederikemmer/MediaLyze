@@ -566,8 +566,8 @@ export type AppSettings = {
   resolution_categories?: ResolutionCategory[];
   scan_performance?: {
     scan_worker_count: number;
-      parallel_scan_jobs: number;
-      comparison_scatter_point_limit: number;
+    parallel_scan_jobs: number;
+    comparison_scatter_point_limit: number;
   };
   history_retention?: {
     file_history: {
@@ -583,6 +583,15 @@ export type AppSettings = {
       storage_limit_gb: number;
     };
   };
+  ui_preferences?: {
+    interface_language: "en" | "de";
+    color_theme: "system" | "light" | "dark";
+  };
+  telemetry?: {
+    mode: TelemetryMode;
+    environment_disabled: boolean;
+    last_user_visible_payload: Record<string, unknown> | null;
+  };
   feature_flags: {
     show_analyzed_files_csv_export: boolean;
     show_full_width_app_shell: boolean;
@@ -591,6 +600,15 @@ export type AppSettings = {
     unlimited_panel_size: boolean;
     in_depth_dolby_vision_profiles: boolean;
   };
+};
+
+export type TelemetryPreviewMode = "none" | "minimal" | "enabled";
+export type TelemetryMode = "none" | "initialized" | "off" | "minimal" | "enabled";
+
+export type TelemetryPreview = {
+  payload: Record<string, unknown>;
+  redacted: boolean;
+  mode: TelemetryPreviewMode;
 };
 
 export type HistoryStorageCategory = {
@@ -1059,6 +1077,8 @@ export const api = {
   fileHistory: (id: string | number, signal?: AbortSignal) =>
     request<MediaFileHistory>(`/files/${id}/history`, { signal }),
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
+  telemetryPreview: (mode: TelemetryPreviewMode = "minimal") =>
+    request<TelemetryPreview>(`/telemetry/preview?mode=${encodeURIComponent(mode)}`),
   inspectPath: (path: string) =>
     request<PathInspection>("/paths/inspect", {
       method: "POST",
@@ -1103,6 +1123,13 @@ export const api = {
         days?: number;
         storage_limit_gb?: number;
       };
+    };
+    ui_preferences?: {
+      interface_language?: "en" | "de";
+      color_theme?: "system" | "light" | "dark";
+    };
+    telemetry?: {
+      mode?: "off" | "minimal" | "enabled";
     };
     feature_flags?: {
       show_analyzed_files_csv_export?: boolean;

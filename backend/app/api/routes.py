@@ -84,6 +84,7 @@ from backend.app.services.scan_jobs import (
 )
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
+from backend.app.services.telemetry import build_telemetry_payload
 
 router = APIRouter()
 
@@ -253,6 +254,20 @@ def app_settings(
     settings: Settings = Depends(get_app_settings),
 ) -> AppSettingsRead:
     return load_app_settings(db, settings)
+
+
+@router.get("/telemetry/preview")
+def telemetry_preview(
+    mode: Literal["none", "minimal", "enabled"] = Query(default="minimal"),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> dict:
+    app_settings_payload = load_app_settings(db, settings)
+    return {
+        "payload": build_telemetry_payload(db, settings, app_settings_payload, mode=mode),
+        "redacted": True,
+        "mode": mode,
+    }
 
 
 @router.patch("/app-settings", response_model=AppSettingsRead)

@@ -84,6 +84,89 @@ def test_library_files_export_csv_returns_404_for_unknown_library() -> None:
     assert response.json() == {"detail": "Library not found"}
 
 
+def test_telemetry_preview_enabled_includes_app_settings_and_media_kind_counts() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                ui_preferences={"interface_language": "de", "color_theme": "dark"},
+                scan_performance={
+                    "scan_worker_count": 5,
+                    "parallel_scan_jobs": 2,
+                    "comparison_scatter_point_limit": 2500,
+                },
+            ),
+        )
+        library = Library(
+            name="Mixed",
+            path="/tmp/mixed",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.off,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="song.flac",
+                    filename="song.flac",
+                    extension="flac",
+                    size_bytes=1_000,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="movie.mkv",
+                    filename="movie.mkv",
+                    extension="mkv",
+                    size_bytes=1_000,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get("/api/telemetry/preview?mode=enabled")
+
+    assert response.status_code == 200
+    payload = response.json()["payload"]
+    assert payload["usage"]["media_kind_counts"] == {"audio": 1, "video": 1, "other": 0}
+    assert payload["app_settings"] == {
+        "interface_language": "de",
+        "color_theme": "dark",
+        "scan_worker_count": 5,
+        "parallel_scan_jobs": 2,
+        "comparison_scatter_point_limit": 2500,
+    }
+
+
+def test_telemetry_preview_minimal_excludes_usage_and_app_settings() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/telemetry/preview?mode=minimal")
+
+    assert response.status_code == 200
+    payload = response.json()["payload"]
+    assert "usage" not in payload
+    assert "app_settings" not in payload
+
+
 def test_library_files_export_csv_returns_422_for_invalid_search_expression() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

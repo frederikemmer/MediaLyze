@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucid
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
 import { PathBrowser } from "../components/PathBrowser";
+import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
@@ -23,6 +24,7 @@ import {
   type ResolutionCategory,
   type RecentScanJob,
   type ScanJobDetail,
+  type TelemetryMode,
 } from "../lib/api";
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
@@ -104,6 +106,8 @@ type PatternSectionKey =
   | "series_folder_regexes"
   | "season_folder_regexes"
   | "bonus_folder_patterns";
+
+type TelemetryPayloadView = "last" | "minimal" | "enabled";
 
 type PatternRecognitionSectionState = Record<PatternSectionKey, boolean>;
 
@@ -686,11 +690,20 @@ export function LibrariesPage() {
   const [historyRetentionStatusTone, setHistoryRetentionStatusTone] = useState<"success" | "error">("error");
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [patternRecognitionStatus, setPatternRecognitionStatus] = useState<string | null>(null);
+  const [telemetryPreviewStatus, setTelemetryPreviewStatus] = useState<string | null>(null);
+  const [telemetryPreviewJsonByMode, setTelemetryPreviewJsonByMode] = useState<
+    Partial<Record<Exclude<TelemetryPayloadView, "last">, string>>
+  >({});
+  const [telemetryPayloadView, setTelemetryPayloadView] = useState<TelemetryPayloadView>("last");
+  const [telemetryStatus, setTelemetryStatus] = useState<string | null>(null);
+  const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingHistoryRetention, setIsSavingHistoryRetention] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const [isSavingPatternRecognition, setIsSavingPatternRecognition] = useState(false);
+  const [isLoadingTelemetryPreview, setIsLoadingTelemetryPreview] = useState(false);
+  const [isSavingTelemetry, setIsSavingTelemetry] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
@@ -708,6 +721,25 @@ export function LibrariesPage() {
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const appScanPerformance = appSettings.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
   const appHistoryRetention = appSettings.history_retention ?? DEFAULT_HISTORY_RETENTION;
+  const appTelemetry = appSettings.telemetry ?? {
+    mode: "none" as TelemetryMode,
+    environment_disabled: false,
+    last_user_visible_payload: null,
+  };
+  const selectedTelemetryPayloadJson =
+    telemetryPayloadView === "last"
+      ? appTelemetry.last_user_visible_payload
+        ? JSON.stringify(appTelemetry.last_user_visible_payload, null, 2)
+        : ""
+      : telemetryPreviewJsonByMode[telemetryPayloadView] ?? "";
+  const selectedTelemetryPayloadPlaceholder =
+    telemetryPayloadView === "last"
+      ? appTelemetry.mode === "off" || appTelemetry.environment_disabled
+        ? t("telemetry.lastPayload.noneAndOff")
+        : t("telemetry.lastPayload.none")
+      : isLoadingTelemetryPreview
+        ? t("telemetry.preview.loading")
+        : t("telemetry.preview.notLoaded");
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
@@ -750,6 +782,65 @@ export function LibrariesPage() {
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
     setPatternRecognitionInputs(normalizePatternRecognitionInputs(updated.pattern_recognition));
     setAppSettings(updated);
+  }
+
+  async function updateInterfaceLanguage(nextLanguage: "en" | "de") {
+    await i18n.changeLanguage(nextLanguage);
+    try {
+      const updated = await api.updateAppSettings({
+        ui_preferences: { interface_language: nextLanguage },
+      });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Keep the local language preference even if the backend sync fails.
+    }
+  }
+
+  async function updateColorTheme(nextTheme: ThemePreference) {
+    setThemePref(nextTheme);
+    try {
+      const updated = await api.updateAppSettings({
+        ui_preferences: { color_theme: nextTheme },
+      });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Keep the local theme preference even if the backend sync fails.
+    }
+  }
+
+  async function selectTelemetryPayloadView(view: TelemetryPayloadView) {
+    setTelemetryPayloadView(view);
+    setTelemetryPreviewStatus(null);
+    if (view === "last" || telemetryPreviewJsonByMode[view]) {
+      return;
+    }
+    setIsLoadingTelemetryPreview(true);
+    try {
+      const preview = await api.telemetryPreview(view);
+      setTelemetryPreviewJsonByMode((current) => ({
+        ...current,
+        [preview.mode === "enabled" ? "enabled" : "minimal"]: JSON.stringify(preview.payload, null, 2),
+      }));
+    } catch {
+      setTelemetryPreviewStatus(t("telemetry.preview.loadFailed"));
+    } finally {
+      setIsLoadingTelemetryPreview(false);
+    }
+  }
+
+  async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    setIsSavingTelemetry(true);
+    setPendingTelemetryMode(mode);
+    setTelemetryStatus(null);
+    try {
+      const updated = await api.updateAppSettings({ telemetry: { mode } });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      setTelemetryStatus(t("telemetry.saveFailed"));
+    } finally {
+      setIsSavingTelemetry(false);
+      setPendingTelemetryMode(null);
+    }
   }
 
   const refreshHistoryStorage = (showLoading = false) => {
@@ -4152,6 +4243,85 @@ export function LibrariesPage() {
               </>
             )}
           </AsyncPanel>
+
+          <AsyncPanel
+            title={t("telemetry.panel.title")}
+            collapseActions={
+              <TelemetryModeToggle
+                compact
+                mode={appTelemetry.mode}
+                disabled={!appSettingsLoaded || isSavingTelemetry || appTelemetry.environment_disabled}
+                undecided={appTelemetry.mode === "none" || appTelemetry.mode === "initialized"}
+                pendingMode={pendingTelemetryMode}
+                onChange={(mode) => void saveTelemetryMode(mode)}
+              />
+            }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
+            collapseState={{
+              collapsed: !settingsPanelState.telemetry,
+              onToggle: () => toggleSettingsPanel("telemetry"),
+              bodyId: "telemetry-panel-body",
+            }}
+          >
+            <div className="settings-sidebar-stack telemetry-panel-content">
+              <p className="app-settings-section-copy">{t("telemetry.panel.description")}</p>
+              {appTelemetry.environment_disabled ? (
+                <div className="alert">{t("telemetry.environmentDisabled")}</div>
+              ) : null}
+              <div className="telemetry-mode-card-grid">
+                <div className="telemetry-mode-card telemetry-mode-card-off">
+                  <strong>{t("telemetry.mode.off")}</strong>
+                  <span>{t("telemetry.modeDescriptions.off")}</span>
+                </div>
+                <div className="telemetry-mode-card telemetry-mode-card-minimal">
+                  <strong>{t("telemetry.mode.minimal")}</strong>
+                  <span>{t("telemetry.modeDescriptions.minimal")}</span>
+                </div>
+                <div className="telemetry-mode-card telemetry-mode-card-enabled">
+                  <strong>{t("telemetry.mode.enabled")}</strong>
+                  <span>{t("telemetry.modeDescriptions.enabled")}</span>
+                </div>
+              </div>
+              <div className="app-settings-section">
+                <p className="app-settings-section-title">{t("telemetry.preview.title")}</p>
+                <p className="app-settings-section-copy">{t("telemetry.preview.description")}</p>
+                <div className="telemetry-preview-actions">
+                  <button
+                    type="button"
+                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
+                    disabled={isLoadingTelemetryPreview}
+                    aria-pressed={telemetryPayloadView === "last"}
+                    onClick={() => void selectTelemetryPayloadView("last")}
+                  >
+                    {t("telemetry.preview.views.last")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}`}
+                    disabled={isLoadingTelemetryPreview}
+                    aria-pressed={telemetryPayloadView === "minimal"}
+                    onClick={() => void selectTelemetryPayloadView("minimal")}
+                  >
+                    {t("telemetry.preview.views.minimal")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}`}
+                    disabled={isLoadingTelemetryPreview}
+                    aria-pressed={telemetryPayloadView === "enabled"}
+                    onClick={() => void selectTelemetryPayloadView("enabled")}
+                  >
+                    {t("telemetry.preview.views.enabled")}
+                  </button>
+                </div>
+                <pre className="telemetry-preview-json" aria-label={t("telemetry.preview.jsonLabel")}>
+                  {selectedTelemetryPayloadJson || selectedTelemetryPayloadPlaceholder}
+                </pre>
+                {telemetryPreviewStatus ? <div className="alert">{telemetryPreviewStatus}</div> : null}
+              </div>
+              {telemetryStatus ? <div className="alert">{telemetryStatus}</div> : null}
+            </div>
+          </AsyncPanel>
         </div>
 
         <div className="settings-sidebar">
@@ -4304,7 +4474,7 @@ export function LibrariesPage() {
                   <select
                     id="app-language"
                     value={i18n.resolvedLanguage ?? "en"}
-                    onChange={(event) => void i18n.changeLanguage(event.target.value)}
+                    onChange={(event) => void updateInterfaceLanguage(event.target.value as "en" | "de")}
                   >
                     <option value="en">{t("language.en")}</option>
                     <option value="de">{t("language.de")}</option>
@@ -4315,7 +4485,7 @@ export function LibrariesPage() {
                   <select
                     id="app-theme"
                     value={themePref}
-                    onChange={(event) => setThemePref(event.target.value as ThemePreference)}
+                    onChange={(event) => void updateColorTheme(event.target.value as ThemePreference)}
                   >
                     <option value="system">{t("theme.system")}</option>
                     <option value="light">{t("theme.light")}</option>

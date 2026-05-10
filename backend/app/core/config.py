@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     ffprobe_worker_count: int = 4
     scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False
+    telemetry_disabled: bool = Field(default=False, validation_alias="MEDIALYZE_TELEMETRY_DISABLED")
     allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx")
 

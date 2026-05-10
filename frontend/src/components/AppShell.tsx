@@ -5,7 +5,8 @@ import { Bug, ChevronDown, ChevronRight, Gift, House, SearchX, Settings, X } fro
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
-import { type ScanJob } from "../lib/api";
+import { TelemetryModeToggle } from "./TelemetryModeToggle";
+import { api, type ScanJob, type TelemetryMode } from "../lib/api";
 import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
 import {
@@ -39,7 +40,7 @@ function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown
 export function AppShell() {
   const { t } = useTranslation();
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
-  const { appSettings, libraries, librariesLoaded, loadDashboard, loadLibraries } = useAppData();
+  const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const currentReleaseVersion = normalizeReleaseVersion(APP_VERSION);
   const [allReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
@@ -47,13 +48,38 @@ export function AppShell() {
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
+  const [telemetryError, setTelemetryError] = useState<string | null>(null);
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
   const showFullWidthAppShell = appSettings.feature_flags.show_full_width_app_shell;
+  const telemetry = appSettings.telemetry ?? {
+    mode: "none" as TelemetryMode,
+    environment_disabled: false,
+    last_user_visible_payload: null,
+  };
+  const telemetryUndecided = telemetry.mode === "none" || telemetry.mode === "initialized";
 
   function dismissReleaseNotes() {
+    if (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
+      setTelemetryError(t("telemetry.releaseNotesChooseFirst"));
+      return;
+    }
     markReleaseNotesSeen(APP_VERSION);
     setShowReleaseNotes(false);
+  }
+
+  async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    setPendingTelemetryMode(mode);
+    setTelemetryError(null);
+    try {
+      const updated = await api.updateAppSettings({ telemetry: { mode } });
+      setAppSettings(updated);
+    } catch {
+      setTelemetryError(t("telemetry.saveFailed"));
+    } finally {
+      setPendingTelemetryMode(null);
+    }
   }
 
   function openReleaseNotes() {
@@ -70,6 +96,16 @@ export function AppShell() {
     }
     void loadLibraries().catch(() => undefined);
   }, [librariesLoaded, loadLibraries]);
+
+  useEffect(() => {
+    if (!appSettingsLoaded || allReleaseNotes.length === 0) {
+      return;
+    }
+    if (telemetryUndecided && !telemetry.environment_disabled) {
+      setExpandedReleaseVersion(releaseNotes?.version ?? allReleaseNotes[0].version);
+      setShowReleaseNotes(true);
+    }
+  }, [allReleaseNotes, appSettingsLoaded, releaseNotes?.version, telemetry.environment_disabled, telemetryUndecided]);
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
@@ -204,6 +240,14 @@ export function AppShell() {
                 <h2 id="release-notes-title">{t("releaseNotes.title")}</h2>
               </div>
               <div className="release-notes-actions">
+                <TelemetryModeToggle
+                  compact
+                  mode={telemetry.mode}
+                  pendingMode={pendingTelemetryMode}
+                  disabled={!appSettingsLoaded || Boolean(pendingTelemetryMode) || telemetry.environment_disabled}
+                  undecided={telemetryUndecided}
+                  onChange={(mode) => void saveTelemetryMode(mode)}
+                />
                 <a
                   className="release-notes-icon-link"
                   href={GITHUB_ISSUE_URL}
@@ -253,6 +297,7 @@ export function AppShell() {
                 </button>
               </div>
             </div>
+            {telemetryError ? <div className="alert release-notes-alert">{telemetryError}</div> : null}
             <div className="release-notes-content">
               {allReleaseNotes.map((versionNotes) => {
                 const isExpanded = expandedReleaseVersion === versionNotes.version;

@@ -1,4 +1,4 @@
-import "../i18n";
+import i18n from "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +24,10 @@ import {
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { LibrariesPage } from "./LibrariesPage";
 
-type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags" | "history_retention"> & {
+type AppSettingsOverrides = Omit<
+  Partial<AppSettings>,
+  "scan_performance" | "feature_flags" | "history_retention" | "ui_preferences"
+> & {
   scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
   history_retention?: {
     file_history?: Partial<NonNullable<AppSettings["history_retention"]>["file_history"]>;
@@ -32,6 +35,7 @@ type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "fea
     scan_history?: Partial<NonNullable<AppSettings["history_retention"]>["scan_history"]>;
   };
   feature_flags?: Partial<AppSettings["feature_flags"]>;
+  ui_preferences?: Partial<NonNullable<AppSettings["ui_preferences"]>>;
 };
 
 function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
@@ -39,6 +43,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     feature_flags: overrideFeatureFlags = {},
     scan_performance: overrideScanPerformance = {},
     history_retention: overrideHistoryRetention = {},
+    ui_preferences: overrideUiPreferences = {},
     ...restOverrides
   } = overrides;
   return {
@@ -75,6 +80,16 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       file_history: { days: 30, storage_limit_gb: 0, ...overrideHistoryRetention.file_history },
       library_history: { days: 365, storage_limit_gb: 0, ...overrideHistoryRetention.library_history },
       scan_history: { days: 30, storage_limit_gb: 0, ...overrideHistoryRetention.scan_history },
+    },
+    ui_preferences: {
+      interface_language: "en",
+      color_theme: "system",
+      ...overrideUiPreferences,
+    },
+    telemetry: {
+      mode: "none",
+      environment_disabled: false,
+      last_user_visible_payload: null,
     },
     feature_flags: {
       show_analyzed_files_csv_export: false,
@@ -369,6 +384,15 @@ beforeEach(() => {
   );
   vi.spyOn(api, "browse").mockResolvedValue(createBrowseResponse());
   vi.spyOn(api, "inspectPath").mockResolvedValue(createPathInspection());
+  vi.spyOn(api, "telemetryPreview").mockResolvedValue({
+    mode: "minimal",
+    redacted: true,
+    payload: {
+      telemetry_mode: "minimal",
+      app: { name: "MediaLyze" },
+      system: { os_family: "darwin" },
+    },
+  });
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
   vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage());
   vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail());
@@ -381,6 +405,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  void i18n.changeLanguage("en");
 });
 
 describe("LibrariesPage ignore patterns", () => {
@@ -1408,6 +1433,118 @@ describe("LibrariesPage settings panels", () => {
     expect(within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: "Restore ignore defaults" })).toBeInTheDocument();
   });
 
+  it("persists interface language changes to app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({ ui_preferences: { interface_language: "de" } }),
+    );
+
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText("Interface language"), { target: { value: "de" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        ui_preferences: { interface_language: "de" },
+      }),
+    );
+  });
+
+  it("persists color theme changes to app settings", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({ ui_preferences: { color_theme: "dark" } }),
+    );
+
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText("Color theme"), { target: { value: "dark" } });
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        ui_preferences: { color_theme: "dark" },
+      }),
+    );
+  });
+
+  it("shows enabled telemetry preview JSON with app settings and extensible media kind counts", async () => {
+    vi.mocked(api.telemetryPreview).mockResolvedValue({
+      mode: "enabled",
+      redacted: true,
+      payload: {
+        telemetry_mode: "enabled",
+        usage: {
+          media_kind_counts: {
+            audio: 120,
+            video: 2300,
+            audiobook: 10,
+          },
+        },
+        app_settings: {
+          interface_language: "de",
+          color_theme: "dark",
+        },
+      },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Telemetry" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Example full" }));
+
+    const preview = await screen.findByLabelText("Telemetry payload JSON preview");
+    await waitFor(() => {
+      expect(preview).toHaveTextContent('"media_kind_counts"');
+      expect(preview).toHaveTextContent('"audiobook"');
+      expect(preview).toHaveTextContent('"app_settings"');
+    });
+  });
+
+  it("shows minimal telemetry preview JSON without usage or app settings", async () => {
+    vi.mocked(api.telemetryPreview).mockResolvedValue({
+      mode: "minimal",
+      redacted: true,
+      payload: {
+        telemetry_mode: "minimal",
+        app: { name: "MediaLyze" },
+        system: { os_family: "darwin" },
+      },
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Example minimal" }));
+
+    const preview = await screen.findByLabelText("Telemetry payload JSON preview");
+    await waitFor(() => {
+      expect(preview).toHaveTextContent('"telemetry_mode": "minimal"');
+      expect(preview).not.toHaveTextContent('"media_kind_counts"');
+      expect(preview).not.toHaveTextContent('"app_settings"');
+    });
+  });
+
+  it("updates telemetry mode from the panel header toggle", async () => {
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "minimal",
+          environment_disabled: false,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const minimalButtons = await screen.findAllByRole("button", { name: "Minimal telemetry" });
+    fireEvent.click(minimalButtons[0]);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        telemetry: { mode: "minimal" },
+      }),
+    );
+    await waitFor(() => expect(minimalButtons[0]).toHaveAttribute("aria-pressed", "true"));
+  });
+
   it("places the pattern recognition panel between resolution categories and history retention", async () => {
     renderPage();
 
@@ -1486,6 +1623,7 @@ describe("LibrariesPage settings panels", () => {
         resolutionCategories: true,
         createLibrary: true,
         appSettings: false,
+        telemetry: true,
       }),
     );
   });

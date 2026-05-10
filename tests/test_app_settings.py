@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -28,6 +30,7 @@ def build_settings(
     tmp_path,
     *,
     disable_default_ignore_patterns: bool = False,
+    telemetry_disabled: bool = False,
     runtime_mode: str = "server",
 ) -> Settings:
     return Settings(
@@ -35,6 +38,7 @@ def build_settings(
         config_path=tmp_path / "config",
         media_root=tmp_path / "media",
         disable_default_ignore_patterns=disable_default_ignore_patterns,
+        telemetry_disabled=telemetry_disabled,
     )
 
 
@@ -59,6 +63,10 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
+    assert loaded.ui_preferences.interface_language == "en"
+    assert loaded.ui_preferences.color_theme == "system"
+    assert loaded.telemetry.mode == "none"
+    assert loaded.telemetry.environment_disabled is False
     assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.file_history.storage_limit_gb == 0
     assert loaded.history_retention.library_history.days == 365
@@ -201,6 +209,64 @@ def test_update_app_settings_can_disable_desktop_full_width_default(tmp_path) ->
     assert loaded.feature_flags.show_full_width_app_shell is False
 
 
+def test_update_app_settings_persists_ui_preferences(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                ui_preferences={
+                    "interface_language": "de",
+                    "color_theme": "dark",
+                }
+            ),
+            settings,
+        )
+        loaded = get_app_settings(db, settings)
+
+    assert updated.ui_preferences.interface_language == "de"
+    assert updated.ui_preferences.color_theme == "dark"
+    assert loaded.ui_preferences.interface_language == "de"
+    assert loaded.ui_preferences.color_theme == "dark"
+
+
+def test_update_app_settings_rejects_invalid_ui_preferences() -> None:
+    with pytest.raises(ValidationError):
+        AppSettingsUpdate(ui_preferences={"interface_language": "fr"})
+
+    with pytest.raises(ValidationError):
+        AppSettingsUpdate(ui_preferences={"color_theme": "blue"})
+
+
+def test_update_app_settings_persists_telemetry_mode(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        updated = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+        loaded = get_app_settings(db, settings)
+
+    assert updated.telemetry.mode == "minimal"
+    assert updated.telemetry.environment_disabled is False
+    assert loaded.telemetry.mode == "minimal"
+
+
+def test_telemetry_disabled_env_forces_off_mode(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path, telemetry_disabled=True)
+
+    with session_factory() as db:
+        updated = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+        loaded = get_app_settings(db, settings)
+
+    assert updated.telemetry.mode == "off"
+    assert updated.telemetry.environment_disabled is True
+    assert loaded.telemetry.mode == "off"
+    assert loaded.telemetry.environment_disabled is True
+
+
 def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path, disable_default_ignore_patterns=True)
@@ -314,6 +380,15 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "file_history": {"days": 120, "storage_limit_gb": 1.5},
             "library_history": {"days": 730, "storage_limit_gb": 0.0},
             "scan_history": {"days": 45, "storage_limit_gb": 0.25},
+        },
+        "ui_preferences": {
+            "interface_language": "en",
+            "color_theme": "system",
+        },
+        "telemetry": {
+            "mode": "none",
+            "environment_disabled": False,
+            "last_user_visible_payload": None,
         },
         "feature_flags": {
             "show_analyzed_files_csv_export": True,
