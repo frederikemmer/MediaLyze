@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False
     telemetry_disabled: bool = Field(default=False, validation_alias="MEDIALYZE_TELEMETRY_DISABLED")
+    telemetry_endpoint: str = Field(
+        default="https://telemetry.medialyze.app/api/telemetry/ingest",
+        validation_alias="MEDIALYZE_TELEMETRY_ENDPOINT",
+    )
+    telemetry_timeout_seconds: float = 2.0
     allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx")
 

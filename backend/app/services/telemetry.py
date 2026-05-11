@@ -6,12 +6,15 @@ import platform
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Literal
+from uuid import uuid4
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, Settings
 from backend.app.models.entities import (
+    AppSetting,
     DuplicateDetectionMode,
     Library,
     LibraryType,
@@ -20,6 +23,7 @@ from backend.app.models.entities import (
     ScanStatus,
 )
 from backend.app.schemas.app_settings import AppSettingsRead
+from backend.app.services.app_settings import APP_SETTINGS_KEY, get_app_settings
 
 TelemetryPreviewMode = Literal["none", "minimal", "enabled"]
 
@@ -80,14 +84,20 @@ def _deployment_channel(settings: Settings) -> str:
     return "server"
 
 
-def _base_payload(settings: Settings, mode: str) -> dict:
+def _base_payload(
+    settings: Settings,
+    mode: str,
+    *,
+    installation_id: str = _PREVIEW_INSTALLATION_ID,
+    is_test: bool = False,
+) -> dict:
     return {
         "schema_version": 1,
         "event_type": "installation_snapshot",
         "telemetry_mode": mode,
-        "installation_id": _PREVIEW_INSTALLATION_ID,
+        "installation_id": installation_id,
         "sent_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "is_test": False,
+        "is_test": is_test,
         "app": {
             "name": settings.app_name,
             "version": settings.app_version,
@@ -184,9 +194,110 @@ def build_telemetry_payload(
     app_settings: AppSettingsRead,
     *,
     mode: TelemetryPreviewMode,
+    installation_id: str = _PREVIEW_INSTALLATION_ID,
+    is_test: bool = False,
 ) -> dict:
-    payload = _base_payload(settings, mode)
+    payload = _base_payload(settings, mode, installation_id=installation_id, is_test=is_test)
     if mode == "enabled":
         payload["usage"] = _enabled_usage_payload(db, app_settings)
         payload["app_settings"] = _enabled_app_settings_payload(app_settings)
     return payload
+
+
+def should_send_telemetry(app_settings: AppSettingsRead, now: datetime) -> bool:
+    if app_settings.telemetry.environment_disabled:
+        return False
+    if app_settings.telemetry.mode not in ("minimal", "enabled"):
+        return False
+    if app_settings.telemetry.last_sent_at is None:
+        return True
+    last_sent = app_settings.telemetry.last_sent_at
+    if last_sent.tzinfo is None:
+        last_sent = last_sent.replace(tzinfo=UTC)
+    return (now - last_sent.astimezone(UTC)).total_seconds() >= 24 * 60 * 60
+
+
+def _stored_telemetry_payload(db: Session) -> dict:
+    setting = db.get(AppSetting, APP_SETTINGS_KEY)
+    if setting is None:
+        setting = AppSetting(key=APP_SETTINGS_KEY, value={})
+        db.add(setting)
+        db.flush()
+    value = setting.value if isinstance(setting.value, dict) else {}
+    telemetry = value.get("telemetry") if isinstance(value.get("telemetry"), dict) else {}
+    return telemetry
+
+
+def _ensure_installation_id(db: Session) -> str:
+    telemetry = _stored_telemetry_payload(db)
+    installation_id = telemetry.get("installation_id")
+    if isinstance(installation_id, str) and installation_id:
+        return installation_id
+
+    installation_id = str(uuid4())
+    setting = db.get(AppSetting, APP_SETTINGS_KEY)
+    value = dict(setting.value) if setting is not None and isinstance(setting.value, dict) else {}
+    value["telemetry"] = {**telemetry, "installation_id": installation_id}
+    if setting is None:
+        setting = AppSetting(key=APP_SETTINGS_KEY, value=value)
+        db.add(setting)
+    else:
+        setting.value = value
+    db.commit()
+    return installation_id
+
+
+def send_telemetry_payload(payload: dict, settings: Settings) -> bool:
+    try:
+        response = httpx.post(
+            settings.telemetry_endpoint,
+            json=payload,
+            timeout=settings.telemetry_timeout_seconds,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        # Telemetry is strictly best effort and must not affect runtime behavior.
+        import logging
+
+        logging.getLogger(__name__).info("Telemetry send failed: %s", exc)
+        return False
+    return True
+
+
+def mark_telemetry_sent(db: Session, timestamp: datetime, payload: dict) -> None:
+    telemetry = _stored_telemetry_payload(db)
+    setting = db.get(AppSetting, APP_SETTINGS_KEY)
+    value = dict(setting.value) if setting is not None and isinstance(setting.value, dict) else {}
+    value["telemetry"] = {
+        **telemetry,
+        "last_sent_at": timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "last_user_visible_payload": payload if payload.get("telemetry_mode") != "none" else telemetry.get("last_user_visible_payload"),
+    }
+    if setting is None:
+        db.add(AppSetting(key=APP_SETTINGS_KEY, value=value))
+    else:
+        setting.value = value
+    db.commit()
+
+
+def send_current_telemetry_snapshot(db: Session, settings: Settings, *, force: bool = False) -> bool:
+    app_settings = get_app_settings(db, settings)
+    now = datetime.now(UTC)
+    if not force and not should_send_telemetry(app_settings, now):
+        return False
+    if app_settings.telemetry.environment_disabled or app_settings.telemetry.mode not in ("minimal", "enabled"):
+        return False
+
+    installation_id = _ensure_installation_id(db)
+    payload = build_telemetry_payload(
+        db,
+        settings,
+        get_app_settings(db, settings),
+        mode=app_settings.telemetry.mode,
+        installation_id=installation_id,
+        is_test=False,
+    )
+    if not send_telemetry_payload(payload, settings):
+        return False
+    mark_telemetry_sent(db, now, payload)
+    return True

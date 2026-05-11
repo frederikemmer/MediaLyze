@@ -45,6 +45,8 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     telemetry: {
       mode: "off",
       environment_disabled: false,
+      installation_id_suffix: null,
+      last_sent_at: null,
       last_user_visible_payload: null,
     },
     ...restOverrides,
@@ -152,6 +154,8 @@ describe("AppShell", () => {
         telemetry: {
           mode: "none",
           environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
           last_user_visible_payload: null,
         },
       }),
@@ -161,6 +165,8 @@ describe("AppShell", () => {
         telemetry: {
           mode: "enabled",
           environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
           last_user_visible_payload: null,
         },
       }),

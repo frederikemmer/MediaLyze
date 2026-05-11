@@ -285,6 +285,12 @@ def app_settings_update(
     runtime.refresh_worker_settings()
     if updated_settings.history_retention != current_settings.history_retention:
         runtime.run_history_retention()
+    if (
+        payload.telemetry is not None
+        and payload.telemetry.mode in {"minimal", "enabled"}
+        and updated_settings.telemetry.mode in {"minimal", "enabled"}
+    ):
+        runtime.request_telemetry_send(force=True)
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings

@@ -1,4 +1,5 @@
 from enum import Enum
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -71,6 +72,8 @@ class UiPreferencesUpdate(BaseModel):
 class TelemetrySettingsRead(BaseModel):
     mode: Literal["none", "initialized", "off", "minimal", "enabled"] = "none"
     environment_disabled: bool = False
+    installation_id_suffix: str | None = None
+    last_sent_at: datetime | None = None
     last_user_visible_payload: dict | None = None
 
 

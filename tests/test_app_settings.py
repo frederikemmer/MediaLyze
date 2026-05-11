@@ -250,7 +250,9 @@ def test_update_app_settings_persists_telemetry_mode(tmp_path) -> None:
 
     assert updated.telemetry.mode == "minimal"
     assert updated.telemetry.environment_disabled is False
+    assert updated.telemetry.installation_id_suffix is not None
     assert loaded.telemetry.mode == "minimal"
+    assert loaded.telemetry.installation_id_suffix == updated.telemetry.installation_id_suffix
 
 
 def test_telemetry_disabled_env_forces_off_mode(tmp_path) -> None:
@@ -387,7 +389,8 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
         },
         "telemetry": {
             "mode": "none",
-            "environment_disabled": False,
+            "installation_id": None,
+            "last_sent_at": None,
             "last_user_visible_payload": None,
         },
         "feature_flags": {

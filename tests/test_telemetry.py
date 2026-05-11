@@ -24,6 +24,7 @@ from backend.app.services.telemetry import (
     build_telemetry_payload,
     round_count_for_telemetry,
     round_storage_gb_for_telemetry,
+    send_current_telemetry_snapshot,
 )
 
 
@@ -37,6 +38,7 @@ def build_settings(tmp_path) -> Settings:
     return Settings(
         config_path=tmp_path / "config",
         media_root=tmp_path / "media",
+        telemetry_endpoint="https://telemetry.example.test/api/telemetry/ingest",
     )
 
 
@@ -195,3 +197,55 @@ def test_none_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     assert "usage" not in payload
     assert "media_kind_counts" not in payload
     assert "app_settings" not in payload
+
+
+def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    posted: dict = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url, *, json, timeout):
+        posted["url"] = url
+        posted["json"] = json
+        posted["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("backend.app.services.telemetry.httpx.post", fake_post)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+
+        sent = send_current_telemetry_snapshot(db, settings, force=True)
+        loaded = get_app_settings(db, settings)
+
+    assert sent is True
+    assert posted["url"] == "https://telemetry.example.test/api/telemetry/ingest"
+    assert posted["timeout"] == settings.telemetry_timeout_seconds
+    assert posted["json"]["telemetry_mode"] == "minimal"
+    assert posted["json"]["is_test"] is False
+    assert posted["json"]["installation_id"] != "00000000-0000-0000-0000-000000000000"
+    assert loaded.telemetry.last_sent_at is not None
+    assert loaded.telemetry.last_user_visible_payload == posted["json"]
+
+
+def test_send_current_telemetry_snapshot_ignores_network_failure(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    def fake_post(url, *, json, timeout):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("backend.app.services.telemetry.httpx.post", fake_post)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+
+        sent = send_current_telemetry_snapshot(db, settings, force=True)
+        loaded = get_app_settings(db, settings)
+
+    assert sent is False
+    assert loaded.telemetry.last_sent_at is None

@@ -89,6 +89,8 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     telemetry: {
       mode: "none",
       environment_disabled: false,
+      installation_id_suffix: null,
+      last_sent_at: null,
       last_user_visible_payload: null,
     },
     feature_flags: {
@@ -1527,6 +1529,8 @@ describe("LibrariesPage settings panels", () => {
         telemetry: {
           mode: "minimal",
           environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
           last_user_visible_payload: null,
         },
       }),

@@ -25,6 +25,7 @@ from backend.app.services.history_reconstruction import reconstruct_history_from
 from backend.app.services.library_service import get_library_statistics, get_library_summary
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.services.stats import build_dashboard
+from backend.app.services.telemetry import send_current_telemetry_snapshot
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -77,9 +78,11 @@ class ScanRuntimeManager:
             self.scheduler.start()
             self.started = True
         self._ensure_history_maintenance_job()
+        self._ensure_telemetry_job()
         self._recover_orphaned_jobs()
         self.sync_all_libraries()
         self.run_history_retention()
+        self.request_telemetry_send(force=False)
 
     def stop(self) -> None:
         with self.lock:
@@ -250,6 +253,12 @@ class ScanRuntimeManager:
         if should_submit:
             self.executor.submit(self._run_history_reconstruction)
         return self.get_history_reconstruction_status()
+
+    def request_telemetry_send(self, *, force: bool = False) -> None:
+        with self.lock:
+            if not self.started:
+                return
+        self.maintenance_executor.submit(self._run_telemetry_send, force)
 
     def submit_scan_job(self, job_id: int) -> None:
         db = SessionLocal()
@@ -495,6 +504,18 @@ class ScanRuntimeManager:
             coalesce=True,
         )
 
+    def _ensure_telemetry_job(self) -> None:
+        self.scheduler.add_job(
+            self.request_telemetry_send,
+            trigger="interval",
+            hours=24,
+            kwargs={"force": False},
+            id="telemetry-daily-snapshot",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     def _ensure_watch_observer(self, library: Library) -> None:
         library_path = str(library.path)
         if not library.path or not library.path.strip():
@@ -534,6 +555,13 @@ class ScanRuntimeManager:
                 job.finished_at = finished_at
 
             db.commit()
+        finally:
+            db.close()
+
+    def _run_telemetry_send(self, force: bool = False) -> None:
+        db = SessionLocal()
+        try:
+            send_current_telemetry_snapshot(db, self.settings, force=force)
         finally:
             db.close()
 

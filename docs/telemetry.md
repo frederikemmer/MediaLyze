@@ -12,6 +12,10 @@ Telemetry modes:
 
 Set `MEDIALYZE_TELEMETRY_DISABLED=true` to force telemetry off. In that state the UI toggle is locked to `off`, and no telemetry payload is sent.
 
+The app sends accepted telemetry modes to `https://telemetry.medialyze.app/api/telemetry/ingest` by default. Override this with `MEDIALYZE_TELEMETRY_ENDPOINT` for development or alternate deployments.
+
+Development builds send normal payloads with `is_test: false`. Test payloads are only used by explicit development connectivity checks, not by the regular app sender.
+
 ## Preview API
 
 The app exposes a local preview endpoint:
@@ -220,7 +224,36 @@ Storage uses `round_storage_gb_for_telemetry(bytes_value)`: bytes are converted 
 A telemetry backend can accept:
 
 ```text
-POST /v1/events
+POST /api/telemetry/ingest
+```
+
+The production app sender posts to this path with `is_test: false` in both dev and release builds.
+
+Development connectivity checks should send the same payload shape with `is_test: true`. Test events must be accepted for endpoint verification but excluded from production aggregates.
+
+Example test request:
+
+```bash
+curl -X POST "https://deine-railway-domain/api/telemetry/ingest" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schema_version": 1,
+    "event_type": "installation_snapshot",
+    "telemetry_mode": "minimal",
+    "installation_id": "11111111-1111-4111-8111-111111111111",
+    "sent_at": "2026-05-11T12:00:00Z",
+    "is_test": true,
+    "app": {
+      "name": "MediaLyze",
+      "version": "0.10.4",
+      "runtime_mode": "server",
+      "deployment_channel": "docker"
+    },
+    "system": {
+      "os_family": "linux",
+      "architecture": "arm64"
+    }
+  }'
 ```
 
 Expected success response:
@@ -246,7 +279,7 @@ Recommended validation:
 - accept only `event_type: "installation_snapshot"`
 - reject payloads over 16 KB
 - rate-limit by `installation_id` and transient IP
-- use `is_test: true` payloads for development connectivity checks and exclude them from production aggregates
+- accept `is_test: true` payloads for development connectivity checks and exclude them from production aggregates
 - store raw events for at most 30 days
 - store aggregate daily counts separately
 
