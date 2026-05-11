@@ -4793,17 +4793,6 @@ html[data-theme="dark"] {
       0 10px 22px rgba(0, 0, 0, 0.24);
   }
 
-  .telemetry-stats-info,
-  .telemetry-installation-id-row {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .telemetry-stats-link,
-  .telemetry-copy-id-button {
-    justify-self: start;
-  }
-
   .telemetry-mode-card {
     background: rgba(38, 35, 31, 0.62);
     border-color: rgba(240, 236, 228, 0.08);
