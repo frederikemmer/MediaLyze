@@ -242,6 +242,7 @@ def _deserialize_telemetry(payload: Any, settings: Settings) -> TelemetrySetting
         return TelemetrySettingsRead(
             mode="off",
             environment_disabled=True,
+            installation_id=installation_id if isinstance(installation_id, str) and installation_id else None,
             installation_id_suffix=installation_id_suffix,
             last_sent_at=last_sent_at,
             last_user_visible_payload=last_payload,
@@ -249,6 +250,7 @@ def _deserialize_telemetry(payload: Any, settings: Settings) -> TelemetrySetting
     return TelemetrySettingsRead(
         mode=mode,
         environment_disabled=False,
+        installation_id=installation_id if isinstance(installation_id, str) and installation_id else None,
         installation_id_suffix=installation_id_suffix,
         last_sent_at=last_sent_at,
         last_user_visible_payload=last_payload,

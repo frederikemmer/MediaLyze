@@ -46,19 +46,22 @@ Response format:
 }
 ```
 
-The `payload` field contains the exact JSON shape for the selected mode. Preview responses use a redacted placeholder installation id.
+The `payload` field contains the exact JSON shape for the selected mode. If the installation already has a persisted installation id, preview responses include that id and set `redacted` to `false`. If no id exists yet, the preview uses a placeholder id and sets `redacted` to `true`.
 
-Telemetry mode is persisted in app settings:
+Telemetry mode and the installation id are persisted in the existing app settings row inside the MediaLyze configuration database. In Docker deployments this is normally `/config/medialyze.db`, so the id survives MediaLyze image updates as long as the `/config` volume is kept. Deleting the config database or moving to a fresh config volume creates a new installation id.
 
 ```json
 {
   "telemetry": {
     "mode": "minimal",
+    "installation_id": "uuid-v4",
     "environment_disabled": false,
     "last_user_visible_payload": null
   }
 }
 ```
+
+The full installation id is returned by `GET /api/app-settings` for the local admin UI so users can later identify their anonymous installation when requesting export or deletion on the telemetry website. Public previews still redact the id.
 
 The UI updates telemetry mode through:
 

@@ -327,6 +327,33 @@ def test_send_initial_telemetry_snapshot_posts_hidden_minimal_payload_and_marks_
     assert loaded.telemetry.last_user_visible_payload is None
 
 
+def test_installation_id_survives_version_updates(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    first_settings = build_settings(tmp_path)
+    first_settings.app_version = "0.10.4"
+    second_settings = build_settings(tmp_path)
+    second_settings.app_version = "0.11.0"
+    posted: list[dict] = []
+
+    def fake_post_json(url, payload, timeout):
+        posted.append(payload)
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+
+    with session_factory() as db:
+        assert send_initial_telemetry_snapshot(db, first_settings) is True
+        first_id = posted[-1]["installation_id"]
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), second_settings)
+
+        assert send_current_telemetry_snapshot(db, second_settings, force=True) is True
+        loaded = get_app_settings(db, second_settings)
+
+    assert posted[0]["app"]["version"] == "0.10.4"
+    assert posted[1]["app"]["version"] == "0.11.0"
+    assert posted[1]["installation_id"] == first_id
+    assert loaded.telemetry.installation_id == first_id
+
+
 def test_send_initial_telemetry_snapshot_waits_for_retry_when_network_fails(tmp_path, monkeypatch) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)

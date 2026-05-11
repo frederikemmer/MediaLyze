@@ -266,6 +266,33 @@ def test_update_app_settings_persists_telemetry_mode(tmp_path) -> None:
     assert loaded.telemetry.installation_id_suffix == updated.telemetry.installation_id_suffix
 
 
+def test_telemetry_installation_id_survives_settings_updates(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        enabled = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+        installation_id = enabled.telemetry.installation_id
+
+        disabled = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "off"}), settings)
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                telemetry={"mode": "minimal"},
+                scan_performance={"scan_worker_count": 5},
+                ui_preferences={"interface_language": "de"},
+            ),
+            settings,
+        )
+        loaded = get_app_settings(db, settings)
+
+    assert installation_id is not None
+    assert disabled.telemetry.installation_id == installation_id
+    assert updated.telemetry.installation_id == installation_id
+    assert loaded.telemetry.installation_id == installation_id
+    assert loaded.telemetry.installation_id_suffix == installation_id[-8:]
+
+
 def test_telemetry_disabled_env_forces_off_mode(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path, telemetry_disabled=True)

@@ -590,6 +590,7 @@ export type AppSettings = {
   telemetry?: {
     mode: TelemetryMode;
     environment_disabled: boolean;
+    installation_id?: string | null;
     installation_id_suffix: string | null;
     last_sent_at: string | null;
     last_user_visible_payload: Record<string, unknown> | null;

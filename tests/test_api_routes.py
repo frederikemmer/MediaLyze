@@ -107,9 +107,10 @@ def test_telemetry_preview_enabled_includes_app_settings_and_media_kind_counts()
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     with session_factory() as db:
-        update_app_settings(
+        app_settings = update_app_settings(
             db,
             AppSettingsUpdate(
+                telemetry={"mode": "enabled"},
                 ui_preferences={"interface_language": "de", "color_theme": "dark"},
                 scan_performance={
                     "scan_worker_count": 5,
@@ -158,7 +159,9 @@ def test_telemetry_preview_enabled_includes_app_settings_and_media_kind_counts()
         response = client.get("/api/telemetry/preview?mode=enabled")
 
     assert response.status_code == 200
+    assert response.json()["redacted"] is False
     payload = response.json()["payload"]
+    assert payload["installation_id"] == app_settings.telemetry.installation_id
     assert payload["usage"]["media_kind_counts"] == {"audio": 1, "video": 1, "other": 0}
     assert payload["app_settings"] == {
         "interface_language": "de",
@@ -179,7 +182,9 @@ def test_telemetry_preview_minimal_excludes_usage_and_app_settings() -> None:
         response = client.get("/api/telemetry/preview?mode=minimal")
 
     assert response.status_code == 200
+    assert response.json()["redacted"] is True
     payload = response.json()["payload"]
+    assert payload["installation_id"] == "00000000-0000-0000-0000-000000000000"
     assert "usage" not in payload
     assert "app_settings" not in payload
 

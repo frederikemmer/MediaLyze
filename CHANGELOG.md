@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - schedule telemetry snapshots at UTC midnight with jitter and delay selected-mode sends for 60 seconds after telemetry settings changes for users to correct wrong input
 - retry failed telemetry sends with a bounded 1s, 2s, 5s, and 10s backoff sequence
 - document that enabled telemetry counts all configured libraries, not only dashboard-visible libraries
+- return the persisted telemetry installation id in app settings so users can later identify their anonymous installation for deletion flows
 
 ### 🐛 Bug fixes
 
@@ -33,9 +34,6 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - harden Windows desktop GitHub Actions builds by retrying the Electron packaging step when upstream `electron-builder` NSIS resource downloads fail transiently with HTTP 502 responses
-
-### 🐛 Bug fixes
-
 - regenerate favicon and Apple touch PNG assets from the vector source at their native target sizes so higher-resolution icons no longer appear pixelated
 
 ## v0.10.3

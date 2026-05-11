@@ -263,9 +263,16 @@ def telemetry_preview(
     settings: Settings = Depends(get_app_settings),
 ) -> dict:
     app_settings_payload = load_app_settings(db, settings)
+    installation_id = app_settings_payload.telemetry.installation_id
     return {
-        "payload": build_telemetry_payload(db, settings, app_settings_payload, mode=mode),
-        "redacted": True,
+        "payload": build_telemetry_payload(
+            db,
+            settings,
+            app_settings_payload,
+            mode=mode,
+            installation_id=installation_id or "00000000-0000-0000-0000-000000000000",
+        ),
+        "redacted": installation_id is None,
         "mode": mode,
     }
 

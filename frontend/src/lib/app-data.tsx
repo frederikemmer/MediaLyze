@@ -52,6 +52,7 @@ const DEFAULT_UI_PREFERENCES = {
 const DEFAULT_TELEMETRY = {
   mode: "none" as const,
   environment_disabled: false,
+  installation_id: null,
   installation_id_suffix: null,
   last_sent_at: null,
   last_user_visible_payload: null,
@@ -149,6 +150,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     telemetry: {
       mode: payload?.telemetry?.mode ?? DEFAULT_TELEMETRY.mode,
       environment_disabled: payload?.telemetry?.environment_disabled ?? DEFAULT_TELEMETRY.environment_disabled,
+      installation_id: payload?.telemetry?.installation_id ?? DEFAULT_TELEMETRY.installation_id,
       installation_id_suffix: payload?.telemetry?.installation_id_suffix ?? DEFAULT_TELEMETRY.installation_id_suffix,
       last_sent_at: payload?.telemetry?.last_sent_at ?? DEFAULT_TELEMETRY.last_sent_at,
       last_user_visible_payload:
