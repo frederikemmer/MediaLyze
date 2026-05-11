@@ -3,12 +3,14 @@ from __future__ import annotations
 import math
 import os
 import platform
+import json
+import urllib.error
+import urllib.request
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -247,14 +249,23 @@ def _ensure_installation_id(db: Session) -> str:
     return installation_id
 
 
+def _post_json(url: str, payload: dict, timeout: float) -> None:
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        status = getattr(response, "status", response.getcode())
+        if status >= 400:
+            raise urllib.error.HTTPError(url, status, "Telemetry ingest rejected payload", response.headers, None)
+
+
 def send_telemetry_payload(payload: dict, settings: Settings) -> bool:
     try:
-        response = httpx.post(
-            settings.telemetry_endpoint,
-            json=payload,
-            timeout=settings.telemetry_timeout_seconds,
-        )
-        response.raise_for_status()
+        _post_json(settings.telemetry_endpoint, payload, settings.telemetry_timeout_seconds)
     except Exception as exc:
         # Telemetry is strictly best effort and must not affect runtime behavior.
         import logging

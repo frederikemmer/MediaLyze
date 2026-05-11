@@ -204,17 +204,12 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
     settings = build_settings(tmp_path)
     posted: dict = {}
 
-    class FakeResponse:
-        def raise_for_status(self) -> None:
-            return None
-
-    def fake_post(url, *, json, timeout):
+    def fake_post_json(url, payload, timeout):
         posted["url"] = url
-        posted["json"] = json
+        posted["json"] = payload
         posted["timeout"] = timeout
-        return FakeResponse()
 
-    monkeypatch.setattr("backend.app.services.telemetry.httpx.post", fake_post)
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
 
     with session_factory() as db:
         update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
@@ -236,10 +231,10 @@ def test_send_current_telemetry_snapshot_ignores_network_failure(tmp_path, monke
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
 
-    def fake_post(url, *, json, timeout):
+    def fake_post_json(url, payload, timeout):
         raise RuntimeError("network down")
 
-    monkeypatch.setattr("backend.app.services.telemetry.httpx.post", fake_post)
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
 
     with session_factory() as db:
         update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
