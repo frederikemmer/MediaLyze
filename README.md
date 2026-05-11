@@ -221,7 +221,7 @@ Relevant environment variables:
 - `TZ`: process/container timezone, default `UTC`
 - `DISABLE_DEFAULT_IGNORE_PATTERNS`: optional; when set to `true`, built-in default ignore patterns are not preloaded
 - `MEDIALYZE_TELEMETRY_DISABLED`: optional; when set to `true`, telemetry is forced off and the UI toggle is locked
-- `MEDIALYZE_TELEMETRY_ENDPOINT`: optional; overrides the telemetry ingest endpoint, default `https://telemetry.medialyze.app/api/telemetry/ingest`
+- `MEDIALYZE_TELEMETRY_ENDPOINT`: optional; overrides the telemetry ingest endpoint, default `https://www.medialyze.app/api/telemetry/ingest`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
 

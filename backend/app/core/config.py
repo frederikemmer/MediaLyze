@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     disable_default_ignore_patterns: bool = False
     telemetry_disabled: bool = Field(default=False, validation_alias="MEDIALYZE_TELEMETRY_DISABLED")
     telemetry_endpoint: str = Field(
-        default="https://telemetry.medialyze.app/api/telemetry/ingest",
+        default="https://www.medialyze.app/api/telemetry/ingest",
         validation_alias="MEDIALYZE_TELEMETRY_ENDPOINT",
     )
     telemetry_timeout_seconds: float = 2.0

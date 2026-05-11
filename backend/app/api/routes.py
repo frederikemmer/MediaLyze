@@ -290,7 +290,9 @@ def app_settings_update(
         and payload.telemetry.mode in {"minimal", "enabled"}
         and updated_settings.telemetry.mode in {"minimal", "enabled"}
     ):
-        runtime.request_telemetry_send(force=True)
+        runtime.schedule_telemetry_send_after_settings_change()
+    elif payload.telemetry is not None and payload.telemetry.mode == "off":
+        runtime.cancel_pending_telemetry_send()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings

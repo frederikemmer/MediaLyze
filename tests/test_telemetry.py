@@ -25,6 +25,7 @@ from backend.app.services.telemetry import (
     round_count_for_telemetry,
     round_storage_gb_for_telemetry,
     send_current_telemetry_snapshot,
+    send_initial_telemetry_snapshot,
 )
 
 
@@ -227,14 +228,97 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
     assert loaded.telemetry.last_user_visible_payload == posted["json"]
 
 
+def test_send_current_telemetry_snapshot_retries_limited_failures(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    calls: list[dict] = []
+    sleeps: list[int] = []
+
+    def fake_post_json(url, payload, timeout):
+        calls.append(payload)
+        if len(calls) < 4:
+            raise RuntimeError("temporary network down")
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+    monkeypatch.setattr("backend.app.services.telemetry.time.sleep", lambda seconds: sleeps.append(seconds))
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+
+        sent = send_current_telemetry_snapshot(db, settings, force=True)
+        loaded = get_app_settings(db, settings)
+
+    assert sent is True
+    assert len(calls) == 4
+    assert sleeps == [1, 2, 5]
+    assert loaded.telemetry.last_sent_at is not None
+    assert loaded.telemetry.last_user_visible_payload == calls[-1]
+
+
+def test_send_initial_telemetry_snapshot_posts_hidden_minimal_payload_and_marks_initialized(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    posted: dict = {}
+
+    def fake_post_json(url, payload, timeout):
+        posted["url"] = url
+        posted["json"] = payload
+        posted["timeout"] = timeout
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+
+    with session_factory() as db:
+        sent = send_initial_telemetry_snapshot(db, settings)
+        loaded = get_app_settings(db, settings)
+
+    assert sent is True
+    assert posted["url"] == "https://telemetry.example.test/api/telemetry/ingest"
+    assert posted["json"]["telemetry_mode"] == "minimal"
+    assert posted["json"]["is_test"] is False
+    assert loaded.telemetry.mode == "initialized"
+    assert loaded.telemetry.last_sent_at is not None
+    assert loaded.telemetry.last_user_visible_payload is None
+
+
+def test_send_initial_telemetry_snapshot_waits_for_retry_when_network_fails(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    calls = 0
+    sleeps: list[int] = []
+
+    def fake_post_json(url, payload, timeout):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+    monkeypatch.setattr("backend.app.services.telemetry.time.sleep", lambda seconds: sleeps.append(seconds))
+
+    with session_factory() as db:
+        sent = send_initial_telemetry_snapshot(db, settings)
+        loaded = get_app_settings(db, settings)
+
+    assert sent is False
+    assert calls == 5
+    assert sleeps == [1, 2, 5, 10]
+    assert loaded.telemetry.mode == "none"
+    assert loaded.telemetry.last_sent_at is None
+    assert loaded.telemetry.last_user_visible_payload is None
+
+
 def test_send_current_telemetry_snapshot_ignores_network_failure(tmp_path, monkeypatch) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
+    sleeps: list[int] = []
 
     def fake_post_json(url, payload, timeout):
         raise RuntimeError("network down")
 
     monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+    monkeypatch.setattr("backend.app.services.telemetry.time.sleep", lambda seconds: sleeps.append(seconds))
 
     with session_factory() as db:
         update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
@@ -243,4 +327,5 @@ def test_send_current_telemetry_snapshot_ignores_network_failure(tmp_path, monke
         loaded = get_app_settings(db, settings)
 
     assert sent is False
+    assert sleeps == [1, 2, 5, 10]
     assert loaded.telemetry.last_sent_at is None

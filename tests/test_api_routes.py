@@ -45,29 +45,46 @@ def _build_test_app(db: Session) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: db
-    app.state.scan_runtime = type(
-        "TestScanRuntime",
-        (),
-        {
-            "__init__": lambda self: setattr(self, "history_reconstruction_status", HistoryReconstructionStatusRead()),
-            "sync_library": lambda self, library_id: None,
-            "refresh_worker_settings": lambda self: None,
-            "request_quality_recompute": lambda self, library_id: None,
-            "run_history_retention": lambda self: None,
-            "cancel_active_jobs": lambda self: [],
-            "get_history_reconstruction_status": lambda self: self.history_reconstruction_status,
-            "request_history_reconstruction": lambda self: setattr(
-                self,
-                "history_reconstruction_status",
-                HistoryReconstructionStatusRead(
-                    status=HistoryReconstructionJobStatus.running,
-                    phase=HistoryReconstructionPhase.loading_libraries,
-                    libraries_total=1,
-                ),
+
+    class TestScanRuntime:
+        def __init__(self) -> None:
+            self.history_reconstruction_status = HistoryReconstructionStatusRead()
+            self.scheduled_telemetry_sends = 0
+            self.canceled_telemetry_sends = 0
+
+        def sync_library(self, library_id: int) -> None:
+            return None
+
+        def refresh_worker_settings(self) -> None:
+            return None
+
+        def request_quality_recompute(self, library_id: int) -> None:
+            return None
+
+        def run_history_retention(self) -> None:
+            return None
+
+        def schedule_telemetry_send_after_settings_change(self) -> None:
+            self.scheduled_telemetry_sends += 1
+
+        def cancel_pending_telemetry_send(self) -> None:
+            self.canceled_telemetry_sends += 1
+
+        def cancel_active_jobs(self) -> list:
+            return []
+
+        def get_history_reconstruction_status(self) -> HistoryReconstructionStatusRead:
+            return self.history_reconstruction_status
+
+        def request_history_reconstruction(self) -> HistoryReconstructionStatusRead:
+            self.history_reconstruction_status = HistoryReconstructionStatusRead(
+                status=HistoryReconstructionJobStatus.running,
+                phase=HistoryReconstructionPhase.loading_libraries,
+                libraries_total=1,
             )
-            or self.history_reconstruction_status,
-        },
-    )()
+            return self.history_reconstruction_status
+
+    app.state.scan_runtime = TestScanRuntime()
     return TestClient(app)
 
 
@@ -165,6 +182,39 @@ def test_telemetry_preview_minimal_excludes_usage_and_app_settings() -> None:
     payload = response.json()["payload"]
     assert "usage" not in payload
     assert "app_settings" not in payload
+
+
+def test_app_settings_telemetry_mode_change_schedules_delayed_send() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.patch("/api/app-settings", json={"telemetry": {"mode": "minimal"}})
+
+        runtime = client.app.state.scan_runtime
+
+    assert response.status_code == 200
+    assert runtime.scheduled_telemetry_sends == 1
+    assert runtime.canceled_telemetry_sends == 0
+
+
+def test_app_settings_telemetry_off_cancels_pending_send() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}))
+        client = _build_test_app(db)
+        response = client.patch("/api/app-settings", json={"telemetry": {"mode": "off"}})
+
+        runtime = client.app.state.scan_runtime
+
+    assert response.status_code == 200
+    assert runtime.scheduled_telemetry_sends == 0
+    assert runtime.canceled_telemetry_sends == 1
 
 
 def test_library_files_export_csv_returns_422_for_invalid_search_expression() -> None:

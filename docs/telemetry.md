@@ -12,9 +12,19 @@ Telemetry modes:
 
 Set `MEDIALYZE_TELEMETRY_DISABLED=true` to force telemetry off. In that state the UI toggle is locked to `off`, and no telemetry payload is sent.
 
-The app sends accepted telemetry modes to `https://telemetry.medialyze.app/api/telemetry/ingest` by default. Override this with `MEDIALYZE_TELEMETRY_ENDPOINT` for development or alternate deployments.
+The app sends accepted telemetry modes to `https://www.medialyze.app/api/telemetry/ingest` by default. Override this with `MEDIALYZE_TELEMETRY_ENDPOINT` for development or alternate deployments.
 
 Development builds send normal payloads with `is_test: false`. Test payloads are only used by explicit development connectivity checks, not by the regular app sender.
+
+## Send Timing
+
+On first startup with `mode=none`, MediaLyze attempts one pre-choice minimal payload. If that send succeeds, the stored mode changes to `initialized`; if it fails, the mode remains `none` so the next startup can retry. This initial payload is not shown as the last user-visible payload because it can happen before a user has made a telemetry choice.
+
+When a user changes telemetry from `off`, `none`, or `initialized` to `minimal` or `enabled`, MediaLyze schedules the first selected-mode payload for 60 seconds later. If telemetry is switched back to `off` before the delay expires, the pending send is canceled.
+
+After that, regular telemetry is sent once per day around `00:00` UTC. The scheduler applies up to 10 minutes of jitter so installations spread requests instead of all posting at the same instant.
+
+Failed sends are retried in the same background task after 1 second, 2 seconds, 5 seconds, and 10 seconds. If all attempts fail, MediaLyze stops retrying that payload and waits for the next scheduled or user-triggered send opportunity.
 
 ## Preview API
 

@@ -288,6 +288,71 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     assert added_jobs[1]["kwargs"]["id"] == "history-storage-refresh"
 
 
+def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:
+    captured: dict = {}
+
+    class SchedulerStub:
+        def add_job(self, func, **kwargs):
+            captured["func"] = func
+            captured["kwargs"] = kwargs
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+
+    runtime._ensure_telemetry_job()
+
+    assert captured["func"] == runtime.request_telemetry_send
+    assert captured["kwargs"]["id"] == "telemetry-daily-snapshot"
+    assert captured["kwargs"]["trigger"] == "cron"
+    assert captured["kwargs"]["hour"] == 0
+    assert captured["kwargs"]["minute"] == 0
+    assert captured["kwargs"]["jitter"] == 600
+    assert captured["kwargs"]["kwargs"] == {"force": False}
+
+
+def test_schedule_telemetry_send_after_settings_change_uses_cancelable_delay(monkeypatch) -> None:
+    started_timers = []
+    submitted: list[tuple] = []
+
+    class TimerStub:
+        def __init__(self, delay, callback) -> None:
+            self.delay = delay
+            self.callback = callback
+            self.daemon = False
+            self.canceled = False
+
+        def start(self) -> None:
+            started_timers.append(self)
+
+        def cancel(self) -> None:
+            self.canceled = True
+
+    class ExecutorStub:
+        def submit(self, fn, *args) -> None:
+            submitted.append((fn, args))
+
+    monkeypatch.setattr(runtime_module, "Timer", TimerStub)
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.started = True
+    runtime.maintenance_executor = ExecutorStub()
+
+    runtime.schedule_telemetry_send_after_settings_change()
+    first_timer = started_timers[-1]
+    runtime.schedule_telemetry_send_after_settings_change()
+    second_timer = started_timers[-1]
+
+    assert first_timer.delay == 60
+    assert first_timer.canceled is True
+    assert second_timer.delay == 60
+    assert second_timer.daemon is True
+
+    second_timer.callback()
+
+    assert runtime.telemetry_send_timer is None
+    assert submitted == [(runtime._run_telemetry_send, (True,))]
+
+
 def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch, tmp_path) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)

@@ -25,7 +25,7 @@ from backend.app.services.history_reconstruction import reconstruct_history_from
 from backend.app.services.library_service import get_library_statistics, get_library_summary
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.services.stats import build_dashboard
-from backend.app.services.telemetry import send_current_telemetry_snapshot
+from backend.app.services.telemetry import send_current_telemetry_snapshot, send_initial_telemetry_snapshot
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -67,6 +67,7 @@ class ScanRuntimeManager:
         self.history_compaction_pending = False
         self.history_storage_refresh_submitted = False
         self.stats_warmup_timer: Timer | None = None
+        self.telemetry_send_timer: Timer | None = None
         self.history_reconstruction_status = HistoryReconstructionStatusRead()
         self.started = False
 
@@ -82,7 +83,7 @@ class ScanRuntimeManager:
         self._recover_orphaned_jobs()
         self.sync_all_libraries()
         self.run_history_retention()
-        self.request_telemetry_send(force=False)
+        self.request_initial_telemetry_send()
 
     def stop(self) -> None:
         with self.lock:
@@ -96,6 +97,9 @@ class ScanRuntimeManager:
         if self.stats_warmup_timer is not None:
             self.stats_warmup_timer.cancel()
             self.stats_warmup_timer = None
+        if self.telemetry_send_timer is not None:
+            self.telemetry_send_timer.cancel()
+            self.telemetry_send_timer = None
         self.watch_trigger_buffers.clear()
 
         for _library_id, (_path, observer) in list(self.watch_observers.items()):
@@ -259,6 +263,29 @@ class ScanRuntimeManager:
             if not self.started:
                 return
         self.maintenance_executor.submit(self._run_telemetry_send, force)
+
+    def request_initial_telemetry_send(self) -> None:
+        with self.lock:
+            if not self.started:
+                return
+        self.maintenance_executor.submit(self._run_initial_telemetry_send)
+
+    def schedule_telemetry_send_after_settings_change(self) -> None:
+        with self.lock:
+            if not self.started:
+                return
+            if self.telemetry_send_timer is not None:
+                self.telemetry_send_timer.cancel()
+            timer = Timer(60, self._run_delayed_telemetry_send)
+            timer.daemon = True
+            self.telemetry_send_timer = timer
+            timer.start()
+
+    def cancel_pending_telemetry_send(self) -> None:
+        with self.lock:
+            if self.telemetry_send_timer is not None:
+                self.telemetry_send_timer.cancel()
+                self.telemetry_send_timer = None
 
     def submit_scan_job(self, job_id: int) -> None:
         db = SessionLocal()
@@ -507,8 +534,10 @@ class ScanRuntimeManager:
     def _ensure_telemetry_job(self) -> None:
         self.scheduler.add_job(
             self.request_telemetry_send,
-            trigger="interval",
-            hours=24,
+            trigger="cron",
+            hour=0,
+            minute=0,
+            jitter=600,
             kwargs={"force": False},
             id="telemetry-daily-snapshot",
             replace_existing=True,
@@ -564,6 +593,18 @@ class ScanRuntimeManager:
             send_current_telemetry_snapshot(db, self.settings, force=force)
         finally:
             db.close()
+
+    def _run_initial_telemetry_send(self) -> None:
+        db = SessionLocal()
+        try:
+            send_initial_telemetry_snapshot(db, self.settings)
+        finally:
+            db.close()
+
+    def _run_delayed_telemetry_send(self) -> None:
+        with self.lock:
+            self.telemetry_send_timer = None
+        self.request_telemetry_send(force=True)
 
     def _submit_next_active_job(self, library_id: int) -> None:
         db = SessionLocal()

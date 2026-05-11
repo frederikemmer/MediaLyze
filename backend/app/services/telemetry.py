@@ -4,6 +4,7 @@ import math
 import os
 import platform
 import json
+import time
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -31,6 +32,7 @@ TelemetryPreviewMode = Literal["none", "minimal", "enabled"]
 
 _DECIMAL_GB = 1_000_000_000
 _PREVIEW_INSTALLATION_ID = "00000000-0000-0000-0000-000000000000"
+_TELEMETRY_RETRY_DELAYS_SECONDS = (1, 2, 5, 10)
 
 
 def round_count_for_telemetry(value: int) -> int:
@@ -264,26 +266,46 @@ def _post_json(url: str, payload: dict, timeout: float) -> None:
 
 
 def send_telemetry_payload(payload: dict, settings: Settings) -> bool:
-    try:
-        _post_json(settings.telemetry_endpoint, payload, settings.telemetry_timeout_seconds)
-    except Exception as exc:
-        # Telemetry is strictly best effort and must not affect runtime behavior.
-        import logging
+    import logging
 
-        logging.getLogger(__name__).info("Telemetry send failed: %s", exc)
-        return False
-    return True
+    last_error: Exception | None = None
+    for attempt_index in range(len(_TELEMETRY_RETRY_DELAYS_SECONDS) + 1):
+        try:
+            _post_json(settings.telemetry_endpoint, payload, settings.telemetry_timeout_seconds)
+            return True
+        except Exception as exc:
+            # Telemetry is strictly best effort and must not affect runtime behavior.
+            last_error = exc
+            if attempt_index >= len(_TELEMETRY_RETRY_DELAYS_SECONDS):
+                break
+            time.sleep(_TELEMETRY_RETRY_DELAYS_SECONDS[attempt_index])
+
+    logging.getLogger(__name__).info("Telemetry send failed after retries: %s", last_error)
+    return False
 
 
-def mark_telemetry_sent(db: Session, timestamp: datetime, payload: dict) -> None:
+def mark_telemetry_sent(
+    db: Session,
+    timestamp: datetime,
+    payload: dict,
+    *,
+    mode: str | None = None,
+    store_last_user_visible_payload: bool = True,
+) -> None:
     telemetry = _stored_telemetry_payload(db)
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
     value = dict(setting.value) if setting is not None and isinstance(setting.value, dict) else {}
-    value["telemetry"] = {
+    next_telemetry = {
         **telemetry,
         "last_sent_at": timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-        "last_user_visible_payload": payload if payload.get("telemetry_mode") != "none" else telemetry.get("last_user_visible_payload"),
     }
+    if mode is not None:
+        next_telemetry["mode"] = mode
+    if store_last_user_visible_payload:
+        next_telemetry["last_user_visible_payload"] = payload
+    else:
+        next_telemetry["last_user_visible_payload"] = telemetry.get("last_user_visible_payload")
+    value["telemetry"] = next_telemetry
     if setting is None:
         db.add(AppSetting(key=APP_SETTINGS_KEY, value=value))
     else:
@@ -311,4 +333,31 @@ def send_current_telemetry_snapshot(db: Session, settings: Settings, *, force: b
     if not send_telemetry_payload(payload, settings):
         return False
     mark_telemetry_sent(db, now, payload)
+    return True
+
+
+def send_initial_telemetry_snapshot(db: Session, settings: Settings) -> bool:
+    app_settings = get_app_settings(db, settings)
+    if app_settings.telemetry.environment_disabled or app_settings.telemetry.mode != "none":
+        return False
+
+    now = datetime.now(UTC)
+    installation_id = _ensure_installation_id(db)
+    payload = build_telemetry_payload(
+        db,
+        settings,
+        get_app_settings(db, settings),
+        mode="minimal",
+        installation_id=installation_id,
+        is_test=False,
+    )
+    if not send_telemetry_payload(payload, settings):
+        return False
+    mark_telemetry_sent(
+        db,
+        now,
+        payload,
+        mode="initialized",
+        store_last_user_visible_payload=False,
+    )
     return True

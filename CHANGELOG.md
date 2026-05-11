@@ -7,15 +7,16 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
-- rename the release-notes dialog title to "Release history" and remove the smaller header label above it
-- match the Settings history reconstruction button sizing to the full-scan action button
 - move the Folder & pattern recognition header tooltip to the left of the collapse button
-- add telemetry payload preview support with `none`, `minimal`, and `enabled` modes, including enabled-only UI preference, scan setting, and media-kind count fields
+- add telemetry payload preview support with `none`, `minimal`, and `enabled` modes
 - add a shared telemetry mode toggle to the Telemetry settings panel and release-history dialog, backed by persisted app settings and lockable via `MEDIALYZE_TELEMETRY_DISABLED`
-- document the telemetry ingest contract at `/api/telemetry/ingest` with a test-payload example using `is_test: true`
-- send minimal and full telemetry snapshots to the configured ingest endpoint as normal `is_test: false` payloads, including in development builds
-- refine the release-history telemetry toggle to use the compact segmented statistics-toggle style and keep telemetry warnings from overlapping release entries
-- simplify the Telemetry settings payload preview to one switchable JSON box for last sent, minimal example, and full example payloads
+- document the telemetry ingest contract at `/api/telemetry/ingest`
+- schedule telemetry snapshots at UTC midnight with jitter and delay selected-mode sends for 60 seconds after telemetry settings changes for users to correct wrong input
+- retry failed telemetry sends with a bounded 1s, 2s, 5s, and 10s backoff sequence
+
+### 🐛 Bug fixes
+
+- match the Settings history reconstruction button sizing to the full-scan action button
 
 ## v0.10.4
 
