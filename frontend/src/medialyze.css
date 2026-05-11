@@ -2980,10 +2980,20 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-preview-actions {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 0 0 10px 8px;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 28, 22, 0.09);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 2px rgba(31, 28, 22, 0.03);
 }
 
 .telemetry-stats-info {
@@ -3019,13 +3029,54 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   flex: 0 0 auto;
 }
 
+.telemetry-preview-view-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.telemetry-preview-view-button:hover,
+.telemetry-preview-view-button:focus-visible {
+  transform: none;
+  color: var(--ink);
+  background: rgba(31, 28, 22, 0.04);
+  box-shadow: none;
+}
+
 .telemetry-preview-view-button.active {
   color: var(--ink);
-  border-color: rgba(31, 28, 22, 0.08);
-  background: rgba(255, 255, 255, 0.98);
+  background: transparent;
+}
+
+.telemetry-preview-view-button.active::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 28, 22, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(250, 248, 244, 0.98));
   box-shadow:
     0 10px 22px rgba(31, 28, 22, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.92),
     inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.telemetry-preview-view-button > span {
+  position: relative;
+  z-index: 1;
 }
 
 .telemetry-mode-toggle {
@@ -4703,6 +4754,7 @@ html[data-theme="dark"] {
   }
 
   .distribution-chart-mode-toggle,
+  .telemetry-preview-actions,
   .telemetry-mode-toggle {
     background: rgba(38, 35, 31, 0.64);
     border-color: rgba(240, 236, 228, 0.09);
@@ -4725,6 +4777,11 @@ html[data-theme="dark"] {
 
   .telemetry-preview-view-button.active {
     color: rgba(255, 250, 243, 0.98);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .telemetry-preview-view-button.active::before {
     border-color: rgba(240, 236, 228, 0.08);
     background: rgba(240, 236, 228, 0.08);
     box-shadow:

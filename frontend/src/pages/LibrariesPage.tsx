@@ -4341,30 +4341,30 @@ export function LibrariesPage() {
                 <div className="telemetry-preview-actions">
                   <button
                     type="button"
-                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
                     disabled={isLoadingTelemetryPreview}
                     aria-pressed={telemetryPayloadView === "last"}
                     onClick={() => void selectTelemetryPayloadView("last")}
                   >
-                    {t("telemetry.preview.views.last")}
+                    <span>{t("telemetry.preview.views.last")}</span>
                   </button>
                   <button
                     type="button"
-                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}`}
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}`}
                     disabled={isLoadingTelemetryPreview}
                     aria-pressed={telemetryPayloadView === "minimal"}
                     onClick={() => void selectTelemetryPayloadView("minimal")}
                   >
-                    {t("telemetry.preview.views.minimal")}
+                    <span>{t("telemetry.preview.views.minimal")}</span>
                   </button>
                   <button
                     type="button"
-                    className={`secondary telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}`}
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}`}
                     disabled={isLoadingTelemetryPreview}
                     aria-pressed={telemetryPayloadView === "enabled"}
                     onClick={() => void selectTelemetryPayloadView("enabled")}
                   >
-                    {t("telemetry.preview.views.enabled")}
+                    <span>{t("telemetry.preview.views.enabled")}</span>
                   </button>
                 </div>
                 <pre className="telemetry-preview-json" aria-label={t("telemetry.preview.jsonLabel")}>
