@@ -3060,6 +3060,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   background: transparent;
 }
 
+.telemetry-preview-view-button.is-loading {
+  cursor: progress;
+}
+
 .telemetry-preview-view-button.active::before {
   content: "";
   position: absolute;

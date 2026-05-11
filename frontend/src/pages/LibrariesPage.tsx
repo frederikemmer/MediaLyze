@@ -696,6 +696,7 @@ export function LibrariesPage() {
     Partial<Record<Exclude<TelemetryPayloadView, "last">, string>>
   >({});
   const [telemetryPayloadView, setTelemetryPayloadView] = useState<TelemetryPayloadView>("last");
+  const [loadingTelemetryPayloadView, setLoadingTelemetryPayloadView] = useState<Exclude<TelemetryPayloadView, "last"> | null>(null);
   const [telemetryStatus, setTelemetryStatus] = useState<string | null>(null);
   const [telemetryIdCopied, setTelemetryIdCopied] = useState(false);
   const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
@@ -741,9 +742,7 @@ export function LibrariesPage() {
       ? appTelemetry.mode === "off" || appTelemetry.environment_disabled
         ? t("telemetry.lastPayload.noneAndOff")
         : t("telemetry.lastPayload.none")
-      : isLoadingTelemetryPreview
-        ? t("telemetry.preview.loading")
-        : t("telemetry.preview.notLoaded");
+      : t("telemetry.preview.notLoaded");
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
@@ -831,11 +830,19 @@ export function LibrariesPage() {
   }
 
   async function selectTelemetryPayloadView(view: TelemetryPayloadView) {
-    setTelemetryPayloadView(view);
     setTelemetryPreviewStatus(null);
-    if (view === "last" || telemetryPreviewJsonByMode[view]) {
+    if (view === "last") {
+      setTelemetryPayloadView(view);
       return;
     }
+    if (telemetryPreviewJsonByMode[view]) {
+      setTelemetryPayloadView(view);
+      return;
+    }
+    if (isLoadingTelemetryPreview) {
+      return;
+    }
+    setLoadingTelemetryPayloadView(view);
     setIsLoadingTelemetryPreview(true);
     try {
       const preview = await api.telemetryPreview(view);
@@ -843,10 +850,12 @@ export function LibrariesPage() {
         ...current,
         [preview.mode === "enabled" ? "enabled" : "minimal"]: JSON.stringify(preview.payload, null, 2),
       }));
+      setTelemetryPayloadView(preview.mode === "enabled" ? "enabled" : "minimal");
     } catch {
       setTelemetryPreviewStatus(t("telemetry.preview.loadFailed"));
     } finally {
       setIsLoadingTelemetryPreview(false);
+      setLoadingTelemetryPayloadView(null);
     }
   }
 
@@ -4342,7 +4351,6 @@ export function LibrariesPage() {
                   <button
                     type="button"
                     className={`telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
-                    disabled={isLoadingTelemetryPreview}
                     aria-pressed={telemetryPayloadView === "last"}
                     onClick={() => void selectTelemetryPayloadView("last")}
                   >
@@ -4350,8 +4358,7 @@ export function LibrariesPage() {
                   </button>
                   <button
                     type="button"
-                    className={`telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}`}
-                    disabled={isLoadingTelemetryPreview}
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}${loadingTelemetryPayloadView === "minimal" ? " is-loading" : ""}`}
                     aria-pressed={telemetryPayloadView === "minimal"}
                     onClick={() => void selectTelemetryPayloadView("minimal")}
                   >
@@ -4359,8 +4366,7 @@ export function LibrariesPage() {
                   </button>
                   <button
                     type="button"
-                    className={`telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}`}
-                    disabled={isLoadingTelemetryPreview}
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}${loadingTelemetryPayloadView === "enabled" ? " is-loading" : ""}`}
                     aria-pressed={telemetryPayloadView === "enabled"}
                     onClick={() => void selectTelemetryPayloadView("enabled")}
                   >

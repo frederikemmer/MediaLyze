@@ -1524,6 +1524,36 @@ describe("LibrariesPage settings panels", () => {
     });
   });
 
+  it("keeps the telemetry payload viewer stable while loading the first preview", async () => {
+    let resolvePreview: (value: Awaited<ReturnType<typeof api.telemetryPreview>>) => void = () => {};
+    vi.mocked(api.telemetryPreview).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePreview = resolve;
+      }),
+    );
+
+    renderPage();
+
+    const preview = await screen.findByLabelText("Telemetry payload JSON preview");
+    expect(preview).toHaveTextContent("No user-visible telemetry payload has been sent yet.");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Example minimal" }));
+
+    expect(preview).toHaveTextContent("No user-visible telemetry payload has been sent yet.");
+    expect(preview).not.toHaveTextContent("Loading telemetry payload preview");
+
+    resolvePreview({
+      mode: "minimal",
+      redacted: true,
+      payload: {
+        telemetry_mode: "minimal",
+        app: { name: "MediaLyze" },
+      },
+    });
+
+    await waitFor(() => expect(preview).toHaveTextContent('"telemetry_mode": "minimal"'));
+  });
+
   it("shows telemetry stats link and copyable installation id", async () => {
     const installationId = "84435651-2be0-4b47-9d7c-6eacb1f25395";
     const writeText = vi.fn().mockResolvedValue(undefined);
