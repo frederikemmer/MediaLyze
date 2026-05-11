@@ -199,6 +199,10 @@ The `app_settings` object is sent only in `enabled` mode:
 
 Language and theme are explicit MediaLyze UI preferences. They are not broad browser fingerprinting data. No other `localStorage` contents are sent.
 
+## Usage Scope
+
+Enabled-mode usage counts cover the whole configured MediaLyze installation, including libraries that are hidden from dashboard statistics with `show_on_dashboard=false`. This can make `usage.library_count`, `usage.analyzed_file_count_rounded`, `usage.storage_size_gb_rounded`, and `usage.media_kind_counts` higher than the dashboard cards, because the dashboard intentionally reports only dashboard-visible libraries.
+
 ## Media Kind Counts
 
 `usage.media_kind_counts` is sent only in `enabled` mode. It is a string-keyed object so future kinds such as `audiobook`, `image`, `subtitle`, or `document` can be added without changing the payload shape.

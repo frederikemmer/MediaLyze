@@ -13,10 +13,12 @@ All notable changes to this project will be documented in this file.
 - document the telemetry ingest contract at `/api/telemetry/ingest`
 - schedule telemetry snapshots at UTC midnight with jitter and delay selected-mode sends for 60 seconds after telemetry settings changes for users to correct wrong input
 - retry failed telemetry sends with a bounded 1s, 2s, 5s, and 10s backoff sequence
+- document that enabled telemetry counts all configured libraries, not only dashboard-visible libraries
 
 ### 🐛 Bug fixes
 
 - match the Settings history reconstruction button sizing to the full-scan action button
+- align the backend default app version with repository release metadata
 
 ## v0.10.4
 

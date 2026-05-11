@@ -174,6 +174,50 @@ def test_enabled_payload_includes_app_settings_and_media_kind_counts(tmp_path) -
     }
 
 
+def test_enabled_payload_counts_all_configured_libraries_not_only_dashboard_visible(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        app_settings = get_app_settings(db, settings)
+        visible_library = Library(
+            name="Visible",
+            path="/tmp/visible",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            duplicate_detection_mode=DuplicateDetectionMode.off,
+            scan_config={},
+            show_on_dashboard=True,
+        )
+        hidden_library = Library(
+            name="Hidden",
+            path="/tmp/hidden",
+            type=LibraryType.series,
+            scan_mode=ScanMode.scheduled,
+            duplicate_detection_mode=DuplicateDetectionMode.both,
+            scan_config={},
+            show_on_dashboard=False,
+        )
+        db.add_all([visible_library, hidden_library])
+        db.flush()
+        add_media_file(db, visible_library.id, "visible.mkv", 1_000_000_000)
+        add_media_file(db, hidden_library.id, "hidden.mp4", 2_000_000_000)
+        db.commit()
+
+        payload = build_telemetry_payload(db, settings, app_settings, mode="enabled")
+
+    assert payload["usage"]["library_count"] == 2
+    assert payload["usage"]["library_type_counts"]["movies"] == 1
+    assert payload["usage"]["library_type_counts"]["series"] == 1
+    assert payload["usage"]["analyzed_file_count_rounded"] == 2
+    assert payload["usage"]["storage_size_gb_rounded"] == 3
+    assert payload["usage"]["media_kind_counts"]["video"] == 2
+    assert payload["usage"]["scan_mode_counts"]["manual"] == 1
+    assert payload["usage"]["scan_mode_counts"]["scheduled"] == 1
+    assert payload["usage"]["duplicate_detection_mode_counts"]["off"] == 1
+    assert payload["usage"]["duplicate_detection_mode_counts"]["both"] == 1
+
+
 def test_minimal_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)

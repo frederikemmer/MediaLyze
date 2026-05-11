@@ -1,5 +1,7 @@
 import os
 import tempfile
+import tomllib
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -40,6 +42,15 @@ def build_settings(
         disable_default_ignore_patterns=disable_default_ignore_patterns,
         telemetry_disabled=telemetry_disabled,
     )
+
+
+def test_default_app_version_matches_pyproject(monkeypatch) -> None:
+    monkeypatch.delenv("APP_VERSION", raising=False)
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == pyproject["project"]["version"]
 
 
 def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_installations(tmp_path) -> None:
