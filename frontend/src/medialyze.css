@@ -2983,6 +2983,40 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 0 0 10px 8px;
+}
+
+.telemetry-stats-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.telemetry-stats-info > div {
+  min-width: 0;
+}
+
+.telemetry-stats-link {
+  flex: 0 0 auto;
+}
+
+.telemetry-installation-id-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 6px 0 10px;
+}
+
+.telemetry-installation-id-row input {
+  min-width: 0;
+  font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.telemetry-copy-id-button {
+  flex: 0 0 auto;
 }
 
 .telemetry-preview-view-button.active {
@@ -4696,6 +4730,17 @@ html[data-theme="dark"] {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 10px 22px rgba(0, 0, 0, 0.24);
+  }
+
+  .telemetry-stats-info,
+  .telemetry-installation-id-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .telemetry-stats-link,
+  .telemetry-copy-id-button {
+    justify-self: start;
   }
 
   .telemetry-mode-card {

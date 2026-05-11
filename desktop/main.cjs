@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -189,6 +189,23 @@ ipcMain.handle("medialyze:select-library-paths", async () => {
     return [];
   }
   return result.filePaths;
+});
+
+ipcMain.handle("medialyze:open-external-url", async (_event, url) => {
+  if (typeof url !== "string") {
+    return false;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return false;
+  }
+  await shell.openExternal(parsed.toString());
+  return true;
 });
 
 async function launchDesktopApp() {

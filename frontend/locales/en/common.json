@@ -790,6 +790,15 @@
       "empty": "No telemetry payload preview is available.",
       "loadFailed": "Telemetry payload preview failed."
     },
+    "stats": {
+      "title": "Public statistics",
+      "description": "MediaLyze has a public statistics page where you can view the telemetry data contributed by this installation and delete all data yourself by using your randomized installation ID.",
+      "openAria": "Open MediaLyze statistics page",
+      "installationIdLabel": "Own installation ID",
+      "installationIdMissing": "No installation ID has been created yet.",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
     "lastPayload": {
       "title": "Last transmitted payload",
       "jsonLabel": "Last transmitted telemetry payload JSON",

@@ -790,6 +790,15 @@
       "empty": "Es ist keine Telemetrie-Payload-Vorschau verfügbar.",
       "loadFailed": "Telemetrie-Payload-Vorschau fehlgeschlagen."
     },
+    "stats": {
+      "title": "Öffentliche Statistik",
+      "description": "Für MediaLyze gibt es eine öffentliche Statistikseite. Dort kannst du die von dieser Installation beigetragenen Telemetriedaten einsehen und alle Daten mit deiner zufällig generierten Installations-ID selbst löschen.",
+      "openAria": "MediaLyze-Statistikseite öffnen",
+      "installationIdLabel": "Eigene Installations-ID",
+      "installationIdMissing": "Es wurde noch keine Installations-ID erstellt.",
+      "copy": "Kopieren",
+      "copied": "Kopiert"
+    },
     "lastPayload": {
       "title": "Zuletzt übermittelter Payload",
       "jsonLabel": "JSON des zuletzt übermittelten Telemetrie-Payloads",

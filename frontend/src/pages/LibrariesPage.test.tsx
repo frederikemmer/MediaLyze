@@ -89,6 +89,7 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
     telemetry: {
       mode: "none",
       environment_disabled: false,
+      installation_id: null,
       installation_id_suffix: null,
       last_sent_at: null,
       last_user_visible_payload: null,
@@ -1521,6 +1522,60 @@ describe("LibrariesPage settings panels", () => {
       expect(preview).not.toHaveTextContent('"media_kind_counts"');
       expect(preview).not.toHaveTextContent('"app_settings"');
     });
+  });
+
+  it("shows telemetry stats link and copyable installation id", async () => {
+    const installationId = "84435651-2be0-4b47-9d7c-6eacb1f25395";
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.mocked(api.appSettings).mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "enabled",
+          environment_disabled: false,
+          installation_id: installationId,
+          installation_id_suffix: "b1f25395",
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Public statistics")).toBeInTheDocument();
+    expect(screen.queryByText("Payload preview")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Own installation ID")).toHaveValue(installationId);
+
+    const copyButton = screen.getByRole("button", { name: "Copy" });
+    expect(copyButton).toHaveTextContent("");
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(installationId));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open MediaLyze statistics page" }));
+    expect(open).toHaveBeenCalledWith("https://www.medialyze.app/stats", "_blank", "noopener,noreferrer");
+  });
+
+  it("opens telemetry stats externally in desktop builds", async () => {
+    const openExternalUrl = vi.fn().mockResolvedValue(true);
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPaths: vi.fn().mockResolvedValue([]),
+      openExternalUrl,
+    };
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open MediaLyze statistics page" }));
+
+    await waitFor(() => expect(openExternalUrl).toHaveBeenCalledWith("https://www.medialyze.app/stats"));
+    expect(open).not.toHaveBeenCalled();
   });
 
   it("updates telemetry mode from the panel header toggle", async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -120,6 +120,7 @@ const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState 
 };
 
 const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";
+const TELEMETRY_STATS_URL = "https://www.medialyze.app/stats";
 
 function normalizePatternRecognitionInputs(settings?: PatternRecognitionSettings | null): PatternRecognitionSettings {
   const next = settings ?? DEFAULT_PATTERN_RECOGNITION_INPUTS;
@@ -696,6 +697,7 @@ export function LibrariesPage() {
   >({});
   const [telemetryPayloadView, setTelemetryPayloadView] = useState<TelemetryPayloadView>("last");
   const [telemetryStatus, setTelemetryStatus] = useState<string | null>(null);
+  const [telemetryIdCopied, setTelemetryIdCopied] = useState(false);
   const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
@@ -724,8 +726,10 @@ export function LibrariesPage() {
   const appTelemetry = appSettings.telemetry ?? {
     mode: "none" as TelemetryMode,
     environment_disabled: false,
+    installation_id: null,
     last_user_visible_payload: null,
   };
+  const telemetryInstallationId = appTelemetry.installation_id ?? "";
   const selectedTelemetryPayloadJson =
     telemetryPayloadView === "last"
       ? appTelemetry.last_user_visible_payload
@@ -754,6 +758,24 @@ export function LibrariesPage() {
       }
     };
   }, []);
+
+  async function openTelemetryStatsPage() {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge?.openExternalUrl) {
+      await desktopBridge.openExternalUrl(TELEMETRY_STATS_URL);
+      return;
+    }
+    window.open(TELEMETRY_STATS_URL, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyTelemetryInstallationId() {
+    if (!telemetryInstallationId || !navigator.clipboard?.writeText) {
+      return;
+    }
+    await navigator.clipboard.writeText(telemetryInstallationId);
+    setTelemetryIdCopied(true);
+    window.setTimeout(() => setTelemetryIdCopied(false), 2000);
+  }
 
   useEffect(() => {
     const nextInputs = historyRetentionInputsFromSettings(appHistoryRetention);
@@ -4283,8 +4305,39 @@ export function LibrariesPage() {
                 </div>
               </div>
               <div className="app-settings-section">
-                <p className="app-settings-section-title">{t("telemetry.preview.title")}</p>
-                <p className="app-settings-section-copy">{t("telemetry.preview.description")}</p>
+                <div className="telemetry-stats-info">
+                  <div>
+                    <p className="app-settings-section-title">{t("telemetry.stats.title")}</p>
+                    <p className="app-settings-section-copy">{t("telemetry.stats.description")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary icon-only-button telemetry-stats-link"
+                    aria-label={t("telemetry.stats.openAria")}
+                    data-tooltip={t("telemetry.stats.openAria")}
+                    onClick={() => void openTelemetryStatsPage()}
+                  >
+                    <SquareArrowOutUpRight size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="telemetry-installation-id-row">
+                  <input
+                    type="text"
+                    readOnly
+                    value={telemetryInstallationId || t("telemetry.stats.installationIdMissing")}
+                    aria-label={t("telemetry.stats.installationIdLabel")}
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-only-button telemetry-copy-id-button"
+                    aria-label={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                    data-tooltip={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                    disabled={!telemetryInstallationId || !navigator.clipboard?.writeText}
+                    onClick={() => void copyTelemetryInstallationId()}
+                  >
+                    <Copy size={16} aria-hidden="true" />
+                  </button>
+                </div>
                 <div className="telemetry-preview-actions">
                   <button
                     type="button"
