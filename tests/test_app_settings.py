@@ -11,7 +11,8 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("CONFIG_PATH", tempfile.mkdtemp(prefix="medialyze-config-"))
 os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
-from backend.app.core.config import Settings
+from backend.app.core import config as config_module
+from backend.app.core.config import APP_VERSION_FALLBACK, Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import AppSetting
 from backend.app.schemas.app_settings import AppSettingsUpdate
@@ -46,11 +47,67 @@ def build_settings(
 
 def test_default_app_version_matches_pyproject(monkeypatch) -> None:
     monkeypatch.delenv("APP_VERSION", raising=False)
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
     pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
 
     settings = Settings(_env_file=None)
 
     assert settings.app_version == pyproject["project"]["version"]
+
+
+def test_baked_build_version_wins_over_stale_runtime_app_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("0.10.4-dev018\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.setenv("APP_VERSION", "0.3.0-dev016")
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == "0.10.4-dev018"
+
+
+def test_invalid_baked_build_version_falls_back_to_error_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("not-a-version\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.setenv("APP_VERSION", "0.10.4-dev018")
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_dev_baked_build_version_falls_back_to_error_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("dev\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_explicit_medialyze_app_version_override_is_validated(monkeypatch, tmp_path) -> None:
+    missing_version_file = tmp_path / ".missing-version"
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: missing_version_file)
+    monkeypatch.setenv("MEDIALYZE_APP_VERSION", "bad-version")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_medialyze_app_version_override_is_used_without_build_file(monkeypatch, tmp_path) -> None:
+    missing_version_file = tmp_path / ".missing-version"
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: missing_version_file)
+    monkeypatch.setenv("MEDIALYZE_APP_VERSION", "0.10.4-dev018")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == "0.10.4-dev018"
 
 
 def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_installations(tmp_path) -> None:

@@ -101,6 +101,22 @@ def test_library_files_export_csv_returns_404_for_unknown_library() -> None:
     assert response.json() == {"detail": "Library not found"}
 
 
+def test_health_returns_backend_version() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        settings = Settings()
+        settings.app_version = "0.10.4-dev018"
+        client.app.dependency_overrides[get_app_settings] = lambda: settings
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "version": "0.10.4-dev018"}
+
+
 def test_telemetry_preview_enabled_includes_app_settings_and_media_kind_counts() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

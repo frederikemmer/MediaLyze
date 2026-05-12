@@ -233,6 +233,18 @@ def test_minimal_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     assert "app_settings" not in payload
 
 
+def test_telemetry_payload_uses_normalized_backend_version(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.0.0"
+
+    with session_factory() as db:
+        app_settings = get_app_settings(db, settings)
+        payload = build_telemetry_payload(db, settings, app_settings, mode="minimal")
+
+    assert payload["app"]["version"] == "0.0.0"
+
+
 def test_none_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)

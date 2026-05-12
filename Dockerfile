@@ -32,6 +32,7 @@ COPY backend ./backend
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY frontend/package.json ./frontend/package.json
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+RUN printf '%s\n' "${APP_VERSION}" > /app/.medialyze-version
 
 RUN pip install --no-cache-dir .
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts/core";
@@ -16,6 +16,21 @@ import {
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
+type EChartsInstanceLike = {
+  containPixel: (finder: { gridIndex: number }, value: [number, number]) => boolean;
+  convertFromPixel: (finder: { xAxisIndex: number }, value: [number, number]) => number | [number, number];
+  getZr: () => {
+    on: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
+    off: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
+  };
+};
+
+type ZrClickEvent = {
+  offsetX: number;
+  offsetY: number;
+  target?: unknown;
+};
+
 type DistributionChartProps = {
   distribution: NumericDistribution;
   metricId: NumericDistributionMetricId;
@@ -32,6 +47,7 @@ export function DistributionChart({
   onSelectBin,
 }: DistributionChartProps) {
   const { t } = useTranslation();
+  const chartRef = useRef<InstanceType<typeof ReactECharts> | null>(null);
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
@@ -144,8 +160,35 @@ export function DistributionChart({
       }
     : undefined;
 
+  useEffect(() => {
+    if (!interactive || !onSelectBin) {
+      return undefined;
+    }
+    const instance = chartRef.current?.getEchartsInstance?.() as EChartsInstanceLike | undefined;
+    const zr = instance?.getZr();
+    if (!instance || !zr) {
+      return undefined;
+    }
+    const handleGridClick = (event: ZrClickEvent) => {
+      if (event.target || !instance.containPixel({ gridIndex: 0 }, [event.offsetX, event.offsetY])) {
+        return;
+      }
+      const converted = instance.convertFromPixel({ xAxisIndex: 0 }, [event.offsetX, event.offsetY]);
+      const rawIndex = Array.isArray(converted) ? converted[0] : converted;
+      const bin = distribution.bins[Math.round(rawIndex)];
+      if (bin) {
+        onSelectBin(bin);
+      }
+    };
+    zr.on("click", handleGridClick);
+    return () => {
+      zr.off("click", handleGridClick);
+    };
+  }, [distribution.bins, interactive, onSelectBin]);
+
   return (
     <ReactECharts
+      ref={chartRef}
       echarts={echarts}
       option={option}
       notMerge

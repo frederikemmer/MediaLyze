@@ -141,8 +141,8 @@ def _library_file_search_filters(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health(settings: Settings = Depends(get_app_settings)) -> dict[str, str]:
+    return {"status": "ok", "version": settings.app_version}
 
 
 @router.get("/browse", response_model=BrowseResponse)
