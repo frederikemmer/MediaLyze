@@ -1082,6 +1082,10 @@ export const api = {
   browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
   telemetryPreview: (mode: TelemetryPreviewMode = "minimal") =>
     request<TelemetryPreview>(`/telemetry/preview?mode=${encodeURIComponent(mode)}`),
+  telemetrySendNow: () =>
+    request<AppSettings>("/telemetry/send-now", {
+      method: "POST",
+    }),
   inspectPath: (path: string) =>
     request<PathInspection>("/paths/inspect", {
       method: "POST",

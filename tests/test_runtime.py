@@ -263,7 +263,7 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
 
     class ExecutorStub:
         def submit(self, fn, *args) -> None:
-            return None
+            submitted.append((fn, args))
 
         def shutdown(self, wait=False, cancel_futures=True) -> None:
             return None
@@ -278,6 +278,7 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     runtime.scheduler = SchedulerStub()
     runtime.executor = ExecutorStub()
     runtime.maintenance_executor = ExecutorStub()
+    submitted: list[tuple] = []
 
     runtime.start()
 
@@ -286,6 +287,8 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     assert added_jobs[0]["kwargs"]["id"] == "history-retention-maintenance"
     assert added_jobs[1]["func"] == runtime.request_history_storage_refresh
     assert added_jobs[1]["kwargs"]["id"] == "history-storage-refresh"
+    assert (runtime._run_initial_telemetry_send, ()) in submitted
+    assert (runtime._run_telemetry_send, (False,)) in submitted
 
 
 def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:
@@ -308,6 +311,7 @@ def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:
     assert captured["kwargs"]["minute"] == 0
     assert captured["kwargs"]["jitter"] == 600
     assert captured["kwargs"]["kwargs"] == {"force": False}
+    assert captured["kwargs"]["misfire_grace_time"] == 3600
 
 
 def test_schedule_telemetry_send_after_settings_change_uses_cancelable_delay(monkeypatch) -> None:

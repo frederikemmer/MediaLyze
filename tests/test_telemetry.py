@@ -1,5 +1,6 @@
 import os
 import tempfile
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +27,7 @@ from backend.app.services.telemetry import (
     round_storage_gb_for_telemetry,
     send_current_telemetry_snapshot,
     send_initial_telemetry_snapshot,
+    should_send_telemetry,
 )
 
 
@@ -242,6 +244,32 @@ def test_none_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     assert "usage" not in payload
     assert "media_kind_counts" not in payload
     assert "app_settings" not in payload
+
+
+def test_should_send_telemetry_allows_one_snapshot_per_utc_day(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        app_settings = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+
+    same_day_settings = app_settings.model_copy(
+        update={
+            "telemetry": app_settings.telemetry.model_copy(
+                update={"last_sent_at": datetime(2026, 5, 11, 16, 10, tzinfo=UTC)}
+            )
+        }
+    )
+    next_day_settings = app_settings.model_copy(
+        update={
+            "telemetry": app_settings.telemetry.model_copy(
+                update={"last_sent_at": datetime(2026, 5, 11, 23, 59, tzinfo=UTC)}
+            )
+        }
+    )
+
+    assert should_send_telemetry(same_day_settings, datetime(2026, 5, 11, 23, 59, tzinfo=UTC)) is False
+    assert should_send_telemetry(next_day_settings, datetime(2026, 5, 12, 0, 0, tzinfo=UTC)) is True
 
 
 def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp_path, monkeypatch) -> None:

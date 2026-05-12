@@ -396,6 +396,7 @@ beforeEach(() => {
       system: { os_family: "darwin" },
     },
   });
+  vi.spyOn(api, "telemetrySendNow").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
   vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage());
   vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail());
@@ -1649,6 +1650,46 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
     await waitFor(() => expect(minimalButtons[0]).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("silently sends telemetry after triple-clicking the selected enabled toggle", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "enabled",
+          environment_disabled: false,
+          installation_id: "84435651-2be0-4b47-9d7c-6eacb1f25395",
+          installation_id_suffix: "b1f25395",
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+    const sendNowSpy = vi.spyOn(api, "telemetrySendNow").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "enabled",
+          environment_disabled: false,
+          installation_id: "84435651-2be0-4b47-9d7c-6eacb1f25395",
+          installation_id_suffix: "b1f25395",
+          last_sent_at: "2026-05-12T00:03:00Z",
+          last_user_visible_payload: { telemetry_mode: "enabled" },
+        },
+      }),
+    );
+
+    renderPage();
+
+    const enabledButtons = await screen.findAllByRole("button", { name: "Help the dev" });
+    fireEvent.click(enabledButtons[0]);
+    fireEvent.click(enabledButtons[0]);
+    fireEvent.click(enabledButtons[0]);
+
+    await waitFor(() => expect(sendNowSpy).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Failed to save telemetry settings.")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Telemetry payload JSON preview")).toHaveTextContent('"telemetry_mode": "enabled"'),
+    );
   });
 
   it("places the pattern recognition panel between resolution categories and history retention", async () => {

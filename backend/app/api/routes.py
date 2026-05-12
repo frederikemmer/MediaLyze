@@ -84,7 +84,7 @@ from backend.app.services.scan_jobs import (
 )
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
-from backend.app.services.telemetry import build_telemetry_payload
+from backend.app.services.telemetry import build_telemetry_payload, send_current_telemetry_snapshot
 
 router = APIRouter()
 
@@ -275,6 +275,21 @@ def telemetry_preview(
         "redacted": installation_id is None,
         "mode": mode,
     }
+
+
+@router.post("/telemetry/send-now", response_model=AppSettingsRead)
+def telemetry_send_now(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> AppSettingsRead:
+    app_settings_payload = load_app_settings(db, settings)
+    if (
+        app_settings_payload.telemetry.environment_disabled
+        or app_settings_payload.telemetry.mode not in {"minimal", "enabled"}
+    ):
+        raise HTTPException(status_code=409, detail="Telemetry is not enabled.")
+    send_current_telemetry_snapshot(db, settings, force=True)
+    return load_app_settings(db, settings)
 
 
 @router.patch("/app-settings", response_model=AppSettingsRead)

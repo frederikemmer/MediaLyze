@@ -14,6 +14,7 @@ type TelemetryModeToggleProps = {
   undecided?: boolean;
   compact?: boolean;
   onChange: (mode: SelectableTelemetryMode) => void;
+  onConfirmedModeClick?: (mode: SelectableTelemetryMode) => void;
 };
 
 const OPTIONS: Array<{
@@ -57,6 +58,7 @@ export function TelemetryModeToggle({
   undecided = false,
   compact = false,
   onChange,
+  onConfirmedModeClick,
 }: TelemetryModeToggleProps) {
   const { t } = useTranslation();
   const toggleId = useId();
@@ -79,7 +81,13 @@ export function TelemetryModeToggle({
             data-tooltip-title={t(option.tooltipTitleKey)}
             data-tooltip-body={t(option.tooltipKey)}
             disabled={disabled}
-            onClick={() => onChange(option.mode)}
+            onClick={() => {
+              if (isSelected) {
+                onConfirmedModeClick?.(option.mode);
+                return;
+              }
+              onChange(option.mode);
+            }}
           >
             {isSelected ? (
               <motion.span

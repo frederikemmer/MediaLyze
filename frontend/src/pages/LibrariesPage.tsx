@@ -719,6 +719,7 @@ export function LibrariesPage() {
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
   const seededDefaultIgnorePatterns = useRef<string[] | null>(null);
   const libraryNameInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const telemetryEnabledClickStampsRef = useRef<number[]>([]);
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
@@ -871,6 +872,37 @@ export function LibrariesPage() {
     } finally {
       setIsSavingTelemetry(false);
       setPendingTelemetryMode(null);
+    }
+  }
+
+  async function sendTelemetryNowSilently() {
+    if (isSavingTelemetry || appTelemetry.environment_disabled || appTelemetry.mode !== "enabled") {
+      return;
+    }
+    setIsSavingTelemetry(true);
+    setPendingTelemetryMode("enabled");
+    try {
+      const updated = await api.telemetrySendNow();
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Hidden dev shortcut: keep the UI quiet if the manual send fails.
+    } finally {
+      setIsSavingTelemetry(false);
+      setPendingTelemetryMode(null);
+    }
+  }
+
+  function handleConfirmedTelemetryModeClick(mode: "off" | "minimal" | "enabled") {
+    if (mode !== "enabled" || appTelemetry.mode !== "enabled") {
+      return;
+    }
+    const now = Date.now();
+    telemetryEnabledClickStampsRef.current = [...telemetryEnabledClickStampsRef.current, now].filter(
+      (timestamp) => now - timestamp <= 1200,
+    );
+    if (telemetryEnabledClickStampsRef.current.length >= 3) {
+      telemetryEnabledClickStampsRef.current = [];
+      void sendTelemetryNowSilently();
     }
   }
 
@@ -4285,6 +4317,7 @@ export function LibrariesPage() {
                 undecided={appTelemetry.mode === "none" || appTelemetry.mode === "initialized"}
                 pendingMode={pendingTelemetryMode}
                 onChange={(mode) => void saveTelemetryMode(mode)}
+                onConfirmedModeClick={handleConfirmedTelemetryModeClick}
               />
             }
             collapseButtonClassName="async-panel-toggle-icon-button-flat"

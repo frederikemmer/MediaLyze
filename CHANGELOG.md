@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 - match the Settings history reconstruction button sizing to the full-scan action button
 - align the backend default app version with repository release metadata
+- send telemetry at most once per UTC calendar day instead of waiting for a full 24-hour gap, and catch up missed daily snapshots on startup
 
 ## v0.10.4
 

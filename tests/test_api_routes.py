@@ -222,6 +222,29 @@ def test_app_settings_telemetry_off_cancels_pending_send() -> None:
     assert runtime.canceled_telemetry_sends == 1
 
 
+def test_telemetry_send_now_posts_normal_payload_and_returns_updated_settings(monkeypatch) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    posted: dict = {}
+
+    def fake_post_json(url, payload, timeout):
+        posted["json"] = payload
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}))
+        client = _build_test_app(db)
+        response = client.post("/api/telemetry/send-now")
+
+    assert response.status_code == 200
+    assert posted["json"]["telemetry_mode"] == "enabled"
+    assert posted["json"]["is_test"] is False
+    assert response.json()["telemetry"]["last_sent_at"] is not None
+    assert response.json()["telemetry"]["last_user_visible_payload"] == posted["json"]
+
+
 def test_library_files_export_csv_returns_422_for_invalid_search_expression() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

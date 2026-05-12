@@ -218,7 +218,7 @@ def should_send_telemetry(app_settings: AppSettingsRead, now: datetime) -> bool:
     last_sent = app_settings.telemetry.last_sent_at
     if last_sent.tzinfo is None:
         last_sent = last_sent.replace(tzinfo=UTC)
-    return (now - last_sent.astimezone(UTC)).total_seconds() >= 24 * 60 * 60
+    return last_sent.astimezone(UTC).date() < now.astimezone(UTC).date()
 
 
 def _stored_telemetry_payload(db: Session) -> dict:

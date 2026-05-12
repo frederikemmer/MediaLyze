@@ -84,6 +84,7 @@ class ScanRuntimeManager:
         self.sync_all_libraries()
         self.run_history_retention()
         self.request_initial_telemetry_send()
+        self.request_telemetry_send()
 
     def stop(self) -> None:
         with self.lock:
@@ -543,6 +544,7 @@ class ScanRuntimeManager:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            misfire_grace_time=3600,
         )
 
     def _ensure_watch_observer(self, library: Library) -> None:
