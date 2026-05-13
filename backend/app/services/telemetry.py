@@ -4,6 +4,7 @@ import math
 import os
 import platform
 import json
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -12,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
+import certifi
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -259,7 +261,8 @@ def _post_json(url: str, payload: dict, timeout: float) -> None:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
         status = getattr(response, "status", response.getcode())
         if status >= 400:
             raise urllib.error.HTTPError(url, status, "Telemetry ingest rejected payload", response.headers, None)

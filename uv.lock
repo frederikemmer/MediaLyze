@@ -224,10 +224,11 @@ wheels = [
 
 [[package]]
 name = "medialyze"
-version = "0.8.3"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
+    { name = "certifi" },
     { name = "fastapi" },
     { name = "psutil" },
     { name = "pydantic-settings" },
@@ -245,6 +246,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10.4,<4" },
+    { name = "certifi", specifier = ">=2026.2.25" },
     { name = "fastapi", specifier = ">=0.116.1,<1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1,<1" },
     { name = "psutil", specifier = ">=7.0.0,<8" },

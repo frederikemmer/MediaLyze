@@ -10,8 +10,10 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
+  buildPyInstallerArgs,
   bundleMacosFfprobeDependencies,
   bundleFfprobe,
   bundledFfprobeName,
@@ -115,6 +117,16 @@ test("bundleFfprobe copies Linux ffprobe without shared libraries or wrapper", (
     assert.equal(existsSync(path.join(outputDir, "ffprobe", "lib")), false);
     assert.equal(existsSync(path.join(outputDir, "ffprobe", "ffprobe-medialyze")), false);
   });
+});
+
+test("desktop backend packaging explicitly collects certifi CA data", () => {
+  const args = buildPyInstallerArgs({ command: "python", args: [] }, "linux");
+  const collectDataIndex = args.findIndex((value) => value === "--collect-data");
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+  assert.notEqual(collectDataIndex, -1);
+  assert.equal(args[collectDataIndex + 1], "certifi");
+  assert.equal(args.at(-1), path.join(repoRoot, "backend", "app", "launcher.py"));
 });
 
 test("parseOtoolDependencies extracts linked library paths", () => {

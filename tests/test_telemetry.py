@@ -23,6 +23,7 @@ from backend.app.services.app_settings import get_app_settings, update_app_setti
 from backend.app.services.telemetry import (
     build_media_kind_counts_for_telemetry,
     build_telemetry_payload,
+    _post_json,
     round_count_for_telemetry,
     round_storage_gb_for_telemetry,
     send_current_telemetry_snapshot,
@@ -310,6 +311,45 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
     assert posted["json"]["installation_id"] != "00000000-0000-0000-0000-000000000000"
     assert loaded.telemetry.last_sent_at is not None
     assert loaded.telemetry.last_user_visible_payload == posted["json"]
+
+
+def test_post_json_uses_certifi_ca_bundle(monkeypatch) -> None:
+    captured: dict = {}
+    context = object()
+
+    class Response:
+        status = 200
+        headers = {}
+
+        def getcode(self):
+            return self.status
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_create_default_context(*, cafile):
+        captured["cafile"] = cafile
+        return context
+
+    def fake_urlopen(request, *, timeout, context):
+        captured["request"] = request
+        captured["timeout"] = timeout
+        captured["context"] = context
+        return Response()
+
+    monkeypatch.setattr("backend.app.services.telemetry.certifi.where", lambda: "/bundle/cacert.pem")
+    monkeypatch.setattr("backend.app.services.telemetry.ssl.create_default_context", fake_create_default_context)
+    monkeypatch.setattr("backend.app.services.telemetry.urllib.request.urlopen", fake_urlopen)
+
+    _post_json("https://telemetry.example.test/api/telemetry/ingest", {"ok": True}, 2.0)
+
+    assert captured["cafile"] == "/bundle/cacert.pem"
+    assert captured["context"] is context
+    assert captured["timeout"] == 2.0
+    assert captured["request"].headers["Content-type"] == "application/json"
 
 
 def test_send_current_telemetry_snapshot_retries_limited_failures(tmp_path, monkeypatch) -> None:
