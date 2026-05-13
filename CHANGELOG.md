@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add a table-based coverage for library modes, scan behavior, supported extensions/formats/codecs/HDR/subtitle handling, and unsupported-input behavior in `docs/supported_metadata.md`
+
 ### 🐛 Bug fixes
 
 - allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` ([#132](https://github.com/frederikemmer/MediaLyze/issues/132))
