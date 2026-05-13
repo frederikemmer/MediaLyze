@@ -18,7 +18,10 @@ echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 type EChartsInstanceLike = {
   containPixel: (finder: { gridIndex: number }, value: [number, number]) => boolean;
-  convertFromPixel: (finder: { xAxisIndex: number }, value: [number, number]) => number | [number, number];
+  convertFromPixel: (
+    finder: { seriesIndex: number } | { xAxisIndex: number },
+    value: [number, number],
+  ) => number | string | [number | string, number];
   getZr: () => {
     on: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
     off: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
@@ -26,9 +29,14 @@ type EChartsInstanceLike = {
 };
 
 type ZrClickEvent = {
-  offsetX: number;
-  offsetY: number;
-  target?: unknown;
+  offsetX?: number;
+  offsetY?: number;
+  event?: {
+    offsetX?: number;
+    offsetY?: number;
+    zrX?: number;
+    zrY?: number;
+  };
 };
 
 type DistributionChartProps = {
@@ -166,16 +174,27 @@ export function DistributionChart({
     }
     const instance = chartRef.current?.getEchartsInstance?.() as EChartsInstanceLike | undefined;
     const zr = instance?.getZr();
-    if (!instance || !zr) {
+      if (!instance || !zr) {
       return undefined;
     }
-    const handleGridClick = (event: ZrClickEvent) => {
-      if (event.target || !instance.containPixel({ gridIndex: 0 }, [event.offsetX, event.offsetY])) {
-        return;
+    const resolveBinFromPoint = (point: [number, number]) => {
+      if (!instance.containPixel({ gridIndex: 0 }, point)) {
+        return undefined;
       }
-      const converted = instance.convertFromPixel({ xAxisIndex: 0 }, [event.offsetX, event.offsetY]);
-      const rawIndex = Array.isArray(converted) ? converted[0] : converted;
-      const bin = distribution.bins[Math.round(rawIndex)];
+
+      const converted =
+        instance.convertFromPixel({ seriesIndex: 0 }, point) ?? instance.convertFromPixel({ xAxisIndex: 0 }, point);
+      const rawValue = Array.isArray(converted) ? converted[0] : converted;
+      const binIndex =
+        typeof rawValue === "number"
+          ? Math.round(rawValue)
+          : distribution.bins.findIndex((bin) => formatNumericDistributionBinLabel(metricId, bin) === String(rawValue));
+      return binIndex >= 0 ? distribution.bins[binIndex] : undefined;
+    };
+    const handleGridClick = (event: ZrClickEvent) => {
+      const x = event.offsetX ?? event.event?.offsetX ?? event.event?.zrX;
+      const y = event.offsetY ?? event.event?.offsetY ?? event.event?.zrY;
+      const bin = typeof x === "number" && typeof y === "number" ? resolveBinFromPoint([x, y]) : undefined;
       if (bin) {
         onSelectBin(bin);
       }
@@ -184,7 +203,7 @@ export function DistributionChart({
     return () => {
       zr.off("click", handleGridClick);
     };
-  }, [distribution.bins, interactive, onSelectBin]);
+  }, [distribution.bins, interactive, metricId, onSelectBin]);
 
   return (
     <ReactECharts

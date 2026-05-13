@@ -93,6 +93,7 @@ export function TelemetryModeToggle({
               <motion.span
                 layoutId={`telemetry-mode-pill-${toggleId}`}
                 className={`nav-active-pill telemetry-mode-pill ${option.className}`}
+                transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
               />
             ) : null}
             <span className="telemetry-mode-button-content">

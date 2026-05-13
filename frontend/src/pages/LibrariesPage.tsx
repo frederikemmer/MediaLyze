@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { motion } from "motion/react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -4387,6 +4388,13 @@ export function LibrariesPage() {
                     aria-pressed={telemetryPayloadView === "last"}
                     onClick={() => void selectTelemetryPayloadView("last")}
                   >
+                    {telemetryPayloadView === "last" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
                     <span>{t("telemetry.preview.views.last")}</span>
                   </button>
                   <button
@@ -4395,6 +4403,13 @@ export function LibrariesPage() {
                     aria-pressed={telemetryPayloadView === "minimal"}
                     onClick={() => void selectTelemetryPayloadView("minimal")}
                   >
+                    {telemetryPayloadView === "minimal" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
                     <span>{t("telemetry.preview.views.minimal")}</span>
                   </button>
                   <button
@@ -4403,6 +4418,13 @@ export function LibrariesPage() {
                     aria-pressed={telemetryPayloadView === "enabled"}
                     onClick={() => void selectTelemetryPayloadView("enabled")}
                   >
+                    {telemetryPayloadView === "enabled" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
                     <span>{t("telemetry.preview.views.enabled")}</span>
                   </button>
                 </div>

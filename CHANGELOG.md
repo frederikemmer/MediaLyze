@@ -6,22 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
-- move the Folder & pattern recognition header tooltip to the left of the collapse button
-- add telemetry payload preview support with `none`, `minimal`, and `enabled` modes
 - add a shared telemetry mode toggle to the Telemetry settings panel and release-history dialog, backed by persisted app settings and lockable via `MEDIALYZE_TELEMETRY_DISABLED`
+- add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
+- add telemetry payload preview support with `none`, `minimal`, and `enabled` modes
 - document the telemetry ingest contract at `/api/telemetry/ingest`
-- schedule telemetry snapshots at UTC midnight with jitter and delay selected-mode sends for 60 seconds after telemetry settings changes for users to correct wrong input
-- retry failed telemetry sends with a bounded 1s, 2s, 5s, and 10s backoff sequence
-- document that enabled telemetry counts all configured libraries, not only dashboard-visible libraries
 - return the persisted telemetry installation id in app settings so users can later identify their anonymous installation for deletion flows
 
 ### 🐛 Bug fixes
 
+- move the Folder & pattern recognition header tooltip to the left of the collapse button
 - match the Settings history reconstruction button sizing to the full-scan action button
-- align the backend default app version with repository release metadata
-- send telemetry at most once per UTC calendar day instead of waiting for a full 24-hour gap, and catch up missed daily snapshots on startup
-- read telemetry app versions from the baked Docker image version and fall back to `0.0.0` for invalid build metadata instead of accepting stale runtime `APP_VERSION` values
+- fix lagging toggle animation in most menues
 
 ## v0.10.4
 

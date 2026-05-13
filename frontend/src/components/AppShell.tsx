@@ -145,7 +145,13 @@ export function AppShell() {
               >
                 {({ isActive }) => (
                   <>
-                    {isActive ? <motion.span layoutId="primary-nav-pill" className="nav-active-pill" /> : null}
+                    {isActive ? (
+                      <motion.span
+                        layoutId="primary-nav-pill"
+                        className="nav-active-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
                     <span className="nav-link-content">
                       <House aria-hidden="true" className="nav-icon" />
                     </span>
@@ -160,7 +166,13 @@ export function AppShell() {
               >
                 {({ isActive }) => (
                   <>
-                    {isActive ? <motion.span layoutId="primary-nav-pill" className="nav-active-pill" /> : null}
+                    {isActive ? (
+                      <motion.span
+                        layoutId="primary-nav-pill"
+                        className="nav-active-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
                     <span className="nav-link-content">
                       <Settings aria-hidden="true" className="nav-icon" />
                     </span>
@@ -177,7 +189,13 @@ export function AppShell() {
                 >
                   {({ isActive }) => (
                     <>
-                      {isActive ? <motion.span layoutId="library-nav-pill" className="nav-active-pill" /> : null}
+                      {isActive ? (
+                        <motion.span
+                          layoutId="library-nav-pill"
+                          className="nav-active-pill"
+                          transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                        />
+                      ) : null}
                       <span className="nav-link-content">{library.name}</span>
                     </>
                   )}

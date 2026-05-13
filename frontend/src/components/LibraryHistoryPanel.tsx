@@ -455,6 +455,7 @@ export function LibraryHistoryPanel({
                       <motion.span
                         layoutId={`library-history-range-pill-${rangeToggleId}`}
                         className="nav-active-pill library-history-range-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
                     <span className="library-history-range-button-content">
@@ -558,6 +559,7 @@ export function LibraryHistoryPanel({
                     <motion.span
                       layoutId={`library-history-mode-pill-${toggleId}`}
                       className="nav-active-pill distribution-chart-mode-pill"
+                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                     />
                   ) : null}
                   <span className="distribution-chart-mode-button-content">
@@ -575,6 +577,7 @@ export function LibraryHistoryPanel({
                     <motion.span
                       layoutId={`library-history-mode-pill-${toggleId}`}
                       className="nav-active-pill distribution-chart-mode-pill"
+                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                     />
                   ) : null}
                   <span className="distribution-chart-mode-button-content">
