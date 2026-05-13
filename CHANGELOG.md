@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` ([#132](https://github.com/frederikemmer/MediaLyze/issues/132))
+
 ## v0.11.0
 
 >2026-05-13

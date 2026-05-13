@@ -444,6 +444,77 @@ def _sqlite_column_names(connection, table_name: str) -> set[str]:
     return {str(row["name"]) for row in rows}
 
 
+def _sqlite_has_unique_index_for_columns(connection, table_name: str, columns: tuple[str, ...]) -> bool:
+    index_rows = connection.exec_driver_sql(f"PRAGMA index_list('{table_name}')").mappings().all()
+    for row in index_rows:
+        if int(row.get("unique") or 0) != 1:
+            continue
+        index_name = str(row.get("name") or "")
+        if not index_name:
+            continue
+        index_columns = tuple(
+            str(item.get("name") or "")
+            for item in connection.exec_driver_sql(f"PRAGMA index_info('{index_name}')").mappings().all()
+        )
+        if index_columns == columns:
+            return True
+    return False
+
+
+def _rebuild_libraries_table_without_unique_path(connection) -> None:
+    if not _sqlite_has_table(connection, "libraries"):
+        return
+    if not _sqlite_has_unique_index_for_columns(connection, "libraries", ("path",)):
+        return
+
+    columns = connection.exec_driver_sql("PRAGMA table_info('libraries')").mappings().all()
+    if not columns:
+        return
+
+    table_name = "libraries"
+    temp_table_name = "libraries__tmp_drop_path_unique"
+
+    # Rebuild the table to remove the inline UNIQUE constraint from libraries.path.
+    # SQLite cannot drop inline column constraints directly.
+    column_defs: list[str] = []
+    column_refs: list[str] = []
+    for row in columns:
+        column_name = str(row["name"])
+        column_type = str(row.get("type") or "").strip()
+        definition = f'"{column_name}"'
+        if column_type:
+            definition += f" {column_type}"
+        if int(row.get("pk") or 0) > 0:
+            definition += " PRIMARY KEY"
+        if int(row.get("notnull") or 0) == 1:
+            definition += " NOT NULL"
+        default_value = row.get("dflt_value")
+        if default_value is not None:
+            definition += f" DEFAULT {default_value}"
+        column_defs.append(definition)
+        column_refs.append(f'"{column_name}"')
+
+    column_list_sql = ", ".join(column_refs)
+    create_table_sql = f'CREATE TABLE "{temp_table_name}" ({", ".join(column_defs)})'
+
+    connection.exec_driver_sql("PRAGMA foreign_keys = OFF;")
+    try:
+        connection.execute(text(create_table_sql))
+        connection.execute(
+            text(
+                f'INSERT INTO "{temp_table_name}" ({column_list_sql}) '
+                f'SELECT {column_list_sql} FROM "{table_name}"'
+            )
+        )
+        connection.execute(text(f'DROP TABLE "{table_name}"'))
+        connection.execute(text(f'ALTER TABLE "{temp_table_name}" RENAME TO "{table_name}"'))
+    finally:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+
+    if "name" in _sqlite_column_names(connection, "libraries"):
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_libraries_name_unique ON libraries (name)"))
+
+
 def _apply_sqlite_additive_migrations(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
@@ -458,6 +529,8 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
                     continue
                 connection.execute(text(statement))
                 existing_columns.add(column_name)
+
+        _rebuild_libraries_table_without_unique_path(connection)
 
         for statement in SQLITE_INDEX_STATEMENTS:
             connection.execute(text(statement))

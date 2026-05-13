@@ -81,7 +81,7 @@ class Library(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    path: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
+    path: Mapped[str] = mapped_column(String(2048), nullable=False)
     type: Mapped[LibraryType] = mapped_column(SqlEnum(LibraryType, native_enum=False), nullable=False)
     last_scan_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     scan_mode: Mapped[ScanMode] = mapped_column(

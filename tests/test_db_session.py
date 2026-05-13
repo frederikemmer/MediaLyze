@@ -253,3 +253,58 @@ def test_sqlite_utc_datetime_roundtrip_restores_utc_tzinfo() -> None:
         stored = db.execute(text("SELECT last_scan_at FROM libraries WHERE id = :library_id"), {"library_id": library.id}).scalar()
 
     assert stored == "2026-03-24 09:36:00.000000"
+
+
+def test_init_db_drops_legacy_unique_constraint_for_libraries_path() -> None:
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE libraries (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    path VARCHAR(2048) NOT NULL UNIQUE,
+                    type VARCHAR(16) NOT NULL
+                )
+                """
+            )
+        )
+
+    init_db(engine)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO libraries (name, path, type) "
+                "VALUES ('Movies', '/media/mnt', 'movies')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO libraries (name, path, type) "
+                "VALUES ('TVSeries', '/media/mnt', 'series')"
+            )
+        )
+
+        same_path_count = connection.execute(
+            text("SELECT COUNT(*) FROM libraries WHERE path = '/media/mnt'")
+        ).scalar_one()
+
+        index_rows = connection.exec_driver_sql("PRAGMA index_list('libraries')").mappings().all()
+        has_unique_path_index = False
+        for row in index_rows:
+            if int(row.get("unique") or 0) != 1:
+                continue
+            index_name = str(row.get("name") or "")
+            index_columns = [
+                str(item.get("name") or "")
+                for item in connection.exec_driver_sql(f"PRAGMA index_info('{index_name}')").mappings().all()
+            ]
+            if index_columns == ["path"]:
+                has_unique_path_index = True
+                break
+
+    assert same_path_count == 2
+    assert has_unique_path_index is False
