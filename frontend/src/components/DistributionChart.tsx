@@ -23,12 +23,13 @@ type EChartsInstanceLike = {
     value: [number, number],
   ) => number | string | [number | string, number];
   getZr: () => {
-    on: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
-    off: (eventName: "click", handler: (event: ZrClickEvent) => void) => void;
+    on: (eventName: "click" | "mousemove" | "globalout", handler: (event: ZrPointerEvent) => void) => void;
+    off: (eventName: "click" | "mousemove" | "globalout", handler: (event: ZrPointerEvent) => void) => void;
+    setCursorStyle: (cursorStyle: "default" | "pointer") => void;
   };
 };
 
-type ZrClickEvent = {
+type ZrPointerEvent = {
   offsetX?: number;
   offsetY?: number;
   event?: {
@@ -174,7 +175,7 @@ export function DistributionChart({
     }
     const instance = chartRef.current?.getEchartsInstance?.() as EChartsInstanceLike | undefined;
     const zr = instance?.getZr();
-      if (!instance || !zr) {
+    if (!instance || !zr) {
       return undefined;
     }
     const resolveBinFromPoint = (point: [number, number]) => {
@@ -191,17 +192,31 @@ export function DistributionChart({
           : distribution.bins.findIndex((bin) => formatNumericDistributionBinLabel(metricId, bin) === String(rawValue));
       return binIndex >= 0 ? distribution.bins[binIndex] : undefined;
     };
-    const handleGridClick = (event: ZrClickEvent) => {
+    const resolveBinFromEvent = (event: ZrPointerEvent) => {
       const x = event.offsetX ?? event.event?.offsetX ?? event.event?.zrX;
       const y = event.offsetY ?? event.event?.offsetY ?? event.event?.zrY;
-      const bin = typeof x === "number" && typeof y === "number" ? resolveBinFromPoint([x, y]) : undefined;
+      return typeof x === "number" && typeof y === "number" ? resolveBinFromPoint([x, y]) : undefined;
+    };
+    const handleGridPointerMove = (event: ZrPointerEvent) => {
+      zr.setCursorStyle(resolveBinFromEvent(event) ? "pointer" : "default");
+    };
+    const handleGridPointerOut = () => {
+      zr.setCursorStyle("default");
+    };
+    const handleGridClick = (event: ZrPointerEvent) => {
+      const bin = resolveBinFromEvent(event);
       if (bin) {
         onSelectBin(bin);
       }
     };
+    zr.on("mousemove", handleGridPointerMove);
+    zr.on("globalout", handleGridPointerOut);
     zr.on("click", handleGridClick);
     return () => {
+      zr.off("mousemove", handleGridPointerMove);
+      zr.off("globalout", handleGridPointerOut);
       zr.off("click", handleGridClick);
+      zr.setCursorStyle("default");
     };
   }, [distribution.bins, interactive, metricId, onSelectBin]);
 
