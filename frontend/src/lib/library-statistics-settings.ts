@@ -23,13 +23,15 @@ export type LibraryStatisticId =
   | "subtitle_sources"
   | "quality_score"
   | "bitrate"
-  | "audio_bitrate";
+  | "audio_bitrate"
+  | "bit_depth";
 
 type LibraryStatisticPanelDataKey =
   | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
+  | "bit_depth_distribution"
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
@@ -42,6 +44,7 @@ type DashboardStatisticPanelDataKey =
   | "video_codec_distribution"
   | "resolution_distribution"
   | "hdr_distribution"
+  | "bit_depth_distribution"
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
@@ -259,6 +262,23 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.audioBitrateDistribution",
     tableColumnKey: "audio_bitrate",
     dashboardTitleKey: "dashboard.audioBitrateDistribution",
+  },
+  {
+    id: "bit_depth",
+    nameKey: "libraryStatistics.items.bitDepth",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.bitDepthDistribution",
+    panelDataKey: "bit_depth_distribution",
+    tableColumnKey: "bit_depth",
+    dashboardTitleKey: "dashboard.bitDepthDistribution",
+    dashboardDataKey: "bit_depth_distribution",
   },
   {
     id: "container",

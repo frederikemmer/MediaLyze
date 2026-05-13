@@ -105,6 +105,7 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "color_primaries": "ALTER TABLE video_streams ADD COLUMN color_primaries VARCHAR(64)",
         "frame_rate": "ALTER TABLE video_streams ADD COLUMN frame_rate FLOAT",
         "bit_rate": "ALTER TABLE video_streams ADD COLUMN bit_rate INTEGER",
+        "bit_depth": "ALTER TABLE video_streams ADD COLUMN bit_depth INTEGER",
         "hdr_type": "ALTER TABLE video_streams ADD COLUMN hdr_type VARCHAR(64)",
     },
     "audio_streams": {
@@ -186,6 +187,7 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
         "ON media_files (library_id, content_hash_algorithm, content_hash)"
     ),
     "CREATE INDEX IF NOT EXISTS ix_video_streams_codec ON video_streams (codec)",
+    "CREATE INDEX IF NOT EXISTS ix_video_streams_bit_depth ON video_streams (bit_depth)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_resolution ON video_streams (width, height)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_hdr_type ON video_streams (hdr_type)",
     "CREATE INDEX IF NOT EXISTS ix_video_streams_media_file_stream_index ON video_streams (media_file_id, stream_index)",

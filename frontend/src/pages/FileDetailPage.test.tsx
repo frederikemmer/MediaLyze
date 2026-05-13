@@ -70,6 +70,7 @@ function createFileDetail(): MediaFileDetail {
     duration: 3360,
     bitrate: 25_000_000,
     audio_bitrate: 768_000,
+    bit_depth: null,
     video_codec: "hevc",
     resolution: "3840x1606",
     resolution_category_id: "4k",

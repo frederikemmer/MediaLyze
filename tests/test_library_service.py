@@ -801,6 +801,77 @@ def test_get_library_statistics_keeps_hdr10_plus_separate_from_hdr10() -> None:
     assert hdr_distribution["HDR10+"] == 1
 
 
+def test_get_library_statistics_splits_hevc_distribution_by_video_bit_depth() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="HEVC Library",
+            path="/tmp/hevc-library",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        files = [
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-8bit.mkv",
+                filename="movie-8bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=7,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-10bit.mkv",
+                filename="movie-10bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=2.0,
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-unknown.mkv",
+                filename="movie-unknown.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=3.0,
+                scan_status=ScanStatus.ready,
+                quality_score=9,
+            ),
+        ]
+        db.add_all(files)
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(media_file_id=files[0].id, stream_index=0, codec="hevc", bit_depth=8),
+                VideoStream(media_file_id=files[1].id, stream_index=0, codec="hevc", bit_depth=10),
+                VideoStream(media_file_id=files[2].id, stream_index=0, codec="hevc", bit_depth=None),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+
+    assert statistics is not None
+    assert [item.model_dump(exclude_none=True) for item in statistics.video_codec_distribution] == [
+        {"label": "hevc_10bit", "value": 1, "filter_value": "hevc"},
+        {"label": "hevc_8bit", "value": 1, "filter_value": "hevc"},
+        {"label": "hevc_unknown_bit_depth", "value": 1, "filter_value": "hevc"},
+    ]
+
+
 def test_get_library_statistics_counts_undefined_languages_per_file() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

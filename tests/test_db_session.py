@@ -53,6 +53,20 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
         connection.execute(
             text(
                 """
+                CREATE TABLE video_streams (
+                    id INTEGER PRIMARY KEY,
+                    media_file_id INTEGER NOT NULL,
+                    stream_index INTEGER NOT NULL,
+                    codec VARCHAR(64),
+                    width INTEGER,
+                    height INTEGER
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE external_subtitles (
                     id INTEGER PRIMARY KEY,
                     media_file_id INTEGER NOT NULL,
@@ -67,6 +81,7 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     inspector = inspect(engine)
     library_columns = {column["name"] for column in inspector.get_columns("libraries")}
     media_file_columns = {column["name"] for column in inspector.get_columns("media_files")}
+    video_stream_columns = {column["name"] for column in inspector.get_columns("video_streams")}
     subtitle_columns = {column["name"] for column in inspector.get_columns("subtitle_streams")}
     external_subtitle_columns = {column["name"] for column in inspector.get_columns("external_subtitles")}
     scan_job_columns = {column["name"] for column in inspector.get_columns("scan_jobs")}
@@ -89,6 +104,7 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     }.issubset(
         media_file_columns
     )
+    assert {"bit_depth", "hdr_type", "pix_fmt"}.issubset(video_stream_columns)
     assert {"codec", "language", "default_flag", "forced_flag", "subtitle_type"}.issubset(subtitle_columns)
     assert {"language", "format"}.issubset(external_subtitle_columns)
     assert {"trigger_source", "trigger_details", "scan_summary"}.issubset(scan_job_columns)
@@ -137,6 +153,20 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
                     stream_index INTEGER NOT NULL,
                     codec VARCHAR(64),
                     language VARCHAR(16)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE video_streams (
+                    id INTEGER PRIMARY KEY,
+                    media_file_id INTEGER NOT NULL,
+                    stream_index INTEGER NOT NULL,
+                    codec VARCHAR(64),
+                    width INTEGER,
+                    height INTEGER
                 )
                 """
             )
@@ -199,6 +229,7 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     init_db(engine)
 
     index_names = {index["name"] for index in inspect(engine).get_indexes("media_files")}
+    video_stream_index_names = {index["name"] for index in inspect(engine).get_indexes("video_streams")}
     subtitle_index_names = {index["name"] for index in inspect(engine).get_indexes("subtitle_streams")}
     external_subtitle_index_names = {index["name"] for index in inspect(engine).get_indexes("external_subtitles")}
     scan_job_index_names = {index["name"] for index in inspect(engine).get_indexes("scan_jobs")}
@@ -214,6 +245,7 @@ def test_init_db_adds_missing_indexes_for_existing_sqlite_schema() -> None:
     assert "ix_media_files_library_quality_score" in index_names
     assert "ix_media_files_library_filename_signature" in index_names
     assert "ix_media_files_library_content_hash" in index_names
+    assert "ix_video_streams_bit_depth" in video_stream_index_names
     assert "ix_subtitle_streams_codec" in subtitle_index_names
     assert "ix_subtitle_streams_language" in subtitle_index_names
     assert "ix_subtitle_streams_media_file_id" in subtitle_index_names
@@ -308,3 +340,50 @@ def test_init_db_drops_legacy_unique_constraint_for_libraries_path() -> None:
 
     assert same_path_count == 2
     assert has_unique_path_index is False
+
+
+def test_init_db_adds_video_bit_depth_column_for_legacy_video_stream_schema_and_is_idempotent() -> None:
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE video_streams (
+                    id INTEGER PRIMARY KEY,
+                    media_file_id INTEGER NOT NULL,
+                    stream_index INTEGER NOT NULL,
+                    codec VARCHAR(64),
+                    width INTEGER,
+                    height INTEGER
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO video_streams (id, media_file_id, stream_index, codec)
+                VALUES (1, 101, 0, 'hevc')
+                """
+            )
+        )
+
+    init_db(engine)
+    init_db(engine)
+
+    with engine.begin() as connection:
+        video_stream_columns = {
+            str(column["name"])
+            for column in connection.exec_driver_sql("PRAGMA table_info('video_streams')").mappings().all()
+        }
+        row_count = connection.execute(text("SELECT COUNT(*) FROM video_streams")).scalar_one()
+        value_row = connection.execute(
+            text("SELECT codec, bit_depth FROM video_streams WHERE id = 1")
+        ).first()
+
+    assert "bit_depth" in video_stream_columns
+    assert row_count == 1
+    assert value_row is not None
+    assert value_row[0] == "hevc"
+    assert value_row[1] is None

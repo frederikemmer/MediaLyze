@@ -27,6 +27,7 @@ function createFile(id: number): MediaFileRow {
     duration: 1200,
     bitrate: 4_000_000,
     audio_bitrate: 256_000,
+    bit_depth: null,
     video_codec: "h264",
     resolution: "1920x1080",
     hdr_type: null,

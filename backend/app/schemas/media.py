@@ -57,6 +57,7 @@ class VideoStreamRead(BaseModel):
     color_primaries: str | None
     frame_rate: float | None
     bit_rate: int | None
+    bit_depth: int | None
     hdr_type: str | None
 
 
@@ -128,6 +129,7 @@ class MediaFileTableRow(BaseModel):
     duration: float | None = None
     bitrate: float | None = None
     audio_bitrate: float | None = None
+    bit_depth: int | None = None
     video_codec: str | None = None
     resolution: str | None = None
     resolution_category_id: str | None = None
@@ -280,6 +282,7 @@ class DashboardResponse(BaseModel):
     video_codec_distribution: list[DistributionItem]
     resolution_distribution: list[DistributionItem]
     hdr_distribution: list[DistributionItem]
+    bit_depth_distribution: list[DistributionItem]
     audio_codec_distribution: list[DistributionItem]
     audio_spatial_profile_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]

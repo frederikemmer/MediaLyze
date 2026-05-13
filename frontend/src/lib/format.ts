@@ -90,6 +90,22 @@ export function formatCodecLabel(value: string | null | undefined, kind: CodecKi
     return "Unknown";
   }
 
+  if (kind === "video" && normalized.startsWith("hevc_")) {
+    if (normalized === "hevc_8bit") {
+      return "H.265 / HEVC (8-bit)";
+    }
+    if (normalized === "hevc_10bit") {
+      return "H.265 / HEVC (10-bit)";
+    }
+    if (normalized === "hevc_unknown_bit_depth") {
+      return "H.265 / HEVC (unknown bit depth)";
+    }
+    const match = normalized.match(/^hevc_(\d+)bit$/);
+    if (match) {
+      return `H.265 / HEVC (${match[1]}-bit)`;
+    }
+  }
+
   const kindSpecific = kind === "video" ? VIDEO_CODEC_LABELS[normalized] : undefined;
   return kindSpecific ?? COMMON_CODEC_LABELS[normalized] ?? humanizeCodecLabel(normalized);
 }

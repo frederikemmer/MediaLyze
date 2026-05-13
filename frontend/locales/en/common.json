@@ -34,6 +34,7 @@
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "bitDepthDistribution": "Bit depth",
     "comparisonPanel": "Metric comparison",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
@@ -295,6 +296,7 @@
       "duration": "Duration",
       "bitrate": "Bitrate",
       "audioBitrate": "Audio bitrate",
+      "bitDepth": "Bit depth",
       "audioCodecs": "Audio codecs",
       "audioSpatialProfiles": "Spatial audio",
       "audioLanguages": "Audio languages",
@@ -369,6 +371,7 @@
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "bitDepthDistribution": "Bit depth",
     "comparisonPanel": "Metric comparison",
     "audioCodecs": "Audio codecs",
     "formatsAndCodecs": "Formats & codecs",
@@ -437,6 +440,10 @@
         "placeholder": "e.g. >=512kb/s",
         "tooltip": "Supported: >256kb/s, >=1Mb/s, <2Mb/s"
       },
+      "bitDepth": {
+        "placeholder": "e.g. >=10",
+        "tooltip": "Supported: >=8, =10, <32"
+      },
       "videoCodec": {
         "placeholder": "e.g. hevc av1"
       },
@@ -473,6 +480,7 @@
         "quality_score": "Use a score from 1 to 10, for example >=8.",
         "bitrate": "Use a bitrate like >8Mb/s or >=256kb/s.",
         "audio_bitrate": "Use an audio bitrate like >512kb/s or >=1Mb/s.",
+        "bit_depth": "Use an integer bit depth like >=16 or =24.",
         "duration": "Use a duration like >90m or >=1h 30m."
       }
     },
@@ -675,6 +683,7 @@
     "duration": "Duration",
     "bitrate": "Bitrate",
     "audioBitrate": "Audio bitrate",
+    "bitDepth": "Bit depth",
     "audioCodecs": "Audio codecs",
     "formatsAndCodecs": "Formats & codecs",
     "audioSpatialProfiles": "Spatial audio",

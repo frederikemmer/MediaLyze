@@ -136,6 +136,7 @@ type GroupedAnalyzedFilesMetrics = {
   hdr_type: string | null;
   bitrate: number | null;
   audio_bitrate: number | null;
+  bit_depth?: number | null;
   audio_codecs: string[];
   audio_spatial_profiles: string[];
   audio_languages: string[];
@@ -424,6 +425,7 @@ function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyze
     hdr_type: commonScalar(files.map((file) => file.hdr_type ?? "sdr"), () => false),
     bitrate: averageNumber(files.map((file) => file.bitrate)),
     audio_bitrate: averageNumber(files.map((file) => file.audio_bitrate)),
+    bit_depth: commonScalar(files.map((file) => file.bit_depth), (value) => value == null),
     audio_codecs: commonArray(files.map((file) => file.audio_codecs)),
     audio_spatial_profiles: commonArray(files.map((file) => file.audio_spatial_profiles)),
     audio_languages: commonArray(files.map((file) => file.audio_languages)),
@@ -445,6 +447,7 @@ function buildGroupedAnalyzedFilesMetricsFromSeries(entry: GroupedSeriesTableRow
     hdr_type: null,
     bitrate: entry.bitrate_average,
     audio_bitrate: entry.audio_bitrate_average,
+    bit_depth: null,
     audio_codecs: [],
     audio_spatial_profiles: [],
     audio_languages: [],
@@ -873,6 +876,19 @@ export function buildFileColumns(
         formatBitrate(isGroupedAnalyzedFilesRow(row) ? row.metrics.audio_bitrate : row.audio_bitrate),
       render: (row) =>
         formatBitrate(isGroupedAnalyzedFilesRow(row) ? row.metrics.audio_bitrate : row.audio_bitrate),
+    },
+    {
+      key: "bit_depth",
+      labelKey: "fileTable.bitDepth",
+      sizing: { mode: "content", minPx: 88, maxPx: 124 },
+      measureValue: (row) => {
+        const bitDepth = isGroupedAnalyzedFilesRow(row) ? row.metrics.bit_depth : row.bit_depth;
+        return bitDepth ? `${bitDepth}-bit` : t("fileTable.na");
+      },
+      render: (row) => {
+        const bitDepth = isGroupedAnalyzedFilesRow(row) ? row.metrics.bit_depth : row.bit_depth;
+        return bitDepth ? `${bitDepth}-bit` : t("fileTable.na");
+      },
     },
     {
       key: "audio_codecs",

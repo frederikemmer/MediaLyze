@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` ([#132](https://github.com/frederikemmer/MediaLyze/issues/132))
+- split HEVC / H.265 codec statistics into bit-depth buckets (8-bit, 10-bit, unknown/other) so SDR 10-bit content is no longer grouped ambiguously, and add legacy-safe SQLite migration support for persisted video stream bit depth ([#129](https://github.com/frederikemmer/MediaLyze/issues/129))
 
 ## v0.11.0
 

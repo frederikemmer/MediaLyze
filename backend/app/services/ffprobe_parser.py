@@ -324,7 +324,8 @@ class NormalizedVideoStream:
     color_primaries: str | None
     frame_rate: float | None
     bit_rate: int | None
-    hdr_type: str | None
+    bit_depth: int | None = None
+    hdr_type: str | None = None
 
 
 @dataclass(slots=True)
@@ -438,12 +439,18 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     color_primaries=stream.get("color_primaries"),
                     frame_rate=_parse_frame_rate(stream.get("avg_frame_rate") or stream.get("r_frame_rate")),
                     bit_rate=_safe_int(stream.get("bit_rate")),
+                    bit_depth=_safe_int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample")),
                     hdr_type=_hdr_type(stream),
                 )
             )
         elif codec_type == "audio":
             disposition = stream.get("disposition") or {}
             tags = stream.get("tags") or {}
+            # For audio, bits_per_sample is often 0 for lossy codecs (MP3, AAC, Opus)
+            # Only use non-zero bit_depth values
+            audio_bit_depth = _safe_int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample"))
+            if audio_bit_depth == 0:
+                audio_bit_depth = None
             normalized.audio_streams.append(
                 NormalizedAudioStream(
                     stream_index=int(stream.get("index", 0)),
@@ -454,7 +461,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     channel_layout=stream.get("channel_layout"),
                     sample_rate=_safe_int(stream.get("sample_rate")),
                     bit_rate=_safe_int(stream.get("bit_rate")),
-                    bit_depth=_safe_int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample")),
+                    bit_depth=audio_bit_depth,
                     bit_rate_mode=tags.get("bit_rate_mode") or tags.get("bitrate_mode"),
                     compression_mode=tags.get("compression_mode"),
                     replay_gain=tags.get("replaygain_track_gain") or tags.get("replay_gain"),

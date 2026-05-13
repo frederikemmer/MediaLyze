@@ -34,6 +34,7 @@
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "bitDepthDistribution": "Bittiefe",
     "comparisonPanel": "Metrikvergleich",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
@@ -295,6 +296,7 @@
       "duration": "Dauer",
       "bitrate": "Bitrate",
       "audioBitrate": "Audio-Bitrate",
+      "bitDepth": "Bittiefe",
       "audioCodecs": "Audio-Codecs",
       "audioSpatialProfiles": "Raumklang",
       "audioLanguages": "Audio-Sprachen",
@@ -369,6 +371,7 @@
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "bitDepthDistribution": "Bittiefe",
     "comparisonPanel": "Metrikvergleich",
     "audioCodecs": "Audio-Codecs",
     "formatsAndCodecs": "Formate & Codecs",
@@ -437,6 +440,10 @@
         "placeholder": "z. B. >=512kb/s",
         "tooltip": "Unterstuetzt: >256kb/s, >=1Mb/s, <2Mb/s"
       },
+      "bitDepth": {
+        "placeholder": "z. B. >=10",
+        "tooltip": "Unterstuetzt: >=8, =10, <32"
+      },
       "videoCodec": {
         "placeholder": "z. B. hevc av1"
       },
@@ -473,6 +480,7 @@
         "quality_score": "Verwende einen Score von 1 bis 10, zum Beispiel >=8.",
         "bitrate": "Verwende eine Bitrate wie >8Mb/s oder >=256kb/s.",
         "audio_bitrate": "Verwende eine Audio-Bitrate wie >512kb/s oder >=1Mb/s.",
+        "bit_depth": "Verwende eine ganzzahlige Bittiefe wie >=16 oder =24.",
         "duration": "Verwende eine Dauer wie >90m oder >=1h 30m."
       }
     },
@@ -675,6 +683,7 @@
     "duration": "Dauer",
     "bitrate": "Bitrate",
     "audioBitrate": "Audio-Bitrate",
+    "bitDepth": "Bittiefe",
     "audioCodecs": "Audio-Codecs",
     "formatsAndCodecs": "Formate & Codecs",
     "audioSpatialProfiles": "Raumklang",
