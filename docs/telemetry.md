@@ -1,34 +1,129 @@
 # Telemetry
 
-MediaLyze telemetry is designed as coarse installation telemetry, not user tracking. Payloads never include file paths, media names, library names, hostnames, search terms, raw `ffprobe` JSON, per-file metadata, or scan diagnostics.
+MediaLyze telemetry is coarse installation reporting for understanding active installations, versions, operating systems, deployment channels, and broad usage scale. It is not intended to track people or media collections, but mainly to show of the userbase and more importantly help me with development.
 
-Telemetry modes:
+Telemetry never sends:
 
-- `none`: no user decision exists yet. Payloads contain only install/runtime/system fields.
-- `initialized`: the first-run telemetry prompt has been shown or the first pre-choice payload was sent, but no user decision exists yet.
-- `off`: telemetry is disabled. No payload is sent while this mode is active.
-- `minimal`: minimal anonymous installation snapshot. Payloads contain only install/runtime/system fields.
-- `enabled`: extended anonymous installation snapshot with coarse usage counts and selected app settings.
+- file paths
+- media names
+- library names
+- hostnames
+- search terms
+- raw `ffprobe` outputs
+- per-file metadata
+- per-file values
+- scan diagnostics or failure details
+- authentication or user identity data
+- broad browser `localStorage` contents
 
-Set `MEDIALYZE_TELEMETRY_DISABLED=true` to force telemetry off. In that state the UI toggle is locked to `off`, and no telemetry payload is sent.
+Network and hosting layers can still see transport metadata such as source IP addresses transiently. MediaLyze therefore describes this telemetry as privacy-preserving anonymous installation telemetry, not as a legal guarantee that every transport-layer data point is anonymous.
+IP addresses are never stored, only the information contained in the payload is.
 
-The app sends accepted telemetry modes to `https://www.medialyze.app/api/telemetry/ingest` by default. Override this with `MEDIALYZE_TELEMETRY_ENDPOINT` for development or alternate deployments.
+---
 
-Development builds send normal payloads with `is_test: false`. Test payloads are only used by explicit development connectivity checks, not by the regular app sender.
+Always feel welcome to ask me any questions about this "feature" or recommend change!
+
+You can always take a look at your contributed payloads and delete them at any time on the website 
+
+## Modes
+
+Telemetry has five stored modes:
+
+- `none`: state after updated from pre-telemtry version or new install.
+- `initialized`: the first-run telemetry choice has been shown, but no user decision exists yet.
+- `off`: telemetry is disabled. No telemetry payloads are sent.
+- `minimal`: send install/runtime/system fields only.
+- `enabled`: send install/runtime/system fields plus coarse usage counts and selected app settings.
+
+Users can actively choose only `off`, `minimal`, or `enabled`. `none` and `initialized` are undecided internal states and should keep the UI prompt visible until the user chooses a real mode.
+
+Set `MEDIALYZE_TELEMETRY_DISABLED=true` to force telemetry off. In that state:
+
+- `GET /api/app-settings` reports telemetry as `mode: "off"` and `environment_disabled: true`.
+- Telemetry toggles are locked in the UI.
+- Scheduled, delayed, and manual sends are blocked.
+- Existing installation id and last user-visible payload data remain readable locally if already present.
+
+## Endpoint And Configuration
+
+The default production ingest endpoint is:
+
+```text
+https://www.medialyze.app/api/telemetry/ingest
+```
+
+Override it with:
+
+```text
+MEDIALYZE_TELEMETRY_ENDPOINT=https://example.test/api/telemetry/ingest
+```
+
+Other telemetry configuration:
+
+- `MEDIALYZE_TELEMETRY_DISABLED=true`: force telemetry off.
+- `telemetry_timeout_seconds`: backend setting, currently `2.0` seconds.
+
+Regular app sends use `is_test: false` in both development and release builds. `is_test: true` is reserved for explicit development connectivity checks outside the normal app sender.
+
+## Installation Id
+
+Telemetry uses a random UUIDv4 `installation_id`.
+
+For the regular telemetry flow, the id is generated when the user first switches telemetry to `minimal` or `enabled`. It is stored in the existing app settings JSON row:
+
+```json
+{
+  "telemetry": {
+    "mode": "minimal",
+    "installation_id": "51b48549-d1f0-4553-8acd-a8064ba7f510",
+    "last_sent_at": "2026-05-13T00:07:56.179328Z",
+    "last_user_visible_payload": {}
+  }
+}
+```
+
+In Docker deployments this normally lives in `/config/medialyze.db`, so the id survives image updates as long as the `/config` volume is kept. Deleting the configuration database, starting with a fresh `/config` volume, or manually removing the telemetry settings creates a new installation id.
+
+The full installation id is shown in the local Telemetry settings panel. Users can use it on the public statistics page to view and delete all telemetry data contributed by their installation:
+
+```text
+https://www.medialyze.app/stats
+```
 
 ## Send Timing
 
-On first startup with `mode=none`, MediaLyze attempts one pre-choice minimal payload. If that send succeeds, the stored mode changes to `initialized`; if it fails, the mode remains `none` so the next startup can retry. This initial payload is not shown as the last user-visible payload because it can happen before a user has made a telemetry choice.
+When a user changes telemetry to `minimal` or `enabled`, MediaLyze schedules a selected-mode send for 60 seconds later. This delay gives the user time to correct an accidental choice.
 
-When a user changes telemetry from `off`, `none`, or `initialized` to `minimal` or `enabled`, MediaLyze schedules the first selected-mode payload for 60 seconds later. If telemetry is switched back to `off` before the delay expires, the pending send is canceled.
+If telemetry is switched to `off` before the 60-second delay expires, the pending send is canceled.
 
-After that, regular telemetry is sent once per day around `00:00` UTC. The scheduler applies up to 10 minutes of jitter so installations spread requests instead of all posting at the same instant.
+After a successful selected-mode send, regular telemetry is sent once per UTC day around midnight:
 
-Failed sends are retried in the same background task after 1 second, 2 seconds, 5 seconds, and 10 seconds. If all attempts fail, MediaLyze stops retrying that payload and waits for the next scheduled or user-triggered send opportunity.
+- Scheduler job id: `telemetry-daily-snapshot`
+- Trigger: `00:00` UTC
+- Jitter: up to 10 minutes
+- Misfire grace time: 1 hour
 
-## Preview API
+The daily decision is calendar-day based in UTC. A snapshot sent at any time on a UTC day prevents another non-forced regular snapshot for that same UTC date.
 
-The app exposes a local preview endpoint:
+Telemetry sends run in the maintenance executor. Network failures must not block scans, startup, settings updates, or API responses.
+
+## Retry Behavior
+
+Each telemetry send is best effort. If the POST fails, MediaLyze retries in the same background task after:
+
+```text
+1s, 2s, 5s, 10s
+```
+
+After the final retry fails, the payload is dropped and MediaLyze waits for the next scheduled, delayed, or explicit send opportunity.
+
+Failures are logged at info level and are not surfaced as runtime errors to scanning workflows.
+
+## Local API
+
+### Preview
+
+The local app exposes payload previews:
 
 ```text
 GET /api/telemetry/preview?mode=none
@@ -36,34 +131,21 @@ GET /api/telemetry/preview?mode=minimal
 GET /api/telemetry/preview?mode=enabled
 ```
 
-Response format:
+Response:
 
 ```json
 {
   "payload": {},
-  "redacted": true,
+  "redacted": false,
   "mode": "enabled"
 }
 ```
 
-The `payload` field contains the exact JSON shape for the selected mode. If the installation already has a persisted installation id, preview responses include that id and set `redacted` to `false`. If no id exists yet, the preview uses a placeholder id and sets `redacted` to `true`.
+`payload` is the JSON object that would be sent for that mode. If an installation id exists, the preview includes the full id and `redacted` is `false`. If no id exists yet, the preview uses `00000000-0000-0000-0000-000000000000` and `redacted` is `true`.
 
-Telemetry mode and the installation id are persisted in the existing app settings row inside the MediaLyze configuration database. In Docker deployments this is normally `/config/medialyze.db`, so the id survives MediaLyze image updates as long as the `/config` volume is kept. Deleting the config database or moving to a fresh config volume creates a new installation id.
+### Settings Update
 
-```json
-{
-  "telemetry": {
-    "mode": "minimal",
-    "installation_id": "uuid-v4",
-    "environment_disabled": false,
-    "last_user_visible_payload": null
-  }
-}
-```
-
-The full installation id is returned by `GET /api/app-settings` for the local admin UI so users can later identify their anonymous installation when requesting export or deletion on the telemetry website. Public previews still redact the id.
-
-The UI updates telemetry mode through:
+Telemetry mode is updated through app settings:
 
 ```http
 PATCH /api/app-settings
@@ -71,53 +153,100 @@ Content-Type: application/json
 
 {
   "telemetry": {
-    "mode": "minimal"
+    "mode": "enabled"
   }
 }
 ```
 
-Accepted update modes are `off`, `minimal`, and `enabled`.
+Accepted update modes:
 
-## None Payload
+```text
+off
+minimal
+enabled
+```
 
-`none` is used before the user has made a telemetry choice. It does not include `usage`, `app_settings`, or media-kind counts.
+Changing to `minimal` or `enabled` schedules the delayed send. Changing to `off` cancels a pending delayed send.
+
+### Manual Local Send
+
+The local API also exposes:
+
+```text
+POST /api/telemetry/send-now
+```
+
+This forces one normal payload for the currently selected mode and returns updated app settings. It only works when telemetry is currently `minimal` or `enabled`; otherwise it returns `409`.
+
+This endpoint is intended for local/admin workflows.
+
+## Payload Contract
+
+All telemetry payloads share these root fields:
+
+- `schema_version`: for future updates
+- `event_type`: for future updates (maybe an issue report feature)
+- `telemetry_mode`: `minimal` or `enabled`
+- `installation_id`: UUIDv4 id ONLY for later identification by the OWNING user
+- `sent_at`: UTC ISO timestamp
+- `is_test`: boolean
+- `app`: app metadata
+- `system`: OS metadata
+
+`minimal` and `none` payloads do not include `usage`, `app_settings`, or `media_kind_counts`.
+
+---
+
+`enabled` payloads include:
+
+- `usage`
+- `usage.media_kind_counts`
+- `app_settings`
+
+### App Object
 
 ```json
 {
-  "schema_version": 1,
-  "event_type": "installation_snapshot",
-  "telemetry_mode": "none",
-  "installation_id": "uuid-v4",
-  "sent_at": "2026-05-09T12:00:00Z",
-  "is_test": false,
-  "app": {
-    "name": "MediaLyze",
-    "version": "0.10.4",
-    "runtime_mode": "server",
-    "deployment_channel": "docker"
-  },
-  "system": {
-    "os_family": "linux",
-    "architecture": "arm64"
-  }
+  "name": "MediaLyze",
+  "version": "0.11.0",
+  "runtime_mode": "server",
+  "deployment_channel": "docker"
 }
 ```
 
+Fields:
+
+- `name`: configured app name.
+- `version`: resolved backend app version. If version resolution fails, MediaLyze reports `0.0.0`.
+- `runtime_mode`: `server` or `desktop`.
+- `deployment_channel`: `docker`, `desktop`, or `server`.
+
+### System Object
+
+```json
+{
+  "os_family": "linux",
+  "architecture": "arm64"
+}
+```
+
+Fields are derived from Python platform data and normalized to lowercase. Examples include `linux`, `darwin`, `windows`, `x86_64`, `arm64`, and `aarch64`.
+
 ## Minimal Payload
 
-`minimal` also excludes `usage`, `app_settings`, and media-kind counts.
+`minimal` contains only install/runtime/system fields.
 
 ```json
 {
   "schema_version": 1,
   "event_type": "installation_snapshot",
   "telemetry_mode": "minimal",
-  "installation_id": "uuid-v4",
-  "sent_at": "2026-05-09T12:00:00Z",
+  "installation_id": "51b48549-d1f0-4553-8acd-a8064ba7f510",
+  "sent_at": "2026-05-13T00:07:56.179328Z",
   "is_test": false,
   "app": {
     "name": "MediaLyze",
-    "version": "0.10.4",
+    "version": "0.11.0",
     "runtime_mode": "server",
     "deployment_channel": "docker"
   },
@@ -130,19 +259,19 @@ Accepted update modes are `off`, `minimal`, and `enabled`.
 
 ## Enabled Payload
 
-`enabled` includes coarse library and analyzed-file statistics plus selected app settings.
+`enabled` includes coarse installation usage and selected app settings.
 
 ```json
 {
   "schema_version": 1,
   "event_type": "installation_snapshot",
   "telemetry_mode": "enabled",
-  "installation_id": "uuid-v4",
-  "sent_at": "2026-05-09T12:00:00Z",
+  "installation_id": "51b48549-d1f0-4553-8acd-a8064ba7f510",
+  "sent_at": "2026-05-13T00:07:56.179328Z",
   "is_test": false,
   "app": {
     "name": "MediaLyze",
-    "version": "0.10.4",
+    "version": "0.11.0",
     "runtime_mode": "server",
     "deployment_channel": "docker"
   },
@@ -168,8 +297,7 @@ Accepted update modes are `off`, `minimal`, and `enabled`.
     "storage_size_gb_rounded": 12000,
     "scan_mode_counts": {
       "manual": 1,
-      "scheduled": 0,
-      "scheduled_daily": 1,
+      "scheduled": 1,
       "watch": 1
     },
     "duplicate_detection_mode_counts": {
@@ -190,9 +318,36 @@ Accepted update modes are `off`, `minimal`, and `enabled`.
 }
 ```
 
-## Enabled-Only App Settings
+## Enabled Usage Fields
 
-The `app_settings` object is sent only in `enabled` mode:
+Enabled usage counts cover the whole configured MediaLyze installation.
+
+Usage fields:
+
+- `library_count`: total configured library count.
+- `library_type_counts`: count by library type: `movies`, `series`, `music`, `mixed`, `other`.
+- `media_kind_counts`: rounded analyzed media count by coarse media kind.
+- `analyzed_file_count_rounded`: rounded count of current analyzed files.
+- `storage_size_gb_rounded`: rounded total size of current analyzed files in decimal GB.
+- `scan_mode_counts`: count by library scan mode: `manual`, `scheduled`, `watch`.
+- `duplicate_detection_mode_counts`: count by duplicate detection mode: `off`, `filename`, `filehash`, `both`.
+- `enabled_feature_flags`: enabled app feature flag keys.
+
+Current analyzed file scope is `MediaFile.scan_status == ready`.
+
+## Media Kind Counts
+
+`usage.media_kind_counts` is a string-keyed object so future kinds such as `audiobook`, `image`, `subtitle`, or `document` can be added without changing the payload shape.
+
+Current classification is extension-based:
+
+- `audio`: extension is in MediaLyze audio extensions.
+- `video`: extension is in MediaLyze video extensions.
+- `other`: extension is neither audio nor video.
+
+Extensions are normalized to lowercase and counted from current analyzed files. Mixed libraries are counted by each file extension, not by library type.
+
+## Enabled App Settings
 
 - `interface_language`: `en` or `de`
 - `color_theme`: `system`, `light`, or `dark`
@@ -200,77 +355,80 @@ The `app_settings` object is sent only in `enabled` mode:
 - `parallel_scan_jobs`: parallel library scan limit
 - `comparison_scatter_point_limit`: scatter plot sample limit
 
-Language and theme are explicit MediaLyze UI preferences. They are not broad browser fingerprinting data. No other `localStorage` contents are sent.
-
-## Usage Scope
-
-Enabled-mode usage counts cover the whole configured MediaLyze installation, including libraries that are hidden from dashboard statistics with `show_on_dashboard=false`. This can make `usage.library_count`, `usage.analyzed_file_count_rounded`, `usage.storage_size_gb_rounded`, and `usage.media_kind_counts` higher than the dashboard cards, because the dashboard intentionally reports only dashboard-visible libraries.
-
-## Media Kind Counts
-
-`usage.media_kind_counts` is sent only in `enabled` mode. It is a string-keyed object so future kinds such as `audiobook`, `image`, `subtitle`, or `document` can be added without changing the payload shape.
-
-Current classification is extension-based:
-
-- `audio`: extension is in MediaLyze audio extensions
-- `video`: extension is in MediaLyze video extensions
-- `other`: extension is neither audio nor video
-
-Counts are based on current analyzed files with `scan_status == ready`. Mixed libraries are counted by each file's extension, not by the library type.
+Language and theme are explicit MediaLyze UI preferences. They are persisted into backend app settings so backend-sent telemetry can include them. No other localStorage values are sent.
 
 ## Rounding Rules
 
-Analyzed file counts and media-kind counts use `round_count_for_telemetry(value)`: values below `100` are unchanged, and larger values are rounded down to their first two significant digits. Examples:
+Analyzed file counts and media-kind counts use `round_count_for_telemetry(value)`.
+
+Rules:
+
+- Values `<= 0` become `0`.
+- Values below `100` are unchanged.
+- Values `>= 100` are rounded down to the first two significant digits.
+
+Examples:
 
 ```text
+7 -> 7
+99 -> 99
 127 -> 120
+999 -> 990
 23793 -> 23000
 ```
 
-Storage uses `round_storage_gb_for_telemetry(bytes_value)`: bytes are converted to decimal GB, values below 1 GB round up to `1`, and larger GB values use the same first-two-digits rounding. Examples:
+Storage uses `round_storage_gb_for_telemetry(bytes_value)`.
+
+Rules:
+
+- Values `<= 0` become `0`.
+- Bytes are converted to decimal GB.
+- Positive values below 1 GB become `1`.
+- Larger GB values use the same first-two-digits rounding as counts.
+
+Examples:
 
 ```text
 534 MB -> 1 GB
 24 GB -> 24 GB
 496 GB -> 490 GB
 12 TB -> 12000 GB
+1PB -> 1000000 GB
 ```
 
-## Ingest Contract
+I know about TiB and all of that...... let's keep that one simple and conservative.
 
-A telemetry backend can accept:
+## Last User-Visible Payload
+
+After a successful regular `minimal` or `enabled` send, MediaLyze stores the sent payload in:
+
+```text
+telemetry.last_user_visible_payload
+```
+
+The Telemetry settings panel shows this as `Last sent`. If no user-visible telemetry payload exists yet, the panel shows an empty-state message. If telemetry is off or environment-disabled, it explains that no payload is available and no telemetry will be sent while telemetry is off or disabled.
+
+The panel can also generate local `minimal` and `enabled` preview payloads. Leaving the Settings page resets the viewer back to `Last sent`.
+
+## Public Statistics Page
+
+The Telemetry settings panel links to:
+
+```text
+https://www.medialyze.app/stats
+```
+
+The page is intended to show public aggregate MediaLyze telemetry statistics. Users can also enter their randomized installation id to view data contributed by their installation and delete all telemetry data for that installation.
+
+In Electron builds, the stats link should open externally in the system browser instead of navigating inside the app window.
+
+## Ingest Service
+
+The public telemetry backend accepts:
 
 ```text
 POST /api/telemetry/ingest
-```
-
-The production app sender posts to this path with `is_test: false` in both dev and release builds.
-
-Development connectivity checks should send the same payload shape with `is_test: true`. Test events must be accepted for endpoint verification but excluded from production aggregates.
-
-Example test request:
-
-```bash
-curl -X POST "https://deine-railway-domain/api/telemetry/ingest" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "schema_version": 1,
-    "event_type": "installation_snapshot",
-    "telemetry_mode": "minimal",
-    "installation_id": "11111111-1111-4111-8111-111111111111",
-    "sent_at": "2026-05-11T12:00:00Z",
-    "is_test": true,
-    "app": {
-      "name": "MediaLyze",
-      "version": "0.10.4",
-      "runtime_mode": "server",
-      "deployment_channel": "docker"
-    },
-    "system": {
-      "os_family": "linux",
-      "architecture": "arm64"
-    }
-  }'
+Content-Type: application/json
 ```
 
 Expected success response:
@@ -290,27 +448,12 @@ Expected validation failure response:
 }
 ```
 
-Recommended validation:
+Validation is hidden/closed-source for now to prevent spam.
 
-- accept only `schema_version: 1`
-- accept only `event_type: "installation_snapshot"`
-- reject payloads over 16 KB
-- rate-limit by `installation_id` and transient IP
-- accept `is_test: true` payloads for development connectivity checks and exclude them from production aggregates
-- store raw events for at most 30 days
-- store aggregate daily counts separately
+#### Other details
 
-Suggested aggregate dimensions:
-
-- date
-- app version
-- runtime mode
-- deployment channel
-- telemetry mode
-- OS family
-- architecture
-- rounded file count
-- rounded storage size
-- media-kind counts
-- selected app settings from `enabled` payloads
-- active installations by distinct installation id
+- Rate-limit by `installation_id` and transient IP.
+- Use IP only transiently for rate limiting, then discard or anonymize it before storage.
+- Accept `is_test: true` payloads for development connectivity checks and exclude them from production aggregates.
+- Store raw events for at most 30 days.
+- Store aggregate daily counts separately.

@@ -4,19 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.11.0
+
+>2026-05-13
+
 ### ✨ New
 
-- add a shared telemetry mode toggle to the Telemetry settings panel and release-history dialog, backed by persisted app settings and lockable via `MEDIALYZE_TELEMETRY_DISABLED`
+- add the public [MediaLyze website](https://www.medialyze.app/)
 - add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
-- add telemetry payload preview support with `none`, `minimal`, and `enabled` modes
-- document the telemetry ingest contract at `/api/telemetry/ingest`
-- return the persisted telemetry installation id in app settings so users can later identify their anonymous installation for deletion flows
+- add `ROADMAP.md`
+- add a shared telemetry mode toggle to the Telemetry settings panel and release-history dialog, backed by persisted app settings and lockable via `MEDIALYZE_TELEMETRY_DISABLED`
+- add telemetry payload preview support with `minimal` and `enabled` modes
+- return the persisted telemetry installation id in app settings so users can later identify their anonymous installation for download or deletion
 
 ### 🐛 Bug fixes
 
-- move the Folder & pattern recognition header tooltip to the left of the collapse button
-- match the Settings history reconstruction button sizing to the full-scan action button
-- fix lagging toggle animation in most menues
+- move the folder & pattern recognition header tooltip to the left of the collapse button
+- match the settings history reconstruction button sizing to the full-scan action button
+- fix lagging toggle animation in most menus
 
 ## v0.10.4
 
