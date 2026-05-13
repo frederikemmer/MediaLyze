@@ -1,4 +1,6 @@
 from enum import Enum
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -55,6 +57,29 @@ class ScanPerformanceUpdate(BaseModel):
         ge=COMPARISON_SCATTER_POINT_LIMIT_MIN,
         le=COMPARISON_SCATTER_POINT_LIMIT_MAX,
     )
+
+
+class UiPreferencesRead(BaseModel):
+    interface_language: Literal["en", "de"] = "en"
+    color_theme: Literal["system", "light", "dark"] = "system"
+
+
+class UiPreferencesUpdate(BaseModel):
+    interface_language: Literal["en", "de"] | None = None
+    color_theme: Literal["system", "light", "dark"] | None = None
+
+
+class TelemetrySettingsRead(BaseModel):
+    mode: Literal["none", "initialized", "off", "minimal", "enabled"] = "none"
+    environment_disabled: bool = False
+    installation_id: str | None = None
+    installation_id_suffix: str | None = None
+    last_sent_at: datetime | None = None
+    last_user_visible_payload: dict | None = None
+
+
+class TelemetrySettingsUpdate(BaseModel):
+    mode: Literal["off", "minimal", "enabled"] | None = None
 
 
 class HistoryRetentionBucketRead(BaseModel):
@@ -138,6 +163,8 @@ class AppSettingsRead(BaseModel):
     resolution_categories: list[ResolutionCategory] = Field(default_factory=list)
     feature_flags: FeatureFlagsRead = Field(default_factory=FeatureFlagsRead)
     scan_performance: ScanPerformanceRead = Field(default_factory=ScanPerformanceRead)
+    ui_preferences: UiPreferencesRead = Field(default_factory=UiPreferencesRead)
+    telemetry: TelemetrySettingsRead = Field(default_factory=TelemetrySettingsRead)
     history_retention: HistoryRetentionRead = Field(default_factory=HistoryRetentionRead)
 
 
@@ -149,4 +176,6 @@ class AppSettingsUpdate(BaseModel):
     resolution_categories: list[ResolutionCategory] | None = None
     feature_flags: FeatureFlagsUpdate | None = None
     scan_performance: ScanPerformanceUpdate | None = None
+    ui_preferences: UiPreferencesUpdate | None = None
+    telemetry: TelemetrySettingsUpdate | None = None
     history_retention: HistoryRetentionUpdate | None = None

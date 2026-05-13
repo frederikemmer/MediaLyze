@@ -52,14 +52,13 @@
     "loading": "Wird geladen..."
   },
   "releaseNotes": {
-    "eyebrow": "Version {{version}}",
-    "title": "Was ist neu",
-    "allVersions": "Versionsverlauf",
+    "title": "Versionsverlauf",
     "versionHeading": "Version {{version}}",
     "current": "Aktuell",
     "openAria": "Versionshinweise fuer {{version}} anzeigen",
     "githubAria": "GitHub-Repository oeffnen",
     "reportIssueAria": "Issue melden",
+    "donateAria": "MediaLyze unterstuetzen",
     "closeAria": "Versionshinweise schliessen"
   },
   "libraries": {
@@ -171,6 +170,16 @@
     "comparisonScatterPointLimit": "Scatter-Plot-Punkte",
     "comparisonScatterPointLimitTooltipAria": "Sampling fuer Scatter-Plots erklaeren",
     "comparisonScatterPointLimitTooltip": "Begrenzt, wie viele Punkte MediaLyze fuer Vergleichs-Scatter-Plots zurueckliefert.\n\nHeatmaps und Saeulendiagramme bleiben exakt; nur Scatter-Plots werden aus Lesbarkeits- und Performance-Gruenden gesampelt.\n\nWarnung: sehr hohe Werte koennen den Speicherverbrauch im Browser merklich erhoehen und grosse Vergleichsansichten traeger machen.\nMaximum: {{max}}.",
+    "telemetryPreview": {
+      "title": "Telemetrie-Vorschau",
+      "description": "Generiert die anonyme Payload-Struktur, die fuer den jeweiligen Telemetrie-Modus gesendet wuerde.",
+      "previewMinimal": "Minimal-Payload anzeigen",
+      "previewEnabled": "Enabled-Payload anzeigen",
+      "jsonLabel": "JSON-Vorschau des Telemetrie-Payloads",
+      "notLoaded": "Waehle einen Payload-Modus aus, um eine Vorschau zu erzeugen.",
+      "empty": "Es ist keine Telemetrie-Payload-Vorschau verfuegbar.",
+      "loadFailed": "Telemetrie-Payload-Vorschau fehlgeschlagen."
+    },
     "historyRetention": {
       "title": "Verlaufsaufbewahrung",
       "loading": "Speicherprognose wird geladen…",
@@ -735,6 +744,67 @@
     "system": "System",
     "light": "Hell",
     "dark": "Dunkel"
+  },
+  "telemetry": {
+    "saveFailed": "Telemetrie-Einstellung konnte nicht gespeichert werden.",
+    "environmentDisabled": "Telemetrie ist durch MEDIALYZE_TELEMETRY_DISABLED fest deaktiviert.",
+    "settingsHint": "Details findest du in den Einstellungen unter Telemetry.",
+    "releaseNotesChooseFirst": "Wähle einen Telemetrie-Modus, bevor du den Release-Verlauf schließt.",
+    "mode": {
+      "off": "Telemetrie aus",
+      "minimal": "Minimale Telemetrie",
+      "enabled": "Hilf dem Entwickler"
+    },
+    "modeTooltipTitles": {
+      "off": "Telemetrie aus",
+      "minimal": "Minimale Telemetrie",
+      "enabled": "Hilf dem Entwickler"
+    },
+    "modeTooltips": {
+      "off": "Es werden keine Telemetrie-Payloads gesendet.",
+      "minimal": "Sendet nur Installations-, Runtime- und Systemdetails. Nutzungsstatistiken und App-Einstellungen sind nicht enthalten.",
+      "enabled": "Ergänzt gerundete Nutzungszählungen, Medienart-Zähler, aktivierte Feature Flags und ausgewählte App-Einstellungen."
+    },
+    "modeDescriptions": {
+      "off": "Es werden keine Telemetrie-Payloads gesendet.",
+      "minimal": "Sendet nur Installations-, Runtime- und Systemdetails. Nutzungsstatistiken und App-Einstellungen sind nicht enthalten.",
+      "enabled": "Ergänzt gerundete Nutzungszählungen, Medienart-Zähler, aktivierte Feature Flags und ausgewählte App-Einstellungen."
+    },
+    "panel": {
+      "title": "Telemetry",
+      "description": "Telemetrie ist anonymes, grobes Installationsreporting. MediaLyze sendet niemals Dateipfade, Mediennamen, Bibliotheksnamen, Suchbegriffe, rohe ffprobe-Payloads oder Scan-Diagnosen."
+    },
+    "preview": {
+      "title": "Payload-Vorschau",
+      "description": "Generiert die anonyme Payload-Struktur, die für den jeweiligen Telemetrie-Modus gesendet würde.",
+      "previewMinimal": "Minimal-Payload anzeigen",
+      "previewEnabled": "Enabled-Payload anzeigen",
+      "views": {
+        "last": "Zuletzt gesendet",
+        "minimal": "Beispiel minimal",
+        "enabled": "Beispiel vollständig"
+      },
+      "jsonLabel": "JSON-Vorschau des Telemetrie-Payloads",
+      "notLoaded": "Wähle einen Payload-Modus aus, um eine Vorschau zu erzeugen.",
+      "loading": "Telemetrie-Payload-Vorschau wird geladen...",
+      "empty": "Es ist keine Telemetrie-Payload-Vorschau verfügbar.",
+      "loadFailed": "Telemetrie-Payload-Vorschau fehlgeschlagen."
+    },
+    "stats": {
+      "title": "Öffentliche Statistik",
+      "description": "Für MediaLyze gibt es eine öffentliche Statistikseite. Dort kannst du die von dieser Installation beigetragenen Telemetriedaten einsehen und alle Daten mit deiner zufällig generierten Installations-ID selbst löschen.",
+      "openAria": "MediaLyze-Statistikseite öffnen",
+      "installationIdLabel": "Eigene Installations-ID",
+      "installationIdMissing": "Es wurde noch keine Installations-ID erstellt.",
+      "copy": "Kopieren",
+      "copied": "Kopiert"
+    },
+    "lastPayload": {
+      "title": "Zuletzt übermittelter Payload",
+      "jsonLabel": "JSON des zuletzt übermittelten Telemetrie-Payloads",
+      "none": "Es wurde noch kein für Nutzer sichtbarer Telemetrie-Payload gesendet.",
+      "noneAndOff": "Es ist kein Telemetrie-Payload verfügbar, und solange Telemetrie aus oder deaktiviert ist, wird keiner gesendet."
+    }
   },
   "quality": {
     "tooltipAria": "Qualitätsaufschlüsselung anzeigen",

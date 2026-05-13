@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-alpine AS runtime
-ARG APP_VERSION=0.10.4
+ARG APP_VERSION=0.11.0
 
 LABEL name="MediaLyze"
 LABEL org.opencontainers.image.source="https://github.com/frederikemmer/MediaLyze"
@@ -32,6 +32,7 @@ COPY backend ./backend
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY frontend/package.json ./frontend/package.json
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+RUN printf '%s\n' "${APP_VERSION}" > /app/.medialyze-version
 
 RUN pip install --no-cache-dir .
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

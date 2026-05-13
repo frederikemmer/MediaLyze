@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.11.0
+
+>2026-05-13
+
+### ✨ New
+
+- add the public [MediaLyze website](https://www.medialyze.app/)
+- add a donation link to the release-notes dialog that opens the project's GitHub Sponsors page
+- add `ROADMAP.md`
+- add a shared telemetry mode toggle to the Telemetry settings panel and release-history dialog, backed by persisted app settings and lockable via `MEDIALYZE_TELEMETRY_DISABLED`
+- add telemetry payload preview support with `minimal` and `enabled` modes
+- return the persisted telemetry installation id in app settings so users can later identify their anonymous installation for download or deletion
+
+### 🐛 Bug fixes
+
+- move the folder & pattern recognition header tooltip to the left of the collapse button
+- match the settings history reconstruction button sizing to the full-scan action button
+- fix lagging toggle animation in most menus
+
 ## v0.10.4
 
 >2026-05-08
@@ -17,6 +36,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - harden Windows desktop GitHub Actions builds by retrying the Electron packaging step when upstream `electron-builder` NSIS resource downloads fail transiently with HTTP 502 responses
+- regenerate favicon and Apple touch PNG assets from the vector source at their native target sizes so higher-resolution icons no longer appear pixelated
 
 ## v0.10.3
 

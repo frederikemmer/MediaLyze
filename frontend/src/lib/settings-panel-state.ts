@@ -5,7 +5,8 @@ export type SettingsPanelId =
   | "recentScanLogs"
   | "resolutionCategories"
   | "createLibrary"
-  | "appSettings";
+  | "appSettings"
+  | "telemetry";
 
 export type SettingsPanelState = Record<SettingsPanelId, boolean>;
 
@@ -19,6 +20,7 @@ const DEFAULT_STATE: SettingsPanelState = {
   resolutionCategories: true,
   createLibrary: true,
   appSettings: true,
+  telemetry: true,
 };
 
 function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
@@ -57,6 +59,10 @@ function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
       "appSettings" in value && typeof value.appSettings === "boolean"
         ? value.appSettings
         : DEFAULT_STATE.appSettings,
+    telemetry:
+      "telemetry" in value && typeof value.telemetry === "boolean"
+        ? value.telemetry
+        : DEFAULT_STATE.telemetry,
   };
 }
 

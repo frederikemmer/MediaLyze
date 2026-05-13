@@ -84,6 +84,7 @@ from backend.app.services.scan_jobs import (
 )
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
+from backend.app.services.telemetry import build_telemetry_payload, send_current_telemetry_snapshot
 
 router = APIRouter()
 
@@ -140,8 +141,8 @@ def _library_file_search_filters(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health(settings: Settings = Depends(get_app_settings)) -> dict[str, str]:
+    return {"status": "ok", "version": settings.app_version}
 
 
 @router.get("/browse", response_model=BrowseResponse)
@@ -255,6 +256,42 @@ def app_settings(
     return load_app_settings(db, settings)
 
 
+@router.get("/telemetry/preview")
+def telemetry_preview(
+    mode: Literal["none", "minimal", "enabled"] = Query(default="minimal"),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> dict:
+    app_settings_payload = load_app_settings(db, settings)
+    installation_id = app_settings_payload.telemetry.installation_id
+    return {
+        "payload": build_telemetry_payload(
+            db,
+            settings,
+            app_settings_payload,
+            mode=mode,
+            installation_id=installation_id or "00000000-0000-0000-0000-000000000000",
+        ),
+        "redacted": installation_id is None,
+        "mode": mode,
+    }
+
+
+@router.post("/telemetry/send-now", response_model=AppSettingsRead)
+def telemetry_send_now(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> AppSettingsRead:
+    app_settings_payload = load_app_settings(db, settings)
+    if (
+        app_settings_payload.telemetry.environment_disabled
+        or app_settings_payload.telemetry.mode not in {"minimal", "enabled"}
+    ):
+        raise HTTPException(status_code=409, detail="Telemetry is not enabled.")
+    send_current_telemetry_snapshot(db, settings, force=True)
+    return load_app_settings(db, settings)
+
+
 @router.patch("/app-settings", response_model=AppSettingsRead)
 def app_settings_update(
     payload: AppSettingsUpdate,
@@ -270,6 +307,14 @@ def app_settings_update(
     runtime.refresh_worker_settings()
     if updated_settings.history_retention != current_settings.history_retention:
         runtime.run_history_retention()
+    if (
+        payload.telemetry is not None
+        and payload.telemetry.mode in {"minimal", "enabled"}
+        and updated_settings.telemetry.mode in {"minimal", "enabled"}
+    ):
+        runtime.schedule_telemetry_send_after_settings_change()
+    elif payload.telemetry is not None and payload.telemetry.mode == "off":
+        runtime.cancel_pending_telemetry_send()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings

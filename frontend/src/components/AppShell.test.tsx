@@ -42,6 +42,13 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
       in_depth_dolby_vision_profiles: false,
       ...overrideFeatureFlags,
     },
+    telemetry: {
+      mode: "off",
+      environment_disabled: false,
+      installation_id_suffix: null,
+      last_sent_at: null,
+      last_user_visible_payload: null,
+    },
     ...restOverrides,
   };
 }
@@ -78,7 +85,7 @@ describe("AppShell", () => {
   it("shows release notes for the current version until dismissed", async () => {
     renderShell();
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
     expect(screen.getAllByText("Version 0.8.3").length).toBeGreaterThan(0);
     expect(screen.getByText(/default the full-width app shell feature flag/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /version 0\.8\.2/i })).toBeInTheDocument();
@@ -91,12 +98,12 @@ describe("AppShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
     expect(window.localStorage.getItem("medialyze-release-notes-seen-version")).toBe("0.8.3");
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
     expect(screen.getByText(/default the full-width app shell feature flag/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open GitHub repository" })).toHaveAttribute(
       "href",
@@ -114,10 +121,18 @@ describe("AppShell", () => {
       "data-tooltip",
       "Report an issue",
     );
+    expect(screen.getByRole("link", { name: "Support MediaLyze" })).toHaveAttribute(
+      "href",
+      "https://github.com/sponsors/frederikemmer",
+    );
+    expect(screen.getByRole("link", { name: "Support MediaLyze" })).toHaveAttribute(
+      "data-tooltip",
+      "Support MediaLyze",
+    );
 
     fireEvent.mouseDown(document.querySelector(".release-notes-backdrop")!);
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
   });
 
   it("does not show already dismissed release notes for the current version", async () => {
@@ -126,11 +141,64 @@ describe("AppShell", () => {
     renderShell();
 
     await waitFor(() => expect(api.libraries).toHaveBeenCalled());
-    expect(screen.queryByRole("dialog", { name: "What's new" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
-    expect(await screen.findByRole("dialog", { name: "What's new" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+  });
+
+  it("updates telemetry mode from the release notes toggle", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "none",
+          environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "enabled",
+          environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    const enabledButton = screen.getByRole("button", { name: "Help the dev" });
+    expect(enabledButton).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Telemetry off" })).toHaveAttribute(
+      "data-tooltip-body",
+      "No telemetry payloads are sent.",
+    );
+    expect(screen.getByRole("button", { name: "Minimal telemetry" })).toHaveAttribute(
+      "data-tooltip-body",
+      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+    );
+    expect(enabledButton).toHaveAttribute("data-tooltip-title", "Help the dev");
+    expect(enabledButton).toHaveAttribute(
+      "data-tooltip-body",
+      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+    );
+
+    fireEvent.click(enabledButton);
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith({
+        telemetry: { mode: "enabled" },
+      }),
+    );
+    await waitFor(() => expect(enabledButton).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("applies the full-width shell class when the feature flag is enabled", async () => {

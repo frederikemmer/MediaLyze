@@ -70,6 +70,7 @@ export function DistributionChartPanel({
                   <motion.span
                     layoutId={`distribution-chart-mode-pill-${toggleId}`}
                     className="nav-active-pill distribution-chart-mode-pill"
+                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                   />
                 ) : null}
                 <span className="distribution-chart-mode-button-content">
@@ -87,6 +88,7 @@ export function DistributionChartPanel({
                   <motion.span
                     layoutId={`distribution-chart-mode-pill-${toggleId}`}
                     className="nav-active-pill distribution-chart-mode-pill"
+                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                   />
                 ) : null}
                 <span className="distribution-chart-mode-button-content">

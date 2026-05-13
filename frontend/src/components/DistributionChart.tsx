@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import * as echarts from "echarts/core";
@@ -16,6 +16,30 @@ import {
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
+type EChartsInstanceLike = {
+  containPixel: (finder: { gridIndex: number }, value: [number, number]) => boolean;
+  convertFromPixel: (
+    finder: { seriesIndex: number } | { xAxisIndex: number },
+    value: [number, number],
+  ) => number | string | [number | string, number];
+  getZr: () => {
+    on: (eventName: "click" | "mousemove" | "globalout", handler: (event: ZrPointerEvent) => void) => void;
+    off: (eventName: "click" | "mousemove" | "globalout", handler: (event: ZrPointerEvent) => void) => void;
+    setCursorStyle: (cursorStyle: "default" | "pointer") => void;
+  };
+};
+
+type ZrPointerEvent = {
+  offsetX?: number;
+  offsetY?: number;
+  event?: {
+    offsetX?: number;
+    offsetY?: number;
+    zrX?: number;
+    zrY?: number;
+  };
+};
+
 type DistributionChartProps = {
   distribution: NumericDistribution;
   metricId: NumericDistributionMetricId;
@@ -32,6 +56,7 @@ export function DistributionChart({
   onSelectBin,
 }: DistributionChartProps) {
   const { t } = useTranslation();
+  const chartRef = useRef<InstanceType<typeof ReactECharts> | null>(null);
   const cssVars = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = cssVars?.getPropertyValue("--muted").trim() || "#5f5b52";
   const fillColor = cssVars?.getPropertyValue("--accent-2").trim() || "#1b998b";
@@ -144,8 +169,60 @@ export function DistributionChart({
       }
     : undefined;
 
+  useEffect(() => {
+    if (!interactive || !onSelectBin) {
+      return undefined;
+    }
+    const instance = chartRef.current?.getEchartsInstance?.() as EChartsInstanceLike | undefined;
+    const zr = instance?.getZr();
+    if (!instance || !zr) {
+      return undefined;
+    }
+    const resolveBinFromPoint = (point: [number, number]) => {
+      if (!instance.containPixel({ gridIndex: 0 }, point)) {
+        return undefined;
+      }
+
+      const converted =
+        instance.convertFromPixel({ seriesIndex: 0 }, point) ?? instance.convertFromPixel({ xAxisIndex: 0 }, point);
+      const rawValue = Array.isArray(converted) ? converted[0] : converted;
+      const binIndex =
+        typeof rawValue === "number"
+          ? Math.round(rawValue)
+          : distribution.bins.findIndex((bin) => formatNumericDistributionBinLabel(metricId, bin) === String(rawValue));
+      return binIndex >= 0 ? distribution.bins[binIndex] : undefined;
+    };
+    const resolveBinFromEvent = (event: ZrPointerEvent) => {
+      const x = event.offsetX ?? event.event?.offsetX ?? event.event?.zrX;
+      const y = event.offsetY ?? event.event?.offsetY ?? event.event?.zrY;
+      return typeof x === "number" && typeof y === "number" ? resolveBinFromPoint([x, y]) : undefined;
+    };
+    const handleGridPointerMove = (event: ZrPointerEvent) => {
+      zr.setCursorStyle(resolveBinFromEvent(event) ? "pointer" : "default");
+    };
+    const handleGridPointerOut = () => {
+      zr.setCursorStyle("default");
+    };
+    const handleGridClick = (event: ZrPointerEvent) => {
+      const bin = resolveBinFromEvent(event);
+      if (bin) {
+        onSelectBin(bin);
+      }
+    };
+    zr.on("mousemove", handleGridPointerMove);
+    zr.on("globalout", handleGridPointerOut);
+    zr.on("click", handleGridClick);
+    return () => {
+      zr.off("mousemove", handleGridPointerMove);
+      zr.off("globalout", handleGridPointerOut);
+      zr.off("click", handleGridClick);
+      zr.setCursorStyle("default");
+    };
+  }, [distribution.bins, interactive, metricId, onSelectBin]);
+
   return (
     <ReactECharts
+      ref={chartRef}
       echarts={echarts}
       option={option}
       notMerge

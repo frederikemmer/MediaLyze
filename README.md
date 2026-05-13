@@ -63,6 +63,14 @@ Bring your own auth (for now).
   </tr>
 </table>
 
+## Support MediaLyze
+
+If you find MediaLyze useful and would like to support ongoing development, you can do so here:
+
+[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=DEINE_PAYPAL_BUTTON_ID)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-181717?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/frederikemmer)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/medialyze)
+
 ## Quick Start
 
 ### Docker Compose
@@ -212,6 +220,8 @@ Relevant environment variables:
 - `FRONTEND_DIST_PATH`: optional explicit frontend bundle path, mainly used by packaged desktop builds
 - `TZ`: process/container timezone, default `UTC`
 - `DISABLE_DEFAULT_IGNORE_PATTERNS`: optional; when set to `true`, built-in default ignore patterns are not preloaded
+- `MEDIALYZE_TELEMETRY_DISABLED`: optional; when set to `true`, telemetry is forced off and the UI toggle is locked
+- `MEDIALYZE_TELEMETRY_ENDPOINT`: optional; overrides the telemetry ingest endpoint, default `https://www.medialyze.app/api/telemetry/ingest`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
 
@@ -227,6 +237,8 @@ MediaLyze exposes separate limits for per-scan analysis workers and parallel lib
 
 Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, `*/.deletedByTMM/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
 See [docs/patterns.md](docs/patterns.md) for series, bonus, and ignore-pattern rules, or [docs/ignore_files_folders.md](docs/ignore_files_folders.md) for ignore-only examples.
+
+Telemetry payloads are documented in [docs/telemetry.md](docs/telemetry.md), including the `none`, `minimal`, and `enabled` payload contracts and the privacy-preserving rounding rules for coarse usage counts.
 
 ## Tech Stack
 

@@ -436,9 +436,8 @@ function resolvePythonInvocation() {
   };
 }
 
-export function main() {
-  const pythonInvocation = resolvePythonInvocation();
-  const pyInstallerArgs = [
+export function buildPyInstallerArgs(pythonInvocation, platform = process.platform) {
+  const args = [
     ...pythonInvocation.args,
     "-m",
     "PyInstaller",
@@ -454,13 +453,21 @@ export function main() {
     specDir,
     "--paths",
     repoRoot,
+    "--collect-data",
+    "certifi",
   ];
 
-  if (process.platform === "win32") {
-    pyInstallerArgs.push("--noconsole");
+  if (platform === "win32") {
+    args.push("--noconsole");
   }
 
-  pyInstallerArgs.push(path.join(repoRoot, "backend", "app", "launcher.py"));
+  args.push(path.join(repoRoot, "backend", "app", "launcher.py"));
+  return args;
+}
+
+export function main() {
+  const pythonInvocation = resolvePythonInvocation();
+  const pyInstallerArgs = buildPyInstallerArgs(pythonInvocation);
 
   rmSync(outputDir, { recursive: true, force: true });
   mkdirSync(outputDir, { recursive: true });

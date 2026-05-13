@@ -45,6 +45,18 @@ const DEFAULT_HISTORY_RETENTION = {
 };
 
 const DEFAULT_PATTERN_RECOGNITION = defaultPatternRecognitionSettings();
+const DEFAULT_UI_PREFERENCES = {
+  interface_language: "en" as const,
+  color_theme: "system" as const,
+};
+const DEFAULT_TELEMETRY = {
+  mode: "none" as const,
+  environment_disabled: false,
+  installation_id: null,
+  installation_id_suffix: null,
+  last_sent_at: null,
+  last_user_visible_payload: null,
+};
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   ignore_patterns: [],
@@ -54,6 +66,8 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   scan_performance: DEFAULT_SCAN_PERFORMANCE,
   history_retention: DEFAULT_HISTORY_RETENTION,
+  ui_preferences: DEFAULT_UI_PREFERENCES,
+  telemetry: DEFAULT_TELEMETRY,
   feature_flags: {
     show_analyzed_files_csv_export: false,
     show_full_width_app_shell: false,
@@ -128,6 +142,19 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
           payload?.history_retention?.scan_history?.storage_limit_gb ??
           DEFAULT_HISTORY_RETENTION.scan_history.storage_limit_gb,
       },
+    },
+    ui_preferences: {
+      interface_language: payload?.ui_preferences?.interface_language ?? DEFAULT_UI_PREFERENCES.interface_language,
+      color_theme: payload?.ui_preferences?.color_theme ?? DEFAULT_UI_PREFERENCES.color_theme,
+    },
+    telemetry: {
+      mode: payload?.telemetry?.mode ?? DEFAULT_TELEMETRY.mode,
+      environment_disabled: payload?.telemetry?.environment_disabled ?? DEFAULT_TELEMETRY.environment_disabled,
+      installation_id: payload?.telemetry?.installation_id ?? DEFAULT_TELEMETRY.installation_id,
+      installation_id_suffix: payload?.telemetry?.installation_id_suffix ?? DEFAULT_TELEMETRY.installation_id_suffix,
+      last_sent_at: payload?.telemetry?.last_sent_at ?? DEFAULT_TELEMETRY.last_sent_at,
+      last_user_visible_payload:
+        payload?.telemetry?.last_user_visible_payload ?? DEFAULT_TELEMETRY.last_user_visible_payload,
     },
     feature_flags: {
       show_analyzed_files_csv_export: payload?.feature_flags?.show_analyzed_files_csv_export ?? false,

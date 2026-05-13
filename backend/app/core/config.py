@@ -1,6 +1,9 @@
 from functools import lru_cache
+from importlib import metadata
 import os
 from pathlib import Path
+import re
+import tomllib
 from enum import Enum
 
 from pydantic import Field, model_validator
@@ -34,8 +37,62 @@ class RuntimeMode(str, Enum):
     desktop = "desktop"
 
 
+APP_VERSION_FALLBACK = "0.0.0"
+APP_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+
+
+def _normalize_app_version(value: str | None) -> str | None:
+    candidate = (value or "").strip()
+    if not candidate or candidate == "dev":
+        return None
+    return candidate if APP_VERSION_PATTERN.fullmatch(candidate) else APP_VERSION_FALLBACK
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _build_version_file_path() -> Path:
+    return _repo_root() / ".medialyze-version"
+
+
+def _read_build_version_file() -> str | None:
+    try:
+        candidate = _build_version_file_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return candidate if APP_VERSION_PATTERN.fullmatch(candidate) else APP_VERSION_FALLBACK
+
+
+def _read_package_version() -> str | None:
+    try:
+        return _normalize_app_version(metadata.version("medialyze"))
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def _read_pyproject_version() -> str | None:
+    try:
+        payload = tomllib.loads((_repo_root() / "pyproject.toml").read_text(encoding="utf-8"))
+        return _normalize_app_version(payload.get("project", {}).get("version"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def resolve_app_version() -> str:
+    for candidate in (
+        _read_build_version_file(),
+        _normalize_app_version(os.environ.get("MEDIALYZE_APP_VERSION")),
+        _read_pyproject_version(),
+        _read_package_version(),
+    ):
+        if candidate:
+            return candidate
+    return APP_VERSION_FALLBACK
+
+
 def _repo_frontend_dist_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "frontend" / "dist"
+    return _repo_root() / "frontend" / "dist"
 
 
 def _default_desktop_config_path() -> Path:
@@ -62,7 +119,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "MediaLyze"
-    app_version: str = "0.2.5"
+    app_version: str = Field(default_factory=resolve_app_version, validation_alias="MEDIALYZE_APP_VERSION")
     runtime_mode: RuntimeMode = Field(default=RuntimeMode.server, validation_alias="MEDIALYZE_RUNTIME")
     app_host: str | None = None
     app_port: int = 8080
@@ -77,11 +134,18 @@ class Settings(BaseSettings):
     ffprobe_worker_count: int = 4
     scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False
+    telemetry_disabled: bool = Field(default=False, validation_alias="MEDIALYZE_TELEMETRY_DISABLED")
+    telemetry_endpoint: str = Field(
+        default="https://www.medialyze.app/api/telemetry/ingest",
+        validation_alias="MEDIALYZE_TELEMETRY_ENDPOINT",
+    )
+    telemetry_timeout_seconds: float = 2.0
     allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx")
 
     @model_validator(mode="after")
     def apply_runtime_defaults(self) -> "Settings":
+        self.app_version = resolve_app_version()
         if self.app_host is None:
             self.app_host = "127.0.0.1" if self.runtime_mode == RuntimeMode.desktop else "0.0.0.0"
         if self.config_path is None:

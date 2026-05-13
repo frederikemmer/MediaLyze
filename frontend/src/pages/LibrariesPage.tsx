@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { motion } from "motion/react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
 import { PathBrowser } from "../components/PathBrowser";
+import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import {
@@ -23,6 +25,7 @@ import {
   type ResolutionCategory,
   type RecentScanJob,
   type ScanJobDetail,
+  type TelemetryMode,
 } from "../lib/api";
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
@@ -105,6 +108,8 @@ type PatternSectionKey =
   | "season_folder_regexes"
   | "bonus_folder_patterns";
 
+type TelemetryPayloadView = "last" | "minimal" | "enabled";
+
 type PatternRecognitionSectionState = Record<PatternSectionKey, boolean>;
 
 const PATTERN_RECOGNITION_SECTION_STORAGE_KEY = "medialyze-pattern-recognition-sections";
@@ -116,6 +121,7 @@ const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState 
 };
 
 const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";
+const TELEMETRY_STATS_URL = "https://www.medialyze.app/stats";
 
 function normalizePatternRecognitionInputs(settings?: PatternRecognitionSettings | null): PatternRecognitionSettings {
   const next = settings ?? DEFAULT_PATTERN_RECOGNITION_INPUTS;
@@ -686,11 +692,22 @@ export function LibrariesPage() {
   const [historyRetentionStatusTone, setHistoryRetentionStatusTone] = useState<"success" | "error">("error");
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [patternRecognitionStatus, setPatternRecognitionStatus] = useState<string | null>(null);
+  const [telemetryPreviewStatus, setTelemetryPreviewStatus] = useState<string | null>(null);
+  const [telemetryPreviewJsonByMode, setTelemetryPreviewJsonByMode] = useState<
+    Partial<Record<Exclude<TelemetryPayloadView, "last">, string>>
+  >({});
+  const [telemetryPayloadView, setTelemetryPayloadView] = useState<TelemetryPayloadView>("last");
+  const [loadingTelemetryPayloadView, setLoadingTelemetryPayloadView] = useState<Exclude<TelemetryPayloadView, "last"> | null>(null);
+  const [telemetryStatus, setTelemetryStatus] = useState<string | null>(null);
+  const [telemetryIdCopied, setTelemetryIdCopied] = useState(false);
+  const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [isSavingFeatureFlags, setIsSavingFeatureFlags] = useState(false);
   const [isSavingScanPerformance, setIsSavingScanPerformance] = useState(false);
   const [isSavingHistoryRetention, setIsSavingHistoryRetention] = useState(false);
   const [isSavingResolutionCategories, setIsSavingResolutionCategories] = useState(false);
   const [isSavingPatternRecognition, setIsSavingPatternRecognition] = useState(false);
+  const [isLoadingTelemetryPreview, setIsLoadingTelemetryPreview] = useState(false);
+  const [isSavingTelemetry, setIsSavingTelemetry] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
@@ -703,11 +720,31 @@ export function LibrariesPage() {
   const persistedIgnorePatterns = useRef<PersistedIgnorePatterns>({ user: [], default: [] });
   const seededDefaultIgnorePatterns = useRef<string[] | null>(null);
   const libraryNameInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const telemetryEnabledClickStampsRef = useRef<number[]>([]);
   const resolutionOptions = normalizeResolutionCategories(appSettings.resolution_categories);
   const resolutionOptionIds = resolutionOptions.map((category) => category.id);
   const resolutionOptionLabels = new Map(resolutionOptions.map((category) => [category.id, category.label]));
   const appScanPerformance = appSettings.scan_performance ?? DEFAULT_SCAN_PERFORMANCE;
   const appHistoryRetention = appSettings.history_retention ?? DEFAULT_HISTORY_RETENTION;
+  const appTelemetry = appSettings.telemetry ?? {
+    mode: "none" as TelemetryMode,
+    environment_disabled: false,
+    installation_id: null,
+    last_user_visible_payload: null,
+  };
+  const telemetryInstallationId = appTelemetry.installation_id ?? "";
+  const selectedTelemetryPayloadJson =
+    telemetryPayloadView === "last"
+      ? appTelemetry.last_user_visible_payload
+        ? JSON.stringify(appTelemetry.last_user_visible_payload, null, 2)
+        : ""
+      : telemetryPreviewJsonByMode[telemetryPayloadView] ?? "";
+  const selectedTelemetryPayloadPlaceholder =
+    telemetryPayloadView === "last"
+      ? appTelemetry.mode === "off" || appTelemetry.environment_disabled
+        ? t("telemetry.lastPayload.noneAndOff")
+        : t("telemetry.lastPayload.none")
+      : t("telemetry.preview.notLoaded");
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
@@ -722,6 +759,24 @@ export function LibrariesPage() {
       }
     };
   }, []);
+
+  async function openTelemetryStatsPage() {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge?.openExternalUrl) {
+      await desktopBridge.openExternalUrl(TELEMETRY_STATS_URL);
+      return;
+    }
+    window.open(TELEMETRY_STATS_URL, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyTelemetryInstallationId() {
+    if (!telemetryInstallationId || !navigator.clipboard?.writeText) {
+      return;
+    }
+    await navigator.clipboard.writeText(telemetryInstallationId);
+    setTelemetryIdCopied(true);
+    window.setTimeout(() => setTelemetryIdCopied(false), 2000);
+  }
 
   useEffect(() => {
     const nextInputs = historyRetentionInputsFromSettings(appHistoryRetention);
@@ -750,6 +805,106 @@ export function LibrariesPage() {
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
     setPatternRecognitionInputs(normalizePatternRecognitionInputs(updated.pattern_recognition));
     setAppSettings(updated);
+  }
+
+  async function updateInterfaceLanguage(nextLanguage: "en" | "de") {
+    await i18n.changeLanguage(nextLanguage);
+    try {
+      const updated = await api.updateAppSettings({
+        ui_preferences: { interface_language: nextLanguage },
+      });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Keep the local language preference even if the backend sync fails.
+    }
+  }
+
+  async function updateColorTheme(nextTheme: ThemePreference) {
+    setThemePref(nextTheme);
+    try {
+      const updated = await api.updateAppSettings({
+        ui_preferences: { color_theme: nextTheme },
+      });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Keep the local theme preference even if the backend sync fails.
+    }
+  }
+
+  async function selectTelemetryPayloadView(view: TelemetryPayloadView) {
+    setTelemetryPreviewStatus(null);
+    if (view === "last") {
+      setTelemetryPayloadView(view);
+      return;
+    }
+    if (telemetryPreviewJsonByMode[view]) {
+      setTelemetryPayloadView(view);
+      return;
+    }
+    if (isLoadingTelemetryPreview) {
+      return;
+    }
+    setLoadingTelemetryPayloadView(view);
+    setIsLoadingTelemetryPreview(true);
+    try {
+      const preview = await api.telemetryPreview(view);
+      setTelemetryPreviewJsonByMode((current) => ({
+        ...current,
+        [preview.mode === "enabled" ? "enabled" : "minimal"]: JSON.stringify(preview.payload, null, 2),
+      }));
+      setTelemetryPayloadView(preview.mode === "enabled" ? "enabled" : "minimal");
+    } catch {
+      setTelemetryPreviewStatus(t("telemetry.preview.loadFailed"));
+    } finally {
+      setIsLoadingTelemetryPreview(false);
+      setLoadingTelemetryPayloadView(null);
+    }
+  }
+
+  async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    setIsSavingTelemetry(true);
+    setPendingTelemetryMode(mode);
+    setTelemetryStatus(null);
+    try {
+      const updated = await api.updateAppSettings({ telemetry: { mode } });
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      setTelemetryStatus(t("telemetry.saveFailed"));
+    } finally {
+      setIsSavingTelemetry(false);
+      setPendingTelemetryMode(null);
+    }
+  }
+
+  async function sendTelemetryNowSilently() {
+    if (isSavingTelemetry || appTelemetry.environment_disabled || appTelemetry.mode !== "enabled") {
+      return;
+    }
+    setIsSavingTelemetry(true);
+    setPendingTelemetryMode("enabled");
+    try {
+      const updated = await api.telemetrySendNow();
+      applyUpdatedAppSettingsState(updated);
+    } catch {
+      // Hidden dev shortcut: keep the UI quiet if the manual send fails.
+    } finally {
+      setIsSavingTelemetry(false);
+      setPendingTelemetryMode(null);
+    }
+  }
+
+  function handleConfirmedTelemetryModeClick(mode: "off" | "minimal" | "enabled") {
+    if (mode !== "enabled" || appTelemetry.mode !== "enabled") {
+      return;
+    }
+    const now = Date.now();
+    telemetryEnabledClickStampsRef.current = [...telemetryEnabledClickStampsRef.current, now].filter(
+      (timestamp) => now - timestamp <= 1200,
+    );
+    if (telemetryEnabledClickStampsRef.current.length >= 3) {
+      telemetryEnabledClickStampsRef.current = [];
+      void sendTelemetryNowSilently();
+    }
   }
 
   const refreshHistoryStorage = (showLoading = false) => {
@@ -3733,7 +3888,7 @@ export function LibrariesPage() {
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
             subtitle={t("libraries.patternRecognition.subtitle")}
-            titleAddon={
+            collapseActions={
               <TooltipTrigger
                 ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
                 content={t("libraries.ignorePatternsHint")}
@@ -3743,6 +3898,7 @@ export function LibrariesPage() {
             }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
             collapseState={{
               collapsed: !settingsPanelState.patternRecognition,
               onToggle: () => toggleSettingsPanel("patternRecognition"),
@@ -3918,7 +4074,7 @@ export function LibrariesPage() {
               <div className="history-retention-title-actions">
                 <button
                   type="button"
-                  className="history-retention-primary-button"
+                  className="small history-retention-primary-button"
                   onClick={() => void reconstructHistory()}
                   disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
                 >
@@ -4151,6 +4307,135 @@ export function LibrariesPage() {
               </>
             )}
           </AsyncPanel>
+
+          <AsyncPanel
+            title={t("telemetry.panel.title")}
+            collapseActions={
+              <TelemetryModeToggle
+                compact
+                mode={appTelemetry.mode}
+                disabled={!appSettingsLoaded || isSavingTelemetry || appTelemetry.environment_disabled}
+                undecided={appTelemetry.mode === "none" || appTelemetry.mode === "initialized"}
+                pendingMode={pendingTelemetryMode}
+                onChange={(mode) => void saveTelemetryMode(mode)}
+                onConfirmedModeClick={handleConfirmedTelemetryModeClick}
+              />
+            }
+            collapseButtonClassName="async-panel-toggle-icon-button-flat"
+            collapseState={{
+              collapsed: !settingsPanelState.telemetry,
+              onToggle: () => toggleSettingsPanel("telemetry"),
+              bodyId: "telemetry-panel-body",
+            }}
+          >
+            <div className="settings-sidebar-stack telemetry-panel-content">
+              <p className="app-settings-section-copy">{t("telemetry.panel.description")}</p>
+              {appTelemetry.environment_disabled ? (
+                <div className="alert">{t("telemetry.environmentDisabled")}</div>
+              ) : null}
+              <div className="telemetry-mode-card-grid">
+                <div className="telemetry-mode-card telemetry-mode-card-off">
+                  <strong>{t("telemetry.mode.off")}</strong>
+                  <span>{t("telemetry.modeDescriptions.off")}</span>
+                </div>
+                <div className="telemetry-mode-card telemetry-mode-card-minimal">
+                  <strong>{t("telemetry.mode.minimal")}</strong>
+                  <span>{t("telemetry.modeDescriptions.minimal")}</span>
+                </div>
+                <div className="telemetry-mode-card telemetry-mode-card-enabled">
+                  <strong>{t("telemetry.mode.enabled")}</strong>
+                  <span>{t("telemetry.modeDescriptions.enabled")}</span>
+                </div>
+              </div>
+              <div className="app-settings-section">
+                <div className="telemetry-stats-info">
+                  <div>
+                    <p className="app-settings-section-title">{t("telemetry.stats.title")}</p>
+                    <p className="app-settings-section-copy">{t("telemetry.stats.description")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary icon-only-button telemetry-stats-link"
+                    aria-label={t("telemetry.stats.openAria")}
+                    data-tooltip={t("telemetry.stats.openAria")}
+                    onClick={() => void openTelemetryStatsPage()}
+                  >
+                    <SquareArrowOutUpRight size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="telemetry-installation-id-row">
+                  <input
+                    type="text"
+                    readOnly
+                    value={telemetryInstallationId || t("telemetry.stats.installationIdMissing")}
+                    aria-label={t("telemetry.stats.installationIdLabel")}
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-only-button telemetry-copy-id-button"
+                    aria-label={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                    data-tooltip={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                    disabled={!telemetryInstallationId || !navigator.clipboard?.writeText}
+                    onClick={() => void copyTelemetryInstallationId()}
+                  >
+                    <Copy size={16} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="telemetry-preview-actions">
+                  <button
+                    type="button"
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
+                    aria-pressed={telemetryPayloadView === "last"}
+                    onClick={() => void selectTelemetryPayloadView("last")}
+                  >
+                    {telemetryPayloadView === "last" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
+                    <span>{t("telemetry.preview.views.last")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}${loadingTelemetryPayloadView === "minimal" ? " is-loading" : ""}`}
+                    aria-pressed={telemetryPayloadView === "minimal"}
+                    onClick={() => void selectTelemetryPayloadView("minimal")}
+                  >
+                    {telemetryPayloadView === "minimal" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
+                    <span>{t("telemetry.preview.views.minimal")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}${loadingTelemetryPayloadView === "enabled" ? " is-loading" : ""}`}
+                    aria-pressed={telemetryPayloadView === "enabled"}
+                    onClick={() => void selectTelemetryPayloadView("enabled")}
+                  >
+                    {telemetryPayloadView === "enabled" ? (
+                      <motion.span
+                        layoutId="telemetry-preview-view-pill"
+                        className="nav-active-pill telemetry-preview-view-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
+                    <span>{t("telemetry.preview.views.enabled")}</span>
+                  </button>
+                </div>
+                <pre className="telemetry-preview-json" aria-label={t("telemetry.preview.jsonLabel")}>
+                  {selectedTelemetryPayloadJson || selectedTelemetryPayloadPlaceholder}
+                </pre>
+                {telemetryPreviewStatus ? <div className="alert">{telemetryPreviewStatus}</div> : null}
+              </div>
+              {telemetryStatus ? <div className="alert">{telemetryStatus}</div> : null}
+            </div>
+          </AsyncPanel>
         </div>
 
         <div className="settings-sidebar">
@@ -4303,7 +4588,7 @@ export function LibrariesPage() {
                   <select
                     id="app-language"
                     value={i18n.resolvedLanguage ?? "en"}
-                    onChange={(event) => void i18n.changeLanguage(event.target.value)}
+                    onChange={(event) => void updateInterfaceLanguage(event.target.value as "en" | "de")}
                   >
                     <option value="en">{t("language.en")}</option>
                     <option value="de">{t("language.de")}</option>
@@ -4314,7 +4599,7 @@ export function LibrariesPage() {
                   <select
                     id="app-theme"
                     value={themePref}
-                    onChange={(event) => setThemePref(event.target.value as ThemePreference)}
+                    onChange={(event) => void updateColorTheme(event.target.value as ThemePreference)}
                   >
                     <option value="system">{t("theme.system")}</option>
                     <option value="light">{t("theme.light")}</option>

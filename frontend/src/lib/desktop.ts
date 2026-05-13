@@ -1,6 +1,7 @@
 export type DesktopBridge = {
   isDesktop: () => boolean;
   selectLibraryPaths: () => Promise<string[]>;
+  openExternalUrl?: (url: string) => Promise<boolean>;
 };
 
 export function getDesktopBridge(): DesktopBridge | null {

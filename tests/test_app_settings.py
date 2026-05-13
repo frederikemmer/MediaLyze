@@ -1,13 +1,18 @@
 import os
 import tempfile
+import tomllib
+from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault("CONFIG_PATH", tempfile.mkdtemp(prefix="medialyze-config-"))
 os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
-from backend.app.core.config import Settings
+from backend.app.core import config as config_module
+from backend.app.core.config import APP_VERSION_FALLBACK, Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import AppSetting
 from backend.app.schemas.app_settings import AppSettingsUpdate
@@ -28,6 +33,7 @@ def build_settings(
     tmp_path,
     *,
     disable_default_ignore_patterns: bool = False,
+    telemetry_disabled: bool = False,
     runtime_mode: str = "server",
 ) -> Settings:
     return Settings(
@@ -35,7 +41,73 @@ def build_settings(
         config_path=tmp_path / "config",
         media_root=tmp_path / "media",
         disable_default_ignore_patterns=disable_default_ignore_patterns,
+        telemetry_disabled=telemetry_disabled,
     )
+
+
+def test_default_app_version_matches_pyproject(monkeypatch) -> None:
+    monkeypatch.delenv("APP_VERSION", raising=False)
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == pyproject["project"]["version"]
+
+
+def test_baked_build_version_wins_over_stale_runtime_app_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("0.10.4-dev018\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.setenv("APP_VERSION", "0.3.0-dev016")
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == "0.10.4-dev018"
+
+
+def test_invalid_baked_build_version_falls_back_to_error_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("not-a-version\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.setenv("APP_VERSION", "0.10.4-dev018")
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_dev_baked_build_version_falls_back_to_error_version(monkeypatch, tmp_path) -> None:
+    version_file = tmp_path / ".medialyze-version"
+    version_file.write_text("dev\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: version_file)
+    monkeypatch.delenv("MEDIALYZE_APP_VERSION", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_explicit_medialyze_app_version_override_is_validated(monkeypatch, tmp_path) -> None:
+    missing_version_file = tmp_path / ".missing-version"
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: missing_version_file)
+    monkeypatch.setenv("MEDIALYZE_APP_VERSION", "bad-version")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == APP_VERSION_FALLBACK
+
+
+def test_medialyze_app_version_override_is_used_without_build_file(monkeypatch, tmp_path) -> None:
+    missing_version_file = tmp_path / ".missing-version"
+    monkeypatch.setattr(config_module, "_build_version_file_path", lambda: missing_version_file)
+    monkeypatch.setenv("MEDIALYZE_APP_VERSION", "0.10.4-dev018")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == "0.10.4-dev018"
 
 
 def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_installations(tmp_path) -> None:
@@ -59,6 +131,10 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.scan_performance.scan_worker_count == 4
     assert loaded.scan_performance.parallel_scan_jobs == 2
     assert loaded.scan_performance.comparison_scatter_point_limit == 5000
+    assert loaded.ui_preferences.interface_language == "en"
+    assert loaded.ui_preferences.color_theme == "system"
+    assert loaded.telemetry.mode == "none"
+    assert loaded.telemetry.environment_disabled is False
     assert loaded.history_retention.file_history.days == 30
     assert loaded.history_retention.file_history.storage_limit_gb == 0
     assert loaded.history_retention.library_history.days == 365
@@ -201,6 +277,93 @@ def test_update_app_settings_can_disable_desktop_full_width_default(tmp_path) ->
     assert loaded.feature_flags.show_full_width_app_shell is False
 
 
+def test_update_app_settings_persists_ui_preferences(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                ui_preferences={
+                    "interface_language": "de",
+                    "color_theme": "dark",
+                }
+            ),
+            settings,
+        )
+        loaded = get_app_settings(db, settings)
+
+    assert updated.ui_preferences.interface_language == "de"
+    assert updated.ui_preferences.color_theme == "dark"
+    assert loaded.ui_preferences.interface_language == "de"
+    assert loaded.ui_preferences.color_theme == "dark"
+
+
+def test_update_app_settings_rejects_invalid_ui_preferences() -> None:
+    with pytest.raises(ValidationError):
+        AppSettingsUpdate(ui_preferences={"interface_language": "fr"})
+
+    with pytest.raises(ValidationError):
+        AppSettingsUpdate(ui_preferences={"color_theme": "blue"})
+
+
+def test_update_app_settings_persists_telemetry_mode(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        updated = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+        loaded = get_app_settings(db, settings)
+
+    assert updated.telemetry.mode == "minimal"
+    assert updated.telemetry.environment_disabled is False
+    assert updated.telemetry.installation_id_suffix is not None
+    assert loaded.telemetry.mode == "minimal"
+    assert loaded.telemetry.installation_id_suffix == updated.telemetry.installation_id_suffix
+
+
+def test_telemetry_installation_id_survives_settings_updates(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        enabled = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+        installation_id = enabled.telemetry.installation_id
+
+        disabled = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "off"}), settings)
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(
+                telemetry={"mode": "minimal"},
+                scan_performance={"scan_worker_count": 5},
+                ui_preferences={"interface_language": "de"},
+            ),
+            settings,
+        )
+        loaded = get_app_settings(db, settings)
+
+    assert installation_id is not None
+    assert disabled.telemetry.installation_id == installation_id
+    assert updated.telemetry.installation_id == installation_id
+    assert loaded.telemetry.installation_id == installation_id
+    assert loaded.telemetry.installation_id_suffix == installation_id[-8:]
+
+
+def test_telemetry_disabled_env_forces_off_mode(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path, telemetry_disabled=True)
+
+    with session_factory() as db:
+        updated = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+        loaded = get_app_settings(db, settings)
+
+    assert updated.telemetry.mode == "off"
+    assert updated.telemetry.environment_disabled is True
+    assert loaded.telemetry.mode == "off"
+    assert loaded.telemetry.environment_disabled is True
+
+
 def test_get_app_settings_skips_built_in_default_ignore_patterns_when_disabled(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path, disable_default_ignore_patterns=True)
@@ -314,6 +477,16 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "file_history": {"days": 120, "storage_limit_gb": 1.5},
             "library_history": {"days": 730, "storage_limit_gb": 0.0},
             "scan_history": {"days": 45, "storage_limit_gb": 0.25},
+        },
+        "ui_preferences": {
+            "interface_language": "en",
+            "color_theme": "system",
+        },
+        "telemetry": {
+            "mode": "none",
+            "installation_id": None,
+            "last_sent_at": None,
+            "last_user_visible_payload": None,
         },
         "feature_flags": {
             "show_analyzed_files_csv_export": True,

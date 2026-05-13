@@ -52,14 +52,13 @@
     "loading": "Loading..."
   },
   "releaseNotes": {
-    "eyebrow": "Version {{version}}",
-    "title": "What's new",
-    "allVersions": "Release history",
+    "title": "Release history",
     "versionHeading": "Version {{version}}",
     "current": "Current",
     "openAria": "Show release notes for {{version}}",
     "githubAria": "Open GitHub repository",
     "reportIssueAria": "Report an issue",
+    "donateAria": "Support MediaLyze",
     "closeAria": "Close release notes"
   },
   "libraries": {
@@ -171,6 +170,16 @@
     "comparisonScatterPointLimit": "Scatter plot points",
     "comparisonScatterPointLimitTooltipAria": "Explain scatter plot point sampling",
     "comparisonScatterPointLimitTooltip": "Caps how many points MediaLyze returns for comparison scatter plots.\n\nHeatmaps and bar charts stay exact; only scatter plots are sampled for readability and browser performance.\n\nWarning: very high values can noticeably increase browser memory use and make large comparison views sluggish.\nMaximum: {{max}}.",
+    "telemetryPreview": {
+      "title": "Telemetry preview",
+      "description": "Generate the anonymous payload shape that would be sent for each telemetry mode.",
+      "previewMinimal": "Preview minimal payload",
+      "previewEnabled": "Preview enabled payload",
+      "jsonLabel": "Telemetry payload JSON preview",
+      "notLoaded": "Select a payload mode to generate a preview.",
+      "empty": "No telemetry payload preview is available.",
+      "loadFailed": "Telemetry payload preview failed."
+    },
     "historyRetention": {
       "title": "History retention",
       "loading": "Loading storage forecast…",
@@ -735,6 +744,67 @@
     "system": "System",
     "light": "Light",
     "dark": "Dark"
+  },
+  "telemetry": {
+    "saveFailed": "Telemetry setting could not be saved.",
+    "environmentDisabled": "Telemetry is locked off by MEDIALYZE_TELEMETRY_DISABLED.",
+    "settingsHint": "Details are available in Settings under Telemetry.",
+    "releaseNotesChooseFirst": "Choose a telemetry mode before closing release history.",
+    "mode": {
+      "off": "Telemetry off",
+      "minimal": "Minimal telemetry",
+      "enabled": "Help the dev"
+    },
+    "modeTooltipTitles": {
+      "off": "Telemetry off",
+      "minimal": "Minimal telemetry",
+      "enabled": "Help the dev"
+    },
+    "modeTooltips": {
+      "off": "No telemetry payloads are sent.",
+      "minimal": "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+      "enabled": "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings."
+    },
+    "modeDescriptions": {
+      "off": "No telemetry payloads are sent.",
+      "minimal": "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+      "enabled": "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings."
+    },
+    "panel": {
+      "title": "Telemetry",
+      "description": "Telemetry is anonymous coarse installation reporting. MediaLyze never sends file paths, media names, library names, search terms, raw ffprobe payloads, or scan diagnostics."
+    },
+    "preview": {
+      "title": "Payload preview",
+      "description": "Generate the anonymous payload shape that would be sent for each telemetry mode.",
+      "previewMinimal": "Preview minimal payload",
+      "previewEnabled": "Preview enabled payload",
+      "views": {
+        "last": "Last sent",
+        "minimal": "Example minimal",
+        "enabled": "Example full"
+      },
+      "jsonLabel": "Telemetry payload JSON preview",
+      "notLoaded": "Select a payload mode to generate a preview.",
+      "loading": "Loading telemetry payload preview...",
+      "empty": "No telemetry payload preview is available.",
+      "loadFailed": "Telemetry payload preview failed."
+    },
+    "stats": {
+      "title": "Public statistics",
+      "description": "MediaLyze has a public statistics page where you can view the telemetry data contributed by this installation and delete all data yourself by using your randomized installation ID.",
+      "openAria": "Open MediaLyze statistics page",
+      "installationIdLabel": "Own installation ID",
+      "installationIdMissing": "No installation ID has been created yet.",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "lastPayload": {
+      "title": "Last transmitted payload",
+      "jsonLabel": "Last transmitted telemetry payload JSON",
+      "none": "No user-visible telemetry payload has been sent yet.",
+      "noneAndOff": "No telemetry payload is available, and no telemetry will be sent while telemetry is off or disabled."
+    }
   },
   "quality": {
     "tooltipAria": "Show quality score breakdown",
