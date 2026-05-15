@@ -691,7 +691,7 @@ export function DashboardPage() {
                   availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={
-                    comparisonLoadingByPanel[panel.item.instanceId] ??
+                    Boolean(comparisonLoadingByPanel[panel.item.instanceId]) ||
                     (!comparisonByPanel[panel.item.instanceId] && !comparisonErrorByPanel[panel.item.instanceId])
                   }
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}

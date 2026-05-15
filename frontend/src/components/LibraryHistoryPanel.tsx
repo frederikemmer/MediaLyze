@@ -1,5 +1,4 @@
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Database, Frame, Hash, Percent } from "lucide-react";
-import { motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -222,8 +221,6 @@ export function LibraryHistoryPanel({
   const rangePickerRef = useRef<HTMLDivElement | null>(null);
   const pickerId = useId();
   const rangePickerId = useId();
-  const toggleId = useId();
-  const rangeToggleId = useId();
   const currentResolutionCategoryIdSet = useMemo(
     () => new Set(currentResolutionCategoryIds),
     [currentResolutionCategoryIds],
@@ -452,10 +449,8 @@ export function LibraryHistoryPanel({
                 const content = (
                   <>
                     {isActive ? (
-                      <motion.span
-                        layoutId={`library-history-range-pill-${rangeToggleId}`}
+                      <span
                         className="nav-active-pill library-history-range-pill"
-                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
                     <span className="library-history-range-button-content">
@@ -556,10 +551,8 @@ export function LibraryHistoryPanel({
                   title={t("distributionChart.countMode")}
                 >
                   {displayMode === "count" ? (
-                    <motion.span
-                      layoutId={`library-history-mode-pill-${toggleId}`}
+                    <span
                       className="nav-active-pill distribution-chart-mode-pill"
-                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                     />
                   ) : null}
                   <span className="distribution-chart-mode-button-content">
@@ -574,10 +567,8 @@ export function LibraryHistoryPanel({
                   title={t("distributionChart.percentMode")}
                 >
                   {displayMode === "percentage" ? (
-                    <motion.span
-                      layoutId={`library-history-mode-pill-${toggleId}`}
+                    <span
                       className="nav-active-pill distribution-chart-mode-pill"
-                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                     />
                   ) : null}
                   <span className="distribution-chart-mode-button-content">

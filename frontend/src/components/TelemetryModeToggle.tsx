@@ -1,6 +1,4 @@
 import { Wifi, WifiHigh, WifiOff, type LucideIcon } from "lucide-react";
-import { motion } from "motion/react";
-import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type TelemetryMode } from "../lib/api";
@@ -63,7 +61,6 @@ export function TelemetryModeToggle({
   onConfirmedModeClick,
 }: TelemetryModeToggleProps) {
   const { t } = useTranslation();
-  const toggleId = useId();
   const selectedMode = undecided || mode === "none" || mode === "initialized" ? null : mode;
 
   return (
@@ -92,10 +89,8 @@ export function TelemetryModeToggle({
             }}
           >
             {isSelected ? (
-              <motion.span
-                layoutId={`telemetry-mode-pill-${toggleId}`}
+              <span
                 className={`nav-active-pill telemetry-mode-pill ${option.className}`}
-                transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
               />
             ) : null}
             <span className="telemetry-mode-button-content">

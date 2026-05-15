@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
-import { motion } from "motion/react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -4389,10 +4388,8 @@ export function LibrariesPage() {
                     onClick={() => void selectTelemetryPayloadView("last")}
                   >
                     {telemetryPayloadView === "last" ? (
-                      <motion.span
-                        layoutId="telemetry-preview-view-pill"
+                      <span
                         className="nav-active-pill telemetry-preview-view-pill"
-                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
                     <span>{t("telemetry.preview.views.last")}</span>
@@ -4404,10 +4401,8 @@ export function LibrariesPage() {
                     onClick={() => void selectTelemetryPayloadView("minimal")}
                   >
                     {telemetryPayloadView === "minimal" ? (
-                      <motion.span
-                        layoutId="telemetry-preview-view-pill"
+                      <span
                         className="nav-active-pill telemetry-preview-view-pill"
-                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
                     <span>{t("telemetry.preview.views.minimal")}</span>
@@ -4419,10 +4414,8 @@ export function LibrariesPage() {
                     onClick={() => void selectTelemetryPayloadView("enabled")}
                   >
                     {telemetryPayloadView === "enabled" ? (
-                      <motion.span
-                        layoutId="telemetry-preview-view-pill"
+                      <span
                         className="nav-active-pill telemetry-preview-view-pill"
-                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
                     <span>{t("telemetry.preview.views.enabled")}</span>
@@ -4442,6 +4435,7 @@ export function LibrariesPage() {
           <AsyncPanel
             title={t("libraries.createTitle")}
             error={submitError}
+            className={!isLoadingLibraries && libraries.length === 0 ? "create-library-first-run-attention" : undefined}
             collapseState={{
               collapsed: !settingsPanelState.createLibrary,
               onToggle: () => toggleSettingsPanel("createLibrary"),

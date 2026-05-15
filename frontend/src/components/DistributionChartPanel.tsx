@@ -1,7 +1,6 @@
-import { lazy, Suspense, useId, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Hash, Percent } from "lucide-react";
-import { motion } from "motion/react";
 
 import type { NumericDistribution, NumericDistributionBin, NumericDistributionMetricId } from "../lib/api";
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
@@ -43,7 +42,6 @@ export function DistributionChartPanel({
 }: DistributionChartPanelProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<NumericDistributionDisplayMode>("count");
-  const toggleId = useId();
   const showTotalCopy = !METRICS_WITHOUT_TOTAL_COPY.has(metricId);
 
   return (
@@ -68,10 +66,8 @@ export function DistributionChartPanel({
                 title={t("distributionChart.countMode")}
               >
                 {mode === "count" ? (
-                  <motion.span
-                    layoutId={`distribution-chart-mode-pill-${toggleId}`}
+                  <span
                     className="nav-active-pill distribution-chart-mode-pill"
-                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                   />
                 ) : null}
                 <span className="distribution-chart-mode-button-content">
@@ -86,10 +82,8 @@ export function DistributionChartPanel({
                 title={t("distributionChart.percentMode")}
               >
                 {mode === "percentage" ? (
-                  <motion.span
-                    layoutId={`distribution-chart-mode-pill-${toggleId}`}
+                  <span
                     className="nav-active-pill distribution-chart-mode-pill"
-                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                   />
                 ) : null}
                 <span className="distribution-chart-mode-button-content">

@@ -1336,6 +1336,7 @@ export function LibraryDetailPage() {
   );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
+  const [knownHasVideoMetadata, setKnownHasVideoMetadata] = useState<boolean | undefined>(undefined);
   const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
   const [expandedGroupedSeriesIds, setExpandedGroupedSeriesIds] = useState<Record<number, boolean>>({});
   const [expandedGroupedSeasonKeys, setExpandedGroupedSeasonKeys] = useState<Record<string, boolean>>({});
@@ -1430,7 +1431,9 @@ export function LibraryDetailPage() {
   const activeLibraryType = displayLibrary?.type;
   const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
   const hasVideoMetadata =
-    libraryStatistics === null ? undefined : libraryStatistics.video_bit_depth_distribution.length > 0;
+    libraryStatistics === null
+      ? knownHasVideoMetadata
+      : libraryStatistics.video_bit_depth_distribution.length > 0;
   const supportsSeriesGrouping = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
@@ -2508,6 +2511,16 @@ export function LibraryDetailPage() {
   }, [sortKey, visibleColumns]);
 
   useEffect(() => {
+    setKnownHasVideoMetadata(undefined);
+  }, [libraryId]);
+
+  useEffect(() => {
+    if (libraryStatistics !== null) {
+      setKnownHasVideoMetadata(libraryStatistics.video_bit_depth_distribution.length > 0);
+    }
+  }, [libraryStatistics]);
+
+  useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups);
@@ -3160,7 +3173,7 @@ export function LibraryDetailPage() {
                   availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
                   loading={
-                    comparisonLoadingByPanel[panel.item.instanceId] ??
+                    Boolean(comparisonLoadingByPanel[panel.item.instanceId]) ||
                     (!comparisonByPanel[panel.item.instanceId] && !comparisonErrorByPanel[panel.item.instanceId])
                   }
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}

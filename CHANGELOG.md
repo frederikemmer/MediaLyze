@@ -7,10 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - notify users about new stable releases and let desktop builds download the latest installer
-- gently highlight the enabled telemetry option when release history opens automatically after an app update
-- treat development builds like the latest bundled stable release for automatic release-history opening and current-version highlighting
 - replace empty statistics-panel notices with a centered animated construction state and animate the release-history donation icon
-- force frontend HTML to revalidate after updates while keeping hashed assets cacheable
 - allow history, duplicates, and analyzed-files panels to grow in height more
 - add a table-based coverage for library modes, scan behavior, supported extensions/formats/codecs/HDR/subtitle handling, and unsupported-input behavior in `docs/supported_metadata.md`
 - split audio and video bit-depth statistics into explicit panels

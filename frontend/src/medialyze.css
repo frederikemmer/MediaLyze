@@ -237,7 +237,8 @@
   max-height: min(82vh, 760px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 16px;
+  row-gap: 11px;
+  column-gap: 16px;
   padding: 22px;
   border: 1px solid rgba(31, 28, 22, 0.08);
   border-radius: 18px;
@@ -252,7 +253,7 @@
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  align-items: start;
+  align-items: center;
 }
 
 .release-notes-header h2 {
@@ -305,7 +306,7 @@
 
 .release-notes-alert {
   grid-row: 2;
-  margin: 0;
+  margin: 11px 0 0;
 }
 
 .release-notes-icon-link,
@@ -3220,6 +3221,11 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-mode-button.telemetry-mode-enabled.is-update-attention {
+  animation: telemetry-enabled-update-attention 2.4s ease-in-out 2;
+}
+
+.icon-nav-button.is-first-library-attention,
+.create-library-first-run-attention {
   animation: telemetry-enabled-update-attention 2.4s ease-in-out 2;
 }
 

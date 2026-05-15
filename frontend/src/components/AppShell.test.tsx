@@ -90,6 +90,13 @@ afterEach(() => {
 });
 
 describe("AppShell", () => {
+  it("gently highlights settings while no library has been added yet", async () => {
+    renderShell();
+
+    await waitFor(() => expect(api.libraries).toHaveBeenCalled());
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveClass("is-first-library-attention");
+  });
+
   it("shows release notes for the current version until dismissed", async () => {
     renderShell();
 

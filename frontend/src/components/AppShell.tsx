@@ -81,6 +81,7 @@ export function AppShell() {
   const showTelemetryAttention =
     showReleaseNotes &&
     (showUpdateTelemetryAttention || (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled));
+  const showFirstLibraryAttention = librariesLoaded && libraries.length === 0;
 
   function dismissReleaseNotes() {
     if (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
@@ -210,7 +211,9 @@ export function AppShell() {
                 to="/settings"
                 end
                 aria-label={t("nav.settingsAria")}
-                className={({ isActive }) => `icon-nav-button ${isActive ? "active" : ""}`.trim()}
+                className={({ isActive }) =>
+                  `icon-nav-button ${isActive ? "active" : ""}${showFirstLibraryAttention ? " is-first-library-attention" : ""}`.trim()
+                }
               >
                 {({ isActive }) => (
                   <>

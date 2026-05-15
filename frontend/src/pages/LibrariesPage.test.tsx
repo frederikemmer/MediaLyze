@@ -1447,6 +1447,15 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("gently highlights the create-library panel while no library exists", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
+
+    renderPage();
+
+    await screen.findByText("Add first library");
+    expect(document.querySelector(".create-library-first-run-attention")).toHaveClass("async-panel");
+  });
+
   it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
