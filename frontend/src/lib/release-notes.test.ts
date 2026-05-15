@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY,
+  RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY,
   isFirstOpenAfterUpdate,
   getSeenReleaseVersion,
   isDevelopmentVersion,
@@ -81,10 +82,11 @@ describe("release notes", () => {
 
     markReleaseNotesSeen("1.2.3");
 
+    expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY)).toBe("1.2.3");
     expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY)).toBe("1.2.3");
     expect(shouldShowReleaseNotes("1.2.3", notes)).toBe(false);
     expect(shouldShowReleaseNotes("1.2.4", { ...notes, version: "1.2.4" })).toBe(true);
-    expect(shouldShowReleaseNotes("dev", notes)).toBe(false);
+    expect(shouldShowReleaseNotes("dev", notes)).toBe(true);
   });
 
   it("recognizes only a real first open after an update", () => {
@@ -92,10 +94,10 @@ describe("release notes", () => {
 
     expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
 
-    window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, "1.2.2");
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.2");
     expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(true);
 
-    window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, "1.2.3");
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.3");
     expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
   });
 
@@ -104,16 +106,19 @@ describe("release notes", () => {
 
     expect(isDevelopmentVersion("dev")).toBe(true);
     expect(isDevelopmentVersion("1.2.4-dev.7")).toBe(true);
+    expect(isDevelopmentVersion("1.2.4-dev007")).toBe(true);
     expect(getSeenReleaseVersion("dev", notes)).toBe("1.2.3");
     expect(getSeenReleaseVersion("1.2.4-dev.7", notes)).toBe("1.2.3");
 
-    window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, "1.2.2");
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.3-dev006");
     expect(shouldShowReleaseNotes("dev", notes)).toBe(true);
-    expect(isFirstOpenAfterUpdate("1.2.4-dev.7", notes)).toBe(true);
+    expect(shouldShowReleaseNotes("1.2.3-dev007", notes)).toBe(true);
+    expect(isFirstOpenAfterUpdate("1.2.3-dev007", notes)).toBe(true);
 
-    markReleaseNotesSeen("dev", notes);
+    markReleaseNotesSeen("1.2.3-dev007", notes);
+    expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY)).toBe("1.2.3-dev007");
     expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY)).toBe("1.2.3");
-    expect(shouldShowReleaseNotes("dev", notes)).toBe(false);
+    expect(shouldShowReleaseNotes("1.2.3-dev007", notes)).toBe(false);
   });
 
   it("prefers remote release notes while keeping older local notes", () => {

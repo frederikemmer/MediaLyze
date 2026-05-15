@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- notify users about newer stable releases, merge remote release notes into release history, and let desktop builds download the matching latest installer directly to the desktop
+- notify users about new stable releases and let desktop builds download the latest installer
 - gently highlight the enabled telemetry option when release history opens automatically after an app update
 - treat development builds like the latest bundled stable release for automatic release-history opening and current-version highlighting
 - allow history, duplicates, and analyzed-files panels to grow in height more

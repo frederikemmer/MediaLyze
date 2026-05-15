@@ -117,7 +117,7 @@ const PATTERN_RECOGNITION_SECTION_STORAGE_KEY = "medialyze-pattern-recognition-s
 const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState = {
   series_folder_regexes: true,
   season_folder_regexes: true,
-  bonus_folder_patterns: true,
+  bonus_folder_patterns: false,
 };
 
 const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";

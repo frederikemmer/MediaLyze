@@ -77,6 +77,9 @@ export function AppShell() {
     last_user_visible_payload: null,
   };
   const telemetryUndecided = telemetry.mode === "none" || telemetry.mode === "initialized";
+  const showTelemetryAttention =
+    showReleaseNotes &&
+    (showUpdateTelemetryAttention || (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled));
 
   function dismissReleaseNotes() {
     if (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
@@ -323,7 +326,7 @@ export function AppShell() {
                 ) : null}
                 <TelemetryModeToggle
                   compact
-                  highlightEnabledOption={showUpdateTelemetryAttention}
+                  highlightEnabledOption={showTelemetryAttention}
                   mode={telemetry.mode}
                   pendingMode={pendingTelemetryMode}
                   disabled={!appSettingsLoaded || Boolean(pendingTelemetryMode) || telemetry.environment_disabled}

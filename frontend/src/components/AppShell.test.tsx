@@ -107,6 +107,7 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
+    expect(window.localStorage.getItem("medialyze-release-notes-seen-app-version")).toBe("0.8.3");
     expect(window.localStorage.getItem("medialyze-release-notes-seen-version")).toBe("0.8.3");
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
@@ -144,7 +145,7 @@ describe("AppShell", () => {
   });
 
   it("gently highlights enabled telemetry only on the first automatic open after an update", async () => {
-    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.2");
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.2");
 
     renderShell();
 
@@ -157,8 +158,27 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Help the dev" })).not.toHaveClass("is-update-attention");
   });
 
+  it("gently highlights enabled telemetry on the first launch while telemetry is undecided", async () => {
+    vi.mocked(api.appSettings).mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "none",
+          environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Help the dev" })).toHaveClass("is-update-attention");
+  });
+
   it("does not show already dismissed release notes for the current version", async () => {
-    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
 
     renderShell();
 
@@ -171,7 +191,7 @@ describe("AppShell", () => {
   });
 
   it("shows newer remote releases beside the currently installed version", async () => {
-    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
     vi.mocked(api.updateStatus).mockResolvedValue({
       current_version: "0.8.3",
       latest_version: "0.9.0",
@@ -197,7 +217,7 @@ describe("AppShell", () => {
   });
 
   it("shows desktop download only when an update is available", async () => {
-    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
     const downloadLatestInstaller = vi.fn().mockResolvedValue({ ok: true });
     window.medialyzeDesktop = {
       isDesktop: () => true,
@@ -257,12 +277,12 @@ describe("AppShell", () => {
     );
     expect(screen.getByRole("button", { name: "Minimal telemetry" })).toHaveAttribute(
       "data-tooltip-body",
-      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+      "Tell the Dev which runtime/system you are using, nothing else.",
     );
     expect(enabledButton).toHaveAttribute("data-tooltip-title", "Help the dev");
     expect(enabledButton).toHaveAttribute(
       "data-tooltip-body",
-      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+      "Adds rounded usage counts and app settings to inform development. NO private data.",
     );
 
     fireEvent.click(enabledButton);

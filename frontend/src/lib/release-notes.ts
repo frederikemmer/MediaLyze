@@ -14,6 +14,7 @@ export type ReleaseNotes = {
 };
 
 export const RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY = "medialyze-release-notes-seen-version";
+export const RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY = "medialyze-release-notes-seen-app-version";
 
 export function normalizeReleaseVersion(version: string): string {
   return version.trim().replace(/^v/i, "");
@@ -21,7 +22,7 @@ export function normalizeReleaseVersion(version: string): string {
 
 export function isDevelopmentVersion(version: string): boolean {
   const normalizedVersion = normalizeReleaseVersion(version);
-  return normalizedVersion === "dev" || /(?:^|-)dev(?:[.+-].*)?$/i.test(normalizedVersion);
+  return normalizedVersion === "dev" || /(?:^|-)dev[0-9a-z.+-]*$/i.test(normalizedVersion);
 }
 
 function cleanMarkdownText(value: string): string {
@@ -136,15 +137,19 @@ export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNot
   if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== getSeenReleaseVersion(version, releaseNotes);
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
 }
 
 export function isFirstOpenAfterUpdate(version: string, releaseNotes: ReleaseNotes | null): boolean {
   if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
-  const seenVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY);
-  return Boolean(seenVersion && seenVersion !== getSeenReleaseVersion(version, releaseNotes));
+  const seenAppVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY);
+  if (seenAppVersion !== null) {
+    return seenAppVersion !== normalizeReleaseVersion(version);
+  }
+  // Legacy installs stored only the displayed release section. Treat that as a prior visit once.
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== null;
 }
 
 export function getSeenReleaseVersion(version: string, releaseNotes: ReleaseNotes | null): string {
@@ -155,5 +160,6 @@ export function markReleaseNotesSeen(version: string, releaseNotes: ReleaseNotes
   if (typeof window === "undefined") {
     return;
   }
+  window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
   window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, getSeenReleaseVersion(version, releaseNotes));
 }

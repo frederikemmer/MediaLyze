@@ -783,8 +783,8 @@
     },
     "modeTooltips": {
       "off": "No telemetry payloads are sent.",
-      "minimal": "Sends install/runtime/system details only. No usage statistics or app settings are included.",
-      "enabled": "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings."
+      "minimal": "Tell the Dev which runtime/system you are using, nothing else.",
+      "enabled": "Adds rounded usage counts and app settings to inform development. NO private data."
     },
     "modeDescriptions": {
       "off": "No telemetry payloads are sent.",

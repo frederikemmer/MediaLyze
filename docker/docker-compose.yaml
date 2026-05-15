@@ -2,6 +2,7 @@ services:
   medialyze:
     image: ghcr.io/frederikemmer/medialyze:latest
     container_name: medialyze
+    hostname: medialyze
     ports:
       - 8080:8080
     environment:
@@ -9,8 +10,8 @@ services:
       TZ: UTC
     volumes:
       - ./config:/config
-      # use .env or change "./media" to the path of your media directory
-      - ./media:/media:ro
+      - PATH/TO/MEDIA0:/media/MEDIA0:ro
 
-      # additional media mounts, if needed. Extend this pattern if needed:
+      # additional media mounts are managed as:
       # /PATH/TO/MEDIA1:/media/MEDIA1:ro
+      # /PATH/TO/MEDIA2:/media/MEDIA2:ro

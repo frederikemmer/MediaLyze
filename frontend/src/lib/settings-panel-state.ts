@@ -15,12 +15,12 @@ const STORAGE_KEY = "medialyze-settings-panel-state";
 const DEFAULT_STATE: SettingsPanelState = {
   configuredLibraries: true,
   historyRetention: true,
-  patternRecognition: true,
-  recentScanLogs: true,
-  resolutionCategories: true,
+  patternRecognition: false,
+  recentScanLogs: false,
+  resolutionCategories: false,
   createLibrary: true,
   appSettings: true,
-  telemetry: true,
+  telemetry: false,
 };
 
 function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
