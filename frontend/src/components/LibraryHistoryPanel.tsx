@@ -13,6 +13,7 @@ import {
 import { AsyncPanel } from "./AsyncPanel";
 import { HistoryTrendChart } from "./HistoryTrendChart";
 import { PanelEmptyState } from "./PanelEmptyState";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 type HistoryResponse = LibraryHistoryResponse | DashboardHistoryResponse;
 type HistoryRangeMode = "7d" | "30d" | "1y" | "all" | "custom";
@@ -440,6 +441,7 @@ export function LibraryHistoryPanel({
               role="group"
               aria-label={t("libraryDetail.history.controls.range")}
             >
+              <SlidingTogglePill activeKey={rangeSelection.mode} className="nav-active-pill library-history-range-pill" />
               {HISTORY_RANGE_OPTIONS.map((option) => {
                 const isActive = rangeSelection.mode === option.mode;
                 const label =
@@ -448,11 +450,6 @@ export function LibraryHistoryPanel({
                     : t(option.labelKey);
                 const content = (
                   <>
-                    {isActive ? (
-                      <span
-                        className="nav-active-pill library-history-range-pill"
-                      />
-                    ) : null}
                     <span className="library-history-range-button-content">
                       {option.mode === "custom" ? <CalendarDays aria-hidden="true" className="distribution-chart-mode-icon" /> : null}
                       <span>{label}</span>
@@ -464,6 +461,7 @@ export function LibraryHistoryPanel({
                     <div key={option.mode} ref={rangePickerRef} className="library-history-range-custom-shell">
                       <button
                         type="button"
+                        data-toggle-key="custom"
                         className={`library-history-range-button${isActive ? " active" : ""} library-history-range-button-custom`}
                         onClick={() => selectRangePreset(option.mode)}
                         aria-pressed={isActive}
@@ -528,6 +526,7 @@ export function LibraryHistoryPanel({
                   <button
                     key={option.mode}
                     type="button"
+                    data-toggle-key={option.mode}
                     className={`library-history-range-button${isActive ? " active" : ""}`}
                     onClick={() => selectRangePreset(option.mode)}
                     aria-pressed={isActive}
@@ -543,34 +542,27 @@ export function LibraryHistoryPanel({
                 role="group"
                 aria-label={t("distributionChart.displayMode")}
               >
+                <SlidingTogglePill activeKey={displayMode} className="nav-active-pill distribution-chart-mode-pill" />
                 <button
                   type="button"
+                  data-toggle-key="count"
                   className={`distribution-chart-mode-button${displayMode === "count" ? " active" : ""}`}
                   onClick={() => setDisplayMode("count")}
                   aria-label={t("distributionChart.countMode")}
                   title={t("distributionChart.countMode")}
                 >
-                  {displayMode === "count" ? (
-                    <span
-                      className="nav-active-pill distribution-chart-mode-pill"
-                    />
-                  ) : null}
                   <span className="distribution-chart-mode-button-content">
                     <Hash aria-hidden="true" className="distribution-chart-mode-icon" />
                   </span>
                 </button>
                 <button
                   type="button"
+                  data-toggle-key="percentage"
                   className={`distribution-chart-mode-button${displayMode === "percentage" ? " active" : ""}`}
                   onClick={() => setDisplayMode("percentage")}
                   aria-label={t("distributionChart.percentMode")}
                   title={t("distributionChart.percentMode")}
                 >
-                  {displayMode === "percentage" ? (
-                    <span
-                      className="nav-active-pill distribution-chart-mode-pill"
-                    />
-                  ) : null}
                   <span className="distribution-chart-mode-button-content">
                     <Percent aria-hidden="true" className="distribution-chart-mode-icon" />
                   </span>

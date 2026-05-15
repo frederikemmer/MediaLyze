@@ -6,6 +6,7 @@ import type { NumericDistribution, NumericDistributionBin, NumericDistributionMe
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
 import { AsyncPanel } from "./AsyncPanel";
 import { PanelEmptyState } from "./PanelEmptyState";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 const METRICS_WITHOUT_TOTAL_COPY = new Set<NumericDistributionMetricId>([
   "size",
@@ -58,34 +59,27 @@ export function DistributionChartPanel({
               role="group"
               aria-label={t("distributionChart.displayMode")}
             >
+              <SlidingTogglePill activeKey={mode} className="nav-active-pill distribution-chart-mode-pill" />
               <button
                 type="button"
+                data-toggle-key="count"
                 className={`distribution-chart-mode-button${mode === "count" ? " active" : ""}`}
                 onClick={() => setMode("count")}
                 aria-label={t("distributionChart.countMode")}
                 title={t("distributionChart.countMode")}
               >
-                {mode === "count" ? (
-                  <span
-                    className="nav-active-pill distribution-chart-mode-pill"
-                  />
-                ) : null}
                 <span className="distribution-chart-mode-button-content">
                   <Hash aria-hidden="true" className="distribution-chart-mode-icon" />
                 </span>
               </button>
               <button
                 type="button"
+                data-toggle-key="percentage"
                 className={`distribution-chart-mode-button${mode === "percentage" ? " active" : ""}`}
                 onClick={() => setMode("percentage")}
                 aria-label={t("distributionChart.percentMode")}
                 title={t("distributionChart.percentMode")}
               >
-                {mode === "percentage" ? (
-                  <span
-                    className="nav-active-pill distribution-chart-mode-pill"
-                  />
-                ) : null}
                 <span className="distribution-chart-mode-button-content">
                   <Percent aria-hidden="true" className="distribution-chart-mode-icon" />
                 </span>

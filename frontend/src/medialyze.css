@@ -1447,6 +1447,7 @@
 }
 
 .distribution-chart-mode-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1505,7 +1506,10 @@
 }
 
 .distribution-chart-mode-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .library-history-actions {
@@ -1533,6 +1537,7 @@
 }
 
 .library-history-range-toggle {
+  position: relative;
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -1599,8 +1604,11 @@
 }
 
 .library-history-range-pill {
-  inset: 2px;
+  inset: auto;
+  top: 0;
+  left: 0;
   border-radius: 8px;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .library-history-range-custom-shell {
@@ -3064,6 +3072,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-preview-actions {
+  position: relative;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3149,7 +3158,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-preview-view-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .telemetry-preview-view-button > span {
@@ -3158,6 +3170,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-mode-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3247,7 +3260,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-mode-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .telemetry-mode-pill.telemetry-mode-off {

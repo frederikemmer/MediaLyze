@@ -27,6 +27,7 @@ import {
   type TelemetryMode,
 } from "../lib/api";
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
+import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
@@ -4381,43 +4382,35 @@ export function LibrariesPage() {
                   </button>
                 </div>
                 <div className="telemetry-preview-actions">
+                  <SlidingTogglePill
+                    activeKey={telemetryPayloadView}
+                    className="nav-active-pill telemetry-preview-view-pill"
+                  />
                   <button
                     type="button"
+                    data-toggle-key="last"
                     className={`telemetry-preview-view-button${telemetryPayloadView === "last" ? " active" : ""}`}
                     aria-pressed={telemetryPayloadView === "last"}
                     onClick={() => void selectTelemetryPayloadView("last")}
                   >
-                    {telemetryPayloadView === "last" ? (
-                      <span
-                        className="nav-active-pill telemetry-preview-view-pill"
-                      />
-                    ) : null}
                     <span>{t("telemetry.preview.views.last")}</span>
                   </button>
                   <button
                     type="button"
+                    data-toggle-key="minimal"
                     className={`telemetry-preview-view-button${telemetryPayloadView === "minimal" ? " active" : ""}${loadingTelemetryPayloadView === "minimal" ? " is-loading" : ""}`}
                     aria-pressed={telemetryPayloadView === "minimal"}
                     onClick={() => void selectTelemetryPayloadView("minimal")}
                   >
-                    {telemetryPayloadView === "minimal" ? (
-                      <span
-                        className="nav-active-pill telemetry-preview-view-pill"
-                      />
-                    ) : null}
                     <span>{t("telemetry.preview.views.minimal")}</span>
                   </button>
                   <button
                     type="button"
+                    data-toggle-key="enabled"
                     className={`telemetry-preview-view-button${telemetryPayloadView === "enabled" ? " active" : ""}${loadingTelemetryPayloadView === "enabled" ? " is-loading" : ""}`}
                     aria-pressed={telemetryPayloadView === "enabled"}
                     onClick={() => void selectTelemetryPayloadView("enabled")}
                   >
-                    {telemetryPayloadView === "enabled" ? (
-                      <span
-                        className="nav-active-pill telemetry-preview-view-pill"
-                      />
-                    ) : null}
                     <span>{t("telemetry.preview.views.enabled")}</span>
                   </button>
                 </div>

@@ -2,6 +2,7 @@ import { Wifi, WifiHigh, WifiOff, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { type TelemetryMode } from "../lib/api";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 type SelectableTelemetryMode = "off" | "minimal" | "enabled";
 
@@ -64,7 +65,15 @@ export function TelemetryModeToggle({
   const selectedMode = undecided || mode === "none" || mode === "initialized" ? null : mode;
 
   return (
-    <div className={`telemetry-mode-toggle${compact ? " telemetry-mode-toggle-compact" : ""}`.trim()}>
+    <div
+      className={`telemetry-mode-toggle${compact ? " telemetry-mode-toggle-compact" : ""}`.trim()}
+    >
+      {selectedMode ? (
+        <SlidingTogglePill
+          activeKey={selectedMode}
+          className={`nav-active-pill telemetry-mode-pill telemetry-mode-${selectedMode}`}
+        />
+      ) : null}
       {OPTIONS.map((option) => {
         const Icon = option.icon;
         const isSelected = selectedMode === option.mode;
@@ -74,6 +83,7 @@ export function TelemetryModeToggle({
           <button
             key={option.mode}
             type="button"
+            data-toggle-key={option.mode}
             className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}${highlightEnabledOption && option.mode === "enabled" ? " is-update-attention" : ""}`.trim()}
             aria-label={label}
             aria-pressed={isSelected}
@@ -88,11 +98,6 @@ export function TelemetryModeToggle({
               onChange(option.mode);
             }}
           >
-            {isSelected ? (
-              <span
-                className={`nav-active-pill telemetry-mode-pill ${option.className}`}
-              />
-            ) : null}
             <span className="telemetry-mode-button-content">
               <Icon aria-hidden="true" className="nav-icon" />
               {!compact ? <span>{label}</span> : null}
