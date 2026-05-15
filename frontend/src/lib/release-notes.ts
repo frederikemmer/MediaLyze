@@ -19,6 +19,11 @@ export function normalizeReleaseVersion(version: string): string {
   return version.trim().replace(/^v/i, "");
 }
 
+export function isDevelopmentVersion(version: string): boolean {
+  const normalizedVersion = normalizeReleaseVersion(version);
+  return normalizedVersion === "dev" || /(?:^|-)dev(?:[.+-].*)?$/i.test(normalizedVersion);
+}
+
 function cleanMarkdownText(value: string): string {
   return value
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -30,7 +35,7 @@ function cleanMarkdownText(value: string): string {
 
 export function parseReleaseNotes(markdown: string, version: string): ReleaseNotes | null {
   const normalizedVersion = normalizeReleaseVersion(version);
-  if (!normalizedVersion || normalizedVersion === "dev") {
+  if (!normalizedVersion || isDevelopmentVersion(normalizedVersion)) {
     return null;
   }
 
@@ -95,6 +100,9 @@ export function parseAllReleaseNotes(markdown: string): ReleaseNotes[] {
 }
 
 export function getCurrentReleaseNotes(): ReleaseNotes | null {
+  if (isDevelopmentVersion(APP_VERSION)) {
+    return getAllReleaseNotes()[0] ?? null;
+  }
   return parseReleaseNotes(changelogMarkdown, APP_VERSION);
 }
 
@@ -125,23 +133,27 @@ export function mergeReleaseNotes(localNotes: ReleaseNotes[], remoteNotes: Relea
 }
 
 export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNotes | null): boolean {
-  if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
+  if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== getSeenReleaseVersion(version, releaseNotes);
 }
 
 export function isFirstOpenAfterUpdate(version: string, releaseNotes: ReleaseNotes | null): boolean {
-  if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
+  if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
   const seenVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY);
-  return Boolean(seenVersion && seenVersion !== normalizeReleaseVersion(version));
+  return Boolean(seenVersion && seenVersion !== getSeenReleaseVersion(version, releaseNotes));
 }
 
-export function markReleaseNotesSeen(version: string): void {
+export function getSeenReleaseVersion(version: string, releaseNotes: ReleaseNotes | null): string {
+  return isDevelopmentVersion(version) && releaseNotes ? releaseNotes.version : normalizeReleaseVersion(version);
+}
+
+export function markReleaseNotesSeen(version: string, releaseNotes: ReleaseNotes | null = null): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
+  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, getSeenReleaseVersion(version, releaseNotes));
 }

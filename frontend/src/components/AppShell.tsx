@@ -44,9 +44,9 @@ export function AppShell() {
   const { t } = useTranslation();
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
-  const currentReleaseVersion = normalizeReleaseVersion(APP_VERSION);
   const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
+  const currentReleaseVersion = releaseNotes?.version ?? normalizeReleaseVersion(APP_VERSION);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [showReleaseNotes, setShowReleaseNotes] = useState(() => shouldShowReleaseNotes(APP_VERSION, releaseNotes));
   const [showUpdateTelemetryAttention, setShowUpdateTelemetryAttention] = useState(
@@ -83,7 +83,7 @@ export function AppShell() {
       setTelemetryError(t("telemetry.releaseNotesChooseFirst"));
       return;
     }
-    markReleaseNotesSeen(APP_VERSION);
+    markReleaseNotesSeen(APP_VERSION, releaseNotes);
     setShowReleaseNotes(false);
     setShowUpdateTelemetryAttention(false);
   }
