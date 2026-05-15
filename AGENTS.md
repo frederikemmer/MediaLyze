@@ -914,6 +914,31 @@ Current release behavior:
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
 * when a new version is released, the relevant `vUnreleased` entries should be moved into the new version section instead of being rewritten from scratch
 
+## 13.4 Version Bump Workflow
+
+When preparing a new release version such as `0.11.1`, update the full release metadata set in one change:
+
+1. update the runtime version in `Dockerfile`
+2. update the Python package version in both `pyproject.toml` and the local `medialyze` package entry in `uv.lock`
+3. update the frontend version in both `frontend/package.json` and `frontend/package-lock.json`
+4. update the desktop version in both `desktop/package.json` and `desktop/package-lock.json`
+5. move the release-ready `CHANGELOG.md` entries from `vUnreleased` into a new `vX.Y.Z` section with the release date, leaving `vUnreleased` in place for future work
+
+After every version bump, run:
+
+```bash
+.venv/bin/python .github/scripts/release_metadata.py version
+.venv/bin/python .github/scripts/release_metadata.py validate
+.venv/bin/python -m pytest tests/test_release_metadata.py
+```
+
+The first command should print the intended version. The second command must pass before release work continues. The third command protects the existing release-metadata validator.
+
+Do not treat lockfiles as incidental churn during a version bump:
+
+* the `uv.lock` `medialyze` package version must match `pyproject.toml`
+* each `package-lock.json` root package version and root `packages[""].version` entry are release metadata and must match the paired `package.json`
+
 Important current nuance:
 
 * version files on `dev` are **not** the authoritative source for the latest public release history
@@ -987,6 +1012,7 @@ When updating documentation, code, or behavior in this repository:
 * if a change is relevant for the next release, add it to `CHANGELOG.md` under `vUnreleased`
 * when a changelog entry corresponds to a tracked GitHub issue, include the GitHub issue link in the `CHANGELOG.md` entry, for example `[#66](https://github.com/frederikemmer/MediaLyze/issues/66)`
 * when preparing or publishing a new version, move the accumulated `vUnreleased` entries into the new version section so the release history remains complete
+* when bumping a release version, update every version-bearing file listed in section 13.4, then run the validation commands there before finishing
 
 If documentation conflicts with code:
 
