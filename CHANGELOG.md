@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-### ✨ New
-
-### 🐛 Bug fixes
-
 ## v0.11.1
 
 >2026-05-15
