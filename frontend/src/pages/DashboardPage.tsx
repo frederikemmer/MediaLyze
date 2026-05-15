@@ -173,6 +173,7 @@ export function DashboardPage() {
   );
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [error, setError] = useState<string | null>(null);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const layoutOptions = useMemo(
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
     [appSettings.feature_flags.unlimited_panel_size],
@@ -277,9 +278,11 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
+    setIsDashboardLoading(true);
     loadDashboard(false, visibleDashboardPanelIds)
       .then(() => setError(null))
-      .catch((reason: Error) => setError(reason.message));
+      .catch((reason: Error) => setError(reason.message))
+      .finally(() => setIsDashboardLoading(false));
   }, [dashboardLoaded, loadDashboard, visibleDashboardPanelIdsKey]);
 
   const loadDashboardHistory = useEffectEvent(async (showLoading = false) => {
@@ -406,9 +409,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
+      setIsDashboardLoading(true);
       loadDashboard(true, visibleDashboardPanelIds)
         .then(() => setError(null))
-        .catch((reason: Error) => setError(reason.message));
+        .catch((reason: Error) => setError(reason.message))
+        .finally(() => setIsDashboardLoading(false));
       void loadDashboardHistory(false);
       for (const { item } of comparisonPanels) {
         const selection = normalizeComparisonSelectionForLibraryType(
@@ -685,7 +690,10 @@ export function DashboardPage() {
                   selection={selection}
                   availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
-                  loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
+                  loading={
+                    comparisonLoadingByPanel[panel.item.instanceId] ??
+                    (!comparisonByPanel[panel.item.instanceId] && !comparisonErrorByPanel[panel.item.instanceId])
+                  }
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
                   onChangeXField={(xField) =>
                     updateComparisonSelection(panel.item.instanceId, { ...selection, xField })
@@ -723,7 +731,7 @@ export function DashboardPage() {
                   distribution={distribution}
                   metricId={statisticDefinition.numericMetricId}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
-                  loading={!dashboard && !error}
+                  loading={(!dashboard || (isDashboardLoading && !distribution)) && !error}
                   error={error}
                 />
               );
@@ -753,7 +761,7 @@ export function DashboardPage() {
               content = (
                 <AsyncPanel
                   title={panelTitle}
-                  loading={!dashboard && !error}
+                  loading={(!dashboard || (isDashboardLoading && formattedItems.length === 0)) && !error}
                   error={error}
                   bodyClassName="async-panel-body-scroll"
                 >

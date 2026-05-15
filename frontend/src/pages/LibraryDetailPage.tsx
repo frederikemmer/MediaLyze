@@ -3159,7 +3159,10 @@ export function LibraryDetailPage() {
                   selection={selection}
                   availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
-                  loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
+                  loading={
+                    comparisonLoadingByPanel[panel.item.instanceId] ??
+                    (!comparisonByPanel[panel.item.instanceId] && !comparisonErrorByPanel[panel.item.instanceId])
+                  }
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
                   onChangeXField={(xField) =>
                     updateComparisonSelection(panel.item.instanceId, { ...selection, xField })

@@ -254,6 +254,64 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it("keeps empty dashboard panels in a loading state until their data request resolves", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "container", statisticId: "container", width: 1, height: 1 }],
+      }),
+    );
+    let resolveDashboard: ((payload: DashboardResponse) => void) | null = null;
+    const dashboardPromise = new Promise<DashboardResponse>((resolve) => {
+      resolveDashboard = resolve;
+    });
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockReturnValue(dashboardPromise);
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Loading...")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+
+    resolveDashboard?.(createDashboard());
+
+    expect(await screen.findByText("MKV")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+  });
+
+  it("keeps comparison panels loading until their first comparison response arrives", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    let resolveComparison: ((payload: ComparisonResponse) => void) | null = null;
+    const comparisonPromise = new Promise<ComparisonResponse>((resolve) => {
+      resolveComparison = resolve;
+    });
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockReturnValue(comparisonPromise);
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Loading...")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+
+    resolveComparison?.(createComparisonResponse());
+
+    expect(await screen.findByTestId("echarts-react")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+  });
+
   it("shows the dashboard title and persists inline layout changes", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());

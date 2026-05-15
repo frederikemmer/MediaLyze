@@ -76,7 +76,7 @@ const ConstructionIcon = forwardRef<ConstructionIconHandle, ConstructionIconProp
                 animate: {
                   x: [0, 6],
                   transition: {
-                    duration: 1,
+                    duration: 2,
                     ease: "linear",
                     repeat: Number.POSITIVE_INFINITY,
                     repeatType: "loop",
