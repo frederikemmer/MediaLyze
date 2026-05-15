@@ -4,19 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-- separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels
-- split audio and video bit-depth statistics into explicit panels, keep audio bit depth at one best-track value per file, and hide video bit depth where a library has no video metadata
-- allow history, duplicates, and analyzed-files panels to grow to eight grid rows while keeping each at a minimum height of two rows
-- refresh dashboard comparison panels when dashboard-visible libraries change so hidden-library assets do not remain in cached plots
-
 ### ✨ New
 
+- notify users about newer stable releases, merge remote release notes into release history, and let desktop builds download the matching latest installer directly to the desktop
+- allow history, duplicates, and analyzed-files panels to grow in height more
 - add a table-based coverage for library modes, scan behavior, supported extensions/formats/codecs/HDR/subtitle handling, and unsupported-input behavior in `docs/supported_metadata.md`
+- split audio and video bit-depth statistics into explicit panels
 
 ### 🐛 Bug fixes
 
 - allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` ([#132](https://github.com/frederikemmer/MediaLyze/issues/132))
-- split HEVC / H.265 codec statistics into bit-depth buckets (8-bit, 10-bit, unknown/other) so SDR 10-bit content is no longer grouped ambiguously, and add legacy-safe SQLite migration support for persisted video stream bit depth ([#129](https://github.com/frederikemmer/MediaLyze/issues/129))
+- separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels ([#129](https://github.com/frederikemmer/MediaLyze/issues/129))
 
 ## v0.11.0
 

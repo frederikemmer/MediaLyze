@@ -148,6 +148,23 @@ export type DashboardHistoryResponse = {
   visible_libraries: DashboardHistoryLibrary[];
 };
 
+export type UpdateReleaseNotes = {
+  version: string;
+  date: string | null;
+  sections: Array<{
+    title: string;
+    items: string[];
+  }>;
+};
+
+export type UpdateStatus = {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  checked_at: string | null;
+  release_notes: UpdateReleaseNotes[];
+};
+
 export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
@@ -955,6 +972,7 @@ function buildPanelQuery(panels?: readonly string[] | null): string {
 
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
+  updateStatus: () => request<UpdateStatus>("/update-status"),
   dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
   dashboardHistory: (signal?: AbortSignal) =>
     request<DashboardHistoryResponse>("/dashboard/history", { signal }),

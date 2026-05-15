@@ -4,6 +4,12 @@ type MediaLyzeDesktopBridge = {
   isDesktop: () => boolean;
   selectLibraryPaths: () => Promise<string[]>;
   openExternalUrl?: (url: string) => Promise<boolean>;
+  downloadLatestInstaller?: (version: string) => Promise<{
+    ok: boolean;
+    path?: string;
+    filename?: string;
+    error?: string;
+  }>;
 };
 
 interface Window {

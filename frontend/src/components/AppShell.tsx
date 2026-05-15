@@ -1,22 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bug, ChevronDown, ChevronRight, Gift, House, SearchX, Settings, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Download, Gift, House, SearchX, Settings, X } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { TelemetryModeToggle } from "./TelemetryModeToggle";
-import { api, type ScanJob, type TelemetryMode } from "../lib/api";
+import { api, type ScanJob, type TelemetryMode, type UpdateStatus } from "../lib/api";
 import { APP_VERSION } from "../lib/app-version";
 import { useAppData } from "../lib/app-data";
 import {
   getAllReleaseNotes,
   getCurrentReleaseNotes,
   markReleaseNotesSeen,
+  mergeReleaseNotes,
   normalizeReleaseVersion,
   shouldShowReleaseNotes,
   type ReleaseNotes,
 } from "../lib/release-notes";
+import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { useScanJobs } from "../lib/scan-jobs";
 
 const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
@@ -42,16 +44,28 @@ export function AppShell() {
   const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const currentReleaseVersion = normalizeReleaseVersion(APP_VERSION);
-  const [allReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
+  const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [showReleaseNotes, setShowReleaseNotes] = useState(() => shouldShowReleaseNotes(APP_VERSION, releaseNotes));
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
+  const [downloadState, setDownloadState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
+  const latestAvailableVersion = updateStatus?.latest_version ?? null;
+  const updateAvailable = APP_VERSION !== "dev" && Boolean(updateStatus?.update_available && latestAvailableVersion);
+  const allReleaseNotes = useMemo(() => {
+    const mergedReleaseNotes = mergeReleaseNotes(localReleaseNotes, updateStatus?.release_notes ?? []);
+    return updateAvailable &&
+      latestAvailableVersion &&
+      !mergedReleaseNotes.some((notes) => notes.version === latestAvailableVersion)
+      ? mergeReleaseNotes(mergedReleaseNotes, [{ version: latestAvailableVersion, date: null, sections: [] }])
+      : mergedReleaseNotes;
+  }, [latestAvailableVersion, localReleaseNotes, updateAvailable, updateStatus?.release_notes]);
   const showFullWidthAppShell = appSettings.feature_flags.show_full_width_app_shell;
   const telemetry = appSettings.telemetry ?? {
     mode: "none" as TelemetryMode,
@@ -82,11 +96,28 @@ export function AppShell() {
     }
   }
 
+  async function downloadLatestInstaller() {
+    if (!latestAvailableVersion) {
+      return;
+    }
+    const bridge = getDesktopBridge();
+    if (!bridge?.downloadLatestInstaller) {
+      return;
+    }
+    setDownloadState("loading");
+    try {
+      const result = await bridge.downloadLatestInstaller(latestAvailableVersion);
+      setDownloadState(result.ok ? "success" : "error");
+    } catch {
+      setDownloadState("error");
+    }
+  }
+
   function openReleaseNotes() {
     if (allReleaseNotes.length === 0) {
       return;
     }
-    setExpandedReleaseVersion(releaseNotes?.version ?? allReleaseNotes[0].version);
+    setExpandedReleaseVersion(updateAvailable && latestAvailableVersion ? latestAvailableVersion : releaseNotes?.version ?? allReleaseNotes[0].version);
     setShowReleaseNotes(true);
   }
 
@@ -96,6 +127,10 @@ export function AppShell() {
     }
     void loadLibraries().catch(() => undefined);
   }, [librariesLoaded, loadLibraries]);
+
+  useEffect(() => {
+    void api.updateStatus().then(setUpdateStatus).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!appSettingsLoaded || allReleaseNotes.length === 0) {
@@ -134,6 +169,9 @@ export function AppShell() {
             >
               {versionLabel}
             </button>
+            {updateAvailable && latestAvailableVersion ? (
+              <span className="app-version-update">{t("releaseNotes.updateAvailable", { version: latestAvailableVersion })}</span>
+            ) : null}
           </div>
           <nav className="media-nav-panel" aria-label="Primary">
             <div className="media-nav-icons">
@@ -258,6 +296,25 @@ export function AppShell() {
                 <h2 id="release-notes-title">{t("releaseNotes.title")}</h2>
               </div>
               <div className="release-notes-actions">
+                {isDesktopApp() && updateAvailable && latestAvailableVersion ? (
+                  <button
+                    type="button"
+                    className={`release-notes-download release-notes-download-${downloadState}`}
+                    disabled={downloadState === "loading"}
+                    onClick={() => void downloadLatestInstaller()}
+                  >
+                    <Download aria-hidden="true" className="nav-icon" />
+                    <span>
+                      {downloadState === "loading"
+                        ? t("releaseNotes.downloadLoading")
+                        : downloadState === "success"
+                          ? t("releaseNotes.downloadSuccess")
+                          : downloadState === "error"
+                            ? t("releaseNotes.downloadRetry", { version: latestAvailableVersion })
+                            : t("releaseNotes.download", { version: latestAvailableVersion })}
+                    </span>
+                  </button>
+                ) : null}
                 <TelemetryModeToggle
                   compact
                   mode={telemetry.mode}
@@ -319,9 +376,14 @@ export function AppShell() {
             <div className="release-notes-content">
               {allReleaseNotes.map((versionNotes) => {
                 const isExpanded = expandedReleaseVersion === versionNotes.version;
+                const isLatestAvailable = updateAvailable && versionNotes.version === latestAvailableVersion;
+                const isCurrentInstalled = versionNotes.version === currentReleaseVersion;
                 const ToggleIcon = isExpanded ? ChevronDown : ChevronRight;
                 return (
-                  <section key={versionNotes.version} className="release-notes-version">
+                  <section
+                    key={versionNotes.version}
+                    className={`release-notes-version${isLatestAvailable ? " release-notes-version-latest" : ""}${isCurrentInstalled ? " release-notes-version-current" : ""}`}
+                  >
                     <button
                       type="button"
                       className="release-notes-version-toggle"
@@ -335,8 +397,11 @@ export function AppShell() {
                     >
                       <span className="release-notes-version-title">
                         {t("releaseNotes.versionHeading", { version: versionNotes.version })}
-                        {versionNotes.version === currentReleaseVersion ? (
-                          <span className="release-notes-current-badge">{t("releaseNotes.current")}</span>
+                        {isLatestAvailable ? (
+                          <span className="release-notes-latest-badge">{t("releaseNotes.latestAvailable")}</span>
+                        ) : null}
+                        {isCurrentInstalled ? (
+                          <span className="release-notes-current-badge">{t("releaseNotes.currentInstalled")}</span>
                         ) : null}
                       </span>
                       <span className="release-notes-version-meta">

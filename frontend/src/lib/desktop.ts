@@ -2,6 +2,14 @@ export type DesktopBridge = {
   isDesktop: () => boolean;
   selectLibraryPaths: () => Promise<string[]>;
   openExternalUrl?: (url: string) => Promise<boolean>;
+  downloadLatestInstaller?: (version: string) => Promise<DesktopInstallerDownloadResult>;
+};
+
+export type DesktopInstallerDownloadResult = {
+  ok: boolean;
+  path?: string;
+  filename?: string;
+  error?: string;
 };
 
 export function getDesktopBridge(): DesktopBridge | null {

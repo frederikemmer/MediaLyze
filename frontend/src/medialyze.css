@@ -55,6 +55,15 @@
   opacity: 0.7;
 }
 
+.app-version-update {
+  position: relative;
+  top: -6px;
+  color: #9a4b00;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .media-nav-panel {
   display: flex;
   flex-wrap: wrap;
@@ -261,6 +270,39 @@
   gap: 8px;
 }
 
+.release-notes-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #0e6b62;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(14, 107, 98, 0.22);
+  animation: release-notes-download-pulse 1.8s ease-in-out infinite;
+}
+
+.release-notes-download:hover,
+.release-notes-download:focus-visible {
+  background: #0a5a53;
+}
+
+.release-notes-download-loading {
+  cursor: wait;
+}
+
+.release-notes-download-success {
+  animation: none;
+}
+
+@keyframes release-notes-download-pulse {
+  50% {
+    box-shadow: 0 10px 24px rgba(14, 107, 98, 0.34);
+  }
+}
+
 .release-notes-alert {
   grid-row: 2;
   margin: 0;
@@ -345,6 +387,15 @@
   background: rgba(255, 255, 255, 0.52);
 }
 
+.release-notes-version-latest {
+  border-color: rgba(197, 110, 17, 0.34);
+  background: rgba(255, 244, 227, 0.72);
+}
+
+.release-notes-version-current {
+  border-color: rgba(27, 153, 139, 0.34);
+}
+
 .release-notes-version-toggle {
   display: flex;
   align-items: center;
@@ -393,6 +444,18 @@
   border-radius: 999px;
   background: rgba(27, 153, 139, 0.14);
   color: #0e6b62;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.release-notes-latest-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(197, 110, 17, 0.16);
+  color: #9a4b00;
   font-size: 0.75rem;
   font-weight: 700;
 }

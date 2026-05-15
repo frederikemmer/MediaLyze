@@ -74,10 +74,18 @@ beforeEach(() => {
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "libraries").mockResolvedValue([]);
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "updateStatus").mockResolvedValue({
+    current_version: "0.8.3",
+    latest_version: "0.8.3",
+    update_available: false,
+    checked_at: null,
+    release_notes: [],
+  });
 });
 
 afterEach(() => {
   cleanup();
+  delete window.medialyzeDesktop;
   vi.restoreAllMocks();
 });
 
@@ -146,6 +154,58 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+  });
+
+  it("shows newer remote releases beside the currently installed version", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    vi.mocked(api.updateStatus).mockResolvedValue({
+      current_version: "0.8.3",
+      latest_version: "0.9.0",
+      update_available: true,
+      checked_at: "2026-05-15T00:00:00Z",
+      release_notes: [
+        {
+          version: "0.9.0",
+          date: "2026-05-15",
+          sections: [{ title: "New", items: ["remote update"] }],
+        },
+      ],
+    });
+
+    renderShell();
+
+    expect(await screen.findByText("Update available: v0.9.0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+
+    expect(await screen.findByText("New available")).toBeInTheDocument();
+    expect(screen.getByText("Currently installed")).toBeInTheDocument();
+    expect(screen.getByText("remote update")).toBeInTheDocument();
+  });
+
+  it("shows desktop download only when an update is available", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    const downloadLatestInstaller = vi.fn().mockResolvedValue({ ok: true });
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPaths: vi.fn(),
+      downloadLatestInstaller,
+    };
+    vi.mocked(api.updateStatus).mockResolvedValue({
+      current_version: "0.8.3",
+      latest_version: "0.9.0",
+      update_available: true,
+      checked_at: "2026-05-15T00:00:00Z",
+      release_notes: [],
+    });
+
+    renderShell();
+
+    expect(await screen.findByText("Update available: v0.9.0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download v0.9.0" }));
+
+    await waitFor(() => expect(downloadLatestInstaller).toHaveBeenCalledWith("0.9.0"));
+    expect(screen.getByRole("button", { name: "Downloaded" })).toBeInTheDocument();
   });
 
   it("updates telemetry mode from the release notes toggle", async () => {

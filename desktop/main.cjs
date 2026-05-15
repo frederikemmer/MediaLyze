@@ -1,9 +1,12 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const http = require("node:http");
+const https = require("node:https");
+const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { resolveFfprobePath } = require("./ffprobe-paths.cjs");
+const { buildLatestInstallerDownload, isAllowedInstallerDownloadUrl } = require("./update-download.cjs");
 
 let mainWindow = null;
 let backendProcess = null;
@@ -206,6 +209,63 @@ ipcMain.handle("medialyze:open-external-url", async (_event, url) => {
   }
   await shell.openExternal(parsed.toString());
   return true;
+});
+
+function downloadToFile(url, destinationPath, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    if (!isAllowedInstallerDownloadUrl(url)) {
+      reject(new Error("Installer URL is not allowed"));
+      return;
+    }
+    downloadUrlToFile(url, destinationPath, redirectsLeft, resolve, reject);
+  });
+}
+
+function downloadUrlToFile(url, destinationPath, redirectsLeft, resolve, reject) {
+  const request = https.get(url, (response) => {
+    if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+      if (redirectsLeft <= 0) {
+        reject(new Error("Too many installer download redirects"));
+        return;
+      }
+      const redirectedUrl = new URL(response.headers.location, url).toString();
+      if (!redirectedUrl.startsWith("https://")) {
+        reject(new Error("Installer redirect is not HTTPS"));
+        return;
+      }
+      response.resume();
+      downloadUrlToFile(redirectedUrl, destinationPath, redirectsLeft - 1, resolve, reject);
+      return;
+    }
+    if (response.statusCode !== 200) {
+      response.resume();
+      reject(new Error(`Installer download failed with HTTP ${response.statusCode}`));
+      return;
+    }
+    const file = fs.createWriteStream(destinationPath);
+    response.pipe(file);
+    file.on("finish", () => file.close(resolve));
+    file.on("error", reject);
+  });
+  request.on("error", reject);
+}
+
+ipcMain.handle("medialyze:download-latest-installer", async (_event, version) => {
+  if (typeof version !== "string") {
+    return { ok: false, error: "Invalid target version" };
+  }
+  const download = buildLatestInstallerDownload(process.platform, version);
+  if (!download) {
+    return { ok: false, error: "No installer available for this platform or version" };
+  }
+  const destinationPath = path.join(app.getPath("desktop"), download.filename);
+  try {
+    await downloadToFile(download.url, destinationPath);
+    return { ok: true, path: destinationPath, filename: download.filename };
+  } catch (error) {
+    await fs.promises.rm(destinationPath, { force: true });
+    return { ok: false, error: String(error) };
+  }
 });
 
 async function launchDesktopApp() {

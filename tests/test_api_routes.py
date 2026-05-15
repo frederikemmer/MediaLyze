@@ -10,6 +10,7 @@ from backend.app.api.deps import get_app_settings, get_db_session
 from backend.app.api.routes import router
 from backend.app.db.base import Base
 from backend.app.models.entities import (
+    AppSetting,
     AudioStream,
     DuplicateDetectionMode,
     ExternalSubtitle,
@@ -39,6 +40,7 @@ from backend.app.schemas.history import (
 from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
+from backend.app.services.update_status import UPDATE_STATUS_KEY
 
 
 def _build_test_app(db: Session) -> TestClient:
@@ -86,6 +88,42 @@ def _build_test_app(db: Session) -> TestClient:
 
     app.state.scan_runtime = TestScanRuntime()
     return TestClient(app)
+
+
+def test_update_status_returns_persisted_latest_release() -> None:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key=UPDATE_STATUS_KEY,
+                value={
+                    "latest_version": "9.9.9",
+                    "checked_at": "2026-05-15T00:00:00+00:00",
+                    "release_notes": [
+                        {
+                            "version": "9.9.9",
+                            "date": "2026-05-15",
+                            "sections": [{"title": "New", "items": ["entry"]}],
+                        }
+                    ],
+                },
+            )
+        )
+        db.commit()
+        response = _build_test_app(db).get("/api/update-status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_version"] == "9.9.9"
+    assert payload["update_available"] is True
+    assert payload["release_notes"][0]["version"] == "9.9.9"
 
 
 def test_library_files_export_csv_returns_404_for_unknown_library() -> None:

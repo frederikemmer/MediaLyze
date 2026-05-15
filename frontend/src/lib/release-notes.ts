@@ -102,6 +102,28 @@ export function getAllReleaseNotes(): ReleaseNotes[] {
   return parseAllReleaseNotes(changelogMarkdown);
 }
 
+export function compareReleaseVersions(left: string, right: string): number {
+  const leftParts = normalizeReleaseVersion(left).split(".").map(Number);
+  const rightParts = normalizeReleaseVersion(right).split(".").map(Number);
+  if (leftParts.length !== 3 || rightParts.length !== 3 || [...leftParts, ...rightParts].some(Number.isNaN)) {
+    return 0;
+  }
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) {
+      return leftParts[index] - rightParts[index];
+    }
+  }
+  return 0;
+}
+
+export function mergeReleaseNotes(localNotes: ReleaseNotes[], remoteNotes: ReleaseNotes[]): ReleaseNotes[] {
+  const notesByVersion = new Map(localNotes.map((notes) => [notes.version, notes]));
+  for (const notes of remoteNotes) {
+    notesByVersion.set(notes.version, notes);
+  }
+  return [...notesByVersion.values()].sort((left, right) => compareReleaseVersions(right.version, left.version));
+}
+
 export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNotes | null): boolean {
   if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
     return false;

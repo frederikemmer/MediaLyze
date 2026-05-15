@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY,
   markReleaseNotesSeen,
+  mergeReleaseNotes,
   parseAllReleaseNotes,
   parseReleaseNotes,
   shouldShowReleaseNotes,
@@ -81,5 +82,24 @@ describe("release notes", () => {
     expect(shouldShowReleaseNotes("1.2.3", notes)).toBe(false);
     expect(shouldShowReleaseNotes("1.2.4", { ...notes, version: "1.2.4" })).toBe(true);
     expect(shouldShowReleaseNotes("dev", notes)).toBe(false);
+  });
+
+  it("prefers remote release notes while keeping older local notes", () => {
+    expect(
+      mergeReleaseNotes(
+        [
+          { version: "1.2.3", date: null, sections: [{ title: "Local", items: ["local current"] }] },
+          { version: "1.2.2", date: null, sections: [{ title: "Local", items: ["older"] }] },
+        ],
+        [
+          { version: "1.2.4", date: null, sections: [{ title: "Remote", items: ["newer"] }] },
+          { version: "1.2.3", date: null, sections: [{ title: "Remote", items: ["remote current"] }] },
+        ],
+      ),
+    ).toEqual([
+      { version: "1.2.4", date: null, sections: [{ title: "Remote", items: ["newer"] }] },
+      { version: "1.2.3", date: null, sections: [{ title: "Remote", items: ["remote current"] }] },
+      { version: "1.2.2", date: null, sections: [{ title: "Local", items: ["older"] }] },
+    ]);
   });
 });

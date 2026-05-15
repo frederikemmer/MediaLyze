@@ -348,6 +348,30 @@ describe("DashboardPage", () => {
     expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
   });
 
+  it("can expand dashboard history beyond four rows while editing the layout", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        version: 3,
+        items: [{ instanceId: "history", statisticId: "history", width: 4, height: 4 }],
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Historic data" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand panel height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toContain("\"height\":5");
+  });
+
   it("reloads comparison data when the visible dashboard libraries change", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());

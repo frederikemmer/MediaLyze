@@ -872,6 +872,32 @@ describe("LibraryDetailPage", () => {
     );
   });
 
+  it("can expand analyzed files beyond four rows while editing the library layout", async () => {
+    const libraryId = 1181;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 3,
+        items: [{ instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+    expect(await screen.findByRole("heading", { level: 2, name: "Analyzed files" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand panel height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"height\":5",
+    );
+  });
+
   it("restores the expanded default layout including history, duplicates, and analyzed files", async () => {
     const libraryId = 119;
     window.localStorage.setItem(
