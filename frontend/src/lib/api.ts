@@ -219,6 +219,7 @@ export type DashboardResponse = {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
+  video_bit_depth_distribution: DistributionItem[];
   bit_depth_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
@@ -254,6 +255,7 @@ export type LibraryStatistics = {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
+  video_bit_depth_distribution: DistributionItem[];
   bit_depth_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];

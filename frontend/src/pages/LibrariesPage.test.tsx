@@ -343,6 +343,7 @@ function createDashboard(overrides: Partial<DashboardResponse> = {}): DashboardR
     video_codec_distribution: [],
     resolution_distribution: [],
     hdr_distribution: [],
+    video_bit_depth_distribution: [],
     bit_depth_distribution: [],
     audio_codec_distribution: [],
     audio_spatial_profile_distribution: [],

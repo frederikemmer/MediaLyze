@@ -52,6 +52,7 @@ _MUSIC_HIDDEN_PANEL_IDS = {
     "video_codec",
     "resolution",
     "hdr_type",
+    "video_bit_depth",
     "audio_bitrate",
     "subtitle_languages",
     "subtitle_codecs",
@@ -419,7 +420,7 @@ def get_library_statistics(
     app_settings = load_app_settings(db)
     primary_video_streams = (
         primary_video_streams_subquery("library_primary_video_streams")
-        if wants("video_codec") or wants("resolution") or wants("hdr_type")
+        if wants("video_codec") or wants("resolution") or wants("hdr_type") or wants("video_bit_depth")
         else None
     )
     container_distribution = (
@@ -483,6 +484,20 @@ def get_library_statistics(
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
         if primary_video_streams is not None and wants("hdr_type")
+        else []
+    )
+    video_bit_depth_distribution = (
+        db.execute(
+            select(
+                primary_video_streams.c.bit_depth,
+                func.count(primary_video_streams.c.id),
+            )
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+            .where(MediaFile.library_id == library_id)
+            .group_by(primary_video_streams.c.bit_depth)
+            .order_by(func.count(primary_video_streams.c.id).desc())
+        ).all()
+        if primary_video_streams is not None and wants("video_bit_depth")
         else []
     )
 
@@ -671,6 +686,15 @@ def get_library_statistics(
             resolution_categories=app_settings.resolution_categories,
         ),
         hdr_distribution=_distribution_items(hdr_distribution, fallback="SDR"),
+        video_bit_depth_distribution=[
+            DistributionItem(
+                label=f"{label}-bit" if label is not None else "unknown",
+                value=value,
+                filter_value=str(label) if label is not None else None,
+            )
+            for label, value in video_bit_depth_distribution
+            if value > 0
+        ],
         bit_depth_distribution=[
             DistributionItem(label=f"{label}-bit", value=value, filter_value=str(label))
             for label, value in bit_depth_distribution

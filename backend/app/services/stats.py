@@ -108,7 +108,7 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
 
     primary_video_streams = (
         primary_video_streams_subquery()
-        if wants("video_codec") or wants("resolution") or wants("hdr_type")
+        if wants("video_codec") or wants("resolution") or wants("hdr_type") or wants("video_bit_depth")
         else None
     )
     app_settings = get_app_settings(db)
@@ -191,6 +191,20 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
         if primary_video_streams is not None and wants("hdr_type")
+        else []
+    )
+    video_bit_depth_rows = (
+        db.execute(
+            select(
+                primary_video_streams.c.bit_depth,
+                func.count(primary_video_streams.c.id),
+            )
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .group_by(primary_video_streams.c.bit_depth)
+            .order_by(func.count(primary_video_streams.c.id).desc())
+        ).all()
+        if primary_video_streams is not None and wants("video_bit_depth")
         else []
     )
 
@@ -378,6 +392,15 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             app_settings.resolution_categories,
         ),
         hdr_distribution=_distribution(hdr_rows, fallback="SDR"),
+        video_bit_depth_distribution=[
+            DistributionItem(
+                label=f"{label}-bit" if label is not None else "unknown",
+                value=value,
+                filter_value=str(label) if label is not None else None,
+            )
+            for label, value in video_bit_depth_rows
+            if value > 0
+        ],
         bit_depth_distribution=[
             DistributionItem(label=f"{label}-bit", value=value, filter_value=str(label))
             for label, value in bit_depth_rows

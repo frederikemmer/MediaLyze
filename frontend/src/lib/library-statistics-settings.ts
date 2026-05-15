@@ -13,6 +13,7 @@ export type LibraryStatisticId =
   | "container"
   | "video_codec"
   | "resolution"
+  | "video_bit_depth"
   | "hdr_type"
   | "duration"
   | "audio_codecs"
@@ -30,6 +31,7 @@ type LibraryStatisticPanelDataKey =
   | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
+  | "video_bit_depth_distribution"
   | "hdr_distribution"
   | "bit_depth_distribution"
   | "audio_codec_distribution"
@@ -43,6 +45,7 @@ type DashboardStatisticPanelDataKey =
   | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
+  | "video_bit_depth_distribution"
   | "hdr_distribution"
   | "bit_depth_distribution"
   | "audio_codec_distribution"
@@ -93,6 +96,7 @@ const STORAGE_KEY = "medialyze-library-statistics-settings";
 const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
   "video_codec",
   "resolution",
+  "video_bit_depth",
   "hdr_type",
   "bitrate",
   "audio_bitrate",
@@ -196,8 +200,24 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     dashboardDataKey: "resolution_distribution",
   },
   {
-    id: "hdr_type",
+    id: "video_bit_depth",
     nameKey: "libraryStatistics.items.dynamicRange",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: true,
+    panelTitleKey: "libraryDetail.dynamicRange",
+    panelDataKey: "video_bit_depth_distribution",
+    dashboardTitleKey: "dashboard.dynamicRange",
+    dashboardDataKey: "video_bit_depth_distribution",
+  },
+  {
+    id: "hdr_type",
+    nameKey: "libraryStatistics.items.hdrProfile",
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
@@ -206,10 +226,10 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
-    panelTitleKey: "libraryDetail.hdrCoverage",
+    panelTitleKey: "libraryDetail.hdrProfile",
     panelDataKey: "hdr_distribution",
     tableColumnKey: "hdr_type",
-    dashboardTitleKey: "dashboard.hdrCoverage",
+    dashboardTitleKey: "dashboard.hdrProfile",
     dashboardDataKey: "hdr_distribution",
   },
   {

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels
+
 ### ✨ New
 
 - add a table-based coverage for library modes, scan behavior, supported extensions/formats/codecs/HDR/subtitle handling, and unsupported-input behavior in `docs/supported_metadata.md`

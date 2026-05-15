@@ -53,6 +53,7 @@ function createDashboard(): DashboardResponse {
     video_codec_distribution: [{ label: "hevc", value: 10 }],
     resolution_distribution: [{ label: "4k", value: 5 }],
     hdr_distribution: [{ label: "HDR10", value: 3 }],
+    video_bit_depth_distribution: [{ label: "10-bit", value: 3, filter_value: "10" }],
     bit_depth_distribution: [{ label: "24-bit", value: 4, filter_value: "24" }],
     audio_codec_distribution: [{ label: "eac3", value: 8 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 4 }],

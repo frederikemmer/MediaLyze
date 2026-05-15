@@ -75,7 +75,7 @@ def test_dashboard_counts_primary_video_only() -> None:
     assert all(item.label != "hevc" for item in dashboard.video_codec_distribution)
 
 
-def test_dashboard_splits_hevc_distribution_by_video_bit_depth() -> None:
+def test_dashboard_keeps_video_codec_and_video_bit_depth_distributions_separate() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -138,9 +138,12 @@ def test_dashboard_splits_hevc_distribution_by_video_bit_depth() -> None:
         dashboard = build_dashboard(db)
 
     assert [item.model_dump(exclude_none=True) for item in dashboard.video_codec_distribution] == [
-        {"label": "hevc_10bit", "value": 1, "filter_value": "hevc"},
-        {"label": "hevc_8bit", "value": 1, "filter_value": "hevc"},
-        {"label": "hevc_unknown_bit_depth", "value": 1, "filter_value": "hevc"},
+        {"label": "hevc", "value": 3},
+    ]
+    assert [item.model_dump(exclude_none=True) for item in dashboard.video_bit_depth_distribution] == [
+        {"label": "10-bit", "value": 1, "filter_value": "10"},
+        {"label": "8-bit", "value": 1, "filter_value": "8"},
+        {"label": "unknown", "value": 1},
     ]
 
 

@@ -97,6 +97,7 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     video_codec_distribution: [{ label: "h264", value: 2 }],
     resolution_distribution: [{ label: "1920x1080", value: 2 }],
     hdr_distribution: [{ label: "SDR", value: 2 }],
+    video_bit_depth_distribution: [{ label: "8-bit", value: 2, filter_value: "8" }],
     bit_depth_distribution: [{ label: "24-bit", value: 2, filter_value: "24" }],
     audio_codec_distribution: [{ label: "aac", value: 2 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 1 }],
@@ -1863,7 +1864,7 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by resolution: 1920x1080/i }));
-    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by dynamic range: hdr10/i }));
+    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by hdr profile: hdr10/i }));
 
     await waitFor(() =>
       expect(libraryFilesSpy).toHaveBeenLastCalledWith(
@@ -2094,7 +2095,7 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by HDR profile: Dolby Vision" }));
 
     expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("dv");
     await waitFor(() =>
@@ -2136,7 +2137,7 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision Profile 8.1" }),
+      screen.getByRole("button", { name: "Filter analyzed files by HDR profile: Dolby Vision Profile 8.1" }),
     );
 
     expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision Profile 8.1");

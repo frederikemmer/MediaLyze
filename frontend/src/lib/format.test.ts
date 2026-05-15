@@ -15,17 +15,6 @@ describe("formatCodecLabel", () => {
     expect(formatCodecLabel("h264", "video")).toBe("H.264 / AVC");
   });
 
-  it("formats HEVC 8-bit distribution buckets", () => {
-    expect(formatCodecLabel("hevc_8bit", "video")).toBe("H.265 / HEVC (8-bit)");
-  });
-
-  it("formats HEVC 10-bit distribution buckets", () => {
-    expect(formatCodecLabel("hevc_10bit", "video")).toBe("H.265 / HEVC (10-bit)");
-  });
-
-  it("formats unknown HEVC bit-depth distribution buckets", () => {
-    expect(formatCodecLabel("hevc_unknown_bit_depth", "video")).toBe("H.265 / HEVC (unknown bit depth)");
-  });
 });
 
 describe("formatDuration", () => {

@@ -30,6 +30,7 @@ describe("library statistics settings", () => {
     expect(settings.visibility.audio_bitrate.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
+    expect(settings.visibility.video_bit_depth.panelEnabled).toBe(true);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
@@ -78,6 +79,7 @@ describe("library statistics settings", () => {
       "comparison",
       "video_codec",
       "resolution",
+      "video_bit_depth",
       "hdr_type",
       "duration",
       "container",
