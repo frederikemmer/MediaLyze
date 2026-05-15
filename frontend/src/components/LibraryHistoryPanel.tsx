@@ -1,5 +1,4 @@
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Database, Frame, Hash, Percent } from "lucide-react";
-import { motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +12,8 @@ import {
 } from "../lib/history-metrics";
 import { AsyncPanel } from "./AsyncPanel";
 import { HistoryTrendChart } from "./HistoryTrendChart";
+import { PanelEmptyState } from "./PanelEmptyState";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 type HistoryResponse = LibraryHistoryResponse | DashboardHistoryResponse;
 type HistoryRangeMode = "7d" | "30d" | "1y" | "all" | "custom";
@@ -199,7 +200,6 @@ export function LibraryHistoryPanel({
   currentResolutionCategoryIds,
   title,
   subtitle,
-  emptyMessage,
   metricLabel,
   rangeStorageKey = DEFAULT_HISTORY_RANGE_STORAGE_KEY,
   bodyId = "library-history-panel-body",
@@ -222,8 +222,6 @@ export function LibraryHistoryPanel({
   const rangePickerRef = useRef<HTMLDivElement | null>(null);
   const pickerId = useId();
   const rangePickerId = useId();
-  const toggleId = useId();
-  const rangeToggleId = useId();
   const currentResolutionCategoryIdSet = useMemo(
     () => new Set(currentResolutionCategoryIds),
     [currentResolutionCategoryIds],
@@ -443,6 +441,7 @@ export function LibraryHistoryPanel({
               role="group"
               aria-label={t("libraryDetail.history.controls.range")}
             >
+              <SlidingTogglePill activeKey={rangeSelection.mode} className="nav-active-pill library-history-range-pill" />
               {HISTORY_RANGE_OPTIONS.map((option) => {
                 const isActive = rangeSelection.mode === option.mode;
                 const label =
@@ -451,13 +450,6 @@ export function LibraryHistoryPanel({
                     : t(option.labelKey);
                 const content = (
                   <>
-                    {isActive ? (
-                      <motion.span
-                        layoutId={`library-history-range-pill-${rangeToggleId}`}
-                        className="nav-active-pill library-history-range-pill"
-                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-                      />
-                    ) : null}
                     <span className="library-history-range-button-content">
                       {option.mode === "custom" ? <CalendarDays aria-hidden="true" className="distribution-chart-mode-icon" /> : null}
                       <span>{label}</span>
@@ -469,6 +461,7 @@ export function LibraryHistoryPanel({
                     <div key={option.mode} ref={rangePickerRef} className="library-history-range-custom-shell">
                       <button
                         type="button"
+                        data-toggle-key="custom"
                         className={`library-history-range-button${isActive ? " active" : ""} library-history-range-button-custom`}
                         onClick={() => selectRangePreset(option.mode)}
                         aria-pressed={isActive}
@@ -533,6 +526,7 @@ export function LibraryHistoryPanel({
                   <button
                     key={option.mode}
                     type="button"
+                    data-toggle-key={option.mode}
                     className={`library-history-range-button${isActive ? " active" : ""}`}
                     onClick={() => selectRangePreset(option.mode)}
                     aria-pressed={isActive}
@@ -548,38 +542,27 @@ export function LibraryHistoryPanel({
                 role="group"
                 aria-label={t("distributionChart.displayMode")}
               >
+                <SlidingTogglePill activeKey={displayMode} className="nav-active-pill distribution-chart-mode-pill" />
                 <button
                   type="button"
+                  data-toggle-key="count"
                   className={`distribution-chart-mode-button${displayMode === "count" ? " active" : ""}`}
                   onClick={() => setDisplayMode("count")}
                   aria-label={t("distributionChart.countMode")}
                   title={t("distributionChart.countMode")}
                 >
-                  {displayMode === "count" ? (
-                    <motion.span
-                      layoutId={`library-history-mode-pill-${toggleId}`}
-                      className="nav-active-pill distribution-chart-mode-pill"
-                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-                    />
-                  ) : null}
                   <span className="distribution-chart-mode-button-content">
                     <Hash aria-hidden="true" className="distribution-chart-mode-icon" />
                   </span>
                 </button>
                 <button
                   type="button"
+                  data-toggle-key="percentage"
                   className={`distribution-chart-mode-button${displayMode === "percentage" ? " active" : ""}`}
                   onClick={() => setDisplayMode("percentage")}
                   aria-label={t("distributionChart.percentMode")}
                   title={t("distributionChart.percentMode")}
                 >
-                  {displayMode === "percentage" ? (
-                    <motion.span
-                      layoutId={`library-history-mode-pill-${toggleId}`}
-                      className="nav-active-pill distribution-chart-mode-pill"
-                      transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-                    />
-                  ) : null}
                   <span className="distribution-chart-mode-button-content">
                     <Percent aria-hidden="true" className="distribution-chart-mode-icon" />
                   </span>
@@ -652,7 +635,7 @@ export function LibraryHistoryPanel({
       }}
     >
       {!history || history.points.length === 0 ? (
-        <div className="notice">{emptyMessage ?? t("libraryDetail.history.empty")}</div>
+        <PanelEmptyState />
       ) : filteredHistoryPoints.length === 0 ? (
         <div className="notice">{t("libraryDetail.history.range.empty")}</div>
       ) : (

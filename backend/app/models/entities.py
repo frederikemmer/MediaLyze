@@ -81,7 +81,7 @@ class Library(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    path: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
+    path: Mapped[str] = mapped_column(String(2048), nullable=False)
     type: Mapped[LibraryType] = mapped_column(SqlEnum(LibraryType, native_enum=False), nullable=False)
     last_scan_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     scan_mode: Mapped[ScanMode] = mapped_column(
@@ -337,6 +337,7 @@ class VideoStream(Base):
     __tablename__ = "video_streams"
     __table_args__ = (
         Index("ix_video_streams_codec", "codec"),
+        Index("ix_video_streams_bit_depth", "bit_depth"),
         Index("ix_video_streams_resolution", "width", "height"),
         Index("ix_video_streams_hdr_type", "hdr_type"),
         Index("ix_video_streams_media_file_stream_index", "media_file_id", "stream_index"),
@@ -355,6 +356,7 @@ class VideoStream(Base):
     color_primaries: Mapped[str | None] = mapped_column(String(64), nullable=True)
     frame_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     bit_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hdr_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     media_file: Mapped[MediaFile] = relationship(back_populates="video_streams")

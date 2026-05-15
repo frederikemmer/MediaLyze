@@ -14,6 +14,7 @@ describe("formatCodecLabel", () => {
   it("formats common video codec identifiers into readable labels", () => {
     expect(formatCodecLabel("h264", "video")).toBe("H.264 / AVC");
   });
+
 });
 
 describe("formatDuration", () => {

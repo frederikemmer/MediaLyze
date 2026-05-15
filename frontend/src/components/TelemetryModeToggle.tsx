@@ -1,9 +1,8 @@
 import { Wifi, WifiHigh, WifiOff, type LucideIcon } from "lucide-react";
-import { motion } from "motion/react";
-import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type TelemetryMode } from "../lib/api";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 type SelectableTelemetryMode = "off" | "minimal" | "enabled";
 
@@ -13,6 +12,7 @@ type TelemetryModeToggleProps = {
   disabled?: boolean;
   undecided?: boolean;
   compact?: boolean;
+  highlightEnabledOption?: boolean;
   onChange: (mode: SelectableTelemetryMode) => void;
   onConfirmedModeClick?: (mode: SelectableTelemetryMode) => void;
 };
@@ -57,15 +57,23 @@ export function TelemetryModeToggle({
   disabled = false,
   undecided = false,
   compact = false,
+  highlightEnabledOption = false,
   onChange,
   onConfirmedModeClick,
 }: TelemetryModeToggleProps) {
   const { t } = useTranslation();
-  const toggleId = useId();
   const selectedMode = undecided || mode === "none" || mode === "initialized" ? null : mode;
 
   return (
-    <div className={`telemetry-mode-toggle${compact ? " telemetry-mode-toggle-compact" : ""}`.trim()}>
+    <div
+      className={`telemetry-mode-toggle${compact ? " telemetry-mode-toggle-compact" : ""}`.trim()}
+    >
+      {selectedMode ? (
+        <SlidingTogglePill
+          activeKey={selectedMode}
+          className={`nav-active-pill telemetry-mode-pill telemetry-mode-${selectedMode}`}
+        />
+      ) : null}
       {OPTIONS.map((option) => {
         const Icon = option.icon;
         const isSelected = selectedMode === option.mode;
@@ -75,7 +83,8 @@ export function TelemetryModeToggle({
           <button
             key={option.mode}
             type="button"
-            className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}`.trim()}
+            data-toggle-key={option.mode}
+            className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}${highlightEnabledOption && option.mode === "enabled" ? " is-update-attention" : ""}`.trim()}
             aria-label={label}
             aria-pressed={isSelected}
             data-tooltip-title={t(option.tooltipTitleKey)}
@@ -89,13 +98,6 @@ export function TelemetryModeToggle({
               onChange(option.mode);
             }}
           >
-            {isSelected ? (
-              <motion.span
-                layoutId={`telemetry-mode-pill-${toggleId}`}
-                className={`nav-active-pill telemetry-mode-pill ${option.className}`}
-                transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-              />
-            ) : null}
             <span className="telemetry-mode-button-content">
               <Icon aria-hidden="true" className="nav-icon" />
               {!compact ? <span>{label}</span> : null}

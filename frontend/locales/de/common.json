@@ -25,7 +25,8 @@
     "duration": "Dauer",
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
-    "hdrCoverage": "HDR-Abdeckung",
+    "videoBitDepth": "Video-Bittiefe",
+    "hdrProfile": "HDR-Profil",
     "audioCodecs": "Audio-Codecs",
     "formatsAndCodecs": "Formate & Codecs",
     "containers": "Container",
@@ -34,6 +35,7 @@
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "audioBitDepth": "Audio-Bittiefe",
     "comparisonPanel": "Metrikvergleich",
     "audioSpatialProfiles": "Raumklang",
     "audioLanguages": "Audio-Sprachen",
@@ -49,12 +51,20 @@
   "panel": {
     "collapseAria": "{{title}} einklappen",
     "expandAria": "{{title}} ausklappen",
-    "loading": "Wird geladen..."
+    "loading": "Wird geladen...",
+    "noDataYet": "Noch keine Daten"
   },
   "releaseNotes": {
     "title": "Versionsverlauf",
     "versionHeading": "Version {{version}}",
     "current": "Aktuell",
+    "currentInstalled": "Aktuell installiert",
+    "latestAvailable": "Neu verfuegbar",
+    "updateAvailable": "Update verfuegbar: v{{version}}",
+    "download": "v{{version}} herunterladen",
+    "downloadLoading": "Wird heruntergeladen...",
+    "downloadSuccess": "Heruntergeladen",
+    "downloadRetry": "v{{version}} erneut versuchen",
     "openAria": "Versionshinweise fuer {{version}} anzeigen",
     "githubAria": "GitHub-Repository oeffnen",
     "reportIssueAria": "Issue melden",
@@ -291,10 +301,14 @@
       "container": "Container",
       "videoCodec": "Video-Codec",
       "resolution": "Auflösung",
-      "dynamicRange": "Dynamic Range",
+      "dynamicRange": "Dynamikumfang",
+      "videoBitDepth": "Video-Bittiefe",
+      "hdrProfile": "HDR-Profil",
       "duration": "Dauer",
       "bitrate": "Bitrate",
       "audioBitrate": "Audio-Bitrate",
+      "bitDepth": "Bittiefe",
+      "audioBitDepth": "Audio-Bittiefe",
       "audioCodecs": "Audio-Codecs",
       "audioSpatialProfiles": "Raumklang",
       "audioLanguages": "Audio-Sprachen",
@@ -363,12 +377,14 @@
     "containers": "Container",
     "videoCodecs": "Video-Codecs",
     "resolutions": "Auflösungen",
-    "hdrCoverage": "HDR-Abdeckung",
+    "videoBitDepth": "Video-Bittiefe",
+    "hdrProfile": "HDR-Profil",
     "sizeDistribution": "Dateigroesse",
     "durationDistribution": "Dauer",
     "qualityScoreDistribution": "Qualitaets-Score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio-Bitrate",
+    "audioBitDepth": "Audio-Bittiefe",
     "comparisonPanel": "Metrikvergleich",
     "audioCodecs": "Audio-Codecs",
     "formatsAndCodecs": "Formate & Codecs",
@@ -437,6 +453,10 @@
         "placeholder": "z. B. >=512kb/s",
         "tooltip": "Unterstuetzt: >256kb/s, >=1Mb/s, <2Mb/s"
       },
+      "bitDepth": {
+        "placeholder": "z. B. >=10",
+        "tooltip": "Unterstuetzt: >=8, =10, <32"
+      },
       "videoCodec": {
         "placeholder": "z. B. hevc av1"
       },
@@ -473,6 +493,7 @@
         "quality_score": "Verwende einen Score von 1 bis 10, zum Beispiel >=8.",
         "bitrate": "Verwende eine Bitrate wie >8Mb/s oder >=256kb/s.",
         "audio_bitrate": "Verwende eine Audio-Bitrate wie >512kb/s oder >=1Mb/s.",
+        "bit_depth": "Verwende eine ganzzahlige Bittiefe wie >=16 oder =24.",
         "duration": "Verwende eine Dauer wie >90m oder >=1h 30m."
       }
     },
@@ -675,6 +696,7 @@
     "duration": "Dauer",
     "bitrate": "Bitrate",
     "audioBitrate": "Audio-Bitrate",
+    "bitDepth": "Bittiefe",
     "audioCodecs": "Audio-Codecs",
     "formatsAndCodecs": "Formate & Codecs",
     "audioSpatialProfiles": "Raumklang",

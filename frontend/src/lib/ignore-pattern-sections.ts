@@ -5,7 +5,7 @@ export type IgnorePatternSectionState = {
 const STORAGE_KEY = "medialyze-ignore-pattern-sections";
 
 const DEFAULT_STATE: IgnorePatternSectionState = {
-  combinedExpanded: true,
+  combinedExpanded: false,
 };
 
 function normalizeSectionState(value: unknown): IgnorePatternSectionState {

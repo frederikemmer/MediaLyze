@@ -1,11 +1,12 @@
-import { lazy, Suspense, useId, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Hash, Percent } from "lucide-react";
-import { motion } from "motion/react";
 
 import type { NumericDistribution, NumericDistributionBin, NumericDistributionMetricId } from "../lib/api";
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
 import { AsyncPanel } from "./AsyncPanel";
+import { PanelEmptyState } from "./PanelEmptyState";
+import { SlidingTogglePill } from "./SlidingTogglePill";
 
 const METRICS_WITHOUT_TOTAL_COPY = new Set<NumericDistributionMetricId>([
   "size",
@@ -42,7 +43,6 @@ export function DistributionChartPanel({
 }: DistributionChartPanelProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<NumericDistributionDisplayMode>("count");
-  const toggleId = useId();
   const showTotalCopy = !METRICS_WITHOUT_TOTAL_COPY.has(metricId);
 
   return (
@@ -59,38 +59,27 @@ export function DistributionChartPanel({
               role="group"
               aria-label={t("distributionChart.displayMode")}
             >
+              <SlidingTogglePill activeKey={mode} className="nav-active-pill distribution-chart-mode-pill" />
               <button
                 type="button"
+                data-toggle-key="count"
                 className={`distribution-chart-mode-button${mode === "count" ? " active" : ""}`}
                 onClick={() => setMode("count")}
                 aria-label={t("distributionChart.countMode")}
                 title={t("distributionChart.countMode")}
               >
-                {mode === "count" ? (
-                  <motion.span
-                    layoutId={`distribution-chart-mode-pill-${toggleId}`}
-                    className="nav-active-pill distribution-chart-mode-pill"
-                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-                  />
-                ) : null}
                 <span className="distribution-chart-mode-button-content">
                   <Hash aria-hidden="true" className="distribution-chart-mode-icon" />
                 </span>
               </button>
               <button
                 type="button"
+                data-toggle-key="percentage"
                 className={`distribution-chart-mode-button${mode === "percentage" ? " active" : ""}`}
                 onClick={() => setMode("percentage")}
                 aria-label={t("distributionChart.percentMode")}
                 title={t("distributionChart.percentMode")}
               >
-                {mode === "percentage" ? (
-                  <motion.span
-                    layoutId={`distribution-chart-mode-pill-${toggleId}`}
-                    className="nav-active-pill distribution-chart-mode-pill"
-                    transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
-                  />
-                ) : null}
                 <span className="distribution-chart-mode-button-content">
                   <Percent aria-hidden="true" className="distribution-chart-mode-icon" />
                 </span>
@@ -101,7 +90,7 @@ export function DistributionChartPanel({
       }
     >
       {!distribution || distribution.total <= 0 ? (
-        <div className="notice">{t("distributionChart.empty")}</div>
+        <PanelEmptyState />
       ) : (
         <div
           className={`distribution-chart-panel-content${showTotalCopy ? "" : " distribution-chart-panel-content-compact"}`}

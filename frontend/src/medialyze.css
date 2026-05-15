@@ -55,6 +55,15 @@
   opacity: 0.7;
 }
 
+.app-version-update {
+  position: relative;
+  top: -6px;
+  color: #9a4b00;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .media-nav-panel {
   display: flex;
   flex-wrap: wrap;
@@ -228,7 +237,8 @@
   max-height: min(82vh, 760px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 16px;
+  row-gap: 11px;
+  column-gap: 16px;
   padding: 22px;
   border: 1px solid rgba(31, 28, 22, 0.08);
   border-radius: 18px;
@@ -243,7 +253,7 @@
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  align-items: start;
+  align-items: center;
 }
 
 .release-notes-header h2 {
@@ -261,9 +271,42 @@
   gap: 8px;
 }
 
+.release-notes-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #0e6b62;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(14, 107, 98, 0.22);
+  animation: release-notes-download-pulse 1.8s ease-in-out infinite;
+}
+
+.release-notes-download:hover,
+.release-notes-download:focus-visible {
+  background: #0a5a53;
+}
+
+.release-notes-download-loading {
+  cursor: wait;
+}
+
+.release-notes-download-success {
+  animation: none;
+}
+
+@keyframes release-notes-download-pulse {
+  50% {
+    box-shadow: 0 10px 24px rgba(14, 107, 98, 0.34);
+  }
+}
+
 .release-notes-alert {
   grid-row: 2;
-  margin: 0;
+  margin: 11px 0 0;
 }
 
 .release-notes-icon-link,
@@ -326,6 +369,10 @@
   height: 18px;
 }
 
+.release-notes-hand-coins-icon {
+  display: inline-flex;
+}
+
 .release-notes-content {
   grid-row: 3;
   min-height: 0;
@@ -343,6 +390,15 @@
   border: 1px solid rgba(31, 28, 22, 0.08);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.52);
+}
+
+.release-notes-version-latest {
+  border-color: rgba(197, 110, 17, 0.34);
+  background: rgba(255, 244, 227, 0.72);
+}
+
+.release-notes-version-current {
+  border-color: rgba(27, 153, 139, 0.34);
 }
 
 .release-notes-version-toggle {
@@ -393,6 +449,18 @@
   border-radius: 999px;
   background: rgba(27, 153, 139, 0.14);
   color: #0e6b62;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.release-notes-latest-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(197, 110, 17, 0.16);
+  color: #9a4b00;
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -700,6 +768,22 @@
 
 .analyzed-files-title-addon .statistic-layout-controls {
   flex: 0 0 auto;
+}
+
+.panel-empty-state {
+  min-height: 100%;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.panel-empty-state-icon {
+  display: inline-flex;
+  color: var(--muted);
 }
 
 .analyzed-files-count {
@@ -1363,6 +1447,7 @@
 }
 
 .distribution-chart-mode-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1421,7 +1506,10 @@
 }
 
 .distribution-chart-mode-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .library-history-actions {
@@ -1449,6 +1537,7 @@
 }
 
 .library-history-range-toggle {
+  position: relative;
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -1515,8 +1604,11 @@
 }
 
 .library-history-range-pill {
-  inset: 2px;
+  inset: auto;
+  top: 0;
+  left: 0;
   border-radius: 8px;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .library-history-range-custom-shell {
@@ -2980,6 +3072,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-preview-actions {
+  position: relative;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3065,7 +3158,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-preview-view-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .telemetry-preview-view-button > span {
@@ -3074,6 +3170,7 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-mode-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3136,6 +3233,23 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   opacity: 0.68;
 }
 
+.telemetry-mode-button.telemetry-mode-enabled.is-update-attention {
+  animation: telemetry-enabled-update-attention 2.4s ease-in-out 2;
+}
+
+.icon-nav-button.is-first-library-attention,
+.create-library-first-run-attention {
+  animation: telemetry-enabled-update-attention 2.4s ease-in-out 2;
+}
+
+@keyframes telemetry-enabled-update-attention {
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(27, 153, 139, 0.12),
+      0 0 0 8px rgba(27, 153, 139, 0.06);
+  }
+}
+
 .telemetry-mode-button-content {
   position: relative;
   z-index: 1;
@@ -3146,7 +3260,10 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 }
 
 .telemetry-mode-pill {
-  inset: 1px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
 }
 
 .telemetry-mode-pill.telemetry-mode-off {

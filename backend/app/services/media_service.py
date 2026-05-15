@@ -66,6 +66,7 @@ FileSortKey = Literal[
     "duration",
     "bitrate",
     "audio_bitrate",
+    "bit_depth",
     "audio_codecs",
     "audio_spatial_profiles",
     "audio_languages",
@@ -88,6 +89,7 @@ CSV_EXPORT_HEADERS = [
     "resolution",
     "hdr_type",
     "duration_seconds",
+    "audio_bit_depth",
     "audio_codecs",
     "audio_spatial_profiles",
     "audio_languages",
@@ -111,6 +113,7 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_quality_score": "quality_score",
     "search_bitrate": "bitrate",
     "search_audio_bitrate": "audio_bitrate",
+    "search_bit_depth": "bit_depth",
     "search_video_codec": "video_codec",
     "search_resolution": "resolution",
     "search_hdr_type": "hdr_type",
@@ -189,6 +192,8 @@ def _cursor_sort_value(row: MediaFileTableRow, sort_key: FileSortKey):
         return row.bitrate or 0
     if sort_key == "audio_bitrate":
         return row.audio_bitrate or 0
+    if sort_key == "bit_depth":
+        return row.bit_depth or 0
     if sort_key == "audio_codecs":
         return min(row.audio_codecs, default="")
     if sort_key == "audio_spatial_profiles":
@@ -275,6 +280,11 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
     primary_video = min(media_file.video_streams, key=lambda stream: stream.stream_index, default=None)
     duration = media_file.media_format.duration if media_file.media_format else None
     audio_bitrate = sum(max(stream.bit_rate or 0, 0) for stream in media_file.audio_streams) or None
+    # Filter out 0 values (used for lossy audio codecs where bit_depth is not applicable)
+    audio_bit_depth = max(
+        (stream.bit_depth for stream in media_file.audio_streams if stream.bit_depth and stream.bit_depth > 0),
+        default=None
+    )
     bitrate = (media_file.media_format.bit_rate if media_file.media_format else None) or audio_bitrate
     resolution = None
     if primary_video and primary_video.width and primary_video.height:
@@ -300,6 +310,7 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         duration=duration,
         bitrate=bitrate,
         audio_bitrate=audio_bitrate,
+        bit_depth=audio_bit_depth,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
         resolution_category_id=resolution_category.id if resolution_category else None,
@@ -527,6 +538,7 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "duration": func.coalesce(MediaFile.duration_seconds, 0),
         "bitrate": func.coalesce(cast(MediaFile.bitrate, Float), cast(MediaFile.audio_bitrate, Float), 0),
         "audio_bitrate": func.coalesce(cast(MediaFile.audio_bitrate, Float), 0),
+        "bit_depth": func.coalesce(audio_aggregates.c.max_audio_bit_depth, 0),
         "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
         "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
         "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
@@ -590,6 +602,11 @@ def _build_library_file_id_query(
             audio_codecs_search=MediaFile.audio_codecs_search,
             audio_spatial_profiles_search=MediaFile.audio_spatial_profiles_search,
             total_audio_bitrate=MediaFile.audio_bitrate,
+            max_audio_bit_depth=(
+                select(func.max(AudioStream.bit_depth))
+                .where(AudioStream.media_file_id == MediaFile.id)
+                .scalar_subquery()
+            ),
         )
     )
     subtitle_aggregates = SimpleNamespace(
@@ -617,6 +634,7 @@ def _build_library_file_id_query(
         search_filters,
         bitrate_expression=func.coalesce(MediaFile.bitrate, MediaFile.audio_bitrate),
         audio_bitrate_expression=MediaFile.audio_bitrate,
+        bit_depth_expression=audio_aggregates.c.max_audio_bit_depth,
         duration_expression=MediaFile.duration_seconds,
         resolution_categories=get_app_settings(db).resolution_categories,
     )
@@ -737,6 +755,7 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
         row.resolution or "",
         row.hdr_type or "",
         _stringify_export_scalar(row.duration),
+        _stringify_export_scalar(row.bit_depth),
         " | ".join(row.audio_codecs),
         " | ".join(row.audio_spatial_profiles),
         " | ".join(row.audio_languages),

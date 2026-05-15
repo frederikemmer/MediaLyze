@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY,
+  RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY,
+  isFirstOpenAfterUpdate,
+  getSeenReleaseVersion,
+  isDevelopmentVersion,
   markReleaseNotesSeen,
+  mergeReleaseNotes,
   parseAllReleaseNotes,
   parseReleaseNotes,
   shouldShowReleaseNotes,
@@ -77,9 +82,61 @@ describe("release notes", () => {
 
     markReleaseNotesSeen("1.2.3");
 
+    expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY)).toBe("1.2.3");
     expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY)).toBe("1.2.3");
     expect(shouldShowReleaseNotes("1.2.3", notes)).toBe(false);
     expect(shouldShowReleaseNotes("1.2.4", { ...notes, version: "1.2.4" })).toBe(true);
-    expect(shouldShowReleaseNotes("dev", notes)).toBe(false);
+    expect(shouldShowReleaseNotes("dev", notes)).toBe(true);
+  });
+
+  it("recognizes only a real first open after an update", () => {
+    const notes = { version: "1.2.3", date: null, sections: [{ title: "New", items: ["entry"] }] };
+
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
+
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.2");
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(true);
+
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.3");
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
+  });
+
+  it("maps development builds to the stable changelog version they represent", () => {
+    const notes = { version: "1.2.3", date: null, sections: [{ title: "New", items: ["entry"] }] };
+
+    expect(isDevelopmentVersion("dev")).toBe(true);
+    expect(isDevelopmentVersion("1.2.4-dev.7")).toBe(true);
+    expect(isDevelopmentVersion("1.2.4-dev007")).toBe(true);
+    expect(getSeenReleaseVersion("dev", notes)).toBe("1.2.3");
+    expect(getSeenReleaseVersion("1.2.4-dev.7", notes)).toBe("1.2.3");
+
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, "1.2.3-dev006");
+    expect(shouldShowReleaseNotes("dev", notes)).toBe(true);
+    expect(shouldShowReleaseNotes("1.2.3-dev007", notes)).toBe(true);
+    expect(isFirstOpenAfterUpdate("1.2.3-dev007", notes)).toBe(true);
+
+    markReleaseNotesSeen("1.2.3-dev007", notes);
+    expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY)).toBe("1.2.3-dev007");
+    expect(window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY)).toBe("1.2.3");
+    expect(shouldShowReleaseNotes("1.2.3-dev007", notes)).toBe(false);
+  });
+
+  it("prefers remote release notes while keeping older local notes", () => {
+    expect(
+      mergeReleaseNotes(
+        [
+          { version: "1.2.3", date: null, sections: [{ title: "Local", items: ["local current"] }] },
+          { version: "1.2.2", date: null, sections: [{ title: "Local", items: ["older"] }] },
+        ],
+        [
+          { version: "1.2.4", date: null, sections: [{ title: "Remote", items: ["newer"] }] },
+          { version: "1.2.3", date: null, sections: [{ title: "Remote", items: ["remote current"] }] },
+        ],
+      ),
+    ).toEqual([
+      { version: "1.2.4", date: null, sections: [{ title: "Remote", items: ["newer"] }] },
+      { version: "1.2.3", date: null, sections: [{ title: "Remote", items: ["remote current"] }] },
+      { version: "1.2.2", date: null, sections: [{ title: "Local", items: ["older"] }] },
+    ]);
   });
 });

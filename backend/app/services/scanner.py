@@ -418,6 +418,7 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
             color_primaries=stream.color_primaries,
             frame_rate=stream.frame_rate,
             bit_rate=stream.bit_rate,
+            bit_depth=stream.bit_depth,
             hdr_type=stream.hdr_type,
         )
         for stream in normalized.video_streams

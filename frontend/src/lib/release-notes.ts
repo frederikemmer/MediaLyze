@@ -14,9 +14,15 @@ export type ReleaseNotes = {
 };
 
 export const RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY = "medialyze-release-notes-seen-version";
+export const RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY = "medialyze-release-notes-seen-app-version";
 
 export function normalizeReleaseVersion(version: string): string {
   return version.trim().replace(/^v/i, "");
+}
+
+export function isDevelopmentVersion(version: string): boolean {
+  const normalizedVersion = normalizeReleaseVersion(version);
+  return normalizedVersion === "dev" || /(?:^|-)dev[0-9a-z.+-]*$/i.test(normalizedVersion);
 }
 
 function cleanMarkdownText(value: string): string {
@@ -30,7 +36,7 @@ function cleanMarkdownText(value: string): string {
 
 export function parseReleaseNotes(markdown: string, version: string): ReleaseNotes | null {
   const normalizedVersion = normalizeReleaseVersion(version);
-  if (!normalizedVersion || normalizedVersion === "dev") {
+  if (!normalizedVersion || isDevelopmentVersion(normalizedVersion)) {
     return null;
   }
 
@@ -95,6 +101,9 @@ export function parseAllReleaseNotes(markdown: string): ReleaseNotes[] {
 }
 
 export function getCurrentReleaseNotes(): ReleaseNotes | null {
+  if (isDevelopmentVersion(APP_VERSION)) {
+    return getAllReleaseNotes()[0] ?? null;
+  }
   return parseReleaseNotes(changelogMarkdown, APP_VERSION);
 }
 
@@ -102,16 +111,55 @@ export function getAllReleaseNotes(): ReleaseNotes[] {
   return parseAllReleaseNotes(changelogMarkdown);
 }
 
-export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNotes | null): boolean {
-  if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
-    return false;
+export function compareReleaseVersions(left: string, right: string): number {
+  const leftParts = normalizeReleaseVersion(left).split(".").map(Number);
+  const rightParts = normalizeReleaseVersion(right).split(".").map(Number);
+  if (leftParts.length !== 3 || rightParts.length !== 3 || [...leftParts, ...rightParts].some(Number.isNaN)) {
+    return 0;
   }
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) {
+      return leftParts[index] - rightParts[index];
+    }
+  }
+  return 0;
 }
 
-export function markReleaseNotesSeen(version: string): void {
+export function mergeReleaseNotes(localNotes: ReleaseNotes[], remoteNotes: ReleaseNotes[]): ReleaseNotes[] {
+  const notesByVersion = new Map(localNotes.map((notes) => [notes.version, notes]));
+  for (const notes of remoteNotes) {
+    notesByVersion.set(notes.version, notes);
+  }
+  return [...notesByVersion.values()].sort((left, right) => compareReleaseVersions(right.version, left.version));
+}
+
+export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNotes | null): boolean {
+  if (!releaseNotes || typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
+}
+
+export function isFirstOpenAfterUpdate(version: string, releaseNotes: ReleaseNotes | null): boolean {
+  if (!releaseNotes || typeof window === "undefined") {
+    return false;
+  }
+  const seenAppVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY);
+  if (seenAppVersion !== null) {
+    return seenAppVersion !== normalizeReleaseVersion(version);
+  }
+  // Legacy installs stored only the displayed release section. Treat that as a prior visit once.
+  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== null;
+}
+
+export function getSeenReleaseVersion(version: string, releaseNotes: ReleaseNotes | null): string {
+  return isDevelopmentVersion(version) && releaseNotes ? releaseNotes.version : normalizeReleaseVersion(version);
+}
+
+export function markReleaseNotesSeen(version: string, releaseNotes: ReleaseNotes | null = null): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
+  window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
+  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, getSeenReleaseVersion(version, releaseNotes));
 }

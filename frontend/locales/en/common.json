@@ -25,7 +25,8 @@
     "duration": "Duration",
     "videoCodecs": "Video codecs",
     "resolutions": "Resolutions",
-    "hdrCoverage": "HDR coverage",
+    "videoBitDepth": "Video bit depth",
+    "hdrProfile": "HDR profile",
     "audioCodecs": "Audio codecs",
     "formatsAndCodecs": "Formats & codecs",
     "containers": "Containers",
@@ -34,6 +35,7 @@
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "audioBitDepth": "Audio bit depth",
     "comparisonPanel": "Metric comparison",
     "audioSpatialProfiles": "Spatial audio",
     "audioLanguages": "Audio languages",
@@ -49,12 +51,20 @@
   "panel": {
     "collapseAria": "Collapse {{title}}",
     "expandAria": "Expand {{title}}",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "noDataYet": "not data yet"
   },
   "releaseNotes": {
     "title": "Release history",
     "versionHeading": "Version {{version}}",
     "current": "Current",
+    "currentInstalled": "Currently installed",
+    "latestAvailable": "New available",
+    "updateAvailable": "Update available: v{{version}}",
+    "download": "Download v{{version}}",
+    "downloadLoading": "Downloading...",
+    "downloadSuccess": "Downloaded",
+    "downloadRetry": "Retry v{{version}}",
     "openAria": "Show release notes for {{version}}",
     "githubAria": "Open GitHub repository",
     "reportIssueAria": "Report an issue",
@@ -291,10 +301,14 @@
       "container": "Container",
       "videoCodec": "Video codec",
       "resolution": "Resolution",
-      "dynamicRange": "Dynamic Range",
+      "dynamicRange": "Dynamic range",
+      "videoBitDepth": "Video bit depth",
+      "hdrProfile": "HDR profile",
       "duration": "Duration",
       "bitrate": "Bitrate",
       "audioBitrate": "Audio bitrate",
+      "bitDepth": "Bit depth",
+      "audioBitDepth": "Audio bit depth",
       "audioCodecs": "Audio codecs",
       "audioSpatialProfiles": "Spatial audio",
       "audioLanguages": "Audio languages",
@@ -363,12 +377,14 @@
     "containers": "Containers",
     "videoCodecs": "Video codecs",
     "resolutions": "Resolutions",
-    "hdrCoverage": "HDR coverage",
+    "videoBitDepth": "Video bit depth",
+    "hdrProfile": "HDR profile",
     "sizeDistribution": "File size",
     "durationDistribution": "Duration",
     "qualityScoreDistribution": "Quality score",
     "bitrateDistribution": "Bitrate",
     "audioBitrateDistribution": "Audio bitrate",
+    "audioBitDepth": "Audio bit depth",
     "comparisonPanel": "Metric comparison",
     "audioCodecs": "Audio codecs",
     "formatsAndCodecs": "Formats & codecs",
@@ -437,6 +453,10 @@
         "placeholder": "e.g. >=512kb/s",
         "tooltip": "Supported: >256kb/s, >=1Mb/s, <2Mb/s"
       },
+      "bitDepth": {
+        "placeholder": "e.g. >=10",
+        "tooltip": "Supported: >=8, =10, <32"
+      },
       "videoCodec": {
         "placeholder": "e.g. hevc av1"
       },
@@ -473,6 +493,7 @@
         "quality_score": "Use a score from 1 to 10, for example >=8.",
         "bitrate": "Use a bitrate like >8Mb/s or >=256kb/s.",
         "audio_bitrate": "Use an audio bitrate like >512kb/s or >=1Mb/s.",
+        "bit_depth": "Use an integer bit depth like >=16 or =24.",
         "duration": "Use a duration like >90m or >=1h 30m."
       }
     },
@@ -675,6 +696,7 @@
     "duration": "Duration",
     "bitrate": "Bitrate",
     "audioBitrate": "Audio bitrate",
+    "bitDepth": "Bit depth",
     "audioCodecs": "Audio codecs",
     "formatsAndCodecs": "Formats & codecs",
     "audioSpatialProfiles": "Spatial audio",
@@ -762,8 +784,8 @@
     },
     "modeTooltips": {
       "off": "No telemetry payloads are sent.",
-      "minimal": "Sends install/runtime/system details only. No usage statistics or app settings are included.",
-      "enabled": "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings."
+      "minimal": "Tell the Dev which runtime/system you are using, nothing else.",
+      "enabled": "Adds rounded usage counts and app settings to inform development. NO private data."
     },
     "modeDescriptions": {
       "off": "No telemetry payloads are sent.",

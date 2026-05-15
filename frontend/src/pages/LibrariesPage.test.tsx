@@ -343,6 +343,8 @@ function createDashboard(overrides: Partial<DashboardResponse> = {}): DashboardR
     video_codec_distribution: [],
     resolution_distribution: [],
     hdr_distribution: [],
+    video_bit_depth_distribution: [],
+    bit_depth_distribution: [],
     audio_codec_distribution: [],
     audio_spatial_profile_distribution: [],
     audio_language_distribution: [],
@@ -360,7 +362,40 @@ function createDashboard(overrides: Partial<DashboardResponse> = {}): DashboardR
   };
 }
 
-function renderPage() {
+function renderPage({ seedExpandedPanels = true }: { seedExpandedPanels?: boolean } = {}) {
+  if (seedExpandedPanels) {
+    if (!window.localStorage.getItem("medialyze-settings-panel-state")) {
+      window.localStorage.setItem(
+        "medialyze-settings-panel-state",
+        JSON.stringify({
+          configuredLibraries: true,
+          historyRetention: true,
+          patternRecognition: true,
+          recentScanLogs: true,
+          resolutionCategories: true,
+          createLibrary: true,
+          appSettings: true,
+          telemetry: true,
+        }),
+      );
+    }
+    if (!window.localStorage.getItem("medialyze-pattern-recognition-sections")) {
+      window.localStorage.setItem(
+        "medialyze-pattern-recognition-sections",
+        JSON.stringify({
+          series_folder_regexes: true,
+          season_folder_regexes: true,
+          bonus_folder_patterns: true,
+        }),
+      );
+    }
+    if (!window.localStorage.getItem("medialyze-ignore-pattern-sections")) {
+      window.localStorage.setItem(
+        "medialyze-ignore-pattern-sections",
+        JSON.stringify({ combinedExpanded: true }),
+      );
+    }
+  }
   return render(
     <MemoryRouter>
       <AppDataProvider>
@@ -413,14 +448,17 @@ afterEach(() => {
 });
 
 describe("LibrariesPage ignore patterns", () => {
-  it("shows the combined ignore-pattern section expanded by default", async () => {
-    renderPage();
+  it("keeps the combined ignore-pattern section collapsed by default", async () => {
+    renderPage({ seedExpandedPanels: false });
 
+    fireEvent.click(await screen.findByRole("button", { name: /^folder & pattern recognition$/i }));
     const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
+    const bonusFolderToggle = screen.getByRole("button", { name: /^bonus folder patterns\d+$/i });
 
-    expect(combinedToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByLabelText("Add a new ignore pattern")).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("*/@eaDir/*")).toBeInTheDocument();
+    expect(combinedToggle).toHaveAttribute("aria-expanded", "false");
+    expect(bonusFolderToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Add a new ignore pattern")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("*/@eaDir/*")).not.toBeInTheDocument();
   });
 
   it("restores the persisted collapse state from localStorage", async () => {
@@ -428,8 +466,12 @@ describe("LibrariesPage ignore patterns", () => {
       "medialyze-ignore-pattern-sections",
       JSON.stringify({ combinedExpanded: false }),
     );
+    window.localStorage.setItem(
+      "medialyze-settings-panel-state",
+      JSON.stringify({ patternRecognition: true }),
+    );
 
-    renderPage();
+    renderPage({ seedExpandedPanels: false });
 
     const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
 
@@ -1405,6 +1447,15 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("gently highlights the create-library panel while no library exists", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
+
+    renderPage();
+
+    await screen.findByText("Add first library");
+    expect(document.querySelector(".create-library-first-run-attention")).toHaveClass("async-panel");
+  });
+
   it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
@@ -1412,29 +1463,24 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.queryByRole("button", { name: /^table view$/i })).not.toBeInTheDocument();
   });
 
-  it("shows the main settings panels expanded by default", async () => {
-    renderPage();
+  it("keeps less-frequent settings panels collapsed by default", async () => {
+    renderPage({ seedExpandedPanels: false });
 
     const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
     const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
     const patternRecognitionToggle = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
     const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
-    const resolutionPanel = resolutionCategoriesToggle.closest(".async-panel");
-    const patternRecognitionPanel = patternRecognitionToggle.closest(".async-panel");
+    const telemetryToggle = screen.getByRole("button", { name: /^telemetry$/i });
+    const recentScanLogsToggle = screen.getByRole("button", { name: /^recent scan logs$/i });
 
     expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
-    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "true");
-    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "true");
+    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
+    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "false");
     expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "true");
+    expect(recentScanLogsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(telemetryToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
-    expect(resolutionPanel).not.toBeNull();
-    expect(patternRecognitionPanel).not.toBeNull();
-    expect(within(resolutionPanel as HTMLElement).getByRole("button", { name: "Restore defaults" })).toBeInTheDocument();
-    expect(
-      within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: /^Ignore patterns\d+$/i }),
-    ).toBeInTheDocument();
-    expect(within(patternRecognitionPanel as HTMLElement).getByRole("button", { name: "Restore ignore defaults" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add resolution category" })).not.toBeInTheDocument();
   });
 
   it("persists interface language changes to app settings", async () => {
@@ -1632,14 +1678,14 @@ describe("LibrariesPage settings panels", () => {
     expect(minimalButtons[0]).toHaveAttribute("data-tooltip-title", "Minimal telemetry");
     expect(minimalButtons[0]).toHaveAttribute(
       "data-tooltip-body",
-      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+      "Tell the Dev which runtime/system you are using, nothing else.",
     );
 
     const enabledButtons = await screen.findAllByRole("button", { name: "Help the dev" });
     expect(enabledButtons[0]).toHaveAttribute("data-tooltip-title", "Help the dev");
     expect(enabledButtons[0]).toHaveAttribute(
       "data-tooltip-body",
-      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+      "Adds rounded usage counts and app settings to inform development. NO private data.",
     );
 
     fireEvent.click(minimalButtons[0]);
@@ -1865,13 +1911,13 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.getByRole("button", { name: "Edit library Shows" })).toBeInTheDocument();
   });
 
-  it("shows the recent scan logs panel expanded by default", async () => {
-    renderPage();
+  it("keeps the recent scan logs panel collapsed by default", async () => {
+    renderPage({ seedExpandedPanels: false });
 
     const scanLogsToggle = await screen.findByRole("button", { name: /^recent scan logs$/i });
 
-    expect(scanLogsToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("No completed scans yet.")).toBeInTheDocument();
+    expect(scanLogsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("No completed scans yet.")).not.toBeInTheDocument();
   });
 
   it("renders recent scan log cards and lazy-loads details", async () => {

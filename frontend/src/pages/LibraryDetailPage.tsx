@@ -136,6 +136,7 @@ type GroupedAnalyzedFilesMetrics = {
   hdr_type: string | null;
   bitrate: number | null;
   audio_bitrate: number | null;
+  bit_depth?: number | null;
   audio_codecs: string[];
   audio_spatial_profiles: string[];
   audio_languages: string[];
@@ -424,6 +425,7 @@ function buildGroupedAnalyzedFilesMetrics(files: MediaFileRow[]): GroupedAnalyze
     hdr_type: commonScalar(files.map((file) => file.hdr_type ?? "sdr"), () => false),
     bitrate: averageNumber(files.map((file) => file.bitrate)),
     audio_bitrate: averageNumber(files.map((file) => file.audio_bitrate)),
+    bit_depth: commonScalar(files.map((file) => file.bit_depth), (value) => value == null),
     audio_codecs: commonArray(files.map((file) => file.audio_codecs)),
     audio_spatial_profiles: commonArray(files.map((file) => file.audio_spatial_profiles)),
     audio_languages: commonArray(files.map((file) => file.audio_languages)),
@@ -445,6 +447,7 @@ function buildGroupedAnalyzedFilesMetricsFromSeries(entry: GroupedSeriesTableRow
     hdr_type: null,
     bitrate: entry.bitrate_average,
     audio_bitrate: entry.audio_bitrate_average,
+    bit_depth: null,
     audio_codecs: [],
     audio_spatial_profiles: [],
     audio_languages: [],
@@ -873,6 +876,19 @@ export function buildFileColumns(
         formatBitrate(isGroupedAnalyzedFilesRow(row) ? row.metrics.audio_bitrate : row.audio_bitrate),
       render: (row) =>
         formatBitrate(isGroupedAnalyzedFilesRow(row) ? row.metrics.audio_bitrate : row.audio_bitrate),
+    },
+    {
+      key: "bit_depth",
+      labelKey: "fileTable.bitDepth",
+      sizing: { mode: "content", minPx: 88, maxPx: 124 },
+      measureValue: (row) => {
+        const bitDepth = isGroupedAnalyzedFilesRow(row) ? row.metrics.bit_depth : row.bit_depth;
+        return bitDepth ? `${bitDepth}-bit` : t("fileTable.na");
+      },
+      render: (row) => {
+        const bitDepth = isGroupedAnalyzedFilesRow(row) ? row.metrics.bit_depth : row.bit_depth;
+        return bitDepth ? `${bitDepth}-bit` : t("fileTable.na");
+      },
     },
     {
       key: "audio_codecs",
@@ -1320,6 +1336,7 @@ export function LibraryDetailPage() {
   );
   const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const [libraryStatistics, setLibraryStatistics] = useState<LibraryStatistics | null>(null);
+  const [knownHasVideoMetadata, setKnownHasVideoMetadata] = useState<boolean | undefined>(undefined);
   const [libraryHistory, setLibraryHistory] = useState<LibraryHistoryResponse | null>(null);
   const [expandedGroupedSeriesIds, setExpandedGroupedSeriesIds] = useState<Record<number, boolean>>({});
   const [expandedGroupedSeasonKeys, setExpandedGroupedSeasonKeys] = useState<Record<string, boolean>>({});
@@ -1413,6 +1430,10 @@ export function LibraryDetailPage() {
   const displayLibrary = librarySummary ?? fallbackSummary;
   const activeLibraryType = displayLibrary?.type;
   const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
+  const hasVideoMetadata =
+    libraryStatistics === null
+      ? knownHasVideoMetadata
+      : libraryStatistics.video_bit_depth_distribution.length > 0;
   const supportsSeriesGrouping = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
@@ -1526,6 +1547,7 @@ export function LibraryDetailPage() {
             definition.kind === "statistic" &&
             !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType, {
               showMusicQualityScore,
+              hasVideoMetadata,
             })
           ) {
             return null;
@@ -1533,7 +1555,7 @@ export function LibraryDetailPage() {
           return { item, definition };
         })
         .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
-    [activeStatisticLayout.items, activeLibraryType, showMusicQualityScore],
+    [activeStatisticLayout.items, activeLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
   const visibleLibraryStatisticPanelIds = useMemo(
     () =>
@@ -1576,9 +1598,10 @@ export function LibraryDetailPage() {
         }
         return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType, {
           showMusicQualityScore,
+          hasVideoMetadata,
         });
       }),
-    [draftStatisticLayout, activeLibraryType, showMusicQualityScore],
+    [draftStatisticLayout, activeLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
@@ -2488,6 +2511,16 @@ export function LibraryDetailPage() {
   }, [sortKey, visibleColumns]);
 
   useEffect(() => {
+    setKnownHasVideoMetadata(undefined);
+  }, [libraryId]);
+
+  useEffect(() => {
+    if (libraryStatistics !== null) {
+      setKnownHasVideoMetadata(libraryStatistics.video_bit_depth_distribution.length > 0);
+    }
+  }, [libraryStatistics]);
+
+  useEffect(() => {
     const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
     const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups);
@@ -3139,7 +3172,10 @@ export function LibraryDetailPage() {
                   selection={selection}
                   availableFields={availableComparisonFields}
                   resizeToken={`${panel.item.width}:${panel.item.height}`}
-                  loading={Boolean(comparisonLoadingByPanel[panel.item.instanceId])}
+                  loading={
+                    Boolean(comparisonLoadingByPanel[panel.item.instanceId]) ||
+                    (!comparisonByPanel[panel.item.instanceId] && !comparisonErrorByPanel[panel.item.instanceId])
+                  }
                   error={comparisonErrorByPanel[panel.item.instanceId] ?? null}
                   onChangeXField={(xField) =>
                     updateComparisonSelection(panel.item.instanceId, { ...selection, xField })
@@ -3216,13 +3252,14 @@ export function LibraryDetailPage() {
                   : statisticDefinition.panelFormatKind
                   ? formatCodecLabel(rawLabel, statisticDefinition.panelFormatKind)
                   : rawLabel;
+                const isFilterable = statisticDefinition.id !== "video_bit_depth";
                 const isApplied = hasSearchValueTokens(fieldValues[statisticDefinition.id], filterValue);
                 return {
                   key: `${statisticDefinition.id}:${rawLabel}`,
                   label,
                   value: item.value,
-                  disabled: isApplied,
-                  ariaLabel: isApplied
+                  disabled: isFilterable && isApplied,
+                  ariaLabel: isFilterable && isApplied
                     ? t("libraryDetail.statistics.filterAlreadyApplied", {
                         field: t(statisticDefinition.nameKey),
                         value: label,
@@ -3232,7 +3269,7 @@ export function LibraryDetailPage() {
                         value: label,
                       }),
                   onClick:
-                    statisticsError || !libraryStatistics
+                    !isFilterable || statisticsError || !libraryStatistics
                       ? undefined
                       : () => applyStatisticFilter(statisticDefinition.id, filterValue),
                 };

@@ -26,6 +26,7 @@ class LibraryFileSearchFilters:
     search_quality_score: str = ""
     search_bitrate: str = ""
     search_audio_bitrate: str = ""
+    search_bit_depth: str = ""
     search_video_codec: str = ""
     search_resolution: str = ""
     search_hdr_type: str = ""
@@ -45,6 +46,7 @@ class LibraryFileSearchFilters:
             search_quality_score=self.search_quality_score.strip(),
             search_bitrate=self.search_bitrate.strip(),
             search_audio_bitrate=self.search_audio_bitrate.strip(),
+            search_bit_depth=self.search_bit_depth.strip(),
             search_video_codec=self.search_video_codec.strip(),
             search_resolution=self.search_resolution.strip(),
             search_hdr_type=self.search_hdr_type.strip(),
@@ -118,6 +120,7 @@ _NUMERIC_FIELD_LABELS = {
     "quality_score": "quality score",
     "bitrate": "bitrate",
     "audio_bitrate": "audio bitrate",
+    "bit_depth": "bit depth",
     "duration": "duration",
 }
 
@@ -316,6 +319,16 @@ def _parse_quality_score_value(raw_value: str) -> int:
     return score
 
 
+def _parse_bit_depth_value(raw_value: str) -> int:
+    candidate = raw_value.strip()
+    if not re.fullmatch(r"\d+", candidate):
+        raise SearchValidationError("Invalid search expression for bit depth")
+    bit_depth = int(candidate)
+    if bit_depth <= 0:
+        raise SearchValidationError("Invalid search expression for bit depth")
+    return bit_depth
+
+
 def _text_token_patterns(token: str) -> list[str]:
     return [f"%{token}%"]
 
@@ -459,6 +472,7 @@ def apply_field_search_filters(
     filters: LibraryFileSearchFilters | None,
     bitrate_expression=None,
     audio_bitrate_expression=None,
+    bit_depth_expression=None,
     duration_expression=None,
     resolution_categories: list[ResolutionCategory] | None = None,
 ):
@@ -495,6 +509,14 @@ def apply_field_search_filters(
             normalized.search_audio_bitrate,
             _parse_bitrate_value,
             "audio_bitrate",
+        )
+    if normalized.search_bit_depth:
+        query = _apply_numeric_filter(
+            query,
+            bit_depth_expression,
+            normalized.search_bit_depth,
+            _parse_bit_depth_value,
+            "bit_depth",
         )
     if normalized.search_video_codec:
         query = _apply_text_filter(query, primary_video_streams.c.codec, normalized.search_video_codec)

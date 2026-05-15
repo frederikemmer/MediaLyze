@@ -27,6 +27,7 @@ export const FIELD_CATEGORIES: Record<string, FieldCategory> = {
   audio_spatial_profile: "audio_only",
   audio_language: "audio_only",
   audio_bitrate: "audio_only",
+  bit_depth: "audio_only",
 
   // Music-only fields
   audio_title: "music_only",

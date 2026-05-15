@@ -43,7 +43,7 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
   { id: "container", kind: "category", labelKey: "libraryStatistics.items.container" },
   { id: "video_codec", kind: "category", labelKey: "libraryStatistics.items.videoCodec" },
   { id: "resolution", kind: "category", labelKey: "libraryStatistics.items.resolution" },
-  { id: "hdr_type", kind: "category", labelKey: "libraryStatistics.items.dynamicRange" },
+  { id: "hdr_type", kind: "category", labelKey: "libraryStatistics.items.hdrProfile" },
 ];
 
 const FIELD_MAP = new Map(COMPARISON_FIELD_DEFINITIONS.map((definition) => [definition.id, definition]));

@@ -31,6 +31,7 @@ from backend.app.services.quality import normalize_quality_profile
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
+from backend.app.services.video_codec_buckets import build_video_codec_distribution
 from backend.app.services.video_queries import primary_video_streams_subquery
 
 
@@ -51,6 +52,7 @@ _MUSIC_HIDDEN_PANEL_IDS = {
     "video_codec",
     "resolution",
     "hdr_type",
+    "video_bit_depth",
     "audio_bitrate",
     "subtitle_languages",
     "subtitle_codecs",
@@ -418,7 +420,7 @@ def get_library_statistics(
     app_settings = load_app_settings(db)
     primary_video_streams = (
         primary_video_streams_subquery("library_primary_video_streams")
-        if wants("video_codec") or wants("resolution") or wants("hdr_type")
+        if wants("video_codec") or wants("resolution") or wants("hdr_type") or wants("video_bit_depth")
         else None
     )
     container_distribution = (
@@ -442,10 +444,14 @@ def get_library_statistics(
 
     video_codec_distribution = (
         db.execute(
-            select(primary_video_streams.c.codec, func.count(primary_video_streams.c.id))
+            select(
+                primary_video_streams.c.codec,
+                primary_video_streams.c.bit_depth,
+                func.count(primary_video_streams.c.id),
+            )
             .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
             .where(MediaFile.library_id == library_id)
-            .group_by(primary_video_streams.c.codec)
+            .group_by(primary_video_streams.c.codec, primary_video_streams.c.bit_depth)
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
         if primary_video_streams is not None and wants("video_codec")
@@ -478,6 +484,20 @@ def get_library_statistics(
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
         if primary_video_streams is not None and wants("hdr_type")
+        else []
+    )
+    video_bit_depth_distribution = (
+        db.execute(
+            select(
+                primary_video_streams.c.bit_depth,
+                func.count(primary_video_streams.c.id),
+            )
+            .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
+            .where(MediaFile.library_id == library_id)
+            .group_by(primary_video_streams.c.bit_depth)
+            .order_by(func.count(primary_video_streams.c.id).desc())
+        ).all()
+        if primary_video_streams is not None and wants("video_bit_depth")
         else []
     )
 
@@ -519,6 +539,28 @@ def get_library_statistics(
             )
             .group_by(audio_codec_values.c.value)
             .order_by(func.count(distinct(audio_codec_values.c.media_file_id)).desc())
+        ).all()
+
+    bit_depth_distribution = []
+    if wants("bit_depth"):
+        audio_bit_depth_values = (
+            select(
+                AudioStream.media_file_id.label("media_file_id"),
+                func.max(AudioStream.bit_depth).label("value"),
+            )
+            .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
+            .where(MediaFile.library_id == library_id)
+            .where(AudioStream.bit_depth.is_not(None))
+            .group_by(AudioStream.media_file_id)
+            .subquery("library_audio_bit_depth_values")
+        )
+        bit_depth_distribution = db.execute(
+            select(
+                audio_bit_depth_values.c.value,
+                func.count(distinct(audio_bit_depth_values.c.media_file_id)),
+            )
+            .group_by(audio_bit_depth_values.c.value)
+            .order_by(func.count(distinct(audio_bit_depth_values.c.media_file_id)).desc())
         ).all()
 
     audio_spatial_profile_distribution = []
@@ -638,12 +680,26 @@ def get_library_statistics(
 
     payload = LibraryStatistics(
         container_distribution=container_distribution,
-        video_codec_distribution=_distribution_items(video_codec_distribution),
+        video_codec_distribution=build_video_codec_distribution(video_codec_distribution),
         resolution_distribution=_group_resolution_distribution(
             resolution_distribution,
             resolution_categories=app_settings.resolution_categories,
         ),
         hdr_distribution=_distribution_items(hdr_distribution, fallback="SDR"),
+        video_bit_depth_distribution=[
+            DistributionItem(
+                label=f"{label}-bit" if label is not None else "unknown",
+                value=value,
+                filter_value=str(label) if label is not None else None,
+            )
+            for label, value in video_bit_depth_distribution
+            if value > 0
+        ],
+        bit_depth_distribution=[
+            DistributionItem(label=f"{label}-bit", value=value, filter_value=str(label))
+            for label, value in bit_depth_distribution
+            if label is not None and value > 0
+        ],
         audio_codec_distribution=_distribution_items(audio_codec_distribution),
         audio_spatial_profile_distribution=audio_spatial_profile_distribution,
         audio_language_distribution=[

@@ -74,14 +74,29 @@ beforeEach(() => {
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "libraries").mockResolvedValue([]);
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+  vi.spyOn(api, "updateStatus").mockResolvedValue({
+    current_version: "0.8.3",
+    latest_version: "0.8.3",
+    update_available: false,
+    checked_at: null,
+    release_notes: [],
+  });
 });
 
 afterEach(() => {
   cleanup();
+  delete window.medialyzeDesktop;
   vi.restoreAllMocks();
 });
 
 describe("AppShell", () => {
+  it("gently highlights settings while no library has been added yet", async () => {
+    renderShell();
+
+    await waitFor(() => expect(api.libraries).toHaveBeenCalled());
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveClass("is-first-library-attention");
+  });
+
   it("shows release notes for the current version until dismissed", async () => {
     renderShell();
 
@@ -99,6 +114,7 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
+    expect(window.localStorage.getItem("medialyze-release-notes-seen-app-version")).toBe("0.8.3");
     expect(window.localStorage.getItem("medialyze-release-notes-seen-version")).toBe("0.8.3");
 
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
@@ -135,8 +151,41 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
   });
 
+  it("gently highlights enabled telemetry only on the first automatic open after an update", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.2");
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Help the dev" })).toHaveClass("is-update-attention");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+
+    expect(screen.getByRole("button", { name: "Help the dev" })).not.toHaveClass("is-update-attention");
+  });
+
+  it("gently highlights enabled telemetry on the first launch while telemetry is undecided", async () => {
+    vi.mocked(api.appSettings).mockResolvedValue(
+      createAppSettings({
+        telemetry: {
+          mode: "none",
+          environment_disabled: false,
+          installation_id_suffix: null,
+          last_sent_at: null,
+          last_user_visible_payload: null,
+        },
+      }),
+    );
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Help the dev" })).toHaveClass("is-update-attention");
+  });
+
   it("does not show already dismissed release notes for the current version", async () => {
-    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
 
     renderShell();
 
@@ -146,6 +195,58 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
 
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+  });
+
+  it("shows newer remote releases beside the currently installed version", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    vi.mocked(api.updateStatus).mockResolvedValue({
+      current_version: "0.8.3",
+      latest_version: "0.9.0",
+      update_available: true,
+      checked_at: "2026-05-15T00:00:00Z",
+      release_notes: [
+        {
+          version: "0.9.0",
+          date: "2026-05-15",
+          sections: [{ title: "New", items: ["remote update"] }],
+        },
+      ],
+    });
+
+    renderShell();
+
+    expect(await screen.findByText("Update available: v0.9.0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+
+    expect(await screen.findByText("New available")).toBeInTheDocument();
+    expect(screen.getByText("Currently installed")).toBeInTheDocument();
+    expect(screen.getByText("remote update")).toBeInTheDocument();
+  });
+
+  it("shows desktop download only when an update is available", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    const downloadLatestInstaller = vi.fn().mockResolvedValue({ ok: true });
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPaths: vi.fn(),
+      downloadLatestInstaller,
+    };
+    vi.mocked(api.updateStatus).mockResolvedValue({
+      current_version: "0.8.3",
+      latest_version: "0.9.0",
+      update_available: true,
+      checked_at: "2026-05-15T00:00:00Z",
+      release_notes: [],
+    });
+
+    renderShell();
+
+    expect(await screen.findByText("Update available: v0.9.0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download v0.9.0" }));
+
+    await waitFor(() => expect(downloadLatestInstaller).toHaveBeenCalledWith("0.9.0"));
+    expect(screen.getByRole("button", { name: "Downloaded" })).toBeInTheDocument();
   });
 
   it("updates telemetry mode from the release notes toggle", async () => {
@@ -183,12 +284,12 @@ describe("AppShell", () => {
     );
     expect(screen.getByRole("button", { name: "Minimal telemetry" })).toHaveAttribute(
       "data-tooltip-body",
-      "Sends install/runtime/system details only. No usage statistics or app settings are included.",
+      "Tell the Dev which runtime/system you are using, nothing else.",
     );
     expect(enabledButton).toHaveAttribute("data-tooltip-title", "Help the dev");
     expect(enabledButton).toHaveAttribute(
       "data-tooltip-body",
-      "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings.",
+      "Adds rounded usage counts and app settings to inform development. NO private data.",
     );
 
     fireEvent.click(enabledButton);

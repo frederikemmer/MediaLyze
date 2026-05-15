@@ -13,6 +13,7 @@ export type LibraryStatisticId =
   | "container"
   | "video_codec"
   | "resolution"
+  | "video_bit_depth"
   | "hdr_type"
   | "duration"
   | "audio_codecs"
@@ -23,13 +24,16 @@ export type LibraryStatisticId =
   | "subtitle_sources"
   | "quality_score"
   | "bitrate"
-  | "audio_bitrate";
+  | "audio_bitrate"
+  | "bit_depth";
 
 type LibraryStatisticPanelDataKey =
   | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
+  | "video_bit_depth_distribution"
   | "hdr_distribution"
+  | "bit_depth_distribution"
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
@@ -41,7 +45,9 @@ type DashboardStatisticPanelDataKey =
   | "container_distribution"
   | "video_codec_distribution"
   | "resolution_distribution"
+  | "video_bit_depth_distribution"
   | "hdr_distribution"
+  | "bit_depth_distribution"
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
@@ -90,6 +96,7 @@ const STORAGE_KEY = "medialyze-library-statistics-settings";
 const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
   "video_codec",
   "resolution",
+  "video_bit_depth",
   "hdr_type",
   "bitrate",
   "audio_bitrate",
@@ -100,6 +107,7 @@ const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
 ]);
 type MusicVisibilityOptions = {
   showMusicQualityScore?: boolean;
+  hasVideoMetadata?: boolean;
 };
 
 function buildStorageKey(storageScope?: string): string {
@@ -193,8 +201,24 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     dashboardDataKey: "resolution_distribution",
   },
   {
+    id: "video_bit_depth",
+    nameKey: "libraryStatistics.items.videoBitDepth",
+    supportsPanel: true,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: true,
+    panelTitleKey: "libraryDetail.videoBitDepth",
+    panelDataKey: "video_bit_depth_distribution",
+    dashboardTitleKey: "dashboard.videoBitDepth",
+    dashboardDataKey: "video_bit_depth_distribution",
+  },
+  {
     id: "hdr_type",
-    nameKey: "libraryStatistics.items.dynamicRange",
+    nameKey: "libraryStatistics.items.hdrProfile",
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
@@ -203,10 +227,10 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
-    panelTitleKey: "libraryDetail.hdrCoverage",
+    panelTitleKey: "libraryDetail.hdrProfile",
     panelDataKey: "hdr_distribution",
     tableColumnKey: "hdr_type",
-    dashboardTitleKey: "dashboard.hdrCoverage",
+    dashboardTitleKey: "dashboard.hdrProfile",
     dashboardDataKey: "hdr_distribution",
   },
   {
@@ -259,6 +283,23 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     panelTitleKey: "libraryDetail.audioBitrateDistribution",
     tableColumnKey: "audio_bitrate",
     dashboardTitleKey: "dashboard.audioBitrateDistribution",
+  },
+  {
+    id: "bit_depth",
+    nameKey: "libraryStatistics.items.audioBitDepth",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelTitleKey: "libraryDetail.audioBitDepth",
+    panelDataKey: "bit_depth_distribution",
+    tableColumnKey: "bit_depth",
+    dashboardTitleKey: "dashboard.audioBitDepth",
+    dashboardDataKey: "bit_depth_distribution",
   },
   {
     id: "container",
@@ -603,6 +644,9 @@ export function isLibraryStatisticDefinitionVisibleForLibraryType(
   libraryType?: LibraryType | null,
   options?: MusicVisibilityOptions,
 ): boolean {
+  if (definition.id === "video_bit_depth" && options?.hasVideoMetadata === false) {
+    return false;
+  }
   if (libraryType !== "music") {
     return true;
   }

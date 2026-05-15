@@ -48,6 +48,7 @@ describe("statistic panel layout", () => {
       { statisticId: "size", width: 2, height: 2 },
       { statisticId: "resolution", width: 1, height: 2 },
       { statisticId: "video_codec", width: 1, height: 2 },
+      { statisticId: "video_bit_depth", width: 1, height: 2 },
       { statisticId: "hdr_type", width: 1, height: 2 },
       { statisticId: "audio_languages", width: 1, height: 2 },
       { statisticId: "duration", width: 1, height: 2 },
@@ -101,6 +102,7 @@ describe("statistic panel layout", () => {
       { statisticId: "container", width: 1, height: 2 },
       { statisticId: "audio_codecs", width: 1, height: 2 },
       { statisticId: "duration", width: 1, height: 2 },
+      { statisticId: "video_bit_depth", width: 1, height: 2 },
       { statisticId: "hdr_type", width: 1, height: 2 },
       { statisticId: "audio_bitrate", width: 1, height: 2 },
       { statisticId: "subtitle_languages", width: 1, height: 2 },
@@ -207,7 +209,7 @@ describe("statistic panel layout", () => {
     });
   });
 
-  it("keeps history above its minimum size and forces wide library panels to full width", () => {
+  it("keeps large panels above their minimum size and forces wide library panels to full width", () => {
     const layout = normalizeStatisticPanelLayout("library", {
       items: [
         { instanceId: "history", statisticId: "history", width: 1, height: 1 },
@@ -217,7 +219,7 @@ describe("statistic panel layout", () => {
     });
 
     expect(layout.items).toMatchObject([
-      { instanceId: "history", width: 2, height: 3 },
+      { instanceId: "history", width: 2, height: 2 },
       { instanceId: "duplicates", width: 4, height: 3 },
       { instanceId: "analyzed_files", width: 4, height: 2 },
     ]);
@@ -238,7 +240,7 @@ describe("statistic panel layout", () => {
 
     expect(getStatisticPanelLayout("dashboard", "main")).toEqual({
       version: 3,
-      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 4 }],
+      items: [{ instanceId: "history", statisticId: "history", width: 4, height: 8 }],
     });
     expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toBe(
       JSON.stringify(storedLayout),

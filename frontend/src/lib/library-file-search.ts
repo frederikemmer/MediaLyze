@@ -37,6 +37,7 @@ const SIZE_RE = /^\s*(\d+(?:\.\d+)?)\s*([kmgt]?i?b|b)?\s*$/i;
 const BITRATE_RE = /^\s*(\d+(?:\.\d+)?)\s*(bps|bit\/s|[kmgt]?bps|[kmgt]?b\/s|[kmgt]?bit\/s)?\s*$/i;
 const DURATION_PART_RE = /(\d+(?:\.\d+)?)\s*([smhd])/gi;
 const SCORE_RE = /^\d+$/;
+const BIT_DEPTH_RE = /^\d+$/;
 
 function isValidStructuredValue(value: string, checker: (rawValue: string) => boolean): boolean {
   const trimmed = value.trim();
@@ -96,6 +97,10 @@ function isValidBitrateValue(value: string): boolean {
   return isValidStructuredValue(value, (rawValue) => BITRATE_RE.test(rawValue));
 }
 
+function isValidBitDepthValue(value: string): boolean {
+  return isValidStructuredValue(value, (rawValue) => BIT_DEPTH_RE.test(rawValue) && Number(rawValue) > 0);
+}
+
 export const LIBRARY_FILE_SEARCH_PICKER_ICON = SlidersHorizontal;
 const TEXT_FILTER_TOOLTIP_KEY = "libraryDetail.searchFields.textMatch.tooltip";
 
@@ -147,6 +152,14 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     validate: isValidBitrateValue,
   },
   {
+    field: "bit_depth",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.audioBitDepth",
+    placeholderKey: "libraryDetail.searchFields.bitDepth.placeholder",
+    tooltipKey: "libraryDetail.searchFields.bitDepth.tooltip",
+    validate: isValidBitDepthValue,
+  },
+  {
     field: "video_codec",
     icon: Film,
     labelKey: "libraryStatistics.items.videoCodec",
@@ -163,7 +176,7 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
   {
     field: "hdr_type",
     icon: SunMedium,
-    labelKey: "libraryStatistics.items.dynamicRange",
+    labelKey: "libraryStatistics.items.hdrProfile",
     placeholderKey: "libraryDetail.searchFields.hdr.placeholder",
     tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },

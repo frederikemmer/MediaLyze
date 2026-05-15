@@ -314,6 +314,25 @@ def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:
     assert captured["kwargs"]["misfire_grace_time"] == 3600
 
 
+def test_update_checks_run_twice_daily_twelve_hours_apart() -> None:
+    captured: list[dict] = []
+
+    class SchedulerStub:
+        def add_job(self, func, **kwargs):
+            captured.append({"func": func, "kwargs": kwargs})
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+
+    runtime._ensure_update_check_jobs()
+
+    assert [entry["func"] for entry in captured] == [runtime.request_update_check, runtime.request_update_check]
+    assert [entry["kwargs"]["id"] for entry in captured] == ["update-check-primary", "update-check-secondary"]
+    assert [entry["kwargs"]["hour"] for entry in captured] == [0, 12]
+    assert [entry["kwargs"]["minute"] for entry in captured] == [0, 0]
+    assert [entry["kwargs"]["jitter"] for entry in captured] == [600, 600]
+
+
 def test_schedule_telemetry_send_after_settings_change_uses_cancelable_delay(monkeypatch) -> None:
     started_timers = []
     submitted: list[tuple] = []

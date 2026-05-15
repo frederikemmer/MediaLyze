@@ -75,6 +75,134 @@ def test_dashboard_counts_primary_video_only() -> None:
     assert all(item.label != "hevc" for item in dashboard.video_codec_distribution)
 
 
+def test_dashboard_keeps_video_codec_and_video_bit_depth_distributions_separate() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies HEVC",
+            path="/tmp/movies-hevc",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        files = [
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-8bit.mkv",
+                filename="movie-8bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-10bit.mkv",
+                filename="movie-10bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=2.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-unknown.mkv",
+                filename="movie-unknown.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=3.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            ),
+        ]
+        db.add_all(files)
+        db.flush()
+
+        db.add_all(
+            [
+                VideoStream(media_file_id=files[0].id, stream_index=0, codec="hevc", bit_depth=8),
+                VideoStream(media_file_id=files[1].id, stream_index=0, codec="hevc", bit_depth=10),
+                VideoStream(media_file_id=files[2].id, stream_index=0, codec="hevc", bit_depth=None),
+            ]
+        )
+        db.commit()
+
+        dashboard = build_dashboard(db)
+
+    assert [item.model_dump(exclude_none=True) for item in dashboard.video_codec_distribution] == [
+        {"label": "hevc", "value": 3},
+    ]
+    assert [item.model_dump(exclude_none=True) for item in dashboard.video_bit_depth_distribution] == [
+        {"label": "10-bit", "value": 1, "filter_value": "10"},
+        {"label": "8-bit", "value": 1, "filter_value": "8"},
+        {"label": "unknown", "value": 1},
+    ]
+
+
+def test_dashboard_audio_bit_depth_distribution_uses_best_audio_track_per_file_only() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audio bit depth only",
+            path="/tmp/audio-bit-depth-only",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        with_audio = MediaFile(
+            library_id=library.id,
+            relative_path="with-audio.mkv",
+            filename="with-audio.mkv",
+            extension="mkv",
+            size_bytes=100,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        video_only = MediaFile(
+            library_id=library.id,
+            relative_path="video-only.mkv",
+            filename="video-only.mkv",
+            extension="mkv",
+            size_bytes=100,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([with_audio, video_only])
+        db.flush()
+
+        db.add_all(
+            [
+                VideoStream(media_file_id=with_audio.id, stream_index=0, codec="hevc", bit_depth=8),
+                AudioStream(media_file_id=with_audio.id, stream_index=2, codec="aac", bit_depth=16),
+                AudioStream(media_file_id=with_audio.id, stream_index=1, codec="aac", bit_depth=24),
+                VideoStream(media_file_id=video_only.id, stream_index=0, codec="hevc", bit_depth=10),
+            ]
+        )
+        db.commit()
+
+        dashboard = build_dashboard(db)
+
+    assert [item.model_dump(exclude_none=True) for item in dashboard.bit_depth_distribution] == [
+        {"label": "24-bit", "value": 1, "filter_value": "24"},
+    ]
+
+
 def test_dashboard_merges_common_audio_language_aliases() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

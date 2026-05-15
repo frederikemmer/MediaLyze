@@ -23,6 +23,7 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
                 "width": 3840,
                 "height": 2160,
                 "pix_fmt": "yuv420p10le",
+                "bits_per_raw_sample": "10",
                 "color_transfer": "smpte2084",
                 "avg_frame_rate": "24000/1001",
                 "bit_rate": "12000000",
@@ -54,6 +55,7 @@ def test_normalize_ffprobe_payload_extracts_streams() -> None:
     assert normalized.media_format.container_format == "matroska,webm"
     assert normalized.media_format.duration == 5423.21
     assert normalized.video_streams[0].hdr_type == "HDR10"
+    assert normalized.video_streams[0].bit_depth == 10
     assert normalized.video_streams[0].frame_rate == 24000 / 1001
     assert normalized.audio_streams[0].profile == "Dolby Digital Plus + Dolby Atmos"
     assert normalized.audio_streams[0].spatial_audio_profile == "dolby_atmos"

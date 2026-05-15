@@ -501,8 +501,8 @@ def test_generate_library_files_csv_export_includes_audio_spatial_profiles() -> 
     comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
 
     assert "# search.audio_spatial_profiles: atmos" in comment_lines
-    assert rows[0][8:11] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
-    assert rows[1][9] == "Dolby Atmos"
+    assert rows[0][9:12] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
+    assert rows[1][10] == "Dolby Atmos"
 
 
 def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
@@ -866,6 +866,67 @@ def test_list_library_files_exposes_and_sorts_bitrate_columns() -> None:
     assert bitrate_sorted.items[1].bitrate == 2_000_000
     assert audio_bitrate_sorted.items[0].audio_bitrate == 384_000
     assert audio_bitrate_sorted.items[1].audio_bitrate == 128_000
+
+
+def test_list_library_files_sorts_and_filters_by_audio_bit_depth_only() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Bit depth sort",
+            path="/tmp/bit-depth-sort",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        lower = MediaFile(
+            library_id=library.id,
+            relative_path="lower.mkv",
+            filename="lower.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        higher = MediaFile(
+            library_id=library.id,
+            relative_path="higher.mkv",
+            filename="higher.mkv",
+            extension="mkv",
+            size_bytes=1,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+        )
+        db.add_all([lower, higher])
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(media_file_id=lower.id, stream_index=0, codec="hevc", bit_depth=10),
+                VideoStream(media_file_id=higher.id, stream_index=0, codec="hevc", bit_depth=8),
+                AudioStream(media_file_id=lower.id, stream_index=1, codec="aac", bit_depth=16),
+                AudioStream(media_file_id=higher.id, stream_index=1, codec="aac", bit_depth=24),
+            ]
+        )
+        db.commit()
+
+        sorted_page = list_library_files(db, library.id, limit=50, sort_key="bit_depth", sort_direction="desc")
+        filtered_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            search_filters=LibraryFileSearchFilters(search_bit_depth=">=24"),
+        )
+
+    assert [item.filename for item in sorted_page.items] == ["higher.mkv", "lower.mkv"]
+    assert [item.bit_depth for item in sorted_page.items] == [24, 16]
+    assert [item.filename for item in filtered_page.items] == ["higher.mkv"]
 
 
 def test_list_library_files_supports_negated_field_search_terms_and_comma_intersections() -> None:
@@ -1308,6 +1369,7 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "resolution",
         "hdr_type",
         "duration_seconds",
+        "audio_bit_depth",
         "audio_codecs",
         "audio_spatial_profiles",
         "audio_languages",
@@ -1330,11 +1392,11 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert data_rows[0][4] == "hevc"
     assert data_rows[0][5] == "3840x2160"
     assert data_rows[0][6] == "HDR10"
-    assert data_rows[0][8] == "aac"
-    assert data_rows[0][12] == "srt"
-    assert data_rows[0][13] == "external | internal"
-    assert data_rows[0][17] == "main"
-    assert data_rows[0][18:] == ["", "", "", "", ""]
+    assert data_rows[0][9] == "aac"
+    assert data_rows[0][13] == "srt"
+    assert data_rows[0][14] == "external | internal"
+    assert data_rows[0][18] == "main"
+    assert data_rows[0][19:] == ["", "", "", "", ""]
     assert data_rows[-1][0] == "episode-504.mkv"
 
 

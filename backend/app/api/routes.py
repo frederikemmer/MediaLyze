@@ -39,6 +39,7 @@ from backend.app.schemas.scan import (
     ScanJobRead,
     ScanRequest,
 )
+from backend.app.schemas.update_status import UpdateStatusRead
 from backend.app.models.entities import DuplicateDetectionMode, Library, ScanJob, ScanTriggerSource
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
@@ -85,6 +86,7 @@ from backend.app.services.scan_jobs import (
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
 from backend.app.services.telemetry import build_telemetry_payload, send_current_telemetry_snapshot
+from backend.app.services.update_status import get_update_status
 
 router = APIRouter()
 
@@ -109,6 +111,7 @@ def _library_file_search_filters(
     search_quality_score: str = "",
     search_bitrate: str = "",
     search_audio_bitrate: str = "",
+    search_bit_depth: str = "",
     search_video_codec: str = "",
     search_resolution: str = "",
     search_hdr_type: str = "",
@@ -127,6 +130,7 @@ def _library_file_search_filters(
         search_quality_score=search_quality_score,
         search_bitrate=search_bitrate,
         search_audio_bitrate=search_audio_bitrate,
+        search_bit_depth=search_bit_depth,
         search_video_codec=search_video_codec,
         search_resolution=search_resolution,
         search_hdr_type=search_hdr_type,
@@ -254,6 +258,14 @@ def app_settings(
     settings: Settings = Depends(get_app_settings),
 ) -> AppSettingsRead:
     return load_app_settings(db, settings)
+
+
+@router.get("/update-status", response_model=UpdateStatusRead)
+def update_status(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> UpdateStatusRead:
+    return get_update_status(db, settings)
 
 
 @router.get("/telemetry/preview")
@@ -489,6 +501,7 @@ def library_series_grouped_detail(
     search_quality_score: str = Query(default="", max_length=32),
     search_bitrate: str = Query(default="", max_length=64),
     search_audio_bitrate: str = Query(default="", max_length=64),
+    search_bit_depth: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
     search_resolution: str = Query(default="", max_length=64),
     search_hdr_type: str = Query(default="", max_length=200),
@@ -514,6 +527,7 @@ def library_series_grouped_detail(
                 search_quality_score=search_quality_score,
                 search_bitrate=search_bitrate,
                 search_audio_bitrate=search_audio_bitrate,
+                search_bit_depth=search_bit_depth,
                 search_video_codec=search_video_codec,
                 search_resolution=search_resolution,
                 search_hdr_type=search_hdr_type,
@@ -587,6 +601,7 @@ def library_files(
     search_quality_score: str = Query(default="", max_length=32),
     search_bitrate: str = Query(default="", max_length=64),
     search_audio_bitrate: str = Query(default="", max_length=64),
+    search_bit_depth: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
     search_resolution: str = Query(default="", max_length=64),
     search_hdr_type: str = Query(default="", max_length=200),
@@ -603,6 +618,7 @@ def library_files(
         "size",
         "bitrate",
         "audio_bitrate",
+        "bit_depth",
         "video_codec",
         "resolution",
         "hdr_type",
@@ -636,6 +652,7 @@ def library_files(
                 search_quality_score=search_quality_score,
                 search_bitrate=search_bitrate,
                 search_audio_bitrate=search_audio_bitrate,
+                search_bit_depth=search_bit_depth,
                 search_video_codec=search_video_codec,
                 search_resolution=search_resolution,
                 search_hdr_type=search_hdr_type,
@@ -670,6 +687,7 @@ def library_grouped_files(
     search_quality_score: str = Query(default="", max_length=32),
     search_bitrate: str = Query(default="", max_length=64),
     search_audio_bitrate: str = Query(default="", max_length=64),
+    search_bit_depth: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
     search_resolution: str = Query(default="", max_length=64),
     search_hdr_type: str = Query(default="", max_length=200),
@@ -686,6 +704,7 @@ def library_grouped_files(
         "size",
         "bitrate",
         "audio_bitrate",
+        "bit_depth",
         "video_codec",
         "resolution",
         "hdr_type",
@@ -721,6 +740,7 @@ def library_grouped_files(
                 search_quality_score=search_quality_score,
                 search_bitrate=search_bitrate,
                 search_audio_bitrate=search_audio_bitrate,
+                search_bit_depth=search_bit_depth,
                 search_video_codec=search_video_codec,
                 search_resolution=search_resolution,
                 search_hdr_type=search_hdr_type,
@@ -750,6 +770,7 @@ def library_files_export_csv(
     search_quality_score: str = Query(default="", max_length=32),
     search_bitrate: str = Query(default="", max_length=64),
     search_audio_bitrate: str = Query(default="", max_length=64),
+    search_bit_depth: str = Query(default="", max_length=32),
     search_video_codec: str = Query(default="", max_length=200),
     search_resolution: str = Query(default="", max_length=64),
     search_hdr_type: str = Query(default="", max_length=200),
@@ -766,6 +787,7 @@ def library_files_export_csv(
         "size",
         "bitrate",
         "audio_bitrate",
+        "bit_depth",
         "video_codec",
         "resolution",
         "hdr_type",
@@ -800,6 +822,7 @@ def library_files_export_csv(
                 search_quality_score=search_quality_score,
                 search_bitrate=search_bitrate,
                 search_audio_bitrate=search_audio_bitrate,
+                search_bit_depth=search_bit_depth,
                 search_video_codec=search_video_codec,
                 search_resolution=search_resolution,
                 search_hdr_type=search_hdr_type,

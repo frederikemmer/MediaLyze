@@ -26,6 +26,7 @@ from backend.app.services.library_service import get_library_statistics, get_lib
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.services.stats import build_dashboard
 from backend.app.services.telemetry import send_current_telemetry_snapshot, send_initial_telemetry_snapshot
+from backend.app.services.update_status import check_for_updates
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -80,6 +81,7 @@ class ScanRuntimeManager:
             self.started = True
         self._ensure_history_maintenance_job()
         self._ensure_telemetry_job()
+        self._ensure_update_check_jobs()
         self._recover_orphaned_jobs()
         self.sync_all_libraries()
         self.run_history_retention()
@@ -264,6 +266,11 @@ class ScanRuntimeManager:
             if not self.started:
                 return
         self.maintenance_executor.submit(self._run_telemetry_send, force)
+
+    def request_update_check(self) -> None:
+        if not self.started:
+            return
+        self.maintenance_executor.submit(self._run_update_check)
 
     def request_initial_telemetry_send(self) -> None:
         with self.lock:
@@ -547,6 +554,21 @@ class ScanRuntimeManager:
             misfire_grace_time=3600,
         )
 
+    def _ensure_update_check_jobs(self) -> None:
+        for hour, job_id in ((0, "update-check-primary"), (12, "update-check-secondary")):
+            self.scheduler.add_job(
+                self.request_update_check,
+                trigger="cron",
+                hour=hour,
+                minute=0,
+                jitter=600,
+                id=job_id,
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=3600,
+            )
+
     def _ensure_watch_observer(self, library: Library) -> None:
         library_path = str(library.path)
         if not library.path or not library.path.strip():
@@ -600,6 +622,13 @@ class ScanRuntimeManager:
         db = SessionLocal()
         try:
             send_initial_telemetry_snapshot(db, self.settings)
+        finally:
+            db.close()
+
+    def _run_update_check(self) -> None:
+        db = SessionLocal()
+        try:
+            check_for_updates(db, self.settings)
         finally:
             db.close()
 

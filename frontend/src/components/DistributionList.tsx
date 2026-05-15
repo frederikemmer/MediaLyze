@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DistributionItem } from "../lib/api";
+import { PanelEmptyState } from "./PanelEmptyState";
 
 export type DistributionListEntry = DistributionItem & {
   key?: string;
@@ -19,6 +20,10 @@ export function DistributionList({
   maxVisibleRows = 0,
   scrollable = false,
 }: DistributionListProps) {
+  if (items.length === 0) {
+    return <PanelEmptyState />;
+  }
+
   const max = Math.max(...items.map((item) => item.value), 1);
   const style =
     maxVisibleRows > 0
@@ -30,7 +35,6 @@ export function DistributionList({
       className={`stack distribution-list ${scrollable ? "distribution-list-scroll" : ""}`.trim()}
       style={style}
     >
-      {items.length === 0 ? <div className="notice">No analyzed data yet.</div> : null}
       {items.map((item) => (
         <div className="distribution-row" key={item.key ?? item.label}>
           <div className="distribution-copy">

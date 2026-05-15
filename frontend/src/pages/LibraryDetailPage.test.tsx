@@ -97,6 +97,8 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     video_codec_distribution: [{ label: "h264", value: 2 }],
     resolution_distribution: [{ label: "1920x1080", value: 2 }],
     hdr_distribution: [{ label: "SDR", value: 2 }],
+    video_bit_depth_distribution: [{ label: "8-bit", value: 2, filter_value: "8" }],
+    bit_depth_distribution: [{ label: "24-bit", value: 2, filter_value: "24" }],
     audio_codec_distribution: [{ label: "aac", value: 2 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 1 }],
     audio_language_distribution: [{ label: "en", value: 2 }],
@@ -265,6 +267,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         duration: 3600,
         bitrate: 4_000_000,
         audio_bitrate: 256_000,
+        bit_depth: null,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -292,6 +295,7 @@ function createFilesPage(libraryId: number): MediaFileTablePage {
         duration: 3600,
         bitrate: 8_000_000,
         audio_bitrate: 512_000,
+        bit_depth: null,
         video_codec: "h264",
         resolution: "1920x1080",
         hdr_type: null,
@@ -375,6 +379,7 @@ function createGroupedSeriesDetail(libraryId: number): MediaSeriesGroupedDetail 
             duration: 3600,
             bitrate: 4_000_000,
             audio_bitrate: 256_000,
+            bit_depth: null,
             video_codec: "h264",
             resolution: "1920x1080",
             resolution_category_label: "1080p",
@@ -407,6 +412,7 @@ function createGroupedSeriesDetail(libraryId: number): MediaSeriesGroupedDetail 
             duration: 3500,
             bitrate: 4_000_000,
             audio_bitrate: 256_000,
+            bit_depth: null,
             video_codec: "h264",
             resolution: "1920x1080",
             resolution_category_label: "1080p",
@@ -768,7 +774,7 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
+    expect(await screen.findByText("not data yet")).toBeInTheDocument();
   });
 
   it("renders the resolution history metric as a stacked area chart", async () => {
@@ -863,6 +869,32 @@ describe("LibraryDetailPage", () => {
 
     expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
       "\"audio_spatial_profiles\"",
+    );
+  });
+
+  it("can expand analyzed files beyond four rows while editing the library layout", async () => {
+    const libraryId = 1181;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 3,
+        items: [{ instanceId: "analyzed_files", statisticId: "analyzed_files", width: 4, height: 4 }],
+      }),
+    );
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+    expect(await screen.findByRole("heading", { level: 2, name: "Analyzed files" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand panel height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem(`medialyze-statistic-panel-layout-library-${libraryId}`)).toContain(
+      "\"height\":5",
     );
   });
 
@@ -1579,7 +1611,7 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    expect(await screen.findByText("History trends will appear after the next finished scan.")).toBeInTheDocument();
+    expect(await screen.findByText("not data yet")).toBeInTheDocument();
     await waitFor(() => expect(libraryHistorySpy).toHaveBeenCalledTimes(1));
 
     fireEvent.focus(window);
@@ -1858,7 +1890,7 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by resolution: 1920x1080/i }));
-    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by dynamic range: hdr10/i }));
+    fireEvent.click(screen.getByRole("button", { name: /filter analyzed files by hdr profile: hdr10/i }));
 
     await waitFor(() =>
       expect(libraryFilesSpy).toHaveBeenLastCalledWith(
@@ -2089,7 +2121,7 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter analyzed files by HDR profile: Dolby Vision" }));
 
     expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("dv");
     await waitFor(() =>
@@ -2131,7 +2163,7 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Filter analyzed files by Dynamic Range: Dolby Vision Profile 8.1" }),
+      screen.getByRole("button", { name: "Filter analyzed files by HDR profile: Dolby Vision Profile 8.1" }),
     );
 
     expect(await screen.findByPlaceholderText("e.g. hdr10, dv, sdr")).toHaveValue("Dolby Vision Profile 8.1");

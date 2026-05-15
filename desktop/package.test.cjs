@@ -8,7 +8,7 @@ test("desktop packaged app includes all runtime CommonJS entry files", () => {
   assert.ok(Array.isArray(packagedFiles), "build.files must be configured");
   assert.deepEqual(
     packagedFiles,
-    expectEntries(packagedFiles, ["main.cjs", "preload.cjs", "ffprobe-paths.cjs"])
+    expectEntries(packagedFiles, ["main.cjs", "preload.cjs", "ffprobe-paths.cjs", "update-download.cjs"])
   );
 });
 

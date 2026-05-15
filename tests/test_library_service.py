@@ -190,6 +190,55 @@ def test_create_library_with_multiple_paths_uses_common_root_and_selected_paths(
     assert library.scan_config == {"selected_paths": ["Movies A", "Movies B"]}
 
 
+def test_create_library_allows_same_root_with_different_selected_paths(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+    common_root = tmp_path / "library-root"
+    (common_root / "Movies").mkdir(parents=True)
+    (common_root / "TVSeries").mkdir()
+
+    with session_factory() as db:
+        first = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Movies",
+                path=str(common_root),
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+                scan_config={"selected_paths": ["Movies"]},
+            ),
+        )
+        second = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="TVSeries",
+                path=str(common_root),
+                type=LibraryType.series,
+                scan_mode=ScanMode.manual,
+                scan_config={"selected_paths": ["TVSeries"]},
+            ),
+        )
+        libraries = db.scalars(select(Library).order_by(Library.id)).all()
+
+    assert first.id != second.id
+    assert [library.path for library in libraries] == [str(common_root), str(common_root)]
+    assert [library.scan_config for library in libraries] == [
+        {"selected_paths": ["Movies"]},
+        {"selected_paths": ["TVSeries"]},
+    ]
+
+
 def test_update_library_settings_can_change_duplicate_detection_mode() -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
@@ -750,6 +799,80 @@ def test_get_library_statistics_keeps_hdr10_plus_separate_from_hdr10() -> None:
     hdr_distribution = {item.label: item.value for item in statistics.hdr_distribution}
     assert hdr_distribution["HDR10"] == 1
     assert hdr_distribution["HDR10+"] == 1
+
+
+def test_get_library_statistics_keeps_video_codec_and_video_bit_depth_distributions_separate() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="HEVC Library",
+            path="/tmp/hevc-library",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        files = [
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-8bit.mkv",
+                filename="movie-8bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=7,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-10bit.mkv",
+                filename="movie-10bit.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=2.0,
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+            ),
+            MediaFile(
+                library_id=library.id,
+                relative_path="movie-unknown.mkv",
+                filename="movie-unknown.mkv",
+                extension="mkv",
+                size_bytes=100,
+                mtime=3.0,
+                scan_status=ScanStatus.ready,
+                quality_score=9,
+            ),
+        ]
+        db.add_all(files)
+        db.flush()
+        db.add_all(
+            [
+                VideoStream(media_file_id=files[0].id, stream_index=0, codec="hevc", bit_depth=8),
+                VideoStream(media_file_id=files[1].id, stream_index=0, codec="hevc", bit_depth=10),
+                VideoStream(media_file_id=files[2].id, stream_index=0, codec="hevc", bit_depth=None),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(db, library.id)
+
+    assert statistics is not None
+    assert [item.model_dump(exclude_none=True) for item in statistics.video_codec_distribution] == [
+        {"label": "hevc", "value": 3},
+    ]
+    assert [item.model_dump(exclude_none=True) for item in statistics.video_bit_depth_distribution] == [
+        {"label": "10-bit", "value": 1, "filter_value": "10"},
+        {"label": "8-bit", "value": 1, "filter_value": "8"},
+        {"label": "unknown", "value": 1},
+    ]
 
 
 def test_get_library_statistics_counts_undefined_languages_per_file() -> None:

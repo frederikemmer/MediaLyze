@@ -30,6 +30,7 @@ describe("library statistics settings", () => {
     expect(settings.visibility.audio_bitrate.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.panelEnabled).toBe(true);
     expect(settings.visibility.hdr_type.tableEnabled).toBe(true);
+    expect(settings.visibility.video_bit_depth.panelEnabled).toBe(true);
     expect(settings.visibility.video_codec.tableTooltipEnabled).toBe(true);
     expect(settings.visibility.size.tableTooltipEnabled).toBe(false);
     expect(settings.visibility.video_codec.dashboardEnabled).toBe(true);
@@ -78,6 +79,7 @@ describe("library statistics settings", () => {
       "comparison",
       "video_codec",
       "resolution",
+      "video_bit_depth",
       "hdr_type",
       "duration",
       "container",
@@ -199,5 +201,16 @@ describe("library statistics settings", () => {
     expect(visiblePanelIds).not.toContain("resolution");
     expect(visiblePanelIds).not.toContain("hdr_type");
     expect(visiblePanelIds).not.toContain("bitrate");
+  });
+
+  it("hides video bit depth when a library has no video metadata", () => {
+    const settings = getLibraryStatisticsSettings();
+
+    expect(
+      getVisibleLibraryStatisticPanels(settings, "mixed", { hasVideoMetadata: false }).map((entry) => entry.id),
+    ).not.toContain("video_bit_depth");
+    expect(
+      getVisibleLibraryStatisticPanels(settings, "mixed", { hasVideoMetadata: true }).map((entry) => entry.id),
+    ).toContain("video_bit_depth");
   });
 });

@@ -148,6 +148,23 @@ export type DashboardHistoryResponse = {
   visible_libraries: DashboardHistoryLibrary[];
 };
 
+export type UpdateReleaseNotes = {
+  version: string;
+  date: string | null;
+  sections: Array<{
+    title: string;
+    items: string[];
+  }>;
+};
+
+export type UpdateStatus = {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  checked_at: string | null;
+  release_notes: UpdateReleaseNotes[];
+};
+
 export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
@@ -219,6 +236,8 @@ export type DashboardResponse = {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
+  video_bit_depth_distribution: DistributionItem[];
+  bit_depth_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
@@ -253,6 +272,8 @@ export type LibraryStatistics = {
   video_codec_distribution: DistributionItem[];
   resolution_distribution: DistributionItem[];
   hdr_distribution: DistributionItem[];
+  video_bit_depth_distribution: DistributionItem[];
+  bit_depth_distribution: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
@@ -279,6 +300,7 @@ export type MediaFileRow = {
   duration: number | null;
   bitrate: number | null;
   audio_bitrate: number | null;
+  bit_depth: number | null;
   video_codec: string | null;
   resolution: string | null;
   resolution_category_id?: string | null;
@@ -312,6 +334,7 @@ export type VideoStream = {
   color_primaries: string | null;
   frame_rate: number | null;
   bit_rate: number | null;
+  bit_depth?: number | null;
   hdr_type: string | null;
 };
 
@@ -377,6 +400,7 @@ export type MediaFileSortKey =
   | "duration"
   | "bitrate"
   | "audio_bitrate"
+  | "bit_depth"
   | "audio_codecs"
   | "audio_spatial_profiles"
   | "audio_languages"
@@ -394,6 +418,7 @@ export type LibraryFileSearchField =
   | "quality_score"
   | "bitrate"
   | "audio_bitrate"
+  | "bit_depth"
   | "video_codec"
   | "resolution"
   | "hdr_type"
@@ -840,6 +865,7 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["quality_score", "search_quality_score"],
   ["bitrate", "search_bitrate"],
   ["audio_bitrate", "search_audio_bitrate"],
+  ["bit_depth", "search_bit_depth"],
   ["video_codec", "search_video_codec"],
   ["resolution", "search_resolution"],
   ["hdr_type", "search_hdr_type"],
@@ -946,6 +972,7 @@ function buildPanelQuery(panels?: readonly string[] | null): string {
 
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
+  updateStatus: () => request<UpdateStatus>("/update-status"),
   dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
   dashboardHistory: (signal?: AbortSignal) =>
     request<DashboardHistoryResponse>("/dashboard/history", { signal }),

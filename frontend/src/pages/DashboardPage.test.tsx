@@ -1,16 +1,19 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { useEffect } from "react";
 
-import { AppDataProvider } from "../lib/app-data";
+import { AppDataProvider, useAppData } from "../lib/app-data";
 import {
+  DEFAULT_QUALITY_PROFILE,
   api,
   type AppSettings,
   type ComparisonResponse,
   type DashboardHistoryResponse,
   type DashboardResponse,
+  type LibrarySummary,
 } from "../lib/api";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import { ScanJobsProvider } from "../lib/scan-jobs";
@@ -53,6 +56,8 @@ function createDashboard(): DashboardResponse {
     video_codec_distribution: [{ label: "hevc", value: 10 }],
     resolution_distribution: [{ label: "4k", value: 5 }],
     hdr_distribution: [{ label: "HDR10", value: 3 }],
+    video_bit_depth_distribution: [{ label: "10-bit", value: 3, filter_value: "10" }],
+    bit_depth_distribution: [{ label: "24-bit", value: 4, filter_value: "24" }],
     audio_codec_distribution: [{ label: "eac3", value: 8 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 4 }],
     audio_language_distribution: [{ label: "en", value: 9 }],
@@ -199,6 +204,29 @@ function createDashboardHistory(): DashboardHistoryResponse {
   };
 }
 
+function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibrarySummary {
+  return {
+    id: 1,
+    name: "Movies",
+    path: "/media/movies",
+    type: "movies",
+    scan_mode: "manual",
+    duplicate_detection_mode: "off",
+    scan_config: {},
+    quality_profile: DEFAULT_QUALITY_PROFILE,
+    show_on_dashboard: true,
+    created_at: "2026-04-19T08:00:00Z",
+    updated_at: "2026-04-19T08:00:00Z",
+    last_scan_at: null,
+    file_count: 0,
+    total_size_bytes: 0,
+    total_duration_seconds: 0,
+    ready_files: 0,
+    pending_files: 0,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   const FileRoute = () => {
     const { fileId = "" } = useParams();
@@ -226,6 +254,64 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it("keeps empty dashboard panels in a loading state until their data request resolves", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "container", statisticId: "container", width: 1, height: 1 }],
+      }),
+    );
+    let resolveDashboard: ((payload: DashboardResponse) => void) | null = null;
+    const dashboardPromise = new Promise<DashboardResponse>((resolve) => {
+      resolveDashboard = resolve;
+    });
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockReturnValue(dashboardPromise);
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Loading...")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+
+    resolveDashboard?.(createDashboard());
+
+    expect(await screen.findByText("MKV")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+  });
+
+  it("keeps comparison panels loading until their first comparison response arrives", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        items: [{ instanceId: "comparison-1", statisticId: "comparison", width: 2, height: 2 }],
+      }),
+    );
+    let resolveComparison: ((payload: ComparisonResponse) => void) | null = null;
+    const comparisonPromise = new Promise<ComparisonResponse>((resolve) => {
+      resolveComparison = resolve;
+    });
+
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockReturnValue(comparisonPromise);
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByText("Loading...")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+
+    resolveComparison?.(createComparisonResponse());
+
+    expect(await screen.findByTestId("echarts-react")).toBeInTheDocument();
+    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+  });
+
   it("shows the dashboard title and persists inline layout changes", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
@@ -318,6 +404,70 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
     expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
+  });
+
+  it("can expand dashboard history beyond four rows while editing the layout", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        version: 3,
+        items: [{ instanceId: "history", statisticId: "history", width: 4, height: 4 }],
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Historic data" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit panel layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand panel height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save panel layout" }));
+
+    expect(window.localStorage.getItem("medialyze-statistic-panel-layout-dashboard-main")).toContain("\"height\":5");
+  });
+
+  it("reloads comparison data when the visible dashboard libraries change", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+    const comparisonSpy = vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+
+    function DashboardHarness({ libraries }: { libraries: LibrarySummary[] }) {
+      const { setLibraries } = useAppData();
+      useEffect(() => {
+        setLibraries(libraries);
+      }, [libraries, setLibraries]);
+      return <DashboardPage />;
+    }
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <AppDataProvider>
+          <ScanJobsProvider>
+            <DashboardHarness libraries={[createLibrarySummary({ id: 1 })]} />
+          </ScanJobsProvider>
+        </AppDataProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(comparisonSpy).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <MemoryRouter>
+        <AppDataProvider>
+          <ScanJobsProvider>
+            <DashboardHarness libraries={[createLibrarySummary({ id: 2 })]} />
+          </ScanJobsProvider>
+        </AppDataProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(comparisonSpy).toHaveBeenCalledTimes(4));
   });
 
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {

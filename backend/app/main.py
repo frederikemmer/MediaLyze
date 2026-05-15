@@ -11,6 +11,22 @@ from backend.app.core.config import get_settings
 from backend.app.db.session import init_db
 from backend.app.services.runtime import ScanRuntimeManager
 
+HTML_CACHE_CONTROL = "no-cache"
+ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
+class ImmutableAssetStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = ASSET_CACHE_CONTROL
+        return response
+
+
+def _frontend_file_response(path: Path) -> FileResponse:
+    headers = {"Cache-Control": HTML_CACHE_CONTROL} if path.suffix == ".html" else None
+    return FileResponse(path, headers=headers)
+
+
 def create_app(settings=None) -> FastAPI:
     active_settings = settings or get_settings()
 
@@ -42,14 +58,14 @@ def create_app(settings=None) -> FastAPI:
     if frontend_dist.exists():
         assets_dir = frontend_dist / "assets"
         if assets_dir.exists():
-            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+            app.mount("/assets", ImmutableAssetStaticFiles(directory=assets_dir), name="assets")
 
         @app.get("/{path:path}")
         def serve_frontend(path: str) -> FileResponse:
             candidate = frontend_dist / path
             if path and candidate.exists() and candidate.is_file():
-                return FileResponse(candidate)
-            return FileResponse(frontend_dist / "index.html")
+                return _frontend_file_response(candidate)
+            return _frontend_file_response(frontend_dist / "index.html")
 
     return app
 
