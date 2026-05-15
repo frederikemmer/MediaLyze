@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - notify users about newer stable releases, merge remote release notes into release history, and let desktop builds download the matching latest installer directly to the desktop
+- gently highlight the enabled telemetry option when release history opens automatically after an app update
 - allow history, duplicates, and analyzed-files panels to grow in height more
 - add a table-based coverage for library modes, scan behavior, supported extensions/formats/codecs/HDR/subtitle handling, and unsupported-input behavior in `docs/supported_metadata.md`
 - split audio and video bit-depth statistics into explicit panels

@@ -13,6 +13,7 @@ type TelemetryModeToggleProps = {
   disabled?: boolean;
   undecided?: boolean;
   compact?: boolean;
+  highlightEnabledOption?: boolean;
   onChange: (mode: SelectableTelemetryMode) => void;
   onConfirmedModeClick?: (mode: SelectableTelemetryMode) => void;
 };
@@ -57,6 +58,7 @@ export function TelemetryModeToggle({
   disabled = false,
   undecided = false,
   compact = false,
+  highlightEnabledOption = false,
   onChange,
   onConfirmedModeClick,
 }: TelemetryModeToggleProps) {
@@ -75,7 +77,7 @@ export function TelemetryModeToggle({
           <button
             key={option.mode}
             type="button"
-            className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}`.trim()}
+            className={`telemetry-mode-button ${option.className}${isSelected ? " is-selected" : ""}${isPending ? " is-pending" : ""}${highlightEnabledOption && option.mode === "enabled" ? " is-update-attention" : ""}`.trim()}
             aria-label={label}
             aria-pressed={isSelected}
             data-tooltip-title={t(option.tooltipTitleKey)}

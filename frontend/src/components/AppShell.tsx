@@ -12,6 +12,7 @@ import { useAppData } from "../lib/app-data";
 import {
   getAllReleaseNotes,
   getCurrentReleaseNotes,
+  isFirstOpenAfterUpdate,
   markReleaseNotesSeen,
   mergeReleaseNotes,
   normalizeReleaseVersion,
@@ -48,6 +49,9 @@ export function AppShell() {
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [showReleaseNotes, setShowReleaseNotes] = useState(() => shouldShowReleaseNotes(APP_VERSION, releaseNotes));
+  const [showUpdateTelemetryAttention, setShowUpdateTelemetryAttention] = useState(
+    () => shouldShowReleaseNotes(APP_VERSION, releaseNotes) && isFirstOpenAfterUpdate(APP_VERSION, releaseNotes),
+  );
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export function AppShell() {
     }
     markReleaseNotesSeen(APP_VERSION);
     setShowReleaseNotes(false);
+    setShowUpdateTelemetryAttention(false);
   }
 
   async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
@@ -118,6 +123,7 @@ export function AppShell() {
       return;
     }
     setExpandedReleaseVersion(updateAvailable && latestAvailableVersion ? latestAvailableVersion : releaseNotes?.version ?? allReleaseNotes[0].version);
+    setShowUpdateTelemetryAttention(false);
     setShowReleaseNotes(true);
   }
 
@@ -317,6 +323,7 @@ export function AppShell() {
                 ) : null}
                 <TelemetryModeToggle
                   compact
+                  highlightEnabledOption={showUpdateTelemetryAttention}
                   mode={telemetry.mode}
                   pendingMode={pendingTelemetryMode}
                   disabled={!appSettingsLoaded || Boolean(pendingTelemetryMode) || telemetry.environment_disabled}

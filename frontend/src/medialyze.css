@@ -3199,6 +3199,18 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   opacity: 0.68;
 }
 
+.telemetry-mode-button.telemetry-mode-enabled.is-update-attention {
+  animation: telemetry-enabled-update-attention 2.4s ease-in-out 2;
+}
+
+@keyframes telemetry-enabled-update-attention {
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(27, 153, 139, 0.12),
+      0 0 0 8px rgba(27, 153, 139, 0.06);
+  }
+}
+
 .telemetry-mode-button-content {
   position: relative;
   z-index: 1;

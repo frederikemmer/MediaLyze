@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY,
+  isFirstOpenAfterUpdate,
   markReleaseNotesSeen,
   mergeReleaseNotes,
   parseAllReleaseNotes,
@@ -82,6 +83,18 @@ describe("release notes", () => {
     expect(shouldShowReleaseNotes("1.2.3", notes)).toBe(false);
     expect(shouldShowReleaseNotes("1.2.4", { ...notes, version: "1.2.4" })).toBe(true);
     expect(shouldShowReleaseNotes("dev", notes)).toBe(false);
+  });
+
+  it("recognizes only a real first open after an update", () => {
+    const notes = { version: "1.2.3", date: null, sections: [{ title: "New", items: ["entry"] }] };
+
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
+
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, "1.2.2");
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(true);
+
+    window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, "1.2.3");
+    expect(isFirstOpenAfterUpdate("1.2.3", notes)).toBe(false);
   });
 
   it("prefers remote release notes while keeping older local notes", () => {

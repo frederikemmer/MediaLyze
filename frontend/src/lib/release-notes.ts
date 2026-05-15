@@ -131,6 +131,14 @@ export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNot
   return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
 }
 
+export function isFirstOpenAfterUpdate(version: string, releaseNotes: ReleaseNotes | null): boolean {
+  if (!releaseNotes || normalizeReleaseVersion(version) === "dev" || typeof window === "undefined") {
+    return false;
+  }
+  const seenVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY);
+  return Boolean(seenVersion && seenVersion !== normalizeReleaseVersion(version));
+}
+
 export function markReleaseNotesSeen(version: string): void {
   if (typeof window === "undefined") {
     return;

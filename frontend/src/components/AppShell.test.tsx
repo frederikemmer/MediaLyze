@@ -143,6 +143,20 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
   });
 
+  it("gently highlights enabled telemetry only on the first automatic open after an update", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.2");
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Help the dev" })).toHaveClass("is-update-attention");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show release notes for v0.8.3" }));
+
+    expect(screen.getByRole("button", { name: "Help the dev" })).not.toHaveClass("is-update-attention");
+  });
+
   it("does not show already dismissed release notes for the current version", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-version", "0.8.3");
 
