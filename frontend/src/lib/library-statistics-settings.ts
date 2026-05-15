@@ -107,6 +107,7 @@ const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
 ]);
 type MusicVisibilityOptions = {
   showMusicQualityScore?: boolean;
+  hasVideoMetadata?: boolean;
 };
 
 function buildStorageKey(storageScope?: string): string {
@@ -201,7 +202,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   },
   {
     id: "video_bit_depth",
-    nameKey: "libraryStatistics.items.dynamicRange",
+    nameKey: "libraryStatistics.items.videoBitDepth",
     supportsPanel: true,
     supportsTable: false,
     supportsTableTooltip: false,
@@ -210,9 +211,9 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
-    panelTitleKey: "libraryDetail.dynamicRange",
+    panelTitleKey: "libraryDetail.videoBitDepth",
     panelDataKey: "video_bit_depth_distribution",
-    dashboardTitleKey: "dashboard.dynamicRange",
+    dashboardTitleKey: "dashboard.videoBitDepth",
     dashboardDataKey: "video_bit_depth_distribution",
   },
   {
@@ -285,7 +286,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   },
   {
     id: "bit_depth",
-    nameKey: "libraryStatistics.items.bitDepth",
+    nameKey: "libraryStatistics.items.audioBitDepth",
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
@@ -294,10 +295,10 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     defaultTableEnabled: false,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
-    panelTitleKey: "libraryDetail.bitDepthDistribution",
+    panelTitleKey: "libraryDetail.audioBitDepth",
     panelDataKey: "bit_depth_distribution",
     tableColumnKey: "bit_depth",
-    dashboardTitleKey: "dashboard.bitDepthDistribution",
+    dashboardTitleKey: "dashboard.audioBitDepth",
     dashboardDataKey: "bit_depth_distribution",
   },
   {
@@ -643,6 +644,9 @@ export function isLibraryStatisticDefinitionVisibleForLibraryType(
   libraryType?: LibraryType | null,
   options?: MusicVisibilityOptions,
 ): boolean {
+  if (definition.id === "video_bit_depth" && options?.hasVideoMetadata === false) {
+    return false;
+  }
   if (libraryType !== "music") {
     return true;
   }

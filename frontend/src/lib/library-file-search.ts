@@ -154,7 +154,7 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
   {
     field: "bit_depth",
     icon: AudioLines,
-    labelKey: "libraryStatistics.items.bitDepth",
+    labelKey: "libraryStatistics.items.audioBitDepth",
     placeholderKey: "libraryDetail.searchFields.bitDepth.placeholder",
     tooltipKey: "libraryDetail.searchFields.bitDepth.tooltip",
     validate: isValidBitDepthValue,
@@ -176,7 +176,7 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
   {
     field: "hdr_type",
     icon: SunMedium,
-    labelKey: "libraryStatistics.items.dynamicRange",
+    labelKey: "libraryStatistics.items.hdrProfile",
     placeholderKey: "libraryDetail.searchFields.hdr.placeholder",
     tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
   },

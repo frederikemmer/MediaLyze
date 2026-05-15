@@ -147,7 +147,7 @@ def test_dashboard_keeps_video_codec_and_video_bit_depth_distributions_separate(
     ]
 
 
-def test_dashboard_bit_depth_distribution_uses_audio_bit_depth_only() -> None:
+def test_dashboard_audio_bit_depth_distribution_uses_best_audio_track_per_file_only() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -189,6 +189,7 @@ def test_dashboard_bit_depth_distribution_uses_audio_bit_depth_only() -> None:
         db.add_all(
             [
                 VideoStream(media_file_id=with_audio.id, stream_index=0, codec="hevc", bit_depth=8),
+                AudioStream(media_file_id=with_audio.id, stream_index=2, codec="aac", bit_depth=16),
                 AudioStream(media_file_id=with_audio.id, stream_index=1, codec="aac", bit_depth=24),
                 VideoStream(media_file_id=video_only.id, stream_index=0, codec="hevc", bit_depth=10),
             ]

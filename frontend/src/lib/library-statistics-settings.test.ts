@@ -202,4 +202,15 @@ describe("library statistics settings", () => {
     expect(visiblePanelIds).not.toContain("hdr_type");
     expect(visiblePanelIds).not.toContain("bitrate");
   });
+
+  it("hides video bit depth when a library has no video metadata", () => {
+    const settings = getLibraryStatisticsSettings();
+
+    expect(
+      getVisibleLibraryStatisticPanels(settings, "mixed", { hasVideoMetadata: false }).map((entry) => entry.id),
+    ).not.toContain("video_bit_depth");
+    expect(
+      getVisibleLibraryStatisticPanels(settings, "mixed", { hasVideoMetadata: true }).map((entry) => entry.id),
+    ).toContain("video_bit_depth");
+  });
 });

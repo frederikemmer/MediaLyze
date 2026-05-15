@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 - separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels
+- split audio and video bit-depth statistics into explicit panels, keep audio bit depth at one best-track value per file, and hide video bit depth where a library has no video metadata
+- allow history, duplicates, and analyzed-files panels to grow to eight grid rows while keeping each at a minimum height of two rows
+- refresh dashboard comparison panels when dashboard-visible libraries change so hidden-library assets do not remain in cached plots
 
 ### ✨ New
 

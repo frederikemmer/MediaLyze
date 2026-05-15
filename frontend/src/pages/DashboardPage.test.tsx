@@ -1,16 +1,19 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { useEffect } from "react";
 
-import { AppDataProvider } from "../lib/app-data";
+import { AppDataProvider, useAppData } from "../lib/app-data";
 import {
+  DEFAULT_QUALITY_PROFILE,
   api,
   type AppSettings,
   type ComparisonResponse,
   type DashboardHistoryResponse,
   type DashboardResponse,
+  type LibrarySummary,
 } from "../lib/api";
 import { getLibraryStatisticsSettings, saveLibraryStatisticsSettings } from "../lib/library-statistics-settings";
 import { ScanJobsProvider } from "../lib/scan-jobs";
@@ -201,6 +204,29 @@ function createDashboardHistory(): DashboardHistoryResponse {
   };
 }
 
+function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibrarySummary {
+  return {
+    id: 1,
+    name: "Movies",
+    path: "/media/movies",
+    type: "movies",
+    scan_mode: "manual",
+    duplicate_detection_mode: "off",
+    scan_config: {},
+    quality_profile: DEFAULT_QUALITY_PROFILE,
+    show_on_dashboard: true,
+    created_at: "2026-04-19T08:00:00Z",
+    updated_at: "2026-04-19T08:00:00Z",
+    last_scan_at: null,
+    file_count: 0,
+    total_size_bytes: 0,
+    total_duration_seconds: 0,
+    ready_files: 0,
+    pending_files: 0,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   const FileRoute = () => {
     const { fileId = "" } = useParams();
@@ -320,6 +346,46 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
     expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
+  });
+
+  it("reloads comparison data when the visible dashboard libraries change", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+    const comparisonSpy = vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+
+    function DashboardHarness({ libraries }: { libraries: LibrarySummary[] }) {
+      const { setLibraries } = useAppData();
+      useEffect(() => {
+        setLibraries(libraries);
+      }, [libraries, setLibraries]);
+      return <DashboardPage />;
+    }
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <AppDataProvider>
+          <ScanJobsProvider>
+            <DashboardHarness libraries={[createLibrarySummary({ id: 1 })]} />
+          </ScanJobsProvider>
+        </AppDataProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(comparisonSpy).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <MemoryRouter>
+        <AppDataProvider>
+          <ScanJobsProvider>
+            <DashboardHarness libraries={[createLibrarySummary({ id: 2 })]} />
+          </ScanJobsProvider>
+        </AppDataProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(comparisonSpy).toHaveBeenCalledTimes(4));
   });
 
   it("renders the comparison panel and reloads it when the axis selection changes", async () => {

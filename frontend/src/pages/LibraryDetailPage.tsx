@@ -1429,6 +1429,8 @@ export function LibraryDetailPage() {
   const displayLibrary = librarySummary ?? fallbackSummary;
   const activeLibraryType = displayLibrary?.type;
   const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
+  const hasVideoMetadata =
+    libraryStatistics === null ? undefined : libraryStatistics.video_bit_depth_distribution.length > 0;
   const supportsSeriesGrouping = displayLibrary?.type === "series" || displayLibrary?.type === "mixed";
   const activeStatisticLayout = isEditingStatisticLayout ? draftStatisticLayout : savedStatisticLayout;
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
@@ -1542,6 +1544,7 @@ export function LibraryDetailPage() {
             definition.kind === "statistic" &&
             !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, activeLibraryType, {
               showMusicQualityScore,
+              hasVideoMetadata,
             })
           ) {
             return null;
@@ -1549,7 +1552,7 @@ export function LibraryDetailPage() {
           return { item, definition };
         })
         .filter((entry): entry is VisibleLibraryLayoutPanel => Boolean(entry)),
-    [activeStatisticLayout.items, activeLibraryType, showMusicQualityScore],
+    [activeStatisticLayout.items, activeLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
   const visibleLibraryStatisticPanelIds = useMemo(
     () =>
@@ -1592,9 +1595,10 @@ export function LibraryDetailPage() {
         }
         return isLibraryStatisticDefinitionVisibleForLibraryType(panelDefinition.statisticDefinition, activeLibraryType, {
           showMusicQualityScore,
+          hasVideoMetadata,
         });
       }),
-    [draftStatisticLayout, activeLibraryType, showMusicQualityScore],
+    [draftStatisticLayout, activeLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
   const activeColumns = useMemo(
     () => fileColumns.filter((column) => visibleColumns.includes(column.key)),
@@ -3232,13 +3236,14 @@ export function LibraryDetailPage() {
                   : statisticDefinition.panelFormatKind
                   ? formatCodecLabel(rawLabel, statisticDefinition.panelFormatKind)
                   : rawLabel;
+                const isFilterable = statisticDefinition.id !== "video_bit_depth";
                 const isApplied = hasSearchValueTokens(fieldValues[statisticDefinition.id], filterValue);
                 return {
                   key: `${statisticDefinition.id}:${rawLabel}`,
                   label,
                   value: item.value,
-                  disabled: isApplied,
-                  ariaLabel: isApplied
+                  disabled: isFilterable && isApplied,
+                  ariaLabel: isFilterable && isApplied
                     ? t("libraryDetail.statistics.filterAlreadyApplied", {
                         field: t(statisticDefinition.nameKey),
                         value: label,
@@ -3248,7 +3253,7 @@ export function LibraryDetailPage() {
                         value: label,
                       }),
                   onClick:
-                    statisticsError || !libraryStatistics
+                    !isFilterable || statisticsError || !libraryStatistics
                       ? undefined
                       : () => applyStatisticFilter(statisticDefinition.id, filterValue),
                 };

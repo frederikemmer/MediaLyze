@@ -37,6 +37,7 @@ import {
   getAvailableStatisticPanelDefinitions,
   getStatisticPanelLayout,
   getStatisticPanelLayoutReadResult,
+  getStatisticPanelSizeConfigForItem,
   moveStatisticPanelLayoutItem,
   removeStatisticPanelLayoutItem,
   resizeStatisticPanelLayoutItem,
@@ -115,8 +116,8 @@ function formatDashboardDistributionLabel(
   return label;
 }
 
-function buildComparisonQueryKey(selection: ComparisonSelection): string {
-  return `${selection.xField}:${selection.yField}`;
+function buildComparisonQueryKey(selection: ComparisonSelection, dashboardLibraryScopeKey: string): string {
+  return `${dashboardLibraryScopeKey}:${selection.xField}:${selection.yField}`;
 }
 
 function readDashboardHistoryPanelCollapsedPreference(): boolean {
@@ -154,8 +155,18 @@ export function DashboardPage() {
     () => [...new Set(libraries.filter((library) => library.show_on_dashboard).map((library) => library.type))],
     [libraries],
   );
+  const dashboardLibraryScopeKey = useMemo(
+    () =>
+      libraries
+        .filter((library) => library.show_on_dashboard)
+        .map((library) => library.id)
+        .sort((left, right) => left - right)
+        .join(","),
+    [libraries],
+  );
   const effectiveDashboardLibraryType = dashboardLibraryTypes.length === 1 ? dashboardLibraryTypes[0] : null;
   const showMusicQualityScore = appSettings.feature_flags.show_music_quality_score;
+  const hasVideoMetadata = dashboard === null ? undefined : dashboard.video_bit_depth_distribution.length > 0;
   const availableComparisonFields = useMemo(
     () => getComparisonFieldDefinitionsForLibraryType(effectiveDashboardLibraryType, { showMusicQualityScore }),
     [effectiveDashboardLibraryType, showMusicQualityScore],
@@ -213,6 +224,7 @@ export function DashboardPage() {
             definition.kind === "statistic" &&
             !isLibraryStatisticDefinitionVisibleForLibraryType(definition.statisticDefinition, effectiveDashboardLibraryType, {
               showMusicQualityScore,
+              hasVideoMetadata,
             })
           ) {
             return null;
@@ -220,7 +232,7 @@ export function DashboardPage() {
           return { item, definition };
         })
         .filter((entry): entry is VisibleDashboardPanel => Boolean(entry)),
-    [activeLayout.items, effectiveDashboardLibraryType, showMusicQualityScore],
+    [activeLayout.items, effectiveDashboardLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
   const comparisonPanels = useMemo(
     () => visiblePanels.filter((panel) => panel.item.statisticId === "comparison"),
@@ -258,10 +270,10 @@ export function DashboardPage() {
         return isLibraryStatisticDefinitionVisibleForLibraryType(
           panelDefinition.statisticDefinition,
           effectiveDashboardLibraryType,
-          { showMusicQualityScore },
+          { showMusicQualityScore, hasVideoMetadata },
         );
       }),
-    [draftLayout, effectiveDashboardLibraryType, showMusicQualityScore],
+    [draftLayout, effectiveDashboardLibraryType, hasVideoMetadata, showMusicQualityScore],
   );
 
   useEffect(() => {
@@ -343,7 +355,7 @@ export function DashboardPage() {
         effectiveDashboardLibraryType,
         { showMusicQualityScore },
       );
-      const queryKey = buildComparisonQueryKey(selection);
+      const queryKey = buildComparisonQueryKey(selection, dashboardLibraryScopeKey);
       const cachedComparison = !force ? dashboardComparisonCache.get(queryKey) ?? null : null;
 
       setComparisonErrorByPanel((current) => ({ ...current, [item.instanceId]: null }));
@@ -390,7 +402,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     syncComparisonPanels();
-  }, [comparisonPanelsKey]);
+  }, [comparisonPanelsKey, dashboardLibraryScopeKey]);
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
@@ -404,12 +416,12 @@ export function DashboardPage() {
           effectiveDashboardLibraryType,
           { showMusicQualityScore },
         );
-        dashboardComparisonCache.delete(buildComparisonQueryKey(selection));
+        dashboardComparisonCache.delete(buildComparisonQueryKey(selection, dashboardLibraryScopeKey));
       }
       syncComparisonPanels(true);
     }
     hadActiveJobsRef.current = hasActiveJobs;
-  }, [comparisonPanelsKey, hasActiveJobs, loadDashboard, visibleDashboardPanelIdsKey]);
+  }, [comparisonPanelsKey, dashboardLibraryScopeKey, hasActiveJobs, loadDashboard, visibleDashboardPanelIdsKey]);
 
   useEffect(() => {
     return () => {
@@ -472,6 +484,7 @@ export function DashboardPage() {
 
   function renderResizeControls(panel: VisibleDashboardPanel) {
     const { item } = panel;
+    const sizeConfig = getStatisticPanelSizeConfigForItem("dashboard", item.statisticId, layoutOptions);
     return (
       <>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-top-left">
@@ -488,7 +501,7 @@ export function DashboardPage() {
           </button>
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-right">
-          {item.width < 4 ? (
+          {sizeConfig.allowWidthResize && item.width < sizeConfig.maxWidth ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -503,7 +516,7 @@ export function DashboardPage() {
               <PanelRightClose className="nav-icon" aria-hidden="true" />
             </button>
           ) : null}
-          {item.width > 1 ? (
+          {sizeConfig.allowWidthResize && item.width > sizeConfig.minWidth ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -520,7 +533,7 @@ export function DashboardPage() {
           ) : null}
         </div>
         <div className="statistic-layout-size-controls statistic-layout-size-controls-bottom">
-          {layoutOptions.unlimitedHeight || item.height < 4 ? (
+          {sizeConfig.allowHeightResize && item.height < sizeConfig.maxHeight ? (
             <button
               type="button"
               className="statistic-layout-size-button"
@@ -541,7 +554,7 @@ export function DashboardPage() {
               <PanelBottomClose className="nav-icon" aria-hidden="true" />
             </button>
           ) : null}
-          {item.height > 1 ? (
+          {sizeConfig.allowHeightResize && item.height > sizeConfig.minHeight ? (
             <button
               type="button"
               className="statistic-layout-size-button"

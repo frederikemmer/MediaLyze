@@ -63,6 +63,7 @@ export type StatisticPanelLayoutReadResult = {
 const STORAGE_KEY_PREFIX = "medialyze-statistic-panel-layout";
 const STATISTIC_PANEL_LAYOUT_VERSION = 3;
 const MAX_PANEL_WIDTH_UNITS = 4;
+const LARGE_PANEL_MAX_HEIGHT_UNITS = 8;
 const COMPARISON_FIELD_IDS = new Set(COMPARISON_FIELD_DEFINITIONS.map((definition) => definition.id));
 const COMPARISON_RENDERER_IDS = new Set<ComparisonRendererId>(["heatmap", "scatter", "bar"]);
 
@@ -202,8 +203,8 @@ function getPanelSizeConfig(
       defaultHeight: 3,
       minWidth: 2,
       maxWidth: 4,
-      minHeight: 3,
-      maxHeight: Math.max(3, boundedMaxHeight),
+      minHeight: 2,
+      maxHeight: options?.unlimitedHeight ? Number.MAX_SAFE_INTEGER : LARGE_PANEL_MAX_HEIGHT_UNITS,
       allowWidthResize: true,
       allowHeightResize: true,
     };
@@ -215,8 +216,8 @@ function getPanelSizeConfig(
       defaultHeight: 3,
       minWidth: 4,
       maxWidth: 4,
-      minHeight: 1,
-      maxHeight: boundedMaxHeight,
+      minHeight: 2,
+      maxHeight: options?.unlimitedHeight ? Number.MAX_SAFE_INTEGER : LARGE_PANEL_MAX_HEIGHT_UNITS,
       allowWidthResize: false,
       allowHeightResize: true,
     };
@@ -229,7 +230,7 @@ function getPanelSizeConfig(
       minWidth: 4,
       maxWidth: 4,
       minHeight: 2,
-      maxHeight: Math.max(4, boundedMaxHeight),
+      maxHeight: options?.unlimitedHeight ? Number.MAX_SAFE_INTEGER : LARGE_PANEL_MAX_HEIGHT_UNITS,
       allowWidthResize: false,
       allowHeightResize: true,
     };
