@@ -368,6 +368,10 @@
   height: 18px;
 }
 
+.release-notes-hand-coins-icon {
+  display: inline-flex;
+}
+
 .release-notes-content {
   grid-row: 3;
   min-height: 0;
@@ -763,6 +767,22 @@
 
 .analyzed-files-title-addon .statistic-layout-controls {
   flex: 0 0 auto;
+}
+
+.panel-empty-state {
+  min-height: 100%;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.panel-empty-state-icon {
+  display: inline-flex;
+  color: var(--muted);
 }
 
 .analyzed-files-count {

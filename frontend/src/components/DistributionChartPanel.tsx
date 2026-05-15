@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import type { NumericDistribution, NumericDistributionBin, NumericDistributionMetricId } from "../lib/api";
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
 import { AsyncPanel } from "./AsyncPanel";
+import { PanelEmptyState } from "./PanelEmptyState";
 
 const METRICS_WITHOUT_TOTAL_COPY = new Set<NumericDistributionMetricId>([
   "size",
@@ -101,7 +102,7 @@ export function DistributionChartPanel({
       }
     >
       {!distribution || distribution.total <= 0 ? (
-        <div className="notice">{t("distributionChart.empty")}</div>
+        <PanelEmptyState />
       ) : (
         <div
           className={`distribution-chart-panel-content${showTotalCopy ? "" : " distribution-chart-panel-content-compact"}`}

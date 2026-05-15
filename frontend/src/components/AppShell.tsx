@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bug, ChevronDown, ChevronRight, Download, Gift, House, SearchX, Settings, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Download, House, SearchX, Settings, X } from "lucide-react";
 import { motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
+import { HandCoinsIcon } from "./HandCoinsIcon";
 import { TelemetryModeToggle } from "./TelemetryModeToggle";
 import { api, type ScanJob, type TelemetryMode, type UpdateStatus } from "../lib/api";
 import { APP_VERSION } from "../lib/app-version";
@@ -351,7 +352,7 @@ export function AppShell() {
                   aria-label={t("releaseNotes.donateAria")}
                   data-tooltip={t("releaseNotes.donateAria")}
                 >
-                  <Gift aria-hidden="true" className="nav-icon" />
+                  <HandCoinsIcon aria-hidden="true" className="release-notes-hand-coins-icon" size={18} />
                 </a>
                 <a
                   className="release-notes-icon-link"

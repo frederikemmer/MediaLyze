@@ -51,7 +51,8 @@
   "panel": {
     "collapseAria": "{{title}} einklappen",
     "expandAria": "{{title}} ausklappen",
-    "loading": "Wird geladen..."
+    "loading": "Wird geladen...",
+    "noDataYet": "Noch keine Daten"
   },
   "releaseNotes": {
     "title": "Versionsverlauf",

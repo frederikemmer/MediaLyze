@@ -51,7 +51,8 @@
   "panel": {
     "collapseAria": "Collapse {{title}}",
     "expandAria": "Expand {{title}}",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "noDataYet": "not data yet"
   },
   "releaseNotes": {
     "title": "Release history",

@@ -13,6 +13,7 @@ import {
 } from "../lib/history-metrics";
 import { AsyncPanel } from "./AsyncPanel";
 import { HistoryTrendChart } from "./HistoryTrendChart";
+import { PanelEmptyState } from "./PanelEmptyState";
 
 type HistoryResponse = LibraryHistoryResponse | DashboardHistoryResponse;
 type HistoryRangeMode = "7d" | "30d" | "1y" | "all" | "custom";
@@ -199,7 +200,6 @@ export function LibraryHistoryPanel({
   currentResolutionCategoryIds,
   title,
   subtitle,
-  emptyMessage,
   metricLabel,
   rangeStorageKey = DEFAULT_HISTORY_RANGE_STORAGE_KEY,
   bodyId = "library-history-panel-body",
@@ -652,7 +652,7 @@ export function LibraryHistoryPanel({
       }}
     >
       {!history || history.points.length === 0 ? (
-        <div className="notice">{emptyMessage ?? t("libraryDetail.history.empty")}</div>
+        <PanelEmptyState />
       ) : filteredHistoryPoints.length === 0 ? (
         <div className="notice">{t("libraryDetail.history.range.empty")}</div>
       ) : (

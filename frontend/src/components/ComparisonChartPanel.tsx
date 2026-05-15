@@ -23,6 +23,7 @@ import {
   type ComparisonSelection,
 } from "../lib/statistic-comparisons";
 import { AsyncPanel } from "./AsyncPanel";
+import { PanelEmptyState } from "./PanelEmptyState";
 
 echarts.use([BarChart, GridComponent, HeatmapChart, ScatterChart, TooltipComponent, VisualMapComponent, CanvasRenderer]);
 
@@ -555,7 +556,7 @@ function ComparisonChartPanelComponent({
       }
     >
       {!comparison || comparison.included_files <= 0 ? (
-        <div className="notice">{t("comparisonChart.empty")}</div>
+        <PanelEmptyState />
       ) : (
         <div className="comparison-chart-content">
           {option ? (
@@ -573,7 +574,7 @@ function ComparisonChartPanelComponent({
               }}
             />
           ) : (
-            <div className="notice">{t("comparisonChart.empty")}</div>
+            <PanelEmptyState />
           )}
         </div>
       )}
