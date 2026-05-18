@@ -32,6 +32,29 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
 }
+_DISTRIBUTION_FIELD_BY_PANEL = {
+    "container": "container_distribution",
+    "video_codec": "video_codec_distribution",
+    "resolution": "resolution_distribution",
+    "hdr_type": "hdr_distribution",
+    "video_bit_depth": "video_bit_depth_distribution",
+    "bit_depth": "bit_depth_distribution",
+    "audio_codecs": "audio_codec_distribution",
+    "audio_spatial_profiles": "audio_spatial_profile_distribution",
+    "audio_languages": "audio_language_distribution",
+    "audio_artists": "audio_artist_distribution",
+    "audio_albums": "audio_album_distribution",
+    "audio_genres": "audio_genre_distribution",
+    "audio_years": "audio_year_distribution",
+    "audio_channels": "audio_channel_distribution",
+    "sample_rates": "sample_rate_distribution",
+    "track_numbers": "track_number_distribution",
+    "bit_rate_modes": "bit_rate_mode_distribution",
+    "embedded_covers": "embedded_cover_distribution",
+    "subtitle_languages": "subtitle_distribution",
+    "subtitle_codecs": "subtitle_codec_distribution",
+    "subtitle_sources": "subtitle_source_distribution",
+}
 
 
 def _distribution(rows: list[tuple[str | None, int]], fallback: str = "unknown") -> list[DistributionItem]:
@@ -90,21 +113,35 @@ def _group_resolution_distribution(rows, resolution_categories) -> list[Distribu
     ]
 
 
-def _dashboard_cache_key(base_key: str, requested_panels: set[str] | None) -> str:
+def _dashboard_panel_view(payload: DashboardResponse, requested_panels: set[str] | None) -> DashboardResponse:
     if requested_panels is None:
-        return base_key
-    return f"{base_key}:panels={','.join(sorted(requested_panels))}"
+        return payload
+
+    updates = {
+        field_name: getattr(payload, field_name) if panel_id in requested_panels else []
+        for panel_id, field_name in _DISTRIBUTION_FIELD_BY_PANEL.items()
+    }
+    updates["numeric_distributions"] = {
+        metric_id: distribution
+        for metric_id, distribution in payload.numeric_distributions.items()
+        if any(
+            requested_panel in requested_panels and metric_id == configured_metric_id
+            for requested_panel, configured_metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
+        )
+    }
+    return payload.model_copy(update=updates)
 
 
 def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) -> DashboardResponse:
     panel_filter = set(requested_panels) if requested_panels is not None else None
-    cache_key = _dashboard_cache_key(str(id(db.get_bind())), panel_filter)
+    cache_key = str(id(db.get_bind()))
     cached = stats_cache.get_dashboard(cache_key)
     if cached is not None:
-        return cached
+        return _dashboard_panel_view(cached, panel_filter)
 
     def wants(panel_id: str) -> bool:
-        return panel_filter is None or panel_id in panel_filter
+        del panel_id
+        return True
 
     primary_video_streams = (
         primary_video_streams_subquery()
@@ -251,6 +288,43 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             .order_by(func.count(distinct(audio_bit_depth_values.c.media_file_id)).desc())
         ).all()
 
+    def file_distribution(column, *, enabled: bool):
+        if not enabled:
+            return []
+        expression = _normalized_text_expr(column, "")
+        return db.execute(
+            select(expression.label("value"), func.count(MediaFile.id))
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .where(func.length(func.trim(func.coalesce(column, ""))) > 0)
+            .group_by(expression)
+            .order_by(func.count(MediaFile.id).desc())
+        ).all()
+
+    audio_artist_rows = file_distribution(MediaFile.audio_artist, enabled=wants("audio_artists"))
+    audio_album_rows = file_distribution(MediaFile.audio_album, enabled=wants("audio_albums"))
+    audio_genre_rows = file_distribution(MediaFile.audio_genre, enabled=wants("audio_genres"))
+    audio_year_rows = file_distribution(func.substr(MediaFile.audio_date, 1, 4), enabled=wants("audio_years"))
+    track_number_rows = file_distribution(MediaFile.track_number, enabled=wants("track_numbers"))
+    bit_rate_mode_rows = file_distribution(MediaFile.bit_rate_mode, enabled=wants("bit_rate_modes"))
+    audio_channel_rows = db.execute(
+        select(MediaFile.audio_channels, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids), MediaFile.audio_channels.is_not(None))
+        .group_by(MediaFile.audio_channels)
+        .order_by(func.count(MediaFile.id).desc())
+    ).all() if wants("audio_channels") else []
+    sample_rate_rows = db.execute(
+        select(MediaFile.sample_rate, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids), MediaFile.sample_rate.is_not(None))
+        .group_by(MediaFile.sample_rate)
+        .order_by(func.count(MediaFile.id).desc())
+    ).all() if wants("sample_rates") else []
+    embedded_cover_rows = db.execute(
+        select(MediaFile.has_embedded_cover, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
+        .group_by(MediaFile.has_embedded_cover)
+        .order_by(MediaFile.has_embedded_cover.desc())
+    ).all() if wants("embedded_covers") else []
+
     audio_language_rows: list[tuple[str, int]] = []
     if wants("audio_languages"):
         audio_language_values = (
@@ -372,15 +446,10 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             ).all()
         )
 
-    numeric_metric_ids = {
-        metric_id
-        for panel_id, metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
-        if wants(panel_id)
-    }
     numeric_distributions = build_numeric_distributions(
         db,
         dashboard_only=True,
-        metric_ids=None if panel_filter is None else numeric_metric_ids,
+        metric_ids=None,
     )
 
     payload = DashboardResponse(
@@ -406,6 +475,24 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             for label, value in bit_depth_rows
             if label is not None and value > 0
         ],
+        audio_artist_distribution=_distribution(audio_artist_rows),
+        audio_album_distribution=_distribution(audio_album_rows),
+        audio_genre_distribution=_distribution(audio_genre_rows),
+        audio_year_distribution=_distribution(audio_year_rows),
+        audio_channel_distribution=[
+            DistributionItem(label=str(label), value=value, filter_value=str(label))
+            for label, value in audio_channel_rows
+        ],
+        sample_rate_distribution=[
+            DistributionItem(label=f"{label} Hz", value=value, filter_value=str(label))
+            for label, value in sample_rate_rows
+        ],
+        track_number_distribution=_distribution(track_number_rows),
+        bit_rate_mode_distribution=_distribution(bit_rate_mode_rows),
+        embedded_cover_distribution=[
+            DistributionItem(label="yes" if label else "no", value=value, filter_value="yes" if label else "no")
+            for label, value in embedded_cover_rows
+        ],
         audio_codec_distribution=_distribution(audio_codec_rows),
         audio_spatial_profile_distribution=audio_spatial_profile_distribution,
         audio_language_distribution=[
@@ -421,4 +508,4 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
         numeric_distributions=numeric_distributions,
     )
     stats_cache.set_dashboard(cache_key, payload)
-    return payload
+    return _dashboard_panel_view(payload, panel_filter)

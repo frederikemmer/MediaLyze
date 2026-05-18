@@ -38,6 +38,11 @@ export const FIELD_CATEGORIES: Record<string, FieldCategory> = {
   audio_date: "music_only",
   audio_disc: "music_only",
   audio_composer: "music_only",
+  audio_channels: "audio_only",
+  sample_rate: "audio_only",
+  track_number: "music_only",
+  bit_rate_mode: "audio_only",
+  has_embedded_cover: "music_only",
 };
 
 /**

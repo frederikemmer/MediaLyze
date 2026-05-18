@@ -22,10 +22,15 @@ from backend.app.services.history_retention import (
 )
 from backend.app.services.history_storage import get_history_storage
 from backend.app.services.history_reconstruction import reconstruct_history_from_media_files
-from backend.app.services.library_service import get_library_statistics, get_library_summary
+from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+from backend.app.services.library_service import get_library_statistics, get_library_summary, list_libraries
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.services.stats import build_dashboard
-from backend.app.services.telemetry import send_current_telemetry_snapshot, send_initial_telemetry_snapshot
+from backend.app.services.telemetry import (
+    send_current_telemetry_snapshot,
+    send_initial_telemetry_snapshot,
+    send_update_telemetry_snapshot,
+)
 from backend.app.services.update_status import check_for_updates
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
@@ -87,6 +92,8 @@ class ScanRuntimeManager:
         self.run_history_retention()
         self.request_initial_telemetry_send()
         self.request_telemetry_send()
+        self.request_update_telemetry_send()
+        self.request_stats_warmup()
 
     def stop(self) -> None:
         with self.lock:
@@ -277,6 +284,12 @@ class ScanRuntimeManager:
             if not self.started:
                 return
         self.maintenance_executor.submit(self._run_initial_telemetry_send)
+
+    def request_update_telemetry_send(self) -> None:
+        with self.lock:
+            if not self.started:
+                return
+        self.maintenance_executor.submit(self._run_update_telemetry_send)
 
     def schedule_telemetry_send_after_settings_change(self) -> None:
         with self.lock:
@@ -625,6 +638,13 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
+    def _run_update_telemetry_send(self) -> None:
+        db = SessionLocal()
+        try:
+            send_update_telemetry_snapshot(db, self.settings)
+        finally:
+            db.close()
+
     def _run_update_check(self) -> None:
         db = SessionLocal()
         try:
@@ -698,12 +718,12 @@ class ScanRuntimeManager:
             return False
         return True
 
-    def request_stats_warmup(self, library_id: int) -> bool:
+    def request_stats_warmup(self, library_id: int | None = None) -> bool:
         with self.lock:
             if not self.started:
                 return False
             self._cancel_stats_warmup_locked()
-            timer = Timer(20, lambda: self._submit_stats_warmup(library_id))
+            timer = Timer(0, lambda: self._submit_stats_warmup(library_id))
             timer.daemon = True
             self.stats_warmup_timer = timer
             timer.start()
@@ -714,7 +734,7 @@ class ScanRuntimeManager:
             self.stats_warmup_timer.cancel()
             self.stats_warmup_timer = None
 
-    def _submit_stats_warmup(self, library_id: int) -> None:
+    def _submit_stats_warmup(self, library_id: int | None) -> None:
         with self.lock:
             self.stats_warmup_timer = None
             if self.active_library_ids:
@@ -724,15 +744,28 @@ class ScanRuntimeManager:
         except RuntimeError:
             return
 
-    def _run_stats_warmup(self, library_id: int) -> None:
+    def _run_stats_warmup(self, library_id: int | None = None) -> None:
         with self.lock:
             if self.active_library_ids:
                 return
         db = SessionLocal()
         try:
-            get_library_summary(db, library_id)
-            get_library_statistics(db, library_id)
+            # Favor the just-mutated library first, then use idle time to warm the rest.
+            library_ids = [library_id] if library_id is not None else []
+            library_ids.extend(
+                summary.id
+                for summary in list_libraries(db)
+                if summary.id != library_id
+            )
+            for candidate_library_id in library_ids:
+                with self.lock:
+                    if self.active_library_ids:
+                        return
+                get_library_summary(db, candidate_library_id)
+                get_library_statistics(db, candidate_library_id)
+                get_library_history(db, candidate_library_id)
             build_dashboard(db)
+            get_dashboard_history(db)
         except Exception:
             logger.exception("Failed to warm statistics caches")
         finally:

@@ -28,7 +28,9 @@ from backend.app.services.telemetry import (
     round_storage_gb_for_telemetry,
     send_current_telemetry_snapshot,
     send_initial_telemetry_snapshot,
+    send_update_telemetry_snapshot,
     should_send_telemetry,
+    should_send_update_telemetry,
 )
 
 
@@ -285,6 +287,44 @@ def test_should_send_telemetry_allows_one_snapshot_per_utc_day(tmp_path) -> None
     assert should_send_telemetry(next_day_settings, datetime(2026, 5, 12, 0, 0, tzinfo=UTC)) is True
 
 
+def test_should_send_update_telemetry_only_for_changed_reported_versions(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.11.1"
+
+    with session_factory() as db:
+        app_settings = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "enabled"}), settings)
+
+    same_version_settings = app_settings.model_copy(
+        update={"telemetry": app_settings.telemetry.model_copy(update={"last_sent_app_version": "0.11.1"})}
+    )
+    previous_version_settings = app_settings.model_copy(
+        update={"telemetry": app_settings.telemetry.model_copy(update={"last_sent_app_version": "0.11.0"})}
+    )
+
+    assert should_send_update_telemetry(same_version_settings, settings) is False
+    assert should_send_update_telemetry(previous_version_settings, settings) is True
+
+
+def test_should_send_update_telemetry_uses_legacy_last_payload_version(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.11.1"
+
+    with session_factory() as db:
+        app_settings = update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+
+    legacy_settings = app_settings.model_copy(
+        update={
+            "telemetry": app_settings.telemetry.model_copy(
+                update={"last_user_visible_payload": {"app": {"version": "0.11.1"}}}
+            )
+        }
+    )
+
+    assert should_send_update_telemetry(legacy_settings, settings) is False
+
+
 def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp_path, monkeypatch) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
@@ -310,6 +350,7 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
     assert posted["json"]["is_test"] is False
     assert posted["json"]["installation_id"] != "00000000-0000-0000-0000-000000000000"
     assert loaded.telemetry.last_sent_at is not None
+    assert loaded.telemetry.last_sent_app_version == settings.app_version
     assert loaded.telemetry.last_user_visible_payload == posted["json"]
 
 
@@ -404,6 +445,7 @@ def test_send_initial_telemetry_snapshot_posts_hidden_minimal_payload_and_marks_
     assert posted["json"]["is_test"] is False
     assert loaded.telemetry.mode == "initialized"
     assert loaded.telemetry.last_sent_at is not None
+    assert loaded.telemetry.last_sent_app_version == settings.app_version
     assert loaded.telemetry.last_user_visible_payload is None
 
 
@@ -432,6 +474,31 @@ def test_installation_id_survives_version_updates(tmp_path, monkeypatch) -> None
     assert posted[1]["app"]["version"] == "0.11.0"
     assert posted[1]["installation_id"] == first_id
     assert loaded.telemetry.installation_id == first_id
+
+
+def test_send_update_telemetry_snapshot_posts_once_after_version_change(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    previous_settings = build_settings(tmp_path)
+    previous_settings.app_version = "0.11.0"
+    updated_settings = build_settings(tmp_path)
+    updated_settings.app_version = "0.11.1"
+    posted: list[dict] = []
+
+    def fake_post_json(url, payload, timeout):
+        posted.append(payload)
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), previous_settings)
+        assert send_current_telemetry_snapshot(db, previous_settings, force=True) is True
+
+        assert send_update_telemetry_snapshot(db, updated_settings) is True
+        assert send_update_telemetry_snapshot(db, updated_settings) is False
+        loaded = get_app_settings(db, updated_settings)
+
+    assert [payload["app"]["version"] for payload in posted] == ["0.11.0", "0.11.1"]
+    assert loaded.telemetry.last_sent_app_version == "0.11.1"
 
 
 def test_send_initial_telemetry_snapshot_waits_for_retry_when_network_fails(tmp_path, monkeypatch) -> None:

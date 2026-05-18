@@ -34,6 +34,19 @@ class LibraryFileSearchFilters:
     search_audio_codecs: str = ""
     search_audio_spatial_profiles: str = ""
     search_audio_languages: str = ""
+    search_audio_title: str = ""
+    search_audio_artist: str = ""
+    search_audio_album: str = ""
+    search_audio_album_artist: str = ""
+    search_audio_genre: str = ""
+    search_audio_date: str = ""
+    search_audio_disc: str = ""
+    search_audio_composer: str = ""
+    search_audio_channels: str = ""
+    search_sample_rate: str = ""
+    search_track_number: str = ""
+    search_bit_rate_mode: str = ""
+    search_has_embedded_cover: str = ""
     search_subtitle_languages: str = ""
     search_subtitle_codecs: str = ""
     search_subtitle_sources: str = ""
@@ -54,6 +67,19 @@ class LibraryFileSearchFilters:
             search_audio_codecs=self.search_audio_codecs.strip(),
             search_audio_spatial_profiles=self.search_audio_spatial_profiles.strip(),
             search_audio_languages=self.search_audio_languages.strip(),
+            search_audio_title=self.search_audio_title.strip(),
+            search_audio_artist=self.search_audio_artist.strip(),
+            search_audio_album=self.search_audio_album.strip(),
+            search_audio_album_artist=self.search_audio_album_artist.strip(),
+            search_audio_genre=self.search_audio_genre.strip(),
+            search_audio_date=self.search_audio_date.strip(),
+            search_audio_disc=self.search_audio_disc.strip(),
+            search_audio_composer=self.search_audio_composer.strip(),
+            search_audio_channels=self.search_audio_channels.strip(),
+            search_sample_rate=self.search_sample_rate.strip(),
+            search_track_number=self.search_track_number.strip(),
+            search_bit_rate_mode=self.search_bit_rate_mode.strip(),
+            search_has_embedded_cover=self.search_has_embedded_cover.strip(),
             search_subtitle_languages=self.search_subtitle_languages.strip(),
             search_subtitle_codecs=self.search_subtitle_codecs.strip(),
             search_subtitle_sources=self.search_subtitle_sources.strip(),
@@ -122,6 +148,8 @@ _NUMERIC_FIELD_LABELS = {
     "audio_bitrate": "audio bitrate",
     "bit_depth": "bit depth",
     "duration": "duration",
+    "audio_channels": "audio channels",
+    "sample_rate": "sample rate",
 }
 
 
@@ -216,6 +244,7 @@ def apply_legacy_search(query, primary_video_streams, audio_aggregates, subtitle
                 match_patterns(audio_aggregates.c.audio_codecs_search, pattern_list),
                 match_patterns(audio_aggregates.c.audio_spatial_profiles_search, pattern_list),
                 match_patterns(audio_aggregates.c.audio_languages_search, pattern_list),
+                match_patterns(MediaFile.audio_metadata_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_languages_search, pattern_list),
                 match_patterns(subtitle_aggregates.c.subtitle_codecs_search, pattern_list),
                 or_(*source_matches) if source_matches else literal(False),
@@ -551,6 +580,32 @@ def apply_field_search_filters(
             audio_aggregates.c.audio_languages_search,
             normalized.search_audio_languages,
             _language_token_patterns,
+        )
+    text_filters = (
+        ("search_audio_title", MediaFile.audio_title),
+        ("search_audio_artist", MediaFile.audio_artist),
+        ("search_audio_album", MediaFile.audio_album),
+        ("search_audio_album_artist", MediaFile.audio_album_artist),
+        ("search_audio_genre", MediaFile.audio_genre),
+        ("search_audio_date", MediaFile.audio_date),
+        ("search_audio_disc", MediaFile.audio_disc),
+        ("search_audio_composer", MediaFile.audio_composer),
+        ("search_track_number", MediaFile.track_number),
+        ("search_bit_rate_mode", MediaFile.bit_rate_mode),
+    )
+    for field_name, expression in text_filters:
+        value = getattr(normalized, field_name)
+        if value:
+            query = _apply_text_filter(query, expression, value)
+    if normalized.search_audio_channels:
+        query = _apply_numeric_filter(query, MediaFile.audio_channels, normalized.search_audio_channels, int, "audio_channels")
+    if normalized.search_sample_rate:
+        query = _apply_numeric_filter(query, MediaFile.sample_rate, normalized.search_sample_rate, int, "sample_rate")
+    if normalized.search_has_embedded_cover:
+        query = _apply_text_filter(
+            query,
+            case((MediaFile.has_embedded_cover.is_(True), literal("yes")), else_=literal("no")),
+            normalized.search_has_embedded_cover,
         )
     if normalized.search_subtitle_languages:
         query = _apply_text_filter(

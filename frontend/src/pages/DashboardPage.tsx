@@ -60,8 +60,26 @@ const DASHBOARD_LAYOUT_KEY = "main";
 const DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY = "medialyze-dashboard-history-collapsed";
 const DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY = "medialyze-dashboard-history-selected-metric";
 const DASHBOARD_HISTORY_RANGE_STORAGE_KEY = "medialyze-dashboard-history-range-selection";
+const DASHBOARD_HISTORY_CACHE_STORAGE_KEY = "medialyze-dashboard-history-cache";
 const DEFAULT_HISTORY_METRIC: LibraryHistoryMetricId = "resolution_mix";
 const dashboardComparisonCache = new LruCache<string, ComparisonResponse>(24);
+
+function readDashboardHistoryCache(): DashboardHistoryResponse | null {
+  try {
+    const value = window.sessionStorage.getItem(DASHBOARD_HISTORY_CACHE_STORAGE_KEY);
+    return value ? (JSON.parse(value) as DashboardHistoryResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDashboardHistoryCache(payload: DashboardHistoryResponse): void {
+  try {
+    window.sessionStorage.setItem(DASHBOARD_HISTORY_CACHE_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore disabled or full storage; live loading remains available.
+  }
+}
 type DashboardLayoutPanelDefinition =
   | {
       id: LibraryStatisticDefinition["id"];
@@ -199,7 +217,7 @@ export function DashboardPage() {
   const [comparisonByPanel, setComparisonByPanel] = useState<Record<string, ComparisonResponse | null>>({});
   const [comparisonErrorByPanel, setComparisonErrorByPanel] = useState<Record<string, string | null>>({});
   const [comparisonLoadingByPanel, setComparisonLoadingByPanel] = useState<Record<string, boolean>>({});
-  const [dashboardHistory, setDashboardHistory] = useState<DashboardHistoryResponse | null>(null);
+  const [dashboardHistory, setDashboardHistory] = useState<DashboardHistoryResponse | null>(() => readDashboardHistoryCache());
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
@@ -297,6 +315,7 @@ export function DashboardPage() {
     try {
       const payload = await api.dashboardHistory(controller.signal);
       setDashboardHistory(payload);
+      writeDashboardHistoryCache(payload);
       setHistoryError(null);
     } catch (reason) {
       if ((reason as Error).name === "AbortError") {
@@ -314,8 +333,9 @@ export function DashboardPage() {
   });
 
   useEffect(() => {
-    setIsHistoryLoading(true);
-    void loadDashboardHistory(true);
+    const hasCachedHistory = dashboardHistory !== null;
+    setIsHistoryLoading(!hasCachedHistory);
+    void loadDashboardHistory(!hasCachedHistory);
   }, []);
 
   useEffect(() => {
@@ -415,6 +435,7 @@ export function DashboardPage() {
         .catch((reason: Error) => setError(reason.message))
         .finally(() => setIsDashboardLoading(false));
       void loadDashboardHistory(false);
+      window.sessionStorage.removeItem(DASHBOARD_HISTORY_CACHE_STORAGE_KEY);
       for (const { item } of comparisonPanels) {
         const selection = normalizeComparisonSelectionForLibraryType(
           item.comparisonSelection ?? getComparisonSelection("dashboard"),
@@ -743,10 +764,10 @@ export function DashboardPage() {
                   : t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
-                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition), {
+                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition) ?? [], {
                       inDepthDolbyVisionProfiles,
                     })
-                  : getDashboardStatisticPanelItems(dashboard, statisticDefinition);
+                  : (getDashboardStatisticPanelItems(dashboard, statisticDefinition) ?? []);
               const formattedItems = statisticDefinition.dashboardFormatKind
                 ? items.map((item) => ({
                     ...item,

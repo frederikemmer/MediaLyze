@@ -31,11 +31,20 @@ export type ComparisonFieldId =
   | "quality_score"
   | "bitrate"
   | "audio_bitrate"
+  | "audio_channels"
+  | "sample_rate"
   | "resolution_mp"
   | "container"
   | "video_codec"
   | "resolution"
-  | "hdr_type";
+  | "hdr_type"
+  | "audio_artist"
+  | "audio_album"
+  | "audio_genre"
+  | "audio_year"
+  | "track_number"
+  | "bit_rate_mode"
+  | "embedded_cover";
 
 export type ComparisonFieldKind = "numeric" | "category";
 export type ComparisonRendererId = "heatmap" | "scatter" | "bar";
@@ -238,6 +247,15 @@ export type DashboardResponse = {
   hdr_distribution: DistributionItem[];
   video_bit_depth_distribution: DistributionItem[];
   bit_depth_distribution: DistributionItem[];
+  audio_artist_distribution?: DistributionItem[];
+  audio_album_distribution?: DistributionItem[];
+  audio_genre_distribution?: DistributionItem[];
+  audio_year_distribution?: DistributionItem[];
+  audio_channel_distribution?: DistributionItem[];
+  sample_rate_distribution?: DistributionItem[];
+  track_number_distribution?: DistributionItem[];
+  bit_rate_mode_distribution?: DistributionItem[];
+  embedded_cover_distribution?: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
@@ -274,6 +292,15 @@ export type LibraryStatistics = {
   hdr_distribution: DistributionItem[];
   video_bit_depth_distribution: DistributionItem[];
   bit_depth_distribution: DistributionItem[];
+  audio_artist_distribution?: DistributionItem[];
+  audio_album_distribution?: DistributionItem[];
+  audio_genre_distribution?: DistributionItem[];
+  audio_year_distribution?: DistributionItem[];
+  audio_channel_distribution?: DistributionItem[];
+  sample_rate_distribution?: DistributionItem[];
+  track_number_distribution?: DistributionItem[];
+  bit_rate_mode_distribution?: DistributionItem[];
+  embedded_cover_distribution?: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
@@ -301,6 +328,19 @@ export type MediaFileRow = {
   bitrate: number | null;
   audio_bitrate: number | null;
   bit_depth: number | null;
+  audio_title?: string | null;
+  audio_artist?: string | null;
+  audio_album?: string | null;
+  audio_album_artist?: string | null;
+  audio_genre?: string | null;
+  audio_date?: string | null;
+  audio_disc?: string | null;
+  audio_composer?: string | null;
+  audio_channels?: number | null;
+  sample_rate?: number | null;
+  track_number?: string | null;
+  bit_rate_mode?: string | null;
+  has_embedded_cover?: boolean;
   video_codec: string | null;
   resolution: string | null;
   resolution_category_id?: string | null;
@@ -401,6 +441,19 @@ export type MediaFileSortKey =
   | "bitrate"
   | "audio_bitrate"
   | "bit_depth"
+  | "audio_title"
+  | "audio_artist"
+  | "audio_album"
+  | "audio_album_artist"
+  | "audio_genre"
+  | "audio_date"
+  | "audio_disc"
+  | "audio_composer"
+  | "audio_channels"
+  | "sample_rate"
+  | "track_number"
+  | "bit_rate_mode"
+  | "has_embedded_cover"
   | "audio_codecs"
   | "audio_spatial_profiles"
   | "audio_languages"
@@ -419,6 +472,19 @@ export type LibraryFileSearchField =
   | "bitrate"
   | "audio_bitrate"
   | "bit_depth"
+  | "audio_title"
+  | "audio_artist"
+  | "audio_album"
+  | "audio_album_artist"
+  | "audio_genre"
+  | "audio_date"
+  | "audio_disc"
+  | "audio_composer"
+  | "audio_channels"
+  | "sample_rate"
+  | "track_number"
+  | "bit_rate_mode"
+  | "has_embedded_cover"
   | "video_codec"
   | "resolution"
   | "hdr_type"
@@ -873,6 +939,19 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["audio_codecs", "search_audio_codecs"],
   ["audio_spatial_profiles", "search_audio_spatial_profiles"],
   ["audio_languages", "search_audio_languages"],
+  ["audio_title", "search_audio_title"],
+  ["audio_artist", "search_audio_artist"],
+  ["audio_album", "search_audio_album"],
+  ["audio_album_artist", "search_audio_album_artist"],
+  ["audio_genre", "search_audio_genre"],
+  ["audio_date", "search_audio_date"],
+  ["audio_disc", "search_audio_disc"],
+  ["audio_composer", "search_audio_composer"],
+  ["audio_channels", "search_audio_channels"],
+  ["sample_rate", "search_sample_rate"],
+  ["track_number", "search_track_number"],
+  ["bit_rate_mode", "search_bit_rate_mode"],
+  ["has_embedded_cover", "search_has_embedded_cover"],
   ["subtitle_languages", "search_subtitle_languages"],
   ["subtitle_codecs", "search_subtitle_codecs"],
   ["subtitle_sources", "search_subtitle_sources"],

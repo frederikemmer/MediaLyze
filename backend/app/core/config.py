@@ -26,9 +26,16 @@ AUDIO_EXTENSIONS = (
     ".flac",
     ".m4a",
     ".aac",
+    ".ogg",
+    ".oga",
     ".opus",
     ".wav",
     ".wma",
+    ".aiff",
+    ".aif",
+    ".alac",
+    ".mka",
+    ".ape",
 )
 
 

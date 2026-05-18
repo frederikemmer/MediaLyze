@@ -7,3 +7,7 @@ def test_get_allowed_media_extensions_by_library_type() -> None:
     assert get_allowed_media_extensions("music") == AUDIO_EXTENSIONS
     assert get_allowed_media_extensions("mixed") == VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
     assert get_allowed_media_extensions("other") == VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
+
+
+def test_audio_extensions_include_newly_supported_formats() -> None:
+    assert {".ogg", ".oga", ".aiff", ".aif", ".alac", ".mka", ".ape"}.issubset(AUDIO_EXTENSIONS)

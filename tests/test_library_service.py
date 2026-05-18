@@ -484,6 +484,86 @@ def test_get_library_statistics_exposes_container_distribution() -> None:
     ]
 
 
+def test_get_library_statistics_exposes_music_metadata_distributions_per_file() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="one.flac",
+                    filename="one.flac",
+                    extension="flac",
+                    size_bytes=1,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audio_artist="Artist A",
+                    audio_album="Album A",
+                    audio_genre="Rock",
+                    audio_date="2026-05-18",
+                    audio_channels=2,
+                    sample_rate=96000,
+                    track_number="03/12",
+                    bit_rate_mode="VBR",
+                    has_embedded_cover=True,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="two.flac",
+                    filename="two.flac",
+                    extension="flac",
+                    size_bytes=1,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audio_artist="Artist A",
+                    audio_album="Album B",
+                    audio_genre="Jazz",
+                    audio_date="2025",
+                    audio_channels=2,
+                    sample_rate=48000,
+                    track_number="04",
+                    bit_rate_mode="CBR",
+                    has_embedded_cover=False,
+                ),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(
+            db,
+            library.id,
+            requested_panels=[
+                "audio_artists",
+                "audio_albums",
+                "audio_genres",
+                "audio_years",
+                "audio_channels",
+                "sample_rates",
+                "track_numbers",
+                "bit_rate_modes",
+                "embedded_covers",
+            ],
+        )
+
+    assert [(item.label, item.value) for item in statistics.audio_artist_distribution] == [("artist a", 2)]
+    assert {item.label for item in statistics.audio_album_distribution} == {"album a", "album b"}
+    assert {item.label for item in statistics.audio_genre_distribution} == {"rock", "jazz"}
+    assert {item.label for item in statistics.audio_year_distribution} == {"2026", "2025"}
+    assert [(item.label, item.value) for item in statistics.audio_channel_distribution] == [("2", 2)]
+    assert {item.label for item in statistics.sample_rate_distribution} == {"96000 Hz", "48000 Hz"}
+    assert {item.label for item in statistics.track_number_distribution} == {"03/12", "04"}
+    assert {item.label for item in statistics.bit_rate_mode_distribution} == {"vbr", "cbr"}
+    assert {item.label for item in statistics.embedded_cover_distribution} == {"yes", "no"}
+
+
 def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
@@ -714,6 +794,9 @@ def test_get_library_statistics_groups_similar_resolutions_into_categories() -> 
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=768_000,
         )
         db.add_all([first, second])
         db.flush()
@@ -1069,6 +1152,9 @@ def test_get_library_statistics_includes_numeric_distributions() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=768_000,
         )
         db.add(media_file)
         db.flush()

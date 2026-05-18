@@ -61,6 +61,15 @@ function createDashboard(): DashboardResponse {
     audio_codec_distribution: [{ label: "eac3", value: 8 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 4 }],
     audio_language_distribution: [{ label: "en", value: 9 }],
+    audio_artist_distribution: [{ label: "artist a", value: 4 }],
+    audio_album_distribution: [{ label: "album a", value: 3 }],
+    audio_genre_distribution: [{ label: "rock", value: 2 }],
+    audio_year_distribution: [{ label: "2026", value: 1 }],
+    audio_channel_distribution: [{ label: "2", value: 5, filter_value: "2" }],
+    sample_rate_distribution: [{ label: "96000 Hz", value: 5, filter_value: "96000" }],
+    track_number_distribution: [{ label: "03/12", value: 1 }],
+    bit_rate_mode_distribution: [{ label: "vbr", value: 4 }],
+    embedded_cover_distribution: [{ label: "yes", value: 4, filter_value: "yes" }],
     subtitle_distribution: [{ label: "en", value: 6 }],
     subtitle_codec_distribution: [{ label: "subrip", value: 5 }],
     subtitle_source_distribution: [{ label: "internal", value: 4 }],
@@ -251,6 +260,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 describe("DashboardPage", () => {
@@ -277,7 +287,7 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
 
-    resolveDashboard?.(createDashboard());
+    resolveDashboard!(createDashboard());
 
     expect(await screen.findByText("MKV")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
@@ -306,7 +316,7 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
 
-    resolveComparison?.(createComparisonResponse());
+    resolveComparison!(createComparisonResponse());
 
     expect(await screen.findByTestId("echarts-react")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
@@ -404,6 +414,31 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "File size" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Quality score" })).toBeInTheDocument();
     expect((await screen.findAllByTestId("echarts-react")).length).toBeGreaterThan(0);
+  });
+
+  it("renders newly added music dashboard panels from a saved layout", async () => {
+    window.localStorage.setItem(
+      "medialyze-statistic-panel-layout-dashboard-main",
+      JSON.stringify({
+        version: 3,
+        items: [
+          { instanceId: "audio_artists", statisticId: "audio_artists", width: 1, height: 1 },
+          { instanceId: "embedded_covers", statisticId: "embedded_covers", width: 1, height: 1 },
+        ],
+      }),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockResolvedValue(createDashboard());
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Artists" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Embedded covers" })).toBeInTheDocument();
+    expect(screen.getByText("artist a")).toBeInTheDocument();
+    expect(screen.getByText("yes")).toBeInTheDocument();
   });
 
   it("can expand dashboard history beyond four rows while editing the layout", async () => {

@@ -357,6 +357,7 @@ class NormalizedAudioStream:
     date: str | None = None
     disc: str | None = None
     composer: str | None = None
+    track: str | None = None
 
 
 @dataclass(slots=True)
@@ -376,6 +377,7 @@ class ProbeResult:
     video_streams: list[NormalizedVideoStream] = field(default_factory=list)
     audio_streams: list[NormalizedAudioStream] = field(default_factory=list)
     subtitle_streams: list[NormalizedSubtitleStream] = field(default_factory=list)
+    has_embedded_cover: bool = False
 
 
 def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
@@ -425,6 +427,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
         codec_type = stream.get("codec_type")
         if codec_type == "video":
             if _is_attached_picture(stream):
+                normalized.has_embedded_cover = True
                 continue
             normalized.video_streams.append(
                 NormalizedVideoStream(
@@ -480,6 +483,7 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     date=tags.get("date"),
                     disc=tags.get("disc"),
                     composer=tags.get("composer"),
+                    track=tags.get("track") or tags.get("tracknumber"),
                 )
             )
         elif codec_type == "subtitle":

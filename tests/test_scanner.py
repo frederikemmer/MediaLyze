@@ -316,6 +316,97 @@ def test_incremental_scan_reanalyzes_files_with_incomplete_metadata(tmp_path: Pa
     assert subtitle_streams[0].subtitle_type == "text"
 
 
+def test_incremental_scan_reanalyzes_older_analysis_schema_and_backfills_music_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    audio_path = media_dir / "song.flac"
+    audio_path.write_text("audio")
+    stat = audio_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {"format_name": "flac", "duration": "180.0", "bit_rate": "900000", "probe_score": 100},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "flac",
+                "channels": 2,
+                "sample_rate": "96000",
+                "bit_rate": "900000",
+                "bit_rate_mode": "vbr",
+                "tags": {
+                    "title": "Song A",
+                    "artist": "Artist A",
+                    "album": "Album A",
+                    "album_artist": "Album Artist A",
+                    "genre": "Rock",
+                    "date": "2026",
+                    "disc": "1/2",
+                    "composer": "Composer A",
+                    "track": "03/12",
+                    "bit_rate_mode": "vbr",
+                },
+            },
+            {"index": 1, "codec_type": "video", "codec_name": "mjpeg", "disposition": {"attached_pic": 1}},
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1, scan_commit_batch_size=1)
+
+    with session_factory() as db:
+        library = Library(name="Music", path=str(media_dir), type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="song.flac",
+            filename="song.flac",
+            extension="flac",
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            last_seen_at=utc_now(),
+            last_analyzed_at=utc_now(),
+            scan_status=ScanStatus.ready,
+            analysis_schema_version=0,
+            raw_ffprobe_json={"streams": [{"codec_type": "audio"}]},
+        )
+        db.add(media_file)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        refreshed = db.get(MediaFile, media_file.id)
+        audio_stream = db.scalar(select(AudioStream).where(AudioStream.media_file_id == media_file.id))
+
+    assert job.files_scanned == 1
+    assert refreshed is not None
+    assert refreshed.audio_title == "Song A"
+    assert refreshed.audio_artist == "Artist A"
+    assert refreshed.audio_album == "Album A"
+    assert refreshed.audio_album_artist == "Album Artist A"
+    assert refreshed.audio_genre == "Rock"
+    assert refreshed.audio_date == "2026"
+    assert refreshed.audio_disc == "1/2"
+    assert refreshed.audio_composer == "Composer A"
+    assert refreshed.audio_channels == 2
+    assert refreshed.sample_rate == 96000
+    assert refreshed.track_number == "03/12"
+    assert refreshed.bit_rate_mode == "vbr"
+    assert refreshed.has_embedded_cover is True
+    assert refreshed.analysis_schema_version == scanner_service.ANALYSIS_SCHEMA_VERSION
+    assert audio_stream is not None
+    assert audio_stream.track == "03/12"
+
+
 def test_incremental_scan_reanalyzes_unchanged_files_when_external_subtitles_change(
     tmp_path: Path,
     monkeypatch,
@@ -1367,6 +1458,7 @@ def test_incremental_scan_backfills_missing_filehash_without_reanalyzing_unchang
             scan_status=ScanStatus.ready,
             quality_score=8,
             raw_ffprobe_json={"format": {}},
+            analysis_schema_version=scanner_service.ANALYSIS_SCHEMA_VERSION,
         )
         db.add(media_file)
         db.commit()
@@ -1441,6 +1533,7 @@ def test_incremental_scan_does_not_rehash_unchanged_files_with_existing_hash(tmp
                 scan_status=ScanStatus.ready,
                 quality_score=8,
                 raw_ffprobe_json={"format": {}},
+                analysis_schema_version=scanner_service.ANALYSIS_SCHEMA_VERSION,
                 content_hash="abc123",
                 content_hash_algorithm="sha256",
             )
@@ -1576,6 +1669,7 @@ def test_incremental_scan_backfills_missing_signatures_for_combined_duplicate_mo
             scan_status=ScanStatus.ready,
             quality_score=8,
             raw_ffprobe_json={"format": {}},
+            analysis_schema_version=scanner_service.ANALYSIS_SCHEMA_VERSION,
         )
         db.add(media_file)
         db.commit()

@@ -67,6 +67,7 @@ from backend.app.utils.glob_patterns import matches_ignore_pattern
 from backend.app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
+ANALYSIS_SCHEMA_VERSION = 1
 MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
@@ -452,6 +453,7 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
             date=stream.date,
             disc=stream.disc,
             composer=stream.composer,
+            track=stream.track,
         )
         for stream in normalized.audio_streams
     ]
@@ -470,6 +472,8 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
         ExternalSubtitle(path=item["path"], language=item["language"], format=item["format"])
         for item in external_subtitles
     ]
+    media_file.has_embedded_cover = normalized.has_embedded_cover
+    media_file.analysis_schema_version = ANALYSIS_SCHEMA_VERSION
 
 
 def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
@@ -507,6 +511,7 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
     audio_codecs = [_normalized_text(stream.codec, "unknown") for stream in media_file.audio_streams]
     audio_spatial_profiles = [_normalized_text(stream.spatial_audio_profile) for stream in media_file.audio_streams]
     audio_languages = [_normalized_text(stream.language, "und") for stream in media_file.audio_streams]
+    primary_audio = min(media_file.audio_streams, key=lambda stream: stream.stream_index, default=None)
     subtitle_languages = [
         *[_normalized_text(stream.language, "und") for stream in media_file.subtitle_streams],
         *[_normalized_text(subtitle.language, "und") for subtitle in media_file.external_subtitles],
@@ -519,11 +524,37 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
     media_file.min_audio_codec = min(audio_codecs, default="")
     media_file.min_audio_spatial_profile = min((value for value in audio_spatial_profiles if value), default="")
     media_file.min_audio_language = min(audio_languages, default="")
+    media_file.audio_title = primary_audio.title if primary_audio and primary_audio.title else ""
+    media_file.audio_artist = primary_audio.artist if primary_audio and primary_audio.artist else ""
+    media_file.audio_album = primary_audio.album if primary_audio and primary_audio.album else ""
+    media_file.audio_album_artist = primary_audio.album_artist if primary_audio and primary_audio.album_artist else ""
+    media_file.audio_genre = primary_audio.genre if primary_audio and primary_audio.genre else ""
+    media_file.audio_date = primary_audio.date if primary_audio and primary_audio.date else ""
+    media_file.audio_disc = primary_audio.disc if primary_audio and primary_audio.disc else ""
+    media_file.audio_composer = primary_audio.composer if primary_audio and primary_audio.composer else ""
+    media_file.audio_channels = max((stream.channels or 0 for stream in media_file.audio_streams), default=0) or None
+    media_file.sample_rate = max((stream.sample_rate or 0 for stream in media_file.audio_streams), default=0) or None
+    media_file.track_number = primary_audio.track if primary_audio and primary_audio.track else ""
+    media_file.bit_rate_mode = primary_audio.bit_rate_mode if primary_audio and primary_audio.bit_rate_mode else ""
     media_file.min_subtitle_language = min(subtitle_languages, default="")
     media_file.min_subtitle_codec = min(subtitle_codecs, default="")
     media_file.audio_codecs_search = _joined_unique(audio_codecs)
     media_file.audio_spatial_profiles_search = _joined_unique(audio_spatial_profiles)
     media_file.audio_languages_search = _joined_unique(audio_languages)
+    media_file.audio_metadata_search = _joined_unique(
+        [
+            media_file.audio_title,
+            media_file.audio_artist,
+            media_file.audio_album,
+            media_file.audio_album_artist,
+            media_file.audio_genre,
+            media_file.audio_date,
+            media_file.audio_disc,
+            media_file.audio_composer,
+            media_file.track_number,
+            media_file.bit_rate_mode,
+        ]
+    )
     media_file.subtitle_languages_search = _joined_unique(subtitle_languages)
     media_file.subtitle_codecs_search = _joined_unique(subtitle_codecs)
     media_file.has_internal_subtitles = bool(media_file.subtitle_streams)
@@ -889,6 +920,7 @@ def _incomplete_analysis_file_ids(db: Session, library_id: int) -> set[int]:
                     MediaFile.last_analyzed_at.is_(None),
                     MediaFile.raw_ffprobe_json.is_(None),
                     MediaFile.scan_status != ScanStatus.ready,
+                    MediaFile.analysis_schema_version < ANALYSIS_SCHEMA_VERSION,
                 ),
             )
         ).all()
@@ -1545,7 +1577,6 @@ def run_scan(
         queued_for_duplicate_processing,
         include_duplicate_counts=True,
     )
-    stats_cache.invalidate(cache_key, job.library_id)
     upsert_library_history_snapshot(
         db,
         library,
@@ -1555,6 +1586,15 @@ def run_scan(
     )
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
+    from backend.app.services.library_service import get_library_statistics, get_library_summary
+    from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+    from backend.app.services.stats import build_dashboard
+
+    get_library_summary(db, job.library_id)
+    get_library_statistics(db, job.library_id)
+    get_library_history(db, job.library_id)
+    build_dashboard(db)
+    get_dashboard_history(db)
     db.refresh(job)
     return job
 
@@ -1632,5 +1672,14 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     job.finished_at = utc_now()
     db.commit()
     stats_cache.invalidate(cache_key, library_id)
+    from backend.app.services.library_service import get_library_statistics, get_library_summary
+    from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+    from backend.app.services.stats import build_dashboard
+
+    get_library_summary(db, library_id)
+    get_library_statistics(db, library_id)
+    get_library_history(db, library_id)
+    build_dashboard(db)
+    get_dashboard_history(db)
     db.refresh(job)
     return job

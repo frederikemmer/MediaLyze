@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import Float, cast, func, select
+from sqlalchemy import Float, cast, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.entities import Library, MediaFile, MediaFormat
+from backend.app.models.entities import Library, MediaFile
 from backend.app.schemas.comparison import (
     ComparisonBarEntry,
     ComparisonBucket,
@@ -19,15 +19,9 @@ from backend.app.schemas.comparison import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.container_formats import format_container_label, normalize_container
-from backend.app.services.numeric_distributions import (
-    NUMERIC_DISTRIBUTION_CONFIGS,
-    audio_bitrate_value_expression,
-    bitrate_value_expression,
-    build_audio_bitrate_subquery,
-)
+from backend.app.services.numeric_distributions import NUMERIC_DISTRIBUTION_CONFIGS
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.stats_cache import stats_cache
-from backend.app.services.video_queries import primary_video_streams_subquery
 
 RESOLUTION_MP_BINS: Final[list[tuple[float | None, float | None]]] = [
     (0, 1),
@@ -61,11 +55,20 @@ class ComparisonSourceRow:
     quality_score: float | None
     bitrate: float | None
     audio_bitrate: float | None
+    audio_channels: float | None
+    sample_rate: float | None
     container: str | None
     video_codec: str | None
     width: int | None
     height: int | None
     hdr_type: str | None
+    audio_artist: str | None
+    audio_album: str | None
+    audio_genre: str | None
+    audio_year: str | None
+    track_number: str | None
+    bit_rate_mode: str | None
+    embedded_cover: bool
 
 
 COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition] = {
@@ -74,11 +77,20 @@ COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition]
     "quality_score": ComparisonFieldDefinition(field_id="quality_score", kind="numeric"),
     "bitrate": ComparisonFieldDefinition(field_id="bitrate", kind="numeric"),
     "audio_bitrate": ComparisonFieldDefinition(field_id="audio_bitrate", kind="numeric"),
+    "audio_channels": ComparisonFieldDefinition(field_id="audio_channels", kind="category"),
+    "sample_rate": ComparisonFieldDefinition(field_id="sample_rate", kind="category"),
     "resolution_mp": ComparisonFieldDefinition(field_id="resolution_mp", kind="numeric"),
     "container": ComparisonFieldDefinition(field_id="container", kind="category"),
     "video_codec": ComparisonFieldDefinition(field_id="video_codec", kind="category"),
     "resolution": ComparisonFieldDefinition(field_id="resolution", kind="category"),
     "hdr_type": ComparisonFieldDefinition(field_id="hdr_type", kind="category"),
+    "audio_artist": ComparisonFieldDefinition(field_id="audio_artist", kind="category"),
+    "audio_album": ComparisonFieldDefinition(field_id="audio_album", kind="category"),
+    "audio_genre": ComparisonFieldDefinition(field_id="audio_genre", kind="category"),
+    "audio_year": ComparisonFieldDefinition(field_id="audio_year", kind="category"),
+    "track_number": ComparisonFieldDefinition(field_id="track_number", kind="category"),
+    "bit_rate_mode": ComparisonFieldDefinition(field_id="bit_rate_mode", kind="category"),
+    "embedded_cover": ComparisonFieldDefinition(field_id="embedded_cover", kind="category"),
 }
 VIDEO_ONLY_COMPARISON_FIELDS: Final[set[ComparisonFieldId]] = {
     "bitrate",
@@ -93,6 +105,15 @@ MUSIC_ALLOWED_COMPARISON_FALLBACK: Final[list[ComparisonFieldId]] = [
     "quality_score",
     "audio_bitrate",
     "container",
+    "audio_channels",
+    "sample_rate",
+    "audio_artist",
+    "audio_album",
+    "audio_genre",
+    "audio_year",
+    "track_number",
+    "bit_rate_mode",
+    "embedded_cover",
 ]
 NUMERIC_BUCKET_CONFIGS = {
     config.metric_id: config
@@ -168,28 +189,40 @@ def _numeric_axis_buckets(field_id: ComparisonFieldId) -> list[ComparisonBucket]
 
 
 def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> list[ComparisonSourceRow]:
-    primary_video_streams = primary_video_streams_subquery("comparison_primary_video_streams")
-    audio_bitrate_totals = build_audio_bitrate_subquery("comparison_audio_bitrate_totals")
-    audio_bitrate_expression = audio_bitrate_value_expression(audio_bitrate_totals)
+    cache_key = str(id(db.get_bind()))
+    cached = (
+        stats_cache.get_library_comparison_source(cache_key, library_id)
+        if library_id is not None
+        else stats_cache.get_dashboard_comparison_source(cache_key)
+    )
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     query = (
         select(
             MediaFile.id.label("media_file_id"),
             MediaFile.filename.label("asset_name"),
             cast(MediaFile.size_bytes, Float).label("size"),
             cast(MediaFile.quality_score, Float).label("quality_score"),
-            cast(MediaFormat.duration, Float).label("duration"),
-            cast(func.coalesce(bitrate_value_expression(), audio_bitrate_expression), Float).label("bitrate"),
-            cast(audio_bitrate_expression, Float).label("audio_bitrate"),
+            cast(MediaFile.duration_seconds, Float).label("duration"),
+            cast(MediaFile.bitrate, Float).label("bitrate"),
+            cast(MediaFile.audio_bitrate, Float).label("audio_bitrate"),
+            cast(MediaFile.audio_channels, Float).label("audio_channels"),
+            cast(MediaFile.sample_rate, Float).label("sample_rate"),
             MediaFile.extension.label("container"),
-            primary_video_streams.c.codec.label("video_codec"),
-            primary_video_streams.c.width.label("width"),
-            primary_video_streams.c.height.label("height"),
-            primary_video_streams.c.hdr_type.label("hdr_type"),
+            MediaFile.primary_video_codec.label("video_codec"),
+            MediaFile.primary_video_width.label("width"),
+            MediaFile.primary_video_height.label("height"),
+            MediaFile.primary_video_hdr_type.label("hdr_type"),
+            MediaFile.audio_artist.label("audio_artist"),
+            MediaFile.audio_album.label("audio_album"),
+            MediaFile.audio_genre.label("audio_genre"),
+            MediaFile.audio_date.label("audio_date"),
+            MediaFile.track_number.label("track_number"),
+            MediaFile.bit_rate_mode.label("bit_rate_mode"),
+            MediaFile.has_embedded_cover.label("embedded_cover"),
         )
         .select_from(MediaFile)
-        .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
-        .outerjoin(primary_video_streams, primary_video_streams.c.media_file_id == MediaFile.id)
-        .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
         .order_by(MediaFile.id.asc())
     )
     if library_id is not None:
@@ -197,7 +230,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
     else:
         query = query.join(Library, Library.id == MediaFile.library_id).where(Library.show_on_dashboard.is_(True))
 
-    return [
+    rows = [
         ComparisonSourceRow(
             media_file_id=row.media_file_id,
             asset_name=row.asset_name or str(row.media_file_id),
@@ -206,14 +239,28 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
             quality_score=row.quality_score,
             bitrate=row.bitrate,
             audio_bitrate=row.audio_bitrate,
+            audio_channels=row.audio_channels,
+            sample_rate=row.sample_rate,
             container=row.container,
             video_codec=row.video_codec,
             width=row.width,
             height=row.height,
             hdr_type=row.hdr_type,
+            audio_artist=row.audio_artist,
+            audio_album=row.audio_album,
+            audio_genre=row.audio_genre,
+            audio_year=(row.audio_date or "")[:4] or None,
+            track_number=row.track_number,
+            bit_rate_mode=row.bit_rate_mode,
+            embedded_cover=bool(row.embedded_cover),
         )
         for row in db.execute(query).all()
     ]
+    if library_id is not None:
+        stats_cache.set_library_comparison_source(cache_key, library_id, rows)
+    else:
+        stats_cache.set_dashboard_comparison_source(cache_key, rows)
+    return rows
 
 
 def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> float | None:
@@ -227,6 +274,10 @@ def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> flo
         return row.bitrate if row.bitrate is not None and row.bitrate > 0 else None
     if field_id == "audio_bitrate":
         return row.audio_bitrate if row.audio_bitrate is not None and row.audio_bitrate > 0 else None
+    if field_id == "audio_channels":
+        return row.audio_channels if row.audio_channels is not None and row.audio_channels > 0 else None
+    if field_id == "sample_rate":
+        return row.sample_rate if row.sample_rate is not None and row.sample_rate > 0 else None
     if field_id == "resolution_mp":
         if row.width is None or row.height is None or row.width <= 0 or row.height <= 0:
             return None
@@ -246,6 +297,32 @@ def _category_value(row: ComparisonSourceRow, field_id: ComparisonFieldId, *, re
         if category is None:
             return CategoryValue(key="unknown", label="unknown")
         return CategoryValue(key=category.id, label=category.label)
+    if field_id == "audio_artist":
+        value = _normalized_text(row.audio_artist, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audio_album":
+        value = _normalized_text(row.audio_album, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audio_genre":
+        value = _normalized_text(row.audio_genre, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audio_year":
+        value = _normalized_text(row.audio_year, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "track_number":
+        value = _normalized_text(row.track_number, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "bit_rate_mode":
+        value = _normalized_text(row.bit_rate_mode, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "embedded_cover":
+        return CategoryValue(key="yes" if row.embedded_cover else "no", label="yes" if row.embedded_cover else "no")
+    if field_id == "audio_channels":
+        value = str(int(row.audio_channels)) if row.audio_channels else "unknown"
+        return CategoryValue(key=value, label=value)
+    if field_id == "sample_rate":
+        value = str(int(row.sample_rate)) if row.sample_rate else "unknown"
+        return CategoryValue(key=value, label=f"{value} Hz" if value != "unknown" else value)
     normalized = (row.hdr_type or "").strip() or "SDR"
     return CategoryValue(key=normalized, label=normalized)
 

@@ -75,6 +75,11 @@ FIELDS_BY_LIBRARY_TYPE = {
             "audio_date",
             "audio_disc",
             "audio_composer",
+            "audio_channels",
+            "sample_rate",
+            "track_number",
+            "bit_rate_mode",
+            "has_embedded_cover",
         },
         "shared_fields": {
             "container",
@@ -109,6 +114,11 @@ FIELDS_BY_LIBRARY_TYPE = {
             "audio_date",
             "audio_disc",
             "audio_composer",
+            "audio_channels",
+            "sample_rate",
+            "track_number",
+            "bit_rate_mode",
+            "has_embedded_cover",
         },
         "shared_fields": {
             "container",
@@ -143,6 +153,11 @@ FIELDS_BY_LIBRARY_TYPE = {
             "audio_date",
             "audio_disc",
             "audio_composer",
+            "audio_channels",
+            "sample_rate",
+            "track_number",
+            "bit_rate_mode",
+            "has_embedded_cover",
         },
         "shared_fields": {
             "container",
@@ -198,6 +213,8 @@ def get_music_only_fields() -> set[str]:
         "audio_date",
         "audio_disc",
         "audio_composer",
+        "track_number",
+        "has_embedded_cover",
     }
 
 

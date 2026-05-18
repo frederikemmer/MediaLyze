@@ -75,6 +75,7 @@ class TelemetrySettingsRead(BaseModel):
     installation_id: str | None = None
     installation_id_suffix: str | None = None
     last_sent_at: datetime | None = None
+    last_sent_app_version: str | None = None
     last_user_visible_payload: dict | None = None
 
 

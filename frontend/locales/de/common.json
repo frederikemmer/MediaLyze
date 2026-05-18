@@ -46,7 +46,16 @@
       "title": "Historische Daten",
       "subtitle": "Taegliche Trend-Snapshots ueber alle sichtbaren Bibliotheken",
       "empty": "Dashboard-Trends erscheinen nach dem naechsten abgeschlossenen Scan."
-    }
+    },
+    "audio_artists": "Artists",
+    "audio_albums": "Alben",
+    "audio_genres": "Genres",
+    "audio_years": "Erscheinungsjahre",
+    "audio_channels": "Kanalzahl",
+    "sample_rates": "Sample-Raten",
+    "track_numbers": "Tracknummern",
+    "bit_rate_modes": "Bitraten-Modi",
+    "embedded_covers": "Eingebettete Cover"
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",
@@ -316,7 +325,28 @@
       "subtitleCodecs": "Untertitel-Codecs",
       "subtitleSources": "Untertitel-Quellen",
       "qualityScore": "Qualitäts-Score",
-      "comparison": "Metrikvergleich"
+      "comparison": "Metrikvergleich",
+      "audio_artists": "Artists",
+      "audio_albums": "Alben",
+      "audio_genres": "Genres",
+      "audio_years": "Erscheinungsjahre",
+      "audio_channels": "Kanalzahl",
+      "sample_rates": "Sample-Raten",
+      "track_numbers": "Tracknummern",
+      "bit_rate_modes": "Bitraten-Modi",
+      "embedded_covers": "Eingebettete Cover",
+      "audio_title": "Titel",
+      "audio_artist": "Artist",
+      "audio_album": "Album",
+      "audio_album_artist": "Album Artist",
+      "audio_genre": "Genre",
+      "audio_date": "Jahr / Datum",
+      "audio_disc": "Disc",
+      "audio_composer": "Komponist",
+      "sample_rate": "Sample Rate",
+      "track_number": "Tracknummer",
+      "bit_rate_mode": "Bitrate Mode",
+      "has_embedded_cover": "Eingebettetes Cover"
     }
   },
   "panelLayout": {
@@ -495,6 +525,47 @@
         "audio_bitrate": "Verwende eine Audio-Bitrate wie >512kb/s oder >=1Mb/s.",
         "bit_depth": "Verwende eine ganzzahlige Bittiefe wie >=16 oder =24.",
         "duration": "Verwende eine Dauer wie >90m oder >=1h 30m."
+      },
+      "audio_title": {
+        "placeholder": "z. B. Songtitel"
+      },
+      "audio_artist": {
+        "placeholder": "z. B. Artist"
+      },
+      "audio_album": {
+        "placeholder": "z. B. Album"
+      },
+      "audio_album_artist": {
+        "placeholder": "z. B. Album Artist"
+      },
+      "audio_genre": {
+        "placeholder": "z. B. Jazz"
+      },
+      "audio_date": {
+        "placeholder": "z. B. 2024"
+      },
+      "audio_disc": {
+        "placeholder": "z. B. 1/2"
+      },
+      "audio_composer": {
+        "placeholder": "z. B. Komponist"
+      },
+      "audio_channels": {
+        "placeholder": "z. B. >=2",
+        "tooltip": "Unterstuetzt: >=2, =6, <8"
+      },
+      "sample_rate": {
+        "placeholder": "z. B. >=48000",
+        "tooltip": "Unterstuetzt: >=44100, =96000"
+      },
+      "track_number": {
+        "placeholder": "z. B. 03"
+      },
+      "bit_rate_mode": {
+        "placeholder": "z. B. VBR"
+      },
+      "has_embedded_cover": {
+        "placeholder": "ja oder nein"
       }
     },
     "loadingFiles": "Analysierte Dateien werden geladen…",
@@ -585,7 +656,16 @@
     },
     "recentScanJobs": "Letzte Scan-Jobs",
     "recentScanJobsSubtitle": "Neueste Queue- und Laufhistorie",
-    "jobLabel": "Job #{{id}}"
+    "jobLabel": "Job #{{id}}",
+    "audio_artists": "Artists",
+    "audio_albums": "Alben",
+    "audio_genres": "Genres",
+    "audio_years": "Erscheinungsjahre",
+    "audio_channels": "Kanalzahl",
+    "sample_rates": "Sample-Raten",
+    "track_numbers": "Tracknummern",
+    "bit_rate_modes": "Bitraten-Modi",
+    "embedded_covers": "Eingebettete Cover"
   },
   "distributionChart": {
     "loading": "Diagramm wird geladen…",
@@ -708,7 +788,20 @@
     "lastAnalyzed": "Zuletzt analysiert",
     "score": "Score",
     "na": "k. A.",
-    "sdr": "SDR"
+    "sdr": "SDR",
+    "audioTitle": "Titel",
+    "audioArtist": "Artist",
+    "audioAlbum": "Album",
+    "audioAlbumArtist": "Album Artist",
+    "audioGenre": "Genre",
+    "audioDate": "Jahr / Datum",
+    "audioDisc": "Disc",
+    "audioComposer": "Komponist",
+    "audioChannels": "Kanalzahl",
+    "sampleRate": "Sample Rate",
+    "trackNumber": "Tracknummer",
+    "bitRateMode": "Bitrate Mode",
+    "embeddedCover": "Eingebettetes Cover"
   },
   "fileDetail": {
     "eyebrow": "Mediendatei-Details",
@@ -873,5 +966,9 @@
       "dolbyAtmos": "Dolby Atmos",
       "dtsX": "DTS:X"
     }
+  },
+  "common": {
+    "yes": "Ja",
+    "no": "Nein"
   }
 }

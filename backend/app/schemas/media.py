@@ -91,6 +91,7 @@ class AudioStreamRead(BaseModel):
     date: str | None = None
     disc: str | None = None
     composer: str | None = None
+    track: str | None = None
 
 
 class SubtitleStreamRead(BaseModel):
@@ -130,6 +131,19 @@ class MediaFileTableRow(BaseModel):
     bitrate: float | None = None
     audio_bitrate: float | None = None
     bit_depth: int | None = None
+    audio_title: str | None = None
+    audio_artist: str | None = None
+    audio_album: str | None = None
+    audio_album_artist: str | None = None
+    audio_genre: str | None = None
+    audio_date: str | None = None
+    audio_disc: str | None = None
+    audio_composer: str | None = None
+    audio_channels: int | None = None
+    sample_rate: int | None = None
+    track_number: str | None = None
+    bit_rate_mode: str | None = None
+    has_embedded_cover: bool = False
     video_codec: str | None = None
     resolution: str | None = None
     resolution_category_id: str | None = None
@@ -284,6 +298,15 @@ class DashboardResponse(BaseModel):
     hdr_distribution: list[DistributionItem]
     video_bit_depth_distribution: list[DistributionItem]
     bit_depth_distribution: list[DistributionItem]
+    audio_artist_distribution: list[DistributionItem]
+    audio_album_distribution: list[DistributionItem]
+    audio_genre_distribution: list[DistributionItem]
+    audio_year_distribution: list[DistributionItem]
+    audio_channel_distribution: list[DistributionItem]
+    sample_rate_distribution: list[DistributionItem]
+    track_number_distribution: list[DistributionItem]
+    bit_rate_mode_distribution: list[DistributionItem]
+    embedded_cover_distribution: list[DistributionItem]
     audio_codec_distribution: list[DistributionItem]
     audio_spatial_profile_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]

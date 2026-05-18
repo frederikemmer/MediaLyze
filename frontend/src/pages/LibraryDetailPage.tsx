@@ -277,6 +277,35 @@ const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryL
   ["analyzed_files", { id: "analyzed_files", kind: "analyzed_files", nameKey: "libraryDetail.analyzedFiles" }],
 ]);
 
+function librarySessionStorageKey(kind: "summary" | "history" | "statistics", key: string): string {
+  return `medialyze-library-${kind}-cache:${key}`;
+}
+
+function readLibrarySessionCache<T>(kind: "summary" | "history" | "statistics", key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(librarySessionStorageKey(kind, key));
+    return value ? (JSON.parse(value) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLibrarySessionCache(kind: "summary" | "history" | "statistics", key: string, value: unknown): void {
+  try {
+    window.sessionStorage.setItem(librarySessionStorageKey(kind, key), JSON.stringify(value));
+  } catch {
+    // Ignore quota and disabled-storage failures.
+  }
+}
+
+function deleteLibrarySessionCache(kind: "summary" | "history" | "statistics", key: string): void {
+  try {
+    window.sessionStorage.removeItem(librarySessionStorageKey(kind, key));
+  } catch {
+    // Ignore disabled-storage failures.
+  }
+}
+
 function buildLibraryStatisticsCacheKey(libraryId: string, panelIds: readonly string[]): string {
   const panelKey = panelIds.length ? [...new Set(panelIds)].sort().join(",") : "none";
   return `${libraryId}:${panelKey}`;
@@ -890,6 +919,27 @@ export function buildFileColumns(
         return bitDepth ? `${bitDepth}-bit` : t("fileTable.na");
       },
     },
+    ...([
+      ["audio_title", "fileTable.audioTitle", (row: any) => row.audio_title],
+      ["audio_artist", "fileTable.audioArtist", (row: any) => row.audio_artist],
+      ["audio_album", "fileTable.audioAlbum", (row: any) => row.audio_album],
+      ["audio_album_artist", "fileTable.audioAlbumArtist", (row: any) => row.audio_album_artist],
+      ["audio_genre", "fileTable.audioGenre", (row: any) => row.audio_genre],
+      ["audio_date", "fileTable.audioDate", (row: any) => row.audio_date],
+      ["audio_disc", "fileTable.audioDisc", (row: any) => row.audio_disc],
+      ["audio_composer", "fileTable.audioComposer", (row: any) => row.audio_composer],
+      ["audio_channels", "fileTable.audioChannels", (row: any) => row.audio_channels],
+      ["sample_rate", "fileTable.sampleRate", (row: any) => row.sample_rate ? `${row.sample_rate} Hz` : null],
+      ["track_number", "fileTable.trackNumber", (row: any) => row.track_number],
+      ["bit_rate_mode", "fileTable.bitRateMode", (row: any) => row.bit_rate_mode],
+      ["has_embedded_cover", "fileTable.embeddedCover", (row: any) => row.has_embedded_cover ? t("common.yes") : t("common.no")],
+    ] as const).map(([key, labelKey, getValue]) => ({
+      key,
+      labelKey,
+      sizing: { mode: "content" as const, minPx: 96, maxPx: 220 },
+      measureValue: (row: any) => String(getValue(isGroupedAnalyzedFilesRow(row) ? row.metrics : row) ?? t("fileTable.na")),
+      render: (row: any) => textOrNa(getValue(isGroupedAnalyzedFilesRow(row) ? row.metrics : row)),
+    })),
     {
       key: "audio_codecs",
       labelKey: audioCodecsLabelKey,
@@ -1661,8 +1711,11 @@ export function LibraryDetailPage() {
     [activeColumns, analyzedTableRows, columnWidthOverrides, t],
   );
   const orderedMetadataFieldDefinitions = useMemo(
-    () => LIBRARY_STATISTIC_DEFINITIONS.filter((definition) => LIBRARY_METADATA_SEARCH_FIELDS.includes(definition.id)),
-    [],
+    () =>
+      LIBRARY_METADATA_SEARCH_FIELDS
+        .filter((field) => !activeLibraryType || shouldShowField(field, activeLibraryType))
+        .map((id) => ({ id })),
+    [activeLibraryType],
   );
   const orderedSelectedMetadataFields = useMemo(
     () =>
@@ -1721,6 +1774,7 @@ export function LibraryDetailPage() {
       return [{ ...group, items: matchingItems }];
     });
   }, [duplicateGroups, duplicateSearchTokens]);
+  const hasVisibleDuplicateContent = Boolean(duplicateGroups && duplicateGroups.items.length > 0);
   const fileQueryKey = useMemo(
     () => buildFileCacheKey(libraryId, deferredAppliedSearchFilterKey, sortKey, sortDirection),
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
@@ -1915,6 +1969,7 @@ export function LibraryDetailPage() {
     try {
       const payload = await api.librarySummary(libraryId, controller.signal);
       librarySummaryCache.set(libraryId, payload);
+      writeLibrarySessionCache("summary", libraryId, payload);
       setLibrarySummary(payload);
       setSummaryError(null);
     } catch (reason) {
@@ -1943,7 +1998,9 @@ export function LibraryDetailPage() {
 
     try {
       const payload = await api.libraryStatistics(libraryId, controller.signal, visibleLibraryStatisticPanelIds);
-      libraryStatisticsCache.set(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds), payload);
+      const cacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
+      libraryStatisticsCache.set(cacheKey, payload);
+      writeLibrarySessionCache("statistics", cacheKey, payload);
       setLibraryStatistics(payload);
       setStatisticsError(null);
     } catch (reason) {
@@ -1973,6 +2030,7 @@ export function LibraryDetailPage() {
     try {
       const payload = await api.libraryHistory(libraryId, controller.signal);
       libraryHistoryCache.set(libraryId, payload);
+      writeLibrarySessionCache("history", libraryId, payload);
       setLibraryHistory(payload);
       setHistoryError(null);
     } catch (reason) {
@@ -2369,6 +2427,12 @@ export function LibraryDetailPage() {
   }, [isDuplicatesPanelCollapsed, libraryId]);
 
   useEffect(() => {
+    if (!hasVisibleDuplicateContent && !showSuppressedDuplicateGroups) {
+      setIsDuplicatesPanelCollapsed(true);
+    }
+  }, [hasVisibleDuplicateContent, showSuppressedDuplicateGroups]);
+
+  useEffect(() => {
     window.localStorage.setItem(
       buildHistoryPanelCollapseStorageKey(libraryId),
       isHistoryPanelCollapsed ? "true" : "false",
@@ -2521,8 +2585,15 @@ export function LibraryDetailPage() {
   }, [libraryStatistics]);
 
   useEffect(() => {
-    const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
-    const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
+    const cachedSummary =
+      librarySummaryCache.get(libraryId) ??
+      readLibrarySessionCache<LibrarySummary>("summary", libraryId) ??
+      fallbackSummary ??
+      null;
+    const cachedHistory =
+      libraryHistoryCache.get(libraryId) ??
+      readLibrarySessionCache<LibraryHistoryResponse>("history", libraryId) ??
+      null;
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups);
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(duplicateGroupsCacheKey) ?? null;
 
@@ -2552,7 +2623,10 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     const statisticsCacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
-    const cachedStatistics = libraryStatisticsCache.get(statisticsCacheKey) ?? null;
+    const cachedStatistics =
+      libraryStatisticsCache.get(statisticsCacheKey) ??
+      readLibrarySessionCache<LibraryStatistics>("statistics", statisticsCacheKey) ??
+      null;
 
     setLibraryStatistics(cachedStatistics);
     setStatisticsError(null);
@@ -2825,6 +2899,9 @@ export function LibraryDetailPage() {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
       libraryHistoryCache.delete(libraryId);
+      deleteLibrarySessionCache("summary", libraryId);
+      deleteLibrarySessionCache("statistics", buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
+      deleteLibrarySessionCache("history", libraryId);
       for (const { item } of comparisonPanels) {
         const selection = normalizeComparisonSelectionForLibraryType(
           item.comparisonSelection ?? getComparisonSelection("library"),
@@ -3240,10 +3317,10 @@ export function LibraryDetailPage() {
                   : t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
-                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition), {
+                  ? collapseHdrDistribution(getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition) ?? [], {
                       inDepthDolbyVisionProfiles,
                     })
-                  : getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition);
+                  : (getLibraryStatisticPanelItems(libraryStatistics, statisticDefinition) ?? []);
               const formattedItems: DistributionListEntry[] = items.map((item) => {
                 const rawLabel = item.label;
                 const filterValue = item.filter_value ?? rawLabel;
@@ -3307,7 +3384,8 @@ export function LibraryDetailPage() {
               const duplicatePanelCanExpand = Boolean(
                 duplicateGroupsError ||
                   (isDuplicateGroupsLoading && !duplicateGroups) ||
-                  (duplicateGroups && duplicateGroups.items.length > 0),
+                  hasVisibleDuplicateContent ||
+                  showSuppressedDuplicateGroups,
               );
               const duplicatePanelCollapsed = !duplicatePanelCanExpand || isDuplicatesPanelCollapsed;
               const hasSuppressedDuplicateGroups = Boolean(duplicateGroups && duplicateGroups.suppressed_group_count > 0);

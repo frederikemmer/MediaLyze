@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.11.2
+
+>2026-05-18
+
+### ✨ New
+
+- expand music-library metadata with sortable/filterable tag and technical audio fields, add matching statistic/comparison dimensions, detect embedded covers, and support `.ogg`, `.oga`, `.aiff`, `.aif`, `.alac`, `.mka`, and `.ape` audio files
+
+### 🐛 Bug fixes
+
+- speed up idle dashboard and library loads by reusing full statistics/history snapshots between mutations and warming page data on startup and while the runtime is idle
+- update vulnerable frontend and desktop development dependencies reported by Dependabot, including Vite, Undici, PostCSS, Picomatch, xmldom, Lodash, and related transitive packages
+
 ## v0.11.1
 
 >2026-05-15

@@ -7,6 +7,7 @@ from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats_cache import stats_cache
+import pytest
 
 
 def _session_factory():
@@ -38,6 +39,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         second_file = MediaFile(
             library_id=library.id,
@@ -48,6 +50,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=9,
+            duration_seconds=4000.0,
         )
         db.add_all([first_file, second_file])
         db.flush()
@@ -93,8 +96,14 @@ def test_library_comparison_uses_resolution_categories_for_resolution_axis() -> 
             extension="mkv",
             size_bytes=6_000_000_000,
             mtime=1.0,
-            scan_status=ScanStatus.ready,
-            quality_score=8,
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+                duration_seconds=5400.0,
+            primary_video_codec="hevc",
+            primary_video_width=3840,
+            primary_video_height=1606,
+            primary_video_resolution_pixels=3840 * 1606,
+            primary_video_hdr_type="HDR10",
         )
         db.add(media_file)
         db.flush()
@@ -109,6 +118,74 @@ def test_library_comparison_uses_resolution_categories_for_resolution_axis() -> 
     assert payload.x_buckets[0].label == "4k"
     assert payload.y_buckets[0].key == "mkv"
     assert payload.heatmap_cells[0].count == 1
+
+
+def test_library_comparison_supports_new_music_axes() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="song.flac",
+                filename="song.flac",
+                extension="flac",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                audio_artist="Artist A",
+                sample_rate=96000,
+            )
+        )
+        db.commit()
+
+        payload = get_library_comparison(db, library_id=library.id, x_field="audio_artist", y_field="sample_rate")
+
+    assert payload is not None
+    assert payload.available_renderers == ["heatmap"]
+    assert payload.x_buckets[0].key == "artist a"
+    assert payload.y_buckets[0].key == "96000"
+    assert payload.y_buckets[0].label == "96000 Hz"
+    assert payload.heatmap_cells[0].count == 1
+
+
+@pytest.mark.parametrize(
+    ("field_id", "expected_key"),
+    [
+        ("audio_channels", "2"),
+        ("sample_rate", "96000"),
+        ("audio_artist", "artist a"),
+        ("audio_album", "album a"),
+        ("audio_genre", "rock"),
+        ("audio_year", "2026"),
+        ("track_number", "03/12"),
+        ("bit_rate_mode", "vbr"),
+        ("embedded_cover", "yes"),
+    ],
+)
+def test_library_comparison_supports_each_new_music_axis(field_id: str, expected_key: str) -> None:
+    session_factory = _session_factory()
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id, relative_path="song.flac", filename="song.flac", extension="flac",
+                size_bytes=100, mtime=1.0, scan_status=ScanStatus.ready, quality_score=5, duration_seconds=60,
+                audio_channels=2, sample_rate=96000, audio_artist="Artist A", audio_album="Album A",
+                audio_genre="Rock", audio_date="2026-05-18", track_number="03/12", bit_rate_mode="VBR",
+                has_embedded_cover=True,
+            )
+        )
+        db.commit()
+        payload = get_library_comparison(db, library_id=library.id, x_field=field_id, y_field="duration")
+    assert payload is not None
+    assert payload.x_buckets[0].key == expected_key
 
 
 def test_dashboard_comparison_supports_resolution_mp_as_numeric_axis() -> None:
@@ -134,6 +211,12 @@ def test_dashboard_comparison_supports_resolution_mp_as_numeric_axis() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=3600.0,
+            primary_video_codec="hevc",
+            primary_video_width=3840,
+            primary_video_height=2160,
+            primary_video_resolution_pixels=3840 * 2160,
+            primary_video_hdr_type="HDR10",
         )
         db.add(media_file)
         db.flush()
@@ -179,6 +262,7 @@ def test_dashboard_comparison_marks_scatter_payload_as_sampled() -> None:
                 mtime=float(index + 1),
                 scan_status=ScanStatus.ready,
                 quality_score=5,
+                duration_seconds=1800.0 * (index + 1),
             )
             db.add(media_file)
             db.flush()
@@ -225,6 +309,7 @@ def test_dashboard_comparison_excludes_libraries_hidden_from_dashboard() -> None
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         hidden_file = MediaFile(
             library_id=hidden_library.id,
@@ -235,6 +320,7 @@ def test_dashboard_comparison_excludes_libraries_hidden_from_dashboard() -> None
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=9,
+            duration_seconds=5400.0,
         )
         db.add_all([visible_file, hidden_file])
         db.flush()
@@ -275,6 +361,7 @@ def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         db.add(media_file)
         db.flush()
@@ -293,6 +380,7 @@ def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
         )
         db.add(second_file)
         db.flush()
