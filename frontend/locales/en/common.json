@@ -46,7 +46,16 @@
       "title": "Historic data",
       "subtitle": "Daily trend snapshots across visible libraries",
       "empty": "Dashboard trends will appear after the next finished scan."
-    }
+    },
+    "audio_artists": "Artists",
+    "audio_albums": "Albums",
+    "audio_genres": "Genres",
+    "audio_years": "Release years",
+    "audio_channels": "Channels",
+    "sample_rates": "Sample rates",
+    "track_numbers": "Track numbers",
+    "bit_rate_modes": "Bitrate modes",
+    "embedded_covers": "Embedded covers"
   },
   "panel": {
     "collapseAria": "Collapse {{title}}",
@@ -316,7 +325,28 @@
       "subtitleCodecs": "Subtitle codecs",
       "subtitleSources": "Subtitle sources",
       "qualityScore": "Quality score",
-      "comparison": "Metric comparison"
+      "comparison": "Metric comparison",
+      "audio_artists": "Artists",
+      "audio_albums": "Albums",
+      "audio_genres": "Genres",
+      "audio_years": "Release years",
+      "audio_channels": "Channels",
+      "sample_rates": "Sample rates",
+      "track_numbers": "Track numbers",
+      "bit_rate_modes": "Bitrate modes",
+      "embedded_covers": "Embedded covers",
+      "audio_title": "Title",
+      "audio_artist": "Artist",
+      "audio_album": "Album",
+      "audio_album_artist": "Album artist",
+      "audio_genre": "Genre",
+      "audio_date": "Year / date",
+      "audio_disc": "Disc",
+      "audio_composer": "Composer",
+      "sample_rate": "Sample rate",
+      "track_number": "Track number",
+      "bit_rate_mode": "Bitrate mode",
+      "has_embedded_cover": "Embedded cover"
     }
   },
   "panelLayout": {
@@ -495,6 +525,47 @@
         "audio_bitrate": "Use an audio bitrate like >512kb/s or >=1Mb/s.",
         "bit_depth": "Use an integer bit depth like >=16 or =24.",
         "duration": "Use a duration like >90m or >=1h 30m."
+      },
+      "audio_title": {
+        "placeholder": "e.g. Song title"
+      },
+      "audio_artist": {
+        "placeholder": "e.g. Artist"
+      },
+      "audio_album": {
+        "placeholder": "e.g. Album"
+      },
+      "audio_album_artist": {
+        "placeholder": "e.g. Album artist"
+      },
+      "audio_genre": {
+        "placeholder": "e.g. jazz"
+      },
+      "audio_date": {
+        "placeholder": "e.g. 2024"
+      },
+      "audio_disc": {
+        "placeholder": "e.g. 1/2"
+      },
+      "audio_composer": {
+        "placeholder": "e.g. Composer"
+      },
+      "audio_channels": {
+        "placeholder": "e.g. >=2",
+        "tooltip": "Supported: >=2, =6, <8"
+      },
+      "sample_rate": {
+        "placeholder": "e.g. >=48000",
+        "tooltip": "Supported: >=44100, =96000"
+      },
+      "track_number": {
+        "placeholder": "e.g. 03"
+      },
+      "bit_rate_mode": {
+        "placeholder": "e.g. VBR"
+      },
+      "has_embedded_cover": {
+        "placeholder": "yes or no"
       }
     },
     "loadingFiles": "Loading analyzed files…",
@@ -585,7 +656,16 @@
     },
     "recentScanJobs": "Recent scan jobs",
     "recentScanJobsSubtitle": "Latest queue and run history",
-    "jobLabel": "Job #{{id}}"
+    "jobLabel": "Job #{{id}}",
+    "audio_artists": "Artists",
+    "audio_albums": "Albums",
+    "audio_genres": "Genres",
+    "audio_years": "Release years",
+    "audio_channels": "Channels",
+    "sample_rates": "Sample rates",
+    "track_numbers": "Track numbers",
+    "bit_rate_modes": "Bitrate modes",
+    "embedded_covers": "Embedded covers"
   },
   "distributionChart": {
     "loading": "Loading chart…",
@@ -708,7 +788,20 @@
     "lastAnalyzed": "Last analyzed",
     "score": "Score",
     "na": "n/a",
-    "sdr": "SDR"
+    "sdr": "SDR",
+    "audioTitle": "Title",
+    "audioArtist": "Artist",
+    "audioAlbum": "Album",
+    "audioAlbumArtist": "Album artist",
+    "audioGenre": "Genre",
+    "audioDate": "Year / date",
+    "audioDisc": "Disc",
+    "audioComposer": "Composer",
+    "audioChannels": "Channels",
+    "sampleRate": "Sample rate",
+    "trackNumber": "Track number",
+    "bitRateMode": "Bitrate mode",
+    "embeddedCover": "Embedded cover"
   },
   "fileDetail": {
     "eyebrow": "Media file detail",
@@ -873,5 +966,9 @@
       "dolbyAtmos": "Dolby Atmos",
       "dtsX": "DTS:X"
     }
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No"
   }
 }

@@ -74,6 +74,9 @@ describe("statistic comparisons", () => {
     expect(musicFields).not.toContain("bitrate");
     expect(musicFields).not.toContain("resolution_mp");
     expect(musicFields).toContain("audio_bitrate");
+    expect(musicFields).toContain("audio_artist");
+    expect(musicFields).toContain("sample_rate");
+    expect(musicFields).toContain("embedded_cover");
     expect(musicFields).toContain("duration");
   });
 

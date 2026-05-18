@@ -102,6 +102,15 @@ function createLibraryStatistics(overrides: Partial<LibraryStatistics> = {}): Li
     audio_codec_distribution: [{ label: "aac", value: 2 }],
     audio_spatial_profile_distribution: [{ label: "Dolby Atmos", value: 1 }],
     audio_language_distribution: [{ label: "en", value: 2 }],
+    audio_artist_distribution: [{ label: "artist a", value: 2 }],
+    audio_album_distribution: [{ label: "album a", value: 2 }],
+    audio_genre_distribution: [{ label: "rock", value: 2 }],
+    audio_year_distribution: [{ label: "2026", value: 2 }],
+    audio_channel_distribution: [{ label: "2", value: 2, filter_value: "2" }],
+    sample_rate_distribution: [{ label: "96000 Hz", value: 2, filter_value: "96000" }],
+    track_number_distribution: [{ label: "03/12", value: 2 }],
+    bit_rate_mode_distribution: [{ label: "vbr", value: 2 }],
+    embedded_cover_distribution: [{ label: "yes", value: 2, filter_value: "yes" }],
     subtitle_language_distribution: [{ label: "en", value: 2 }],
     subtitle_codec_distribution: [{ label: "srt", value: 2 }],
     subtitle_source_distribution: [{ label: "external", value: 2 }],
@@ -722,6 +731,38 @@ describe("LibraryDetailPage", () => {
     expect(screen.getByText("7.5/10")).toBeInTheDocument();
     expect(screen.getByText("4.5 Mb/s")).toBeInTheDocument();
     expect(screen.getByText("224 kb/s")).toBeInTheDocument();
+  });
+
+  it("renders the new music metadata columns", () => {
+    const columns = buildFileColumns(i18next.t.bind(i18next), {}, {}, {}, {}, vi.fn(), vi.fn(), new Set(), false);
+    const row = {
+      audio_title: "Song A",
+      audio_artist: "Artist A",
+      audio_album: "Album A",
+      audio_album_artist: "Album Artist A",
+      audio_genre: "Rock",
+      audio_date: "2026",
+      audio_disc: "1/2",
+      audio_composer: "Composer A",
+      audio_channels: 2,
+      sample_rate: 96000,
+      track_number: "03/12",
+      bit_rate_mode: "VBR",
+      has_embedded_cover: true,
+    } as any;
+
+    render(
+      <table><tbody><tr>
+        {[
+          "audio_title","audio_artist","audio_album","audio_album_artist","audio_genre","audio_date","audio_disc",
+          "audio_composer","audio_channels","sample_rate","track_number","bit_rate_mode","has_embedded_cover",
+        ].map((key) => <td key={key}>{columns.find((column) => column.key === key)?.render(row)}</td>)}
+      </tr></tbody></table>,
+    );
+
+    for (const value of ["Song A", "Artist A", "Album A", "Album Artist A", "Rock", "2026", "1/2", "Composer A", "2", "96000 Hz", "03/12", "VBR", "Yes"]) {
+      expect(screen.getByText(value)).toBeInTheDocument();
+    }
   });
 
   it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {
@@ -1759,6 +1800,54 @@ describe("LibraryDetailPage", () => {
         }),
       ),
     );
+  });
+
+  it("adds a new music metadata search field and sends the filter", async () => {
+    const libraryId = 405;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId, { type: "music" }));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+    await screen.findByText("2 of 2 entries rendered");
+
+    fireEvent.click(screen.getByRole("button", { name: /add metadata search field/i }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /^artist$/i }));
+    const input = await screen.findByPlaceholderText("e.g. Artist");
+    fireEvent.change(input, { target: { value: "Artist A" } });
+
+    await waitFor(() =>
+      expect(libraryFilesSpy).toHaveBeenLastCalledWith(
+        String(libraryId),
+        expect.objectContaining({ filters: expect.objectContaining({ audio_artist: "Artist A" }) }),
+      ),
+    );
+  });
+
+  it("renders newly added music statistic panels from a saved layout", async () => {
+    const libraryId = 406;
+    window.localStorage.setItem(
+      `medialyze-statistic-panel-layout-library-${libraryId}`,
+      JSON.stringify({
+        version: 3,
+        items: [
+          { instanceId: "audio_artists", statisticId: "audio_artists", width: 1, height: 1 },
+          { instanceId: "embedded_covers", statisticId: "embedded_covers", width: 1, height: 1 },
+        ],
+      }),
+    );
+    mockAppSettings();
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId, { type: "music" }));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Artists" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Embedded covers" })).toBeInTheDocument();
+    expect(screen.getByText("artist a")).toBeInTheDocument();
+    expect(screen.getByText("yes")).toBeInTheDocument();
   });
 
   it("filters files when clicking a statistic count", async () => {

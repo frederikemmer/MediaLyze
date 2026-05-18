@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## vUnreleased
 
 - speed up idle dashboard and library loads by reusing full statistics/history snapshots between mutations and warming page data on startup and while the runtime is idle
+- expand music-library metadata with sortable/filterable tag and technical audio fields, add matching statistic/comparison dimensions, detect embedded covers, and support `.ogg`, `.oga`, `.aiff`, `.aif`, `.alac`, `.mka`, and `.ape` audio files
 
 ## v0.11.1
 

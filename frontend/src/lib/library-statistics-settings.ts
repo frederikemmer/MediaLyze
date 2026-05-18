@@ -25,7 +25,28 @@ export type LibraryStatisticId =
   | "quality_score"
   | "bitrate"
   | "audio_bitrate"
-  | "bit_depth";
+  | "bit_depth"
+  | "audio_artists"
+  | "audio_albums"
+  | "audio_genres"
+  | "audio_years"
+  | "audio_channels"
+  | "sample_rates"
+  | "track_numbers"
+  | "bit_rate_modes"
+  | "embedded_covers"
+  | "audio_title"
+  | "audio_artist"
+  | "audio_album"
+  | "audio_album_artist"
+  | "audio_genre"
+  | "audio_date"
+  | "audio_disc"
+  | "audio_composer"
+  | "sample_rate"
+  | "track_number"
+  | "bit_rate_mode"
+  | "has_embedded_cover";
 
 type LibraryStatisticPanelDataKey =
   | "container_distribution"
@@ -37,6 +58,15 @@ type LibraryStatisticPanelDataKey =
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
+  | "audio_artist_distribution"
+  | "audio_album_distribution"
+  | "audio_genre_distribution"
+  | "audio_year_distribution"
+  | "audio_channel_distribution"
+  | "sample_rate_distribution"
+  | "track_number_distribution"
+  | "bit_rate_mode_distribution"
+  | "embedded_cover_distribution"
   | "subtitle_language_distribution"
   | "subtitle_codec_distribution"
   | "subtitle_source_distribution";
@@ -51,6 +81,15 @@ type DashboardStatisticPanelDataKey =
   | "audio_codec_distribution"
   | "audio_spatial_profile_distribution"
   | "audio_language_distribution"
+  | "audio_artist_distribution"
+  | "audio_album_distribution"
+  | "audio_genre_distribution"
+  | "audio_year_distribution"
+  | "audio_channel_distribution"
+  | "sample_rate_distribution"
+  | "track_number_distribution"
+  | "bit_rate_mode_distribution"
+  | "embedded_cover_distribution"
   | "subtitle_distribution"
   | "subtitle_codec_distribution"
   | "subtitle_source_distribution";
@@ -371,6 +410,43 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     dashboardTitleKey: "dashboard.audioLanguages",
     dashboardDataKey: "audio_language_distribution",
   },
+  ...([
+    ["audio_artists", "audio_artist_distribution"],
+    ["audio_albums", "audio_album_distribution"],
+    ["audio_genres", "audio_genre_distribution"],
+    ["audio_years", "audio_year_distribution"],
+    ["audio_channels", "audio_channel_distribution"],
+    ["sample_rates", "sample_rate_distribution"],
+    ["track_numbers", "track_number_distribution"],
+    ["bit_rate_modes", "bit_rate_mode_distribution"],
+    ["embedded_covers", "embedded_cover_distribution"],
+  ] as const).map(([id, dataKey]) => ({
+    id,
+    nameKey: `libraryStatistics.items.${id}`,
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: id === "audio_artists" || id === "audio_albums" || id === "audio_genres",
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelTitleKey: `libraryDetail.${id}`,
+    panelDataKey: dataKey,
+    tableColumnKey: (
+      id === "audio_artists" ? "audio_artist"
+      : id === "audio_albums" ? "audio_album"
+      : id === "audio_genres" ? "audio_genre"
+      : id === "audio_years" ? "audio_date"
+      : id === "audio_channels" ? "audio_channels"
+      : id === "sample_rates" ? "sample_rate"
+      : id === "track_numbers" ? "track_number"
+      : id === "bit_rate_modes" ? "bit_rate_mode"
+      : "has_embedded_cover"
+    ) as MediaFileSortKey,
+    dashboardTitleKey: `dashboard.${id}`,
+    dashboardDataKey: dataKey,
+  })),
   {
     id: "subtitle_languages",
     nameKey: "libraryStatistics.items.subtitleLanguages",

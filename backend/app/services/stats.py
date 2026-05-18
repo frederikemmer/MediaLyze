@@ -42,6 +42,15 @@ _DISTRIBUTION_FIELD_BY_PANEL = {
     "audio_codecs": "audio_codec_distribution",
     "audio_spatial_profiles": "audio_spatial_profile_distribution",
     "audio_languages": "audio_language_distribution",
+    "audio_artists": "audio_artist_distribution",
+    "audio_albums": "audio_album_distribution",
+    "audio_genres": "audio_genre_distribution",
+    "audio_years": "audio_year_distribution",
+    "audio_channels": "audio_channel_distribution",
+    "sample_rates": "sample_rate_distribution",
+    "track_numbers": "track_number_distribution",
+    "bit_rate_modes": "bit_rate_mode_distribution",
+    "embedded_covers": "embedded_cover_distribution",
     "subtitle_languages": "subtitle_distribution",
     "subtitle_codecs": "subtitle_codec_distribution",
     "subtitle_sources": "subtitle_source_distribution",
@@ -279,6 +288,43 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             .order_by(func.count(distinct(audio_bit_depth_values.c.media_file_id)).desc())
         ).all()
 
+    def file_distribution(column, *, enabled: bool):
+        if not enabled:
+            return []
+        expression = _normalized_text_expr(column, "")
+        return db.execute(
+            select(expression.label("value"), func.count(MediaFile.id))
+            .where(MediaFile.library_id.in_(dashboard_library_ids))
+            .where(func.length(func.trim(func.coalesce(column, ""))) > 0)
+            .group_by(expression)
+            .order_by(func.count(MediaFile.id).desc())
+        ).all()
+
+    audio_artist_rows = file_distribution(MediaFile.audio_artist, enabled=wants("audio_artists"))
+    audio_album_rows = file_distribution(MediaFile.audio_album, enabled=wants("audio_albums"))
+    audio_genre_rows = file_distribution(MediaFile.audio_genre, enabled=wants("audio_genres"))
+    audio_year_rows = file_distribution(func.substr(MediaFile.audio_date, 1, 4), enabled=wants("audio_years"))
+    track_number_rows = file_distribution(MediaFile.track_number, enabled=wants("track_numbers"))
+    bit_rate_mode_rows = file_distribution(MediaFile.bit_rate_mode, enabled=wants("bit_rate_modes"))
+    audio_channel_rows = db.execute(
+        select(MediaFile.audio_channels, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids), MediaFile.audio_channels.is_not(None))
+        .group_by(MediaFile.audio_channels)
+        .order_by(func.count(MediaFile.id).desc())
+    ).all() if wants("audio_channels") else []
+    sample_rate_rows = db.execute(
+        select(MediaFile.sample_rate, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids), MediaFile.sample_rate.is_not(None))
+        .group_by(MediaFile.sample_rate)
+        .order_by(func.count(MediaFile.id).desc())
+    ).all() if wants("sample_rates") else []
+    embedded_cover_rows = db.execute(
+        select(MediaFile.has_embedded_cover, func.count(MediaFile.id))
+        .where(MediaFile.library_id.in_(dashboard_library_ids))
+        .group_by(MediaFile.has_embedded_cover)
+        .order_by(MediaFile.has_embedded_cover.desc())
+    ).all() if wants("embedded_covers") else []
+
     audio_language_rows: list[tuple[str, int]] = []
     if wants("audio_languages"):
         audio_language_values = (
@@ -428,6 +474,24 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             DistributionItem(label=f"{label}-bit", value=value, filter_value=str(label))
             for label, value in bit_depth_rows
             if label is not None and value > 0
+        ],
+        audio_artist_distribution=_distribution(audio_artist_rows),
+        audio_album_distribution=_distribution(audio_album_rows),
+        audio_genre_distribution=_distribution(audio_genre_rows),
+        audio_year_distribution=_distribution(audio_year_rows),
+        audio_channel_distribution=[
+            DistributionItem(label=str(label), value=value, filter_value=str(label))
+            for label, value in audio_channel_rows
+        ],
+        sample_rate_distribution=[
+            DistributionItem(label=f"{label} Hz", value=value, filter_value=str(label))
+            for label, value in sample_rate_rows
+        ],
+        track_number_distribution=_distribution(track_number_rows),
+        bit_rate_mode_distribution=_distribution(bit_rate_mode_rows),
+        embedded_cover_distribution=[
+            DistributionItem(label="yes" if label else "no", value=value, filter_value="yes" if label else "no")
+            for label, value in embedded_cover_rows
         ],
         audio_codec_distribution=_distribution(audio_codec_rows),
         audio_spatial_profile_distribution=audio_spatial_profile_distribution,

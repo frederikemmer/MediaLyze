@@ -9,11 +9,20 @@ ComparisonFieldId = Literal[
     "quality_score",
     "bitrate",
     "audio_bitrate",
+    "audio_channels",
+    "sample_rate",
     "resolution_mp",
     "container",
     "video_codec",
     "resolution",
     "hdr_type",
+    "audio_artist",
+    "audio_album",
+    "audio_genre",
+    "audio_year",
+    "track_number",
+    "bit_rate_mode",
+    "embedded_cover",
 ]
 
 ComparisonFieldKind = Literal["numeric", "category"]

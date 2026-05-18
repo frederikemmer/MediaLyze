@@ -764,10 +764,10 @@ export function DashboardPage() {
                   : t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey);
               const items =
                 statisticDefinition.id === "hdr_type"
-                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition), {
+                  ? collapseHdrDistribution(getDashboardStatisticPanelItems(dashboard, statisticDefinition) ?? [], {
                       inDepthDolbyVisionProfiles,
                     })
-                  : getDashboardStatisticPanelItems(dashboard, statisticDefinition);
+                  : (getDashboardStatisticPanelItems(dashboard, statisticDefinition) ?? []);
               const formattedItems = statisticDefinition.dashboardFormatKind
                 ? items.map((item) => ({
                     ...item,

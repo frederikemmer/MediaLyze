@@ -1,6 +1,7 @@
 import csv
 import io
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -260,6 +261,186 @@ def test_list_library_files_exposes_container() -> None:
     assert page.items[0].container == "mkv"
 
 
+def test_list_library_files_exposes_and_filters_music_metadata() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Music",
+            path="/tmp/music",
+            type=LibraryType.music,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        matching = MediaFile(
+            library_id=library.id,
+            relative_path="artist/album/03-song.flac",
+            filename="03-song.flac",
+            extension="flac",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+            audio_title="Song A",
+            audio_artist="Artist A",
+            audio_album="Album A",
+            audio_album_artist="Album Artist A",
+            audio_genre="Rock",
+            audio_date="2026-05-18",
+            audio_disc="1/2",
+            audio_composer="Composer A",
+            audio_channels=2,
+            sample_rate=96000,
+            track_number="03/12",
+            bit_rate_mode="VBR",
+            has_embedded_cover=True,
+        )
+        other = MediaFile(
+            library_id=library.id,
+            relative_path="other.flac",
+            filename="other.flac",
+            extension="flac",
+            size_bytes=456,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+            audio_title="Other",
+            audio_artist="Other",
+        )
+        db.add_all([matching, other])
+        db.commit()
+
+        page = list_library_files(
+            db,
+            library.id,
+            search_filters=LibraryFileSearchFilters(
+                search_audio_artist="Artist A",
+                search_audio_album="Album A",
+                search_audio_channels="=2",
+                search_sample_rate=">=96000",
+                search_track_number="03",
+                search_bit_rate_mode="VBR",
+                search_has_embedded_cover="yes",
+            ),
+            limit=50,
+        )
+
+    assert page.total == 1
+    item = page.items[0]
+    assert item.audio_title == "Song A"
+    assert item.audio_artist == "Artist A"
+    assert item.audio_album == "Album A"
+    assert item.audio_album_artist == "Album Artist A"
+    assert item.audio_genre == "Rock"
+    assert item.audio_date == "2026-05-18"
+    assert item.audio_disc == "1/2"
+    assert item.audio_composer == "Composer A"
+    assert item.audio_channels == 2
+    assert item.sample_rate == 96000
+    assert item.track_number == "03/12"
+    assert item.bit_rate_mode == "VBR"
+    assert item.has_embedded_cover is True
+
+
+@pytest.mark.parametrize(
+    ("filter_name", "filter_value"),
+    [
+        ("search_audio_title", "Song A"),
+        ("search_audio_artist", "Artist A"),
+        ("search_audio_album", "Album A"),
+        ("search_audio_album_artist", "Album Artist A"),
+        ("search_audio_genre", "Rock"),
+        ("search_audio_date", "2026"),
+        ("search_audio_disc", "1/2"),
+        ("search_audio_composer", "Composer A"),
+        ("search_audio_channels", "=2"),
+        ("search_sample_rate", "=96000"),
+        ("search_track_number", "03"),
+        ("search_bit_rate_mode", "VBR"),
+        ("search_has_embedded_cover", "yes"),
+    ],
+)
+def test_list_library_files_filters_each_new_music_field(filter_name: str, filter_value: str) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id, relative_path="match.flac", filename="match.flac", extension="flac",
+                    size_bytes=1, mtime=1.0, scan_status=ScanStatus.ready, quality_score=5,
+                    audio_title="Song A", audio_artist="Artist A", audio_album="Album A",
+                    audio_album_artist="Album Artist A", audio_genre="Rock", audio_date="2026-05-18",
+                    audio_disc="1/2", audio_composer="Composer A", audio_channels=2, sample_rate=96000,
+                    track_number="03/12", bit_rate_mode="VBR", has_embedded_cover=True,
+                ),
+                MediaFile(
+                    library_id=library.id, relative_path="miss.flac", filename="miss.flac", extension="flac",
+                    size_bytes=1, mtime=2.0, scan_status=ScanStatus.ready, quality_score=5,
+                    audio_title="Other", audio_artist="Other", audio_album="Other", audio_album_artist="Other",
+                    audio_genre="Jazz", audio_date="2025", audio_disc="2", audio_composer="Other",
+                    audio_channels=6, sample_rate=48000, track_number="04", bit_rate_mode="CBR",
+                    has_embedded_cover=False,
+                ),
+            ]
+        )
+        db.commit()
+        page = list_library_files(
+            db,
+            library.id,
+            search_filters=LibraryFileSearchFilters(**{filter_name: filter_value}),
+            limit=50,
+        )
+    assert [item.filename for item in page.items] == ["match.flac"]
+
+
+@pytest.mark.parametrize(
+    "sort_key",
+    [
+        "audio_title", "audio_artist", "audio_album", "audio_album_artist", "audio_genre", "audio_date",
+        "audio_disc", "audio_composer", "audio_channels", "sample_rate", "track_number", "bit_rate_mode",
+        "has_embedded_cover",
+    ],
+)
+def test_list_library_files_sorts_each_new_music_column(sort_key: str) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id, relative_path="a.flac", filename="a.flac", extension="flac",
+                    size_bytes=1, mtime=1.0, scan_status=ScanStatus.ready, quality_score=5,
+                    audio_title="A", audio_artist="A", audio_album="A", audio_album_artist="A", audio_genre="A",
+                    audio_date="2025", audio_disc="1", audio_composer="A", audio_channels=2, sample_rate=48000,
+                    track_number="01", bit_rate_mode="CBR", has_embedded_cover=False,
+                ),
+                MediaFile(
+                    library_id=library.id, relative_path="b.flac", filename="b.flac", extension="flac",
+                    size_bytes=1, mtime=2.0, scan_status=ScanStatus.ready, quality_score=5,
+                    audio_title="B", audio_artist="B", audio_album="B", audio_album_artist="B", audio_genre="B",
+                    audio_date="2026", audio_disc="2", audio_composer="B", audio_channels=6, sample_rate=96000,
+                    track_number="02", bit_rate_mode="VBR", has_embedded_cover=True,
+                ),
+            ]
+        )
+        db.commit()
+        page = list_library_files(db, library.id, limit=50, sort_key=sort_key, sort_direction="asc")
+    assert [item.filename for item in page.items] == ["a.flac", "b.flac"]
+
+
 def test_list_library_files_exposes_audio_spatial_profiles() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -501,8 +682,85 @@ def test_generate_library_files_csv_export_includes_audio_spatial_profiles() -> 
     comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
 
     assert "# search.audio_spatial_profiles: atmos" in comment_lines
-    assert rows[0][9:12] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
-    assert rows[1][10] == "Dolby Atmos"
+    assert rows[0][22:25] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
+    assert rows[1][23] == "Dolby Atmos"
+
+
+def test_generate_library_files_csv_export_includes_new_music_metadata_columns() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Music CSV",
+            path="/tmp/music-csv",
+            type=LibraryType.music,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="song.flac",
+                filename="song.flac",
+                extension="flac",
+                size_bytes=1024,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                audio_title="Song A",
+                audio_artist="Artist A",
+                audio_album="Album A",
+                audio_album_artist="Album Artist A",
+                audio_genre="Rock",
+                audio_date="2026",
+                audio_disc="1/2",
+                audio_composer="Composer A",
+                audio_channels=2,
+                sample_rate=96000,
+                track_number="03/12",
+                bit_rate_mode="vbr",
+                has_embedded_cover=True,
+            )
+        )
+        db.commit()
+
+        _filename, chunks = generate_library_files_csv_export(db, library.id, library_name=library.name)
+
+    _comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
+
+    assert rows[0][9:22] == [
+        "audio_title",
+        "audio_artist",
+        "audio_album",
+        "audio_album_artist",
+        "audio_genre",
+        "audio_date",
+        "audio_disc",
+        "audio_composer",
+        "audio_channels",
+        "sample_rate",
+        "track_number",
+        "bit_rate_mode",
+        "has_embedded_cover",
+    ]
+    assert rows[1][9:22] == [
+        "Song A",
+        "Artist A",
+        "Album A",
+        "Album Artist A",
+        "Rock",
+        "2026",
+        "1/2",
+        "Composer A",
+        "2",
+        "96000",
+        "03/12",
+        "vbr",
+        "yes",
+    ]
 
 
 def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
@@ -1370,6 +1628,19 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "hdr_type",
         "duration_seconds",
         "audio_bit_depth",
+        "audio_title",
+        "audio_artist",
+        "audio_album",
+        "audio_album_artist",
+        "audio_genre",
+        "audio_date",
+        "audio_disc",
+        "audio_composer",
+        "audio_channels",
+        "sample_rate",
+        "track_number",
+        "bit_rate_mode",
+        "has_embedded_cover",
         "audio_codecs",
         "audio_spatial_profiles",
         "audio_languages",
@@ -1392,11 +1663,11 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert data_rows[0][4] == "hevc"
     assert data_rows[0][5] == "3840x2160"
     assert data_rows[0][6] == "HDR10"
-    assert data_rows[0][9] == "aac"
-    assert data_rows[0][13] == "srt"
-    assert data_rows[0][14] == "external | internal"
-    assert data_rows[0][18] == "main"
-    assert data_rows[0][19:] == ["", "", "", "", ""]
+    assert data_rows[0][22] == "aac"
+    assert data_rows[0][26] == "srt"
+    assert data_rows[0][27] == "external | internal"
+    assert data_rows[0][31] == "main"
+    assert data_rows[0][32:] == ["", "", "", "", ""]
     assert data_rows[-1][0] == "episode-504.mkv"
 
 

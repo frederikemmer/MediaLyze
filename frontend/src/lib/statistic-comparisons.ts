@@ -39,11 +39,20 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
   { id: "quality_score", kind: "numeric", labelKey: "libraryStatistics.items.qualityScore" },
   { id: "bitrate", kind: "numeric", labelKey: "libraryStatistics.items.bitrate" },
   { id: "audio_bitrate", kind: "numeric", labelKey: "libraryStatistics.items.audioBitrate" },
+  { id: "audio_channels", kind: "category", labelKey: "libraryStatistics.items.audio_channels" },
+  { id: "sample_rate", kind: "category", labelKey: "libraryStatistics.items.sample_rate" },
   { id: "resolution_mp", kind: "numeric", labelKey: "libraryStatistics.items.resolutionMp" },
   { id: "container", kind: "category", labelKey: "libraryStatistics.items.container" },
   { id: "video_codec", kind: "category", labelKey: "libraryStatistics.items.videoCodec" },
   { id: "resolution", kind: "category", labelKey: "libraryStatistics.items.resolution" },
   { id: "hdr_type", kind: "category", labelKey: "libraryStatistics.items.hdrProfile" },
+  { id: "audio_artist", kind: "category", labelKey: "libraryStatistics.items.audio_artist" },
+  { id: "audio_album", kind: "category", labelKey: "libraryStatistics.items.audio_album" },
+  { id: "audio_genre", kind: "category", labelKey: "libraryStatistics.items.audio_genre" },
+  { id: "audio_year", kind: "category", labelKey: "libraryStatistics.items.audio_years" },
+  { id: "track_number", kind: "category", labelKey: "libraryStatistics.items.track_number" },
+  { id: "bit_rate_mode", kind: "category", labelKey: "libraryStatistics.items.bit_rate_mode" },
+  { id: "embedded_cover", kind: "category", labelKey: "libraryStatistics.items.embedded_covers" },
 ];
 
 const FIELD_MAP = new Map(COMPARISON_FIELD_DEFINITIONS.map((definition) => [definition.id, definition]));
@@ -57,6 +66,15 @@ const FILTERABLE_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
   "video_codec",
   "resolution",
   "hdr_type",
+  "audio_channels",
+  "sample_rate",
+  "audio_artist",
+  "audio_album",
+  "audio_genre",
+  "audio_year",
+  "track_number",
+  "bit_rate_mode",
+  "embedded_cover",
 ]);
 const DEFAULT_SELECTION: ComparisonSelection = {
   xField: "duration",

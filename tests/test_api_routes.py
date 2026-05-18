@@ -382,6 +382,69 @@ def test_library_files_route_accepts_bitrate_sort_keys() -> None:
     assert [item["filename"] for item in audio_bitrate_response.json()["items"]] == ["high.mkv", "low.mkv"]
 
 
+def test_library_files_route_accepts_new_music_filters_and_sort_keys() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Music Route",
+            path="/tmp/music-route",
+            type=LibraryType.music,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="a.flac",
+                    filename="a.flac",
+                    extension="flac",
+                    size_bytes=1024,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    audio_artist="Artist A",
+                    audio_channels=2,
+                    track_number="01",
+                    has_embedded_cover=True,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="b.flac",
+                    filename="b.flac",
+                    extension="flac",
+                    size_bytes=2048,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    audio_artist="Artist B",
+                    audio_channels=6,
+                    track_number="02",
+                    has_embedded_cover=False,
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        filtered_response = client.get(
+            f"/api/libraries/{library.id}/files"
+            "?search_audio_artist=Artist%20A&search_audio_channels=2&search_track_number=01"
+            "&search_has_embedded_cover=yes"
+        )
+        sorted_response = client.get(
+            f"/api/libraries/{library.id}/files?sort_key=audio_artist&sort_direction=desc"
+        )
+
+    assert filtered_response.status_code == 200
+    assert [item["filename"] for item in filtered_response.json()["items"]] == ["a.flac"]
+    assert sorted_response.status_code == 200
+    assert [item["filename"] for item in sorted_response.json()["items"]] == ["b.flac", "a.flac"]
+
+
 def test_library_series_routes_return_recognized_hierarchy() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

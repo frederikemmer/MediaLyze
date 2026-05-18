@@ -203,6 +203,64 @@ def test_dashboard_audio_bit_depth_distribution_uses_best_audio_track_per_file_o
     ]
 
 
+def test_dashboard_exposes_music_metadata_distributions() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Music", path="/tmp/music", type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="song.flac",
+                filename="song.flac",
+                extension="flac",
+                size_bytes=1,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                audio_artist="Artist A",
+                audio_album="Album A",
+                audio_genre="Rock",
+                audio_date="2026-05-18",
+                audio_channels=2,
+                sample_rate=96000,
+                track_number="03/12",
+                bit_rate_mode="VBR",
+                has_embedded_cover=True,
+            )
+        )
+        db.commit()
+
+        dashboard = build_dashboard(
+            db,
+            requested_panels=[
+                "audio_artists",
+                "audio_albums",
+                "audio_genres",
+                "audio_years",
+                "audio_channels",
+                "sample_rates",
+                "track_numbers",
+                "bit_rate_modes",
+                "embedded_covers",
+            ],
+        )
+
+    assert dashboard.audio_artist_distribution[0].label == "artist a"
+    assert dashboard.audio_album_distribution[0].label == "album a"
+    assert dashboard.audio_genre_distribution[0].label == "rock"
+    assert dashboard.audio_year_distribution[0].label == "2026"
+    assert dashboard.audio_channel_distribution[0].label == "2"
+    assert dashboard.sample_rate_distribution[0].label == "96000 Hz"
+    assert dashboard.track_number_distribution[0].label == "03/12"
+    assert dashboard.bit_rate_mode_distribution[0].label == "vbr"
+    assert dashboard.embedded_cover_distribution[0].label == "yes"
+
+
 def test_dashboard_merges_common_audio_language_aliases() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

@@ -159,6 +159,41 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     tooltipKey: "libraryDetail.searchFields.bitDepth.tooltip",
     validate: isValidBitDepthValue,
   },
+  ...[
+    "audio_title",
+    "audio_artist",
+    "audio_album",
+    "audio_album_artist",
+    "audio_genre",
+    "audio_date",
+    "audio_disc",
+    "audio_composer",
+    "track_number",
+    "bit_rate_mode",
+    "has_embedded_cover",
+  ].map((field) => ({
+    field: field as LibraryFileMetadataSearchField,
+    icon: AudioLines,
+    labelKey: `libraryStatistics.items.${field}`,
+    placeholderKey: `libraryDetail.searchFields.${field}.placeholder`,
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
+  })),
+  {
+    field: "audio_channels",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.audio_channels",
+    placeholderKey: "libraryDetail.searchFields.audio_channels.placeholder",
+    tooltipKey: "libraryDetail.searchFields.audio_channels.tooltip",
+    validate: isValidBitDepthValue,
+  },
+  {
+    field: "sample_rate",
+    icon: AudioLines,
+    labelKey: "libraryStatistics.items.sample_rate",
+    placeholderKey: "libraryDetail.searchFields.sample_rate.placeholder",
+    tooltipKey: "libraryDetail.searchFields.sample_rate.tooltip",
+    validate: isValidBitDepthValue,
+  },
   {
     field: "video_codec",
     icon: Film,
@@ -234,9 +269,9 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
 
 const SEARCH_CONFIG_MAP = new Map(LIBRARY_FILE_SEARCH_CONFIGS.map((config) => [config.field, config]));
 
-export const LIBRARY_METADATA_SEARCH_FIELDS = LIBRARY_STATISTIC_DEFINITIONS.map(
-  (definition) => definition.id,
-);
+export const LIBRARY_METADATA_SEARCH_FIELDS = LIBRARY_FILE_SEARCH_CONFIGS
+  .map((definition) => definition.field)
+  .filter((field): field is LibraryFileMetadataSearchField => field !== "file");
 
 export function getLibraryFileSearchConfig(field: "file" | LibraryFileMetadataSearchField): LibraryFileSearchConfig {
   return SEARCH_CONFIG_MAP.get(field) ?? LIBRARY_FILE_SEARCH_CONFIGS[0];

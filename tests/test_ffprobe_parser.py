@@ -81,6 +81,8 @@ def test_normalize_ffprobe_payload_extracts_music_tag_metadata() -> None:
                     "date": "2026",
                     "disc": "1/2",
                     "composer": "Composer A",
+                    "track": "03/12",
+                    "bit_rate_mode": "VBR",
                 },
             }
         ],
@@ -97,6 +99,8 @@ def test_normalize_ffprobe_payload_extracts_music_tag_metadata() -> None:
     assert stream.date == "2026"
     assert stream.disc == "1/2"
     assert stream.composer == "Composer A"
+    assert stream.track == "03/12"
+    assert stream.bit_rate_mode == "VBR"
 
 
 def test_normalize_ffprobe_payload_extracts_spatial_audio_profiles() -> None:
@@ -218,6 +222,7 @@ def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:
 
     assert len(normalized.video_streams) == 1
     assert normalized.video_streams[0].codec == "h264"
+    assert normalized.has_embedded_cover is True
 
 
 def test_normalize_ffprobe_payload_extracts_dolby_vision_profile() -> None:
