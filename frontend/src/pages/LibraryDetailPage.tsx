@@ -277,6 +277,35 @@ const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryL
   ["analyzed_files", { id: "analyzed_files", kind: "analyzed_files", nameKey: "libraryDetail.analyzedFiles" }],
 ]);
 
+function librarySessionStorageKey(kind: "summary" | "history" | "statistics", key: string): string {
+  return `medialyze-library-${kind}-cache:${key}`;
+}
+
+function readLibrarySessionCache<T>(kind: "summary" | "history" | "statistics", key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(librarySessionStorageKey(kind, key));
+    return value ? (JSON.parse(value) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLibrarySessionCache(kind: "summary" | "history" | "statistics", key: string, value: unknown): void {
+  try {
+    window.sessionStorage.setItem(librarySessionStorageKey(kind, key), JSON.stringify(value));
+  } catch {
+    // Ignore quota and disabled-storage failures.
+  }
+}
+
+function deleteLibrarySessionCache(kind: "summary" | "history" | "statistics", key: string): void {
+  try {
+    window.sessionStorage.removeItem(librarySessionStorageKey(kind, key));
+  } catch {
+    // Ignore disabled-storage failures.
+  }
+}
+
 function buildLibraryStatisticsCacheKey(libraryId: string, panelIds: readonly string[]): string {
   const panelKey = panelIds.length ? [...new Set(panelIds)].sort().join(",") : "none";
   return `${libraryId}:${panelKey}`;
@@ -1915,6 +1944,7 @@ export function LibraryDetailPage() {
     try {
       const payload = await api.librarySummary(libraryId, controller.signal);
       librarySummaryCache.set(libraryId, payload);
+      writeLibrarySessionCache("summary", libraryId, payload);
       setLibrarySummary(payload);
       setSummaryError(null);
     } catch (reason) {
@@ -1943,7 +1973,9 @@ export function LibraryDetailPage() {
 
     try {
       const payload = await api.libraryStatistics(libraryId, controller.signal, visibleLibraryStatisticPanelIds);
-      libraryStatisticsCache.set(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds), payload);
+      const cacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
+      libraryStatisticsCache.set(cacheKey, payload);
+      writeLibrarySessionCache("statistics", cacheKey, payload);
       setLibraryStatistics(payload);
       setStatisticsError(null);
     } catch (reason) {
@@ -1973,6 +2005,7 @@ export function LibraryDetailPage() {
     try {
       const payload = await api.libraryHistory(libraryId, controller.signal);
       libraryHistoryCache.set(libraryId, payload);
+      writeLibrarySessionCache("history", libraryId, payload);
       setLibraryHistory(payload);
       setHistoryError(null);
     } catch (reason) {
@@ -2521,8 +2554,15 @@ export function LibraryDetailPage() {
   }, [libraryStatistics]);
 
   useEffect(() => {
-    const cachedSummary = librarySummaryCache.get(libraryId) ?? fallbackSummary ?? null;
-    const cachedHistory = libraryHistoryCache.get(libraryId) ?? null;
+    const cachedSummary =
+      librarySummaryCache.get(libraryId) ??
+      readLibrarySessionCache<LibrarySummary>("summary", libraryId) ??
+      fallbackSummary ??
+      null;
+    const cachedHistory =
+      libraryHistoryCache.get(libraryId) ??
+      readLibrarySessionCache<LibraryHistoryResponse>("history", libraryId) ??
+      null;
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, showSuppressedDuplicateGroups);
     const cachedDuplicateGroups = libraryDuplicateGroupsCache.get(duplicateGroupsCacheKey) ?? null;
 
@@ -2552,7 +2592,10 @@ export function LibraryDetailPage() {
 
   useEffect(() => {
     const statisticsCacheKey = buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds);
-    const cachedStatistics = libraryStatisticsCache.get(statisticsCacheKey) ?? null;
+    const cachedStatistics =
+      libraryStatisticsCache.get(statisticsCacheKey) ??
+      readLibrarySessionCache<LibraryStatistics>("statistics", statisticsCacheKey) ??
+      null;
 
     setLibraryStatistics(cachedStatistics);
     setStatisticsError(null);
@@ -2825,6 +2868,9 @@ export function LibraryDetailPage() {
       librarySummaryCache.delete(libraryId);
       libraryStatisticsCache.delete(buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
       libraryHistoryCache.delete(libraryId);
+      deleteLibrarySessionCache("summary", libraryId);
+      deleteLibrarySessionCache("statistics", buildLibraryStatisticsCacheKey(libraryId, visibleLibraryStatisticPanelIds));
+      deleteLibrarySessionCache("history", libraryId);
       for (const { item } of comparisonPanels) {
         const selection = normalizeComparisonSelectionForLibraryType(
           item.comparisonSelection ?? getComparisonSelection("library"),

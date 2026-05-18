@@ -251,6 +251,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 describe("DashboardPage", () => {
@@ -277,7 +278,7 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
 
-    resolveDashboard?.(createDashboard());
+    resolveDashboard!(createDashboard());
 
     expect(await screen.findByText("MKV")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
@@ -306,7 +307,7 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
 
-    resolveComparison?.(createComparisonResponse());
+    resolveComparison!(createComparisonResponse());
 
     expect(await screen.findByTestId("echarts-react")).toBeInTheDocument();
     expect(screen.queryByText("not data yet")).not.toBeInTheDocument();

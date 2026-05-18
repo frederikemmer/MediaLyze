@@ -77,6 +77,28 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     in_depth_dolby_vision_profiles: false,
   },
 };
+const DASHBOARD_SESSION_STORAGE_PREFIX = "medialyze-dashboard-cache:";
+
+function readSessionJson<T>(key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionJson(key: string, value: unknown): void {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore quota and disabled-storage failures; the network path still works.
+  }
+}
+
+function dashboardSessionStorageKey(panelKey: string | null): string {
+  return `${DASHBOARD_SESSION_STORAGE_PREFIX}${panelKey ?? "all"}`;
+}
 
 function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined): AppSettings {
   return {
@@ -245,6 +267,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const loadDashboard = useEffectEvent(async (force = false, panels?: readonly string[] | null) => {
     const panelKey = panels?.length ? [...new Set(panels)].sort().join(",") : null;
+    const sessionCachedDashboard = readSessionJson<DashboardResponse>(dashboardSessionStorageKey(panelKey));
     if (!force) {
       if (
         dashboardRequestRef.current &&
@@ -259,6 +282,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ) {
         return dashboard;
       }
+      if (sessionCachedDashboard) {
+        setDashboardState(sessionCachedDashboard);
+        setDashboardLoaded(true);
+        dashboardPanelKeyRef.current = panelKey;
+      }
     }
 
     const request = api
@@ -267,6 +295,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setDashboardState(payload);
         setDashboardLoaded(true);
         dashboardPanelKeyRef.current = panelKey;
+        writeSessionJson(dashboardSessionStorageKey(panelKey), payload);
         return payload;
       })
       .finally(() => {

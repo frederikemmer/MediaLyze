@@ -571,6 +571,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   scrollIntoViewMock.mockClear();
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 beforeEach(() => {
