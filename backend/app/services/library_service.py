@@ -59,6 +59,20 @@ _MUSIC_HIDDEN_PANEL_IDS = {
     "subtitle_sources",
     "audio_languages",
 }
+_DISTRIBUTION_FIELD_BY_PANEL = {
+    "container": "container_distribution",
+    "video_codec": "video_codec_distribution",
+    "resolution": "resolution_distribution",
+    "hdr_type": "hdr_distribution",
+    "video_bit_depth": "video_bit_depth_distribution",
+    "bit_depth": "bit_depth_distribution",
+    "audio_codecs": "audio_codec_distribution",
+    "audio_spatial_profiles": "audio_spatial_profile_distribution",
+    "audio_languages": "audio_language_distribution",
+    "subtitle_languages": "subtitle_language_distribution",
+    "subtitle_codecs": "subtitle_codec_distribution",
+    "subtitle_sources": "subtitle_source_distribution",
+}
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -118,10 +132,31 @@ def _distribution_items(rows: list[tuple[str | None, int]], *, fallback: str = "
     ]
 
 
-def _statistics_cache_key(base_key: str, requested_panels: set[str] | None) -> str:
-    if requested_panels is None:
-        return base_key
-    return f"{base_key}:panels={','.join(sorted(requested_panels))}"
+def _statistics_panel_view(
+    payload: LibraryStatistics,
+    requested_panels: set[str] | None,
+    hidden_panel_ids: set[str],
+) -> LibraryStatistics:
+    if requested_panels is None and not hidden_panel_ids:
+        return payload
+
+    visible_panels = set(_DISTRIBUTION_FIELD_BY_PANEL) | set(_NUMERIC_PANEL_METRIC_IDS)
+    if requested_panels is not None:
+        visible_panels &= requested_panels
+    visible_panels -= hidden_panel_ids
+    updates = {
+        field_name: getattr(payload, field_name) if panel_id in visible_panels else []
+        for panel_id, field_name in _DISTRIBUTION_FIELD_BY_PANEL.items()
+    }
+    updates["numeric_distributions"] = {
+        metric_id: distribution
+        for metric_id, distribution in payload.numeric_distributions.items()
+        if any(
+            requested_panel in visible_panels and metric_id == configured_metric_id
+            for requested_panel, configured_metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
+        )
+    }
+    return payload.model_copy(update=updates)
 
 
 def _normalized_language_expr(expression):
@@ -403,19 +438,20 @@ def get_library_statistics(
     requested_panels: Iterable[str] | None = None,
 ) -> LibraryStatistics | None:
     panel_filter = set(requested_panels) if requested_panels is not None else None
-    cache_key = _statistics_cache_key(str(id(db.get_bind())), panel_filter)
-    cached = stats_cache.get_library_statistics(cache_key, library_id)
-    if cached is not None:
-        return cached
+    cache_key = str(id(db.get_bind()))
 
     library = db.get(Library, library_id)
     if library is None:
         return None
 
     hidden_panel_ids = _MUSIC_HIDDEN_PANEL_IDS if library.type == "music" else set()
+    cached = stats_cache.get_library_statistics(cache_key, library_id)
+    if cached is not None:
+        return _statistics_panel_view(cached, panel_filter, hidden_panel_ids)
 
     def wants(panel_id: str) -> bool:
-        return (panel_filter is None or panel_id in panel_filter) and panel_id not in hidden_panel_ids
+        del panel_id
+        return True
 
     app_settings = load_app_settings(db)
     primary_video_streams = (
@@ -667,15 +703,10 @@ def get_library_statistics(
             ).all()
         )
 
-    numeric_metric_ids = {
-        metric_id
-        for panel_id, metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
-        if wants(panel_id)
-    }
     numeric_distributions = build_numeric_distributions(
         db,
         library_id=library_id,
-        metric_ids=None if panel_filter is None else numeric_metric_ids,
+        metric_ids=None,
     )
 
     payload = LibraryStatistics(
@@ -718,4 +749,4 @@ def get_library_statistics(
         numeric_distributions=numeric_distributions,
     )
     stats_cache.set_library_statistics(cache_key, library_id, payload)
-    return payload
+    return _statistics_panel_view(payload, panel_filter, hidden_panel_ids)

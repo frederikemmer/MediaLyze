@@ -289,6 +289,7 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     assert added_jobs[1]["kwargs"]["id"] == "history-storage-refresh"
     assert (runtime._run_initial_telemetry_send, ()) in submitted
     assert (runtime._run_telemetry_send, (False,)) in submitted
+    assert (runtime._run_update_telemetry_send, ()) in submitted
 
 
 def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:

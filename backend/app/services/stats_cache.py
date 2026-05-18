@@ -33,10 +33,12 @@ class StatsCache:
     _DASHBOARD_LIMIT = 4
     _DASHBOARD_HISTORY_LIMIT = 4
     _DASHBOARD_COMPARISON_LIMIT = 24
+    _DASHBOARD_COMPARISON_SOURCE_LIMIT = 4
     _LIBRARIES_LIMIT = 4
     _LIBRARY_SUMMARY_LIMIT = 64
     _LIBRARY_STATISTICS_LIMIT = 32
     _LIBRARY_COMPARISON_LIMIT = 64
+    _LIBRARY_COMPARISON_SOURCE_LIMIT = 64
 
     def __init__(self) -> None:
         self._lock = Lock()
@@ -46,6 +48,7 @@ class StatsCache:
             tuple[str, ComparisonFieldId, ComparisonFieldId],
             ComparisonResponse,
         ] = OrderedDict()
+        self._dashboard_comparison_sources: OrderedDict[str, list[object]] = OrderedDict()
         self._libraries: OrderedDict[str, list[LibrarySummary]] = OrderedDict()
         self._library_summaries: OrderedDict[tuple[str, int], LibrarySummary] = OrderedDict()
         self._library_statistics: OrderedDict[tuple[str, int], LibraryStatistics] = OrderedDict()
@@ -53,6 +56,7 @@ class StatsCache:
             tuple[str, int, ComparisonFieldId, ComparisonFieldId],
             ComparisonResponse,
         ] = OrderedDict()
+        self._library_comparison_sources: OrderedDict[tuple[str, int], list[object]] = OrderedDict()
 
     def get_dashboard(self, cache_key: str) -> DashboardResponse | None:
         with self._lock:
@@ -78,6 +82,19 @@ class StatsCache:
     ) -> ComparisonResponse | None:
         with self._lock:
             return _get_cached(self._dashboard_comparisons, (cache_key, x_field, y_field))
+
+    def get_dashboard_comparison_source(self, cache_key: str) -> list[object] | None:
+        with self._lock:
+            return _get_cached(self._dashboard_comparison_sources, cache_key)
+
+    def set_dashboard_comparison_source(self, cache_key: str, rows: list[object]) -> None:
+        with self._lock:
+            _set_cached(
+                self._dashboard_comparison_sources,
+                cache_key,
+                rows,
+                limit=self._DASHBOARD_COMPARISON_SOURCE_LIMIT,
+            )
 
     def set_dashboard_comparison(
         self,
@@ -133,6 +150,19 @@ class StatsCache:
         with self._lock:
             return _get_cached(self._library_comparisons, (cache_key, library_id, x_field, y_field))
 
+    def get_library_comparison_source(self, cache_key: str, library_id: int) -> list[object] | None:
+        with self._lock:
+            return _get_cached(self._library_comparison_sources, (cache_key, library_id))
+
+    def set_library_comparison_source(self, cache_key: str, library_id: int, rows: list[object]) -> None:
+        with self._lock:
+            _set_cached(
+                self._library_comparison_sources,
+                (cache_key, library_id),
+                rows,
+                limit=self._LIBRARY_COMPARISON_SOURCE_LIMIT,
+            )
+
     def set_library_comparison(
         self,
         cache_key: str,
@@ -154,11 +184,13 @@ class StatsCache:
             self._dashboard.pop(cache_key, None)
             self._dashboard_history.pop(cache_key, None)
             _delete_matching(self._dashboard_comparisons, lambda key: key[0] == cache_key)
+            self._dashboard_comparison_sources.pop(cache_key, None)
             self._libraries.pop(cache_key, None)
             if library_id is None:
                 _delete_matching(self._library_summaries, lambda key: key[0] == cache_key)
                 _delete_matching(self._library_statistics, lambda key: key[0] == cache_key)
                 _delete_matching(self._library_comparisons, lambda key: key[0] == cache_key)
+                _delete_matching(self._library_comparison_sources, lambda key: key[0] == cache_key)
             else:
                 _delete_matching(
                     self._library_summaries,
@@ -172,6 +204,7 @@ class StatsCache:
                     self._library_comparisons,
                     lambda key: key[0] == cache_key and key[1] == library_id,
                 )
+                self._library_comparison_sources.pop((cache_key, library_id), None)
 
 
 stats_cache = StatsCache()

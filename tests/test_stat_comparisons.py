@@ -38,6 +38,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         second_file = MediaFile(
             library_id=library.id,
@@ -48,6 +49,7 @@ def test_dashboard_comparison_includes_heatmap_scatter_and_bar() -> None:
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=9,
+            duration_seconds=4000.0,
         )
         db.add_all([first_file, second_file])
         db.flush()
@@ -93,8 +95,14 @@ def test_library_comparison_uses_resolution_categories_for_resolution_axis() -> 
             extension="mkv",
             size_bytes=6_000_000_000,
             mtime=1.0,
-            scan_status=ScanStatus.ready,
-            quality_score=8,
+                scan_status=ScanStatus.ready,
+                quality_score=8,
+                duration_seconds=5400.0,
+            primary_video_codec="hevc",
+            primary_video_width=3840,
+            primary_video_height=1606,
+            primary_video_resolution_pixels=3840 * 1606,
+            primary_video_hdr_type="HDR10",
         )
         db.add(media_file)
         db.flush()
@@ -134,6 +142,12 @@ def test_dashboard_comparison_supports_resolution_mp_as_numeric_axis() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=3600.0,
+            primary_video_codec="hevc",
+            primary_video_width=3840,
+            primary_video_height=2160,
+            primary_video_resolution_pixels=3840 * 2160,
+            primary_video_hdr_type="HDR10",
         )
         db.add(media_file)
         db.flush()
@@ -179,6 +193,7 @@ def test_dashboard_comparison_marks_scatter_payload_as_sampled() -> None:
                 mtime=float(index + 1),
                 scan_status=ScanStatus.ready,
                 quality_score=5,
+                duration_seconds=1800.0 * (index + 1),
             )
             db.add(media_file)
             db.flush()
@@ -225,6 +240,7 @@ def test_dashboard_comparison_excludes_libraries_hidden_from_dashboard() -> None
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         hidden_file = MediaFile(
             library_id=hidden_library.id,
@@ -235,6 +251,7 @@ def test_dashboard_comparison_excludes_libraries_hidden_from_dashboard() -> None
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=9,
+            duration_seconds=5400.0,
         )
         db.add_all([visible_file, hidden_file])
         db.flush()
@@ -275,6 +292,7 @@ def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=7,
+            duration_seconds=3600.0,
         )
         db.add(media_file)
         db.flush()
@@ -293,6 +311,7 @@ def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
         )
         db.add(second_file)
         db.flush()

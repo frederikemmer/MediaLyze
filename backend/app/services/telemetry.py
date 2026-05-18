@@ -223,6 +223,22 @@ def should_send_telemetry(app_settings: AppSettingsRead, now: datetime) -> bool:
     return last_sent.astimezone(UTC).date() < now.astimezone(UTC).date()
 
 
+def should_send_update_telemetry(app_settings: AppSettingsRead, settings: Settings) -> bool:
+    if app_settings.telemetry.environment_disabled:
+        return False
+    if app_settings.telemetry.mode not in ("minimal", "enabled"):
+        return False
+    if app_settings.telemetry.last_sent_app_version is not None:
+        return app_settings.telemetry.last_sent_app_version != settings.app_version
+
+    last_payload = app_settings.telemetry.last_user_visible_payload
+    if isinstance(last_payload, dict):
+        app_payload = last_payload.get("app")
+        if isinstance(app_payload, dict) and app_payload.get("version") == settings.app_version:
+            return False
+    return True
+
+
 def _stored_telemetry_payload(db: Session) -> dict:
     setting = db.get(AppSetting, APP_SETTINGS_KEY)
     if setting is None:
@@ -301,6 +317,7 @@ def mark_telemetry_sent(
     next_telemetry = {
         **telemetry,
         "last_sent_at": timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "last_sent_app_version": payload.get("app", {}).get("version"),
     }
     if mode is not None:
         next_telemetry["mode"] = mode
@@ -364,3 +381,10 @@ def send_initial_telemetry_snapshot(db: Session, settings: Settings) -> bool:
         store_last_user_visible_payload=False,
     )
     return True
+
+
+def send_update_telemetry_snapshot(db: Session, settings: Settings) -> bool:
+    app_settings = get_app_settings(db, settings)
+    if not should_send_update_telemetry(app_settings, settings):
+        return False
+    return send_current_telemetry_snapshot(db, settings, force=True)

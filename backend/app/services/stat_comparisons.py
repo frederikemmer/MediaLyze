@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import Float, cast, func, select
+from sqlalchemy import Float, cast, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.entities import Library, MediaFile, MediaFormat
+from backend.app.models.entities import Library, MediaFile
 from backend.app.schemas.comparison import (
     ComparisonBarEntry,
     ComparisonBucket,
@@ -19,15 +19,9 @@ from backend.app.schemas.comparison import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.container_formats import format_container_label, normalize_container
-from backend.app.services.numeric_distributions import (
-    NUMERIC_DISTRIBUTION_CONFIGS,
-    audio_bitrate_value_expression,
-    bitrate_value_expression,
-    build_audio_bitrate_subquery,
-)
+from backend.app.services.numeric_distributions import NUMERIC_DISTRIBUTION_CONFIGS
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.stats_cache import stats_cache
-from backend.app.services.video_queries import primary_video_streams_subquery
 
 RESOLUTION_MP_BINS: Final[list[tuple[float | None, float | None]]] = [
     (0, 1),
@@ -168,28 +162,31 @@ def _numeric_axis_buckets(field_id: ComparisonFieldId) -> list[ComparisonBucket]
 
 
 def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> list[ComparisonSourceRow]:
-    primary_video_streams = primary_video_streams_subquery("comparison_primary_video_streams")
-    audio_bitrate_totals = build_audio_bitrate_subquery("comparison_audio_bitrate_totals")
-    audio_bitrate_expression = audio_bitrate_value_expression(audio_bitrate_totals)
+    cache_key = str(id(db.get_bind()))
+    cached = (
+        stats_cache.get_library_comparison_source(cache_key, library_id)
+        if library_id is not None
+        else stats_cache.get_dashboard_comparison_source(cache_key)
+    )
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     query = (
         select(
             MediaFile.id.label("media_file_id"),
             MediaFile.filename.label("asset_name"),
             cast(MediaFile.size_bytes, Float).label("size"),
             cast(MediaFile.quality_score, Float).label("quality_score"),
-            cast(MediaFormat.duration, Float).label("duration"),
-            cast(func.coalesce(bitrate_value_expression(), audio_bitrate_expression), Float).label("bitrate"),
-            cast(audio_bitrate_expression, Float).label("audio_bitrate"),
+            cast(MediaFile.duration_seconds, Float).label("duration"),
+            cast(MediaFile.bitrate, Float).label("bitrate"),
+            cast(MediaFile.audio_bitrate, Float).label("audio_bitrate"),
             MediaFile.extension.label("container"),
-            primary_video_streams.c.codec.label("video_codec"),
-            primary_video_streams.c.width.label("width"),
-            primary_video_streams.c.height.label("height"),
-            primary_video_streams.c.hdr_type.label("hdr_type"),
+            MediaFile.primary_video_codec.label("video_codec"),
+            MediaFile.primary_video_width.label("width"),
+            MediaFile.primary_video_height.label("height"),
+            MediaFile.primary_video_hdr_type.label("hdr_type"),
         )
         .select_from(MediaFile)
-        .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
-        .outerjoin(primary_video_streams, primary_video_streams.c.media_file_id == MediaFile.id)
-        .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
         .order_by(MediaFile.id.asc())
     )
     if library_id is not None:
@@ -197,7 +194,7 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
     else:
         query = query.join(Library, Library.id == MediaFile.library_id).where(Library.show_on_dashboard.is_(True))
 
-    return [
+    rows = [
         ComparisonSourceRow(
             media_file_id=row.media_file_id,
             asset_name=row.asset_name or str(row.media_file_id),
@@ -214,6 +211,11 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
         )
         for row in db.execute(query).all()
     ]
+    if library_id is not None:
+        stats_cache.set_library_comparison_source(cache_key, library_id, rows)
+    else:
+        stats_cache.set_dashboard_comparison_source(cache_key, rows)
+    return rows
 
 
 def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> float | None:

@@ -25,7 +25,11 @@ from backend.app.services.history_reconstruction import reconstruct_history_from
 from backend.app.services.library_service import get_library_statistics, get_library_summary
 from backend.app.services.path_access import is_watch_supported_for_library
 from backend.app.services.stats import build_dashboard
-from backend.app.services.telemetry import send_current_telemetry_snapshot, send_initial_telemetry_snapshot
+from backend.app.services.telemetry import (
+    send_current_telemetry_snapshot,
+    send_initial_telemetry_snapshot,
+    send_update_telemetry_snapshot,
+)
 from backend.app.services.update_status import check_for_updates
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
@@ -87,6 +91,7 @@ class ScanRuntimeManager:
         self.run_history_retention()
         self.request_initial_telemetry_send()
         self.request_telemetry_send()
+        self.request_update_telemetry_send()
 
     def stop(self) -> None:
         with self.lock:
@@ -277,6 +282,12 @@ class ScanRuntimeManager:
             if not self.started:
                 return
         self.maintenance_executor.submit(self._run_initial_telemetry_send)
+
+    def request_update_telemetry_send(self) -> None:
+        with self.lock:
+            if not self.started:
+                return
+        self.maintenance_executor.submit(self._run_update_telemetry_send)
 
     def schedule_telemetry_send_after_settings_change(self) -> None:
         with self.lock:
@@ -625,6 +636,13 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
+    def _run_update_telemetry_send(self) -> None:
+        db = SessionLocal()
+        try:
+            send_update_telemetry_snapshot(db, self.settings)
+        finally:
+            db.close()
+
     def _run_update_check(self) -> None:
         db = SessionLocal()
         try:
@@ -703,7 +721,7 @@ class ScanRuntimeManager:
             if not self.started:
                 return False
             self._cancel_stats_warmup_locked()
-            timer = Timer(20, lambda: self._submit_stats_warmup(library_id))
+            timer = Timer(0, lambda: self._submit_stats_warmup(library_id))
             timer.daemon = True
             self.stats_warmup_timer = timer
             timer.start()

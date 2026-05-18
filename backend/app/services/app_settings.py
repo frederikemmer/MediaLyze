@@ -235,6 +235,9 @@ def _deserialize_telemetry(payload: Any, settings: Settings) -> TelemetrySetting
             last_sent_at = None
     elif not isinstance(last_sent_at, datetime):
         last_sent_at = None
+    last_sent_app_version = candidate.get("last_sent_app_version")
+    if not isinstance(last_sent_app_version, str) or not last_sent_app_version:
+        last_sent_app_version = None
     last_payload = candidate.get("last_user_visible_payload")
     if not isinstance(last_payload, dict):
         last_payload = None
@@ -245,6 +248,7 @@ def _deserialize_telemetry(payload: Any, settings: Settings) -> TelemetrySetting
             installation_id=installation_id if isinstance(installation_id, str) and installation_id else None,
             installation_id_suffix=installation_id_suffix,
             last_sent_at=last_sent_at,
+            last_sent_app_version=last_sent_app_version,
             last_user_visible_payload=last_payload,
         )
     return TelemetrySettingsRead(
@@ -253,6 +257,7 @@ def _deserialize_telemetry(payload: Any, settings: Settings) -> TelemetrySetting
         installation_id=installation_id if isinstance(installation_id, str) and installation_id else None,
         installation_id_suffix=installation_id_suffix,
         last_sent_at=last_sent_at,
+        last_sent_app_version=last_sent_app_version,
         last_user_visible_payload=last_payload,
     )
 
@@ -467,6 +472,7 @@ def update_app_settings(
         "mode": next_telemetry.mode,
         "installation_id": installation_id,
         "last_sent_at": existing_telemetry.get("last_sent_at"),
+        "last_sent_app_version": existing_telemetry.get("last_sent_app_version"),
         "last_user_visible_payload": next_telemetry.last_user_visible_payload,
     }
 

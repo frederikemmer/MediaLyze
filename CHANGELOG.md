@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- send one additional telemetry snapshot on the first start after an app update when the user has telemetry set to `minimal` or `enabled`
+- speed up idle dashboard and library loads by reusing full statistics snapshots between mutations and warming refreshed statistics immediately after background jobs finish
+- consolidate folder discovery, recognition, bonus-content, and ignore-pattern documentation in `docs/patterns.md`, and expand `docs/supported_metadata.md` into a media-type capability matrix
+
 ## v0.11.1
 
 >2026-05-15

@@ -574,6 +574,9 @@ def test_library_statistics_route_includes_numeric_distributions() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=768_000,
         )
         db.add(media_file)
         db.flush()
@@ -617,6 +620,9 @@ def test_dashboard_comparison_route_returns_comparison_payload() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=512_000,
         )
         db.add(media_file)
         db.flush()

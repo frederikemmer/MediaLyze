@@ -131,11 +131,10 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
         query = (
             select(
                 MediaFile.id.label("media_file_id"),
-                cast(MediaFormat.duration, Float).label("value"),
+                cast(MediaFile.duration_seconds, Float).label("value"),
             )
             .select_from(MediaFile)
-            .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
-            .where(MediaFormat.duration.is_not(None), MediaFormat.duration > 0)
+            .where(MediaFile.duration_seconds.is_not(None), MediaFile.duration_seconds > 0)
         )
         query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
@@ -153,32 +152,24 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
         return query.subquery(f"{metric_id}_distribution_values")
 
     if metric_id == "bitrate":
-        audio_bitrate_totals = build_audio_bitrate_subquery(f"{metric_id}_distribution_audio_bitrate_totals")
-        audio_fallback_expression = audio_bitrate_value_expression(audio_bitrate_totals)
-        value_expression = func.coalesce(bitrate_value_expression(), audio_fallback_expression)
         query = (
             select(
                 MediaFile.id.label("media_file_id"),
-                cast(value_expression, Float).label("value"),
+                cast(MediaFile.bitrate, Float).label("value"),
             )
             .select_from(MediaFile)
-            .outerjoin(MediaFormat, MediaFormat.media_file_id == MediaFile.id)
-            .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
-            .where(value_expression.is_not(None), value_expression > 0)
+            .where(MediaFile.bitrate.is_not(None), MediaFile.bitrate > 0)
         )
         query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")
 
-    audio_bitrate_totals = build_audio_bitrate_subquery(f"{metric_id}_distribution_audio_bitrate_totals")
-    audio_bitrate_expression = audio_bitrate_value_expression(audio_bitrate_totals)
     query = (
         select(
             MediaFile.id.label("media_file_id"),
-            cast(audio_bitrate_expression, Float).label("value"),
+            cast(MediaFile.audio_bitrate, Float).label("value"),
         )
         .select_from(MediaFile)
-        .outerjoin(audio_bitrate_totals, audio_bitrate_totals.c.media_file_id == MediaFile.id)
-        .where(audio_bitrate_expression.is_not(None))
+        .where(MediaFile.audio_bitrate.is_not(None), MediaFile.audio_bitrate > 0)
     )
     query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
     return query.subquery(f"{metric_id}_distribution_values")

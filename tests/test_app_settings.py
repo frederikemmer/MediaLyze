@@ -486,6 +486,7 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "mode": "none",
             "installation_id": None,
             "last_sent_at": None,
+            "last_sent_app_version": None,
             "last_user_visible_payload": None,
         },
         "feature_flags": {

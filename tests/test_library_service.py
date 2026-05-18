@@ -714,6 +714,9 @@ def test_get_library_statistics_groups_similar_resolutions_into_categories() -> 
             mtime=2.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=768_000,
         )
         db.add_all([first, second])
         db.flush()
@@ -1069,6 +1072,9 @@ def test_get_library_statistics_includes_numeric_distributions() -> None:
             mtime=1.0,
             scan_status=ScanStatus.ready,
             quality_score=8,
+            duration_seconds=5400.0,
+            bitrate=8_888_888,
+            audio_bitrate=768_000,
         )
         db.add(media_file)
         db.flush()

@@ -32,6 +32,20 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
 }
+_DISTRIBUTION_FIELD_BY_PANEL = {
+    "container": "container_distribution",
+    "video_codec": "video_codec_distribution",
+    "resolution": "resolution_distribution",
+    "hdr_type": "hdr_distribution",
+    "video_bit_depth": "video_bit_depth_distribution",
+    "bit_depth": "bit_depth_distribution",
+    "audio_codecs": "audio_codec_distribution",
+    "audio_spatial_profiles": "audio_spatial_profile_distribution",
+    "audio_languages": "audio_language_distribution",
+    "subtitle_languages": "subtitle_distribution",
+    "subtitle_codecs": "subtitle_codec_distribution",
+    "subtitle_sources": "subtitle_source_distribution",
+}
 
 
 def _distribution(rows: list[tuple[str | None, int]], fallback: str = "unknown") -> list[DistributionItem]:
@@ -90,21 +104,35 @@ def _group_resolution_distribution(rows, resolution_categories) -> list[Distribu
     ]
 
 
-def _dashboard_cache_key(base_key: str, requested_panels: set[str] | None) -> str:
+def _dashboard_panel_view(payload: DashboardResponse, requested_panels: set[str] | None) -> DashboardResponse:
     if requested_panels is None:
-        return base_key
-    return f"{base_key}:panels={','.join(sorted(requested_panels))}"
+        return payload
+
+    updates = {
+        field_name: getattr(payload, field_name) if panel_id in requested_panels else []
+        for panel_id, field_name in _DISTRIBUTION_FIELD_BY_PANEL.items()
+    }
+    updates["numeric_distributions"] = {
+        metric_id: distribution
+        for metric_id, distribution in payload.numeric_distributions.items()
+        if any(
+            requested_panel in requested_panels and metric_id == configured_metric_id
+            for requested_panel, configured_metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
+        )
+    }
+    return payload.model_copy(update=updates)
 
 
 def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) -> DashboardResponse:
     panel_filter = set(requested_panels) if requested_panels is not None else None
-    cache_key = _dashboard_cache_key(str(id(db.get_bind())), panel_filter)
+    cache_key = str(id(db.get_bind()))
     cached = stats_cache.get_dashboard(cache_key)
     if cached is not None:
-        return cached
+        return _dashboard_panel_view(cached, panel_filter)
 
     def wants(panel_id: str) -> bool:
-        return panel_filter is None or panel_id in panel_filter
+        del panel_id
+        return True
 
     primary_video_streams = (
         primary_video_streams_subquery()
@@ -372,15 +400,10 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
             ).all()
         )
 
-    numeric_metric_ids = {
-        metric_id
-        for panel_id, metric_id in _NUMERIC_PANEL_METRIC_IDS.items()
-        if wants(panel_id)
-    }
     numeric_distributions = build_numeric_distributions(
         db,
         dashboard_only=True,
-        metric_ids=None if panel_filter is None else numeric_metric_ids,
+        metric_ids=None,
     )
 
     payload = DashboardResponse(
@@ -421,4 +444,4 @@ def build_dashboard(db: Session, requested_panels: Iterable[str] | None = None) 
         numeric_distributions=numeric_distributions,
     )
     stats_cache.set_dashboard(cache_key, payload)
-    return payload
+    return _dashboard_panel_view(payload, panel_filter)

@@ -1,140 +1,105 @@
-# Pattern Rules
+# Discovery, Folder Recognition, And Pattern Rules
 
-MediaLyze supports two pattern systems:
+This is the central reference for:
 
-- folder-depth or regex-based recognition for series and season folders
-- glob patterns for bonus-content detection and ignored paths
+- which folders are visible in the path browser
+- which files are discovered for each library type
+- how show / season / episode recognition works
+- how bonus-content classification works
+- how ignore patterns work
 
-All matching runs on normalized paths below the library root. MediaLyze internally uses `/` as the separator and matches case-insensitively.
+Metadata, statistics, and UI capability coverage by media kind are documented in [supported_metadata.md](supported_metadata.md).
 
-## Start Here
+## 1) Discovery Pipeline
 
-Use this quick guide first:
+For each scan, MediaLyze currently applies discovery logic in this order:
 
-- Choose `Folder depth` if your library mostly looks like `Series/Season/Episodes`.
-- Choose `Regex` if you need to extract season numbers from unusual folder names such as `S01`, `01`, or custom naming styles.
-- Use `Bonus folder patterns` when you want extras to stay indexed, but marked as bonus material.
-- Use `Ignore patterns` when files or folders should never be indexed at all.
+1. choose the library root and any configured `selected_paths`
+2. traverse the selected roots deterministically
+3. skip ignored directories and files
+4. keep only file extensions allowed for the library type
+5. classify matching bonus paths
+6. recognize show / season / episode structure where applicable
+7. analyze the remaining media files with `ffprobe`
 
-If you only want one recommendation: start with `Folder depth`, keep the defaults, run one scan, then only add patterns for the cases that still do not classify the way you want.
+All path matching uses normalized library-relative paths with `/` separators.
 
-## Common Real-World Setups
+## 2) Library Roots And Folder Visibility
 
-### Standard TV layout
+### 2.1 Server mode
 
-```text
-Breaking Bad/Season 01/Episode 01.mkv
-Dark/Staffel 2/Folge 03.mkv
-```
+In server mode, library paths must stay below `MEDIA_ROOT`.
 
-Recommended:
+Current behavior:
 
-- recognition mode: `Folder depth`
-- series folder depth: `1`
-- season folder depth: `2`
+- paths outside `MEDIA_ROOT` are rejected
+- symlinks that resolve outside `MEDIA_ROOT` are hidden from the browser
+- entries are sorted with folders first, then by case-insensitive name
+- top-level container placeholder folders named `cdrom`, `floppy`, or `usb` are hidden when they are only empty shadow directories created inside a non-mounted media root
+- explicit mounts remain visible, even if they use otherwise common mount-style names
 
-### TV folders below one extra parent folder
+The placeholder-folder suppression is intentionally narrow:
 
-```text
-Shows/Breaking Bad/Season 01/Episode 01.mkv
-TV/Dark/Staffel 2/Folge 03.mkv
-```
+- only the names `cdrom`, `floppy`, and `usb`
+- only directly below the media root
+- only when the media root itself is not a mount
+- only when the entry is a plain directory and not a mount
 
-Recommended:
+### 2.2 Desktop mode
 
-- recognition mode: `Folder depth`
-- series folder depth: `2`
-- season folder depth: `3`
+Desktop builds do not use the backend browse tree for picking libraries. They use the native OS folder picker plus absolute-path validation.
 
-### Mixed season naming
+Desktop-specific behavior:
 
-```text
-Show Name/Season 01/Episode 01.mkv
-Show Name/S01/Episode 02.mkv
-Show Name/01/Episode 03.mkv
-```
+- library paths must be absolute
+- local paths support `watch`
+- network paths fall back from `watch` to scheduled scanning
 
-Recommended:
+### 2.3 Selected scan roots
 
-- recognition mode: `Regex`
-- season regex list with multiple small patterns instead of one oversized pattern
+A library can be created from multiple selected directories when they share a common parent. Internally:
 
-### Extras should remain visible as bonus material
+- the shared parent becomes the stored library root
+- the chosen subdirectories are stored in `scan_config.selected_paths`
+- scanning only traverses those selected roots
+- relative media paths keep the selected directory names
 
-```text
-Show Name/Season 01/Episode 01.mkv
-Show Name/Extras/Behind the scenes.mkv
-Show Name/Season 00/Special.mkv
-```
+## 3) Type-Aware File Discovery
 
-Recommended:
+| Library Type | Discovered Extensions |
+|---|---|
+| `movies` | `.mkv`, `.mp4`, `.avi`, `.mov`, `.m4v`, `.ts`, `.m2ts`, `.wmv` |
+| `series` | `.mkv`, `.mp4`, `.avi`, `.mov`, `.m4v`, `.ts`, `.m2ts`, `.wmv` |
+| `music` | `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, `.wma` |
+| `mixed` | all video + all audio extensions above |
+| `other` | all video + all audio extensions above |
 
-- keep `Bonus folder patterns` enabled
-- use glob patterns such as `*/Extras/*` or `*/Season 00/*`
+Files with non-matching extensions are skipped during discovery and never become media rows.
 
-### Metadata and junk files should disappear completely
+## 4) Pattern Systems At A Glance
 
-```text
-movie.nfo
-Thumbs.db
-Show Name/Season 01/poster.jpg
-Show Name/Season 01/video.part
-```
+MediaLyze uses three pattern families:
 
-Recommended:
+| Pattern Family | Syntax | Purpose |
+|---|---|---|
+| show / season recognition | folder depth or Python regex | extract show / season structure |
+| bonus-content matching | glob | keep media indexed but classify it as bonus |
+| ignore matching | glob | skip files or folders entirely |
 
-- use `Ignore patterns`
-- examples: `*.nfo`, `*/Thumbs.db`, `*.part`
+Use:
 
-## Choosing The Right Tool
+- `Folder depth` when your show library mostly follows a regular structure such as `Series/Season/Episode`
+- `Regex` when season folder names themselves must be parsed, for example `S01` or `01`
+- `Bonus folder patterns` when extras should stay indexed but be marked as bonus content
+- `Ignore patterns` when paths should never be indexed or analyzed
 
-### Folder depth
+## 5) Show, Season, And Episode Recognition
 
-Use folder depth when the path structure already tells MediaLyze what is a series and what is a season.
+Recognition is attempted for video paths in `series` and `mixed` libraries.
 
-Example:
+### 5.1 Folder-depth recognition
 
-```text
-Library Root/Series Name/Season 01/Episode.mkv
-```
-
-Here MediaLyze only needs to know:
-
-- which depth contains the series folder
-- which depth contains the season folder
-
-Folder depth is usually easier to understand, easier to maintain, and the better default for clean libraries.
-
-### Regex
-
-Use regex when the season folder name itself must be parsed.
-
-Typical reasons:
-
-- season folders are named `S01`
-- season folders are just `01`
-- series folders include year or extra tags
-- your library mixes several naming styles
-
-Regex is more flexible, but also easier to misconfigure.
-
-### Glob patterns
-
-Use glob patterns when you only want to match path shapes, not extract values.
-
-Use glob for:
-
-- `*/Extras/*`
-- `*.nfo`
-- `*/Sample/*`
-
-Do not use regex syntax in glob fields.
-
-## Folder Depth Recognition
-
-Series recognition is only attempted for libraries of type `series` or `mixed`.
-
-With folder depth, MediaLyze looks at fixed path levels below the library root.
+Folder depth is the default recognition mode.
 
 Example with series depth `1` and season depth `2`:
 
@@ -161,9 +126,9 @@ Meaning:
 Important:
 
 - season depth must be greater than series depth
-- every video inside a recognized season folder is treated as an episode
-- MediaLyze still tries to extract episode numbers from filenames such as `S01E02`, `1x02`, `Episode 02`, or `Folge 02`
-- default season parsing still expects recognizable season names such as `Season 01`, `Staffel 2`, or similar forms with suffix metadata
+- every supported video inside a recognized season folder is treated as an episode
+- MediaLyze still tries to extract episode numbers from filenames such as `S01E02`, `1x02`, `Episode 02`, and `Folge 02`
+- default season parsing expects recognizable season names such as `Season 01` or `Staffel 2`
 
 Supported default season examples:
 
@@ -175,14 +140,14 @@ Staffel 4 (2026)
 Staffel 4 (2026) [1080p, SDR, h264] [ger, eng]
 ```
 
-## Regex Recognition
+### 5.2 Regex recognition
 
 Regex mode is useful when folder depth alone is not enough.
 
 A file is classified as an episode when all of these are true:
 
-- some folder in its path matches a configured season folder regex
-- the folder directly above that season folder matches a configured series folder regex
+- some folder in its path matches a configured season-folder regex
+- the folder directly above that season folder matches a configured series-folder regex
 - the file itself is a supported video file
 
 Example:
@@ -196,7 +161,7 @@ Here:
 - `Example Show (2024)` is tested against the series regex list
 - `Season 01` is tested against the season regex list
 
-## Regex Syntax
+### 5.3 Regex syntax
 
 MediaLyze uses Python regular expressions via `re.search(..., re.IGNORECASE)`.
 
@@ -204,202 +169,72 @@ That means:
 
 - matching is case-insensitive
 - patterns are searched inside the folder name unless you anchor them
-- if you want an exact match, usually start with `^` and end with `$`
+- named groups must use Python syntax such as `(?P<title>...)`
 
-Recommended:
+Recognized named groups:
 
-```text
-^(?P<title>.+?) \((?P<year>\d{4})\)$
-```
+- `title`: optional series title
+- `year`: optional four-digit series year
+- `season`: numeric season value
 
-Usually too broad:
-
-```text
-Season
-```
-
-Because MediaLyze uses Python regex syntax, named groups must use `(?P<name>...)`, not `(?<name>...)`.
-
-Correct:
-
-```text
-^(?P<season>\d{1,3})$
-```
-
-Incorrect:
-
-```text
-^(?<season>\d{1,3})$
-```
-
-## Named Capture Groups
-
-MediaLyze recognizes these named groups in the regex fields:
-
-- `title`: optional series title from the series folder
-- `year`: optional four-digit year from the series folder
-- `season`: required numeric season value from the season folder
-
-Notes:
-
-- `title` is optional. If you do not capture it, MediaLyze falls back to the full series folder name.
-- `year` is optional.
-- `season` should be present in season regexes. If MediaLyze cannot parse a season number, the folder cannot be classified as a season.
-
-## Default Regexes
-
-Default series folder regex:
+Default series-folder regex:
 
 ```text
 ^(?P<title>.+?)(?:\s+\((?P<year>\d{4})\))?(?:\s+\[[^\]]+\])?$
 ```
 
-This matches folders such as:
-
-```text
-Example Show
-Example Show (2024)
-Example Show (2024) [tmdb-12345]
-```
-
-Default season folder regex:
+Default season-folder regex:
 
 ```text
 ^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$
 ```
 
-This matches folders such as:
-
-```text
-Season 1
-Season 01
-Staffel 2
-Staffel 4 (2026)
-Staffel 4 (2026) [1080p, SDR, h264]
-```
-
-## Practical Regex Examples
-
-### Simple series folders
-
-```text
-^(?P<title>.+?)$
-```
-
-Matches:
-
-```text
-Breaking Bad
-Dark
-The Office US
-```
-
-### Series folders with year
-
-```text
-^(?P<title>.+?)\s+\((?P<year>\d{4})\)$
-```
-
-Matches:
-
-```text
-Battlestar Galactica (2004)
-Doctor Who (2005)
-```
-
-### Season folders using words
-
-```text
-^(?:Season|Staffel)\s*(?P<season>\d{1,3})$
-```
-
-### Numeric season folders only
+Useful alternatives:
 
 ```text
 ^(?P<season>\d{1,2})$
-```
-
-### `S01`-style season folders
-
-```text
 ^S(?P<season>\d{1,2})$
 ```
 
-### Two season styles in one library
+## 6) Bonus Content
 
-Store both:
+Bonus matching uses glob patterns, not regex.
 
-```text
-^(?:Season|Staffel)\s*(?P<season>\d{1,3})$
-^S(?P<season>\d{1,2})$
-```
+Bonus matches:
 
-## Recommended Workflow For Regexes
+- remain indexed
+- are classified as `bonus`
 
-1. Take one real folder name from your library.
-2. Write the smallest exact pattern for that naming style.
-3. Add `^` and `$` unless you really want partial matches.
-4. Add named groups only for values MediaLyze should extract.
-5. Test against a few real folder names.
-6. If your library uses multiple styles, add multiple patterns.
-
-Good:
+Default bonus-folder names currently include:
 
 ```text
-^(?P<title>.+?)\s+\((?P<year>\d{4})\)$
-^(?P<title>.+?)$
+behind the scenes
+deleted scenes
+interviews
+scenes
+samples
+shorts
+featurettes
+clips
+other
+extras
+trailers
+theme-music
+backdrops
+Specials
+Season 00
 ```
 
-Less maintainable:
+For each name, MediaLyze seeds four effective folder patterns:
 
 ```text
-^(?P<title>.+?)(?:\s+\((?P<year>\d{4})\))?(?:\s+-\s+.+)?(?:\s+\[[^\]]+\])?(?:\s+\{.*\})?$
+Name/
+Name/*
+*/Name/
+*/Name/*
 ```
 
-## Common Regex Mistakes
-
-### Using the wrong named-group syntax
-
-Use:
-
-```text
-(?P<title>...)
-```
-
-Not:
-
-```text
-(?<title>...)
-```
-
-### Forgetting anchors
-
-Without `^` and `$`, a regex can match only part of a folder name.
-
-Prefer:
-
-```text
-^Season\s*(?P<season>\d{1,3})$
-```
-
-### Making one regex do everything
-
-If your library contains several styles, use several small regexes.
-
-## Bonus Folder Patterns
-
-Bonus patterns use glob syntax, not regex syntax.
-
-Bonus matches stay indexed, but are categorized as `bonus` instead of normal main content.
-
-Typical use cases:
-
-- `Extras` folders
-- `Trailers` folders
-- `Season 00`
-- featurettes, interviews, deleted scenes
-
-Common patterns:
+Typical user patterns:
 
 ```text
 Extras/*
@@ -408,39 +243,104 @@ Extras/*
 */Season 00/*
 ```
 
-Choose bonus patterns when you still want the files visible in MediaLyze.
+Use bonus matching when files should stay searchable and visible, but should be separated from main content.
 
-Choose ignore patterns instead if those files should disappear completely.
+## 7) Ignore Patterns
 
-## Ignore Patterns
+Ignore rules use glob syntax and are matched against normalized library-relative paths.
 
-Ignore patterns use the same glob rules as bonus patterns, but ignored files are never indexed or analyzed.
+Ignored paths:
 
-Typical use cases:
+- are not indexed
+- are not analyzed
+- are counted in scan ignore summaries
 
-- metadata sidecars such as `.nfo`
-- temporary download leftovers
-- NAS-generated system folders
-- images or assets you never want inside the media library
+The settings UI stores:
 
-Examples:
+- `user_ignore_patterns`
+- `default_ignore_patterns`
+- merged effective `ignore_patterns`
+
+### 7.1 Built-in defaults
+
+Fresh installations seed these defaults unless `DISABLE_DEFAULT_IGNORE_PATTERNS=true` is set:
+
+```text
+*/.DS_Store
+*/._*
+*/@eaDir/*
+*/#recycle/*
+*/.deletedByTMM/*
+*/.recycle/*
+*/Thumbs.db
+*/Desktop.ini
+*/$RECYCLE.BIN/*
+*/.thumbnails/*
+*.part
+*.tmp
+*.temp
+*thumbs.db
+```
+
+When seeding is disabled, the default-pattern list starts empty. The UI still allows manual entries.
+
+### 7.2 Common ignore patterns
+
+Ignore one extension everywhere:
 
 ```text
 *.nfo
-*/.DS_Store
-*/@eaDir/*
-*.part
-*.tmp
 ```
 
-See [ignore_files_folders.md](ignore_files_folders.md) for an additional ignore-only reference list.
+Ignore one top-level folder:
 
-## Glob Syntax Quick Reference
+```text
+Extras/*
+Sample/*
+```
 
-MediaLyze matches bonus and ignore patterns with shell-style wildcards.
+Ignore a folder name anywhere:
+
+```text
+*/Sample/*
+```
+
+Ignore every path containing a word:
+
+```text
+*trailer*
+```
+
+### 7.3 Practical examples
+
+Metadata sidecars:
+
+```text
+*.nfo
+*.png
+```
+
+Extra material that should disappear completely:
+
+```text
+Extras/*
+*/Sample/*
+*trailer*
+```
+
+Generated subtitle index files:
+
+```text
+*.idx
+*.sub
+```
+
+## 8) Glob Matching Rules
+
+Bonus and ignore patterns both use shell-style glob matching.
 
 - `*` matches any number of characters
-- `?` matches a single character
+- `?` matches one character
 - `[seq]` matches one character from a set
 - `[!seq]` matches one character not in a set
 
@@ -452,65 +352,44 @@ Examples:
 movie-??.mkv
 ```
 
-Folder patterns such as `*/Extras/*` affect everything below that folder. A leading `/` is optional, so `Extras/*` and `/Extras/*` can both match the same top-level normalized path.
+Matching details:
 
-## How To Decide: Bonus Or Ignore
+- paths are normalized to use `/`
+- matching is done against the library-relative path, not only the filename
+- ignore matching is case-sensitive
+- bonus matching is case-insensitive because candidate paths and patterns are normalized to lowercase before comparison
+- for directories, MediaLyze checks candidates with and without a trailing slash
+- a leading `/` is optional because candidates are tested both with and without it
 
-Use `Bonus` if:
+## 9) Bonus Or Ignore?
 
-- you still want the files searchable and visible
-- you want them classified separately from main episodes or movies
+Use `bonus` if:
 
-Use `Ignore` if:
+- files should remain searchable
+- files should remain visible in MediaLyze
+- you want them separated from normal main content
 
-- the files should never appear in MediaLyze
-- they are junk, sidecars, temp files, or non-media clutter
+Use `ignore` if:
 
-## Pattern Cookbook
+- files should never appear in MediaLyze
+- they are temporary, generated, sidecar, or clutter paths
 
-### Ignore metadata sidecars
+## 10) Related Behavior
 
-```text
-*.nfo
-*.jpg
-*.png
-```
+### External subtitle sidecars
 
-### Ignore temp and download leftovers
-
-```text
-*.part
-*.tmp
-*.temp
-```
-
-### Ignore NAS and system folders
+External subtitle sidecars are not discovered through the normal media-extension allow-list. They are detected near a media file when the filename stem / prefix matches and the extension is one of:
 
 ```text
-*/@eaDir/*
-*/#recycle/*
-*/.deletedByTMM/*
+.srt
+.ass
+.ssa
+.sub
+.idx
 ```
 
-### Keep specials as bonus content
+Adding or removing a detected sidecar causes the associated media file to be reanalyzed on the next scan even if the media file itself did not change.
 
-```text
-*/Season 00/*
-*/Specials/*
-```
+### Supported analysis surface
 
-### Keep trailers and extras as bonus content
-
-```text
-*/Extras/*
-*/trailers/*
-```
-
-## External References
-
-Official Python documentation:
-
-- Python `re` regular expressions: https://docs.python.org/3/library/re.html
-- Python `fnmatch` glob matching: https://docs.python.org/3/library/fnmatch.html
-
-If you test regexes outside MediaLyze, make sure the tool uses Python regex syntax and not a different flavor.
+For the current metadata/statistics/panel matrix by media kind, see [supported_metadata.md](supported_metadata.md).
