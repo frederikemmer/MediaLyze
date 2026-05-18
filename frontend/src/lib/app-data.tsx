@@ -192,8 +192,12 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [appSettings, setAppSettingsState] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [appSettingsLoaded, setAppSettingsLoaded] = useState(false);
-  const [dashboard, setDashboardState] = useState<DashboardResponse | null>(null);
-  const [dashboardLoaded, setDashboardLoaded] = useState(false);
+  const [dashboard, setDashboardState] = useState<DashboardResponse | null>(() =>
+    readSessionJson<DashboardResponse>(dashboardSessionStorageKey(null)),
+  );
+  const [dashboardLoaded, setDashboardLoaded] = useState(() =>
+    readSessionJson<DashboardResponse>(dashboardSessionStorageKey(null)) !== null,
+  );
   const [libraries, setLibrariesState] = useState<LibrarySummary[]>([]);
   const [librariesLoaded, setLibrariesLoaded] = useState(false);
   const appSettingsRequestRef = useRef<Promise<AppSettings> | null>(null);

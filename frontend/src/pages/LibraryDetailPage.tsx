@@ -1750,6 +1750,7 @@ export function LibraryDetailPage() {
       return [{ ...group, items: matchingItems }];
     });
   }, [duplicateGroups, duplicateSearchTokens]);
+  const hasVisibleDuplicateContent = Boolean(duplicateGroups && duplicateGroups.items.length > 0);
   const fileQueryKey = useMemo(
     () => buildFileCacheKey(libraryId, deferredAppliedSearchFilterKey, sortKey, sortDirection),
     [deferredAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
@@ -2400,6 +2401,12 @@ export function LibraryDetailPage() {
       isDuplicatesPanelCollapsed ? "true" : "false",
     );
   }, [isDuplicatesPanelCollapsed, libraryId]);
+
+  useEffect(() => {
+    if (!hasVisibleDuplicateContent && !showSuppressedDuplicateGroups) {
+      setIsDuplicatesPanelCollapsed(true);
+    }
+  }, [hasVisibleDuplicateContent, showSuppressedDuplicateGroups]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -3353,7 +3360,8 @@ export function LibraryDetailPage() {
               const duplicatePanelCanExpand = Boolean(
                 duplicateGroupsError ||
                   (isDuplicateGroupsLoading && !duplicateGroups) ||
-                  (duplicateGroups && duplicateGroups.items.length > 0),
+                  hasVisibleDuplicateContent ||
+                  showSuppressedDuplicateGroups,
               );
               const duplicatePanelCollapsed = !duplicatePanelCanExpand || isDuplicatesPanelCollapsed;
               const hasSuppressedDuplicateGroups = Boolean(duplicateGroups && duplicateGroups.suppressed_group_count > 0);

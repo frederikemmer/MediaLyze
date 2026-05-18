@@ -1254,7 +1254,6 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
     fireEvent.click(await screen.findByRole("button", { name: "Show hidden" }));
 
     expect(await screen.findByText("Hidden")).toBeInTheDocument();
@@ -1267,6 +1266,50 @@ describe("LibraryDetailPage", () => {
       String(libraryId),
       expect.objectContaining({ includeSuppressed: true }),
     );
+  });
+
+  it("keeps an empty duplicate panel collapsed until hidden groups are shown again", async () => {
+    vi.spyOn(api, "libraryDuplicates")
+      .mockResolvedValueOnce(
+        createDuplicateGroupPage({
+          total_groups: 0,
+          duplicate_file_count: 0,
+          suppressed_group_count: 1,
+          items: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createDuplicateGroupPage({
+          total_groups: 0,
+          duplicate_file_count: 0,
+          suppressed_group_count: 1,
+          items: [
+            {
+              mode: "filename",
+              signature: "movie",
+              label: "Movie",
+              file_count: 2,
+              total_size_bytes: 2048,
+              suppressed: true,
+              items: [
+                { id: 1, relative_path: "Movie.mkv", filename: "Movie.mkv", size_bytes: 1024 },
+                { id: 2, relative_path: "Movie Copy.mkv", filename: "Movie Copy.mkv", size_bytes: 1024 },
+              ],
+            },
+          ],
+        }),
+      );
+
+    renderPage(126);
+
+    const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
+    expect(duplicatesToggle).toBeDisabled();
+    expect(duplicatesToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show hidden" }));
+
+    await waitFor(() => expect(duplicatesToggle).not.toBeDisabled());
+    expect(duplicatesToggle.closest(".statistic-layout-panel-shell")).not.toHaveClass("is-collapsed-panel");
   });
 
   it("hides the score meter when the feature flag is enabled", async () => {
