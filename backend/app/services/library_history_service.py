@@ -354,6 +354,11 @@ def _parse_history_metrics(
 
 
 def get_library_history(db: Session, library_id: int) -> LibraryHistoryResponse | None:
+    cache_key = str(id(db.get_bind()))
+    cached = stats_cache.get_library_history(cache_key, library_id)
+    if cached is not None:
+        return cached
+
     library = db.get(Library, library_id)
     if library is None:
         return None
@@ -379,7 +384,7 @@ def get_library_history(db: Session, library_id: int) -> LibraryHistoryResponse 
             )
         )
 
-    return LibraryHistoryResponse(
+    payload = LibraryHistoryResponse(
         generated_at=utc_now(),
         library_id=library_id,
         oldest_snapshot_day=points[0].snapshot_day if points else None,
@@ -390,6 +395,8 @@ def get_library_history(db: Session, library_id: int) -> LibraryHistoryResponse 
         ],
         points=points,
     )
+    stats_cache.set_library_history(cache_key, library_id, payload)
+    return payload
 
 
 def _weighted_average(total: float, weight: int) -> float | None:

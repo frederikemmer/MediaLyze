@@ -5,7 +5,7 @@ from threading import Lock
 
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
 from backend.app.schemas.library import LibraryStatistics, LibrarySummary
-from backend.app.schemas.library_history import DashboardHistoryResponse
+from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
 from backend.app.schemas.media import DashboardResponse
 
 
@@ -36,6 +36,7 @@ class StatsCache:
     _DASHBOARD_COMPARISON_SOURCE_LIMIT = 4
     _LIBRARIES_LIMIT = 4
     _LIBRARY_SUMMARY_LIMIT = 64
+    _LIBRARY_HISTORY_LIMIT = 64
     _LIBRARY_STATISTICS_LIMIT = 32
     _LIBRARY_COMPARISON_LIMIT = 64
     _LIBRARY_COMPARISON_SOURCE_LIMIT = 64
@@ -51,6 +52,7 @@ class StatsCache:
         self._dashboard_comparison_sources: OrderedDict[str, list[object]] = OrderedDict()
         self._libraries: OrderedDict[str, list[LibrarySummary]] = OrderedDict()
         self._library_summaries: OrderedDict[tuple[str, int], LibrarySummary] = OrderedDict()
+        self._library_history: OrderedDict[tuple[str, int], LibraryHistoryResponse] = OrderedDict()
         self._library_statistics: OrderedDict[tuple[str, int], LibraryStatistics] = OrderedDict()
         self._library_comparisons: OrderedDict[
             tuple[str, int, ComparisonFieldId, ComparisonFieldId],
@@ -123,9 +125,17 @@ class StatsCache:
         with self._lock:
             return _get_cached(self._library_summaries, (cache_key, library_id))
 
+    def get_library_history(self, cache_key: str, library_id: int) -> LibraryHistoryResponse | None:
+        with self._lock:
+            return _get_cached(self._library_history, (cache_key, library_id))
+
     def set_library_summary(self, cache_key: str, library_id: int, payload: LibrarySummary) -> None:
         with self._lock:
             _set_cached(self._library_summaries, (cache_key, library_id), payload, limit=self._LIBRARY_SUMMARY_LIMIT)
+
+    def set_library_history(self, cache_key: str, library_id: int, payload: LibraryHistoryResponse) -> None:
+        with self._lock:
+            _set_cached(self._library_history, (cache_key, library_id), payload, limit=self._LIBRARY_HISTORY_LIMIT)
 
     def get_library_statistics(self, cache_key: str, library_id: int) -> LibraryStatistics | None:
         with self._lock:
@@ -188,6 +198,7 @@ class StatsCache:
             self._libraries.pop(cache_key, None)
             if library_id is None:
                 _delete_matching(self._library_summaries, lambda key: key[0] == cache_key)
+                _delete_matching(self._library_history, lambda key: key[0] == cache_key)
                 _delete_matching(self._library_statistics, lambda key: key[0] == cache_key)
                 _delete_matching(self._library_comparisons, lambda key: key[0] == cache_key)
                 _delete_matching(self._library_comparison_sources, lambda key: key[0] == cache_key)
@@ -196,6 +207,7 @@ class StatsCache:
                     self._library_summaries,
                     lambda key: key[0] == cache_key and key[1] == library_id,
                 )
+                self._library_history.pop((cache_key, library_id), None)
                 _delete_matching(
                     self._library_statistics,
                     lambda key: key[0] == cache_key and key[1] == library_id,

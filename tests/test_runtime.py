@@ -292,6 +292,47 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
     assert (runtime._run_update_telemetry_send, ()) in submitted
 
 
+def test_start_requests_startup_stats_warmup(monkeypatch) -> None:
+    session_factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+    requested: list[int | None] = []
+
+    class SchedulerStub:
+        running = False
+
+        def start(self) -> None:
+            self.running = True
+
+        def add_job(self, func, **kwargs):
+            return None
+
+        def get_jobs(self):
+            return []
+
+        def get_job(self, job_id):
+            return None
+
+        def shutdown(self, wait=False) -> None:
+            self.running = False
+
+    class ExecutorStub:
+        def submit(self, fn, *args) -> None:
+            return None
+
+        def shutdown(self, wait=False, cancel_futures=True) -> None:
+            return None
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime.scheduler = SchedulerStub()
+    runtime.executor = ExecutorStub()
+    runtime.maintenance_executor = ExecutorStub()
+    monkeypatch.setattr(runtime, "request_stats_warmup", lambda library_id=None: requested.append(library_id) or True)
+
+    runtime.start()
+
+    assert requested == [None]
+
+
 def test_telemetry_daily_job_runs_at_utc_midnight_with_jitter() -> None:
     captured: dict = {}
 

@@ -1555,11 +1555,14 @@ def run_scan(
     db.commit()
     stats_cache.invalidate(cache_key, job.library_id)
     from backend.app.services.library_service import get_library_statistics, get_library_summary
+    from backend.app.services.library_history_service import get_dashboard_history, get_library_history
     from backend.app.services.stats import build_dashboard
 
     get_library_summary(db, job.library_id)
     get_library_statistics(db, job.library_id)
+    get_library_history(db, job.library_id)
     build_dashboard(db)
+    get_dashboard_history(db)
     db.refresh(job)
     return job
 
@@ -1638,10 +1641,13 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     db.commit()
     stats_cache.invalidate(cache_key, library_id)
     from backend.app.services.library_service import get_library_statistics, get_library_summary
+    from backend.app.services.library_history_service import get_dashboard_history, get_library_history
     from backend.app.services.stats import build_dashboard
 
     get_library_summary(db, library_id)
     get_library_statistics(db, library_id)
+    get_library_history(db, library_id)
     build_dashboard(db)
+    get_dashboard_history(db)
     db.refresh(job)
     return job
