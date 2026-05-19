@@ -95,4 +95,31 @@ describe("statistic comparisons", () => {
     expect(normalized.xField).not.toBe(normalized.yField);
     expect(["heatmap", "bar", "scatter"]).toContain(normalized.renderer);
   });
+
+  it("hides video-only comparison fields for audiobook libraries", () => {
+    const audiobookFields = getComparisonFieldDefinitionsForLibraryType("audiobooks").map((field) => field.id);
+
+    expect(audiobookFields).not.toContain("video_codec");
+    expect(audiobookFields).not.toContain("resolution");
+    expect(audiobookFields).not.toContain("hdr_type");
+    expect(audiobookFields).toContain("audio_artist");
+    expect(audiobookFields).toContain("sample_rate");
+    expect(audiobookFields).toContain("chapter_count");
+    expect(audiobookFields).toContain("audiobook_narrator");
+    expect(audiobookFields).toContain("audiobook_author");
+    expect(audiobookFields).toContain("audiobook_publisher");
+    expect(audiobookFields).toContain("audiobook_series");
+    expect(audiobookFields).toContain("audiobook_series_part");
+  });
+
+  it("hides audiobook-only comparison fields for music libraries", () => {
+    const musicFields = getComparisonFieldDefinitionsForLibraryType("music").map((field) => field.id);
+
+    expect(musicFields).not.toContain("chapter_count");
+    expect(musicFields).not.toContain("audiobook_narrator");
+    expect(musicFields).not.toContain("audiobook_author");
+    expect(musicFields).not.toContain("audiobook_publisher");
+    expect(musicFields).not.toContain("audiobook_series");
+    expect(musicFields).not.toContain("audiobook_series_part");
+  });
 });

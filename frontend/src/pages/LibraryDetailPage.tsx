@@ -742,7 +742,8 @@ export function buildFileColumns(
   libraryType?: string | null,
   inDepthDolbyVisionProfiles = false,
 ): FileColumnDefinition[] {
-  const audioCodecsLabelKey = libraryType === "music" ? "fileTable.formatsAndCodecs" : "fileTable.audioCodecs";
+  const audioCodecsLabelKey =
+    libraryType === "music" || libraryType === "audiobooks" ? "fileTable.formatsAndCodecs" : "fileTable.audioCodecs";
   function textOrNa(value: string | null | undefined): string {
     return value ? value : t("fileTable.na");
   }
@@ -933,6 +934,16 @@ export function buildFileColumns(
       ["track_number", "fileTable.trackNumber", (row: any) => row.track_number],
       ["bit_rate_mode", "fileTable.bitRateMode", (row: any) => row.bit_rate_mode],
       ["has_embedded_cover", "fileTable.embeddedCover", (row: any) => row.has_embedded_cover ? t("common.yes") : t("common.no")],
+      ["chapter_count", "fileTable.chapterCount", (row: any) => row.chapter_count],
+      ["audiobook_narrator", "fileTable.audiobookNarrator", (row: any) => row.audiobook_narrator],
+      ["audiobook_author", "fileTable.audiobookAuthor", (row: any) => row.audiobook_author],
+      ["audiobook_publisher", "fileTable.audiobookPublisher", (row: any) => row.audiobook_publisher],
+      ["audiobook_series", "fileTable.audiobookSeries", (row: any) => row.audiobook_series],
+      ["audiobook_series_part", "fileTable.audiobookSeriesPart", (row: any) => row.audiobook_series_part],
+      ["audiobook_language", "fileTable.audiobookLanguage", (row: any) => row.audiobook_language],
+      ["audiobook_abridged", "fileTable.audiobookAbridged", (row: any) => row.audiobook_abridged],
+      ["audiobook_asin", "fileTable.audiobookAsin", (row: any) => row.audiobook_asin],
+      ["audiobook_isbn", "fileTable.audiobookIsbn", (row: any) => row.audiobook_isbn],
     ] as const).map(([key, labelKey, getValue]) => ({
       key,
       labelKey,
@@ -1552,7 +1563,7 @@ export function LibraryDetailPage() {
       // Filter columns by library type
       if (activeLibraryType) {
         return allColumns.filter((col) => {
-          if (activeLibraryType === "music" && col.key === "quality_score" && !showMusicQualityScore) {
+          if ((activeLibraryType === "music" || activeLibraryType === "audiobooks") && col.key === "quality_score" && !showMusicQualityScore) {
             return false;
           }
           return shouldShowField(col.key, activeLibraryType);
@@ -3312,7 +3323,7 @@ export function LibraryDetailPage() {
             } else if (panel.definition.kind === "statistic") {
               const statisticDefinition = panel.definition.statisticDefinition;
               const panelTitle =
-                activeLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                (activeLibraryType === "music" || activeLibraryType === "audiobooks") && statisticDefinition.id === "audio_codecs"
                   ? t("libraryDetail.formatsAndCodecs")
                   : t(statisticDefinition.panelTitleKey ?? statisticDefinition.nameKey);
               const items =

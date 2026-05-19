@@ -52,10 +52,16 @@
     "audio_genres": "Genres",
     "audio_years": "Erscheinungsjahre",
     "audio_channels": "Kanalzahl",
-    "sample_rates": "Sample-Raten",
-    "track_numbers": "Tracknummern",
-    "bit_rate_modes": "Bitraten-Modi",
-    "embedded_covers": "Eingebettete Cover"
+      "sample_rates": "Sample-Raten",
+      "track_numbers": "Tracknummern",
+      "bit_rate_modes": "Bitraten-Modi",
+      "embedded_covers": "Eingebettete Cover",
+      "audiobook_narrators": "Erzähler",
+      "audiobook_authors": "Autoren",
+      "audiobook_publishers": "Verlage",
+      "audiobook_series": "Hörbuchreihe",
+      "audiobook_series_parts": "Reihenteile",
+      "chapter_counts": "Kapitelanzahl"
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",
@@ -92,9 +98,11 @@
     "name": "Name",
     "namePlaceholder": "Filmarchiv",
     "nameRequired": "Der Bibliotheksname darf nicht leer sein.",
-    "type": "Bibliothekstyp",
-    "typeTooltipAria": "Bibliothekstypen erklaeren",
-    "typeTooltip": "Filme: keine Serien-Erkennung.\nShows: Serien- und Staffel-Erkennung ist waehrend Scans aktiv.\nGemischt: Serien- und Staffel-Erkennung wird nur versucht, wenn Muster passen.\nAndere: keine Serien-Erkennung.",
+    "type": "Medientyp",
+    "typePlaceholder": "Medientyp auswaehlen",
+    "typeRequired": "Bitte einen Medientyp auswaehlen.",
+    "typeTooltipAria": "Medientypen erklaeren",
+    "typeTooltip": "Filme: keine Serien-Erkennung.\nSerien: Serien- und Staffel-Erkennung ist waehrend Scans aktiv.\nMusik: Audio-Metadaten und Musikstatistiken sind aktiv.\nHoerbuecher: Audio-Metadaten und Hoerbuch-Bibliotheken sind aktiv.\nGemischt: Serien- und Staffel-Erkennung wird nur versucht, wenn Muster passen.\nAndere: keine Serien-Erkennung.",
     "desktopPathPlaceholder": "/Volumes/Media oder \\\\server\\share\\videos",
     "desktopPathMustExist": "Bitte ein vorhandenes Verzeichnis auswaehlen.",
     "chooseFolder": "Ordner auswaehlen",
@@ -121,7 +129,7 @@
     "renameAria": "Bibliothek {{name}} bearbeiten",
     "renameTooltip": "Bibliothek bearbeiten",
     "editNameAria": "Name fuer Bibliothek {{name}} bearbeiten",
-    "editTypeAria": "Typ fuer Bibliothek {{name}} bearbeiten",
+    "editTypeAria": "Medientyp fuer Bibliothek {{name}} bearbeiten",
     "saveEditAria": "Aenderungen fuer Bibliothek {{name}} speichern",
     "saveEditTooltip": "Bibliotheksaenderungen speichern",
     "cancelEditAria": "Aenderungen fuer Bibliothek {{name}} verwerfen",
@@ -346,7 +354,14 @@
       "sample_rate": "Sample Rate",
       "track_number": "Tracknummer",
       "bit_rate_mode": "Bitrate Mode",
-      "has_embedded_cover": "Eingebettetes Cover"
+      "has_embedded_cover": "Eingebettetes Cover",
+      "chapter_count": "Kapitelanzahl",
+      "chapter_titles": "Kapiteltitel",
+      "audiobook_narrator": "Erzähler",
+      "audiobook_author": "Autor",
+      "audiobook_publisher": "Verlag",
+      "audiobook_series": "Hörbuchreihe",
+      "audiobook_series_part": "Reihenteil"
     }
   },
   "panelLayout": {
@@ -382,6 +397,7 @@
     "movies": "Filme",
     "series": "Serien",
     "music": "Musik (alpha)",
+    "audiobooks": "Hoerbuecher",
     "mixed": "Gemischt",
     "other": "Andere"
   },
@@ -524,7 +540,8 @@
         "bitrate": "Verwende eine Bitrate wie >8Mb/s oder >=256kb/s.",
         "audio_bitrate": "Verwende eine Audio-Bitrate wie >512kb/s oder >=1Mb/s.",
         "bit_depth": "Verwende eine ganzzahlige Bittiefe wie >=16 oder =24.",
-        "duration": "Verwende eine Dauer wie >90m oder >=1h 30m."
+        "duration": "Verwende eine Dauer wie >90m oder >=1h 30m.",
+        "chapter_count": "Verwende eine Kapitelanzahl wie >=10 oder =24."
       },
       "audio_title": {
         "placeholder": "z. B. Songtitel"
@@ -566,6 +583,46 @@
       },
       "has_embedded_cover": {
         "placeholder": "ja oder nein"
+      },
+      "chapter_count": {
+        "placeholder": "z. B. >=10",
+        "tooltip": "Unterstützt: >=10, =24, <50"
+      },
+      "chapter_titles": {
+        "placeholder": "z. B. Kapitel eins"
+      },
+      "audiobook_narrator": {
+        "placeholder": "z. B. Erzähler"
+      },
+      "audiobook_author": {
+        "placeholder": "z. B. Autor"
+      },
+      "audiobook_publisher": {
+        "placeholder": "z. B. Verlag"
+      },
+      "audiobook_series": {
+        "placeholder": "z. B. Reihe"
+      },
+      "audiobook_series_part": {
+        "placeholder": "z. B. 2"
+      },
+      "audiobook_description": {
+        "placeholder": "z. B. Begriff aus Synopsis"
+      },
+      "audiobook_copyright": {
+        "placeholder": "z. B. Rechteinhaber"
+      },
+      "audiobook_asin": {
+        "placeholder": "z. B. B000000000"
+      },
+      "audiobook_isbn": {
+        "placeholder": "z. B. 978..."
+      },
+      "audiobook_language": {
+        "placeholder": "z. B. de oder en"
+      },
+      "audiobook_abridged": {
+        "placeholder": "abridged oder unabridged"
       }
     },
     "loadingFiles": "Analysierte Dateien werden geladen…",
@@ -665,7 +722,13 @@
     "sample_rates": "Sample-Raten",
     "track_numbers": "Tracknummern",
     "bit_rate_modes": "Bitraten-Modi",
-    "embedded_covers": "Eingebettete Cover"
+    "embedded_covers": "Eingebettete Cover",
+    "audiobook_narrators": "Erzähler",
+    "audiobook_authors": "Autoren",
+    "audiobook_publishers": "Verlage",
+    "audiobook_series": "Hörbuchreihe",
+    "audiobook_series_parts": "Reihenteile",
+    "chapter_counts": "Kapitelanzahl"
   },
   "distributionChart": {
     "loading": "Diagramm wird geladen…",
@@ -801,7 +864,17 @@
     "sampleRate": "Sample Rate",
     "trackNumber": "Tracknummer",
     "bitRateMode": "Bitrate Mode",
-    "embeddedCover": "Eingebettetes Cover"
+    "embeddedCover": "Eingebettetes Cover",
+    "chapterCount": "Kapitel",
+    "audiobookNarrator": "Erzähler",
+    "audiobookAuthor": "Autor",
+    "audiobookPublisher": "Verlag",
+    "audiobookSeries": "Reihe",
+    "audiobookSeriesPart": "Reihenteil",
+    "audiobookLanguage": "Buchsprache",
+    "audiobookAbridged": "Gekürzt",
+    "audiobookAsin": "ASIN",
+    "audiobookIsbn": "ISBN"
   },
   "fileDetail": {
     "eyebrow": "Mediendatei-Details",
@@ -822,6 +895,18 @@
     "probeScore": "Probe-Score",
     "videoStreams": "Video-Streams",
     "audioStreams": "Audio-Streams",
+    "cover": "Cover",
+    "coverCodec": "Codec",
+    "coverDimensions": "Abmessungen",
+    "coverStream": "Stream-Index",
+    "chapters": "Kapitel",
+    "chapterSearch": "Kapitel suchen",
+    "chapterSearchPlaceholder": "Kapiteltitel suchen",
+    "exportChapters": "Kapitel exportieren",
+    "showAllChapters": "Alle {{count}} Kapitel anzeigen",
+    "showFewerChapters": "Weniger Kapitel anzeigen",
+    "untitledChapter": "Kapitel {{number}}",
+    "analysisFailure": "Analyseproblem",
     "subtitles": "Untertitel",
     "rawJson": "Rohes ffprobe-JSON",
     "history": {
@@ -952,7 +1037,7 @@
     "none": "Keine Stream-Details verfügbar.",
     "audioSpatial": "Raumklang",
     "unknownLanguage": "Unbekannte Sprache",
-    "unknownType": "Unbekannter Typ",
+    "unknownType": "Unbekannter Medientyp",
     "mono": "Mono",
     "stereo": "Stereo",
     "channels": "{{count}} Kanäle",

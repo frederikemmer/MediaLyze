@@ -155,6 +155,36 @@ def test_create_library_defaults_duplicate_detection_mode_to_off(tmp_path) -> No
     assert library.show_on_dashboard is True
 
 
+def test_create_library_accepts_audiobook_media_type(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON;")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+    library_dir = tmp_path / "audiobooks"
+    library_dir.mkdir()
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Audiobooks",
+                path=str(library_dir),
+                type=LibraryType.audiobooks,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+
+    assert library.type == LibraryType.audiobooks
+
+
 def test_create_library_with_multiple_paths_uses_common_root_and_selected_paths(tmp_path) -> None:
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
@@ -562,6 +592,82 @@ def test_get_library_statistics_exposes_music_metadata_distributions_per_file() 
     assert {item.label for item in statistics.track_number_distribution} == {"03/12", "04"}
     assert {item.label for item in statistics.bit_rate_mode_distribution} == {"vbr", "cbr"}
     assert {item.label for item in statistics.embedded_cover_distribution} == {"yes", "no"}
+
+
+def test_get_library_statistics_exposes_audiobook_metadata_distributions() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobooks",
+            path="/tmp/audiobooks",
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="one.m4b",
+                    filename="one.m4b",
+                    extension="m4b",
+                    size_bytes=1,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audiobook_narrator="Narrator A",
+                    audiobook_author="Author A",
+                    audiobook_publisher="Publisher A",
+                    audiobook_series="Series A",
+                    audiobook_series_part="1",
+                    chapter_count=24,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="two.m4b",
+                    filename="two.m4b",
+                    extension="m4b",
+                    size_bytes=1,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audiobook_narrator="Narrator A",
+                    audiobook_author="Author B",
+                    audiobook_publisher="Publisher A",
+                    audiobook_series="Series B",
+                    audiobook_series_part="2",
+                    chapter_count=None,
+                ),
+            ]
+        )
+        db.commit()
+
+        statistics = get_library_statistics(
+            db,
+            library.id,
+            requested_panels=[
+                "audiobook_narrators",
+                "audiobook_authors",
+                "audiobook_publishers",
+                "audiobook_series",
+                "audiobook_series_parts",
+                "chapter_counts",
+            ],
+        )
+
+    assert statistics is not None
+    assert [(item.label, item.value) for item in statistics.audiobook_narrator_distribution] == [("narrator a", 2)]
+    assert {item.label for item in statistics.audiobook_author_distribution} == {"author a", "author b"}
+    assert [(item.label, item.value) for item in statistics.audiobook_publisher_distribution] == [("publisher a", 2)]
+    assert {item.label for item in statistics.audiobook_series_distribution} == {"series a", "series b"}
+    assert {item.label for item in statistics.audiobook_series_part_distribution} == {"1", "2"}
+    assert statistics.numeric_distributions["chapter_count"].total == 2
+    assert {item.label for item in statistics.chapter_count_distribution} == {"24", "0"}
 
 
 def test_create_library_accepts_absolute_paths_in_desktop_mode(tmp_path) -> None:

@@ -9,7 +9,8 @@ export type NumericDistributionMetricId =
   | "duration"
   | "size"
   | "bitrate"
-  | "audio_bitrate";
+  | "audio_bitrate"
+  | "chapter_count";
 
 export type NumericDistributionBin = {
   lower: number | null;
@@ -44,7 +45,13 @@ export type ComparisonFieldId =
   | "audio_year"
   | "track_number"
   | "bit_rate_mode"
-  | "embedded_cover";
+  | "embedded_cover"
+  | "chapter_count"
+  | "audiobook_narrator"
+  | "audiobook_author"
+  | "audiobook_publisher"
+  | "audiobook_series"
+  | "audiobook_series_part";
 
 export type ComparisonFieldKind = "numeric" | "category";
 export type ComparisonRendererId = "heatmap" | "scatter" | "bar";
@@ -226,7 +233,7 @@ export type QualityBreakdown = {
 };
 
 export type DuplicateDetectionMode = "off" | "filename" | "filehash" | "both";
-export type LibraryType = "movies" | "series" | "music" | "mixed" | "other";
+export type LibraryType = "movies" | "series" | "music" | "audiobooks" | "mixed" | "other";
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
@@ -256,13 +263,19 @@ export type DashboardResponse = {
   track_number_distribution?: DistributionItem[];
   bit_rate_mode_distribution?: DistributionItem[];
   embedded_cover_distribution?: DistributionItem[];
+  audiobook_narrator_distribution?: DistributionItem[];
+  audiobook_author_distribution?: DistributionItem[];
+  audiobook_publisher_distribution?: DistributionItem[];
+  audiobook_series_distribution?: DistributionItem[];
+  audiobook_series_part_distribution?: DistributionItem[];
+  chapter_count_distribution?: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
   subtitle_source_distribution: DistributionItem[];
-  numeric_distributions: Record<NumericDistributionMetricId, NumericDistribution>;
+  numeric_distributions: Partial<Record<NumericDistributionMetricId, NumericDistribution>>;
 };
 
 export type LibrarySummary = {
@@ -301,13 +314,19 @@ export type LibraryStatistics = {
   track_number_distribution?: DistributionItem[];
   bit_rate_mode_distribution?: DistributionItem[];
   embedded_cover_distribution?: DistributionItem[];
+  audiobook_narrator_distribution?: DistributionItem[];
+  audiobook_author_distribution?: DistributionItem[];
+  audiobook_publisher_distribution?: DistributionItem[];
+  audiobook_series_distribution?: DistributionItem[];
+  audiobook_series_part_distribution?: DistributionItem[];
+  chapter_count_distribution?: DistributionItem[];
   audio_codec_distribution: DistributionItem[];
   audio_spatial_profile_distribution: DistributionItem[];
   audio_language_distribution: DistributionItem[];
   subtitle_language_distribution: DistributionItem[];
   subtitle_codec_distribution: DistributionItem[];
   subtitle_source_distribution: DistributionItem[];
-  numeric_distributions: Record<NumericDistributionMetricId, NumericDistribution>;
+  numeric_distributions: Partial<Record<NumericDistributionMetricId, NumericDistribution>>;
 };
 
 export type MediaFileRow = {
@@ -341,6 +360,25 @@ export type MediaFileRow = {
   track_number?: string | null;
   bit_rate_mode?: string | null;
   has_embedded_cover?: boolean;
+  chapter_count?: number | null;
+  audiobook_narrator?: string | null;
+  audiobook_author?: string | null;
+  audiobook_publisher?: string | null;
+  audiobook_series?: string | null;
+  audiobook_series_part?: string | null;
+  audiobook_description?: string | null;
+  audiobook_copyright?: string | null;
+  audiobook_asin?: string | null;
+  audiobook_isbn?: string | null;
+  audiobook_language?: string | null;
+  audiobook_abridged?: string | null;
+  embedded_cover_stream_index?: number | null;
+  embedded_cover_codec?: string | null;
+  embedded_cover_width?: number | null;
+  embedded_cover_height?: number | null;
+  analysis_failure_kind?: string | null;
+  analysis_failure_reason?: string | null;
+  analysis_failure_detail?: string | null;
   video_codec: string | null;
   resolution: string | null;
   resolution_category_id?: string | null;
@@ -422,12 +460,22 @@ export type ExternalSubtitle = {
   format: string | null;
 };
 
+export type MediaChapter = {
+  chapter_index: number;
+  start_time: number | null;
+  end_time: number | null;
+  duration: number | null;
+  title?: string | null;
+  tags?: Record<string, string> | null;
+};
+
 export type MediaFileStreamDetails = {
   id: number;
   video_streams: VideoStream[];
   audio_streams: AudioStream[];
   subtitle_streams: SubtitleStream[];
   external_subtitles: ExternalSubtitle[];
+  chapters?: MediaChapter[];
 };
 
 export type MediaFileSortKey =
@@ -454,6 +502,16 @@ export type MediaFileSortKey =
   | "track_number"
   | "bit_rate_mode"
   | "has_embedded_cover"
+  | "chapter_count"
+  | "audiobook_narrator"
+  | "audiobook_author"
+  | "audiobook_publisher"
+  | "audiobook_series"
+  | "audiobook_series_part"
+  | "audiobook_language"
+  | "audiobook_abridged"
+  | "audiobook_asin"
+  | "audiobook_isbn"
   | "audio_codecs"
   | "audio_spatial_profiles"
   | "audio_languages"
@@ -485,6 +543,19 @@ export type LibraryFileSearchField =
   | "track_number"
   | "bit_rate_mode"
   | "has_embedded_cover"
+  | "chapter_count"
+  | "chapter_titles"
+  | "audiobook_narrator"
+  | "audiobook_author"
+  | "audiobook_publisher"
+  | "audiobook_series"
+  | "audiobook_series_part"
+  | "audiobook_description"
+  | "audiobook_copyright"
+  | "audiobook_asin"
+  | "audiobook_isbn"
+  | "audiobook_language"
+  | "audiobook_abridged"
   | "video_codec"
   | "resolution"
   | "hdr_type"
@@ -952,6 +1023,19 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
   ["track_number", "search_track_number"],
   ["bit_rate_mode", "search_bit_rate_mode"],
   ["has_embedded_cover", "search_has_embedded_cover"],
+  ["chapter_count", "search_chapter_count"],
+  ["chapter_titles", "search_chapter_titles"],
+  ["audiobook_narrator", "search_audiobook_narrator"],
+  ["audiobook_author", "search_audiobook_author"],
+  ["audiobook_publisher", "search_audiobook_publisher"],
+  ["audiobook_series", "search_audiobook_series"],
+  ["audiobook_series_part", "search_audiobook_series_part"],
+  ["audiobook_description", "search_audiobook_description"],
+  ["audiobook_copyright", "search_audiobook_copyright"],
+  ["audiobook_asin", "search_audiobook_asin"],
+  ["audiobook_isbn", "search_audiobook_isbn"],
+  ["audiobook_language", "search_audiobook_language"],
+  ["audiobook_abridged", "search_audiobook_abridged"],
   ["subtitle_languages", "search_subtitle_languages"],
   ["subtitle_codecs", "search_subtitle_codecs"],
   ["subtitle_sources", "search_subtitle_sources"],
@@ -1174,6 +1258,18 @@ export const api = {
       throw new Error(detail);
     }
 
+    return {
+      blob: await response.blob(),
+      filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),
+    };
+  },
+  downloadFileChaptersCsv: async (id: string | number, signal?: AbortSignal): Promise<DownloadedCsv> => {
+    const response = await fetch(`${API_PREFIX}/files/${id}/chapters/export.csv`, { signal });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const detail = payload?.detail ?? response.statusText;
+      throw new Error(detail);
+    }
     return {
       blob: await response.blob(),
       filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),

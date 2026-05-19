@@ -130,6 +130,24 @@ function createFileDetail(): MediaFileDetail {
       },
     ],
     external_subtitles: [{ path: "Shows/Season01/file.en.srt", language: "en", format: "srt" }],
+    chapters: [
+      {
+        chapter_index: 0,
+        start_time: 0,
+        end_time: 90,
+        duration: 90,
+        title: "Opening",
+        tags: { title: "Opening" },
+      },
+      {
+        chapter_index: 1,
+        start_time: 90,
+        end_time: 180,
+        duration: 90,
+        title: null,
+        tags: null,
+      },
+    ],
     raw_ffprobe_json: { streams: [] },
   };
 }
@@ -284,6 +302,65 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("5.1")).toBeInTheDocument();
     expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
     expect(screen.getByText("External")).toBeInTheDocument();
+  });
+
+  it("renders audiobook chapters with timings and fallback titles", async () => {
+    const file = createFileDetail();
+    const downloadChapters = vi.spyOn(api, "downloadFileChaptersCsv").mockResolvedValue({
+      blob: new Blob(["chapter_index,title\n0,Opening\n"], { type: "text/csv" }),
+      filename: "book-chapters.csv",
+    });
+    const createObjectUrl = vi.fn(() => "blob:chapters");
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectUrl, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectUrl, configurable: true });
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "Chapters" })).toBeInTheDocument();
+    expect(screen.getByText("Opening")).toBeInTheDocument();
+    expect(screen.getByText("Chapter 2")).toBeInTheDocument();
+    expect(screen.getAllByText("1m").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search chapters" }), { target: { value: "opening" } });
+    expect(screen.getByText("Opening")).toBeInTheDocument();
+    expect(screen.queryByText("Chapter 2")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export chapters" }));
+    await waitFor(() => expect(downloadChapters).toHaveBeenCalledWith(file.id));
+    expect(createObjectUrl).toHaveBeenCalled();
+    expect(anchorClick).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:chapters");
+  });
+
+  it("renders cover details and persisted analysis diagnostics", async () => {
+    const file = {
+      ...createFileDetail(),
+      scan_status: "failed",
+      has_embedded_cover: true,
+      embedded_cover_stream_index: 3,
+      embedded_cover_codec: "mjpeg",
+      embedded_cover_width: 600,
+      embedded_cover_height: 900,
+      analysis_failure_kind: "audible_drm_or_unreadable",
+      analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
+      analysis_failure_detail: "Invalid data found when processing input",
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "Cover" })).toBeInTheDocument();
+    expect(screen.getByText("600x900")).toBeInTheDocument();
+    expect(screen.getByText("mjpeg")).toBeInTheDocument();
+    expect(screen.getByText("Analysis issue")).toBeInTheDocument();
+    expect(screen.getByText("Probably DRM-protected or unreadable by ffprobe.")).toBeInTheDocument();
   });
 
   it("renders file history snapshots in the detail panel", async () => {

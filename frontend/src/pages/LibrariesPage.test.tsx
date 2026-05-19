@@ -1368,6 +1368,36 @@ describe("LibrariesPage ignore patterns", () => {
   });
 });
 
+describe("LibrariesPage media type selection", () => {
+  it("requires an explicit media type and can create audiobook libraries", async () => {
+    const createSpy = vi
+      .spyOn(api, "createLibrary")
+      .mockResolvedValue(createLibrarySummary({ name: "Audiobooks", type: "audiobooks" }));
+
+    renderPage();
+
+    const mediaTypeSelect = await screen.findByRole("combobox", { name: "Media type" });
+    expect(mediaTypeSelect).toHaveValue("");
+    expect(within(mediaTypeSelect).getByRole("option", { name: "Select media type" })).toBeInTheDocument();
+    expect(within(mediaTypeSelect).getByRole("option", { name: "Audiobooks" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Audiobooks" } });
+    fireEvent.change(mediaTypeSelect, { target: { value: "audiobooks" } });
+    const createForm = mediaTypeSelect.closest("form");
+    expect(createForm).not.toBeNull();
+    fireEvent.click(within(createForm as HTMLFormElement).getByRole("button", { name: "Create library" }));
+
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Audiobooks",
+          type: "audiobooks",
+        }),
+      ),
+    );
+  });
+});
+
 describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
@@ -1901,7 +1931,7 @@ describe("LibrariesPage settings panels", () => {
     expect(promptSpy).not.toHaveBeenCalled();
 
     const nameInput = screen.getByRole("textbox", { name: "Edit name for library Movies" });
-    const typeSelect = screen.getByRole("combobox", { name: "Edit type for library Movies" });
+    const typeSelect = screen.getByRole("combobox", { name: "Edit media type for library Movies" });
     fireEvent.change(nameInput, { target: { value: "Shows" } });
     fireEvent.change(typeSelect, { target: { value: "series" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes for library Movies" }));

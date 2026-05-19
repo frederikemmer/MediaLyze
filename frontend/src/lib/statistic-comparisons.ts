@@ -39,6 +39,7 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
   { id: "quality_score", kind: "numeric", labelKey: "libraryStatistics.items.qualityScore" },
   { id: "bitrate", kind: "numeric", labelKey: "libraryStatistics.items.bitrate" },
   { id: "audio_bitrate", kind: "numeric", labelKey: "libraryStatistics.items.audioBitrate" },
+  { id: "chapter_count", kind: "numeric", labelKey: "libraryStatistics.items.chapter_count" },
   { id: "audio_channels", kind: "category", labelKey: "libraryStatistics.items.audio_channels" },
   { id: "sample_rate", kind: "category", labelKey: "libraryStatistics.items.sample_rate" },
   { id: "resolution_mp", kind: "numeric", labelKey: "libraryStatistics.items.resolutionMp" },
@@ -53,6 +54,11 @@ export const COMPARISON_FIELD_DEFINITIONS: ComparisonFieldDefinition[] = [
   { id: "track_number", kind: "category", labelKey: "libraryStatistics.items.track_number" },
   { id: "bit_rate_mode", kind: "category", labelKey: "libraryStatistics.items.bit_rate_mode" },
   { id: "embedded_cover", kind: "category", labelKey: "libraryStatistics.items.embedded_covers" },
+  { id: "audiobook_narrator", kind: "category", labelKey: "libraryStatistics.items.audiobook_narrator" },
+  { id: "audiobook_author", kind: "category", labelKey: "libraryStatistics.items.audiobook_author" },
+  { id: "audiobook_publisher", kind: "category", labelKey: "libraryStatistics.items.audiobook_publisher" },
+  { id: "audiobook_series", kind: "category", labelKey: "libraryStatistics.items.audiobook_series" },
+  { id: "audiobook_series_part", kind: "category", labelKey: "libraryStatistics.items.audiobook_series_part" },
 ];
 
 const FIELD_MAP = new Map(COMPARISON_FIELD_DEFINITIONS.map((definition) => [definition.id, definition]));
@@ -75,6 +81,12 @@ const FILTERABLE_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
   "track_number",
   "bit_rate_mode",
   "embedded_cover",
+  "chapter_count",
+  "audiobook_narrator",
+  "audiobook_author",
+  "audiobook_publisher",
+  "audiobook_series",
+  "audiobook_series_part",
 ]);
 const DEFAULT_SELECTION: ComparisonSelection = {
   xField: "duration",
@@ -87,6 +99,14 @@ const VIDEO_ONLY_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
   "video_codec",
   "resolution",
   "hdr_type",
+]);
+const AUDIOBOOK_ONLY_COMPARISON_FIELDS = new Set<ComparisonFieldId>([
+  "chapter_count",
+  "audiobook_narrator",
+  "audiobook_author",
+  "audiobook_publisher",
+  "audiobook_series",
+  "audiobook_series_part",
 ]);
 
 export function getComparisonFieldDefinition(fieldId: ComparisonFieldId): ComparisonFieldDefinition {
@@ -162,14 +182,17 @@ export function getComparisonFieldDefinitionsForLibraryType(
   libraryType?: LibraryType | null,
   options?: MusicComparisonVisibilityOptions,
 ): ComparisonFieldDefinition[] {
-  if (libraryType !== "music") {
-    return COMPARISON_FIELD_DEFINITIONS;
+  if (libraryType !== "music" && libraryType !== "audiobooks") {
+    return COMPARISON_FIELD_DEFINITIONS.filter((definition) => !AUDIOBOOK_ONLY_COMPARISON_FIELDS.has(definition.id));
   }
   return COMPARISON_FIELD_DEFINITIONS.filter((definition) => {
     if (VIDEO_ONLY_COMPARISON_FIELDS.has(definition.id)) {
       return false;
     }
     if (definition.id === "quality_score" && options?.showMusicQualityScore !== true) {
+      return false;
+    }
+    if (libraryType !== "audiobooks" && AUDIOBOOK_ONLY_COMPARISON_FIELDS.has(definition.id)) {
       return false;
     }
     return true;

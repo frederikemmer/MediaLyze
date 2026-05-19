@@ -261,6 +261,80 @@ def test_dashboard_exposes_music_metadata_distributions() -> None:
     assert dashboard.embedded_cover_distribution[0].label == "yes"
 
 
+def test_dashboard_exposes_audiobook_metadata_distributions() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobooks",
+            path="/tmp/audiobooks",
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="book.m4b",
+                filename="book.m4b",
+                extension="m4b",
+                size_bytes=1,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                audiobook_narrator="Narrator A",
+                audiobook_author="Author A",
+                audiobook_publisher="Publisher A",
+                audiobook_series="Series A",
+                audiobook_series_part="1",
+                chapter_count=24,
+            )
+        )
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="book-without-chapters.m4b",
+                filename="book-without-chapters.m4b",
+                extension="m4b",
+                size_bytes=1,
+                mtime=2.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                audiobook_narrator="Narrator B",
+                audiobook_author="Author B",
+                audiobook_publisher="Publisher A",
+                audiobook_series="Series A",
+                audiobook_series_part="2",
+                chapter_count=None,
+            )
+        )
+        db.commit()
+
+        dashboard = build_dashboard(
+            db,
+            requested_panels=[
+                "audiobook_narrators",
+                "audiobook_authors",
+                "audiobook_publishers",
+                "audiobook_series",
+                "audiobook_series_parts",
+                "chapter_counts",
+            ],
+        )
+
+    assert {item.label for item in dashboard.audiobook_narrator_distribution} == {"narrator a", "narrator b"}
+    assert {item.label for item in dashboard.audiobook_author_distribution} == {"author a", "author b"}
+    assert dashboard.audiobook_publisher_distribution[0].label == "publisher a"
+    assert dashboard.audiobook_series_distribution[0].label == "series a"
+    assert {item.label for item in dashboard.audiobook_series_part_distribution} == {"1", "2"}
+    assert dashboard.numeric_distributions["chapter_count"].total == 2
+    assert {item.label for item in dashboard.chapter_count_distribution} == {"24", "0"}
+
+
 def test_dashboard_merges_common_audio_language_aliases() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

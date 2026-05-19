@@ -19,6 +19,7 @@ NumericDistributionMetricId = Literal[
     "size",
     "bitrate",
     "audio_bitrate",
+    "chapter_count",
 ]
 
 
@@ -113,6 +114,17 @@ class ExternalSubtitleRead(BaseModel):
     format: str | None
 
 
+class MediaChapterRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    chapter_index: int
+    start_time: float | None
+    end_time: float | None
+    duration: float | None
+    title: str | None = None
+    tags: dict[str, Any] | None = None
+
+
 class MediaFileTableRow(BaseModel):
     id: int
     library_id: int
@@ -144,6 +156,25 @@ class MediaFileTableRow(BaseModel):
     track_number: str | None = None
     bit_rate_mode: str | None = None
     has_embedded_cover: bool = False
+    chapter_count: int | None = None
+    audiobook_narrator: str | None = None
+    audiobook_author: str | None = None
+    audiobook_publisher: str | None = None
+    audiobook_series: str | None = None
+    audiobook_series_part: str | None = None
+    audiobook_description: str | None = None
+    audiobook_copyright: str | None = None
+    audiobook_asin: str | None = None
+    audiobook_isbn: str | None = None
+    audiobook_language: str | None = None
+    audiobook_abridged: str | None = None
+    embedded_cover_stream_index: int | None = None
+    embedded_cover_codec: str | None = None
+    embedded_cover_width: int | None = None
+    embedded_cover_height: int | None = None
+    analysis_failure_kind: str | None = None
+    analysis_failure_reason: str | None = None
+    analysis_failure_detail: str | None = None
     video_codec: str | None = None
     resolution: str | None = None
     resolution_category_id: str | None = None
@@ -171,6 +202,7 @@ class MediaFileDetail(MediaFileTableRow):
     audio_streams: list[AudioStreamRead]
     subtitle_streams: list[SubtitleStreamRead]
     external_subtitles: list[ExternalSubtitleRead]
+    chapters: list[MediaChapterRead]
     raw_ffprobe_json: dict[str, Any] | None
 
 
@@ -180,6 +212,7 @@ class MediaFileStreamDetails(BaseModel):
     audio_streams: list[AudioStreamRead]
     subtitle_streams: list[SubtitleStreamRead]
     external_subtitles: list[ExternalSubtitleRead]
+    chapters: list[MediaChapterRead] = Field(default_factory=list)
 
 
 class MediaFileTablePage(BaseModel):
@@ -307,6 +340,12 @@ class DashboardResponse(BaseModel):
     track_number_distribution: list[DistributionItem]
     bit_rate_mode_distribution: list[DistributionItem]
     embedded_cover_distribution: list[DistributionItem]
+    audiobook_narrator_distribution: list[DistributionItem]
+    audiobook_author_distribution: list[DistributionItem]
+    audiobook_publisher_distribution: list[DistributionItem]
+    audiobook_series_distribution: list[DistributionItem]
+    audiobook_series_part_distribution: list[DistributionItem]
+    chapter_count_distribution: list[DistributionItem]
     audio_codec_distribution: list[DistributionItem]
     audio_spatial_profile_distribution: list[DistributionItem]
     audio_language_distribution: list[DistributionItem]

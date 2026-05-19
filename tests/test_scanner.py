@@ -20,6 +20,7 @@ from backend.app.models.entities import (
     LibraryHistory,
     LibraryType,
     MediaFile,
+    MediaChapter,
     MediaFileHistory,
     MediaSeason,
     MediaSeries,
@@ -405,6 +406,109 @@ def test_incremental_scan_reanalyzes_older_analysis_schema_and_backfills_music_m
     assert refreshed.analysis_schema_version == scanner_service.ANALYSIS_SCHEMA_VERSION
     assert audio_stream is not None
     assert audio_stream.track == "03/12"
+
+
+def test_incremental_scan_replaces_audiobook_chapters_and_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    audio_path = media_dir / "book.m4b"
+    audio_path.write_text("audio")
+    stat = audio_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "tags": {
+                "narrator": "Narrator A",
+                "book_author": "Author A",
+                "publisher": "Publisher A",
+                "series": "Series A",
+                "series-part": "2",
+                "synopsis": "Synopsis A",
+                "copyright": "Copyright A",
+                "asin": "B000000001",
+                "isbn": "9781234567890",
+                "language": "de",
+                "abridged": "unabridged",
+            },
+        },
+        "streams": [{"index": 0, "codec_type": "audio", "codec_name": "aac", "tags": {"album_artist": "Fallback Narrator"}}],
+        "chapters": [
+            {"id": 0, "start_time": "0", "end_time": "10", "tags": {"title": "Opening"}},
+            {"id": 1, "start_time": "10", "end_time": "30", "tags": {"title": "Chapter One"}},
+        ],
+    }
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1, scan_commit_batch_size=1)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobooks",
+            path=str(media_dir),
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="book.m4b",
+            filename="book.m4b",
+            extension="m4b",
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            last_seen_at=utc_now(),
+            last_analyzed_at=utc_now(),
+            scan_status=ScanStatus.ready,
+            analysis_schema_version=0,
+            analysis_failure_kind="audible_drm_or_unreadable",
+            analysis_failure_reason="old failure",
+            analysis_failure_detail="old detail",
+            raw_ffprobe_json={"streams": [{"codec_type": "audio"}]},
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(MediaChapter(media_file_id=media_file.id, chapter_index=99, start_time=0, end_time=1, duration=1, title="Old"))
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        refreshed = db.get(MediaFile, media_file.id)
+        chapters = db.scalars(
+            select(MediaChapter)
+            .where(MediaChapter.media_file_id == media_file.id)
+            .order_by(MediaChapter.chapter_index)
+        ).all()
+
+    assert job.files_scanned == 1
+    assert refreshed is not None
+    assert refreshed.chapter_count == 2
+    assert set(refreshed.chapter_titles_search.split()) == {"opening", "chapter", "one"}
+    assert refreshed.audiobook_narrator == "Narrator A"
+    assert refreshed.audiobook_author == "Author A"
+    assert refreshed.audiobook_publisher == "Publisher A"
+    assert refreshed.audiobook_series == "Series A"
+    assert refreshed.audiobook_series_part == "2"
+    assert refreshed.audiobook_description == "Synopsis A"
+    assert refreshed.audiobook_copyright == "Copyright A"
+    assert refreshed.audiobook_asin == "B000000001"
+    assert refreshed.audiobook_isbn == "9781234567890"
+    assert refreshed.audiobook_language == "de"
+    assert refreshed.audiobook_abridged == "unabridged"
+    assert refreshed.analysis_failure_kind == ""
+    assert refreshed.analysis_failure_reason == ""
+    assert refreshed.analysis_failure_detail == ""
+    assert [chapter.title for chapter in chapters] == ["Opening", "Chapter One"]
 
 
 def test_incremental_scan_reanalyzes_unchanged_files_when_external_subtitles_change(
@@ -1312,6 +1416,48 @@ def test_scan_summary_records_failed_files_with_short_reason(tmp_path: Path, mon
     assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
     assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "ffprobe exploded"
     assert "RuntimeError: ffprobe exploded" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
+
+
+def test_audible_analysis_failure_is_classified_for_detail_view(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    (media_dir / "locked.aax").write_text("audio")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    def fail_ffprobe(_file_path, _ffprobe_path):
+        raise RuntimeError("Invalid data found when processing input")
+
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", fail_ffprobe)
+    monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
+
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path,
+        ffprobe_worker_count=1,
+        scan_commit_batch_size=1,
+    )
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobooks",
+            path=str(media_dir),
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        media_file = db.scalar(select(MediaFile).where(MediaFile.relative_path == "locked.aax"))
+
+    assert media_file is not None
+    assert media_file.scan_status == ScanStatus.failed
+    assert media_file.analysis_failure_kind == "audible_drm_or_unreadable"
+    assert media_file.analysis_failure_reason == "Probably DRM-protected or unreadable by ffprobe."
 
 
 def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, monkeypatch) -> None:

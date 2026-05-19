@@ -70,6 +70,63 @@ def _safe_bool(value: Any) -> bool | None:
     return None
 
 
+def _tag_key(value: str) -> str:
+    return re.sub(r"[\s_-]+", "", value.strip().lower())
+
+
+def _tag_value(tags: dict[str, Any], *keys: str) -> str | None:
+    normalized_tags = {str(key).strip().lower(): value for key, value in tags.items()}
+    compact_tags = {_tag_key(str(key)): value for key, value in tags.items()}
+    for key in keys:
+        value = normalized_tags.get(key.strip().lower())
+        if value in (None, "", "N/A"):
+            value = compact_tags.get(_tag_key(key))
+        if value in (None, "", "N/A"):
+            continue
+        candidate = str(value).strip()
+        if candidate:
+            return candidate
+    return None
+
+
+def _abridged_value(tags: dict[str, Any]) -> str | None:
+    raw = _tag_value(tags, "abridged", "unabridged", "abridgement", "version", "book_version")
+    if not raw:
+        return None
+    normalized = raw.strip().lower()
+    if normalized in {"false", "0", "no"} or "unabridged" in normalized or "ungekuerzt" in normalized or "ungek\u00fcrzt" in normalized:
+        return "unabridged"
+    if normalized in {"true", "1", "yes"} or "abridged" in normalized or "gekuerzt" in normalized or "gek\u00fcrzt" in normalized:
+        return "abridged"
+    return raw.strip()
+
+
+def _tag_text(tags: dict[str, Any] | None) -> dict[str, str]:
+    if not isinstance(tags, dict):
+        return {}
+    return {
+        str(key): str(value).strip()
+        for key, value in tags.items()
+        if value not in (None, "", "N/A") and str(value).strip()
+    }
+
+
+def _time_base_seconds(value: Any, time_base: str | None) -> float | None:
+    raw_value = _safe_float(value)
+    if raw_value is None:
+        return None
+    if not time_base or "/" not in time_base:
+        return raw_value
+    numerator, denominator = time_base.split("/", 1)
+    try:
+        denominator_value = float(denominator)
+        if denominator_value == 0:
+            return raw_value
+        return raw_value * float(numerator) / denominator_value
+    except ValueError:
+        return raw_value
+
+
 def _first_present_int(entry: dict[str, Any], *keys: str) -> int | None:
     for key in keys:
         value = _safe_int(entry.get(key))
@@ -371,13 +428,39 @@ class NormalizedSubtitleStream:
 
 
 @dataclass(slots=True)
+class NormalizedChapter:
+    chapter_index: int
+    start_time: float | None
+    end_time: float | None
+    duration: float | None
+    title: str | None
+    tags: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class ProbeResult:
     raw: dict[str, Any]
     media_format: NormalizedFormat
     video_streams: list[NormalizedVideoStream] = field(default_factory=list)
     audio_streams: list[NormalizedAudioStream] = field(default_factory=list)
     subtitle_streams: list[NormalizedSubtitleStream] = field(default_factory=list)
+    chapters: list[NormalizedChapter] = field(default_factory=list)
     has_embedded_cover: bool = False
+    embedded_cover_stream_index: int | None = None
+    embedded_cover_codec: str | None = None
+    embedded_cover_width: int | None = None
+    embedded_cover_height: int | None = None
+    audiobook_narrator: str | None = None
+    audiobook_author: str | None = None
+    audiobook_publisher: str | None = None
+    audiobook_series: str | None = None
+    audiobook_series_part: str | None = None
+    audiobook_description: str | None = None
+    audiobook_copyright: str | None = None
+    audiobook_asin: str | None = None
+    audiobook_isbn: str | None = None
+    audiobook_language: str | None = None
+    audiobook_abridged: str | None = None
 
 
 def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
@@ -412,6 +495,7 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
 def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
     format_data = payload.get("format") or {}
     streams = payload.get("streams") or []
+    format_tags = format_data.get("tags") or {}
 
     normalized = ProbeResult(
         raw=payload,
@@ -421,6 +505,17 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
             bit_rate=_safe_int(format_data.get("bit_rate")),
             probe_score=_safe_int(format_data.get("probe_score")),
         ),
+        audiobook_narrator=_tag_value(format_tags, "narrator", "performer"),
+        audiobook_author=_tag_value(format_tags, "book_author", "book author", "author", "writer"),
+        audiobook_publisher=_tag_value(format_tags, "publisher", "organization", "label"),
+        audiobook_series=_tag_value(format_tags, "series", "movement", "grouping"),
+        audiobook_series_part=_tag_value(format_tags, "series-part", "series_part", "part", "movement_number"),
+        audiobook_description=_tag_value(format_tags, "description", "synopsis", "summary", "comment"),
+        audiobook_copyright=_tag_value(format_tags, "copyright", "copyrightnotice", "copyright_notice"),
+        audiobook_asin=_tag_value(format_tags, "asin", "audible_asin", "amazon_asin"),
+        audiobook_isbn=_tag_value(format_tags, "isbn", "isbn13", "isbn-13", "isbn10", "isbn-10"),
+        audiobook_language=normalize_language_code(_tag_value(format_tags, "book_language", "book language", "language", "lang")),
+        audiobook_abridged=_abridged_value(format_tags),
     )
 
     for stream in streams:
@@ -428,6 +523,10 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
         if codec_type == "video":
             if _is_attached_picture(stream):
                 normalized.has_embedded_cover = True
+                normalized.embedded_cover_stream_index = _safe_int(stream.get("index"))
+                normalized.embedded_cover_codec = stream.get("codec_name")
+                normalized.embedded_cover_width = _safe_int(stream.get("width"))
+                normalized.embedded_cover_height = _safe_int(stream.get("height"))
                 continue
             normalized.video_streams.append(
                 NormalizedVideoStream(
@@ -449,6 +548,54 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
         elif codec_type == "audio":
             disposition = stream.get("disposition") or {}
             tags = stream.get("tags") or {}
+            normalized.audiobook_narrator = normalized.audiobook_narrator or _tag_value(tags, "narrator", "performer")
+            normalized.audiobook_author = normalized.audiobook_author or _tag_value(
+                tags,
+                "book_author",
+                "book author",
+                "author",
+                "writer",
+            )
+            normalized.audiobook_publisher = normalized.audiobook_publisher or _tag_value(
+                tags,
+                "publisher",
+                "organization",
+                "label",
+            )
+            normalized.audiobook_series = normalized.audiobook_series or _tag_value(tags, "series", "movement", "grouping")
+            normalized.audiobook_series_part = normalized.audiobook_series_part or _tag_value(
+                tags,
+                "series-part",
+                "series_part",
+                "part",
+                "movement_number",
+            )
+            normalized.audiobook_description = normalized.audiobook_description or _tag_value(
+                tags,
+                "description",
+                "synopsis",
+                "summary",
+                "comment",
+            )
+            normalized.audiobook_copyright = normalized.audiobook_copyright or _tag_value(
+                tags,
+                "copyright",
+                "copyrightnotice",
+                "copyright_notice",
+            )
+            normalized.audiobook_asin = normalized.audiobook_asin or _tag_value(tags, "asin", "audible_asin", "amazon_asin")
+            normalized.audiobook_isbn = normalized.audiobook_isbn or _tag_value(
+                tags,
+                "isbn",
+                "isbn13",
+                "isbn-13",
+                "isbn10",
+                "isbn-10",
+            )
+            normalized.audiobook_language = normalized.audiobook_language or normalize_language_code(
+                _tag_value(tags, "book_language", "book language", "language", "lang")
+            )
+            normalized.audiobook_abridged = normalized.audiobook_abridged or _abridged_value(tags)
             # For audio, bits_per_sample is often 0 for lossy codecs (MP3, AAC, Opus)
             # Only use non-zero bit_depth values
             audio_bit_depth = _safe_int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample"))
@@ -475,15 +622,15 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     default_flag=bool(disposition.get("default")),
                     forced_flag=bool(disposition.get("forced")),
                     # Music-specific metadata from tags
-                    title=tags.get("title"),
-                    artist=tags.get("artist"),
-                    album=tags.get("album"),
-                    album_artist=tags.get("album_artist"),
-                    genre=tags.get("genre"),
-                    date=tags.get("date"),
-                    disc=tags.get("disc"),
-                    composer=tags.get("composer"),
-                    track=tags.get("track") or tags.get("tracknumber"),
+                    title=_tag_value(tags, "title"),
+                    artist=_tag_value(tags, "artist"),
+                    album=_tag_value(tags, "album"),
+                    album_artist=_tag_value(tags, "album_artist", "album artist"),
+                    genre=_tag_value(tags, "genre"),
+                    date=_tag_value(tags, "date", "year"),
+                    disc=_tag_value(tags, "disc", "discnumber"),
+                    composer=_tag_value(tags, "composer", "author"),
+                    track=_tag_value(tags, "track", "tracknumber"),
                 )
             )
         elif codec_type == "subtitle":
@@ -500,5 +647,30 @@ def normalize_ffprobe_payload(payload: dict[str, Any]) -> ProbeResult:
                     subtitle_type=_subtitle_type(codec_name),
                 )
             )
+
+    for fallback_index, chapter in enumerate(payload.get("chapters") or []):
+        if not isinstance(chapter, dict):
+            continue
+        tags = _tag_text(chapter.get("tags") if isinstance(chapter.get("tags"), dict) else {})
+        time_base = str(chapter.get("time_base") or "") or None
+        start_time = _safe_float(chapter.get("start_time"))
+        if start_time is None:
+            start_time = _time_base_seconds(chapter.get("start"), time_base)
+        end_time = _safe_float(chapter.get("end_time"))
+        if end_time is None:
+            end_time = _time_base_seconds(chapter.get("end"), time_base)
+        duration = None
+        if start_time is not None and end_time is not None and end_time >= start_time:
+            duration = end_time - start_time
+        normalized.chapters.append(
+            NormalizedChapter(
+                chapter_index=_safe_int(chapter.get("id")) if _safe_int(chapter.get("id")) is not None else fallback_index,
+                start_time=start_time,
+                end_time=end_time,
+                duration=duration,
+                title=_tag_value(tags, "title"),
+                tags=tags,
+            )
+        )
 
     return normalized

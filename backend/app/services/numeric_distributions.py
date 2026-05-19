@@ -71,6 +71,17 @@ NUMERIC_DISTRIBUTION_CONFIGS: tuple[NumericDistributionMetricConfig, ...] = (
             (2_048_000.0, None),
         ),
     ),
+    NumericDistributionMetricConfig(
+        metric_id="chapter_count",
+        bins=(
+            (0.0, 10.0),
+            (10.0, 25.0),
+            (25.0, 50.0),
+            (50.0, 75.0),
+            (75.0, 100.0),
+            (100.0, None),
+        ),
+    ),
 )
 
 
@@ -159,6 +170,17 @@ def _metric_value_subquery(metric_id: NumericDistributionMetricId, library_id: i
             )
             .select_from(MediaFile)
             .where(MediaFile.bitrate.is_not(None), MediaFile.bitrate > 0)
+        )
+        query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
+        return query.subquery(f"{metric_id}_distribution_values")
+
+    if metric_id == "chapter_count":
+        query = (
+            select(
+                MediaFile.id.label("media_file_id"),
+                cast(func.coalesce(MediaFile.chapter_count, 0), Float).label("value"),
+            )
+            .select_from(MediaFile)
         )
         query = _apply_library_scope(query, library_id=library_id, dashboard_only=dashboard_only)
         return query.subquery(f"{metric_id}_distribution_values")

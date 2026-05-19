@@ -3724,6 +3724,28 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   color: var(--ink);
 }
 
+.file-detail-chapter-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-detail-chapter-tools input {
+  min-width: 180px;
+  flex: 1 1 220px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.file-detail-analysis-warning {
+  margin-top: 12px;
+}
+
 .format-details-row {
   align-items: center;
   gap: 16px;

@@ -2,7 +2,7 @@ import type { NumericDistributionBin, NumericDistributionMetricId } from "./api"
 import { formatBitrate, formatBytes, formatDuration } from "./format";
 
 export type NumericDistributionDisplayMode = "count" | "percentage";
-export type NumericDistributionUnitKind = "score" | "duration" | "bytes" | "bitrate";
+export type NumericDistributionUnitKind = "score" | "duration" | "bytes" | "bitrate" | "count";
 
 export type NumericDistributionConfig = {
   metricId: NumericDistributionMetricId;
@@ -40,6 +40,11 @@ export const NUMERIC_DISTRIBUTION_CONFIGS: Record<NumericDistributionMetricId, N
     labelKey: "libraryStatistics.items.audioBitrate",
     unitKind: "bitrate",
   },
+  chapter_count: {
+    metricId: "chapter_count",
+    labelKey: "libraryStatistics.items.chapter_count",
+    unitKind: "count",
+  },
 };
 
 function formatRangeBoundary(value: number, unitKind: NumericDistributionUnitKind): string {
@@ -51,6 +56,9 @@ function formatRangeBoundary(value: number, unitKind: NumericDistributionUnitKin
   }
   if (unitKind === "bytes") {
     return formatBytes(value);
+  }
+  if (unitKind === "count") {
+    return String(Math.round(value));
   }
   return formatBitrate(value);
 }
@@ -89,6 +97,9 @@ function formatSearchBoundary(value: number, unitKind: NumericDistributionUnitKi
       }
     }
     return `${Math.round(value)}B`;
+  }
+  if (unitKind === "count") {
+    return String(Math.round(value));
   }
 
   const units = [

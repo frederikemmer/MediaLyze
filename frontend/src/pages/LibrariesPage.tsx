@@ -53,7 +53,7 @@ type CreateLibraryForm = {
   name: string;
   path: string;
   paths: string[];
-  type: LibraryType;
+  type: LibraryType | "";
   scan_mode: string;
   duplicate_detection_mode: DuplicateDetectionMode;
 };
@@ -62,7 +62,7 @@ const EMPTY_FORM: CreateLibraryForm = {
   name: "",
   path: ".",
   paths: [],
-  type: "mixed",
+  type: "",
   scan_mode: "manual",
   duplicate_detection_mode: "off",
 };
@@ -1290,11 +1290,16 @@ export function LibrariesPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!form.type) {
+      setSubmitError(t("libraries.typeRequired"));
+      return;
+    }
     setSubmitting(true);
     try {
       const selectedPaths = form.paths.length ? form.paths : (form.path.trim() ? [form.path.trim()] : []);
       const created = await api.createLibrary({
         ...form,
+        type: form.type,
         path: selectedPaths[0] ?? form.path,
         paths: selectedPaths,
       });
@@ -3496,6 +3501,7 @@ export function LibrariesPage() {
                                   <option value="movies">{t("libraryTypes.movies")}</option>
                                   <option value="series">{t("libraryTypes.series")}</option>
                                   <option value="music">{t("libraryTypes.music")}</option>
+                                  <option value="audiobooks">{t("libraryTypes.audiobooks")}</option>
                                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                                   <option value="other">{t("libraryTypes.other")}</option>
                                 </select>
@@ -4463,11 +4469,14 @@ export function LibrariesPage() {
                 <select
                   id="library-type"
                   value={form.type}
-                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType }))}
+                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType | "" }))}
+                  required
                 >
+                  <option value="">{t("libraries.typePlaceholder")}</option>
                   <option value="movies">{t("libraryTypes.movies")}</option>
                   <option value="series">{t("libraryTypes.series")}</option>
                   <option value="music">{t("libraryTypes.music")}</option>
+                  <option value="audiobooks">{t("libraryTypes.audiobooks")}</option>
                   <option value="mixed">{t("libraryTypes.mixed")}</option>
                   <option value="other">{t("libraryTypes.other")}</option>
                 </select>

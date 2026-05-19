@@ -47,6 +47,19 @@ class LibraryFileSearchFilters:
     search_track_number: str = ""
     search_bit_rate_mode: str = ""
     search_has_embedded_cover: str = ""
+    search_chapter_count: str = ""
+    search_chapter_titles: str = ""
+    search_audiobook_narrator: str = ""
+    search_audiobook_author: str = ""
+    search_audiobook_publisher: str = ""
+    search_audiobook_series: str = ""
+    search_audiobook_series_part: str = ""
+    search_audiobook_description: str = ""
+    search_audiobook_copyright: str = ""
+    search_audiobook_asin: str = ""
+    search_audiobook_isbn: str = ""
+    search_audiobook_language: str = ""
+    search_audiobook_abridged: str = ""
     search_subtitle_languages: str = ""
     search_subtitle_codecs: str = ""
     search_subtitle_sources: str = ""
@@ -80,6 +93,19 @@ class LibraryFileSearchFilters:
             search_track_number=self.search_track_number.strip(),
             search_bit_rate_mode=self.search_bit_rate_mode.strip(),
             search_has_embedded_cover=self.search_has_embedded_cover.strip(),
+            search_chapter_count=self.search_chapter_count.strip(),
+            search_chapter_titles=self.search_chapter_titles.strip(),
+            search_audiobook_narrator=self.search_audiobook_narrator.strip(),
+            search_audiobook_author=self.search_audiobook_author.strip(),
+            search_audiobook_publisher=self.search_audiobook_publisher.strip(),
+            search_audiobook_series=self.search_audiobook_series.strip(),
+            search_audiobook_series_part=self.search_audiobook_series_part.strip(),
+            search_audiobook_description=self.search_audiobook_description.strip(),
+            search_audiobook_copyright=self.search_audiobook_copyright.strip(),
+            search_audiobook_asin=self.search_audiobook_asin.strip(),
+            search_audiobook_isbn=self.search_audiobook_isbn.strip(),
+            search_audiobook_language=self.search_audiobook_language.strip(),
+            search_audiobook_abridged=self.search_audiobook_abridged.strip(),
             search_subtitle_languages=self.search_subtitle_languages.strip(),
             search_subtitle_codecs=self.search_subtitle_codecs.strip(),
             search_subtitle_sources=self.search_subtitle_sources.strip(),
@@ -150,6 +176,7 @@ _NUMERIC_FIELD_LABELS = {
     "duration": "duration",
     "audio_channels": "audio channels",
     "sample_rate": "sample rate",
+    "chapter_count": "chapter count",
 }
 
 
@@ -592,6 +619,18 @@ def apply_field_search_filters(
         ("search_audio_composer", MediaFile.audio_composer),
         ("search_track_number", MediaFile.track_number),
         ("search_bit_rate_mode", MediaFile.bit_rate_mode),
+        ("search_chapter_titles", MediaFile.chapter_titles_search),
+        ("search_audiobook_narrator", MediaFile.audiobook_narrator),
+        ("search_audiobook_author", MediaFile.audiobook_author),
+        ("search_audiobook_publisher", MediaFile.audiobook_publisher),
+        ("search_audiobook_series", MediaFile.audiobook_series),
+        ("search_audiobook_series_part", MediaFile.audiobook_series_part),
+        ("search_audiobook_description", MediaFile.audiobook_description),
+        ("search_audiobook_copyright", MediaFile.audiobook_copyright),
+        ("search_audiobook_asin", MediaFile.audiobook_asin),
+        ("search_audiobook_isbn", MediaFile.audiobook_isbn),
+        ("search_audiobook_language", MediaFile.audiobook_language),
+        ("search_audiobook_abridged", MediaFile.audiobook_abridged),
     )
     for field_name, expression in text_filters:
         value = getattr(normalized, field_name)
@@ -601,6 +640,8 @@ def apply_field_search_filters(
         query = _apply_numeric_filter(query, MediaFile.audio_channels, normalized.search_audio_channels, int, "audio_channels")
     if normalized.search_sample_rate:
         query = _apply_numeric_filter(query, MediaFile.sample_rate, normalized.search_sample_rate, int, "sample_rate")
+    if normalized.search_chapter_count:
+        query = _apply_numeric_filter(query, MediaFile.chapter_count, normalized.search_chapter_count, int, "chapter_count")
     if normalized.search_has_embedded_cover:
         query = _apply_text_filter(
             query,

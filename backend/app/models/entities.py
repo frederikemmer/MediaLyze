@@ -26,6 +26,7 @@ class LibraryType(str, Enum):
     movies = "movies"
     series = "series"
     music = "music"
+    audiobooks = "audiobooks"
     mixed = "mixed"
     other = "other"
 
@@ -220,6 +221,12 @@ class MediaFile(Base):
         Index("ix_media_files_library_primary_video_codec", "library_id", "primary_video_codec"),
         Index("ix_media_files_library_resolution_pixels", "library_id", "primary_video_resolution_pixels"),
         Index("ix_media_files_library_primary_video_hdr_type", "library_id", "primary_video_hdr_type"),
+        Index("ix_media_files_library_chapter_count", "library_id", "chapter_count"),
+        Index("ix_media_files_library_audiobook_narrator", "library_id", "audiobook_narrator"),
+        Index("ix_media_files_library_audiobook_series", "library_id", "audiobook_series"),
+        Index("ix_media_files_library_audiobook_author", "library_id", "audiobook_author"),
+        Index("ix_media_files_library_audiobook_publisher", "library_id", "audiobook_publisher"),
+        Index("ix_media_files_library_audiobook_series_part", "library_id", "audiobook_series_part"),
         Index("ix_media_files_library_content_category", "library_id", "content_category"),
         Index("ix_media_files_series_id", "series_id"),
         Index("ix_media_files_season_id", "season_id"),
@@ -270,6 +277,26 @@ class MediaFile(Base):
     track_number: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     bit_rate_mode: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     has_embedded_cover: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    chapter_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chapter_titles_search: Mapped[str] = mapped_column(String(4096), default="", nullable=False)
+    audiobook_narrator: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    audiobook_author: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    audiobook_publisher: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    audiobook_series: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    audiobook_series_part: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    audiobook_description: Mapped[str] = mapped_column(String(4096), default="", nullable=False)
+    audiobook_copyright: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    audiobook_asin: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    audiobook_isbn: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    audiobook_language: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    audiobook_abridged: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    embedded_cover_stream_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedded_cover_codec: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    embedded_cover_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedded_cover_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    analysis_failure_kind: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    analysis_failure_reason: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    analysis_failure_detail: Mapped[str] = mapped_column(String(12000), default="", nullable=False)
     analysis_schema_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     min_subtitle_language: Mapped[str] = mapped_column(String(16), default="", nullable=False)
     min_subtitle_codec: Mapped[str] = mapped_column(String(64), default="", nullable=False)
@@ -313,6 +340,12 @@ class MediaFile(Base):
         back_populates="media_file",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    chapters: Mapped[list[MediaChapter]] = relationship(
+        back_populates="media_file",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MediaChapter.chapter_index",
     )
     subtitle_streams: Mapped[list[SubtitleStream]] = relationship(
         back_populates="media_file",
@@ -419,6 +452,25 @@ class AudioStream(Base):
     track: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     media_file: Mapped[MediaFile] = relationship(back_populates="audio_streams")
+
+
+class MediaChapter(Base):
+    __tablename__ = "media_chapters"
+    __table_args__ = (
+        Index("ix_media_chapters_media_file_id", "media_file_id"),
+        Index("ix_media_chapters_media_file_index", "media_file_id", "chapter_index"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("media_files.id", ondelete="CASCADE"), nullable=False)
+    chapter_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+    end_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    media_file: Mapped[MediaFile] = relationship(back_populates="chapters")
 
 
 class SubtitleStream(Base):

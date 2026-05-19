@@ -90,6 +90,47 @@ FIELDS_BY_LIBRARY_TYPE = {
             "extension",
         },
     },
+    "audiobooks": {
+        "video_fields": set(),
+        "audio_fields": {
+            "audio_codec",
+            "audio_spatial_profile",
+            "audio_language",
+            "audio_bitrate",
+            "audio_title",
+            "audio_artist",
+            "audio_album",
+            "audio_album_artist",
+            "audio_genre",
+            "audio_date",
+            "audio_disc",
+            "audio_composer",
+            "audio_channels",
+            "sample_rate",
+            "track_number",
+            "bit_rate_mode",
+            "has_embedded_cover",
+            "chapter_count",
+            "chapter_titles",
+            "audiobook_narrator",
+            "audiobook_author",
+            "audiobook_publisher",
+            "audiobook_series",
+            "audiobook_series_part",
+            "audiobook_language",
+            "audiobook_abridged",
+            "audiobook_asin",
+            "audiobook_isbn",
+        },
+        "shared_fields": {
+            "container",
+            "duration",
+            "size",
+            "quality_score",
+            "file_path",
+            "extension",
+        },
+    },
     "mixed": {
         "video_fields": {
             "video_codec",
@@ -175,7 +216,7 @@ def get_visible_fields_for_library_type(library_type: str) -> set[str]:
     """Get all visible field identifiers for a library type.
     
     Args:
-        library_type: One of "movies", "series", "music", "mixed", "other"
+        library_type: One of "movies", "series", "music", "audiobooks", "mixed", "other"
         
     Returns:
         Set of visible field identifiers
@@ -218,11 +259,33 @@ def get_music_only_fields() -> set[str]:
     }
 
 
+def get_audiobook_only_fields() -> set[str]:
+    """Get fields that are specific to audiobook libraries."""
+    return {
+        "chapter_count",
+        "chapter_titles",
+        "audiobook_narrator",
+        "audiobook_author",
+        "audiobook_publisher",
+        "audiobook_series",
+        "audiobook_series_part",
+        "audiobook_language",
+        "audiobook_abridged",
+        "audiobook_asin",
+        "audiobook_isbn",
+    }
+
+
 def should_hide_video_fields(library_type: str) -> bool:
     """Check if video-exclusive fields should be hidden for this library type."""
-    return library_type == "music"
+    return library_type in ("music", "audiobooks")
 
 
 def should_hide_music_fields(library_type: str) -> bool:
     """Check if music-exclusive fields should be hidden for this library type."""
     return library_type in ("movies", "series")
+
+
+def should_hide_audiobook_fields(library_type: str) -> bool:
+    """Check if audiobook-exclusive fields should be hidden for this library type."""
+    return library_type != "audiobooks"

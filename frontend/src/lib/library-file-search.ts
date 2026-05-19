@@ -3,6 +3,7 @@ import {
   AudioLines,
   Captions,
   Clock3,
+  BookOpen,
   FileText,
   Film,
   FolderSearch,
@@ -38,6 +39,7 @@ const BITRATE_RE = /^\s*(\d+(?:\.\d+)?)\s*(bps|bit\/s|[kmgt]?bps|[kmgt]?b\/s|[km
 const DURATION_PART_RE = /(\d+(?:\.\d+)?)\s*([smhd])/gi;
 const SCORE_RE = /^\d+$/;
 const BIT_DEPTH_RE = /^\d+$/;
+const COUNT_RE = /^\d+$/;
 
 function isValidStructuredValue(value: string, checker: (rawValue: string) => boolean): boolean {
   const trimmed = value.trim();
@@ -99,6 +101,10 @@ function isValidBitrateValue(value: string): boolean {
 
 function isValidBitDepthValue(value: string): boolean {
   return isValidStructuredValue(value, (rawValue) => BIT_DEPTH_RE.test(rawValue) && Number(rawValue) > 0);
+}
+
+function isValidCountValue(value: string): boolean {
+  return isValidStructuredValue(value, (rawValue) => COUNT_RE.test(rawValue) && Number(rawValue) >= 0);
 }
 
 export const LIBRARY_FILE_SEARCH_PICKER_ICON = SlidersHorizontal;
@@ -194,6 +200,34 @@ export const LIBRARY_FILE_SEARCH_CONFIGS: LibraryFileSearchConfig[] = [
     tooltipKey: "libraryDetail.searchFields.sample_rate.tooltip",
     validate: isValidBitDepthValue,
   },
+  {
+    field: "chapter_count",
+    icon: BookOpen,
+    labelKey: "libraryStatistics.items.chapter_count",
+    placeholderKey: "libraryDetail.searchFields.chapter_count.placeholder",
+    tooltipKey: "libraryDetail.searchFields.chapter_count.tooltip",
+    validate: isValidCountValue,
+  },
+  ...[
+    "chapter_titles",
+    "audiobook_narrator",
+    "audiobook_author",
+    "audiobook_publisher",
+    "audiobook_series",
+    "audiobook_series_part",
+    "audiobook_description",
+    "audiobook_copyright",
+    "audiobook_asin",
+    "audiobook_isbn",
+    "audiobook_language",
+    "audiobook_abridged",
+  ].map((field) => ({
+    field: field as LibraryFileMetadataSearchField,
+    icon: BookOpen,
+    labelKey: `libraryStatistics.items.${field}`,
+    placeholderKey: `libraryDetail.searchFields.${field}.placeholder`,
+    tooltipKey: TEXT_FILTER_TOOLTIP_KEY,
+  })),
   {
     field: "video_codec",
     icon: Film,

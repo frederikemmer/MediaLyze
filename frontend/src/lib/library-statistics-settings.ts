@@ -35,6 +35,13 @@ export type LibraryStatisticId =
   | "track_numbers"
   | "bit_rate_modes"
   | "embedded_covers"
+  | "audiobook_narrators"
+  | "audiobook_authors"
+  | "audiobook_publishers"
+  | "audiobook_series"
+  | "audiobook_series_parts"
+  | "chapter_counts"
+  | "chapter_titles"
   | "audio_title"
   | "audio_artist"
   | "audio_album"
@@ -46,7 +53,17 @@ export type LibraryStatisticId =
   | "sample_rate"
   | "track_number"
   | "bit_rate_mode"
-  | "has_embedded_cover";
+  | "has_embedded_cover"
+  | "chapter_count"
+  | "audiobook_narrator"
+  | "audiobook_author"
+  | "audiobook_publisher"
+  | "audiobook_series"
+  | "audiobook_series_part"
+  | "audiobook_language"
+  | "audiobook_abridged"
+  | "audiobook_asin"
+  | "audiobook_isbn";
 
 type LibraryStatisticPanelDataKey =
   | "container_distribution"
@@ -67,6 +84,12 @@ type LibraryStatisticPanelDataKey =
   | "track_number_distribution"
   | "bit_rate_mode_distribution"
   | "embedded_cover_distribution"
+  | "audiobook_narrator_distribution"
+  | "audiobook_author_distribution"
+  | "audiobook_publisher_distribution"
+  | "audiobook_series_distribution"
+  | "audiobook_series_part_distribution"
+  | "chapter_count_distribution"
   | "subtitle_language_distribution"
   | "subtitle_codec_distribution"
   | "subtitle_source_distribution";
@@ -90,6 +113,12 @@ type DashboardStatisticPanelDataKey =
   | "track_number_distribution"
   | "bit_rate_mode_distribution"
   | "embedded_cover_distribution"
+  | "audiobook_narrator_distribution"
+  | "audiobook_author_distribution"
+  | "audiobook_publisher_distribution"
+  | "audiobook_series_distribution"
+  | "audiobook_series_part_distribution"
+  | "chapter_count_distribution"
   | "subtitle_distribution"
   | "subtitle_codec_distribution"
   | "subtitle_source_distribution";
@@ -143,6 +172,16 @@ const MUSIC_HIDDEN_STATISTIC_IDS = new Set<LibraryStatisticId>([
   "subtitle_codecs",
   "subtitle_sources",
   "audio_languages",
+]);
+const AUDIOBOOK_ONLY_STATISTIC_IDS = new Set<LibraryStatisticId>([
+  "audiobook_narrators",
+  "audiobook_authors",
+  "audiobook_publishers",
+  "audiobook_series",
+  "audiobook_series_parts",
+  "audiobook_series_part",
+  "chapter_counts",
+  "chapter_titles",
 ]);
 type MusicVisibilityOptions = {
   showMusicQualityScore?: boolean;
@@ -420,6 +459,11 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     ["track_numbers", "track_number_distribution"],
     ["bit_rate_modes", "bit_rate_mode_distribution"],
     ["embedded_covers", "embedded_cover_distribution"],
+    ["audiobook_narrators", "audiobook_narrator_distribution"],
+    ["audiobook_authors", "audiobook_author_distribution"],
+    ["audiobook_publishers", "audiobook_publisher_distribution"],
+    ["audiobook_series", "audiobook_series_distribution"],
+    ["audiobook_series_parts", "audiobook_series_part_distribution"],
   ] as const).map(([id, dataKey]) => ({
     id,
     nameKey: `libraryStatistics.items.${id}`,
@@ -427,8 +471,20 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTable: true,
     supportsTableTooltip: false,
     supportsDashboard: true,
-    defaultPanelEnabled: id === "audio_artists" || id === "audio_albums" || id === "audio_genres",
-    defaultTableEnabled: false,
+    defaultPanelEnabled:
+      id === "audio_artists" ||
+      id === "audio_albums" ||
+      id === "audio_genres" ||
+      id === "audiobook_narrators" ||
+      id === "audiobook_authors" ||
+      id === "audiobook_publishers" ||
+      id === "audiobook_series",
+    defaultTableEnabled:
+      id === "audiobook_narrators" ||
+      id === "audiobook_authors" ||
+      id === "audiobook_publishers" ||
+      id === "audiobook_series" ||
+      id === "audiobook_series_parts",
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
     panelTitleKey: `libraryDetail.${id}`,
@@ -442,11 +498,73 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
       : id === "sample_rates" ? "sample_rate"
       : id === "track_numbers" ? "track_number"
       : id === "bit_rate_modes" ? "bit_rate_mode"
+      : id === "audiobook_narrators" ? "audiobook_narrator"
+      : id === "audiobook_authors" ? "audiobook_author"
+      : id === "audiobook_publishers" ? "audiobook_publisher"
+      : id === "audiobook_series" ? "audiobook_series"
+      : id === "audiobook_series_parts" ? "audiobook_series_part"
       : "has_embedded_cover"
     ) as MediaFileSortKey,
     dashboardTitleKey: `dashboard.${id}`,
     dashboardDataKey: dataKey,
   })),
+  {
+    id: "chapter_counts",
+    nameKey: "libraryStatistics.items.chapter_count",
+    supportsPanel: true,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: true,
+    defaultPanelEnabled: true,
+    defaultTableEnabled: true,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    panelKind: "numeric-chart",
+    numericMetricId: "chapter_count",
+    panelTitleKey: "libraryDetail.chapter_counts",
+    panelDataKey: "chapter_count_distribution",
+    tableColumnKey: "chapter_count",
+    dashboardTitleKey: "dashboard.chapter_counts",
+    dashboardDataKey: "chapter_count_distribution",
+  },
+  {
+    id: "audiobook_series_part",
+    nameKey: "libraryStatistics.items.audiobook_series_part",
+    supportsPanel: false,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: false,
+    defaultPanelEnabled: false,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    tableColumnKey: "audiobook_series_part",
+  },
+  ...(["audiobook_language", "audiobook_abridged", "audiobook_asin", "audiobook_isbn"] as const).map((id) => ({
+    id,
+    nameKey: `libraryStatistics.items.${id}`,
+    supportsPanel: false,
+    supportsTable: true,
+    supportsTableTooltip: false,
+    supportsDashboard: false,
+    defaultPanelEnabled: false,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+    tableColumnKey: id,
+  })),
+  {
+    id: "chapter_titles",
+    nameKey: "libraryStatistics.items.chapter_titles",
+    supportsPanel: false,
+    supportsTable: false,
+    supportsTableTooltip: false,
+    supportsDashboard: false,
+    defaultPanelEnabled: false,
+    defaultTableEnabled: false,
+    defaultTableTooltipEnabled: false,
+    defaultDashboardEnabled: false,
+  },
   {
     id: "subtitle_languages",
     nameKey: "libraryStatistics.items.subtitleLanguages",
@@ -723,8 +841,11 @@ export function isLibraryStatisticDefinitionVisibleForLibraryType(
   if (definition.id === "video_bit_depth" && options?.hasVideoMetadata === false) {
     return false;
   }
-  if (libraryType !== "music") {
-    return true;
+  if (libraryType !== "music" && libraryType !== "audiobooks") {
+    return !AUDIOBOOK_ONLY_STATISTIC_IDS.has(definition.id);
+  }
+  if (libraryType !== "audiobooks" && AUDIOBOOK_ONLY_STATISTIC_IDS.has(definition.id)) {
+    return false;
   }
   if (definition.id === "quality_score" && options?.showMusicQualityScore !== true) {
     return false;

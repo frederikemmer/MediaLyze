@@ -153,6 +153,93 @@ def test_library_comparison_supports_new_music_axes() -> None:
     assert payload.heatmap_cells[0].count == 1
 
 
+def test_library_comparison_treats_audiobooks_as_audio_only_media_type() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(name="Audiobooks", path="/tmp/audiobooks", type=LibraryType.audiobooks, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        library_id = library.id
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="book.m4b",
+                filename="book.m4b",
+                extension="m4b",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                audio_artist="Narrator A",
+                sample_rate=44100,
+            )
+        )
+        db.commit()
+
+        payload = get_library_comparison(db, library_id=library.id, x_field="video_codec", y_field="hdr_type")
+
+    assert payload is not None
+    assert payload.x_field != "video_codec"
+    assert payload.y_field != "hdr_type"
+    assert payload.x_field != payload.y_field
+
+
+def test_library_comparison_supports_audiobook_axes() -> None:
+    session_factory = _session_factory()
+
+    with session_factory() as db:
+        library = Library(name="Audiobooks", path="/tmp/audiobooks", type=LibraryType.audiobooks, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        library_id = library.id
+        db.add(
+            MediaFile(
+                library_id=library_id,
+                relative_path="book.m4b",
+                filename="book.m4b",
+                extension="m4b",
+                size_bytes=100,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+                chapter_count=24,
+                audiobook_narrator="Narrator A",
+                audiobook_author="Author A",
+                audiobook_publisher="Publisher A",
+                audiobook_series="Series A",
+                audiobook_series_part="1",
+            )
+        )
+        db.commit()
+
+        payload = get_library_comparison(
+            db,
+            library_id=library_id,
+            x_field="audiobook_narrator",
+            y_field="chapter_count",
+        )
+
+    assert payload is not None
+    assert payload.available_renderers == ["heatmap", "bar"]
+    assert payload.x_buckets[0].key == "narrator a"
+    assert any(bucket.lower == 10 and bucket.upper == 25 for bucket in payload.y_buckets)
+    assert payload.heatmap_cells[0].count == 1
+
+    with session_factory() as db:
+        payload = get_library_comparison(
+            db,
+            library_id=library_id,
+            x_field="audiobook_author",
+            y_field="audiobook_publisher",
+        )
+
+    assert payload is not None
+    assert payload.x_buckets[0].key == "author a"
+    assert payload.y_buckets[0].key == "publisher a"
+    stats_cache.invalidate("default")
+
+
 @pytest.mark.parametrize(
     ("field_id", "expected_key"),
     [

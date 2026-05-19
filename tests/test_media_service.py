@@ -12,6 +12,7 @@ from backend.app.models.entities import (
     ExternalSubtitle,
     Library,
     LibraryType,
+    MediaChapter,
     MediaFile,
     MediaSeason,
     MediaSeries,
@@ -25,6 +26,7 @@ from backend.app.services.library_service import get_library_statistics
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import (
     generate_library_files_csv_export,
+    generate_media_chapters_csv_export,
     get_grouped_library_series_detail,
     list_grouped_library_files,
     list_library_files,
@@ -344,6 +346,161 @@ def test_list_library_files_exposes_and_filters_music_metadata() -> None:
     assert item.track_number == "03/12"
     assert item.bit_rate_mode == "VBR"
     assert item.has_embedded_cover is True
+
+
+def test_list_library_files_exposes_filters_and_sorts_audiobook_metadata() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobooks",
+            path="/tmp/audiobooks",
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        matching = MediaFile(
+            library_id=library.id,
+            relative_path="series/book-a.m4b",
+            filename="book-a.m4b",
+            extension="m4b",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+            chapter_count=24,
+            chapter_titles_search="opening chapter one",
+            audiobook_narrator="Narrator A",
+            audiobook_author="Author A",
+            audiobook_publisher="Publisher A",
+            audiobook_series="Series A",
+            audiobook_series_part="2",
+            audiobook_description="Long Synopsis A",
+            audiobook_copyright="Copyright A",
+            audiobook_language="en",
+            audiobook_abridged="unabridged",
+            audiobook_asin="B000000001",
+            audiobook_isbn="9781234567890",
+            search_fields_version=3,
+        )
+        other = MediaFile(
+            library_id=library.id,
+            relative_path="other.aax",
+            filename="other.aax",
+            extension="aax",
+            size_bytes=456,
+            mtime=2.0,
+            scan_status=ScanStatus.ready,
+            quality_score=5,
+            chapter_count=4,
+            chapter_titles_search="intro",
+            audiobook_narrator="Other",
+            audiobook_author="Other Author",
+            audiobook_publisher="Other Publisher",
+            audiobook_series="Other",
+            audiobook_series_part="1",
+            audiobook_description="Other Synopsis",
+            audiobook_copyright="Other Copyright",
+            audiobook_language="de",
+            audiobook_abridged="abridged",
+            audiobook_asin="B000000002",
+            audiobook_isbn="9781234567891",
+            search_fields_version=3,
+        )
+        db.add_all([matching, other])
+        db.flush()
+        db.add(MediaChapter(media_file_id=matching.id, chapter_index=0, start_time=0, end_time=10, duration=10, title="Opening"))
+        db.commit()
+
+        filtered = list_library_files(
+            db,
+            library.id,
+            search_filters=LibraryFileSearchFilters(
+                search_chapter_count=">=20",
+                search_chapter_titles="chapter one",
+                search_audiobook_narrator="Narrator A",
+                search_audiobook_author="Author A",
+                search_audiobook_publisher="Publisher A",
+                search_audiobook_series="Series A",
+                search_audiobook_series_part="2",
+                search_audiobook_description="Synopsis A",
+                search_audiobook_copyright="Copyright A",
+                search_audiobook_language="en",
+                search_audiobook_abridged="unabridged",
+                search_audiobook_asin="B000000001",
+                search_audiobook_isbn="9781234567890",
+            ),
+            limit=50,
+        )
+        sorted_page = list_library_files(
+            db,
+            library.id,
+            limit=50,
+            sort_key="chapter_count",
+            sort_direction="desc",
+        )
+
+    assert [item.filename for item in filtered.items] == ["book-a.m4b"]
+    item = filtered.items[0]
+    assert item.chapter_count == 24
+    assert item.audiobook_narrator == "Narrator A"
+    assert item.audiobook_author == "Author A"
+    assert item.audiobook_publisher == "Publisher A"
+    assert item.audiobook_series == "Series A"
+    assert item.audiobook_series_part == "2"
+    assert item.audiobook_language == "en"
+    assert item.audiobook_abridged == "unabridged"
+    assert [item.filename for item in sorted_page.items] == ["book-a.m4b", "other.aax"]
+
+
+@pytest.mark.parametrize("sort_key", ["audiobook_narrator", "audiobook_series", "audiobook_series_part"])
+def test_list_library_files_sorts_each_audiobook_text_column(sort_key: str) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Audiobooks", path="/tmp/audiobooks", type=LibraryType.audiobooks, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="a.m4b",
+                    filename="a.m4b",
+                    extension="m4b",
+                    size_bytes=1,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audiobook_narrator="A",
+                    audiobook_series="A",
+                    audiobook_series_part="1",
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="b.m4b",
+                    filename="b.m4b",
+                    extension="m4b",
+                    size_bytes=1,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                    audiobook_narrator="B",
+                    audiobook_series="B",
+                    audiobook_series_part="2",
+                ),
+            ]
+        )
+        db.commit()
+        page = list_library_files(db, library.id, limit=50, sort_key=sort_key, sort_direction="asc")
+
+    assert [item.filename for item in page.items] == ["a.m4b", "b.m4b"]
 
 
 @pytest.mark.parametrize(
@@ -680,10 +837,11 @@ def test_generate_library_files_csv_export_includes_audio_spatial_profiles() -> 
         )
 
     comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
+    header = rows[0]
 
     assert "# search.audio_spatial_profiles: atmos" in comment_lines
-    assert rows[0][22:25] == ["audio_codecs", "audio_spatial_profiles", "audio_languages"]
-    assert rows[1][23] == "Dolby Atmos"
+    assert [header.index(column) for column in ["audio_codecs", "audio_spatial_profiles", "audio_languages"]]
+    assert rows[1][header.index("audio_spatial_profiles")] == "Dolby Atmos"
 
 
 def test_generate_library_files_csv_export_includes_new_music_metadata_columns() -> None:
@@ -746,6 +904,20 @@ def test_generate_library_files_csv_export_includes_new_music_metadata_columns()
         "bit_rate_mode",
         "has_embedded_cover",
     ]
+    assert rows[0][22:34] == [
+        "chapter_count",
+        "audiobook_narrator",
+        "audiobook_author",
+        "audiobook_publisher",
+        "audiobook_series",
+        "audiobook_series_part",
+        "audiobook_language",
+        "audiobook_abridged",
+        "audiobook_asin",
+        "audiobook_isbn",
+        "analysis_failure_kind",
+        "analysis_failure_reason",
+    ]
     assert rows[1][9:22] == [
         "Song A",
         "Artist A",
@@ -761,6 +933,115 @@ def test_generate_library_files_csv_export_includes_new_music_metadata_columns()
         "vbr",
         "yes",
     ]
+    assert rows[1][22:26] == ["", "", "", ""]
+
+
+def test_generate_library_files_csv_export_includes_audiobook_metadata_columns() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobook CSV",
+            path="/tmp/audiobook-csv",
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            MediaFile(
+                library_id=library.id,
+                relative_path="book.m4b",
+                filename="book.m4b",
+                extension="m4b",
+                size_bytes=1024,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                chapter_count=24,
+                audiobook_narrator="Narrator A",
+                audiobook_author="Author A",
+                audiobook_publisher="Publisher A",
+                audiobook_series="Series A",
+                audiobook_series_part="2",
+                audiobook_language="en",
+                audiobook_abridged="unabridged",
+                audiobook_asin="B000000001",
+                audiobook_isbn="9781234567890",
+                analysis_failure_kind="",
+                analysis_failure_reason="",
+                search_fields_version=3,
+            )
+        )
+        db.commit()
+
+        _filename, chunks = generate_library_files_csv_export(
+            db,
+            library.id,
+            library_name=library.name,
+            search_filters=LibraryFileSearchFilters(search_audiobook_narrator="Narrator A"),
+        )
+
+    comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
+    header = rows[0]
+
+    assert "# search.audiobook_narrator: Narrator A" in comment_lines
+    assert rows[1][header.index("chapter_count")] == "24"
+    assert rows[1][header.index("audiobook_narrator")] == "Narrator A"
+    assert rows[1][header.index("audiobook_author")] == "Author A"
+    assert rows[1][header.index("audiobook_publisher")] == "Publisher A"
+    assert rows[1][header.index("audiobook_series")] == "Series A"
+    assert rows[1][header.index("audiobook_series_part")] == "2"
+    assert rows[1][header.index("audiobook_language")] == "en"
+    assert rows[1][header.index("audiobook_abridged")] == "unabridged"
+    assert rows[1][header.index("audiobook_asin")] == "B000000001"
+    assert rows[1][header.index("audiobook_isbn")] == "9781234567890"
+
+
+def test_generate_media_chapters_csv_export_includes_chapter_detail_rows() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Audiobooks", path="/tmp/audiobooks", type=LibraryType.audiobooks, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="series/book.m4b",
+            filename="book.m4b",
+            extension="m4b",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(
+            MediaChapter(
+                media_file_id=media_file.id,
+                chapter_index=1,
+                start_time=10,
+                end_time=20,
+                duration=10,
+                title="Chapter One",
+                tags={"title": "Chapter One"},
+            )
+        )
+        db.commit()
+
+        filename, chunks = generate_media_chapters_csv_export(db, media_file.id)
+
+    assert filename == "book.m4b-chapters.csv"
+    _comment_lines, rows = _split_csv_export(_collect_csv_export_text(chunks))
+    header = rows[0]
+    assert rows[1][header.index("relative_path")] == "series/book.m4b"
+    assert rows[1][header.index("chapter_index")] == "1"
+    assert rows[1][header.index("title")] == "Chapter One"
+    assert '"title": "Chapter One"' in rows[1][header.index("tags_json")]
 
 
 def test_list_library_files_sorts_and_filters_by_subtitle_sources() -> None:
@@ -1641,6 +1922,18 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "track_number",
         "bit_rate_mode",
         "has_embedded_cover",
+        "chapter_count",
+        "audiobook_narrator",
+        "audiobook_author",
+        "audiobook_publisher",
+        "audiobook_series",
+        "audiobook_series_part",
+        "audiobook_language",
+        "audiobook_abridged",
+        "audiobook_asin",
+        "audiobook_isbn",
+        "analysis_failure_kind",
+        "analysis_failure_reason",
         "audio_codecs",
         "audio_spatial_profiles",
         "audio_languages",
@@ -1663,11 +1956,11 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
     assert data_rows[0][4] == "hevc"
     assert data_rows[0][5] == "3840x2160"
     assert data_rows[0][6] == "HDR10"
-    assert data_rows[0][22] == "aac"
-    assert data_rows[0][26] == "srt"
-    assert data_rows[0][27] == "external | internal"
-    assert data_rows[0][31] == "main"
-    assert data_rows[0][32:] == ["", "", "", "", ""]
+    assert data_rows[0][header.index("audio_codecs")] == "aac"
+    assert data_rows[0][header.index("subtitle_codecs")] == "srt"
+    assert data_rows[0][header.index("subtitle_sources")] == "external | internal"
+    assert data_rows[0][header.index("content_category")] == "main"
+    assert data_rows[0][header.index("series_title") :] == ["", "", "", "", ""]
     assert data_rows[-1][0] == "episode-504.mkv"
 
 
