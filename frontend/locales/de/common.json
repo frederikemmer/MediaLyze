@@ -87,6 +87,9 @@
     "closeAria": "Versionshinweise schliessen"
   },
   "libraries": {
+    "settingsNavigation": "Einstellungsmenü",
+    "collapseSettingsNavigation": "Einstellungsmenü einklappen",
+    "expandSettingsNavigation": "Einstellungsmenü ausklappen",
     "configured": "Konfigurierte Bibliotheken",
     "fullScan": "Vollscan",
     "addFirstLibrary": "Erste Bibliothek anlegen",
@@ -154,6 +157,9 @@
     "ignorePatternsTooltip": "Einrichtung, Beispiele und empfohlene Szenarien sind in der oben verlinkten Muster-Doku beschrieben.",
     "ignorePatternsAddAria": "Neues Ignoriermuster hinzufügen",
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
+    "resolutionCategories": {
+      "title": "Auflösungskategorien"
+    },
     "patternRecognition": {
       "title": "Ordner- & Muster-Erkennung",
       "subtitle": "Serien- und Bonusordner-Muster sowie ignorierte Pfade fuer Scans konfigurieren.",

@@ -87,6 +87,9 @@
     "closeAria": "Close release notes"
   },
   "libraries": {
+    "settingsNavigation": "Settings menu",
+    "collapseSettingsNavigation": "Collapse settings menu",
+    "expandSettingsNavigation": "Expand settings menu",
     "configured": "Configured libraries",
     "fullScan": "full scan",
     "addFirstLibrary": "Add first library",
@@ -154,6 +157,9 @@
     "ignorePatternsTooltip": "Pattern setup, examples, and recommended scenarios are documented in the pattern docs linked above.",
     "ignorePatternsAddAria": "Add a new ignore pattern",
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
+    "resolutionCategories": {
+      "title": "Resolution categories"
+    },
     "patternRecognition": {
       "title": "Folder & pattern recognition",
       "subtitle": "Configure scan-time series and bonus folder patterns plus ignored paths.",

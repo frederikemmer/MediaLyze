@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 - add Audiobooks as a selectable media type, require an explicit media-type choice when creating libraries, and relabel the UI from Library Type to Media Type
 - analyze audiobook metadata and chapters, including `.m4b`, `.aa`, and `.aax` discovery, persisted chapter rows, narrator/series fields, table filters/sorts, CSV export, statistics, comparisons, and file-detail chapter display
 - expand audiobook metadata with author, publisher, description, copyright, ASIN/ISBN, book language, abridged state, cover stream details, chapter CSV export, searchable chapter lists, and clearer Audible `.aa`/`.aax` analysis diagnostics
+- replace the Settings page's top-level collapsible panels with a persistent vertical navigation and single active settings panel
 
 ## v0.11.2
 

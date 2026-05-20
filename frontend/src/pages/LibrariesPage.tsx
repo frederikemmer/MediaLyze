@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Copy,
+  Database,
+  FolderCog,
+  History,
+  Library,
+  ListPlus,
+  Pencil,
+  Plus,
+  Radio,
+  Settings,
+  SquareArrowOutUpRight,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
@@ -37,8 +56,11 @@ import {
   type PatternRecognitionSettings,
 } from "../lib/pattern-recognition";
 import {
-  getSettingsPanelState,
-  saveSettingsPanelState,
+  getActiveSettingsPanel,
+  getSettingsNavCollapsed,
+  hasStoredActiveSettingsPanelPreference,
+  saveActiveSettingsPanel,
+  saveSettingsNavCollapsed,
   type SettingsPanelId,
 } from "../lib/settings-panel-state";
 import {
@@ -601,6 +623,21 @@ function networkWatchFallbackApplied(inspection: PathInspection | null | undefin
   return Boolean(inspection && !inspection.watch_supported && scanMode === "scheduled");
 }
 
+const SETTINGS_NAV_ITEMS: Array<{
+  id: SettingsPanelId;
+  labelKey: string;
+  icon: typeof Settings;
+}> = [
+  { id: "configuredLibraries", labelKey: "libraries.configured", icon: Library },
+  { id: "createLibrary", labelKey: "libraries.createTitle", icon: ListPlus },
+  { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
+  { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Database },
+  { id: "patternRecognition", labelKey: "libraries.patternRecognition.title", icon: FolderCog },
+  { id: "historyRetention", labelKey: "libraries.historyRetention.title", icon: History },
+  { id: "recentScanLogs", labelKey: "scanLogs.title", icon: ClipboardList },
+  { id: "telemetry", labelKey: "telemetry.panel.title", icon: Radio },
+];
+
 export function LibrariesPage() {
   const { t, i18n } = useTranslation();
   const desktopBridge = getDesktopBridge();
@@ -632,7 +669,10 @@ export function LibrariesPage() {
   const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
-  const [settingsPanelState, setSettingsPanelState] = useState(() => getSettingsPanelState());
+  const [activeSettingsPanelId, setActiveSettingsPanelId] = useState<SettingsPanelId>(() =>
+    getActiveSettingsPanel("configuredLibraries"),
+  );
+  const [isSettingsNavCollapsed, setIsSettingsNavCollapsed] = useState(() => getSettingsNavCollapsed());
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
   const [recentScanJobsError, setRecentScanJobsError] = useState<string | null>(null);
@@ -1030,6 +1070,13 @@ export function LibrariesPage() {
     }
     void refreshLibraries(true).catch(() => undefined);
   }, [librariesLoaded]);
+
+  useEffect(() => {
+    if (!librariesLoaded || hasStoredActiveSettingsPanelPreference()) {
+      return;
+    }
+    setActiveSettingsPanelId(libraries.length === 0 ? "createLibrary" : "configuredLibraries");
+  }, [libraries.length, librariesLoaded]);
 
   useEffect(() => {
     void refreshRecentScanJobs(true).catch(() => undefined);
@@ -1630,13 +1677,12 @@ export function LibrariesPage() {
     );
   }
 
-  function toggleSettingsPanel(panelId: SettingsPanelId) {
-    setSettingsPanelState((current) =>
-      saveSettingsPanelState({
-        ...current,
-        [panelId]: !current[panelId],
-      }),
-    );
+  function selectSettingsPanel(panelId: SettingsPanelId) {
+    setActiveSettingsPanelId(saveActiveSettingsPanel(panelId));
+  }
+
+  function toggleSettingsNavCollapsed() {
+    setIsSettingsNavCollapsed((current) => saveSettingsNavCollapsed(!current));
   }
 
   async function toggleScanJobExpansion(jobId: number) {
@@ -1691,10 +1737,20 @@ export function LibrariesPage() {
       ),
     },
     nextShowMusicQualityScore = showMusicQualityScore,
+    nextInDepthDolbyVisionProfiles = inDepthDolbyVisionProfiles,
+    fallbackToAppSettingsPatterns = true,
   ) {
+    const effectiveUserPatterns =
+      fallbackToAppSettingsPatterns && nextUserPatterns.length === 0
+        ? (appSettings.user_ignore_patterns ?? [])
+        : nextUserPatterns;
+    const effectiveDefaultPatterns =
+      fallbackToAppSettingsPatterns && nextDefaultPatterns.length === 0
+        ? (appSettings.default_ignore_patterns ?? [])
+        : nextDefaultPatterns;
     return api.updateAppSettings({
-      user_ignore_patterns: normalizeIgnorePatterns(nextUserPatterns),
-      default_ignore_patterns: normalizeIgnorePatterns(nextDefaultPatterns),
+      user_ignore_patterns: normalizeIgnorePatterns(effectiveUserPatterns),
+      default_ignore_patterns: normalizeIgnorePatterns(effectiveDefaultPatterns),
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
       scan_performance: nextScanPerformance,
       history_retention: nextHistoryRetention,
@@ -1704,7 +1760,7 @@ export function LibrariesPage() {
         hide_quality_score_meter: nextHideQualityScoreMeter,
         show_music_quality_score: nextShowMusicQualityScore,
         unlimited_panel_size: nextUnlimitedPanelSize,
-        in_depth_dolby_vision_profiles: inDepthDolbyVisionProfiles,
+        in_depth_dolby_vision_profiles: nextInDepthDolbyVisionProfiles,
       },
     });
   }
@@ -1730,6 +1786,11 @@ export function LibrariesPage() {
         nextHideQualityScoreMeter,
         nextUnlimitedPanelSize,
         nextResolutionCategories,
+        undefined,
+        undefined,
+        showMusicQualityScore,
+        inDepthDolbyVisionProfiles,
+        false,
       );
       const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
@@ -1913,39 +1974,19 @@ export function LibrariesPage() {
     setFeatureFlagsStatus(null);
     setIsSavingFeatureFlags(true);
     try {
-      const updated = await api.updateAppSettings({
-        user_ignore_patterns: normalizeIgnorePatterns(userIgnorePatternInputs),
-        default_ignore_patterns: normalizeIgnorePatterns(defaultIgnorePatternInputs),
-        scan_performance: {
-          scan_worker_count: normalizeScanPerformanceInput(
-            scanWorkerCountInputRef.current,
-            appScanPerformance.scan_worker_count,
-            SCAN_WORKER_COUNT_MIN,
-            SCAN_WORKER_COUNT_MAX,
-          ),
-          parallel_scan_jobs: normalizeScanPerformanceInput(
-            parallelScanJobsInputRef.current,
-            appScanPerformance.parallel_scan_jobs,
-            PARALLEL_SCAN_JOB_COUNT_MIN,
-            PARALLEL_SCAN_JOB_COUNT_MAX,
-          ),
-          comparison_scatter_point_limit: normalizeScanPerformanceInput(
-            comparisonScatterPointLimitInputRef.current,
-            appScanPerformance.comparison_scatter_point_limit,
-            COMPARISON_SCATTER_POINT_LIMIT_MIN,
-            COMPARISON_SCATTER_POINT_LIMIT_MAX,
-          ),
-        },
-        history_retention: appHistoryRetention,
-        feature_flags: {
-          show_analyzed_files_csv_export: showAnalyzedFilesCsvExport,
-          show_full_width_app_shell: showFullWidthAppShell,
-          hide_quality_score_meter: hideQualityScoreMeter,
-          show_music_quality_score: showMusicQualityScore,
-          unlimited_panel_size: unlimitedPanelSize,
-          in_depth_dolby_vision_profiles: enabled,
-        },
-      });
+      const updated = await persistAppSettingsSnapshot(
+        userIgnorePatternInputs,
+        defaultIgnorePatternInputs,
+        showAnalyzedFilesCsvExport,
+        showFullWidthAppShell,
+        hideQualityScoreMeter,
+        unlimitedPanelSize,
+        undefined,
+        undefined,
+        undefined,
+        showMusicQualityScore,
+        enabled,
+      );
       applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
@@ -3405,8 +3446,62 @@ export function LibrariesPage() {
 
   return (
     <>
-      <div className="settings-layout">
+      <div className={`settings-layout${isSettingsNavCollapsed ? " is-settings-nav-collapsed" : ""}`}>
+        <aside className="settings-navigation-panel" aria-label={t("libraries.settingsNavigation")}>
+          <div className="settings-navigation-header">
+            {!isSettingsNavCollapsed ? <span>{t("libraries.settingsNavigation")}</span> : null}
+            <button
+              type="button"
+              className="secondary icon-only-button settings-navigation-collapse-button"
+              aria-label={
+                isSettingsNavCollapsed
+                  ? t("libraries.expandSettingsNavigation")
+                  : t("libraries.collapseSettingsNavigation")
+              }
+              title={
+                isSettingsNavCollapsed
+                  ? t("libraries.expandSettingsNavigation")
+                  : t("libraries.collapseSettingsNavigation")
+              }
+              aria-expanded={!isSettingsNavCollapsed}
+              onClick={toggleSettingsNavCollapsed}
+            >
+              {isSettingsNavCollapsed ? (
+                <ChevronRight aria-hidden="true" className="nav-icon" />
+              ) : (
+                <ChevronLeft aria-hidden="true" className="nav-icon" />
+              )}
+            </button>
+          </div>
+          <nav className="settings-navigation-list">
+            {SETTINGS_NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const label = t(item.labelKey);
+              const active = activeSettingsPanelId === item.id;
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`settings-navigation-item${active ? " active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={label}
+                  title={isSettingsNavCollapsed ? label : undefined}
+                  data-settings-panel-id={item.id}
+                  onClick={() => selectSettingsPanel(item.id)}
+                >
+                  {active ? <SlidingTogglePill activeKey={item.id} className="nav-active-pill" /> : null}
+                  <span className="settings-navigation-item-content">
+                    <Icon aria-hidden="true" className="nav-icon" />
+                    {!isSettingsNavCollapsed ? <span>{label}</span> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
         <div className="settings-main-column">
+          {activeSettingsPanelId === "configuredLibraries" ? (
           <AsyncPanel
             title={t("libraries.configured")}
             loading={isLoadingLibraries}
@@ -3421,12 +3516,6 @@ export function LibrariesPage() {
                 {t("libraries.fullScan")}
               </button>
             }
-            collapseButtonClassName="async-panel-toggle-icon-button-flat"
-            collapseState={{
-              collapsed: !settingsPanelState.configuredLibraries,
-              onToggle: () => toggleSettingsPanel("configuredLibraries"),
-              bodyId: "configured-libraries-panel-body",
-            }}
           >
             <div className="listing">
               {!libraries.length ? <div className="notice">{t("libraries.addFirstLibrary")}</div> : null}
@@ -3746,14 +3835,11 @@ export function LibrariesPage() {
               })}
             </div>
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "resolutionCategories" ? (
           <AsyncPanel
-            title="Resolution categories"
-            collapseState={{
-              collapsed: !settingsPanelState.resolutionCategories,
-              onToggle: () => toggleSettingsPanel("resolutionCategories"),
-              bodyId: "resolution-categories-panel-body",
-            }}
+            title={t("libraries.resolutionCategories.title")}
           >
             <div className="settings-sidebar-stack">
               <div className="field-label-row">
@@ -3890,7 +3976,9 @@ export function LibrariesPage() {
               {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
             </div>
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "patternRecognition" ? (
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
             subtitle={t("libraries.patternRecognition.subtitle")}
@@ -3904,12 +3992,6 @@ export function LibrariesPage() {
             }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
-            collapseButtonClassName="async-panel-toggle-icon-button-flat"
-            collapseState={{
-              collapsed: !settingsPanelState.patternRecognition,
-              onToggle: () => toggleSettingsPanel("patternRecognition"),
-              bodyId: "pattern-recognition-panel-body",
-            }}
           >
             <div className="settings-sidebar-stack">
               <div className="pattern-recognition-doc-row">
@@ -4073,7 +4155,9 @@ export function LibrariesPage() {
               ) : null}
             </div>
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "historyRetention" ? (
           <AsyncPanel
             title={t("libraries.historyRetention.title")}
             collapseActions={
@@ -4095,12 +4179,6 @@ export function LibrariesPage() {
                 />
               </div>
             }
-            collapseButtonClassName="async-panel-toggle-icon-button-flat"
-            collapseState={{
-              collapsed: !settingsPanelState.historyRetention,
-              onToggle: () => toggleSettingsPanel("historyRetention"),
-              bodyId: "history-retention-panel-body",
-            }}
           >
             <div className="settings-sidebar-stack history-retention-panel-content">
               {isLoadingHistoryStorage ? <p className="field-hint">{t("libraries.historyRetention.loading")}</p> : null}
@@ -4243,17 +4321,14 @@ export function LibrariesPage() {
               ) : null}
             </div>
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "recentScanLogs" ? (
           <AsyncPanel
             title={t("scanLogs.title")}
             subtitle={t("scanLogs.subtitle")}
             loading={isLoadingRecentScanJobs}
             error={recentScanJobsError}
-            collapseState={{
-              collapsed: !settingsPanelState.recentScanLogs,
-              onToggle: () => toggleSettingsPanel("recentScanLogs"),
-              bodyId: "recent-scan-logs-panel-body",
-            }}
           >
             {recentScanJobs.length === 0 ? (
               <div className="notice">{t("scanLogs.empty")}</div>
@@ -4313,7 +4388,9 @@ export function LibrariesPage() {
               </>
             )}
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "telemetry" ? (
           <AsyncPanel
             title={t("telemetry.panel.title")}
             collapseActions={
@@ -4327,12 +4404,6 @@ export function LibrariesPage() {
                 onConfirmedModeClick={handleConfirmedTelemetryModeClick}
               />
             }
-            collapseButtonClassName="async-panel-toggle-icon-button-flat"
-            collapseState={{
-              collapsed: !settingsPanelState.telemetry,
-              onToggle: () => toggleSettingsPanel("telemetry"),
-              bodyId: "telemetry-panel-body",
-            }}
           >
             <div className="settings-sidebar-stack telemetry-panel-content">
               <p className="app-settings-section-copy">{t("telemetry.panel.description")}</p>
@@ -4428,18 +4499,13 @@ export function LibrariesPage() {
               {telemetryStatus ? <div className="alert">{telemetryStatus}</div> : null}
             </div>
           </AsyncPanel>
-        </div>
+          ) : null}
 
-        <div className="settings-sidebar">
+          {activeSettingsPanelId === "createLibrary" ? (
           <AsyncPanel
             title={t("libraries.createTitle")}
             error={submitError}
             className={!isLoadingLibraries && libraries.length === 0 ? "create-library-first-run-attention" : undefined}
-            collapseState={{
-              collapsed: !settingsPanelState.createLibrary,
-              onToggle: () => toggleSettingsPanel("createLibrary"),
-              bodyId: "create-library-panel-body",
-            }}
           >
             <form className="form-grid" onSubmit={handleSubmit}>
               <p className="field-hint field-span-full">
@@ -4568,14 +4634,11 @@ export function LibrariesPage() {
               </button>
             </form>
           </AsyncPanel>
+          ) : null}
 
+          {activeSettingsPanelId === "appSettings" ? (
           <AsyncPanel
             title={t("libraries.appSettings")}
-            collapseState={{
-              collapsed: !settingsPanelState.appSettings,
-              onToggle: () => toggleSettingsPanel("appSettings"),
-              bodyId: "app-settings-panel-body",
-            }}
           >
             <div className="settings-sidebar-stack">
               <div className="app-settings-performance-grid">
@@ -4824,6 +4887,7 @@ export function LibrariesPage() {
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}
             </div>
           </AsyncPanel>
+          ) : null}
         </div>
       </div>
     </>
