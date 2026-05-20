@@ -88,6 +88,11 @@
   },
   "libraries": {
     "settingsNavigation": "Settings menu",
+    "settingsNavigationTitle": "Settings",
+    "settingsNavigationLibraries": "Libraries",
+    "settingsNavigationAddLibrary": "Add library",
+    "settingsNavigationPatternRecognition": "Pattern recognition",
+    "quickActions": "Quickactions",
     "collapseSettingsNavigation": "Collapse settings menu",
     "expandSettingsNavigation": "Expand settings menu",
     "configured": "Configured libraries",

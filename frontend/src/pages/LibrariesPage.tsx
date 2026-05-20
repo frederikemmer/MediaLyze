@@ -2,19 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Archive,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
-  ClipboardList,
   Copy,
   Database,
-  FolderCog,
+  DatabaseSearch,
+  FingerprintPattern,
   History,
-  Library,
-  ListPlus,
   Pencil,
   Plus,
+  Proportions,
   Radio,
   Settings,
   SquareArrowOutUpRight,
@@ -24,6 +23,7 @@ import {
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
+import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { PathBrowser } from "../components/PathBrowser";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TooltipTrigger } from "../components/TooltipTrigger";
@@ -628,13 +628,13 @@ const SETTINGS_NAV_ITEMS: Array<{
   labelKey: string;
   icon: typeof Settings;
 }> = [
-  { id: "configuredLibraries", labelKey: "libraries.configured", icon: Library },
-  { id: "createLibrary", labelKey: "libraries.createTitle", icon: ListPlus },
+  { id: "configuredLibraries", labelKey: "libraries.settingsNavigationLibraries", icon: Database },
+  { id: "createLibrary", labelKey: "libraries.settingsNavigationAddLibrary", icon: Plus },
   { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
-  { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Database },
-  { id: "patternRecognition", labelKey: "libraries.patternRecognition.title", icon: FolderCog },
+  { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Proportions },
+  { id: "patternRecognition", labelKey: "libraries.settingsNavigationPatternRecognition", icon: FingerprintPattern },
   { id: "historyRetention", labelKey: "libraries.historyRetention.title", icon: History },
-  { id: "recentScanLogs", labelKey: "scanLogs.title", icon: ClipboardList },
+  { id: "recentScanLogs", labelKey: "scanLogs.title", icon: Archive },
   { id: "telemetry", labelKey: "telemetry.panel.title", icon: Radio },
 ];
 
@@ -3449,7 +3449,7 @@ export function LibrariesPage() {
       <div className={`settings-layout${isSettingsNavCollapsed ? " is-settings-nav-collapsed" : ""}`}>
         <aside className="settings-navigation-panel" aria-label={t("libraries.settingsNavigation")}>
           <div className="settings-navigation-header">
-            {!isSettingsNavCollapsed ? <span>{t("libraries.settingsNavigation")}</span> : null}
+            {!isSettingsNavCollapsed ? <span>{t("libraries.settingsNavigationTitle")}</span> : null}
             <button
               type="button"
               className="secondary icon-only-button settings-navigation-collapse-button"
@@ -3466,11 +3466,12 @@ export function LibrariesPage() {
               aria-expanded={!isSettingsNavCollapsed}
               onClick={toggleSettingsNavCollapsed}
             >
-              {isSettingsNavCollapsed ? (
-                <ChevronRight aria-hidden="true" className="nav-icon" />
-              ) : (
-                <ChevronLeft aria-hidden="true" className="nav-icon" />
-              )}
+              <PanelLeftToggleIcon
+                aria-hidden="true"
+                collapsed={isSettingsNavCollapsed}
+                className="settings-navigation-toggle-icon"
+                size={24}
+              />
             </button>
           </div>
           <nav className="settings-navigation-list">
@@ -3498,6 +3499,23 @@ export function LibrariesPage() {
               );
             })}
           </nav>
+          <div className="settings-navigation-quick-actions">
+            <div className="settings-navigation-divider" />
+            {!isSettingsNavCollapsed ? (
+              <div className="settings-navigation-section-label">{t("libraries.quickActions")}</div>
+            ) : null}
+            <button
+              type="button"
+              className="secondary settings-navigation-quick-action"
+              aria-label={t("libraries.fullScan")}
+              disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
+              title={t("libraries.fullScan")}
+              onClick={() => void runFullScanForAllLibraries()}
+            >
+              <DatabaseSearch aria-hidden="true" className="nav-icon" />
+              {!isSettingsNavCollapsed ? <span>{t("libraries.fullScan")}</span> : null}
+            </button>
+          </div>
         </aside>
 
         <div className="settings-main-column">

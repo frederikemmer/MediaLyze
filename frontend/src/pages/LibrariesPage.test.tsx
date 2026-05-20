@@ -446,7 +446,7 @@ describe("LibrariesPage ignore patterns", () => {
   it("keeps the combined ignore-pattern section collapsed by default", async () => {
     renderPage({ seedExpandedPanels: false, activePanel: "patternRecognition" });
 
-    fireEvent.click(await screen.findByRole("button", { name: /^folder & pattern recognition$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^pattern recognition$/i }));
     const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
     const bonusFolderToggle = screen.getByRole("button", { name: /^bonus folder patterns\d+$/i });
 
@@ -1478,7 +1478,7 @@ describe("LibrariesPage settings panels", () => {
   it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
-    await screen.findByRole("button", { name: /^configured libraries$/i });
+    await screen.findByRole("button", { name: /^libraries$/i });
     expect(screen.queryByRole("button", { name: /^table view$/i })).not.toBeInTheDocument();
   });
 
@@ -1764,7 +1764,7 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     const resolutionItem = await screen.findByRole("button", { name: /^resolution categories$/i });
-    const patternRecognitionItem = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
+    const patternRecognitionItem = screen.getByRole("button", { name: /^pattern recognition$/i });
     const historyRetentionItem = screen.getByRole("button", { name: /^history retention$/i });
     const recentScanLogsItem = screen.getByRole("button", { name: /^recent scan logs$/i });
 
@@ -1788,14 +1788,14 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "Configured libraries" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^configured libraries$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /^libraries$/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("does not render old top-level collapse toggles", async () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: /^app settings$/i })).not.toHaveAttribute("aria-expanded");
-    expect(screen.getByRole("button", { name: /^configured libraries$/i })).not.toHaveAttribute("aria-expanded");
+    expect(screen.getByRole("button", { name: /^libraries$/i })).not.toHaveAttribute("aria-expanded");
   });
 
   it("queues a full scan for all configured libraries from the panel header", async () => {
@@ -1810,7 +1810,31 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /^full scan$/i }));
+    const configuredPanel = (await screen.findByRole("heading", { name: "Configured libraries" })).closest("section");
+    expect(configuredPanel).not.toBeNull();
+    fireEvent.click(within(configuredPanel as HTMLElement).getByRole("button", { name: /^full scan$/i }));
+
+    await waitFor(() => {
+      expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
+      expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
+    });
+  });
+
+  it("queues a full scan for all configured libraries from the quick action", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary(),
+      createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
+    ]);
+    const scanSpy = vi
+      .spyOn(api, "scanLibrary")
+      .mockResolvedValueOnce(createScanJob({ id: 31, library_id: 1, library_name: "Movies", job_type: "full" }))
+      .mockResolvedValueOnce(createScanJob({ id: 32, library_id: 2, library_name: "Series", job_type: "full" }));
+
+    renderPage();
+
+    const settingsMenu = await screen.findByLabelText("Settings menu");
+    expect(within(settingsMenu).getByText("Quickactions")).toBeInTheDocument();
+    fireEvent.click(within(settingsMenu).getByRole("button", { name: /^full scan$/i }));
 
     await waitFor(() => {
       expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
