@@ -223,7 +223,11 @@
       "loading": "Speicherprognose wird geladen…",
       "bucketLabel": "Verlaufstyp",
       "daysLabel": "Aufbewahrung in Tagen",
+      "daysTooltipAria": "Aufbewahrung in Tagen erklaeren",
+      "daysTooltip": "Legt fest, wie viele Tage MediaLyze Eintraege dieses Verlaufstyps behaelt, bevor aeltere Datensaetze entfernt werden.\n\n0 entspricht unbegrenzt.",
       "storageLimitLabel": "Speicherlimit (GB)",
+      "storageLimitTooltipAria": "Speicherlimit erklaeren",
+      "storageLimitTooltip": "Das maximale geschaetzte Speichervolumen, das dieser Verlaufstyp nutzen darf, bevor MediaLyze die aeltesten Datensaetze entfernt.\n\n0 entspricht unbegrenzt.",
       "zeroUnlimited": "0 = unbegrenzt",
       "scopeNote": "Die Dateiverlauf-Aufbewahrung betrifft nur dateibasierte Snapshots; Dashboard- und Mediathek-Trends nutzen den separaten Mediathekverlauf.",
       "reconstructButton": "Verlauf rekonstruieren",
@@ -291,13 +295,16 @@
       "unknown": "Unbekannter Pfadtyp"
     },
     "quality": {
+      "category": "Kategorie",
       "weight": "Gewichtung",
       "minimum": "Minimum",
       "ideal": "Ideal",
       "maximum": "Maximum",
+      "selectedValues": "Ausgewaehlt",
       "noneSelected": "Keine Auswahl",
       "resolution": "Auflösung",
       "visual_density": "Visuelle Dichte",
+      "visualDensityTooltipAria": "Visuelle Dichte der Qualitätswertung erklären",
       "visualDensityHint": "Gib den Video-Speicherverbrauch fuer einen typischen 1080p-Titel in GB pro Minute an. Hoehere Aufloesungen werden ueber die Pixelzahl nach oben skaliert, niedrigere nach unten. Beispiel: 0.02 bedeutet etwa 20 MB pro Minute fuer reine 1080p-Videodaten.",
       "video_codec": "Video-Codec",
       "audio_channels": "Audiokanäle",
@@ -1064,6 +1071,7 @@
     }
   },
   "common": {
+    "close": "Schliessen",
     "yes": "Ja",
     "no": "Nein"
   }

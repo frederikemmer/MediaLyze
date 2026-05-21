@@ -1017,7 +1017,8 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.getAllByText("Media library history")).toHaveLength(2);
     expect(screen.getAllByText("Scan history")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
-    expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Explain retention days" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain storage limit" })).toBeInTheDocument();
     expect(screen.getByText(/File history retention only affects per-file snapshots/)).toBeInTheDocument();
     expect(await screen.findByText("977 KB")).toBeInTheDocument();
     expect((await screen.findAllByText("2.9 MB")).length).toBeGreaterThan(0);
@@ -1361,6 +1362,7 @@ describe("LibrariesPage media type selection", () => {
 
     renderPage();
 
+    fireEvent.click(await screen.findByRole("button", { name: "Add library" }));
     const mediaTypeSelect = await screen.findByRole("combobox", { name: "Media type" });
     expect(mediaTypeSelect).toHaveValue("");
     expect(within(mediaTypeSelect).getByRole("option", { name: "Select media type" })).toBeInTheDocument();
@@ -1392,6 +1394,7 @@ describe("LibrariesPage desktop mode", () => {
 
     renderPage();
 
+    fireEvent.click(await screen.findByRole("button", { name: "Add library" }));
     expect(await screen.findByRole("button", { name: "Choose folder" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Up" })).not.toBeInTheDocument();
     expect(screen.getByText("Select a local folder, mounted network share, or UNC path to analyze.")).toBeInTheDocument();
@@ -1403,7 +1406,7 @@ describe("LibrariesPage desktop mode", () => {
       selectLibraryPaths: vi.fn().mockResolvedValue(["/mnt/network-media"]),
     };
     vi.spyOn(api, "libraries").mockResolvedValue([
-      createLibrarySummary({ path: "/mnt/network-media", scan_mode: "manual" }),
+      createLibrarySummary({ path: "/mnt/network-media", scan_mode: "watch" }),
     ]);
     vi.spyOn(api, "inspectPath").mockResolvedValue(
       createPathInspection({
@@ -1416,9 +1419,8 @@ describe("LibrariesPage desktop mode", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     await screen.findByRole("link", { name: "Movies" });
-    fireEvent.change(screen.getByLabelText("Scan mode"), { target: { value: "watch" } });
 
-    await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveValue("scheduled"));
+    await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveTextContent("Time Interval"));
     expect(
       screen.getAllByText(
         "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
@@ -1435,7 +1437,8 @@ describe("LibrariesPage desktop mode", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     await screen.findByRole("link", { name: "Movies" });
-    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
+    fireEvent.click(screen.getByLabelText("Duplicate detection"));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Both" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1466,13 +1469,15 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
-  it("gently highlights the create-library panel while no library exists", async () => {
+  it("keeps libraries selected while no library exists and exposes add library from the panel", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([]);
 
     renderPage();
 
-    await screen.findByRole("heading", { name: "Create library" });
-    expect(document.querySelector(".create-library-first-run-attention")).toHaveClass("async-panel");
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^libraries$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Add library" })).toBeInTheDocument();
+    expect(document.querySelector('[data-settings-panel-id="createLibrary"]')).not.toBeInTheDocument();
   });
 
   it("does not show the old centralized table-view settings panel", async () => {
@@ -1787,7 +1792,7 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Configured libraries" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^libraries$/i })).toHaveAttribute("aria-current", "page");
   });
 
@@ -1796,28 +1801,6 @@ describe("LibrariesPage settings panels", () => {
 
     expect(await screen.findByRole("button", { name: /^app settings$/i })).not.toHaveAttribute("aria-expanded");
     expect(screen.getByRole("button", { name: /^libraries$/i })).not.toHaveAttribute("aria-expanded");
-  });
-
-  it("queues a full scan for all configured libraries from the panel header", async () => {
-    vi.spyOn(api, "libraries").mockResolvedValue([
-      createLibrarySummary(),
-      createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
-    ]);
-    const scanSpy = vi
-      .spyOn(api, "scanLibrary")
-      .mockResolvedValueOnce(createScanJob({ id: 31, library_id: 1, library_name: "Movies", job_type: "full" }))
-      .mockResolvedValueOnce(createScanJob({ id: 32, library_id: 2, library_name: "Series", job_type: "full" }));
-
-    renderPage();
-
-    const configuredPanel = (await screen.findByRole("heading", { name: "Configured libraries" })).closest("section");
-    expect(configuredPanel).not.toBeNull();
-    fireEvent.click(within(configuredPanel as HTMLElement).getByRole("button", { name: /^full scan$/i }));
-
-    await waitFor(() => {
-      expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
-      expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
-    });
   });
 
   it("queues a full scan for all configured libraries from the quick action", async () => {

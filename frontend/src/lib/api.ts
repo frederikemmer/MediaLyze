@@ -185,6 +185,9 @@ export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
   ideal: string | number;
+  values?: string[];
+  minimum_values?: string[];
+  ideal_values?: string[];
 };
 
 export type QualityNumericCategoryConfig = {
@@ -218,8 +221,8 @@ export type QualityCategoryBreakdown = {
   weight: number;
   active: boolean;
   skipped: boolean;
-  minimum: string | number | null;
-  ideal: string | number | null;
+  minimum: string | number | string[] | null;
+  ideal: string | number | string[] | null;
   maximum?: string | number | null;
   actual: string | number | string[] | null;
   unknown_mapping: boolean;
@@ -239,10 +242,10 @@ export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
   resolution: { weight: 8, minimum: "1080p", ideal: "4k" },
   visual_density: { weight: 10, minimum: 0.02, ideal: 0.04, maximum: 0.08 },
-  video_codec: { weight: 5, minimum: "h264", ideal: "hevc" },
+  video_codec: { weight: 5, minimum: "h264", ideal: "hevc", minimum_values: ["h264"], ideal_values: ["hevc"] },
   audio_channels: { weight: 4, minimum: "stereo", ideal: "5.1" },
   audio_codec: { weight: 3, minimum: "aac", ideal: "eac3" },
-  dynamic_range: { weight: 4, minimum: "sdr", ideal: "hdr10" },
+  dynamic_range: { weight: 4, minimum: "sdr", ideal: "hdr10", minimum_values: ["sdr"], ideal_values: ["hdr10"] },
   language_preferences: { weight: 6, mode: "partial", audio_languages: [], subtitle_languages: [] },
 };
 

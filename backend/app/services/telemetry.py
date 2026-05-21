@@ -37,6 +37,10 @@ _PREVIEW_INSTALLATION_ID = "00000000-0000-0000-0000-000000000000"
 _TELEMETRY_RETRY_DELAYS_SECONDS = (1, 2, 5, 10)
 
 
+def is_dev_app_version(value: str | None) -> bool:
+    return "-dev" in (value or "").strip().lower()
+
+
 def round_count_for_telemetry(value: int) -> int:
     if value <= 0:
         return 0
@@ -203,7 +207,12 @@ def build_telemetry_payload(
     installation_id: str = _PREVIEW_INSTALLATION_ID,
     is_test: bool = False,
 ) -> dict:
-    payload = _base_payload(settings, mode, installation_id=installation_id, is_test=is_test)
+    payload = _base_payload(
+        settings,
+        mode,
+        installation_id=installation_id,
+        is_test=is_test or is_dev_app_version(settings.app_version),
+    )
     if mode == "enabled":
         payload["usage"] = _enabled_usage_payload(db, app_settings)
         payload["app_settings"] = _enabled_app_settings_payload(app_settings)
@@ -348,7 +357,6 @@ def send_current_telemetry_snapshot(db: Session, settings: Settings, *, force: b
         get_app_settings(db, settings),
         mode=app_settings.telemetry.mode,
         installation_id=installation_id,
-        is_test=False,
     )
     if not send_telemetry_payload(payload, settings):
         return False
@@ -369,7 +377,6 @@ def send_initial_telemetry_snapshot(db: Session, settings: Settings) -> bool:
         get_app_settings(db, settings),
         mode="minimal",
         installation_id=installation_id,
-        is_test=False,
     )
     if not send_telemetry_payload(payload, settings):
         return False

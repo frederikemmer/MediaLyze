@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -11,7 +11,6 @@ import {
   DatabaseSearch,
   FingerprintPattern,
   History,
-  Pencil,
   Plus,
   Proportions,
   Radio,
@@ -23,8 +22,10 @@ import {
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
+import { DeleteIcon } from "../components/DeleteIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { PathBrowser } from "../components/PathBrowser";
+import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
@@ -273,6 +274,8 @@ type ResolutionCategoryDraft = ResolutionCategory & {
 };
 
 const RESOLUTION_CATEGORY_TOOLTIP = [
+  "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
+  "",
   "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
   "Reference dimensions:",
   "8k: 7680x4320",
@@ -370,17 +373,6 @@ function normalizeVisualDensityBounds(minimum: number, ideal: number, maximum: n
     minimum: nextMinimum,
     ideal: nextIdeal,
     maximum: nextMaximum,
-  };
-}
-
-function weightFieldStyle(weight: number) {
-  const clamped = Math.max(0, Math.min(10, weight));
-  const lightness = 90 - clamped * 3.4;
-  const alpha = 0.16 + clamped * 0.035;
-  return {
-    backgroundColor: `hsla(157, 57%, ${lightness}%, ${alpha})`,
-    borderColor: `hsla(157, 57%, 38%, ${0.18 + clamped * 0.04})`,
-    color: clamped >= 7 ? "#f7fbf9" : "#145c49",
   };
 }
 
@@ -629,7 +621,6 @@ const SETTINGS_NAV_ITEMS: Array<{
   icon: typeof Settings;
 }> = [
   { id: "configuredLibraries", labelKey: "libraries.settingsNavigationLibraries", icon: Database },
-  { id: "createLibrary", labelKey: "libraries.settingsNavigationAddLibrary", icon: Plus },
   { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
   { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Proportions },
   { id: "patternRecognition", labelKey: "libraries.settingsNavigationPatternRecognition", icon: FingerprintPattern },
@@ -668,6 +659,7 @@ export function LibrariesPage() {
   const [libraryIdentityForms, setLibraryIdentityForms] = useState<Record<number, LibraryIdentityForm>>({});
   const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
+  const [isCreateLibraryDialogOpen, setIsCreateLibraryDialogOpen] = useState(false);
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
   const [activeSettingsPanelId, setActiveSettingsPanelId] = useState<SettingsPanelId>(() =>
     getActiveSettingsPanel("configuredLibraries"),
@@ -1075,7 +1067,7 @@ export function LibrariesPage() {
     if (!librariesLoaded || hasStoredActiveSettingsPanelPreference()) {
       return;
     }
-    setActiveSettingsPanelId(libraries.length === 0 ? "createLibrary" : "configuredLibraries");
+    setActiveSettingsPanelId("configuredLibraries");
   }, [libraries.length, librariesLoaded]);
 
   useEffect(() => {
@@ -1335,6 +1327,20 @@ export function LibrariesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isCreateLibraryDialogOpen) {
+      return undefined;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCreateLibraryDialog();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCreateLibraryDialogOpen]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.type) {
@@ -1355,11 +1361,21 @@ export function LibrariesPage() {
       setFormPathInspection(null);
       setFormPathInspectionError(null);
       setSubmitError(null);
+      setIsCreateLibraryDialogOpen(false);
     } catch (reason) {
       setSubmitError((reason as Error).message);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function openCreateLibraryDialog() {
+    setSubmitError(null);
+    setIsCreateLibraryDialogOpen(true);
+  }
+
+  function closeCreateLibraryDialog() {
+    setIsCreateLibraryDialogOpen(false);
   }
 
   function addDesktopLibraryPath() {
@@ -2457,6 +2473,48 @@ export function LibrariesPage() {
     });
   }
 
+  function ScanLogDetailSection({
+    children,
+    count,
+    isExpandable,
+    summary = "",
+    title,
+  }: {
+    children: ReactNode;
+    count: number;
+    isExpandable: boolean;
+    summary?: string;
+    title: string;
+  }) {
+    const header = (
+      <>
+        <span className="scan-log-collapse-copy">
+          <strong>{title}</strong>
+          {summary ? <span className="scan-log-collapse-summary">{summary}</span> : null}
+        </span>
+        <span className="scan-log-collapse-meta">
+          <span className="badge">{count}</span>
+          {isExpandable ? <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" /> : null}
+        </span>
+      </>
+    );
+
+    if (!isExpandable) {
+      return (
+        <div className="scan-log-detail-section scan-log-detail-section-empty">
+          <div className="scan-log-collapse-toggle scan-log-collapse-toggle-static">{header}</div>
+        </div>
+      );
+    }
+
+    return (
+      <details className="scan-log-detail-section scan-log-collapsible-block">
+        <summary className="scan-log-collapse-toggle">{header}</summary>
+        {children}
+      </details>
+    );
+  }
+
   function renderScanPathList(
     title: string,
     count: number,
@@ -2464,18 +2522,9 @@ export function LibrariesPage() {
     truncatedCount = 0,
     summary = "",
   ) {
+    const hasEntries = count > 0 || paths.length > 0 || truncatedCount > 0;
     return (
-      <details className="scan-log-detail-block scan-log-collapsible-block">
-        <summary className="scan-log-collapse-toggle">
-          <span className="scan-log-collapse-copy">
-            <strong>{title}</strong>
-            {summary ? <span className="scan-log-collapse-summary">{summary}</span> : null}
-          </span>
-          <span className="scan-log-collapse-meta">
-            <span className="badge">{count}</span>
-            <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
-          </span>
-        </summary>
+      <ScanLogDetailSection count={count} isExpandable={hasEntries} summary={summary} title={title}>
         <div className="scan-log-collapse-content">
           {paths.length > 0 ? (
             <div className="scan-log-path-list">
@@ -2490,7 +2539,7 @@ export function LibrariesPage() {
           )}
           {truncatedCount > 0 ? <div className="subtitle">{t("scanLogs.moreEntries", { count: truncatedCount })}</div> : null}
         </div>
-      </details>
+      </ScanLogDetailSection>
     );
   }
 
@@ -2576,104 +2625,84 @@ export function LibrariesPage() {
           <span>{t("scanLogs.duration")}: {formatDuration(detail.duration_seconds)}</span>
         </div>
 
-        <div className="scan-log-summary-grid">
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.discovery.discovered_files}</strong>
-            <span>{t("scanLogs.metricDetected")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.discovery.ignored_total}</strong>
-            <span>{t("scanLogs.metricIgnored")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.analysis.analyzed_successfully}</strong>
-            <span>{t("scanLogs.metricAnalyzed")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.analysis.analysis_failed}</strong>
-            <span>{t("scanLogs.metricFailed")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.duplicates.duplicate_groups}</strong>
-            <span>{t("scanLogs.metricDuplicateGroups")}</span>
-          </div>
-          <div className="scan-log-stat">
-            <strong>{detail.scan_summary.duplicates.duplicate_files}</strong>
-            <span>{t("scanLogs.metricDuplicateFiles")}</span>
-          </div>
+        <div className="scan-log-summary-table-shell">
+          <table className="scan-log-summary-table">
+            <tbody>
+              <tr>
+                <th scope="row">{t("scanLogs.metricDetected")}</th>
+                <td>{detail.scan_summary.discovery.discovered_files}</td>
+                <th scope="row">{t("scanLogs.metricIgnored")}</th>
+                <td>{detail.scan_summary.discovery.ignored_total}</td>
+              </tr>
+              <tr>
+                <th scope="row">{t("scanLogs.metricAnalyzed")}</th>
+                <td>{detail.scan_summary.analysis.analyzed_successfully}</td>
+                <th scope="row">{t("scanLogs.metricFailed")}</th>
+                <td>{detail.scan_summary.analysis.analysis_failed}</td>
+              </tr>
+              <tr>
+                <th scope="row">{t("scanLogs.metricDuplicateGroups")}</th>
+                <td>{detail.scan_summary.duplicates.duplicate_groups}</td>
+                <th scope="row">{t("scanLogs.metricDuplicateFiles")}</th>
+                <td>{detail.scan_summary.duplicates.duplicate_files}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <div className="scan-log-panels-grid">
-          <details className="scan-log-detail-block scan-log-collapsible-block">
-            <summary className="scan-log-collapse-toggle">
-              <span className="scan-log-collapse-copy">
-                <strong>{t("scanLogs.ignorePatterns")}</strong>
-                {ignorePatternsSummary ? <span className="scan-log-collapse-summary">{ignorePatternsSummary}</span> : null}
-              </span>
-              <span className="scan-log-collapse-meta">
-                <span className="badge">{detail.scan_summary.ignore_patterns.length}</span>
-                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
-              </span>
-            </summary>
+        <div className="scan-log-detail-sections">
+          <ScanLogDetailSection
+            count={detail.scan_summary.ignore_patterns.length}
+            isExpandable={detail.scan_summary.ignore_patterns.length > 0}
+            summary={ignorePatternsSummary}
+            title={t("scanLogs.ignorePatterns")}
+          >
             <div className="scan-log-collapse-content">
-              {detail.scan_summary.ignore_patterns.length > 0 ? (
-                <div className="scan-log-scroll-area">
-                  <div className="scan-log-path-list">
-                    {detail.scan_summary.ignore_patterns.map((pattern) => (
-                      <code key={`pattern-${detail.id}-${pattern}`} className="scan-log-path">
-                        {pattern}
-                      </code>
-                    ))}
-                  </div>
+              <div className="scan-log-scroll-area">
+                <div className="scan-log-path-list">
+                  {detail.scan_summary.ignore_patterns.map((pattern) => (
+                    <code key={`pattern-${detail.id}-${pattern}`} className="scan-log-path">
+                      {pattern}
+                    </code>
+                  ))}
                 </div>
-              ) : (
-                <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>
-              )}
+              </div>
             </div>
-          </details>
+          </ScanLogDetailSection>
 
-          <details className="scan-log-detail-block scan-log-collapsible-block">
-            <summary className="scan-log-collapse-toggle">
-              <span className="scan-log-collapse-copy">
-                <strong>{t("scanLogs.patternHits")}</strong>
-                {patternHitsSummary ? <span className="scan-log-collapse-summary">{patternHitsSummary}</span> : null}
-              </span>
-              <span className="scan-log-collapse-meta">
-                <span className="badge">{patternHits.length}</span>
-                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
-              </span>
-            </summary>
+          <ScanLogDetailSection
+            count={patternHits.length}
+            isExpandable={patternHits.length > 0}
+            summary={patternHitsSummary}
+            title={t("scanLogs.patternHits")}
+          >
             <div className="scan-log-collapse-content">
-              {patternHits.length > 0 ? (
-                <div className="scan-log-scroll-area">
-                  <div className="scan-log-pattern-list">
-                    {patternHits.map((hit) => (
-                      <div className="scan-log-pattern-card" key={`${detail.id}-${hit.pattern}`}>
-                        <div className="scan-log-detail-title">
-                          <code>{hit.pattern}</code>
-                          <span className="badge">{hit.count}</span>
-                        </div>
-                        {hit.paths.length > 0 ? (
-                          <div className="scan-log-path-list">
-                            {hit.paths.map((path) => (
-                              <code key={`${hit.pattern}-${path}`} className="scan-log-path">
-                                {path}
-                              </code>
-                            ))}
-                          </div>
-                        ) : null}
-                        {hit.truncated_count > 0 ? (
-                          <div className="subtitle">{t("scanLogs.moreEntries", { count: hit.truncated_count })}</div>
-                        ) : null}
+              <div className="scan-log-scroll-area">
+                <div className="scan-log-pattern-list">
+                  {patternHits.map((hit) => (
+                    <div className="scan-log-pattern-card" key={`${detail.id}-${hit.pattern}`}>
+                      <div className="scan-log-detail-title">
+                        <code>{hit.pattern}</code>
+                        <span className="badge">{hit.count}</span>
                       </div>
-                    ))}
-                  </div>
+                      {hit.paths.length > 0 ? (
+                        <div className="scan-log-path-list">
+                          {hit.paths.map((path) => (
+                            <code key={`${hit.pattern}-${path}`} className="scan-log-path">
+                              {path}
+                            </code>
+                          ))}
+                        </div>
+                      ) : null}
+                      {hit.truncated_count > 0 ? (
+                        <div className="subtitle">{t("scanLogs.moreEntries", { count: hit.truncated_count })}</div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <div className="notice scan-log-empty-detail">{t("scanLogs.none")}</div>
-              )}
+              </div>
             </div>
-          </details>
+          </ScanLogDetailSection>
 
           {renderScanPathList(
             t("scanLogs.newFiles"),
@@ -2697,16 +2726,15 @@ export function LibrariesPage() {
             compactScanValues(detail.scan_summary.changes.deleted_files.paths),
           )}
 
-          <details className="scan-log-detail-block scan-log-collapsible-block">
-            <summary className="scan-log-collapse-toggle">
-              <span className="scan-log-collapse-copy">
-                <strong>{t("scanLogs.failedFiles")}</strong>
-              </span>
-              <span className="scan-log-collapse-meta">
-                <span className="badge">{detail.scan_summary.analysis.analysis_failed}</span>
-                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
-              </span>
-            </summary>
+          <ScanLogDetailSection
+            count={detail.scan_summary.analysis.analysis_failed}
+            isExpandable={
+              detail.scan_summary.analysis.analysis_failed > 0 ||
+              detail.scan_summary.analysis.failed_files.length > 0 ||
+              detail.scan_summary.analysis.failed_files_truncated_count > 0
+            }
+            title={t("scanLogs.failedFiles")}
+          >
             <div className="scan-log-collapse-content">
               {renderFailureList(detail, "analysis", detail.scan_summary.analysis.failed_files)}
               {detail.scan_summary.analysis.failed_files_truncated_count > 0 ? (
@@ -2715,29 +2743,29 @@ export function LibrariesPage() {
                 </div>
               ) : null}
             </div>
-          </details>
+          </ScanLogDetailSection>
 
-          <details className="scan-log-detail-block scan-log-collapsible-block">
-            <summary className="scan-log-collapse-toggle">
-              <span className="scan-log-collapse-copy">
-                <strong>{t("scanLogs.duplicatesTitle")}</strong>
-                <span className="scan-log-collapse-summary">
-                  {t("scanLogs.duplicatesSummary", {
-                    mode: t(`libraries.duplicateDetectionModes.${detail.scan_summary.duplicates.mode}`),
-                    groups: detail.scan_summary.duplicates.duplicate_groups,
-                    files: detail.scan_summary.duplicates.duplicate_files,
-                  })}
-                </span>
-              </span>
-              <span className="scan-log-collapse-meta">
-                <span className="badge">
-                  {detail.scan_summary.duplicates.processing_failed > 0
-                    ? detail.scan_summary.duplicates.processing_failed
-                    : detail.scan_summary.duplicates.processed_successfully}
-                </span>
-                <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" />
-              </span>
-            </summary>
+          <ScanLogDetailSection
+            count={
+              detail.scan_summary.duplicates.processing_failed > 0
+                ? detail.scan_summary.duplicates.processing_failed
+                : detail.scan_summary.duplicates.processed_successfully
+            }
+            isExpandable={
+              detail.scan_summary.duplicates.processing_failed > 0 ||
+              detail.scan_summary.duplicates.processed_successfully > 0 ||
+              detail.scan_summary.duplicates.duplicate_groups > 0 ||
+              detail.scan_summary.duplicates.duplicate_files > 0 ||
+              detail.scan_summary.duplicates.failed_files.length > 0 ||
+              detail.scan_summary.duplicates.failed_files_truncated_count > 0
+            }
+            summary={t("scanLogs.duplicatesSummary", {
+              mode: t(`libraries.duplicateDetectionModes.${detail.scan_summary.duplicates.mode}`),
+              groups: detail.scan_summary.duplicates.duplicate_groups,
+              files: detail.scan_summary.duplicates.duplicate_files,
+            })}
+            title={t("scanLogs.duplicatesTitle")}
+          >
             <div className="scan-log-collapse-content">
               <div className="scan-log-summary-grid">
                 <div className="scan-log-stat">
@@ -2770,7 +2798,7 @@ export function LibrariesPage() {
                 </div>
               ) : null}
             </div>
-          </details>
+          </ScanLogDetailSection>
         </div>
       </div>
     );
@@ -3040,6 +3068,46 @@ export function LibrariesPage() {
     setQualityPickerOpenKey(null);
   }
 
+  function selectedQualityValues(
+    category: QualityProfile["video_codec"] | QualityProfile["dynamic_range"],
+    boundary: "minimum" | "ideal",
+  ) {
+    const explicitValues = boundary === "minimum" ? category.minimum_values : category.ideal_values;
+    const minimumValue = String(category.minimum).trim().toLowerCase();
+    const idealValue = String(category.ideal).trim().toLowerCase();
+    const legacyValues = (category.values ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean);
+    const values =
+      explicitValues ??
+      (legacyValues.length > 0
+        ? legacyValues.filter((value) => (boundary === "minimum" ? value === minimumValue : value !== minimumValue))
+        : [boundary === "minimum" ? minimumValue : idealValue]);
+    return [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))];
+  }
+
+  function toggleMultiSelectQualityPreference(
+    libraryId: number,
+    key: "video_codec" | "dynamic_range",
+    boundary: "minimum" | "ideal",
+    options: string[],
+    value: string,
+  ) {
+    updateLibraryQualityProfile(libraryId, (current) => {
+      const category = current[key];
+      const source = selectedQualityValues(category, boundary);
+      const nextValues = source.includes(value)
+        ? source.filter((entry) => entry !== value)
+        : [...source, value].sort((left, right) => options.indexOf(left) - options.indexOf(right));
+      return {
+        ...current,
+        [key]: {
+          ...category,
+          values: undefined,
+          [boundary === "minimum" ? "minimum_values" : "ideal_values"]: nextValues,
+        },
+      };
+    });
+  }
+
   function toggleLanguagePreference(
     libraryId: number,
     field: "audio_languages" | "subtitle_languages",
@@ -3117,16 +3185,18 @@ export function LibrariesPage() {
       onSubmit: () => void;
     },
     optionLabels?: Map<string, string>,
+    closeOnSelect = true,
   ) {
     const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
     const displayOptions = [...new Set([...options, ...values])];
     return (
       <div className="field">
-        <label>{label}</label>
+        <label className="sr-only">{label}</label>
         <div className="quality-picker-field-shell search-filter-picker">
           <button
             type="button"
             className={`quality-picker-field${open ? " is-open" : ""}`}
+            aria-label={label}
             aria-expanded={open}
             onClick={() => toggleQualityPicker(libraryId, fieldKey)}
           >
@@ -3161,9 +3231,6 @@ export function LibrariesPage() {
                         }
                       }}
                     />
-                    <button type="button" className="quality-picker-custom-submit" onClick={customEntry.onSubmit}>
-                      {customEntry.addLabel}
-                    </button>
                   </div>
                   {customEntry.error ? <div className="quality-picker-custom-error">{customEntry.error}</div> : null}
                 </div>
@@ -3182,10 +3249,15 @@ export function LibrariesPage() {
                     onClick={() => {
                       if (isSelected && onRemove) {
                         onRemove(option);
-                        setQualityPickerOpenKey(null);
+                        if (closeOnSelect) {
+                          setQualityPickerOpenKey(null);
+                        }
                         return;
                       }
                       onSelect(option);
+                      if (!closeOnSelect) {
+                        return;
+                      }
                     }}
                   >
                     <span>{optionLabels?.get(option) ?? option}</span>
@@ -3199,6 +3271,57 @@ export function LibrariesPage() {
     );
   }
 
+  function renderSettingsChoicePicker<T extends string>(
+    libraryId: number,
+    fieldKey: string,
+    label: string,
+    value: T,
+    options: Array<{ value: T; label: string; disabled?: boolean }>,
+    onSelect: (value: T) => void,
+  ) {
+    const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
+    const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
+    const pickerId = `${fieldKey}-${libraryId}`;
+    return (
+      <div className="settings-choice-picker-shell quality-picker-field-shell search-filter-picker">
+        <button
+          id={pickerId}
+          type="button"
+          className={`settings-choice-picker-field${open ? " is-open" : ""}`}
+          aria-label={label}
+          aria-expanded={open}
+          onClick={() => toggleQualityPicker(libraryId, fieldKey)}
+        >
+          <span className="settings-choice-picker-value">{selectedLabel}</span>
+          <ChevronDown aria-hidden="true" className="nav-icon settings-choice-picker-chevron" />
+        </button>
+        {open ? (
+          <div className="search-filter-picker-popover quality-picker-popover settings-choice-picker-popover">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={`search-filter-picker-item${isSelected ? " is-selected" : ""}`}
+                  role="menuitemradio"
+                  aria-checked={isSelected}
+                  disabled={option.disabled}
+                  onClick={() => {
+                    onSelect(option.value);
+                    setQualityPickerOpenKey(null);
+                  }}
+                >
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderQualityWeightField(
     label: string,
     value: number,
@@ -3206,14 +3329,13 @@ export function LibrariesPage() {
   ) {
     return (
       <div className="field quality-weight-field">
-        <label>{label}</label>
+        <label className="sr-only">{label}</label>
         <input
           className="quality-weight-input"
           type="number"
           min={0}
           max={10}
           value={value}
-          style={weightFieldStyle(value)}
           onChange={(event) => onChange(Number(event.target.value))}
         />
       </div>
@@ -3239,44 +3361,115 @@ export function LibrariesPage() {
     );
 
     return (
-      <div className="quality-settings-group" key={key}>
-        <div className="quality-settings-group-title">{t(`libraries.quality.${key}`)}</div>
-        {renderPickerField(
-          library.id,
-          `${key}:minimum`,
-          t("libraries.quality.minimum"),
-          [minimumValue],
-          options,
-          (value) => updateOrderedQualityBoundary(library.id, key, "minimum", value),
-          undefined,
-          disabledForMinimum,
-          undefined,
-          undefined,
-          labels,
-        )}
-        {renderPickerField(
-          library.id,
-          `${key}:ideal`,
-          t("libraries.quality.ideal"),
-          [idealValue],
-          options,
-          (value) => updateOrderedQualityBoundary(library.id, key, "ideal", value),
-          undefined,
-          disabledForIdeal,
-          undefined,
-          undefined,
-          labels,
-        )}
-        {renderQualityWeightField(
-          t("libraries.quality.weight"),
-          category.weight,
-          (value) =>
-            updateLibraryQualityProfile(library.id, (current) => ({
-              ...current,
-              [key]: { ...current[key], weight: value },
-            })),
-        )}
-      </div>
+      <tr className="quality-settings-group" key={key}>
+        <th scope="row" className="quality-settings-group-title">
+          {t(`libraries.quality.${key}`)}
+        </th>
+        <td>
+          {renderPickerField(
+            library.id,
+            `${key}:minimum`,
+            t("libraries.quality.minimum"),
+            [minimumValue],
+            options,
+            (value) => updateOrderedQualityBoundary(library.id, key, "minimum", value),
+            undefined,
+            disabledForMinimum,
+            undefined,
+            undefined,
+            labels,
+          )}
+        </td>
+        <td>
+          {renderPickerField(
+            library.id,
+            `${key}:ideal`,
+            t("libraries.quality.ideal"),
+            [idealValue],
+            options,
+            (value) => updateOrderedQualityBoundary(library.id, key, "ideal", value),
+            undefined,
+            disabledForIdeal,
+            undefined,
+            undefined,
+            labels,
+          )}
+        </td>
+        <td>
+          {renderQualityWeightField(
+            t("libraries.quality.weight"),
+            category.weight,
+            (value) =>
+              updateLibraryQualityProfile(library.id, (current) => ({
+                ...current,
+                [key]: { ...current[key], weight: value },
+              })),
+          )}
+        </td>
+      </tr>
+    );
+  }
+
+  function renderQualityMultiSelectRow(
+    library: LibrarySummary,
+    key: "video_codec" | "dynamic_range",
+    options: string[],
+    labels?: Map<string, string>,
+  ) {
+    const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
+    const category = profile[key];
+    const minimumValues = selectedQualityValues(category, "minimum");
+    const idealValues = selectedQualityValues(category, "ideal");
+
+    return (
+      <tr className="quality-settings-group quality-settings-group-multi" key={key}>
+        <th scope="row" className="quality-settings-group-title">
+          {t(`libraries.quality.${key}`)}
+        </th>
+        <td>
+          {renderPickerField(
+            library.id,
+            `${key}:minimum_values`,
+            t("libraries.quality.minimum"),
+            minimumValues,
+            options,
+            (value) => toggleMultiSelectQualityPreference(library.id, key, "minimum", options, value),
+            (value) => toggleMultiSelectQualityPreference(library.id, key, "minimum", options, value),
+            new Set(idealValues),
+            undefined,
+            undefined,
+            labels,
+            false,
+          )}
+        </td>
+        <td>
+          {renderPickerField(
+            library.id,
+            `${key}:ideal_values`,
+            t("libraries.quality.ideal"),
+            idealValues,
+            options,
+            (value) => toggleMultiSelectQualityPreference(library.id, key, "ideal", options, value),
+            (value) => toggleMultiSelectQualityPreference(library.id, key, "ideal", options, value),
+            new Set(minimumValues),
+            undefined,
+            undefined,
+            labels,
+            false,
+          )}
+        </td>
+        <td>
+          {renderQualityWeightField(
+            t("libraries.quality.weight"),
+            category.weight,
+            (value) =>
+              updateLibraryQualityProfile(library.id, (current) => ({
+                ...current,
+                [key]: { ...current[key], weight: value },
+              })),
+          )}
+        </td>
+      </tr>
     );
   }
 
@@ -3284,153 +3477,323 @@ export function LibrariesPage() {
     const profile = settingsForms[library.id]?.quality_profile ?? library.quality_profile;
     return (
       <div className="quality-settings-panel field-span-full">
-        {renderQualityOrdinalRow(library, "resolution", resolutionOptionIds, resolutionOptionLabels)}
-        {renderQualityOrdinalRow(library, "video_codec", VIDEO_CODEC_OPTIONS, VIDEO_CODEC_OPTION_LABELS)}
-        {renderQualityOrdinalRow(library, "audio_channels", AUDIO_CHANNEL_OPTIONS)}
-        {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS, AUDIO_CODEC_OPTION_LABELS)}
-        {renderQualityOrdinalRow(library, "dynamic_range", DYNAMIC_RANGE_OPTIONS)}
-        <div className="quality-settings-group">
-          <div className="quality-settings-group-title">{t("libraries.quality.language_preferences")}</div>
-          {renderPickerField(
-            library.id,
-            "language_preferences:audio",
-          t("libraries.quality.audioLanguages"),
-          profile.language_preferences.audio_languages,
-          LANGUAGE_OPTIONS,
-          (value) => toggleLanguagePreference(library.id, "audio_languages", value),
-          (value) => toggleLanguagePreference(library.id, "audio_languages", value),
-          new Set(),
-          "quality-picker-popover-languages",
-          {
-            draft: qualityLanguageDrafts["language_preferences:audio"] ?? "",
-            error: qualityLanguageErrors["language_preferences:audio"] ?? null,
-            placeholder: t("libraries.quality.languageCodePlaceholder"),
-            addLabel: t("libraries.quality.addLanguage"),
-            onDraftChange: (value) => updateLanguageDraft("language_preferences:audio", value),
-            onSubmit: () => submitCustomLanguagePreference(library.id, "audio_languages", "language_preferences:audio"),
-          },
-        )}
-        {renderPickerField(
-          library.id,
-          "language_preferences:subtitle",
-          t("libraries.quality.subtitleLanguages"),
-          profile.language_preferences.subtitle_languages,
-          LANGUAGE_OPTIONS,
-          (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
-          (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
-          new Set(),
-          "quality-picker-popover-languages",
-          {
-            draft: qualityLanguageDrafts["language_preferences:subtitle"] ?? "",
-            error: qualityLanguageErrors["language_preferences:subtitle"] ?? null,
-            placeholder: t("libraries.quality.languageCodePlaceholder"),
-            addLabel: t("libraries.quality.addLanguage"),
-            onDraftChange: (value) => updateLanguageDraft("language_preferences:subtitle", value),
-            onSubmit: () =>
-              submitCustomLanguagePreference(library.id, "subtitle_languages", "language_preferences:subtitle"),
-          },
-        )}
-          {renderQualityWeightField(
-            t("libraries.quality.weight"),
-            profile.language_preferences.weight,
-            (value) =>
-              updateLibraryQualityProfile(library.id, (current) => ({
-                ...current,
-                language_preferences: { ...current.language_preferences, weight: value },
-              })),
-          )}
-        </div>
-        <div className="quality-settings-group quality-settings-group-numeric">
-          <div className="quality-settings-group-title">
-            {t("libraries.quality.visual_density")}
-            <span className="quality-settings-hint">{t("libraries.quality.visualDensityHint")}</span>
-          </div>
-          <div className="field">
-            <label>{t("libraries.quality.minimum")}</label>
-            <input
-              className="quality-density-input"
-              type="number"
-              min={0}
-              step="0.001"
-              value={Number(profile.visual_density.minimum)}
-              onChange={(event) =>
-                updateLibraryQualityProfile(library.id, (current) => {
-                  const bounds = normalizeVisualDensityBounds(
-                    Number(event.target.value),
-                    Number(current.visual_density.ideal),
-                    Number(current.visual_density.maximum),
-                  );
-                  return {
-                    ...current,
-                    visual_density: { ...current.visual_density, ...bounds },
-                  };
-                })
-              }
-            />
-          </div>
-          <div className="field">
-            <label>{t("libraries.quality.ideal")}</label>
-            <input
-              className="quality-density-input"
-              type="number"
-              min={Number(profile.visual_density.minimum)}
-              step="0.001"
-              value={Number(profile.visual_density.ideal)}
-              onChange={(event) =>
-                updateLibraryQualityProfile(library.id, (current) => {
-                  const bounds = normalizeVisualDensityBounds(
-                    Number(current.visual_density.minimum),
-                    Number(event.target.value),
-                    Number(current.visual_density.maximum),
-                  );
-                  return {
-                    ...current,
-                    visual_density: {
-                      ...current.visual_density,
-                      ...bounds,
+        <div className="quality-settings-table-shell">
+          <table className="quality-settings-table">
+            <thead>
+              <tr>
+                <th>{t("libraries.quality.category")}</th>
+                <th>{t("libraries.quality.minimum")}</th>
+                <th>{t("libraries.quality.ideal")}</th>
+                <th>{t("libraries.quality.weight")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {renderQualityOrdinalRow(library, "resolution", resolutionOptionIds, resolutionOptionLabels)}
+              {renderQualityMultiSelectRow(library, "video_codec", VIDEO_CODEC_OPTIONS, VIDEO_CODEC_OPTION_LABELS)}
+              {renderQualityOrdinalRow(library, "audio_channels", AUDIO_CHANNEL_OPTIONS)}
+              {renderQualityOrdinalRow(library, "audio_codec", AUDIO_CODEC_OPTIONS, AUDIO_CODEC_OPTION_LABELS)}
+              {renderQualityMultiSelectRow(library, "dynamic_range", DYNAMIC_RANGE_OPTIONS)}
+              <tr className="quality-settings-group">
+                <th scope="row" className="quality-settings-group-title">
+                  {t("libraries.quality.language_preferences")}
+                </th>
+                <td>
+                  {renderPickerField(
+                    library.id,
+                    "language_preferences:audio",
+                    t("libraries.quality.audioLanguages"),
+                    profile.language_preferences.audio_languages,
+                    LANGUAGE_OPTIONS,
+                    (value) => toggleLanguagePreference(library.id, "audio_languages", value),
+                    (value) => toggleLanguagePreference(library.id, "audio_languages", value),
+                    new Set(),
+                    "quality-picker-popover-languages",
+                    {
+                      draft: qualityLanguageDrafts["language_preferences:audio"] ?? "",
+                      error: qualityLanguageErrors["language_preferences:audio"] ?? null,
+                      placeholder: t("libraries.quality.languageCodePlaceholder"),
+                      addLabel: t("libraries.quality.addLanguage"),
+                      onDraftChange: (value) => updateLanguageDraft("language_preferences:audio", value),
+                      onSubmit: () =>
+                        submitCustomLanguagePreference(library.id, "audio_languages", "language_preferences:audio"),
                     },
-                  };
-                })
-              }
-            />
-          </div>
-          <div className="field">
-            <label>{t("libraries.quality.maximum")}</label>
-            <input
-              className="quality-density-input"
-              type="number"
-              min={Number(profile.visual_density.ideal)}
-              step="0.001"
-              value={Number(profile.visual_density.maximum)}
-              onChange={(event) =>
-                updateLibraryQualityProfile(library.id, (current) => {
-                  const bounds = normalizeVisualDensityBounds(
-                    Number(current.visual_density.minimum),
-                    Number(current.visual_density.ideal),
-                    Number(event.target.value),
-                  );
-                  return {
-                    ...current,
-                    visual_density: {
-                      ...current.visual_density,
-                      ...bounds,
+                  )}
+                </td>
+                <td>
+                  {renderPickerField(
+                    library.id,
+                    "language_preferences:subtitle",
+                    t("libraries.quality.subtitleLanguages"),
+                    profile.language_preferences.subtitle_languages,
+                    LANGUAGE_OPTIONS,
+                    (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
+                    (value) => toggleLanguagePreference(library.id, "subtitle_languages", value),
+                    new Set(),
+                    "quality-picker-popover-languages",
+                    {
+                      draft: qualityLanguageDrafts["language_preferences:subtitle"] ?? "",
+                      error: qualityLanguageErrors["language_preferences:subtitle"] ?? null,
+                      placeholder: t("libraries.quality.languageCodePlaceholder"),
+                      addLabel: t("libraries.quality.addLanguage"),
+                      onDraftChange: (value) => updateLanguageDraft("language_preferences:subtitle", value),
+                      onSubmit: () =>
+                        submitCustomLanguagePreference(library.id, "subtitle_languages", "language_preferences:subtitle"),
                     },
-                  };
-                })
-              }
-            />
-          </div>
-          {renderQualityWeightField(
-            t("libraries.quality.weight"),
-            profile.visual_density.weight,
-            (value) =>
-              updateLibraryQualityProfile(library.id, (current) => ({
-                ...current,
-                visual_density: { ...current.visual_density, weight: value },
-              })),
-          )}
+                  )}
+                </td>
+                <td>
+                  {renderQualityWeightField(
+                    t("libraries.quality.weight"),
+                    profile.language_preferences.weight,
+                    (value) =>
+                      updateLibraryQualityProfile(library.id, (current) => ({
+                        ...current,
+                        language_preferences: { ...current.language_preferences, weight: value },
+                      })),
+                  )}
+                </td>
+              </tr>
+              <tr className="quality-settings-group quality-settings-group-numeric">
+                <th scope="row" className="quality-settings-group-title">
+                  <span className="quality-settings-title-with-tooltip">
+                    <span>{t("libraries.quality.visual_density")}</span>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.quality.visualDensityTooltipAria")}
+                      content={t("libraries.quality.visualDensityHint")}
+                      align="start"
+                    />
+                  </span>
+                </th>
+                <td>
+                  <div className="field">
+                    <label>{t("libraries.quality.minimum")}</label>
+                    <input
+                      className="quality-density-input"
+                      type="number"
+                      min={0}
+                      step="0.001"
+                      value={Number(profile.visual_density.minimum)}
+                      onChange={(event) =>
+                        updateLibraryQualityProfile(library.id, (current) => {
+                          const bounds = normalizeVisualDensityBounds(
+                            Number(event.target.value),
+                            Number(current.visual_density.ideal),
+                            Number(current.visual_density.maximum),
+                          );
+                          return {
+                            ...current,
+                            visual_density: { ...current.visual_density, ...bounds },
+                          };
+                        })
+                      }
+                    />
+                  </div>
+                </td>
+                <td>
+                  <div className="quality-density-ideal-stack">
+                    <div className="field">
+                      <label>{t("libraries.quality.ideal")}</label>
+                      <input
+                        className="quality-density-input"
+                        type="number"
+                        min={Number(profile.visual_density.minimum)}
+                        step="0.001"
+                        value={Number(profile.visual_density.ideal)}
+                        onChange={(event) =>
+                          updateLibraryQualityProfile(library.id, (current) => {
+                            const bounds = normalizeVisualDensityBounds(
+                              Number(current.visual_density.minimum),
+                              Number(event.target.value),
+                              Number(current.visual_density.maximum),
+                            );
+                            return {
+                              ...current,
+                              visual_density: {
+                                ...current.visual_density,
+                                ...bounds,
+                              },
+                            };
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label>{t("libraries.quality.maximum")}</label>
+                      <input
+                        className="quality-density-input"
+                        type="number"
+                        min={Number(profile.visual_density.ideal)}
+                        step="0.001"
+                        value={Number(profile.visual_density.maximum)}
+                        onChange={(event) =>
+                          updateLibraryQualityProfile(library.id, (current) => {
+                            const bounds = normalizeVisualDensityBounds(
+                              Number(current.visual_density.minimum),
+                              Number(current.visual_density.ideal),
+                              Number(event.target.value),
+                            );
+                            return {
+                              ...current,
+                              visual_density: {
+                                ...current.visual_density,
+                                ...bounds,
+                              },
+                            };
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {renderQualityWeightField(
+                    t("libraries.quality.weight"),
+                    profile.visual_density.weight,
+                    (value) =>
+                      updateLibraryQualityProfile(library.id, (current) => ({
+                        ...current,
+                        visual_density: { ...current.visual_density, weight: value },
+                      })),
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
+    );
+  }
+
+  function renderCreateLibraryForm(idPrefix = "library") {
+    const nameInputId = `${idPrefix}-name`;
+    const typeInputId = `${idPrefix}-type`;
+    const pathInputId = `${idPrefix}-path`;
+
+    return (
+      <form className="form-grid" onSubmit={handleSubmit}>
+        <p className="field-hint field-span-full">
+          {desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
+        </p>
+        <div className="field">
+          <label htmlFor={nameInputId}>{t("libraries.name")}</label>
+          <input
+            id={nameInputId}
+            value={form.name}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder={t("libraries.namePlaceholder")}
+            required
+          />
+        </div>
+        <div className="field">
+          <div className="field-label-row">
+            <label htmlFor={typeInputId}>{t("libraries.type")}</label>
+            <TooltipTrigger
+              ariaLabel={t("libraries.typeTooltipAria")}
+              content={t("libraries.typeTooltip")}
+              preserveLineBreaks
+            >
+              ?
+            </TooltipTrigger>
+          </div>
+          <select
+            id={typeInputId}
+            value={form.type}
+            onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType | "" }))}
+            required
+          >
+            <option value="">{t("libraries.typePlaceholder")}</option>
+            <option value="movies">{t("libraryTypes.movies")}</option>
+            <option value="series">{t("libraryTypes.series")}</option>
+            <option value="music">{t("libraryTypes.music")}</option>
+            <option value="audiobooks">{t("libraryTypes.audiobooks")}</option>
+            <option value="mixed">{t("libraryTypes.mixed")}</option>
+            <option value="other">{t("libraryTypes.other")}</option>
+          </select>
+        </div>
+        {desktopApp ? (
+          <div className="field field-span-full">
+            <label htmlFor={pathInputId}>{t("pathBrowser.selected")}</label>
+            <div className="desktop-path-field">
+              <div className="desktop-path-row">
+                <input
+                  id={pathInputId}
+                  value={form.path}
+                  onChange={(event) => setForm((current) => ({ ...current, path: event.target.value }))}
+                  placeholder={t("libraries.desktopPathPlaceholder")}
+                  required
+                />
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={addDesktopLibraryPath}
+                >
+                  {t("pathBrowser.addCurrent")}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void selectDesktopLibraryPaths()}
+                >
+                  {t("libraries.chooseFolder")}
+                </button>
+              </div>
+              <div className="path-browser-selected-list">
+                {form.paths.length ? form.paths.map((path) => (
+                  <span key={path} className="path-browser-selected-item">
+                    <span className="badge">{path}</span>
+                    <button
+                      type="button"
+                      className="ghost small"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          paths: current.paths.filter((candidate) => candidate !== path),
+                        }))
+                      }
+                    >
+                      {t("pathBrowser.remove")}
+                    </button>
+                  </span>
+                )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
+              </div>
+              {formPathInspection ? (
+                <div className="meta-row">
+                  <span className="badge">{t(`libraries.pathKinds.${formPathInspection.path_kind}`)}</span>
+                  {!formPathInspection.exists || !formPathInspection.is_directory ? (
+                    <span className="field-hint">{t("libraries.desktopPathMustExist")}</span>
+                  ) : null}
+                  {formPathInspection.exists && formPathInspection.is_directory && !formPathInspection.watch_supported ? (
+                    <span className="field-hint">{t("libraries.watchUnavailableNetwork")}</span>
+                  ) : null}
+                </div>
+              ) : null}
+              {formPathInspectionError ? <div className="alert">{formPathInspectionError}</div> : null}
+            </div>
+          </div>
+        ) : (
+          <PathBrowser
+            value={form.path}
+            selectedPaths={form.paths}
+            onChange={(path) => setForm((current) => ({ ...current, path }))}
+            onAddPath={(path) =>
+              setForm((current) => ({
+                ...current,
+                path,
+                paths: appendSelectedLibraryPaths(current.paths, [path]),
+              }))
+            }
+            onRemovePath={(path) =>
+              setForm((current) => ({
+                ...current,
+                paths: current.paths.filter((candidate) => candidate !== path),
+              }))
+            }
+          />
+        )}
+        <button type="submit" className="history-retention-primary-button" disabled={submitting}>
+          {submitting ? t("libraries.creating") : t("libraries.createButton")}
+        </button>
+      </form>
     );
   }
 
@@ -3521,18 +3884,20 @@ export function LibrariesPage() {
         <div className="settings-main-column">
           {activeSettingsPanelId === "configuredLibraries" ? (
           <AsyncPanel
-            title={t("libraries.configured")}
+            title={t("libraries.settingsNavigationLibraries")}
             loading={isLoadingLibraries}
             error={error}
             collapseActions={
-              <button
-                type="button"
-                className="small history-retention-primary-button"
-                disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
-                onClick={() => void runFullScanForAllLibraries()}
-              >
-                {t("libraries.fullScan")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="secondary small settings-panel-header-action"
+                  onClick={openCreateLibraryDialog}
+                >
+                  <Plus aria-hidden="true" className="nav-icon" />
+                  <span>{t("libraries.settingsNavigationAddLibrary")}</span>
+                </button>
+              </>
             }
           >
             <div className="listing">
@@ -3631,13 +3996,18 @@ export function LibrariesPage() {
                         <div className="library-title-actions">
                           <button
                             type="button"
-                            className="secondary icon-only-button"
+                            className="secondary icon-only-button library-action-tooltip-trigger"
                             aria-label={
                               library.show_on_dashboard
                                 ? t("libraries.hideFromDashboardAria", { name: library.name })
                                 : t("libraries.showOnDashboardAria", { name: library.name })
                             }
                             title={
+                              library.show_on_dashboard
+                                ? t("libraries.hideFromDashboardTooltip")
+                                : t("libraries.showOnDashboardTooltip")
+                            }
+                            data-tooltip={
                               library.show_on_dashboard
                                 ? t("libraries.hideFromDashboardTooltip")
                                 : t("libraries.showOnDashboardTooltip")
@@ -3673,26 +4043,28 @@ export function LibrariesPage() {
                           ) : (
                             <button
                               type="button"
-                              className="secondary icon-only-button"
+                              className="secondary icon-only-button library-action-tooltip-trigger"
                               aria-label={t("libraries.renameAria", { name: library.name })}
                               title={t("libraries.renameTooltip")}
+                              data-tooltip={t("libraries.renameTooltip")}
                               onClick={() => startEditingLibraryIdentity(library)}
                             >
-                              <Pencil aria-hidden="true" className="nav-icon" />
+                              <SquarePenIcon aria-hidden="true" className="nav-icon" />
                             </button>
                           )}
                           <button
                             type="button"
-                            className="secondary icon-only-button"
+                            className="secondary icon-only-button library-action-tooltip-trigger"
                             aria-label={t("libraries.deleteAria", { name: library.name })}
                             title={t("libraries.deleteTooltip")}
+                            data-tooltip={t("libraries.deleteTooltip")}
                             onClick={() => void removeLibrary(library.id)}
                           >
-                            <Trash2 aria-hidden="true" className="nav-icon" />
+                            <DeleteIcon aria-hidden="true" className="nav-icon" />
                           </button>
                           <button
                             type="button"
-                            className="small"
+                            className="small library-scan-button"
                             title={t("libraries.scanNowTooltip")}
                             onClick={() => void runLibraryScan(library.id)}
                           >
@@ -3716,23 +4088,27 @@ export function LibrariesPage() {
                       <div className="field-label-row">
                         <label htmlFor={`scan-mode-${library.id}`}>{t("libraries.scanMode")}</label>
                       </div>
-                      <select
-                        id={`scan-mode-${library.id}`}
-                        value={settingsForms[library.id]?.scan_mode ?? library.scan_mode}
-                        onChange={(event) =>
-                          updateLibraryForm(library.id, { scan_mode: event.target.value })
-                        }
-                      >
-                        <option value="manual">{t("scanModes.manual")}</option>
-                        <option value="scheduled">{t("scanModes.scheduled")}</option>
-                        <option value="scheduled_daily">{t("scanModes.scheduled_daily")}</option>
-                        <option
-                          value="watch"
-                          disabled={Boolean(desktopApp && libraryPathInspections[library.id] && !libraryPathInspections[library.id]?.watch_supported)}
-                        >
-                          {t("scanModes.watch")}
-                        </option>
-                      </select>
+                      {renderSettingsChoicePicker(
+                        library.id,
+                        "scan-mode",
+                        t("libraries.scanMode"),
+                        settingsForms[library.id]?.scan_mode ?? library.scan_mode,
+                        [
+                          { value: "manual", label: t("scanModes.manual") },
+                          { value: "scheduled", label: t("scanModes.scheduled") },
+                          { value: "scheduled_daily", label: t("scanModes.scheduled_daily") },
+                          {
+                            value: "watch",
+                            label: t("scanModes.watch"),
+                            disabled: Boolean(
+                              desktopApp
+                                && libraryPathInspections[library.id]
+                                && !libraryPathInspections[library.id]?.watch_supported,
+                            ),
+                          },
+                        ],
+                        (scanMode) => updateLibraryForm(library.id, { scan_mode: scanMode }),
+                      )}
                     </div>
                     <div className="field">
                       <div className="field-label-row">
@@ -3744,20 +4120,20 @@ export function LibrariesPage() {
                           ?
                         </TooltipTrigger>
                       </div>
-                      <select
-                        id={`duplicate-detection-mode-${library.id}`}
-                        value={settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode}
-                        onChange={(event) =>
-                          updateLibraryForm(library.id, {
-                            duplicate_detection_mode: event.target.value as DuplicateDetectionMode,
-                          })
-                        }
-                      >
-                        <option value="off">{t("libraries.duplicateDetectionModes.off")}</option>
-                        <option value="filename">{t("libraries.duplicateDetectionModes.filename")}</option>
-                        <option value="filehash">{t("libraries.duplicateDetectionModes.filehash")}</option>
-                        <option value="both">{t("libraries.duplicateDetectionModes.both")}</option>
-                      </select>
+                      {renderSettingsChoicePicker<DuplicateDetectionMode>(
+                        library.id,
+                        "duplicate-detection-mode",
+                        t("libraries.duplicateDetectionMode"),
+                        settingsForms[library.id]?.duplicate_detection_mode ?? library.duplicate_detection_mode,
+                        [
+                          { value: "off", label: t("libraries.duplicateDetectionModes.off") },
+                          { value: "filename", label: t("libraries.duplicateDetectionModes.filename") },
+                          { value: "filehash", label: t("libraries.duplicateDetectionModes.filehash") },
+                          { value: "both", label: t("libraries.duplicateDetectionModes.both") },
+                        ],
+                        (duplicateDetectionMode) =>
+                          updateLibraryForm(library.id, { duplicate_detection_mode: duplicateDetectionMode }),
+                      )}
                     </div>
                     {networkWatchFallbackApplied(
                       libraryPathInspections[library.id],
@@ -3775,6 +4151,7 @@ export function LibrariesPage() {
                         </div>
                         <input
                           id={`interval-minutes-${library.id}`}
+                          className="settings-choice-input"
                           type="number"
                           min={5}
                           value={settingsForms[library.id]?.interval_minutes ?? 60}
@@ -3799,6 +4176,7 @@ export function LibrariesPage() {
                         </div>
                         <input
                           id={`scheduled-time-${library.id}`}
+                          className="settings-choice-input"
                           type="time"
                           value={settingsForms[library.id]?.scheduled_time ?? "02:00"}
                           onChange={(event) =>
@@ -3817,6 +4195,7 @@ export function LibrariesPage() {
                         </div>
                         <input
                           id={`debounce-seconds-${library.id}`}
+                          className="settings-choice-input"
                           type="number"
                           min={3}
                           value={settingsForms[library.id]?.debounce_seconds ?? 15}
@@ -3828,10 +4207,10 @@ export function LibrariesPage() {
                         />
                       </div>
                     ) : null}
-                    <div className="field field-span-full">
+                    <div className="field field-span-full quality-settings-section-heading">
                       <button
                         type="button"
-                        className="secondary quality-settings-toggle"
+                        className="quality-settings-toggle"
                         aria-expanded={Boolean(qualitySectionOpen[library.id])}
                         onClick={() =>
                           setQualitySectionOpen((current) => ({ ...current, [library.id]: !current[library.id] }))
@@ -3858,113 +4237,126 @@ export function LibrariesPage() {
           {activeSettingsPanelId === "resolutionCategories" ? (
           <AsyncPanel
             title={t("libraries.resolutionCategories.title")}
+            titleAddon={
+              <TooltipTrigger
+                ariaLabel="Explain reduced default resolution thresholds"
+                content={RESOLUTION_CATEGORY_TOOLTIP}
+                preserveLineBreaks
+              >
+                ?
+              </TooltipTrigger>
+            }
           >
             <div className="settings-sidebar-stack">
-              <div className="field-label-row">
-                <p className="field-hint">
-                  Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.
-                </p>
-                <TooltipTrigger
-                  ariaLabel="Explain reduced default resolution thresholds"
-                  content={RESOLUTION_CATEGORY_TOOLTIP}
-                  preserveLineBreaks
-                >
-                  ?
-                </TooltipTrigger>
-              </div>
-              <div className="resolution-category-settings">
-                <div className="resolution-category-row resolution-category-add-row">
-                  <div className="field">
-                    <label htmlFor="resolution-category-new-label">Label</label>
-                    <input
-                      id="resolution-category-new-label"
-                      type="text"
-                      placeholder="New category"
-                      value={newResolutionCategoryDraft.label}
-                      onChange={(event) => updateNewResolutionCategoryDraft({ label: event.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="resolution-category-new-width">Min width</label>
-                    <input
-                      id="resolution-category-new-width"
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={newResolutionCategoryDraft.min_width}
-                      onChange={(event) => updateNewResolutionCategoryDraft({ min_width: event.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="resolution-category-new-height">Min height</label>
-                    <input
-                      id="resolution-category-new-height"
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={newResolutionCategoryDraft.min_height}
-                      onChange={(event) => updateNewResolutionCategoryDraft({ min_height: event.target.value })}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary icon-only-button"
-                    aria-label="Add resolution category"
-                    onClick={() => void addResolutionCategoryDraft()}
-                    disabled={!newResolutionCategoryDraft.label.trim() || isSavingResolutionCategories}
-                  >
-                    <Plus aria-hidden="true" className="nav-icon" />
-                  </button>
-                </div>
-                {resolutionCategoryDrafts.map((category, index) => (
-                  <div className="resolution-category-row" key={category.id}>
-                    <div className="field">
-                      <label htmlFor={`resolution-category-label-${category.id}`}>Label</label>
-                      <input
-                        id={`resolution-category-label-${category.id}`}
-                        type="text"
-                        value={category.label}
-                        onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
-                        onBlur={() => void saveResolutionCategories()}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
-                      <input
-                        id={`resolution-category-width-${category.id}`}
-                        type="number"
-                        min={0}
-                        value={category.min_width}
-                        onChange={(event) =>
-                          updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
-                        }
-                        onBlur={() => void saveResolutionCategories()}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
-                      <input
-                        id={`resolution-category-height-${category.id}`}
-                        type="number"
-                        min={0}
-                        value={category.min_height}
-                        onChange={(event) =>
-                          updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
-                        }
-                        onBlur={() => void saveResolutionCategories()}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary icon-only-button"
-                      aria-label={`Remove resolution category ${category.label || category.id}`}
-                      onClick={() => void removeResolutionCategoryDraft(index)}
-                      disabled={resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories}
-                    >
-                      <Trash2 aria-hidden="true" className="nav-icon" />
-                    </button>
-                  </div>
-                ))}
+              <div className="resolution-category-table-shell">
+                <table className="resolution-category-table">
+                  <thead>
+                    <tr>
+                      <th>Label</th>
+                      <th>Min width</th>
+                      <th>Min height</th>
+                      <th><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="resolution-category-add-row">
+                      <td>
+                        <label className="sr-only" htmlFor="resolution-category-new-label">Label</label>
+                        <input
+                          id="resolution-category-new-label"
+                          type="text"
+                          placeholder="New category"
+                          value={newResolutionCategoryDraft.label}
+                          onChange={(event) => updateNewResolutionCategoryDraft({ label: event.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <label className="sr-only" htmlFor="resolution-category-new-width">Min width</label>
+                        <input
+                          id="resolution-category-new-width"
+                          type="number"
+                          min={0}
+                          placeholder="0"
+                          value={newResolutionCategoryDraft.min_width}
+                          onChange={(event) => updateNewResolutionCategoryDraft({ min_width: event.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <label className="sr-only" htmlFor="resolution-category-new-height">Min height</label>
+                        <input
+                          id="resolution-category-new-height"
+                          type="number"
+                          min={0}
+                          placeholder="0"
+                          value={newResolutionCategoryDraft.min_height}
+                          onChange={(event) => updateNewResolutionCategoryDraft({ min_height: event.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary icon-only-button"
+                          aria-label="Add resolution category"
+                          onClick={() => void addResolutionCategoryDraft()}
+                          disabled={!newResolutionCategoryDraft.label.trim() || isSavingResolutionCategories}
+                        >
+                          <Plus aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </td>
+                    </tr>
+                    {resolutionCategoryDrafts.map((category, index) => (
+                      <tr key={category.id}>
+                        <td>
+                          <label className="sr-only" htmlFor={`resolution-category-label-${category.id}`}>Label</label>
+                          <input
+                            id={`resolution-category-label-${category.id}`}
+                            type="text"
+                            value={category.label}
+                            onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
+                            onBlur={() => void saveResolutionCategories()}
+                          />
+                        </td>
+                        <td>
+                          <label className="sr-only" htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
+                          <input
+                            id={`resolution-category-width-${category.id}`}
+                            type="number"
+                            min={0}
+                            value={category.min_width}
+                            onChange={(event) =>
+                              updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
+                            }
+                            onBlur={() => void saveResolutionCategories()}
+                          />
+                        </td>
+                        <td>
+                          <label className="sr-only" htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
+                          <input
+                            id={`resolution-category-height-${category.id}`}
+                            type="number"
+                            min={0}
+                            value={category.min_height}
+                            onChange={(event) =>
+                              updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
+                            }
+                            onBlur={() => void saveResolutionCategories()}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary icon-only-button"
+                            aria-label={`Remove resolution category ${category.label || category.id}`}
+                            onClick={() => void removeResolutionCategoryDraft(index)}
+                            disabled={resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories}
+                          >
+                            <Trash2 aria-hidden="true" className="nav-icon" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               <div className="resolution-category-actions">
                 <button
@@ -4207,8 +4599,30 @@ export function LibrariesPage() {
                     <thead>
                       <tr>
                         <th>{t("libraries.historyRetention.bucketLabel")}</th>
-                        <th>{t("libraries.historyRetention.daysLabel")}</th>
-                        <th>{t("libraries.historyRetention.storageLimitLabel")}</th>
+                        <th>
+                          <span className="table-heading-with-tooltip">
+                            <span>{t("libraries.historyRetention.daysLabel")}</span>
+                            <TooltipTrigger
+                              ariaLabel={t("libraries.historyRetention.daysTooltipAria")}
+                              content={t("libraries.historyRetention.daysTooltip")}
+                              preserveLineBreaks
+                            >
+                              ?
+                            </TooltipTrigger>
+                          </span>
+                        </th>
+                        <th>
+                          <span className="table-heading-with-tooltip">
+                            <span>{t("libraries.historyRetention.storageLimitLabel")}</span>
+                            <TooltipTrigger
+                              ariaLabel={t("libraries.historyRetention.storageLimitTooltipAria")}
+                              content={t("libraries.historyRetention.storageLimitTooltip")}
+                              preserveLineBreaks
+                            >
+                              ?
+                            </TooltipTrigger>
+                          </span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4254,7 +4668,6 @@ export function LibrariesPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="field-hint">{t("libraries.historyRetention.zeroUnlimited")}</p>
                 <p className="field-hint">{t("libraries.historyRetention.scopeNote")}</p>
                 <div className="settings-table-shell history-retention-table-shell">
                   <table className="settings-data-table history-retention-table">
@@ -4519,141 +4932,6 @@ export function LibrariesPage() {
           </AsyncPanel>
           ) : null}
 
-          {activeSettingsPanelId === "createLibrary" ? (
-          <AsyncPanel
-            title={t("libraries.createTitle")}
-            error={submitError}
-            className={!isLoadingLibraries && libraries.length === 0 ? "create-library-first-run-attention" : undefined}
-          >
-            <form className="form-grid" onSubmit={handleSubmit}>
-              <p className="field-hint field-span-full">
-                {desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
-              </p>
-              <div className="field">
-                <label htmlFor="library-name">{t("libraries.name")}</label>
-                <input
-                  id="library-name"
-                  value={form.name}
-                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                  placeholder={t("libraries.namePlaceholder")}
-                  required
-                />
-              </div>
-              <div className="field">
-                <div className="field-label-row">
-                  <label htmlFor="library-type">{t("libraries.type")}</label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.typeTooltipAria")}
-                    content={t("libraries.typeTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <select
-                  id="library-type"
-                  value={form.type}
-                  onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as LibraryType | "" }))}
-                  required
-                >
-                  <option value="">{t("libraries.typePlaceholder")}</option>
-                  <option value="movies">{t("libraryTypes.movies")}</option>
-                  <option value="series">{t("libraryTypes.series")}</option>
-                  <option value="music">{t("libraryTypes.music")}</option>
-                  <option value="audiobooks">{t("libraryTypes.audiobooks")}</option>
-                  <option value="mixed">{t("libraryTypes.mixed")}</option>
-                  <option value="other">{t("libraryTypes.other")}</option>
-                </select>
-              </div>
-              {desktopApp ? (
-                <div className="field field-span-full">
-                  <label htmlFor="library-path">{t("pathBrowser.selected")}</label>
-                  <div className="desktop-path-field">
-                    <div className="desktop-path-row">
-                      <input
-                        id="library-path"
-                        value={form.path}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, path: event.target.value }))
-                        }
-                        placeholder={t("libraries.desktopPathPlaceholder")}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={addDesktopLibraryPath}
-                      >
-                        {t("pathBrowser.addCurrent")}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => void selectDesktopLibraryPaths()}
-                      >
-                        {t("libraries.chooseFolder")}
-                      </button>
-                    </div>
-                    <div className="path-browser-selected-list">
-                      {form.paths.length ? form.paths.map((path) => (
-                        <span key={path} className="path-browser-selected-item">
-                          <span className="badge">{path}</span>
-                          <button
-                            type="button"
-                            className="ghost small"
-                            onClick={() =>
-                              setForm((current) => ({
-                                ...current,
-                                paths: current.paths.filter((candidate) => candidate !== path),
-                              }))
-                            }
-                          >
-                            {t("pathBrowser.remove")}
-                          </button>
-                        </span>
-                      )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
-                    </div>
-                    {formPathInspection ? (
-                      <div className="meta-row">
-                        <span className="badge">{t(`libraries.pathKinds.${formPathInspection.path_kind}`)}</span>
-                        {!formPathInspection.exists || !formPathInspection.is_directory ? (
-                          <span className="field-hint">{t("libraries.desktopPathMustExist")}</span>
-                        ) : null}
-                        {formPathInspection.exists && formPathInspection.is_directory && !formPathInspection.watch_supported ? (
-                          <span className="field-hint">{t("libraries.watchUnavailableNetwork")}</span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {formPathInspectionError ? <div className="alert">{formPathInspectionError}</div> : null}
-                  </div>
-                </div>
-              ) : (
-                <PathBrowser
-                  value={form.path}
-                  selectedPaths={form.paths}
-                  onChange={(path) => setForm((current) => ({ ...current, path }))}
-                  onAddPath={(path) =>
-                    setForm((current) => ({
-                      ...current,
-                      path,
-                      paths: appendSelectedLibraryPaths(current.paths, [path]),
-                    }))
-                  }
-                  onRemovePath={(path) =>
-                    setForm((current) => ({
-                      ...current,
-                      paths: current.paths.filter((candidate) => candidate !== path),
-                    }))
-                  }
-                />
-              )}
-              <button type="submit" className="history-retention-primary-button" disabled={submitting}>
-                {submitting ? t("libraries.creating") : t("libraries.createButton")}
-              </button>
-            </form>
-          </AsyncPanel>
-          ) : null}
-
           {activeSettingsPanelId === "appSettings" ? (
           <AsyncPanel
             title={t("libraries.appSettings")}
@@ -4787,119 +5065,121 @@ export function LibrariesPage() {
               <div className="app-settings-divider" aria-hidden="true" />
               <div className="app-settings-section">
                 <p className="app-settings-section-title">{t("libraries.featureFlagsTitle")}</p>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="show-analyzed-files-csv-export">
-                    <input
-                      id="show-analyzed-files-csv-export"
-                      type="checkbox"
-                      checked={showAnalyzedFilesCsvExport}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleAnalyzedFilesCsvExport(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltipAria")}
-                    content={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="show-full-width-app-shell">
-                    <input
-                      id="show-full-width-app-shell"
-                      type="checkbox"
-                      checked={showFullWidthAppShell}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleFullWidthAppShell(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.showFullWidthAppShell")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.showFullWidthAppShellTooltipAria")}
-                    content={t("libraries.featureFlags.showFullWidthAppShellTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="hide-quality-score-meter">
-                    <input
-                      id="hide-quality-score-meter"
-                      type="checkbox"
-                      checked={hideQualityScoreMeter}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleHideQualityScoreMeter(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.hideQualityScoreMeter")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
-                    content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="show-music-quality-score">
-                    <input
-                      id="show-music-quality-score"
-                      type="checkbox"
-                      checked={showMusicQualityScore}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleShowMusicQualityScore(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.showMusicQualityScore")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.showMusicQualityScoreTooltipAria")}
-                    content={t("libraries.featureFlags.showMusicQualityScoreTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="unlimited-panel-size">
-                    <input
-                      id="unlimited-panel-size"
-                      type="checkbox"
-                      checked={unlimitedPanelSize}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleUnlimitedPanelSize(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.unlimitedPanelSize")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.unlimitedPanelSizeTooltipAria")}
-                    content={t("libraries.featureFlags.unlimitedPanelSizeTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="app-settings-flag-row">
-                  <label className="app-settings-flag-toggle" htmlFor="in-depth-dolby-vision-profiles">
-                    <input
-                      id="in-depth-dolby-vision-profiles"
-                      type="checkbox"
-                      checked={inDepthDolbyVisionProfiles}
-                      disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                      onChange={(event) => void toggleInDepthDolbyVisionProfiles(event.target.checked)}
-                    />
-                    <span>{t("libraries.featureFlags.inDepthDolbyVisionProfiles")}</span>
-                  </label>
-                  <TooltipTrigger
-                    ariaLabel={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltipAria")}
-                    content={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltip")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
+                <div className="app-settings-flag-list">
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="show-analyzed-files-csv-export">
+                      <input
+                        id="show-analyzed-files-csv-export"
+                        type="checkbox"
+                        checked={showAnalyzedFilesCsvExport}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleAnalyzedFilesCsvExport(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltipAria")}
+                      content={t("libraries.featureFlags.showAnalyzedFilesCsvExportTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="show-full-width-app-shell">
+                      <input
+                        id="show-full-width-app-shell"
+                        type="checkbox"
+                        checked={showFullWidthAppShell}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleFullWidthAppShell(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.showFullWidthAppShell")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.showFullWidthAppShellTooltipAria")}
+                      content={t("libraries.featureFlags.showFullWidthAppShellTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="hide-quality-score-meter">
+                      <input
+                        id="hide-quality-score-meter"
+                        type="checkbox"
+                        checked={hideQualityScoreMeter}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleHideQualityScoreMeter(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.hideQualityScoreMeter")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
+                      content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="show-music-quality-score">
+                      <input
+                        id="show-music-quality-score"
+                        type="checkbox"
+                        checked={showMusicQualityScore}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleShowMusicQualityScore(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.showMusicQualityScore")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.showMusicQualityScoreTooltipAria")}
+                      content={t("libraries.featureFlags.showMusicQualityScoreTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="unlimited-panel-size">
+                      <input
+                        id="unlimited-panel-size"
+                        type="checkbox"
+                        checked={unlimitedPanelSize}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleUnlimitedPanelSize(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.unlimitedPanelSize")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.unlimitedPanelSizeTooltipAria")}
+                      content={t("libraries.featureFlags.unlimitedPanelSizeTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="app-settings-flag-row">
+                    <label className="app-settings-flag-toggle" htmlFor="in-depth-dolby-vision-profiles">
+                      <input
+                        id="in-depth-dolby-vision-profiles"
+                        type="checkbox"
+                        checked={inDepthDolbyVisionProfiles}
+                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        onChange={(event) => void toggleInDepthDolbyVisionProfiles(event.target.checked)}
+                      />
+                      <span>{t("libraries.featureFlags.inDepthDolbyVisionProfiles")}</span>
+                    </label>
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltipAria")}
+                      content={t("libraries.featureFlags.inDepthDolbyVisionProfilesTooltip")}
+                      preserveLineBreaks
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
                 </div>
               </div>
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}
@@ -4908,6 +5188,31 @@ export function LibrariesPage() {
           ) : null}
         </div>
       </div>
+      {isCreateLibraryDialogOpen ? (
+        <div className="settings-create-library-backdrop" role="presentation" onMouseDown={closeCreateLibraryDialog}>
+          <section
+            className="settings-create-library-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-create-library-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="settings-create-library-dialog-header">
+              <h2 id="settings-create-library-dialog-title">{t("libraries.createTitle")}</h2>
+              <button
+                type="button"
+                className="secondary icon-only-button settings-create-library-dialog-close"
+                aria-label={t("common.close")}
+                onClick={closeCreateLibraryDialog}
+              >
+                <X aria-hidden="true" className="nav-icon" />
+              </button>
+            </div>
+            {submitError ? <div className="alert">{submitError}</div> : null}
+            {renderCreateLibraryForm("library-dialog")}
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }

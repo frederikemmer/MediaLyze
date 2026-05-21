@@ -23,6 +23,7 @@ from backend.app.services.app_settings import get_app_settings, update_app_setti
 from backend.app.services.telemetry import (
     build_media_kind_counts_for_telemetry,
     build_telemetry_payload,
+    is_dev_app_version,
     _post_json,
     round_count_for_telemetry,
     round_storage_gb_for_telemetry,
@@ -248,6 +249,34 @@ def test_telemetry_payload_uses_normalized_backend_version(tmp_path) -> None:
     assert payload["app"]["version"] == "0.0.0"
 
 
+def test_dev_versions_are_marked_as_test_telemetry(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.11.2-dev003"
+
+    with session_factory() as db:
+        app_settings = get_app_settings(db, settings)
+        payload = build_telemetry_payload(db, settings, app_settings, mode="minimal")
+
+    assert is_dev_app_version("0.11.2") is False
+    assert is_dev_app_version("0.11.2-dev003") is True
+    assert payload["app"]["version"] == "0.11.2-dev003"
+    assert payload["is_test"] is True
+
+
+def test_release_versions_are_not_marked_as_test_telemetry(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.11.2"
+
+    with session_factory() as db:
+        app_settings = get_app_settings(db, settings)
+        payload = build_telemetry_payload(db, settings, app_settings, mode="minimal")
+
+    assert payload["app"]["version"] == "0.11.2"
+    assert payload["is_test"] is False
+
+
 def test_none_payload_excludes_usage_and_app_settings(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
@@ -352,6 +381,26 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
     assert loaded.telemetry.last_sent_at is not None
     assert loaded.telemetry.last_sent_app_version == settings.app_version
     assert loaded.telemetry.last_user_visible_payload == posted["json"]
+
+
+def test_send_current_telemetry_snapshot_marks_dev_versions_as_test(tmp_path, monkeypatch) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    settings.app_version = "0.11.2-dev003"
+    posted = {}
+
+    def fake_post_json(url, payload, timeout):
+        posted["json"] = payload
+
+    monkeypatch.setattr("backend.app.services.telemetry._post_json", fake_post_json)
+
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(telemetry={"mode": "minimal"}), settings)
+        sent = send_current_telemetry_snapshot(db, settings, force=True)
+
+    assert sent is True
+    assert posted["json"]["app"]["version"] == "0.11.2-dev003"
+    assert posted["json"]["is_test"] is True
 
 
 def test_post_json_uses_certifi_ca_bundle(monkeypatch) -> None:

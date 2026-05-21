@@ -108,7 +108,7 @@ class QualityScoreInput:
 
 
 def default_quality_profile() -> dict[str, Any]:
-    return QualityProfile().model_dump(mode="json")
+    return QualityProfile().model_dump(mode="json", exclude_none=True)
 
 
 def normalize_quality_profile(
@@ -119,12 +119,28 @@ def normalize_quality_profile(
     profile = payload if isinstance(payload, QualityProfile) else QualityProfile.model_validate(payload or {})
     resolution_minimum = resolve_resolution_category_fallback(str(profile.resolution.minimum), categories)
     resolution_ideal = resolve_resolution_category_fallback(str(profile.resolution.ideal), categories)
+    video_codec_minimum_values, video_codec_ideal_values = _normalized_tiered_quality_values(profile.video_codec)
+    dynamic_range_minimum_values, dynamic_range_ideal_values = _normalized_tiered_quality_values(profile.dynamic_range)
     normalized = profile.model_copy(
         update={
             "resolution": profile.resolution.model_copy(
                 update={
                     "minimum": resolution_minimum,
                     "ideal": resolution_ideal,
+                }
+            ),
+            "video_codec": profile.video_codec.model_copy(
+                update={
+                    "values": None,
+                    "minimum_values": video_codec_minimum_values,
+                    "ideal_values": video_codec_ideal_values,
+                }
+            ),
+            "dynamic_range": profile.dynamic_range.model_copy(
+                update={
+                    "values": None,
+                    "minimum_values": dynamic_range_minimum_values,
+                    "ideal_values": dynamic_range_ideal_values,
                 }
             ),
             "language_preferences": profile.language_preferences.model_copy(
@@ -135,7 +151,7 @@ def normalize_quality_profile(
             )
         }
     )
-    return normalized.model_dump(mode="json")
+    return normalized.model_dump(mode="json", exclude_none=True)
 
 
 def build_quality_score_input(
@@ -239,12 +255,10 @@ def calculate_quality_score(
             actual=_visual_density(score_input, primary_video),
             missing_is_zero=True,
         ),
-        _rank_category(
+        _value_set_category(
             key="video_codec",
             config=profile.video_codec,
             actual_key=_normalize_video_codec(primary_video.codec) if primary_video else None,
-            actual_value=VIDEO_CODEC_RANKS.get(_normalize_video_codec(primary_video.codec)) if primary_video else None,
-            ranks=VIDEO_CODEC_RANKS,
             missing_is_zero=False,
         ),
         _rank_category(
@@ -263,12 +277,10 @@ def calculate_quality_score(
             ranks=AUDIO_CODEC_RANKS,
             missing_is_zero=False,
         ),
-        _rank_category(
+        _value_set_category(
             key="dynamic_range",
             config=profile.dynamic_range,
             actual_key=_normalize_dynamic_range(primary_video.hdr_type) if primary_video else "sdr",
-            actual_value=DYNAMIC_RANGE_RANKS.get(_normalize_dynamic_range(primary_video.hdr_type) if primary_video else "sdr"),
-            ranks=DYNAMIC_RANGE_RANKS,
             missing_is_zero=False,
         ),
         _language_category(score_input, profile.language_preferences),
@@ -302,6 +314,35 @@ def _normalized_language_list(values: list[str]) -> list[str]:
         seen.add(candidate)
         normalized.append(candidate)
     return normalized
+
+
+def _normalized_quality_values(values: list[str] | None, *, fallback: list[str] | None = None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in [*(values or []), *(fallback or [])]:
+        candidate = str(value).strip().lower()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
+def _normalized_tiered_quality_values(config: QualityCategoryConfig) -> tuple[list[str], list[str]]:
+    minimum_values = _normalized_quality_values(config.minimum_values)
+    ideal_values = _normalized_quality_values(config.ideal_values)
+    legacy_values = _normalized_quality_values(config.values)
+    if not minimum_values and not ideal_values and legacy_values:
+        minimum_key = str(config.minimum).strip().lower()
+        ideal_key = str(config.ideal).strip().lower()
+        minimum_values = [value for value in legacy_values if value == minimum_key]
+        ideal_values = [value for value in legacy_values if value != minimum_key]
+        if not ideal_values and ideal_key in legacy_values:
+            ideal_values = [ideal_key]
+    if not minimum_values and not ideal_values:
+        minimum_values = _normalized_quality_values([str(config.minimum)])
+        ideal_values = _normalized_quality_values([str(config.ideal)])
+    return minimum_values, ideal_values
 
 
 def _primary_video_stream(video_streams: list[QualityVideoStream]) -> QualityVideoStream | None:
@@ -619,6 +660,49 @@ def _rank_category(
         active=True,
         minimum=minimum,
         ideal=ideal,
+        maximum=None,
+        actual=actual_key,
+    )
+
+
+def _value_set_category(
+    *,
+    key: str,
+    config: QualityCategoryConfig,
+    actual_key: str | None,
+    missing_is_zero: bool,
+) -> QualityCategoryBreakdownRead:
+    active = config.weight > 0
+    if not active:
+        return QualityCategoryBreakdownRead(key=key, score=0.0, weight=0, active=False)
+    minimum_values, ideal_values = _normalized_tiered_quality_values(config)
+
+    if actual_key is None:
+        return QualityCategoryBreakdownRead(
+            key=key,
+            score=0.0 if missing_is_zero else 60.0,
+            weight=config.weight,
+            active=True,
+            minimum=None,
+            ideal=None,
+            maximum=None,
+            actual=None,
+            notes=["missing_value"],
+        )
+
+    if actual_key in ideal_values:
+        score = 100.0
+    elif actual_key in minimum_values:
+        score = 60.0
+    else:
+        score = 0.0
+    return QualityCategoryBreakdownRead(
+        key=key,
+        score=score,
+        weight=config.weight,
+        active=True,
+        minimum=minimum_values,
+        ideal=ideal_values,
         maximum=None,
         actual=actual_key,
     )
