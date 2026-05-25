@@ -774,6 +774,8 @@ describe("LibraryDetailPage", () => {
       audiobook_publisher: "Publisher A",
       audiobook_series: "Series A",
       audiobook_series_part: "2",
+      audiobook_description: "Description A",
+      audiobook_copyright: "Copyright A",
       audiobook_language: "en",
       audiobook_abridged: "unabridged",
       audiobook_asin: "B000000001",
@@ -791,6 +793,8 @@ describe("LibraryDetailPage", () => {
               "audiobook_publisher",
               "audiobook_series",
               "audiobook_series_part",
+              "audiobook_description",
+              "audiobook_copyright",
               "audiobook_language",
               "audiobook_abridged",
               "audiobook_asin",
@@ -803,7 +807,20 @@ describe("LibraryDetailPage", () => {
       </table>,
     );
 
-    for (const value of ["24", "Narrator A", "Author A", "Publisher A", "Series A", "2", "en", "unabridged", "B000000001", "9781234567890"]) {
+    for (const value of [
+      "24",
+      "Narrator A",
+      "Author A",
+      "Publisher A",
+      "Series A",
+      "2",
+      "Description A",
+      "Copyright A",
+      "en",
+      "unabridged",
+      "B000000001",
+      "9781234567890",
+    ]) {
       expect(screen.getByText(value)).toBeInTheDocument();
     }
   });

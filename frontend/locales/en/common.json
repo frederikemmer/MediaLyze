@@ -379,7 +379,14 @@
       "audiobook_author": "Author",
       "audiobook_publisher": "Publisher",
       "audiobook_series": "Audiobook series",
-      "audiobook_series_part": "Series part"
+      "audiobook_series_part": "Series part",
+      "audiobook_series_parts": "Series parts",
+      "audiobook_description": "Description",
+      "audiobook_copyright": "Copyright",
+      "audiobook_language": "Book language",
+      "audiobook_abridged": "Abridged",
+      "audiobook_asin": "ASIN",
+      "audiobook_isbn": "ISBN"
     }
   },
   "panelLayout": {
@@ -889,6 +896,8 @@
     "audiobookPublisher": "Publisher",
     "audiobookSeries": "Series",
     "audiobookSeriesPart": "Series part",
+    "audiobookDescription": "Description",
+    "audiobookCopyright": "Copyright",
     "audiobookLanguage": "Book language",
     "audiobookAbridged": "Abridged",
     "audiobookAsin": "ASIN",

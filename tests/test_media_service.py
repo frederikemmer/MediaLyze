@@ -904,13 +904,15 @@ def test_generate_library_files_csv_export_includes_new_music_metadata_columns()
         "bit_rate_mode",
         "has_embedded_cover",
     ]
-    assert rows[0][22:34] == [
+    assert rows[0][22:36] == [
         "chapter_count",
         "audiobook_narrator",
         "audiobook_author",
         "audiobook_publisher",
         "audiobook_series",
         "audiobook_series_part",
+        "audiobook_description",
+        "audiobook_copyright",
         "audiobook_language",
         "audiobook_abridged",
         "audiobook_asin",
@@ -966,6 +968,8 @@ def test_generate_library_files_csv_export_includes_audiobook_metadata_columns()
                 audiobook_publisher="Publisher A",
                 audiobook_series="Series A",
                 audiobook_series_part="2",
+                audiobook_description="Synopsis A",
+                audiobook_copyright="Copyright A",
                 audiobook_language="en",
                 audiobook_abridged="unabridged",
                 audiobook_asin="B000000001",
@@ -994,6 +998,8 @@ def test_generate_library_files_csv_export_includes_audiobook_metadata_columns()
     assert rows[1][header.index("audiobook_publisher")] == "Publisher A"
     assert rows[1][header.index("audiobook_series")] == "Series A"
     assert rows[1][header.index("audiobook_series_part")] == "2"
+    assert rows[1][header.index("audiobook_description")] == "Synopsis A"
+    assert rows[1][header.index("audiobook_copyright")] == "Copyright A"
     assert rows[1][header.index("audiobook_language")] == "en"
     assert rows[1][header.index("audiobook_abridged")] == "unabridged"
     assert rows[1][header.index("audiobook_asin")] == "B000000001"
@@ -1928,6 +1934,8 @@ def test_generate_library_files_csv_export_includes_all_filtered_rows_and_metada
         "audiobook_publisher",
         "audiobook_series",
         "audiobook_series_part",
+        "audiobook_description",
+        "audiobook_copyright",
         "audiobook_language",
         "audiobook_abridged",
         "audiobook_asin",

@@ -7,15 +7,11 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - analyze audiobook metadata and chapters, including `.m4b`, `.aa`, and `.aax` discovery, persisted chapter rows, narrator/series fields, table filters/sorts, CSV export, statistics, comparisons, and file-detail chapter display
-
-### 🔧 Enhancements
-
-- replace the Settings page's top-level collapsible panels with a persistent vertical navigation and single active settings panel
-- make video-codec and dynamic-range quality preferences compact tiered multi-select controls with separate minimum and ideal selections
-- mark telemetry payloads from `-dev` application versions as test traffic so they can be filtered from production metrics
+- improved settings page, now with sidebar instead of panels
 
 ### 🐛 Bug fixes
 
+- keep the analyzed-files table-view settings aligned with the active library type so enabled metadata columns are rendered and labelled correctly
 - schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected ([#139](https://github.com/frederikemmer/MediaLyze/issues/139))
 - keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
 

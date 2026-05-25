@@ -379,7 +379,14 @@
       "audiobook_author": "Autor",
       "audiobook_publisher": "Verlag",
       "audiobook_series": "Hörbuchreihe",
-      "audiobook_series_part": "Reihenteil"
+      "audiobook_series_part": "Reihenteil",
+      "audiobook_series_parts": "Reihenteile",
+      "audiobook_description": "Beschreibung",
+      "audiobook_copyright": "Copyright",
+      "audiobook_language": "Buchsprache",
+      "audiobook_abridged": "Gekürzt",
+      "audiobook_asin": "ASIN",
+      "audiobook_isbn": "ISBN"
     }
   },
   "panelLayout": {
@@ -889,6 +896,8 @@
     "audiobookPublisher": "Verlag",
     "audiobookSeries": "Reihe",
     "audiobookSeriesPart": "Reihenteil",
+    "audiobookDescription": "Beschreibung",
+    "audiobookCopyright": "Copyright",
     "audiobookLanguage": "Buchsprache",
     "audiobookAbridged": "Gekürzt",
     "audiobookAsin": "ASIN",

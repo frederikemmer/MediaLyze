@@ -60,6 +60,8 @@ export type LibraryStatisticId =
   | "audiobook_publisher"
   | "audiobook_series"
   | "audiobook_series_part"
+  | "audiobook_description"
+  | "audiobook_copyright"
   | "audiobook_language"
   | "audiobook_abridged"
   | "audiobook_asin"
@@ -143,6 +145,7 @@ export type LibraryStatisticDefinition = {
   numericMetricId?: NumericDistributionMetricId;
   panelFormatKind?: DistributionFormatKind;
   tableColumnKey?: MediaFileSortKey;
+  tableNameKey?: string;
   dashboardTitleKey?: string;
   dashboardDataKey?: DashboardStatisticPanelDataKey;
   dashboardFormatKind?: DistributionFormatKind;
@@ -235,7 +238,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTableTooltip: false,
     supportsDashboard: true,
     defaultPanelEnabled: true,
-    defaultTableEnabled: false,
+    defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: true,
     panelKind: "comparison",
@@ -467,8 +470,24 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   ] as const).map(([id, dataKey]) => ({
     id,
     nameKey: `libraryStatistics.items.${id}`,
+    tableNameKey: (
+      id === "audio_artists" ? "libraryStatistics.items.audio_artist"
+      : id === "audio_albums" ? "libraryStatistics.items.audio_album"
+      : id === "audio_genres" ? "libraryStatistics.items.audio_genre"
+      : id === "audio_years" ? "libraryStatistics.items.audio_date"
+      : id === "audio_channels" ? "libraryStatistics.items.audio_channels"
+      : id === "sample_rates" ? "libraryStatistics.items.sample_rate"
+      : id === "track_numbers" ? "libraryStatistics.items.track_number"
+      : id === "bit_rate_modes" ? "libraryStatistics.items.bit_rate_mode"
+      : id === "audiobook_narrators" ? "libraryStatistics.items.audiobook_narrator"
+      : id === "audiobook_authors" ? "libraryStatistics.items.audiobook_author"
+      : id === "audiobook_publishers" ? "libraryStatistics.items.audiobook_publisher"
+      : id === "audiobook_series" ? "libraryStatistics.items.audiobook_series"
+      : id === "audiobook_series_parts" ? "libraryStatistics.items.audiobook_series_part"
+      : "libraryStatistics.items.has_embedded_cover"
+    ),
     supportsPanel: true,
-    supportsTable: true,
+    supportsTable: id !== "audiobook_series_parts",
     supportsTableTooltip: false,
     supportsDashboard: true,
     defaultPanelEnabled:
@@ -483,8 +502,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
       id === "audiobook_narrators" ||
       id === "audiobook_authors" ||
       id === "audiobook_publishers" ||
-      id === "audiobook_series" ||
-      id === "audiobook_series_parts",
+      id === "audiobook_series",
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
     panelTitleKey: `libraryDetail.${id}`,
@@ -511,6 +529,7 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
   {
     id: "chapter_counts",
     nameKey: "libraryStatistics.items.chapter_count",
+    tableNameKey: "libraryStatistics.items.chapter_count",
     supportsPanel: true,
     supportsTable: true,
     supportsTableTooltip: false,
@@ -535,12 +554,19 @@ export const LIBRARY_STATISTIC_DEFINITIONS: LibraryStatisticDefinition[] = [
     supportsTableTooltip: false,
     supportsDashboard: false,
     defaultPanelEnabled: false,
-    defaultTableEnabled: false,
+    defaultTableEnabled: true,
     defaultTableTooltipEnabled: false,
     defaultDashboardEnabled: false,
     tableColumnKey: "audiobook_series_part",
   },
-  ...(["audiobook_language", "audiobook_abridged", "audiobook_asin", "audiobook_isbn"] as const).map((id) => ({
+  ...([
+    "audiobook_description",
+    "audiobook_copyright",
+    "audiobook_language",
+    "audiobook_abridged",
+    "audiobook_asin",
+    "audiobook_isbn",
+  ] as const).map((id) => ({
     id,
     nameKey: `libraryStatistics.items.${id}`,
     supportsPanel: false,

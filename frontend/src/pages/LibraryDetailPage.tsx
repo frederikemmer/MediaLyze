@@ -940,6 +940,8 @@ export function buildFileColumns(
       ["audiobook_publisher", "fileTable.audiobookPublisher", (row: any) => row.audiobook_publisher],
       ["audiobook_series", "fileTable.audiobookSeries", (row: any) => row.audiobook_series],
       ["audiobook_series_part", "fileTable.audiobookSeriesPart", (row: any) => row.audiobook_series_part],
+      ["audiobook_description", "fileTable.audiobookDescription", (row: any) => row.audiobook_description],
+      ["audiobook_copyright", "fileTable.audiobookCopyright", (row: any) => row.audiobook_copyright],
       ["audiobook_language", "fileTable.audiobookLanguage", (row: any) => row.audiobook_language],
       ["audiobook_abridged", "fileTable.audiobookAbridged", (row: any) => row.audiobook_abridged],
       ["audiobook_asin", "fileTable.audiobookAsin", (row: any) => row.audiobook_asin],
@@ -3661,6 +3663,9 @@ export function LibraryDetailPage() {
                     {isEditingTableView ? (
                       <TableViewSettingsEditor
                         settings={draftTableViewSettings}
+                        libraryType={activeLibraryType}
+                        showMusicQualityScore={showMusicQualityScore}
+                        hasVideoMetadata={hasVideoMetadata}
                         onChange={(nextSettings) => setDraftTableViewSettings(cloneLibraryStatisticsSettings(nextSettings))}
                       />
                     ) : (

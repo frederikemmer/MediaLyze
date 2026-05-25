@@ -87,6 +87,8 @@ FileSortKey = Literal[
     "audiobook_publisher",
     "audiobook_series",
     "audiobook_series_part",
+    "audiobook_description",
+    "audiobook_copyright",
     "audiobook_language",
     "audiobook_abridged",
     "audiobook_asin",
@@ -133,6 +135,8 @@ CSV_EXPORT_HEADERS = [
     "audiobook_publisher",
     "audiobook_series",
     "audiobook_series_part",
+    "audiobook_description",
+    "audiobook_copyright",
     "audiobook_language",
     "audiobook_abridged",
     "audiobook_asin",
@@ -295,6 +299,10 @@ def _cursor_sort_value(row: MediaFileTableRow, sort_key: FileSortKey):
         return (row.audiobook_series or "").lower()
     if sort_key == "audiobook_series_part":
         return (row.audiobook_series_part or "").lower()
+    if sort_key == "audiobook_description":
+        return (row.audiobook_description or "").lower()
+    if sort_key == "audiobook_copyright":
+        return (row.audiobook_copyright or "").lower()
     if sort_key == "audiobook_language":
         return (row.audiobook_language or "").lower()
     if sort_key == "audiobook_abridged":
@@ -690,6 +698,8 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "audiobook_publisher": func.lower(MediaFile.audiobook_publisher),
         "audiobook_series": func.lower(MediaFile.audiobook_series),
         "audiobook_series_part": func.lower(MediaFile.audiobook_series_part),
+        "audiobook_description": func.lower(MediaFile.audiobook_description),
+        "audiobook_copyright": func.lower(MediaFile.audiobook_copyright),
         "audiobook_language": func.lower(MediaFile.audiobook_language),
         "audiobook_abridged": func.lower(MediaFile.audiobook_abridged),
         "audiobook_asin": func.lower(MediaFile.audiobook_asin),
@@ -922,6 +932,8 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
         row.audiobook_publisher or "",
         row.audiobook_series or "",
         row.audiobook_series_part or "",
+        row.audiobook_description or "",
+        row.audiobook_copyright or "",
         row.audiobook_language or "",
         row.audiobook_abridged or "",
         row.audiobook_asin or "",

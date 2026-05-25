@@ -50,6 +50,8 @@ export const FIELD_CATEGORIES: Record<string, FieldCategory> = {
   audiobook_publisher: "audiobook_only",
   audiobook_series: "audiobook_only",
   audiobook_series_part: "audiobook_only",
+  audiobook_description: "audiobook_only",
+  audiobook_copyright: "audiobook_only",
   audiobook_language: "audiobook_only",
   audiobook_abridged: "audiobook_only",
   audiobook_asin: "audiobook_only",

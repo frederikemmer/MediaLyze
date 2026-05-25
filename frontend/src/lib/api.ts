@@ -511,6 +511,8 @@ export type MediaFileSortKey =
   | "audiobook_publisher"
   | "audiobook_series"
   | "audiobook_series_part"
+  | "audiobook_description"
+  | "audiobook_copyright"
   | "audiobook_language"
   | "audiobook_abridged"
   | "audiobook_asin"

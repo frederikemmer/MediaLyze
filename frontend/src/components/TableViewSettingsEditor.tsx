@@ -4,22 +4,38 @@ import { useTranslation } from "react-i18next";
 
 import {
   getOrderedLibraryStatisticDefinitions,
+  isLibraryStatisticDefinitionVisibleForLibraryType,
   updateLibraryStatisticVisibility,
   moveLibraryStatistic,
   type LibraryStatisticId,
   type LibraryStatisticsSettings,
 } from "../lib/library-statistics-settings";
+import type { LibraryType } from "../lib/api";
 
 type TableViewSettingsEditorProps = {
   settings: LibraryStatisticsSettings;
+  libraryType?: LibraryType | null;
+  showMusicQualityScore?: boolean;
+  hasVideoMetadata?: boolean;
   onChange: (settings: LibraryStatisticsSettings) => void;
 };
 
-export function TableViewSettingsEditor({ settings, onChange }: TableViewSettingsEditorProps) {
+export function TableViewSettingsEditor({
+  settings,
+  libraryType,
+  showMusicQualityScore,
+  hasVideoMetadata,
+  onChange,
+}: TableViewSettingsEditorProps) {
   const { t } = useTranslation();
   const [draggedStatisticId, setDraggedStatisticId] = useState<LibraryStatisticId | null>(null);
   const [dropTargetStatisticId, setDropTargetStatisticId] = useState<LibraryStatisticId | null>(null);
-  const orderedStatistics = getOrderedLibraryStatisticDefinitions(settings);
+  const orderedStatistics = getOrderedLibraryStatisticDefinitions(settings).filter((statistic) =>
+    isLibraryStatisticDefinitionVisibleForLibraryType(statistic, libraryType, {
+      showMusicQualityScore,
+      hasVideoMetadata,
+    }),
+  );
 
   function toggleStatisticVisibility(
     statisticId: LibraryStatisticId,
@@ -91,7 +107,7 @@ export function TableViewSettingsEditor({ settings, onChange }: TableViewSetting
                       >
                         <GripVertical className="nav-icon" />
                       </span>
-                      <span>{t(statistic.nameKey)}</span>
+                      <span>{t(statistic.tableNameKey ?? statistic.nameKey)}</span>
                     </div>
                   </td>
                   <td className="settings-checkbox-cell">
