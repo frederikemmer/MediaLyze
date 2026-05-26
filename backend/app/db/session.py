@@ -16,9 +16,10 @@ def _sqlite_url(database_path: Path) -> str:
 
 
 def create_engine_for_settings(settings: Settings) -> Engine:
+    busy_timeout_ms = int(settings.sqlite_busy_timeout_seconds * 1000)
     engine = create_engine(
         _sqlite_url(settings.database_path),
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "timeout": settings.sqlite_busy_timeout_seconds},
         poolclass=NullPool,
         future=True,
     )
@@ -30,6 +31,7 @@ def create_engine_for_settings(settings: Settings) -> Engine:
         cursor.execute("PRAGMA journal_mode = WAL;")
         cursor.execute("PRAGMA synchronous = NORMAL;")
         cursor.execute("PRAGMA temp_store = MEMORY;")
+        cursor.execute(f"PRAGMA busy_timeout = {busy_timeout_ms};")
         cursor.close()
 
     return engine

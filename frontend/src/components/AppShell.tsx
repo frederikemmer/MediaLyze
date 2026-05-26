@@ -256,7 +256,7 @@ export function AppShell() {
           </nav>
         </div>
         {activeJobs.length > 0 ? (
-          <div className="scan-banner" title={t("scanBanner.refreshHint")}>
+          <div className="scan-banner">
             <div className="scan-banner-header">
               <div className="scan-banner-copy">
                 <strong className="scan-banner-status">
@@ -268,6 +268,7 @@ export function AppShell() {
                 type="button"
                 className="scan-banner-stop"
                 aria-label={t("scanBanner.stopAria")}
+                title={t("scanBanner.stopAria")}
                 disabled={stoppingScans}
                 onClick={async () => {
                   setStoppingScans(true);

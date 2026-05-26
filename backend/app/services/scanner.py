@@ -540,6 +540,15 @@ def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
     media_file.quality_score_breakdown = breakdown.model_dump(mode="json")
 
 
+def _scan_job_is_canceled(db: Session, job_id: int | None) -> bool:
+    if job_id is None:
+        return False
+    bind = db.get_bind()
+    with Session(bind=bind, autoflush=False, expire_on_commit=False) as fresh_db:
+        status = fresh_db.scalar(select(ScanJob.status).where(ScanJob.id == job_id))
+    return status == JobStatus.canceled
+
+
 def _normalized_text(value: str | None, fallback: str = "") -> str:
     candidate = (value or "").strip().lower()
     return candidate or fallback
@@ -1102,8 +1111,7 @@ def run_scan(
         db.refresh(job)
 
     def _should_cancel() -> bool:
-        db.refresh(job)
-        return job.status == JobStatus.canceled
+        return _scan_job_is_canceled(db, job.id)
 
     existing_by_path = {
         media_file.relative_path: media_file
@@ -1501,6 +1509,10 @@ def run_scan(
 
         def _submit_work(work: QueuedMediaWork) -> None:
             while len(pending) >= max_in_flight:
+                if _should_cancel():
+                    for future in pending:
+                        future.cancel()
+                    raise ScanCanceled()
                 _poll_completed_work(wait_for_completion=True)
             pending[executor.submit(_safe_process_work, work)] = work
 
@@ -1555,6 +1567,7 @@ def run_scan(
                     queued_work_total += 1
                     queued_for_analysis += 1
                     queued_for_duplicate_processing += 1
+                    db.commit()
                     _submit_work(
                         QueuedMediaWork(
                             media_file=media_file,
@@ -1607,6 +1620,7 @@ def run_scan(
                             queued_for_analysis += 1
                         if needs_duplicate_processing:
                             queued_for_duplicate_processing += 1
+                        db.commit()
                         _submit_work(
                             QueuedMediaWork(
                                 media_file=media_file,
@@ -1654,6 +1668,9 @@ def run_scan(
             processing_progress_counter = 0
 
     if _should_cancel():
+        raise ScanCanceled()
+    db.refresh(job)
+    if job.status == JobStatus.canceled:
         raise ScanCanceled()
     library.last_scan_at = utc_now()
     job.status = JobStatus.completed
@@ -1704,8 +1721,7 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
         db.refresh(job)
 
     def _should_cancel() -> bool:
-        db.refresh(job)
-        return job.status == JobStatus.canceled
+        return _scan_job_is_canceled(db, job.id)
 
     media_files = db.scalars(
         select(MediaFile)
@@ -1755,6 +1771,11 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     if batch_counter:
         db.commit()
 
+    if _should_cancel():
+        raise ScanCanceled()
+    db.refresh(job)
+    if job.status == JobStatus.canceled:
+        raise ScanCanceled()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()
     db.commit()

@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - restore official release workflow resilience by avoiding failing marketplace Docker actions, fixing authenticated tag creation, and preserving desktop builds as workflow artifacts
+- make scan cancellation wait for transient SQLite writer locks, preserve late cancel requests, and show a clear cancel-button tooltip
 
 ## v0.12.0
 

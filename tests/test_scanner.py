@@ -3,6 +3,7 @@ import tempfile
 from concurrent.futures import Future
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -16,6 +17,7 @@ from backend.app.models.entities import (
     AudioStream,
     DuplicateDetectionMode,
     ExternalSubtitle,
+    JobStatus,
     Library,
     LibraryHistory,
     LibraryType,
@@ -24,16 +26,19 @@ from backend.app.models.entities import (
     MediaFileHistory,
     MediaSeason,
     MediaSeries,
+    ScanJob,
     ScanMode,
     ScanStatus,
     SubtitleStream,
 )
+from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services import scanner as scanner_service
 from backend.app.services.library_service import get_library_statistics
 from backend.app.services.duplicates import list_library_duplicate_groups
 from backend.app.services.pattern_recognition import default_pattern_recognition_settings, recognize_media_path
 from backend.app.services.scanner import _iter_media_files
-from backend.app.services.scanner import run_scan
+from backend.app.services.scanner import ScanCanceled
+from backend.app.services.scanner import run_quality_recompute, run_scan
 from backend.app.utils.time import utc_now
 
 
@@ -56,6 +61,75 @@ def test_iter_media_files_skips_symlink_directories(tmp_path: Path) -> None:
 
     assert discovery.files == [nested_dir / "movie.mkv"]
     assert discovery.ignored_total == 0
+
+
+def test_quality_recompute_preserves_cancel_requested_during_work(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+    video_path = media_dir / "movie.mkv"
+    video_path.write_text("video")
+    stat = video_path.stat()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            last_seen_at=utc_now(),
+            last_analyzed_at=utc_now(),
+            scan_status=ScanStatus.ready,
+            raw_ffprobe_json={"format": {}},
+            quality_score=1,
+        )
+        job = ScanJob(
+            library_id=library.id,
+            status=JobStatus.running,
+            job_type="quality_recompute",
+            started_at=utc_now(),
+        )
+        db.add_all([media_file, job])
+        db.commit()
+        library_id = library.id
+        job_id = job.id
+
+    def request_cancel(*_args, **_kwargs) -> QualityBreakdownRead:
+        with session_factory() as db:
+            job = db.get(ScanJob, job_id)
+            assert job is not None
+            job.status = JobStatus.canceled
+            job.finished_at = utc_now()
+            db.commit()
+        return QualityBreakdownRead(score=5, score_raw=5.0, categories=[])
+
+    monkeypatch.setattr("backend.app.services.scanner.calculate_quality_score", request_cancel)
+
+    with session_factory() as db:
+        with pytest.raises(ScanCanceled):
+            run_quality_recompute(db, library_id, db.get(ScanJob, job_id))
+
+    with session_factory() as db:
+        job = db.get(ScanJob, job_id)
+
+    assert job is not None
+    assert job.status == JobStatus.canceled
 
 
 def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch) -> None:
