@@ -19,9 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --prune --tags origin "+refs/heads/*:refs/remotes/origin/*" "+refs/tags/*:refs/tags/*"
+          git checkout --force "${GITHUB_SHA}"
 
       - name: Set image name
         run: echo "IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
