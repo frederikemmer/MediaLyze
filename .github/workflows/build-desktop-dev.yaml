@@ -16,7 +16,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --prune --tags origin "+refs/heads/*:refs/remotes/origin/*" "+refs/tags/*:refs/tags/*"
+          git checkout --force "${GITHUB_SHA}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
