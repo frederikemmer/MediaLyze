@@ -118,7 +118,7 @@ jobs:
 
       - name: Set up QEMU
         if: steps.release_gate.outputs.should_release == 'true' && steps.state.outputs.release_exists != 'true'
-        uses: docker/setup-qemu-action@v3.6.0
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm64
 
       - name: Set up Docker Buildx
         if: steps.release_gate.outputs.should_release == 'true' && steps.state.outputs.release_exists != 'true'
