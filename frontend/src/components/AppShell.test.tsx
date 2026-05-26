@@ -197,6 +197,68 @@ describe("AppShell", () => {
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
   });
 
+  it("uses a clear tooltip on the active scan cancel button", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    vi.mocked(api.activeScanJobs).mockResolvedValue([
+      {
+        id: 1,
+        library_id: 1,
+        library_name: "Movies",
+        status: "running",
+        job_type: "incremental",
+        files_total: 100,
+        files_scanned: 10,
+        errors: 0,
+        started_at: "2026-05-26T10:00:00Z",
+        finished_at: null,
+        progress_percent: 10,
+        phase_label: "Analyzing media",
+        phase_detail: null,
+      },
+    ]);
+
+    renderShell();
+
+    const stopButton = await screen.findByRole("button", { name: "Stop active scans" });
+
+    expect(stopButton).toHaveAttribute("title", "Stop active scans");
+    expect(stopButton.closest(".scan-banner")).not.toHaveAttribute(
+      "title",
+      "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
+    );
+  });
+
+  it("keeps active scans visible and shows an error when cancel fails", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    vi.mocked(api.activeScanJobs).mockResolvedValue([
+      {
+        id: 1,
+        library_id: 1,
+        library_name: "Movies",
+        status: "running",
+        job_type: "incremental",
+        files_total: 100,
+        files_scanned: 10,
+        errors: 0,
+        started_at: "2026-05-26T10:00:00Z",
+        finished_at: null,
+        progress_percent: 10,
+        phase_label: "Analyzing media",
+        phase_detail: null,
+      },
+    ]);
+    vi.spyOn(api, "cancelActiveScanJobs").mockRejectedValue(new Error("database busy"));
+
+    renderShell();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Stop active scans" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Stop was requested, but the database is still busy. Try again shortly.",
+    );
+    expect(screen.getByText("Movies")).toBeInTheDocument();
+  });
+
   it("shows newer remote releases beside the currently installed version", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
     vi.mocked(api.updateStatus).mockResolvedValue({

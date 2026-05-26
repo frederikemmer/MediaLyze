@@ -141,6 +141,7 @@ class Settings(BaseSettings):
     ffprobe_path: str = "ffprobe"
     scan_discovery_batch_size: int = 500
     scan_commit_batch_size: int = 5
+    sqlite_busy_timeout_seconds: float = Field(default=30.0, ge=0.0)
     ffprobe_worker_count: int = 4
     scan_runtime_worker_count: int = 2
     disable_default_ignore_patterns: bool = False

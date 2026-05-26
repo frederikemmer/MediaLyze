@@ -23,12 +23,15 @@ function createJob(id: number): ScanJob {
 }
 
 function Probe() {
-  const { activeJobs, trackJob } = useScanJobs();
+  const { activeJobs, stopAll, trackJob } = useScanJobs();
   return (
     <>
       <div data-testid="job-count">{activeJobs.length}</div>
       <button type="button" onClick={() => trackJob(createJob(1))}>
         track
+      </button>
+      <button type="button" onClick={() => void stopAll().catch(() => undefined)}>
+        stop
       </button>
     </>
   );
@@ -125,5 +128,23 @@ describe("ScanJobsProvider", () => {
     await flushEffects();
 
     expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
+  });
+
+  it("keeps tracked scans visible when cancel fails", async () => {
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+    vi.spyOn(api, "cancelActiveScanJobs").mockRejectedValue(new Error("database busy"));
+
+    render(
+      <ScanJobsProvider>
+        <Probe />
+      </ScanJobsProvider>,
+    );
+
+    await flushEffects();
+    fireEvent.click(screen.getByRole("button", { name: "track" }));
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await flushEffects();
+
+    expect(screen.getByTestId("job-count")).toHaveTextContent("1");
   });
 });

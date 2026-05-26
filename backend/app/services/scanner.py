@@ -13,6 +13,7 @@ import re
 import traceback
 
 from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.config import Settings, get_allowed_media_extensions
@@ -81,6 +82,10 @@ RENAME_NUMBER_PATTERN = re.compile(r"\d+")
 
 class ScanCanceled(Exception):
     pass
+
+
+def _is_sqlite_database_locked(exc: OperationalError) -> bool:
+    return "database is locked" in str(exc).lower()
 
 
 @dataclass
@@ -538,6 +543,15 @@ def _persist_quality_breakdown(media_file: MediaFile, breakdown) -> None:
     media_file.quality_score = breakdown.score
     media_file.quality_score_raw = breakdown.score_raw
     media_file.quality_score_breakdown = breakdown.model_dump(mode="json")
+
+
+def _scan_job_is_canceled(db: Session, job_id: int | None) -> bool:
+    if job_id is None:
+        return False
+    bind = db.get_bind()
+    with Session(bind=bind, autoflush=False, expire_on_commit=False) as fresh_db:
+        status = fresh_db.scalar(select(ScanJob.status).where(ScanJob.id == job_id))
+    return status == JobStatus.canceled
 
 
 def _normalized_text(value: str | None, fallback: str = "") -> str:
@@ -1035,16 +1049,31 @@ def _incomplete_analysis_file_ids(db: Session, library_id: int) -> set[int]:
     return incomplete_ids
 
 
-def execute_scan_job(job_id: int, settings: Settings) -> None:
+def execute_scan_job(
+    job_id: int,
+    settings: Settings,
+    *,
+    is_cancel_requested: Callable[[int | None], bool] | None = None,
+) -> None:
     db = SessionLocal()
     try:
-        _run_scan_job(db, settings, job_id)
+        _run_scan_job(db, settings, job_id, is_cancel_requested=is_cancel_requested)
     except ScanCanceled:
         job = db.get(ScanJob, job_id)
         if job:
             job.status = JobStatus.canceled
             job.finished_at = utc_now()
-            db.commit()
+            try:
+                db.commit()
+            except OperationalError as exc:
+                db.rollback()
+                if _is_sqlite_database_locked(exc):
+                    logger.warning(
+                        "Scan job %s stopped after a cancel request, but SQLite was still busy while persisting the canceled status.",
+                        job_id,
+                    )
+                else:
+                    raise
     except Exception:
         job = db.get(ScanJob, job_id)
         if job:
@@ -1056,7 +1085,13 @@ def execute_scan_job(job_id: int, settings: Settings) -> None:
         db.close()
 
 
-def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
+def _run_scan_job(
+    db: Session,
+    settings: Settings,
+    job_id: int,
+    *,
+    is_cancel_requested: Callable[[int | None], bool] | None = None,
+) -> ScanJob:
     job = db.get(ScanJob, job_id)
     if not job:
         raise ValueError(f"Scan job {job_id} not found")
@@ -1072,8 +1107,8 @@ def _run_scan_job(db: Session, settings: Settings, job_id: int) -> ScanJob:
     db.refresh(job)
 
     if job.job_type == "quality_recompute":
-        return run_quality_recompute(db, job.library_id, job)
-    return run_scan(db, settings, job.library_id, job.job_type, job)
+        return run_quality_recompute(db, job.library_id, job, is_cancel_requested=is_cancel_requested)
+    return run_scan(db, settings, job.library_id, job.job_type, job, is_cancel_requested=is_cancel_requested)
 
 
 def run_scan(
@@ -1082,6 +1117,8 @@ def run_scan(
     library_id: int,
     scan_type: str = "incremental",
     existing_job: ScanJob | None = None,
+    *,
+    is_cancel_requested: Callable[[int | None], bool] | None = None,
 ) -> ScanJob:
     cache_key = str(id(db.get_bind()))
     library = db.get(Library, library_id)
@@ -1102,8 +1139,7 @@ def run_scan(
         db.refresh(job)
 
     def _should_cancel() -> bool:
-        db.refresh(job)
-        return job.status == JobStatus.canceled
+        return _scan_job_is_canceled(db, job.id) or bool(is_cancel_requested and is_cancel_requested(job.id))
 
     existing_by_path = {
         media_file.relative_path: media_file
@@ -1501,6 +1537,10 @@ def run_scan(
 
         def _submit_work(work: QueuedMediaWork) -> None:
             while len(pending) >= max_in_flight:
+                if _should_cancel():
+                    for future in pending:
+                        future.cancel()
+                    raise ScanCanceled()
                 _poll_completed_work(wait_for_completion=True)
             pending[executor.submit(_safe_process_work, work)] = work
 
@@ -1555,6 +1595,7 @@ def run_scan(
                     queued_work_total += 1
                     queued_for_analysis += 1
                     queued_for_duplicate_processing += 1
+                    db.commit()
                     _submit_work(
                         QueuedMediaWork(
                             media_file=media_file,
@@ -1607,6 +1648,7 @@ def run_scan(
                             queued_for_analysis += 1
                         if needs_duplicate_processing:
                             queued_for_duplicate_processing += 1
+                        db.commit()
                         _submit_work(
                             QueuedMediaWork(
                                 media_file=media_file,
@@ -1655,6 +1697,9 @@ def run_scan(
 
     if _should_cancel():
         raise ScanCanceled()
+    db.refresh(job)
+    if job.status == JobStatus.canceled:
+        raise ScanCanceled()
     library.last_scan_at = utc_now()
     job.status = JobStatus.completed
     job.finished_at = utc_now()
@@ -1686,7 +1731,13 @@ def run_scan(
     return job
 
 
-def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | None = None) -> ScanJob:
+def run_quality_recompute(
+    db: Session,
+    library_id: int,
+    existing_job: ScanJob | None = None,
+    *,
+    is_cancel_requested: Callable[[int | None], bool] | None = None,
+) -> ScanJob:
     cache_key = str(id(db.get_bind()))
     library = db.get(Library, library_id)
     if not library:
@@ -1704,8 +1755,7 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
         db.refresh(job)
 
     def _should_cancel() -> bool:
-        db.refresh(job)
-        return job.status == JobStatus.canceled
+        return _scan_job_is_canceled(db, job.id) or bool(is_cancel_requested and is_cancel_requested(job.id))
 
     media_files = db.scalars(
         select(MediaFile)
@@ -1755,6 +1805,11 @@ def run_quality_recompute(db: Session, library_id: int, existing_job: ScanJob | 
     if batch_counter:
         db.commit()
 
+    if _should_cancel():
+        raise ScanCanceled()
+    db.refresh(job)
+    if job.status == JobStatus.canceled:
+        raise ScanCanceled()
     job.status = JobStatus.failed if job.errors else JobStatus.completed
     job.finished_at = utc_now()
     db.commit()

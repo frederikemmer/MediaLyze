@@ -55,6 +55,7 @@ export function AppShell() {
   );
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
+  const [scanCancelError, setScanCancelError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
+      setScanCancelError(null);
       void Promise.all([loadLibraries(true), loadDashboard(true)])
         .then(() => setSyncError(null))
         .catch((reason: Error) => {
@@ -256,7 +258,7 @@ export function AppShell() {
           </nav>
         </div>
         {activeJobs.length > 0 ? (
-          <div className="scan-banner" title={t("scanBanner.refreshHint")}>
+          <div className="scan-banner">
             <div className="scan-banner-header">
               <div className="scan-banner-copy">
                 <strong className="scan-banner-status">
@@ -268,16 +270,28 @@ export function AppShell() {
                 type="button"
                 className="scan-banner-stop"
                 aria-label={t("scanBanner.stopAria")}
+                title={t("scanBanner.stopAria")}
                 disabled={stoppingScans}
                 onClick={async () => {
                   setStoppingScans(true);
-                  await stopAll();
-                  setStoppingScans(false);
+                  setScanCancelError(null);
+                  try {
+                    await stopAll();
+                  } catch {
+                    setScanCancelError(t("scanBanner.cancelFailed"));
+                  } finally {
+                    setStoppingScans(false);
+                  }
                 }}
               >
                 <SearchX aria-hidden="true" className="nav-icon" />
               </button>
             </div>
+            {scanCancelError ? (
+              <div className="scan-banner-error" role="alert">
+                {scanCancelError}
+              </div>
+            ) : null}
             <div className="scan-banner-list">
               {activeJobs.map((job) => (
                 <div className="scan-banner-job" key={job.id}>

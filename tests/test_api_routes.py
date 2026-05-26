@@ -42,9 +42,10 @@ from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.update_status import UPDATE_STATUS_KEY
+from backend.app.services.runtime import ScanCancelPersistenceError
 
 
-def _build_test_app(db: Session) -> TestClient:
+def _build_test_app(db: Session, scan_runtime=None) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: db
@@ -87,7 +88,7 @@ def _build_test_app(db: Session) -> TestClient:
             )
             return self.history_reconstruction_status
 
-    app.state.scan_runtime = TestScanRuntime()
+    app.state.scan_runtime = scan_runtime or TestScanRuntime()
     return TestClient(app)
 
 
@@ -1178,6 +1179,23 @@ def test_active_scan_jobs_route_serializes_timestamps_as_utc_z_strings() -> None
     payload = response.json()[0]
     assert payload["started_at"] == "2026-03-24T04:06:00Z"
     assert payload["finished_at"] == "2026-03-24T04:10:00Z"
+
+
+def test_cancel_active_scan_jobs_reports_busy_database_retry() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    class BusyRuntime:
+        def cancel_active_jobs(self) -> list[int]:
+            raise ScanCancelPersistenceError([1, 2])
+
+    with session_factory() as db:
+        client = _build_test_app(db, scan_runtime=BusyRuntime())
+        response = client.post("/api/scan-jobs/active/cancel")
+
+    assert response.status_code == 503
+    assert "database is still busy" in response.json()["detail"]
 
 
 def test_history_storage_route_returns_storage_payload() -> None:

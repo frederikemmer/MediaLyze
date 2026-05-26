@@ -15,7 +15,8 @@
     "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analysiert",
     "libraryFallback": "Bibliothek #{{id}}",
     "refreshHint": "Während Scans laufen, aktualisiert sich der Scan-Fortschritt live. Statistiken und Tabellen-Caches werden nach dem Scan aktualisiert, damit die App reaktionsfähig bleibt.",
-    "stopAria": "Aktive Scans stoppen"
+    "stopAria": "Aktive Scans stoppen",
+    "cancelFailed": "Stop wurde angefordert, aber die Datenbank ist noch beschäftigt. Bitte gleich erneut versuchen."
   },
   "dashboard": {
     "liveUpdates": "Live-Aktualisierungen sind aktiv, während Scans laufen. Die Dashboard-Metriken werden automatisch aktualisiert.",

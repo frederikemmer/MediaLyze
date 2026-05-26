@@ -1,11 +1,34 @@
+import os
+import tempfile
 from datetime import UTC, datetime
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.db.session import init_db
+os.environ.setdefault("CONFIG_PATH", tempfile.mkdtemp(prefix="medialyze-config-"))
+os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
+
+from backend.app.core.config import Settings
+from backend.app.db.session import create_engine_for_settings, init_db
 from backend.app.db.base import Base
 from backend.app.models.entities import Library, LibraryType, ScanMode
+
+
+def test_sqlite_engine_configures_busy_timeout(tmp_path) -> None:
+    settings = Settings(
+        config_path=tmp_path,
+        media_root=tmp_path / "media",
+        sqlite_busy_timeout_seconds=30,
+    )
+    engine = create_engine_for_settings(settings)
+
+    try:
+        with engine.connect() as connection:
+            busy_timeout_ms = connection.execute(text("PRAGMA busy_timeout")).scalar_one()
+    finally:
+        engine.dispose()
+
+    assert busy_timeout_ms == 30_000
 
 
 def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:

@@ -31,12 +31,8 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
   });
 
   const stopAll = useEffectEvent(async () => {
-    try {
-      await api.cancelActiveScanJobs();
-      setActiveJobs([]);
-    } catch {
-      // Keep the last known state on transient errors.
-    }
+    await api.cancelActiveScanJobs();
+    setActiveJobs([]);
   });
 
   const trackJob = useEffectEvent((job: ScanJob) => {
