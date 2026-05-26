@@ -232,6 +232,16 @@ jobs:
           "$ffprobe_bin" -v error -print_format json -show_format -show_streams dist/ffprobe-smoke.wav >/tmp/ffprobe-smoke.json
           grep -q '"codec_name": "pcm_s16le"' /tmp/ffprobe-smoke.json
 
+      - name: Upload desktop workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            dist/desktop-app/MediaLyze.AppImage
+            dist/desktop-app/MediaLyze-arm64.dmg
+            dist/desktop-app/MediaLyze.Setup.exe
+          if-no-files-found: error
+
       - name: Upload desktop asset to GitHub release
         shell: bash
         env:

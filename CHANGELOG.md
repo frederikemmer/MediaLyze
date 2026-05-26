@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- restore official release workflow resilience by avoiding failing marketplace Docker actions, fixing authenticated tag creation, and preserving desktop builds as workflow artifacts
+
 ## v0.12.0
 
 >2026-05-26

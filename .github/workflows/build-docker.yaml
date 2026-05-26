@@ -151,6 +151,8 @@ jobs:
 
       - name: Create annotated git tag
         if: steps.release_gate.outputs.should_release == 'true' && steps.state.outputs.tag_exists != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
