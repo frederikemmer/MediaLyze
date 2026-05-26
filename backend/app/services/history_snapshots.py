@@ -53,6 +53,48 @@ def _canonicalize_snapshot(snapshot: dict) -> tuple[dict, str]:
     return snapshot, hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _media_file_history_fingerprint(snapshot: dict) -> str:
+    external_subtitles = snapshot.get("external_subtitles")
+    if not isinstance(external_subtitles, list):
+        external_subtitles = []
+
+    payload = {
+        "relative_path": snapshot.get("relative_path"),
+        "extension": snapshot.get("extension"),
+        "size_bytes": snapshot.get("size_bytes"),
+        "mtime": snapshot.get("mtime"),
+        "scan_status": snapshot.get("scan_status"),
+        "quality_score": snapshot.get("quality_score"),
+        "quality_score_raw": snapshot.get("quality_score_raw"),
+        "analysis_failure_kind": snapshot.get("analysis_failure_kind"),
+        "analysis_failure_reason": snapshot.get("analysis_failure_reason"),
+        "analysis_failure_detail": snapshot.get("analysis_failure_detail"),
+        "external_subtitles": sorted(
+            (
+                {
+                    "path": subtitle.get("path"),
+                    "language": subtitle.get("language"),
+                    "format": subtitle.get("format"),
+                }
+                for subtitle in external_subtitles
+                if isinstance(subtitle, dict)
+            ),
+            key=lambda subtitle: (
+                str(subtitle.get("path") or "").lower(),
+                str(subtitle.get("language") or "").lower(),
+                str(subtitle.get("format") or "").lower(),
+            ),
+        ),
+    }
+    fingerprint_payload = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+    return hashlib.sha256(fingerprint_payload.encode("utf-8")).hexdigest()
+
+
 def build_media_file_history_snapshot(media_file: MediaFile, resolution_categories) -> tuple[dict, str]:
     snapshot = serialize_media_file_detail(media_file, resolution_categories).model_dump(mode="json")
     return _canonicalize_snapshot(snapshot)
@@ -67,8 +109,9 @@ def create_media_file_history_entry_if_changed(
     captured_at: datetime | None = None,
 ) -> bool:
     snapshot, snapshot_hash = build_media_file_history_snapshot(media_file, resolution_categories)
-    latest_hash = db.scalar(
-        select(MediaFileHistory.snapshot_hash)
+    current_fingerprint = _media_file_history_fingerprint(snapshot)
+    latest_snapshot = db.scalar(
+        select(MediaFileHistory.snapshot)
         .where(
             MediaFileHistory.library_id == media_file.library_id,
             MediaFileHistory.relative_path == media_file.relative_path,
@@ -76,7 +119,10 @@ def create_media_file_history_entry_if_changed(
         .order_by(MediaFileHistory.captured_at.desc(), MediaFileHistory.id.desc())
         .limit(1)
     )
-    if latest_hash == snapshot_hash:
+    if (
+        isinstance(latest_snapshot, dict)
+        and _media_file_history_fingerprint(latest_snapshot) == current_fingerprint
+    ):
         return False
 
     db.add(

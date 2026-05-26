@@ -87,6 +87,26 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "track_number": "ALTER TABLE media_files ADD COLUMN track_number VARCHAR(32) NOT NULL DEFAULT ''",
         "bit_rate_mode": "ALTER TABLE media_files ADD COLUMN bit_rate_mode VARCHAR(32) NOT NULL DEFAULT ''",
         "has_embedded_cover": "ALTER TABLE media_files ADD COLUMN has_embedded_cover BOOLEAN NOT NULL DEFAULT 0",
+        "chapter_count": "ALTER TABLE media_files ADD COLUMN chapter_count INTEGER",
+        "chapter_titles_search": "ALTER TABLE media_files ADD COLUMN chapter_titles_search VARCHAR(4096) NOT NULL DEFAULT ''",
+        "audiobook_narrator": "ALTER TABLE media_files ADD COLUMN audiobook_narrator VARCHAR(512) NOT NULL DEFAULT ''",
+        "audiobook_author": "ALTER TABLE media_files ADD COLUMN audiobook_author VARCHAR(512) NOT NULL DEFAULT ''",
+        "audiobook_publisher": "ALTER TABLE media_files ADD COLUMN audiobook_publisher VARCHAR(512) NOT NULL DEFAULT ''",
+        "audiobook_series": "ALTER TABLE media_files ADD COLUMN audiobook_series VARCHAR(512) NOT NULL DEFAULT ''",
+        "audiobook_series_part": "ALTER TABLE media_files ADD COLUMN audiobook_series_part VARCHAR(64) NOT NULL DEFAULT ''",
+        "audiobook_description": "ALTER TABLE media_files ADD COLUMN audiobook_description VARCHAR(4096) NOT NULL DEFAULT ''",
+        "audiobook_copyright": "ALTER TABLE media_files ADD COLUMN audiobook_copyright VARCHAR(1024) NOT NULL DEFAULT ''",
+        "audiobook_asin": "ALTER TABLE media_files ADD COLUMN audiobook_asin VARCHAR(64) NOT NULL DEFAULT ''",
+        "audiobook_isbn": "ALTER TABLE media_files ADD COLUMN audiobook_isbn VARCHAR(64) NOT NULL DEFAULT ''",
+        "audiobook_language": "ALTER TABLE media_files ADD COLUMN audiobook_language VARCHAR(64) NOT NULL DEFAULT ''",
+        "audiobook_abridged": "ALTER TABLE media_files ADD COLUMN audiobook_abridged VARCHAR(32) NOT NULL DEFAULT ''",
+        "embedded_cover_stream_index": "ALTER TABLE media_files ADD COLUMN embedded_cover_stream_index INTEGER",
+        "embedded_cover_codec": "ALTER TABLE media_files ADD COLUMN embedded_cover_codec VARCHAR(64) NOT NULL DEFAULT ''",
+        "embedded_cover_width": "ALTER TABLE media_files ADD COLUMN embedded_cover_width INTEGER",
+        "embedded_cover_height": "ALTER TABLE media_files ADD COLUMN embedded_cover_height INTEGER",
+        "analysis_failure_kind": "ALTER TABLE media_files ADD COLUMN analysis_failure_kind VARCHAR(64) NOT NULL DEFAULT ''",
+        "analysis_failure_reason": "ALTER TABLE media_files ADD COLUMN analysis_failure_reason VARCHAR(1024) NOT NULL DEFAULT ''",
+        "analysis_failure_detail": "ALTER TABLE media_files ADD COLUMN analysis_failure_detail VARCHAR(12000) NOT NULL DEFAULT ''",
         "analysis_schema_version": "ALTER TABLE media_files ADD COLUMN analysis_schema_version INTEGER NOT NULL DEFAULT 0",
         "min_subtitle_language": "ALTER TABLE media_files ADD COLUMN min_subtitle_language VARCHAR(16) NOT NULL DEFAULT ''",
         "min_subtitle_codec": "ALTER TABLE media_files ADD COLUMN min_subtitle_codec VARCHAR(64) NOT NULL DEFAULT ''",
@@ -193,6 +213,12 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_track_number ON media_files (library_id, track_number)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_bit_rate_mode ON media_files (library_id, bit_rate_mode)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_has_embedded_cover ON media_files (library_id, has_embedded_cover)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_chapter_count ON media_files (library_id, chapter_count)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audiobook_narrator ON media_files (library_id, audiobook_narrator)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audiobook_series ON media_files (library_id, audiobook_series)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audiobook_author ON media_files (library_id, audiobook_author)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audiobook_publisher ON media_files (library_id, audiobook_publisher)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_audiobook_series_part ON media_files (library_id, audiobook_series_part)",
     (
         "CREATE INDEX IF NOT EXISTS ix_media_files_library_resolution_pixels "
         "ON media_files (library_id, primary_video_resolution_pixels)"
@@ -229,6 +255,8 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_track ON audio_streams (track)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_language ON audio_streams (language)",
     "CREATE INDEX IF NOT EXISTS ix_audio_streams_media_file_id ON audio_streams (media_file_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_chapters_media_file_id ON media_chapters (media_file_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_chapters_media_file_index ON media_chapters (media_file_id, chapter_index)",
     "CREATE INDEX IF NOT EXISTS ix_subtitle_streams_codec ON subtitle_streams (codec)",
     "CREATE INDEX IF NOT EXISTS ix_subtitle_streams_language ON subtitle_streams (language)",
     "CREATE INDEX IF NOT EXISTS ix_subtitle_streams_media_file_id ON subtitle_streams (media_file_id)",
@@ -457,8 +485,46 @@ def _backfill_media_file_search_fields(connection) -> None:
                 CASE WHEN EXISTS (SELECT 1 FROM external_subtitles WHERE media_file_id = media_files.id)
                   THEN 'external' ELSE '' END
               ),
-              search_fields_version = 1
-            WHERE search_fields_version < 1
+              chapter_count = (
+                SELECT NULLIF(COUNT(*), 0)
+                FROM media_chapters
+                WHERE media_file_id = media_files.id
+              ),
+              chapter_titles_search = COALESCE((
+                SELECT GROUP_CONCAT(value, ' ')
+                FROM (
+                  SELECT DISTINCT LOWER(TRIM(COALESCE(title, ''))) AS value
+                  FROM media_chapters
+                  WHERE media_file_id = media_files.id
+                    AND LENGTH(LOWER(TRIM(COALESCE(title, '')))) > 0
+                  ORDER BY value
+                )
+              ), ''),
+              audio_metadata_search = TRIM(COALESCE(audio_metadata_search, '') || ' ' ||
+                COALESCE((
+                  SELECT GROUP_CONCAT(value, ' ')
+                  FROM (
+                    SELECT DISTINCT LOWER(TRIM(COALESCE(title, ''))) AS value
+                    FROM media_chapters
+                    WHERE media_file_id = media_files.id
+                      AND LENGTH(LOWER(TRIM(COALESCE(title, '')))) > 0
+                    ORDER BY value
+                  )
+                ), '') || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_narrator, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_author, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_publisher, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_series, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_series_part, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_description, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_copyright, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_asin, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_isbn, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_language, ''))) || ' ' ||
+                LOWER(TRIM(COALESCE(audiobook_abridged, '')))
+              ),
+              search_fields_version = 3
+            WHERE search_fields_version < 3
             """
         )
     )

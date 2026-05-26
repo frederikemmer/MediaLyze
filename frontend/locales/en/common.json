@@ -52,10 +52,16 @@
     "audio_genres": "Genres",
     "audio_years": "Release years",
     "audio_channels": "Channels",
-    "sample_rates": "Sample rates",
-    "track_numbers": "Track numbers",
-    "bit_rate_modes": "Bitrate modes",
-    "embedded_covers": "Embedded covers"
+      "sample_rates": "Sample rates",
+      "track_numbers": "Track numbers",
+      "bit_rate_modes": "Bitrate modes",
+      "embedded_covers": "Embedded covers",
+      "audiobook_narrators": "Narrators",
+      "audiobook_authors": "Authors",
+      "audiobook_publishers": "Publishers",
+      "audiobook_series": "Audiobook series",
+      "audiobook_series_parts": "Series parts",
+      "chapter_counts": "Chapter counts"
   },
   "panel": {
     "collapseAria": "Collapse {{title}}",
@@ -81,6 +87,17 @@
     "closeAria": "Close release notes"
   },
   "libraries": {
+    "settingsNavigation": "Settings menu",
+    "mobileSettingsNavigation": "Mobile settings menu",
+    "settingsNavigationTitle": "Settings",
+    "settingsNavigationLibraries": "Libraries",
+    "settingsNavigationAddLibrary": "Add library",
+    "settingsNavigationPatternRecognition": "Pattern recognition",
+    "quickActions": "Quickactions",
+    "collapseSettingsNavigation": "Collapse settings menu",
+    "expandSettingsNavigation": "Expand settings menu",
+    "openMobileSettingsNavigation": "Open settings menu",
+    "closeMobileSettingsNavigation": "Close settings menu",
     "configured": "Configured libraries",
     "fullScan": "full scan",
     "addFirstLibrary": "Add first library",
@@ -92,9 +109,11 @@
     "name": "Name",
     "namePlaceholder": "Movies archive",
     "nameRequired": "Library name must not be empty.",
-    "type": "Library type",
-    "typeTooltipAria": "Explain library types",
-    "typeTooltip": "Movies: no series recognition.\nShows: series and season recognition is enabled during scans.\nMixed: series and season recognition is attempted only where patterns match.\nOther: no series recognition.",
+    "type": "Media type",
+    "typePlaceholder": "Select media type",
+    "typeRequired": "Select a media type.",
+    "typeTooltipAria": "Explain media types",
+    "typeTooltip": "Movies: no series recognition.\nShows: series and season recognition is enabled during scans.\nMusic: audio metadata and music statistics are enabled.\nAudiobooks: audio metadata and audiobook-focused libraries are enabled.\nMixed: series and season recognition is attempted only where patterns match.\nOther: no series recognition.",
     "desktopPathPlaceholder": "/Volumes/Media or \\\\server\\share\\videos",
     "desktopPathMustExist": "Choose an existing directory.",
     "chooseFolder": "Choose folder",
@@ -121,7 +140,7 @@
     "renameAria": "Edit library {{name}}",
     "renameTooltip": "Edit library",
     "editNameAria": "Edit name for library {{name}}",
-    "editTypeAria": "Edit type for library {{name}}",
+    "editTypeAria": "Edit media type for library {{name}}",
     "saveEditAria": "Save changes for library {{name}}",
     "saveEditTooltip": "Save library changes",
     "cancelEditAria": "Cancel changes for library {{name}}",
@@ -146,6 +165,9 @@
     "ignorePatternsTooltip": "Pattern setup, examples, and recommended scenarios are documented in the pattern docs linked above.",
     "ignorePatternsAddAria": "Add a new ignore pattern",
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
+    "resolutionCategories": {
+      "title": "Resolution categories"
+    },
     "patternRecognition": {
       "title": "Folder & pattern recognition",
       "subtitle": "Configure scan-time series and bonus folder patterns plus ignored paths.",
@@ -204,7 +226,11 @@
       "loading": "Loading storage forecast…",
       "bucketLabel": "History type",
       "daysLabel": "Retention days",
+      "daysTooltipAria": "Explain retention days",
+      "daysTooltip": "How many days MediaLyze keeps entries for this history type before pruning older records.\n\n0 means unlimited.",
       "storageLimitLabel": "Storage limit (GB)",
+      "storageLimitTooltipAria": "Explain storage limit",
+      "storageLimitTooltip": "The maximum estimated storage this history type may use before MediaLyze prunes the oldest records.\n\n0 means unlimited.",
       "zeroUnlimited": "0 = unlimited",
       "scopeNote": "File history retention only affects per-file snapshots; dashboard and media library trends use the separate media library history.",
       "reconstructButton": "Reconstruct history",
@@ -272,13 +298,16 @@
       "unknown": "Unknown path type"
     },
     "quality": {
+      "category": "Category",
       "weight": "Weight",
       "minimum": "Minimum",
       "ideal": "Ideal",
       "maximum": "Maximum",
+      "selectedValues": "Selected",
       "noneSelected": "No selection",
       "resolution": "Resolution",
       "visual_density": "Visual density",
+      "visualDensityTooltipAria": "Explain visual density quality setting",
       "visualDensityHint": "Enter the video storage for a typical 1080p title in GB per minute. Higher resolutions are scaled upward by pixel count, lower ones downward. Example: 0.02 means about 20 MB per minute for 1080p video-only data.",
       "video_codec": "Video codec",
       "audio_channels": "Audio channels",
@@ -346,7 +375,21 @@
       "sample_rate": "Sample rate",
       "track_number": "Track number",
       "bit_rate_mode": "Bitrate mode",
-      "has_embedded_cover": "Embedded cover"
+      "has_embedded_cover": "Embedded cover",
+      "chapter_count": "Chapter count",
+      "chapter_titles": "Chapter titles",
+      "audiobook_narrator": "Narrator",
+      "audiobook_author": "Author",
+      "audiobook_publisher": "Publisher",
+      "audiobook_series": "Audiobook series",
+      "audiobook_series_part": "Series part",
+      "audiobook_series_parts": "Series parts",
+      "audiobook_description": "Description",
+      "audiobook_copyright": "Copyright",
+      "audiobook_language": "Book language",
+      "audiobook_abridged": "Abridged",
+      "audiobook_asin": "ASIN",
+      "audiobook_isbn": "ISBN"
     }
   },
   "panelLayout": {
@@ -382,6 +425,7 @@
     "movies": "Movies",
     "series": "Shows",
     "music": "Music (alpha)",
+    "audiobooks": "Audiobooks",
     "mixed": "Mixed",
     "other": "Other"
   },
@@ -524,7 +568,8 @@
         "bitrate": "Use a bitrate like >8Mb/s or >=256kb/s.",
         "audio_bitrate": "Use an audio bitrate like >512kb/s or >=1Mb/s.",
         "bit_depth": "Use an integer bit depth like >=16 or =24.",
-        "duration": "Use a duration like >90m or >=1h 30m."
+        "duration": "Use a duration like >90m or >=1h 30m.",
+        "chapter_count": "Use a chapter count like >=10 or =24."
       },
       "audio_title": {
         "placeholder": "e.g. Song title"
@@ -566,6 +611,46 @@
       },
       "has_embedded_cover": {
         "placeholder": "yes or no"
+      },
+      "chapter_count": {
+        "placeholder": "e.g. >=10",
+        "tooltip": "Supported: >=10, =24, <50"
+      },
+      "chapter_titles": {
+        "placeholder": "e.g. Chapter one"
+      },
+      "audiobook_narrator": {
+        "placeholder": "e.g. Narrator"
+      },
+      "audiobook_author": {
+        "placeholder": "e.g. Author"
+      },
+      "audiobook_publisher": {
+        "placeholder": "e.g. Publisher"
+      },
+      "audiobook_series": {
+        "placeholder": "e.g. Series"
+      },
+      "audiobook_series_part": {
+        "placeholder": "e.g. 2"
+      },
+      "audiobook_description": {
+        "placeholder": "e.g. synopsis term"
+      },
+      "audiobook_copyright": {
+        "placeholder": "e.g. copyright holder"
+      },
+      "audiobook_asin": {
+        "placeholder": "e.g. B000000000"
+      },
+      "audiobook_isbn": {
+        "placeholder": "e.g. 978..."
+      },
+      "audiobook_language": {
+        "placeholder": "e.g. en or de"
+      },
+      "audiobook_abridged": {
+        "placeholder": "abridged or unabridged"
       }
     },
     "loadingFiles": "Loading analyzed files…",
@@ -665,7 +750,13 @@
     "sample_rates": "Sample rates",
     "track_numbers": "Track numbers",
     "bit_rate_modes": "Bitrate modes",
-    "embedded_covers": "Embedded covers"
+    "embedded_covers": "Embedded covers",
+    "audiobook_narrators": "Narrators",
+    "audiobook_authors": "Authors",
+    "audiobook_publishers": "Publishers",
+    "audiobook_series": "Audiobook series",
+    "audiobook_series_parts": "Series parts",
+    "chapter_counts": "Chapter counts"
   },
   "distributionChart": {
     "loading": "Loading chart…",
@@ -801,7 +892,19 @@
     "sampleRate": "Sample rate",
     "trackNumber": "Track number",
     "bitRateMode": "Bitrate mode",
-    "embeddedCover": "Embedded cover"
+    "embeddedCover": "Embedded cover",
+    "chapterCount": "Chapters",
+    "audiobookNarrator": "Narrator",
+    "audiobookAuthor": "Author",
+    "audiobookPublisher": "Publisher",
+    "audiobookSeries": "Series",
+    "audiobookSeriesPart": "Series part",
+    "audiobookDescription": "Description",
+    "audiobookCopyright": "Copyright",
+    "audiobookLanguage": "Book language",
+    "audiobookAbridged": "Abridged",
+    "audiobookAsin": "ASIN",
+    "audiobookIsbn": "ISBN"
   },
   "fileDetail": {
     "eyebrow": "Media file detail",
@@ -822,6 +925,18 @@
     "probeScore": "Probe score",
     "videoStreams": "Video streams",
     "audioStreams": "Audio streams",
+    "cover": "Cover",
+    "coverCodec": "Codec",
+    "coverDimensions": "Dimensions",
+    "coverStream": "Stream index",
+    "chapters": "Chapters",
+    "chapterSearch": "Search chapters",
+    "chapterSearchPlaceholder": "Search chapter titles",
+    "exportChapters": "Export chapters",
+    "showAllChapters": "Show all {{count}} chapters",
+    "showFewerChapters": "Show fewer chapters",
+    "untitledChapter": "Chapter {{number}}",
+    "analysisFailure": "Analysis issue",
     "subtitles": "Subtitles",
     "rawJson": "Raw ffprobe JSON",
     "history": {
@@ -952,7 +1067,7 @@
     "none": "No stream details available.",
     "audioSpatial": "Spatial audio",
     "unknownLanguage": "Unknown language",
-    "unknownType": "Unknown type",
+    "unknownType": "Unknown media type",
     "mono": "Mono",
     "stereo": "Stereo",
     "channels": "{{count}} ch",
@@ -968,6 +1083,7 @@
     }
   },
   "common": {
+    "close": "Close",
     "yes": "Yes",
     "no": "No"
   }

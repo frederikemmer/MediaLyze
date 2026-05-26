@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from backend.app.models.entities import (
     AudioStream,
     ExternalSubtitle,
+    MediaChapter,
     MediaFile,
     MediaFileHistory,
     MediaFormat,
@@ -80,6 +81,18 @@ FileSortKey = Literal[
     "track_number",
     "bit_rate_mode",
     "has_embedded_cover",
+    "chapter_count",
+    "audiobook_narrator",
+    "audiobook_author",
+    "audiobook_publisher",
+    "audiobook_series",
+    "audiobook_series_part",
+    "audiobook_description",
+    "audiobook_copyright",
+    "audiobook_language",
+    "audiobook_abridged",
+    "audiobook_asin",
+    "audiobook_isbn",
     "audio_codecs",
     "audio_spatial_profiles",
     "audio_languages",
@@ -116,6 +129,20 @@ CSV_EXPORT_HEADERS = [
     "track_number",
     "bit_rate_mode",
     "has_embedded_cover",
+    "chapter_count",
+    "audiobook_narrator",
+    "audiobook_author",
+    "audiobook_publisher",
+    "audiobook_series",
+    "audiobook_series_part",
+    "audiobook_description",
+    "audiobook_copyright",
+    "audiobook_language",
+    "audiobook_abridged",
+    "audiobook_asin",
+    "audiobook_isbn",
+    "analysis_failure_kind",
+    "analysis_failure_reason",
     "audio_codecs",
     "audio_spatial_profiles",
     "audio_languages",
@@ -132,6 +159,17 @@ CSV_EXPORT_HEADERS = [
     "episode_number_end",
     "episode_title",
 ]
+CHAPTER_CSV_EXPORT_HEADERS = [
+    "media_file_id",
+    "relative_path",
+    "filename",
+    "chapter_index",
+    "start_time",
+    "end_time",
+    "duration",
+    "title",
+    "tags_json",
+]
 CSV_EXPORT_FILTER_LABELS = {
     "file_search": "file",
     "search_container": "container",
@@ -147,6 +185,17 @@ CSV_EXPORT_FILTER_LABELS = {
     "search_audio_codecs": "audio_codecs",
     "search_audio_spatial_profiles": "audio_spatial_profiles",
     "search_audio_languages": "audio_languages",
+    "search_chapter_titles": "chapter_titles",
+    "search_chapter_count": "chapter_count",
+    "search_audiobook_narrator": "audiobook_narrator",
+    "search_audiobook_author": "audiobook_author",
+    "search_audiobook_publisher": "audiobook_publisher",
+    "search_audiobook_series": "audiobook_series",
+    "search_audiobook_series_part": "audiobook_series_part",
+    "search_audiobook_language": "audiobook_language",
+    "search_audiobook_abridged": "audiobook_abridged",
+    "search_audiobook_asin": "audiobook_asin",
+    "search_audiobook_isbn": "audiobook_isbn",
     "search_subtitle_languages": "subtitle_languages",
     "search_subtitle_codecs": "subtitle_codecs",
     "search_subtitle_sources": "subtitle_sources",
@@ -238,6 +287,30 @@ def _cursor_sort_value(row: MediaFileTableRow, sort_key: FileSortKey):
         return row.last_analyzed_at.isoformat() if row.last_analyzed_at else ""
     if sort_key == "quality_score":
         return row.quality_score_raw if row.quality_score_raw > 0 else row.quality_score * 10
+    if sort_key == "chapter_count":
+        return row.chapter_count or 0
+    if sort_key == "audiobook_narrator":
+        return (row.audiobook_narrator or "").lower()
+    if sort_key == "audiobook_author":
+        return (row.audiobook_author or "").lower()
+    if sort_key == "audiobook_publisher":
+        return (row.audiobook_publisher or "").lower()
+    if sort_key == "audiobook_series":
+        return (row.audiobook_series or "").lower()
+    if sort_key == "audiobook_series_part":
+        return (row.audiobook_series_part or "").lower()
+    if sort_key == "audiobook_description":
+        return (row.audiobook_description or "").lower()
+    if sort_key == "audiobook_copyright":
+        return (row.audiobook_copyright or "").lower()
+    if sort_key == "audiobook_language":
+        return (row.audiobook_language or "").lower()
+    if sort_key == "audiobook_abridged":
+        return (row.audiobook_abridged or "").lower()
+    if sort_key == "audiobook_asin":
+        return (row.audiobook_asin or "").lower()
+    if sort_key == "audiobook_isbn":
+        return (row.audiobook_isbn or "").lower()
     return row.relative_path.lower()
 
 
@@ -350,6 +423,25 @@ def _row_from_model(media_file: MediaFile, resolution_categories=None) -> MediaF
         track_number=media_file.track_number or None,
         bit_rate_mode=media_file.bit_rate_mode or None,
         has_embedded_cover=media_file.has_embedded_cover,
+        chapter_count=media_file.chapter_count,
+        audiobook_narrator=media_file.audiobook_narrator or None,
+        audiobook_author=media_file.audiobook_author or None,
+        audiobook_publisher=media_file.audiobook_publisher or None,
+        audiobook_series=media_file.audiobook_series or None,
+        audiobook_series_part=media_file.audiobook_series_part or None,
+        audiobook_description=media_file.audiobook_description or None,
+        audiobook_copyright=media_file.audiobook_copyright or None,
+        audiobook_asin=media_file.audiobook_asin or None,
+        audiobook_isbn=media_file.audiobook_isbn or None,
+        audiobook_language=media_file.audiobook_language or None,
+        audiobook_abridged=media_file.audiobook_abridged or None,
+        embedded_cover_stream_index=media_file.embedded_cover_stream_index,
+        embedded_cover_codec=media_file.embedded_cover_codec or None,
+        embedded_cover_width=media_file.embedded_cover_width,
+        embedded_cover_height=media_file.embedded_cover_height,
+        analysis_failure_kind=media_file.analysis_failure_kind or None,
+        analysis_failure_reason=media_file.analysis_failure_reason or None,
+        analysis_failure_detail=media_file.analysis_failure_detail or None,
         video_codec=primary_video.codec if primary_video else None,
         resolution=resolution,
         resolution_category_id=resolution_category.id if resolution_category else None,
@@ -600,6 +692,18 @@ def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggrega
         "mtime": MediaFile.mtime,
         "last_analyzed_at": func.coalesce(cast(MediaFile.last_analyzed_at, String), ""),
         "quality_score": case((MediaFile.quality_score_raw > 0, MediaFile.quality_score_raw), else_=MediaFile.quality_score * 10),
+        "chapter_count": func.coalesce(MediaFile.chapter_count, 0),
+        "audiobook_narrator": func.lower(MediaFile.audiobook_narrator),
+        "audiobook_author": func.lower(MediaFile.audiobook_author),
+        "audiobook_publisher": func.lower(MediaFile.audiobook_publisher),
+        "audiobook_series": func.lower(MediaFile.audiobook_series),
+        "audiobook_series_part": func.lower(MediaFile.audiobook_series_part),
+        "audiobook_description": func.lower(MediaFile.audiobook_description),
+        "audiobook_copyright": func.lower(MediaFile.audiobook_copyright),
+        "audiobook_language": func.lower(MediaFile.audiobook_language),
+        "audiobook_abridged": func.lower(MediaFile.audiobook_abridged),
+        "audiobook_asin": func.lower(MediaFile.audiobook_asin),
+        "audiobook_isbn": func.lower(MediaFile.audiobook_isbn),
     }
     return sort_map[sort_key]
 
@@ -615,6 +719,7 @@ def _load_media_files_by_ids(db: Session, selected_ids: list[int]) -> list[Media
             selectinload(MediaFile.media_format),
             selectinload(MediaFile.video_streams),
             selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
             selectinload(MediaFile.series),
@@ -725,7 +830,7 @@ def _ensure_library_search_fields(db: Session, library_id: int) -> None:
     needs_backfill = db.scalar(
         select(func.count())
         .select_from(MediaFile)
-        .where(MediaFile.library_id == library_id, MediaFile.search_fields_version < 1)
+        .where(MediaFile.library_id == library_id, MediaFile.search_fields_version < 2)
     )
     if not needs_backfill:
         return
@@ -821,6 +926,20 @@ def _csv_export_row(row: MediaFileTableRow) -> list[str | int | float]:
         row.track_number or "",
         row.bit_rate_mode or "",
         "yes" if row.has_embedded_cover else "no",
+        _stringify_export_scalar(row.chapter_count),
+        row.audiobook_narrator or "",
+        row.audiobook_author or "",
+        row.audiobook_publisher or "",
+        row.audiobook_series or "",
+        row.audiobook_series_part or "",
+        row.audiobook_description or "",
+        row.audiobook_copyright or "",
+        row.audiobook_language or "",
+        row.audiobook_abridged or "",
+        row.audiobook_asin or "",
+        row.audiobook_isbn or "",
+        row.analysis_failure_kind or "",
+        row.analysis_failure_reason or "",
         " | ".join(row.audio_codecs),
         " | ".join(row.audio_spatial_profiles),
         " | ".join(row.audio_languages),
@@ -892,6 +1011,44 @@ def generate_library_files_csv_export(
             for media_file in files:
                 batch_writer.writerow(_csv_export_row(_row_from_model(media_file, get_app_settings(db).resolution_categories)))
             yield batch_buffer.getvalue().encode("utf-8")
+
+    return filename, iter_csv_chunks()
+
+
+def generate_media_chapters_csv_export(db: Session, file_id: int) -> tuple[str, Iterator[bytes]] | None:
+    media_file = db.scalar(select(MediaFile).where(MediaFile.id == file_id))
+    if media_file is None:
+        return None
+    chapters = list(
+        db.scalars(
+            select(MediaChapter)
+            .where(MediaChapter.media_file_id == file_id)
+            .order_by(MediaChapter.chapter_index, MediaChapter.id)
+        ).all()
+    )
+    base_name = re.sub(r"[^A-Za-z0-9._-]+", "_", media_file.filename).strip("_") or f"file-{file_id}"
+    filename = f"{base_name}-chapters.csv"
+
+    def iter_csv_chunks() -> Iterator[bytes]:
+        yield "\ufeff".encode("utf-8")
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(CHAPTER_CSV_EXPORT_HEADERS)
+        for chapter in chapters:
+            writer.writerow(
+                [
+                    media_file.id,
+                    media_file.relative_path,
+                    media_file.filename,
+                    chapter.chapter_index,
+                    _stringify_export_scalar(chapter.start_time),
+                    _stringify_export_scalar(chapter.end_time),
+                    _stringify_export_scalar(chapter.duration),
+                    chapter.title or "",
+                    json.dumps(chapter.tags or {}, ensure_ascii=False, sort_keys=True),
+                ]
+            )
+        yield buffer.getvalue().encode("utf-8")
 
     return filename, iter_csv_chunks()
 
@@ -985,6 +1142,7 @@ def _series_summary_from_model(db: Session, series: MediaSeries, resolution_cate
             selectinload(MediaFile.media_format),
             selectinload(MediaFile.video_streams),
             selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
             selectinload(MediaFile.series),
@@ -1367,6 +1525,7 @@ def get_media_file_detail(db: Session, file_id: int) -> MediaFileDetail | None:
             selectinload(MediaFile.media_format),
             selectinload(MediaFile.video_streams),
             selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
             selectinload(MediaFile.series),
@@ -1388,6 +1547,7 @@ def serialize_media_file_detail(media_file: MediaFile, resolution_categories=Non
         audio_streams=sorted(media_file.audio_streams, key=lambda stream: stream.stream_index),
         subtitle_streams=sorted(media_file.subtitle_streams, key=lambda stream: stream.stream_index),
         external_subtitles=sorted(media_file.external_subtitles, key=lambda subtitle: subtitle.path.lower()),
+        chapters=sorted(media_file.chapters, key=lambda chapter: chapter.chapter_index),
         raw_ffprobe_json=media_file.raw_ffprobe_json,
     )
 
@@ -1399,6 +1559,7 @@ def get_media_file_stream_details(db: Session, file_id: int) -> MediaFileStreamD
         .options(
             selectinload(MediaFile.video_streams),
             selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
         )
@@ -1412,6 +1573,7 @@ def get_media_file_stream_details(db: Session, file_id: int) -> MediaFileStreamD
         audio_streams=sorted(media_file.audio_streams, key=lambda stream: stream.stream_index),
         subtitle_streams=sorted(media_file.subtitle_streams, key=lambda stream: stream.stream_index),
         external_subtitles=sorted(media_file.external_subtitles, key=lambda subtitle: subtitle.path.lower()),
+        chapters=sorted(media_file.chapters, key=lambda chapter: chapter.chapter_index),
     )
 
 

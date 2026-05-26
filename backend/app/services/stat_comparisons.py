@@ -69,6 +69,12 @@ class ComparisonSourceRow:
     track_number: str | None
     bit_rate_mode: str | None
     embedded_cover: bool
+    chapter_count: float | None
+    audiobook_narrator: str | None
+    audiobook_author: str | None
+    audiobook_publisher: str | None
+    audiobook_series: str | None
+    audiobook_series_part: str | None
 
 
 COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition] = {
@@ -91,6 +97,12 @@ COMPARISON_FIELD_DEFINITIONS: dict[ComparisonFieldId, ComparisonFieldDefinition]
     "track_number": ComparisonFieldDefinition(field_id="track_number", kind="category"),
     "bit_rate_mode": ComparisonFieldDefinition(field_id="bit_rate_mode", kind="category"),
     "embedded_cover": ComparisonFieldDefinition(field_id="embedded_cover", kind="category"),
+    "chapter_count": ComparisonFieldDefinition(field_id="chapter_count", kind="numeric"),
+    "audiobook_narrator": ComparisonFieldDefinition(field_id="audiobook_narrator", kind="category"),
+    "audiobook_author": ComparisonFieldDefinition(field_id="audiobook_author", kind="category"),
+    "audiobook_publisher": ComparisonFieldDefinition(field_id="audiobook_publisher", kind="category"),
+    "audiobook_series": ComparisonFieldDefinition(field_id="audiobook_series", kind="category"),
+    "audiobook_series_part": ComparisonFieldDefinition(field_id="audiobook_series_part", kind="category"),
 }
 VIDEO_ONLY_COMPARISON_FIELDS: Final[set[ComparisonFieldId]] = {
     "bitrate",
@@ -114,6 +126,12 @@ MUSIC_ALLOWED_COMPARISON_FALLBACK: Final[list[ComparisonFieldId]] = [
     "track_number",
     "bit_rate_mode",
     "embedded_cover",
+    "chapter_count",
+    "audiobook_narrator",
+    "audiobook_author",
+    "audiobook_publisher",
+    "audiobook_series",
+    "audiobook_series_part",
 ]
 NUMERIC_BUCKET_CONFIGS = {
     config.metric_id: config
@@ -127,7 +145,7 @@ def _normalize_library_comparison_fields(
     x_field: ComparisonFieldId,
     y_field: ComparisonFieldId,
 ) -> tuple[ComparisonFieldId, ComparisonFieldId]:
-    if library_type != "music":
+    if library_type not in {"music", "audiobooks"}:
         return x_field, y_field
 
     allowed_fields = [
@@ -221,6 +239,12 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
             MediaFile.track_number.label("track_number"),
             MediaFile.bit_rate_mode.label("bit_rate_mode"),
             MediaFile.has_embedded_cover.label("embedded_cover"),
+            cast(MediaFile.chapter_count, Float).label("chapter_count"),
+            MediaFile.audiobook_narrator.label("audiobook_narrator"),
+            MediaFile.audiobook_author.label("audiobook_author"),
+            MediaFile.audiobook_publisher.label("audiobook_publisher"),
+            MediaFile.audiobook_series.label("audiobook_series"),
+            MediaFile.audiobook_series_part.label("audiobook_series_part"),
         )
         .select_from(MediaFile)
         .order_by(MediaFile.id.asc())
@@ -253,6 +277,12 @@ def _comparison_source_rows(db: Session, *, library_id: int | None = None) -> li
             track_number=row.track_number,
             bit_rate_mode=row.bit_rate_mode,
             embedded_cover=bool(row.embedded_cover),
+            chapter_count=row.chapter_count,
+            audiobook_narrator=row.audiobook_narrator,
+            audiobook_author=row.audiobook_author,
+            audiobook_publisher=row.audiobook_publisher,
+            audiobook_series=row.audiobook_series,
+            audiobook_series_part=row.audiobook_series_part,
         )
         for row in db.execute(query).all()
     ]
@@ -278,6 +308,8 @@ def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> flo
         return row.audio_channels if row.audio_channels is not None and row.audio_channels > 0 else None
     if field_id == "sample_rate":
         return row.sample_rate if row.sample_rate is not None and row.sample_rate > 0 else None
+    if field_id == "chapter_count":
+        return row.chapter_count if row.chapter_count is not None else 0
     if field_id == "resolution_mp":
         if row.width is None or row.height is None or row.width <= 0 or row.height <= 0:
             return None
@@ -317,6 +349,21 @@ def _category_value(row: ComparisonSourceRow, field_id: ComparisonFieldId, *, re
         return CategoryValue(key=value, label=value)
     if field_id == "embedded_cover":
         return CategoryValue(key="yes" if row.embedded_cover else "no", label="yes" if row.embedded_cover else "no")
+    if field_id == "audiobook_narrator":
+        value = _normalized_text(row.audiobook_narrator, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audiobook_author":
+        value = _normalized_text(row.audiobook_author, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audiobook_publisher":
+        value = _normalized_text(row.audiobook_publisher, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audiobook_series":
+        value = _normalized_text(row.audiobook_series, "unknown")
+        return CategoryValue(key=value, label=value)
+    if field_id == "audiobook_series_part":
+        value = _normalized_text(row.audiobook_series_part, "unknown")
+        return CategoryValue(key=value, label=value)
     if field_id == "audio_channels":
         value = str(int(row.audio_channels)) if row.audio_channels else "unknown"
         return CategoryValue(key=value, label=value)

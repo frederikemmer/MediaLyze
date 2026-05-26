@@ -102,6 +102,49 @@ def test_quality_score_maps_opus_audio_codec_instead_of_neutral_unknown() -> Non
     assert audio_codec.score == 100.0
 
 
+def test_quality_score_uses_video_codec_multi_selection_without_rank_hierarchy() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=8000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="vp9",
+                profile=None,
+                width=1920,
+                height=1080,
+                pix_fmt="yuv420p",
+                color_space=None,
+                color_transfer=None,
+                color_primaries=None,
+                frame_rate=24.0,
+                bit_rate=7000000,
+                hdr_type=None,
+            )
+        ],
+    )
+
+    accepted = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={"video_codec": {"weight": 5, "minimum": "h264", "ideal": "hevc", "values": ["h264", "vp9"]}},
+    )
+    rejected = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={"video_codec": {"weight": 5, "minimum": "h264", "ideal": "hevc", "values": ["h264", "hevc"]}},
+    )
+
+    accepted_video_codec = next(category for category in accepted.categories if category.key == "video_codec")
+    rejected_video_codec = next(category for category in rejected.categories if category.key == "video_codec")
+
+    assert accepted_video_codec.score == 100.0
+    assert rejected_video_codec.score == 0.0
+
+
 def test_quality_score_penalizes_low_quality_media() -> None:
     probe = ProbeResult(
         raw={},
@@ -114,7 +157,7 @@ def test_quality_score_penalizes_low_quality_media() -> None:
         video_streams=[
             NormalizedVideoStream(
                 stream_index=0,
-                codec="h264",
+                codec="mpeg2video",
                 profile="High",
                 width=640,
                 height=360,
@@ -163,6 +206,49 @@ def test_quality_score_treats_dolby_vision_profiles_as_dolby_vision() -> None:
     dynamic_range = next(category for category in breakdown.categories if category.key == "dynamic_range")
 
     assert dynamic_range.actual == "dolby_vision"
+
+
+def test_quality_score_uses_dynamic_range_multi_selection_without_rank_hierarchy() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="matroska",
+            duration=7200,
+            bit_rate=14000000,
+            probe_score=100,
+        ),
+        video_streams=[
+            NormalizedVideoStream(
+                stream_index=0,
+                codec="hevc",
+                profile="Main 10",
+                width=3840,
+                height=2160,
+                pix_fmt="yuv420p10le",
+                color_space=None,
+                color_transfer="smpte2084",
+                color_primaries=None,
+                frame_rate=23.976,
+                bit_rate=12000000,
+                hdr_type="HDR10+",
+            )
+        ],
+    )
+
+    accepted = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={"dynamic_range": {"weight": 4, "minimum": "sdr", "ideal": "hdr10", "values": ["sdr", "hdr10_plus"]}},
+    )
+    rejected = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={"dynamic_range": {"weight": 4, "minimum": "sdr", "ideal": "hdr10", "values": ["sdr", "hdr10"]}},
+    )
+
+    accepted_dynamic_range = next(category for category in accepted.categories if category.key == "dynamic_range")
+    rejected_dynamic_range = next(category for category in rejected.categories if category.key == "dynamic_range")
+
+    assert accepted_dynamic_range.score == 100.0
+    assert rejected_dynamic_range.score == 0.0
 
 
 def test_quality_score_counts_external_subtitles_for_language_preferences() -> None:

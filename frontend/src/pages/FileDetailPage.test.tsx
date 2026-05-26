@@ -130,6 +130,24 @@ function createFileDetail(): MediaFileDetail {
       },
     ],
     external_subtitles: [{ path: "Shows/Season01/file.en.srt", language: "en", format: "srt" }],
+    chapters: [
+      {
+        chapter_index: 0,
+        start_time: 0,
+        end_time: 90,
+        duration: 90,
+        title: "Opening",
+        tags: { title: "Opening" },
+      },
+      {
+        chapter_index: 1,
+        start_time: 90,
+        end_time: 180,
+        duration: 90,
+        title: null,
+        tags: null,
+      },
+    ],
     raw_ffprobe_json: { streams: [] },
   };
 }
@@ -202,6 +220,52 @@ function createFileHistory(): MediaFileHistory {
           filename: "Old_File_Name.mkv",
           quality_score: 8,
           size_bytes: 8_589_934_592,
+        },
+      },
+    ],
+  };
+}
+
+function createEnrichmentOnlyFileHistory(): MediaFileHistory {
+  const current = createFileDetail();
+  return {
+    file_id: current.id,
+    library_id: current.library_id,
+    relative_path: current.relative_path,
+    total: 2,
+    items: [
+      {
+        id: 2,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-15T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "enriched",
+        snapshot: {
+          ...current,
+          audio_channels: 6,
+          sample_rate: 48_000,
+          has_embedded_cover: false,
+          content_category: "main",
+        },
+      },
+      {
+        id: 1,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-03-14T10:00:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "unenriched",
+        snapshot: {
+          ...current,
+          audio_channels: null,
+          sample_rate: null,
+          has_embedded_cover: undefined,
+          content_category: undefined,
         },
       },
     ],
@@ -286,6 +350,65 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("External")).toBeInTheDocument();
   });
 
+  it("renders audiobook chapters with timings and fallback titles", async () => {
+    const file = createFileDetail();
+    const downloadChapters = vi.spyOn(api, "downloadFileChaptersCsv").mockResolvedValue({
+      blob: new Blob(["chapter_index,title\n0,Opening\n"], { type: "text/csv" }),
+      filename: "book-chapters.csv",
+    });
+    const createObjectUrl = vi.fn(() => "blob:chapters");
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectUrl, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectUrl, configurable: true });
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "Chapters" })).toBeInTheDocument();
+    expect(screen.getByText("Opening")).toBeInTheDocument();
+    expect(screen.getByText("Chapter 2")).toBeInTheDocument();
+    expect(screen.getAllByText("1m").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search chapters" }), { target: { value: "opening" } });
+    expect(screen.getByText("Opening")).toBeInTheDocument();
+    expect(screen.queryByText("Chapter 2")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export chapters" }));
+    await waitFor(() => expect(downloadChapters).toHaveBeenCalledWith(file.id));
+    expect(createObjectUrl).toHaveBeenCalled();
+    expect(anchorClick).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:chapters");
+  });
+
+  it("renders cover details and persisted analysis diagnostics", async () => {
+    const file = {
+      ...createFileDetail(),
+      scan_status: "failed",
+      has_embedded_cover: true,
+      embedded_cover_stream_index: 3,
+      embedded_cover_codec: "mjpeg",
+      embedded_cover_width: 600,
+      embedded_cover_height: 900,
+      analysis_failure_kind: "audible_drm_or_unreadable",
+      analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
+      analysis_failure_detail: "Invalid data found when processing input",
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "Cover" })).toBeInTheDocument();
+    expect(screen.getByText("600x900")).toBeInTheDocument();
+    expect(screen.getByText("mjpeg")).toBeInTheDocument();
+    expect(screen.getByText("Analysis issue")).toBeInTheDocument();
+    expect(screen.getByText("Probably DRM-protected or unreadable by ffprobe.")).toBeInTheDocument();
+  });
+
   it("renders file history snapshots in the detail panel", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
@@ -307,6 +430,23 @@ describe("FileDetailPage", () => {
     expect(screen.getAllByText("Shows/Season01/Old_File_Name.mkv").length).toBeGreaterThan(0);
     expect(container.querySelectorAll(".file-history-entry")).toHaveLength(2);
     expect(container.querySelectorAll(".file-history-entry[open]")).toHaveLength(1);
+  });
+
+  it("collapses file history snapshots that only add newly detected metadata", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(api, "fileHistory").mockResolvedValue(createEnrichmentOnlyFileHistory());
+
+    const { container } = renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "File history" })).toBeInTheDocument();
+    const historyList = container.querySelector(".file-history-list");
+    expect(historyList?.querySelectorAll(".file-history-entry")).toHaveLength(1);
+    expect(historyList?.textContent).not.toContain("Audio Channels");
+    expect(historyList?.textContent).not.toContain("Sample Rate");
+    expect(historyList?.textContent).toContain("No tracked fields changed in this period.");
   });
 
   it("stays stable when the quality detail request fails", async () => {

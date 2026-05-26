@@ -103,6 +103,123 @@ def test_normalize_ffprobe_payload_extracts_music_tag_metadata() -> None:
     assert stream.bit_rate_mode == "VBR"
 
 
+def test_normalize_ffprobe_payload_extracts_audiobook_metadata_and_chapters() -> None:
+    payload = {
+        "format": {
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "tags": {
+                "narrator": "Narrator A",
+                "book_author": "Author A",
+                "publisher": "Publisher A",
+                "series": "Series A",
+                "series-part": "2",
+                "synopsis": "A book synopsis",
+                "copyright": "Copyright A",
+                "asin": "B000000001",
+                "isbn-13": "9781234567890",
+                "language": "de",
+                "abridged": "unabridged",
+            },
+        },
+        "streams": [{"index": 0, "codec_type": "audio", "codec_name": "aac"}],
+        "chapters": [
+            {
+                "id": 0,
+                "start_time": "0.000000",
+                "end_time": "12.500000",
+                "tags": {"title": "Opening"},
+            },
+            {
+                "id": 1,
+                "start_time": "12.500000",
+                "end_time": "30.000000",
+                "tags": {"TITLE": "Chapter One"},
+            },
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audiobook_narrator == "Narrator A"
+    assert normalized.audiobook_author == "Author A"
+    assert normalized.audiobook_publisher == "Publisher A"
+    assert normalized.audiobook_series == "Series A"
+    assert normalized.audiobook_series_part == "2"
+    assert normalized.audiobook_description == "A book synopsis"
+    assert normalized.audiobook_copyright == "Copyright A"
+    assert normalized.audiobook_asin == "B000000001"
+    assert normalized.audiobook_isbn == "9781234567890"
+    assert normalized.audiobook_language == "de"
+    assert normalized.audiobook_abridged == "unabridged"
+    assert [(chapter.chapter_index, chapter.start_time, chapter.end_time, chapter.duration, chapter.title) for chapter in normalized.chapters] == [
+        (0, 0.0, 12.5, 12.5, "Opening"),
+        (1, 12.5, 30.0, 17.5, "Chapter One"),
+    ]
+
+
+def test_normalize_ffprobe_payload_handles_untitled_chapters_and_time_base_fallback() -> None:
+    payload = {
+        "format": {"format_name": "matroska", "tags": {"grouping": "Series B", "movement_number": "3"}},
+        "streams": [{"index": 0, "codec_type": "audio", "codec_name": "aac", "tags": {"performer": "Narrator B"}}],
+        "chapters": [
+            {"id": 7, "time_base": "1/1000", "start": 1500, "end": 4500, "tags": {}},
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audiobook_narrator == "Narrator B"
+    assert normalized.audiobook_series == "Series B"
+    assert normalized.audiobook_series_part == "3"
+    assert len(normalized.chapters) == 1
+    chapter = normalized.chapters[0]
+    assert chapter.chapter_index == 7
+    assert chapter.start_time == 1.5
+    assert chapter.end_time == 4.5
+    assert chapter.duration == 3.0
+    assert chapter.title is None
+
+
+def test_normalize_ffprobe_payload_reads_audiobook_metadata_from_stream_tags() -> None:
+    payload = {
+        "format": {"format_name": "mp3"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "mp3",
+                "tags": {
+                    "performer": "Narrator B",
+                    "author": "Author B",
+                    "organization": "Publisher B",
+                    "grouping": "Series B",
+                    "movement_number": "3",
+                    "comment": "Stream-level synopsis",
+                    "copyright_notice": "Copyright B",
+                    "amazon_asin": "B000000003",
+                    "isbn10": "1234567890",
+                    "book language": "eng",
+                    "version": "Abridged",
+                },
+            }
+        ],
+    }
+
+    normalized = normalize_ffprobe_payload(payload)
+
+    assert normalized.audiobook_narrator == "Narrator B"
+    assert normalized.audiobook_author == "Author B"
+    assert normalized.audiobook_publisher == "Publisher B"
+    assert normalized.audiobook_series == "Series B"
+    assert normalized.audiobook_series_part == "3"
+    assert normalized.audiobook_description == "Stream-level synopsis"
+    assert normalized.audiobook_copyright == "Copyright B"
+    assert normalized.audiobook_asin == "B000000003"
+    assert normalized.audiobook_isbn == "1234567890"
+    assert normalized.audiobook_language == "en"
+    assert normalized.audiobook_abridged == "abridged"
+
+
 def test_normalize_ffprobe_payload_extracts_spatial_audio_profiles() -> None:
     payload = {
         "format": {"format_name": "matroska"},
@@ -223,6 +340,10 @@ def test_normalize_ffprobe_payload_ignores_attached_pictures() -> None:
     assert len(normalized.video_streams) == 1
     assert normalized.video_streams[0].codec == "h264"
     assert normalized.has_embedded_cover is True
+    assert normalized.embedded_cover_stream_index == 1
+    assert normalized.embedded_cover_codec == "mjpeg"
+    assert normalized.embedded_cover_width == 600
+    assert normalized.embedded_cover_height == 900
 
 
 def test_normalize_ffprobe_payload_extracts_dolby_vision_profile() -> None:

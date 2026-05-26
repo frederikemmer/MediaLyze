@@ -24,8 +24,11 @@ VIDEO_EXTENSIONS = (
 AUDIO_EXTENSIONS = (
     ".mp3",
     ".flac",
+    ".m4b",
     ".m4a",
     ".aac",
+    ".aa",
+    ".aax",
     ".ogg",
     ".oga",
     ".opus",
@@ -188,12 +191,12 @@ def get_allowed_media_extensions(library_type: str) -> tuple[str, ...]:
     """Return allowed media extensions based on library type.
     
     Args:
-        library_type: One of "movies", "series", "music", "mixed", "other"
+        library_type: One of "movies", "series", "music", "audiobooks", "mixed", "other"
         
     Returns:
         Tuple of allowed file extensions for the library type
     """
-    if library_type == "music":
+    if library_type in ("music", "audiobooks"):
         return AUDIO_EXTENSIONS
     elif library_type in ("movies", "series"):
         return VIDEO_EXTENSIONS

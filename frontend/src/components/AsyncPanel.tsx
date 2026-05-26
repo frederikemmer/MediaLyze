@@ -95,6 +95,11 @@ export function AsyncPanel({
                 <h2>{title}</h2>
               ) : null}
               {titleAddon}
+              {!collapseState && collapseActions ? (
+                <div className="async-panel-toggle-actions">
+                  {collapseActions}
+                </div>
+              ) : null}
             </div>
             {subtitleAddon}
             {subtitle && !isCollapsed ? <p className="subtitle">{subtitle}</p> : null}

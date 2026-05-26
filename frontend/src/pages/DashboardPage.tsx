@@ -759,7 +759,7 @@ export function DashboardPage() {
             } else {
               const statisticDefinition = panel.definition.statisticDefinition;
               const panelTitle =
-                effectiveDashboardLibraryType === "music" && statisticDefinition.id === "audio_codecs"
+                (effectiveDashboardLibraryType === "music" || effectiveDashboardLibraryType === "audiobooks") && statisticDefinition.id === "audio_codecs"
                   ? t("dashboard.formatsAndCodecs")
                   : t(statisticDefinition.dashboardTitleKey ?? statisticDefinition.nameKey);
               const items =

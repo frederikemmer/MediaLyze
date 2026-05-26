@@ -9,6 +9,9 @@ class QualityCategoryConfig(BaseModel):
     weight: int = Field(default=0, ge=0, le=10)
     minimum: str | float
     ideal: str | float
+    values: list[str] | None = None
+    minimum_values: list[str] | None = None
+    ideal_values: list[str] | None = None
 
 
 class QualityNumericCategoryConfig(BaseModel):
@@ -44,7 +47,13 @@ class QualityProfile(BaseModel):
         default_factory=lambda: QualityNumericCategoryConfig(weight=10, minimum=0.02, ideal=0.04, maximum=0.08)
     )
     video_codec: QualityCategoryConfig = Field(
-        default_factory=lambda: QualityCategoryConfig(weight=5, minimum="h264", ideal="hevc")
+        default_factory=lambda: QualityCategoryConfig(
+            weight=5,
+            minimum="h264",
+            ideal="hevc",
+            minimum_values=["h264"],
+            ideal_values=["hevc"],
+        )
     )
     audio_channels: QualityCategoryConfig = Field(
         default_factory=lambda: QualityCategoryConfig(weight=4, minimum="stereo", ideal="5.1")
@@ -53,7 +62,13 @@ class QualityProfile(BaseModel):
         default_factory=lambda: QualityCategoryConfig(weight=3, minimum="aac", ideal="eac3")
     )
     dynamic_range: QualityCategoryConfig = Field(
-        default_factory=lambda: QualityCategoryConfig(weight=4, minimum="sdr", ideal="hdr10")
+        default_factory=lambda: QualityCategoryConfig(
+            weight=4,
+            minimum="sdr",
+            ideal="hdr10",
+            minimum_values=["sdr"],
+            ideal_values=["hdr10"],
+        )
     )
     language_preferences: QualityLanguagePreferencesConfig = Field(
         default_factory=lambda: QualityLanguagePreferencesConfig(weight=6, mode="partial")
@@ -66,8 +81,8 @@ class QualityCategoryBreakdownRead(BaseModel):
     weight: int
     active: bool
     skipped: bool = False
-    minimum: str | float | None = None
-    ideal: str | float | None = None
+    minimum: str | float | list[str] | None = None
+    ideal: str | float | list[str] | None = None
     maximum: str | float | None = None
     actual: str | float | list[str] | None = None
     unknown_mapping: bool = False

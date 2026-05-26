@@ -23,6 +23,12 @@ ComparisonFieldId = Literal[
     "track_number",
     "bit_rate_mode",
     "embedded_cover",
+    "chapter_count",
+    "audiobook_narrator",
+    "audiobook_author",
+    "audiobook_publisher",
+    "audiobook_series",
+    "audiobook_series_part",
 ]
 
 ComparisonFieldKind = Literal["numeric", "category"]

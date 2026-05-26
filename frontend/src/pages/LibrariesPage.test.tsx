@@ -22,6 +22,7 @@ import {
   type ScanJobDetail,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
+import type { SettingsPanelId } from "../lib/settings-panel-state";
 import { LibrariesPage } from "./LibrariesPage";
 
 type AppSettingsOverrides = Omit<
@@ -362,23 +363,17 @@ function createDashboard(overrides: Partial<DashboardResponse> = {}): DashboardR
   };
 }
 
-function renderPage({ seedExpandedPanels = true }: { seedExpandedPanels?: boolean } = {}) {
+function renderPage({
+  seedExpandedPanels = true,
+  activePanel,
+}: {
+  seedExpandedPanels?: boolean;
+  activePanel?: SettingsPanelId;
+} = {}) {
+  if (activePanel) {
+    window.localStorage.setItem("medialyze-settings-active-panel", activePanel);
+  }
   if (seedExpandedPanels) {
-    if (!window.localStorage.getItem("medialyze-settings-panel-state")) {
-      window.localStorage.setItem(
-        "medialyze-settings-panel-state",
-        JSON.stringify({
-          configuredLibraries: true,
-          historyRetention: true,
-          patternRecognition: true,
-          recentScanLogs: true,
-          resolutionCategories: true,
-          createLibrary: true,
-          appSettings: true,
-          telemetry: true,
-        }),
-      );
-    }
     if (!window.localStorage.getItem("medialyze-pattern-recognition-sections")) {
       window.localStorage.setItem(
         "medialyze-pattern-recognition-sections",
@@ -449,9 +444,9 @@ afterEach(() => {
 
 describe("LibrariesPage ignore patterns", () => {
   it("keeps the combined ignore-pattern section collapsed by default", async () => {
-    renderPage({ seedExpandedPanels: false });
+    renderPage({ seedExpandedPanels: false, activePanel: "patternRecognition" });
 
-    fireEvent.click(await screen.findByRole("button", { name: /^folder & pattern recognition$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^pattern recognition$/i }));
     const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
     const bonusFolderToggle = screen.getByRole("button", { name: /^bonus folder patterns\d+$/i });
 
@@ -466,12 +461,8 @@ describe("LibrariesPage ignore patterns", () => {
       "medialyze-ignore-pattern-sections",
       JSON.stringify({ combinedExpanded: false }),
     );
-    window.localStorage.setItem(
-      "medialyze-settings-panel-state",
-      JSON.stringify({ patternRecognition: true }),
-    );
 
-    renderPage({ seedExpandedPanels: false });
+    renderPage({ seedExpandedPanels: false, activePanel: "patternRecognition" });
 
     const combinedToggle = await screen.findByRole("button", { name: /^ignore patterns\d+$/i });
 
@@ -488,7 +479,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "patternRecognition" });
 
     const defaultInput = await screen.findByDisplayValue("*/@eaDir/*");
     fireEvent.change(defaultInput, { target: { value: "*/#recycle/*" } });
@@ -529,7 +520,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "patternRecognition" });
 
     const restoreButton = await screen.findByRole("button", { name: "Restore ignore defaults" });
     fireEvent.click(restoreButton);
@@ -586,7 +577,7 @@ describe("LibrariesPage ignore patterns", () => {
     );
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings({ pattern_recognition: patternRecognition }));
 
-    renderPage();
+    renderPage({ activePanel: "patternRecognition" });
 
     await screen.findByDisplayValue("Custom Extras/*");
     const bonusInput = screen.getByDisplayValue("Custom Extras/*");
@@ -612,7 +603,7 @@ describe("LibrariesPage ignore patterns", () => {
   it("defaults show and season recognition to folder depth and hides regex inputs", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
 
-    renderPage();
+    renderPage({ activePanel: "patternRecognition" });
 
     expect(await screen.findByDisplayValue("Folder depth")).toBeInTheDocument();
     expect(screen.getByLabelText("Series folder depth")).toHaveValue("1");
@@ -646,7 +637,7 @@ describe("LibrariesPage ignore patterns", () => {
     );
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
 
-    renderPage();
+    renderPage({ activePanel: "patternRecognition" });
 
     fireEvent.change(await screen.findByDisplayValue("Folder depth"), { target: { value: "regex" } });
 
@@ -692,10 +683,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const checkbox = await screen.findByLabelText("Show analyzed-files CSV export");
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -739,10 +729,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const checkbox = await screen.findByLabelText("Use full-width app shell");
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -786,10 +775,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const checkbox = await screen.findByLabelText("Hide quality score meter");
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -833,10 +821,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const checkbox = await screen.findByLabelText("Unlimited panel size");
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -880,10 +867,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const checkbox = await screen.findByLabelText("In-depth Dolby Vision profiles");
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(checkbox).toBeEnabled());
     fireEvent.click(checkbox);
 
@@ -924,7 +910,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const scanWorkerInput = (await screen.findByLabelText("Per-scan analysis workers")) as HTMLSelectElement;
     const parallelScanInput = screen.getByLabelText("Parallel library scans") as HTMLSelectElement;
@@ -975,10 +961,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const scatterPointLimitInput = (await screen.findByLabelText("Scatter plot points")) as HTMLSelectElement;
-    await screen.findByDisplayValue("movie.tmp");
     await waitFor(() => expect(scatterPointLimitInput).toBeEnabled());
 
     fireEvent.change(scatterPointLimitInput, { target: { value: "10000" } });
@@ -1010,7 +995,7 @@ describe("LibrariesPage ignore patterns", () => {
   });
 
   it("shows the scatter plot point limit under the plots and charts section", async () => {
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     const sectionTitle = await screen.findByText("Plots & Charts");
     const settingsSection = sectionTitle.closest(".app-settings-section") as HTMLElement | null;
@@ -1025,14 +1010,15 @@ describe("LibrariesPage ignore patterns", () => {
   });
 
   it("renders history retention rows with storage forecast values", async () => {
-    renderPage();
+    renderPage({ activePanel: "historyRetention" });
 
-    expect(await screen.findByText("History retention")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "History retention" })).toBeInTheDocument();
     expect(screen.getAllByText("File history")).toHaveLength(2);
     expect(screen.getAllByText("Media library history")).toHaveLength(2);
     expect(screen.getAllByText("Scan history")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeInTheDocument();
-    expect(screen.getAllByText("0 = unlimited").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Explain retention days" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain storage limit" })).toBeInTheDocument();
     expect(screen.getByText(/File history retention only affects per-file snapshots/)).toBeInTheDocument();
     expect(await screen.findByText("977 KB")).toBeInTheDocument();
     expect((await screen.findAllByText("2.9 MB")).length).toBeGreaterThan(0);
@@ -1054,7 +1040,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "historyRetention" });
 
     expect(await screen.findByText("Reconstructing file history")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
@@ -1100,7 +1086,7 @@ describe("LibrariesPage ignore patterns", () => {
       .mockResolvedValueOnce(createHistoryStorage())
       .mockResolvedValueOnce(createHistoryStorage());
 
-    renderPage();
+    renderPage({ activePanel: "historyRetention" });
 
     const button = await screen.findByRole("button", { name: "Reconstruct history" });
     fireEvent.click(button);
@@ -1141,9 +1127,8 @@ describe("LibrariesPage ignore patterns", () => {
         }),
       );
 
-    renderPage();
+    renderPage({ activePanel: "historyRetention" });
 
-    await screen.findByDisplayValue("movie.tmp");
     const daysInput = (await screen.findByLabelText("Retention days", {
       selector: "#file_history-history-days",
     })) as HTMLInputElement;
@@ -1152,6 +1137,7 @@ describe("LibrariesPage ignore patterns", () => {
     }) as HTMLInputElement;
     expect(daysInput.value).toBe("30");
     expect(storageInput.value).toBe("0");
+    await waitFor(() => expect(daysInput).toBeEnabled());
     fireEvent.change(daysInput, { target: { value: "120" } });
     fireEvent.change(storageInput, { target: { value: "1.5" } });
     fireEvent.blur(storageInput);
@@ -1197,7 +1183,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "resolutionCategories" });
 
     const labelInput = (await screen.findByDisplayValue("4k")) as HTMLInputElement;
     fireEvent.change(labelInput, { target: { value: "UHD" } });
@@ -1238,7 +1224,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "resolutionCategories" });
 
     await screen.findByDisplayValue("UHD");
     fireEvent.click(screen.getByRole("button", { name: "Restore defaults" }));
@@ -1259,7 +1245,7 @@ describe("LibrariesPage ignore patterns", () => {
   });
 
   it("shows the resolution category tooltip with relaxed thresholds and reference formats", async () => {
-    renderPage();
+    renderPage({ activePanel: "resolutionCategories" });
 
     fireEvent.click(screen.getByRole("button", { name: "Explain reduced default resolution thresholds" }));
 
@@ -1285,7 +1271,7 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "resolutionCategories" });
 
     fireEvent.change(await screen.findByPlaceholderText("New category"), { target: { value: "480p" } });
     fireEvent.change(screen.getByLabelText("Min width", { selector: "#resolution-category-new-width" }), {
@@ -1323,9 +1309,9 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByText("Movies");
+    await screen.findByRole("link", { name: "Movies" });
     fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
     expect(await screen.findByText("UHD")).toBeInTheDocument();
     const visualDensityTitle = await screen.findByText("Visual density");
@@ -1343,9 +1329,9 @@ describe("LibrariesPage ignore patterns", () => {
   it("shows recognized codec options in quality score settings", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
 
-    renderPage();
+    renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByText("Movies");
+    await screen.findByRole("link", { name: "Movies" });
     fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
 
     const videoCodecTitle = await screen.findByText("Video codec");
@@ -1368,6 +1354,37 @@ describe("LibrariesPage ignore patterns", () => {
   });
 });
 
+describe("LibrariesPage media type selection", () => {
+  it("requires an explicit media type and can create audiobook libraries", async () => {
+    const createSpy = vi
+      .spyOn(api, "createLibrary")
+      .mockResolvedValue(createLibrarySummary({ name: "Audiobooks", type: "audiobooks" }));
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add library" }));
+    const mediaTypeSelect = await screen.findByRole("combobox", { name: "Media type" });
+    expect(mediaTypeSelect).toHaveValue("");
+    expect(within(mediaTypeSelect).getByRole("option", { name: "Select media type" })).toBeInTheDocument();
+    expect(within(mediaTypeSelect).getByRole("option", { name: "Audiobooks" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Audiobooks" } });
+    fireEvent.change(mediaTypeSelect, { target: { value: "audiobooks" } });
+    const createForm = mediaTypeSelect.closest("form");
+    expect(createForm).not.toBeNull();
+    fireEvent.click(within(createForm as HTMLFormElement).getByRole("button", { name: "Create library" }));
+
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Audiobooks",
+          type: "audiobooks",
+        }),
+      ),
+    );
+  });
+});
+
 describe("LibrariesPage desktop mode", () => {
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
@@ -1377,6 +1394,7 @@ describe("LibrariesPage desktop mode", () => {
 
     renderPage();
 
+    fireEvent.click(await screen.findByRole("button", { name: "Add library" }));
     expect(await screen.findByRole("button", { name: "Choose folder" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Up" })).not.toBeInTheDocument();
     expect(screen.getByText("Select a local folder, mounted network share, or UNC path to analyze.")).toBeInTheDocument();
@@ -1388,7 +1406,7 @@ describe("LibrariesPage desktop mode", () => {
       selectLibraryPaths: vi.fn().mockResolvedValue(["/mnt/network-media"]),
     };
     vi.spyOn(api, "libraries").mockResolvedValue([
-      createLibrarySummary({ path: "/mnt/network-media", scan_mode: "manual" }),
+      createLibrarySummary({ path: "/mnt/network-media", scan_mode: "watch" }),
     ]);
     vi.spyOn(api, "inspectPath").mockResolvedValue(
       createPathInspection({
@@ -1398,13 +1416,16 @@ describe("LibrariesPage desktop mode", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByText("Movies");
-    fireEvent.change(screen.getByLabelText("Scan mode"), { target: { value: "watch" } });
+    await screen.findByRole("link", { name: "Movies" });
 
-    await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveValue("scheduled"));
-    expect(screen.getByText("Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Scan mode")).toHaveTextContent("Time Interval"));
+    expect(
+      screen.getAllByText(
+        "Watch mode is only available for local paths. MediaLyze falls back to scheduled scans for network locations.",
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("shows duplicate detection settings and auto-saves the selected mode", async () => {
@@ -1413,10 +1434,11 @@ describe("LibrariesPage desktop mode", () => {
       createLibrarySummary({ duplicate_detection_mode: "both" }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByText("Movies");
-    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
+    await screen.findByRole("link", { name: "Movies" });
+    fireEvent.click(screen.getByLabelText("Duplicate detection"));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Both" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1431,9 +1453,9 @@ describe("LibrariesPage desktop mode", () => {
   it("shows the duplicate detection hint in a tooltip instead of inline text", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
 
-    renderPage();
+    renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByText("Movies");
+    await screen.findByRole("link", { name: "Movies" });
     expect(
       screen.queryByText("Off disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views."),
     ).not.toBeInTheDocument();
@@ -1447,40 +1469,74 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
-  it("gently highlights the create-library panel while no library exists", async () => {
+  it("keeps libraries selected while no library exists and exposes add library from the panel", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([]);
 
     renderPage();
 
-    await screen.findByText("Add first library");
-    expect(document.querySelector(".create-library-first-run-attention")).toHaveClass("async-panel");
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^libraries$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Add library" })).toBeInTheDocument();
+    expect(document.querySelector('[data-settings-panel-id="createLibrary"]')).not.toBeInTheDocument();
   });
 
   it("does not show the old centralized table-view settings panel", async () => {
     renderPage();
 
-    await screen.findByRole("button", { name: /^configured libraries$/i });
+    await screen.findByRole("button", { name: /^libraries$/i });
     expect(screen.queryByRole("button", { name: /^table view$/i })).not.toBeInTheDocument();
   });
 
-  it("keeps less-frequent settings panels collapsed by default", async () => {
-    renderPage({ seedExpandedPanels: false });
+  it("switches between settings panels from the vertical navigation", async () => {
+    renderPage({ activePanel: "appSettings" });
 
-    const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
-    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
-    const patternRecognitionToggle = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
-    const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
-    const telemetryToggle = screen.getByRole("button", { name: /^telemetry$/i });
-    const recentScanLogsToggle = screen.getByRole("button", { name: /^recent scan logs$/i });
-
-    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "true");
-    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
-    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "false");
-    expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "true");
-    expect(recentScanLogsToggle).toHaveAttribute("aria-expanded", "false");
-    expect(telemetryToggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add resolution category" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^resolution categories$/i }));
+
+    expect(await screen.findByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
+  });
+
+  it("collapses and restores the settings navigation", async () => {
+    renderPage({ activePanel: "appSettings" });
+
+    const collapseButton = await screen.findByRole("button", { name: "Collapse settings menu" });
+    fireEvent.click(collapseButton);
+
+    expect(window.localStorage.getItem("medialyze-settings-sidebar-collapsed")).toBe("true");
+    expect(await screen.findByRole("button", { name: "Expand settings menu" })).toBeInTheDocument();
+  });
+
+  it("opens the mobile settings menu and closes it after selecting a panel", async () => {
+    renderPage({ activePanel: "appSettings" });
+
+    const trigger = await screen.findByRole("button", { name: "Open settings menu" });
+    expect(trigger).toHaveTextContent("App settings");
+
+    const menu = document.getElementById("settings-mobile-navigation-menu");
+    expect(menu).not.toBeNull();
+    expect(menu).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(trigger);
+
+    expect(await screen.findByRole("button", { name: "Close settings menu" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(menu).toHaveAttribute("aria-hidden", "false");
+    expect(within(menu as HTMLElement).getByRole("button", { name: "full scan" })).toBeInTheDocument();
+
+    fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));
+
+    expect(await screen.findByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
+    expect(menu).toHaveAttribute("aria-hidden", "true");
+    expect(await screen.findByRole("button", { name: "Open settings menu" })).toHaveTextContent(
+      "Resolution categories",
+    );
   });
 
   it("persists interface language changes to app settings", async () => {
@@ -1488,7 +1544,7 @@ describe("LibrariesPage settings panels", () => {
       createAppSettings({ ui_preferences: { interface_language: "de" } }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     fireEvent.change(await screen.findByLabelText("Interface language"), { target: { value: "de" } });
 
@@ -1504,7 +1560,7 @@ describe("LibrariesPage settings panels", () => {
       createAppSettings({ ui_preferences: { color_theme: "dark" } }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "appSettings" });
 
     fireEvent.change(await screen.findByLabelText("Color theme"), { target: { value: "dark" } });
 
@@ -1535,7 +1591,7 @@ describe("LibrariesPage settings panels", () => {
       },
     });
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     expect(await screen.findByRole("heading", { name: "Telemetry" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Example full" }));
@@ -1559,7 +1615,7 @@ describe("LibrariesPage settings panels", () => {
       },
     });
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     fireEvent.click(await screen.findByRole("button", { name: "Example minimal" }));
 
@@ -1579,7 +1635,7 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     const preview = await screen.findByLabelText("Telemetry payload JSON preview");
     expect(preview).toHaveTextContent("No user-visible telemetry payload has been sent yet.");
@@ -1622,7 +1678,7 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     expect(await screen.findByText("Public statistics")).toBeInTheDocument();
     expect(screen.queryByText("Payload preview")).not.toBeInTheDocument();
@@ -1647,7 +1703,7 @@ describe("LibrariesPage settings panels", () => {
       openExternalUrl,
     };
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     fireEvent.click(await screen.findByRole("button", { name: "Open MediaLyze statistics page" }));
 
@@ -1668,7 +1724,7 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     const offButtons = await screen.findAllByRole("button", { name: "Telemetry off" });
     expect(offButtons[0]).toHaveAttribute("data-tooltip-title", "Telemetry off");
@@ -1724,7 +1780,7 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "telemetry" });
 
     const enabledButtons = await screen.findAllByRole("button", { name: "Help the dev" });
     fireEvent.click(enabledButtons[0]);
@@ -1738,90 +1794,45 @@ describe("LibrariesPage settings panels", () => {
     );
   });
 
-  it("places the pattern recognition panel between resolution categories and history retention", async () => {
+  it("orders settings navigation entries consistently", async () => {
     renderPage();
 
-    const resolutionPanel = (await screen.findByRole("button", { name: /^resolution categories$/i })).closest(
-      ".async-panel",
-    ) as HTMLElement | null;
-    const patternRecognitionPanel = screen.getByRole("button", { name: /^folder & pattern recognition$/i }).closest(
-      ".async-panel",
-    ) as HTMLElement | null;
-    const historyRetentionPanel = screen.getByRole("button", { name: /^history retention$/i }).closest(
-      ".async-panel",
-    ) as HTMLElement | null;
-    const recentScanLogsPanel = screen.getByRole("button", { name: /^recent scan logs$/i }).closest(
-      ".async-panel",
-    ) as HTMLElement | null;
+    const resolutionItem = await screen.findByRole("button", { name: /^resolution categories$/i });
+    const patternRecognitionItem = screen.getByRole("button", { name: /^pattern recognition$/i });
+    const historyRetentionItem = screen.getByRole("button", { name: /^history retention$/i });
+    const recentScanLogsItem = screen.getByRole("button", { name: /^recent scan logs$/i });
 
-    expect(resolutionPanel).not.toBeNull();
-    expect(patternRecognitionPanel).not.toBeNull();
-    expect(historyRetentionPanel).not.toBeNull();
-    expect(recentScanLogsPanel).not.toBeNull();
-
-    if (!resolutionPanel || !patternRecognitionPanel || !historyRetentionPanel || !recentScanLogsPanel) {
-      return;
-    }
-
-    expect(resolutionPanel.compareDocumentPosition(patternRecognitionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(patternRecognitionPanel.compareDocumentPosition(historyRetentionPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(historyRetentionPanel.compareDocumentPosition(recentScanLogsPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(resolutionItem.compareDocumentPosition(patternRecognitionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(patternRecognitionItem.compareDocumentPosition(historyRetentionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(historyRetentionItem.compareDocumentPosition(recentScanLogsItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("restores persisted settings panel state from localStorage", async () => {
-    window.localStorage.setItem(
-      "medialyze-settings-panel-state",
-      JSON.stringify({
-        configuredLibraries: false,
-        historyRetention: false,
-        recentScanLogs: true,
-        resolutionCategories: false,
-        createLibrary: true,
-        ignorePatterns: false,
-        appSettings: false,
-      }),
-    );
+  it("restores the persisted active settings panel from localStorage", async () => {
+    window.localStorage.setItem("medialyze-settings-active-panel", "appSettings");
 
     renderPage();
 
-    const configuredToggle = await screen.findByRole("button", { name: /^configured libraries$/i });
-    const patternRecognitionToggle = screen.getByRole("button", { name: /^folder & pattern recognition$/i });
-    const resolutionCategoriesToggle = screen.getByRole("button", { name: /^resolution categories$/i });
-    const historyRetentionToggle = screen.getByRole("button", { name: /^history retention$/i });
-    const appSettingsToggle = screen.getByRole("button", { name: /^app settings$/i });
-
-    expect(configuredToggle).toHaveAttribute("aria-expanded", "false");
-    expect(patternRecognitionToggle).toHaveAttribute("aria-expanded", "false");
-    expect(resolutionCategoriesToggle).toHaveAttribute("aria-expanded", "false");
-    expect(historyRetentionToggle).toHaveAttribute("aria-expanded", "false");
-    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(await screen.findByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.queryByText("Add first library")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
   });
 
-  it("persists panel collapse changes when toggled", async () => {
+  it("falls back to configured libraries when the persisted active panel is invalid", async () => {
+    window.localStorage.setItem("medialyze-settings-active-panel", "invalid-panel");
+
     renderPage();
 
-    const appSettingsToggle = await screen.findByRole("button", { name: /^app settings$/i });
-    fireEvent.click(appSettingsToggle);
-
-    expect(appSettingsToggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("medialyze-settings-panel-state")).toBe(
-      JSON.stringify({
-        configuredLibraries: true,
-        historyRetention: true,
-        patternRecognition: true,
-        recentScanLogs: true,
-        resolutionCategories: true,
-        createLibrary: true,
-        appSettings: false,
-        telemetry: true,
-      }),
-    );
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^libraries$/i })).toHaveAttribute("aria-current", "page");
   });
 
-  it("queues a full scan for all configured libraries from the panel header", async () => {
+  it("does not render old top-level collapse toggles", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /^app settings$/i })).not.toHaveAttribute("aria-expanded");
+    expect(screen.getByRole("button", { name: /^libraries$/i })).not.toHaveAttribute("aria-expanded");
+  });
+
+  it("queues a full scan for all configured libraries from the quick action", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([
       createLibrarySummary(),
       createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
@@ -1833,7 +1844,11 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /^full scan$/i }));
+    const settingsMenu = await screen.findByLabelText("Settings menu");
+    const desktopQuickActions = settingsMenu.querySelector(".settings-navigation-quick-actions") as HTMLElement | null;
+    expect(desktopQuickActions).not.toBeNull();
+    expect(within(desktopQuickActions as HTMLElement).getByText("Quickactions")).toBeInTheDocument();
+    fireEvent.click(within(desktopQuickActions as HTMLElement).getByRole("button", { name: /^full scan$/i }));
 
     await waitFor(() => {
       expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
@@ -1901,7 +1916,7 @@ describe("LibrariesPage settings panels", () => {
     expect(promptSpy).not.toHaveBeenCalled();
 
     const nameInput = screen.getByRole("textbox", { name: "Edit name for library Movies" });
-    const typeSelect = screen.getByRole("combobox", { name: "Edit type for library Movies" });
+    const typeSelect = screen.getByRole("combobox", { name: "Edit media type for library Movies" });
     fireEvent.change(nameInput, { target: { value: "Shows" } });
     fireEvent.change(typeSelect, { target: { value: "series" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes for library Movies" }));
@@ -1911,13 +1926,18 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.getByRole("button", { name: "Edit library Shows" })).toBeInTheDocument();
   });
 
-  it("keeps the recent scan logs panel collapsed by default", async () => {
+  it("keeps recent scan logs out of the active panel by default", async () => {
     renderPage({ seedExpandedPanels: false });
 
-    const scanLogsToggle = await screen.findByRole("button", { name: /^recent scan logs$/i });
-
-    expect(scanLogsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(await screen.findByRole("button", { name: /^recent scan logs$/i })).toBeInTheDocument();
     expect(screen.queryByText("No completed scans yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows recent scan logs after selecting the navigation item", async () => {
+    renderPage({ seedExpandedPanels: false, activePanel: "recentScanLogs" });
+
+    expect(await screen.findByText("No completed scans yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^recent scan logs$/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("renders recent scan log cards and lazy-loads details", async () => {
@@ -1944,7 +1964,7 @@ describe("LibrariesPage settings panels", () => {
       }),
     );
 
-    renderPage();
+    renderPage({ activePanel: "recentScanLogs" });
 
     await waitFor(() => expect(recentSpy).toHaveBeenCalledWith({ sinceHours: 24, limit: 200 }));
 
@@ -1956,7 +1976,7 @@ describe("LibrariesPage settings panels", () => {
 
     await waitFor(() => expect(detailSpy).toHaveBeenCalledWith(14));
     const ignoreSections = await screen.findAllByText("Ignore patterns");
-    expect(ignoreSections.length).toBeGreaterThanOrEqual(2);
+    expect(ignoreSections.length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText("Duplicate processing")).toBeInTheDocument();
     fireEvent.click(ignoreSections.at(-1) as HTMLElement);
     expect((await screen.findAllByText("sample.*")).length).toBeGreaterThanOrEqual(2);
@@ -1983,7 +2003,7 @@ describe("LibrariesPage settings panels", () => {
         }),
       );
 
-    renderPage();
+    renderPage({ activePanel: "recentScanLogs" });
 
     expect(await screen.findByRole("button", { name: "Load more" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));

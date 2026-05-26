@@ -2,8 +2,10 @@ export type FileDetailPanelId =
   | "qualityBreakdown"
   | "fileHistory"
   | "format"
+  | "cover"
   | "videoStreams"
   | "audioStreams"
+  | "chapters"
   | "subtitles"
   | "rawJson";
 
@@ -18,8 +20,10 @@ const DEFAULT_ORDER: FileDetailPanelId[] = [
   "qualityBreakdown",
   "fileHistory",
   "format",
+  "cover",
   "videoStreams",
   "audioStreams",
+  "chapters",
   "subtitles",
   "rawJson",
 ];
@@ -28,8 +32,10 @@ const DEFAULT_COLLAPSED: Record<FileDetailPanelId, boolean> = {
   qualityBreakdown: false,
   fileHistory: false,
   format: false,
+  cover: false,
   videoStreams: false,
   audioStreams: false,
+  chapters: false,
   subtitles: false,
   rawJson: false,
 };
@@ -56,6 +62,7 @@ function normalizeCollapsed(value: unknown): Record<FileDetailPanelId, boolean> 
         ? value.fileHistory
         : DEFAULT_COLLAPSED.fileHistory,
     format: "format" in value && typeof value.format === "boolean" ? value.format : DEFAULT_COLLAPSED.format,
+    cover: "cover" in value && typeof value.cover === "boolean" ? value.cover : DEFAULT_COLLAPSED.cover,
     videoStreams:
       "videoStreams" in value && typeof value.videoStreams === "boolean"
         ? value.videoStreams
@@ -64,6 +71,7 @@ function normalizeCollapsed(value: unknown): Record<FileDetailPanelId, boolean> 
       "audioStreams" in value && typeof value.audioStreams === "boolean"
         ? value.audioStreams
         : DEFAULT_COLLAPSED.audioStreams,
+    chapters: "chapters" in value && typeof value.chapters === "boolean" ? value.chapters : DEFAULT_COLLAPSED.chapters,
     subtitles:
       "subtitles" in value && typeof value.subtitles === "boolean" ? value.subtitles : DEFAULT_COLLAPSED.subtitles,
     rawJson: "rawJson" in value && typeof value.rawJson === "boolean" ? value.rawJson : DEFAULT_COLLAPSED.rawJson,

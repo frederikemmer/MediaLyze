@@ -5,9 +5,11 @@ import logging
 import os
 from pathlib import Path
 from threading import Lock, Timer
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
+from tzlocal import get_localzone
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, FileMovedEvent
 from watchdog.observers import Observer
 
@@ -48,6 +50,21 @@ from backend.app.services.scanner import (
 logger = logging.getLogger(__name__)
 
 
+def resolve_scheduler_timezone():
+    configured_timezone = os.environ.get("TZ")
+    if configured_timezone:
+        try:
+            return ZoneInfo(configured_timezone)
+        except ZoneInfoNotFoundError:
+            logger.warning("Ignoring invalid TZ value for scheduler timezone: %s", configured_timezone)
+
+    try:
+        return get_localzone()
+    except Exception:
+        logger.exception("Failed to resolve local scheduler timezone; falling back to UTC")
+        return ZoneInfo("UTC")
+
+
 class LibraryWatchHandler(FileSystemEventHandler):
     def __init__(self, runtime: "ScanRuntimeManager", library_id: int) -> None:
         self.runtime = runtime
@@ -60,7 +77,7 @@ class LibraryWatchHandler(FileSystemEventHandler):
 class ScanRuntimeManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.scheduler = BackgroundScheduler(timezone="UTC")
+        self.scheduler = BackgroundScheduler(timezone=resolve_scheduler_timezone())
         self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
         self.executor = self._build_executor(self.executor_max_workers)
         self.maintenance_executor = self._build_maintenance_executor()

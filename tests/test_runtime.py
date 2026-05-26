@@ -29,6 +29,14 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def test_runtime_scheduler_uses_configured_tz_environment(monkeypatch) -> None:
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+
+    assert getattr(runtime.scheduler.timezone, "key", None) == "Europe/Berlin"
+
+
 def test_recover_orphaned_jobs_cancels_queued_and_running_jobs_without_resubmitting(monkeypatch) -> None:
     session_factory = _session_factory()
     monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)

@@ -765,6 +765,66 @@ describe("LibraryDetailPage", () => {
     }
   });
 
+  it("renders the audiobook metadata columns", () => {
+    const columns = buildFileColumns(i18next.t.bind(i18next), {}, {}, {}, {}, vi.fn(), vi.fn(), new Set(), false);
+    const row = {
+      chapter_count: 24,
+      audiobook_narrator: "Narrator A",
+      audiobook_author: "Author A",
+      audiobook_publisher: "Publisher A",
+      audiobook_series: "Series A",
+      audiobook_series_part: "2",
+      audiobook_description: "Description A",
+      audiobook_copyright: "Copyright A",
+      audiobook_language: "en",
+      audiobook_abridged: "unabridged",
+      audiobook_asin: "B000000001",
+      audiobook_isbn: "9781234567890",
+    } as any;
+
+    render(
+      <table>
+        <tbody>
+          <tr>
+            {[
+              "chapter_count",
+              "audiobook_narrator",
+              "audiobook_author",
+              "audiobook_publisher",
+              "audiobook_series",
+              "audiobook_series_part",
+              "audiobook_description",
+              "audiobook_copyright",
+              "audiobook_language",
+              "audiobook_abridged",
+              "audiobook_asin",
+              "audiobook_isbn",
+            ].map((key) => (
+              <td key={key}>{columns.find((column) => column.key === key)?.render(row)}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>,
+    );
+
+    for (const value of [
+      "24",
+      "Narrator A",
+      "Author A",
+      "Publisher A",
+      "Series A",
+      "2",
+      "Description A",
+      "Copyright A",
+      "en",
+      "unabridged",
+      "B000000001",
+      "9781234567890",
+    ]) {
+      expect(screen.getByText(value)).toBeInTheDocument();
+    }
+  });
+
   it("renders history, duplicates, and analyzed files inside the editable layout grid", async () => {
     const libraryId = 126;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });

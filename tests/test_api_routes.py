@@ -18,6 +18,7 @@ from backend.app.models.entities import (
     Library,
     LibraryHistory,
     LibraryType,
+    MediaChapter,
     MediaContentCategory,
     MediaFile,
     MediaFileHistory,
@@ -137,6 +138,49 @@ def test_library_files_export_csv_returns_404_for_unknown_library() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Library not found"}
+
+
+def test_file_chapters_export_csv_returns_chapter_detail_rows() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Audiobooks", path="/tmp/audiobooks", type=LibraryType.audiobooks, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="book.m4b",
+            filename="book.m4b",
+            extension="m4b",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+        )
+        db.add(media_file)
+        db.flush()
+        db.add(
+            MediaChapter(
+                media_file_id=media_file.id,
+                chapter_index=0,
+                start_time=0,
+                end_time=10,
+                duration=10,
+                title="Opening",
+                tags={"title": "Opening"},
+            )
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        response = client.get(f"/api/files/{media_file.id}/chapters/export.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "book.m4b-chapters.csv" in response.headers["content-disposition"]
+    assert "chapter_index" in response.text
+    assert "Opening" in response.text
 
 
 def test_health_returns_backend_version() -> None:
@@ -443,6 +487,98 @@ def test_library_files_route_accepts_new_music_filters_and_sort_keys() -> None:
     assert [item["filename"] for item in filtered_response.json()["items"]] == ["a.flac"]
     assert sorted_response.status_code == 200
     assert [item["filename"] for item in sorted_response.json()["items"]] == ["b.flac", "a.flac"]
+
+
+def test_library_files_route_accepts_audiobook_filters_and_sort_keys() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Audiobook Route",
+            path="/tmp/audiobook-route",
+            type=LibraryType.audiobooks,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="a.m4b",
+                    filename="a.m4b",
+                    extension="m4b",
+                    size_bytes=1024,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    chapter_count=24,
+                    chapter_titles_search="opening chapter one",
+                    audiobook_narrator="Narrator A",
+                    audiobook_author="Author A",
+                    audiobook_publisher="Publisher A",
+                    audiobook_series="Series A",
+                    audiobook_series_part="2",
+                    audiobook_description="Synopsis A",
+                    audiobook_copyright="Copyright A",
+                    audiobook_language="en",
+                    audiobook_abridged="unabridged",
+                    audiobook_asin="B000000001",
+                    audiobook_isbn="9781234567890",
+                    search_fields_version=3,
+                ),
+                MediaFile(
+                    library_id=library.id,
+                    relative_path="b.aax",
+                    filename="b.aax",
+                    extension="aax",
+                    size_bytes=2048,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    chapter_count=4,
+                    chapter_titles_search="intro",
+                    audiobook_narrator="Narrator B",
+                    audiobook_author="Author B",
+                    audiobook_publisher="Publisher B",
+                    audiobook_series="Series B",
+                    audiobook_series_part="1",
+                    audiobook_description="Synopsis B",
+                    audiobook_copyright="Copyright B",
+                    audiobook_language="de",
+                    audiobook_abridged="abridged",
+                    audiobook_asin="B000000002",
+                    audiobook_isbn="9781234567891",
+                    search_fields_version=3,
+                ),
+            ]
+        )
+        db.commit()
+
+        client = _build_test_app(db)
+        filtered_response = client.get(
+            f"/api/libraries/{library.id}/files"
+            "?search_audiobook_narrator=Narrator%20A&search_audiobook_series=Series%20A"
+            "&search_audiobook_author=Author%20A&search_audiobook_publisher=Publisher%20A"
+            "&search_audiobook_series_part=2&search_chapter_titles=chapter%20one&search_chapter_count=%3E%3D20"
+            "&search_audiobook_description=Synopsis&search_audiobook_copyright=Copyright"
+            "&search_audiobook_language=en&search_audiobook_abridged=unabridged"
+            "&search_audiobook_asin=B000000001&search_audiobook_isbn=9781234567890"
+        )
+        sorted_response = client.get(
+            f"/api/libraries/{library.id}/files?sort_key=audiobook_author&sort_direction=asc"
+        )
+
+    assert filtered_response.status_code == 200
+    item = filtered_response.json()["items"][0]
+    assert item["filename"] == "a.m4b"
+    assert item["chapter_count"] == 24
+    assert item["audiobook_narrator"] == "Narrator A"
+    assert item["audiobook_author"] == "Author A"
+    assert item["audiobook_publisher"] == "Publisher A"
+    assert sorted_response.status_code == 200
+    assert [item["filename"] for item in sorted_response.json()["items"]] == ["a.m4b", "b.aax"]
 
 
 def test_library_series_routes_return_recognized_hierarchy() -> None:

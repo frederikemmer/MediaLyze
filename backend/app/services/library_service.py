@@ -13,6 +13,7 @@ from backend.app.models.entities import (
     AudioStream,
     ExternalSubtitle,
     Library,
+    MediaChapter,
     MediaFile,
     MediaFormat,
     ScanJob,
@@ -47,6 +48,7 @@ _NUMERIC_PANEL_METRIC_IDS = {
     "size": "size",
     "bitrate": "bitrate",
     "audio_bitrate": "audio_bitrate",
+    "chapter_counts": "chapter_count",
 }
 _MUSIC_HIDDEN_PANEL_IDS = {
     "video_codec",
@@ -58,6 +60,14 @@ _MUSIC_HIDDEN_PANEL_IDS = {
     "subtitle_codecs",
     "subtitle_sources",
     "audio_languages",
+}
+_AUDIOBOOK_PANEL_IDS = {
+    "audiobook_narrators",
+    "audiobook_authors",
+    "audiobook_publishers",
+    "audiobook_series",
+    "audiobook_series_parts",
+    "chapter_counts",
 }
 _DISTRIBUTION_FIELD_BY_PANEL = {
     "container": "container_distribution",
@@ -78,6 +88,12 @@ _DISTRIBUTION_FIELD_BY_PANEL = {
     "track_numbers": "track_number_distribution",
     "bit_rate_modes": "bit_rate_mode_distribution",
     "embedded_covers": "embedded_cover_distribution",
+    "audiobook_narrators": "audiobook_narrator_distribution",
+    "audiobook_authors": "audiobook_author_distribution",
+    "audiobook_publishers": "audiobook_publisher_distribution",
+    "audiobook_series": "audiobook_series_distribution",
+    "audiobook_series_parts": "audiobook_series_part_distribution",
+    "chapter_counts": "chapter_count_distribution",
     "subtitle_languages": "subtitle_language_distribution",
     "subtitle_codecs": "subtitle_codec_distribution",
     "subtitle_sources": "subtitle_source_distribution",
@@ -349,6 +365,7 @@ def delete_library(db: Session, library_id: int) -> bool:
     db.execute(delete(ExternalSubtitle).where(ExternalSubtitle.media_file_id.in_(media_file_ids)))
     db.execute(delete(SubtitleStream).where(SubtitleStream.media_file_id.in_(media_file_ids)))
     db.execute(delete(AudioStream).where(AudioStream.media_file_id.in_(media_file_ids)))
+    db.execute(delete(MediaChapter).where(MediaChapter.media_file_id.in_(media_file_ids)))
     db.execute(delete(VideoStream).where(VideoStream.media_file_id.in_(media_file_ids)))
     db.execute(delete(MediaFormat).where(MediaFormat.media_file_id.in_(media_file_ids)))
     db.execute(delete(MediaFile).where(MediaFile.library_id == library_id))
@@ -453,7 +470,11 @@ def get_library_statistics(
     if library is None:
         return None
 
-    hidden_panel_ids = _MUSIC_HIDDEN_PANEL_IDS if library.type == "music" else set()
+    hidden_panel_ids = (
+        _MUSIC_HIDDEN_PANEL_IDS | (_AUDIOBOOK_PANEL_IDS if library.type == "music" else set())
+        if library.type in {"music", "audiobooks"}
+        else _AUDIOBOOK_PANEL_IDS
+    )
     cached = stats_cache.get_library_statistics(cache_key, library_id)
     if cached is not None:
         return _statistics_panel_view(cached, panel_filter, hidden_panel_ids)
@@ -623,6 +644,24 @@ def get_library_statistics(
     audio_year_distribution = file_distribution(func.substr(MediaFile.audio_date, 1, 4), enabled=wants("audio_years"))
     track_number_distribution = file_distribution(MediaFile.track_number, enabled=wants("track_numbers"))
     bit_rate_mode_distribution = file_distribution(MediaFile.bit_rate_mode, enabled=wants("bit_rate_modes"))
+    audiobook_narrator_distribution = file_distribution(MediaFile.audiobook_narrator, enabled=wants("audiobook_narrators"))
+    audiobook_author_distribution = file_distribution(MediaFile.audiobook_author, enabled=wants("audiobook_authors"))
+    audiobook_publisher_distribution = file_distribution(MediaFile.audiobook_publisher, enabled=wants("audiobook_publishers"))
+    audiobook_series_distribution = file_distribution(MediaFile.audiobook_series, enabled=wants("audiobook_series"))
+    audiobook_series_part_distribution = file_distribution(
+        MediaFile.audiobook_series_part,
+        enabled=wants("audiobook_series_parts"),
+    )
+    chapter_count_distribution = (
+        db.execute(
+            select(func.coalesce(MediaFile.chapter_count, 0), func.count(MediaFile.id))
+            .where(MediaFile.library_id == library_id)
+            .group_by(func.coalesce(MediaFile.chapter_count, 0))
+            .order_by(func.count(MediaFile.id).desc())
+        ).all()
+        if wants("chapter_counts")
+        else []
+    )
     audio_channel_distribution = (
         db.execute(
             select(MediaFile.audio_channels, func.count(MediaFile.id))
@@ -803,6 +842,16 @@ def get_library_statistics(
         embedded_cover_distribution=[
             DistributionItem(label="yes" if label else "no", value=value, filter_value="yes" if label else "no")
             for label, value in embedded_cover_distribution
+        ],
+        audiobook_narrator_distribution=_distribution_items(audiobook_narrator_distribution),
+        audiobook_author_distribution=_distribution_items(audiobook_author_distribution),
+        audiobook_publisher_distribution=_distribution_items(audiobook_publisher_distribution),
+        audiobook_series_distribution=_distribution_items(audiobook_series_distribution),
+        audiobook_series_part_distribution=_distribution_items(audiobook_series_part_distribution),
+        chapter_count_distribution=[
+            DistributionItem(label=str(label), value=value, filter_value=str(label))
+            for label, value in chapter_count_distribution
+            if label is not None
         ],
         audio_codec_distribution=_distribution_items(audio_codec_distribution),
         audio_spatial_profile_distribution=audio_spatial_profile_distribution,

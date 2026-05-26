@@ -1,97 +1,84 @@
 export type SettingsPanelId =
   | "configuredLibraries"
-  | "historyRetention"
-  | "patternRecognition"
-  | "recentScanLogs"
-  | "resolutionCategories"
-  | "createLibrary"
   | "appSettings"
+  | "resolutionCategories"
+  | "patternRecognition"
+  | "historyRetention"
+  | "recentScanLogs"
   | "telemetry";
 
-export type SettingsPanelState = Record<SettingsPanelId, boolean>;
+const ACTIVE_PANEL_STORAGE_KEY = "medialyze-settings-active-panel";
+const NAV_COLLAPSED_STORAGE_KEY = "medialyze-settings-sidebar-collapsed";
 
-const STORAGE_KEY = "medialyze-settings-panel-state";
+export const SETTINGS_PANEL_IDS: SettingsPanelId[] = [
+  "configuredLibraries",
+  "appSettings",
+  "resolutionCategories",
+  "patternRecognition",
+  "historyRetention",
+  "recentScanLogs",
+  "telemetry",
+];
 
-const DEFAULT_STATE: SettingsPanelState = {
-  configuredLibraries: true,
-  historyRetention: true,
-  patternRecognition: false,
-  recentScanLogs: false,
-  resolutionCategories: false,
-  createLibrary: true,
-  appSettings: true,
-  telemetry: false,
-};
-
-function normalizeSettingsPanelState(value: unknown): SettingsPanelState {
-  if (!value || typeof value !== "object") {
-    return DEFAULT_STATE;
-  }
-
-  return {
-    configuredLibraries:
-      "configuredLibraries" in value && typeof value.configuredLibraries === "boolean"
-        ? value.configuredLibraries
-        : DEFAULT_STATE.configuredLibraries,
-    historyRetention:
-      "historyRetention" in value && typeof value.historyRetention === "boolean"
-        ? value.historyRetention
-        : DEFAULT_STATE.historyRetention,
-    patternRecognition:
-      "patternRecognition" in value && typeof value.patternRecognition === "boolean"
-        ? value.patternRecognition
-        : "ignorePatterns" in value && typeof value.ignorePatterns === "boolean"
-          ? value.ignorePatterns
-          : DEFAULT_STATE.patternRecognition,
-    recentScanLogs:
-      "recentScanLogs" in value && typeof value.recentScanLogs === "boolean"
-        ? value.recentScanLogs
-        : DEFAULT_STATE.recentScanLogs,
-    resolutionCategories:
-      "resolutionCategories" in value && typeof value.resolutionCategories === "boolean"
-        ? value.resolutionCategories
-        : DEFAULT_STATE.resolutionCategories,
-    createLibrary:
-      "createLibrary" in value && typeof value.createLibrary === "boolean"
-        ? value.createLibrary
-        : DEFAULT_STATE.createLibrary,
-    appSettings:
-      "appSettings" in value && typeof value.appSettings === "boolean"
-        ? value.appSettings
-        : DEFAULT_STATE.appSettings,
-    telemetry:
-      "telemetry" in value && typeof value.telemetry === "boolean"
-        ? value.telemetry
-        : DEFAULT_STATE.telemetry,
-  };
+export function isSettingsPanelId(value: unknown): value is SettingsPanelId {
+  return typeof value === "string" && SETTINGS_PANEL_IDS.includes(value as SettingsPanelId);
 }
 
-export function getSettingsPanelState(): SettingsPanelState {
+export function getActiveSettingsPanel(fallback: SettingsPanelId): SettingsPanelId {
   if (typeof window === "undefined") {
-    return DEFAULT_STATE;
+    return fallback;
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_STATE;
-    }
-    return normalizeSettingsPanelState(JSON.parse(raw));
+    const raw = window.localStorage.getItem(ACTIVE_PANEL_STORAGE_KEY);
+    return isSettingsPanelId(raw) ? raw : fallback;
   } catch {
-    return DEFAULT_STATE;
+    return fallback;
   }
 }
 
-export function saveSettingsPanelState(state: SettingsPanelState): SettingsPanelState {
-  const normalized = normalizeSettingsPanelState(state);
+export function hasStoredActiveSettingsPanelPreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
 
+  try {
+    return window.localStorage.getItem(ACTIVE_PANEL_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function saveActiveSettingsPanel(panelId: SettingsPanelId): SettingsPanelId {
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      window.localStorage.setItem(ACTIVE_PANEL_STORAGE_KEY, panelId);
     } catch {
       // ignore storage errors
     }
   }
+  return panelId;
+}
 
-  return normalized;
+export function getSettingsNavCollapsed(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(NAV_COLLAPSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function saveSettingsNavCollapsed(collapsed: boolean): boolean {
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(NAV_COLLAPSED_STORAGE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }
+  return collapsed;
 }

@@ -199,6 +199,143 @@ function FormatDetailsList({
   );
 }
 
+function formatChapterTime(value: number | null | undefined): string {
+  return value === null || value === undefined ? "n/a" : formatDuration(value);
+}
+
+function ChaptersList({
+  detail,
+  t,
+}: {
+  detail: MediaFileDetail | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): ReactNode {
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  if (!detail) {
+    return t("streamDetails.unavailable");
+  }
+  const chapters = detail.chapters ?? [];
+  if (!chapters.length) {
+    return t("streamDetails.none");
+  }
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredChapters = normalizedQuery
+    ? chapters.filter((chapter) => (chapter.title ?? "").toLowerCase().includes(normalizedQuery))
+    : chapters;
+  const visibleChapters = showAll ? filteredChapters : filteredChapters.slice(0, 50);
+
+  async function handleExport() {
+    if (!detail) {
+      return;
+    }
+    const payload = await api.downloadFileChaptersCsv(detail.id);
+    const objectUrl = window.URL.createObjectURL(payload.blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = payload.filename ?? `${detail.filename}-chapters.csv`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  }
+
+  return (
+    <div className="stream-tooltip-content stream-tooltip-content-panel">
+      <div className="stream-tooltip-summary">
+        <strong>{t("fileDetail.chapters")}</strong>
+        <span>{chapters.length}</span>
+      </div>
+      <div className="file-detail-chapter-tools">
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setShowAll(false);
+          }}
+          placeholder={t("fileDetail.chapterSearchPlaceholder")}
+          aria-label={t("fileDetail.chapterSearch")}
+        />
+        <button type="button" className="secondary-button" onClick={() => void handleExport()}>
+          {t("fileDetail.exportChapters")}
+        </button>
+      </div>
+      {visibleChapters.map((chapter, index) => (
+        <div className="stream-tooltip-row" key={`${chapter.chapter_index}-${chapter.start_time ?? index}`}>
+          <div className="stream-tooltip-head">
+            <div className="stream-tooltip-inline">
+              <strong>{chapter.title?.trim() || t("fileDetail.untitledChapter", { number: index + 1 })}</strong>
+              <div className="stream-tooltip-meta">
+                <span className="stream-tooltip-pill">{formatChapterTime(chapter.start_time)}</span>
+                {chapter.end_time !== null && chapter.end_time !== undefined ? (
+                  <span className="stream-tooltip-pill">{formatChapterTime(chapter.end_time)}</span>
+                ) : null}
+                {chapter.duration !== null && chapter.duration !== undefined ? (
+                  <span className="stream-tooltip-pill">{formatChapterTime(chapter.duration)}</span>
+                ) : null}
+              </div>
+            </div>
+            <span>#{index + 1}</span>
+          </div>
+        </div>
+      ))}
+      {filteredChapters.length > visibleChapters.length ? (
+        <button type="button" className="secondary-button" onClick={() => setShowAll(true)}>
+          {t("fileDetail.showAllChapters", { count: filteredChapters.length })}
+        </button>
+      ) : null}
+      {showAll && filteredChapters.length > 50 ? (
+        <button type="button" className="secondary-button" onClick={() => setShowAll(false)}>
+          {t("fileDetail.showFewerChapters")}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CoverDetailsList({
+  detail,
+  t,
+}: {
+  detail: MediaFileDetail | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): ReactNode {
+  if (!detail) {
+    return t("streamDetails.unavailable");
+  }
+  if (!detail.has_embedded_cover) {
+    return t("streamDetails.none");
+  }
+  const dimensions =
+    detail.embedded_cover_width && detail.embedded_cover_height
+      ? `${detail.embedded_cover_width}x${detail.embedded_cover_height}`
+      : "n/a";
+  const rows = [
+    { key: "codec", label: t("fileDetail.coverCodec"), value: detail.embedded_cover_codec ?? "n/a" },
+    { key: "dimensions", label: t("fileDetail.coverDimensions"), value: dimensions },
+    {
+      key: "stream",
+      label: t("fileDetail.coverStream"),
+      value: detail.embedded_cover_stream_index !== null && detail.embedded_cover_stream_index !== undefined
+        ? String(detail.embedded_cover_stream_index)
+        : "n/a",
+    },
+  ];
+  return (
+    <div className="stream-tooltip-content stream-tooltip-content-panel">
+      {rows.map((row) => (
+        <div className="stream-tooltip-row" key={row.key}>
+          <div className="stream-tooltip-head format-details-row">
+            <span className="format-details-label">{row.label}</span>
+            <strong className="format-details-value">{row.value}</strong>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function snapshotNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -234,16 +371,31 @@ const HISTORY_VOLATILE_FIELD_KEYS = new Set([
   "filename",
   "last_seen_at",
   "last_analyzed_at",
-  "scan_status",
   "raw_ffprobe_json",
   "quality_score_breakdown",
 ]);
+
+const HISTORY_STATE_FIELD_KEYS = new Set([
+  "relative_path",
+  "extension",
+  "size_bytes",
+  "mtime",
+  "scan_status",
+  "quality_score",
+  "quality_score_raw",
+  "analysis_failure_kind",
+  "analysis_failure_reason",
+  "analysis_failure_detail",
+]);
+
+const HISTORY_STATE_FIELD_PREFIXES = ["external_subtitles."];
 
 const HISTORY_FIELD_LABELS: Record<string, string> = {
   relative_path: "Path",
   extension: "Container",
   size_bytes: "Size",
   mtime: "Modified",
+  scan_status: "Analysis status",
   quality_score: "Quality",
   quality_score_raw: "Raw quality",
   container: "Container",
@@ -265,6 +417,9 @@ const HISTORY_FIELD_LABELS: Record<string, string> = {
   "media_format.duration": "Format duration",
   "media_format.bit_rate": "Format bitrate",
   "media_format.probe_score": "Probe score",
+  "external_subtitles.path": "External subtitle path",
+  "external_subtitles.language": "External subtitle language",
+  "external_subtitles.format": "External subtitle format",
 };
 
 function stableHistoryValue(value: unknown): unknown {
@@ -314,8 +469,20 @@ function historyStateKey(snapshot: FileHistoryEntry["snapshot"]): string {
   const flattened = flattenHistorySnapshot(snapshot);
   return JSON.stringify(
     Object.keys(flattened)
+      .filter(isHistoryStateFieldKey)
       .sort()
       .map((key) => [key, stableHistoryValue(flattened[key])]),
+  );
+}
+
+function isHistoryStateFieldKey(key: string): boolean {
+  const arraylessKey = key.replace(/\.\d+\./g, ".");
+  return (
+    HISTORY_STATE_FIELD_KEYS.has(key) ||
+    HISTORY_STATE_FIELD_KEYS.has(arraylessKey) ||
+    HISTORY_STATE_FIELD_PREFIXES.some(
+      (prefix) => key.startsWith(prefix) || arraylessKey.startsWith(prefix),
+    )
   );
 }
 
@@ -420,7 +587,9 @@ function buildHistoryDiffMetrics(
   }
   const current = flattenHistorySnapshot(snapshot);
   const previous = flattenHistorySnapshot(previousSnapshot);
-  const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])].sort();
+  const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])]
+    .filter(isHistoryStateFieldKey)
+    .sort();
 
   return keys.reduce<FileHistoryMetric[]>((metrics, key) => {
     if (JSON.stringify(stableHistoryValue(current[key])) === JSON.stringify(stableHistoryValue(previous[key]))) {
@@ -833,6 +1002,12 @@ export function FileDetailPage() {
       error,
       body: <FormatDetailsList detail={file} t={t} />,
     },
+    cover: {
+      title: t("fileDetail.cover"),
+      loading: !file && !error,
+      error,
+      body: <CoverDetailsList detail={file} t={t} />,
+    },
     fileHistory: {
       title: t("fileDetail.history.title"),
       loading: !fileHistory && !fileHistoryError,
@@ -864,6 +1039,12 @@ export function FileDetailPage() {
       loading: !file && !error,
       error,
       body: <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" />,
+    },
+    chapters: {
+      title: t("fileDetail.chapters"),
+      loading: !file && !error,
+      error,
+      body: <ChaptersList detail={file} t={t} />,
     },
     subtitles: {
       title: t("fileDetail.subtitles"),
@@ -915,6 +1096,12 @@ export function FileDetailPage() {
           <span className="badge">{formatDuration(file?.duration ?? 0)}</span>
           <span className="badge">{file ? `${file.quality_score}/10` : "…"}</span>
         </div>
+        {file?.analysis_failure_reason ? (
+          <div className="notice file-detail-analysis-warning">
+            <strong>{t("fileDetail.analysisFailure")}</strong>
+            <span>{file.analysis_failure_reason}</span>
+          </div>
+        ) : null}
       </section>
 
       <div

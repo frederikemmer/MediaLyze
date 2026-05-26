@@ -23,6 +23,7 @@ from backend.app.models.entities import (
     JobStatus,
     Library,
     MediaContentCategory,
+    MediaChapter,
     MediaFile,
     MediaFileHistoryCaptureReason,
     MediaFormat,
@@ -67,7 +68,7 @@ from backend.app.utils.glob_patterns import matches_ignore_pattern
 from backend.app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
-ANALYSIS_SCHEMA_VERSION = 1
+ANALYSIS_SCHEMA_VERSION = 3
 MAX_FILE_LIST_SAMPLE_SIZE = 50
 MAX_FAILED_FILE_SAMPLE_SIZE = 200
 MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
@@ -302,6 +303,37 @@ def _error_details(exc: Exception) -> tuple[str, str]:
     return _short_error_reason(exc), _detailed_error_reason(exc)
 
 
+def _classify_analysis_failure(relative_path: str, reason: str, detail: str) -> tuple[str, str, str]:
+    combined = f"{reason}\n{detail}".lower()
+    extension = Path(relative_path).suffix.lower()
+    if extension in {".aa", ".aax"} and any(
+        token in combined
+        for token in (
+            "invalid data",
+            "could not find codec parameters",
+            "unsupported",
+            "encrypted",
+            "decryption",
+            "activation",
+            "audible",
+            "drm",
+        )
+    ):
+        return (
+            "audible_drm_or_unreadable",
+            "Probably DRM-protected or unreadable by ffprobe.",
+            detail,
+        )
+    return ("ffprobe_error", reason, detail)
+
+
+def _set_analysis_failure(media_file: MediaFile, relative_path: str, reason: str, detail: str) -> None:
+    kind, display_reason, display_detail = _classify_analysis_failure(relative_path, reason, detail)
+    media_file.analysis_failure_kind = kind
+    media_file.analysis_failure_reason = display_reason
+    media_file.analysis_failure_detail = display_detail[:MAX_FAILURE_DETAIL_LENGTH]
+
+
 def _iter_media_files(
     root: Path,
     allowed_extensions: tuple[str, ...],
@@ -457,6 +489,17 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
         )
         for stream in normalized.audio_streams
     ]
+    media_file.chapters = [
+        MediaChapter(
+            chapter_index=chapter.chapter_index,
+            start_time=chapter.start_time,
+            end_time=chapter.end_time,
+            duration=chapter.duration,
+            title=chapter.title,
+            tags=chapter.tags or None,
+        )
+        for chapter in normalized.chapters
+    ]
     media_file.subtitle_streams = [
         SubtitleStream(
             stream_index=stream.stream_index,
@@ -473,6 +516,21 @@ def _replace_analysis(media_file: MediaFile, normalized, external_subtitles: lis
         for item in external_subtitles
     ]
     media_file.has_embedded_cover = normalized.has_embedded_cover
+    media_file.embedded_cover_stream_index = normalized.embedded_cover_stream_index
+    media_file.embedded_cover_codec = normalized.embedded_cover_codec or ""
+    media_file.embedded_cover_width = normalized.embedded_cover_width
+    media_file.embedded_cover_height = normalized.embedded_cover_height
+    media_file.audiobook_narrator = normalized.audiobook_narrator or ""
+    media_file.audiobook_author = normalized.audiobook_author or ""
+    media_file.audiobook_publisher = normalized.audiobook_publisher or ""
+    media_file.audiobook_series = normalized.audiobook_series or ""
+    media_file.audiobook_series_part = normalized.audiobook_series_part or ""
+    media_file.audiobook_description = normalized.audiobook_description or ""
+    media_file.audiobook_copyright = normalized.audiobook_copyright or ""
+    media_file.audiobook_asin = normalized.audiobook_asin or ""
+    media_file.audiobook_isbn = normalized.audiobook_isbn or ""
+    media_file.audiobook_language = normalized.audiobook_language or ""
+    media_file.audiobook_abridged = normalized.audiobook_abridged or ""
     media_file.analysis_schema_version = ANALYSIS_SCHEMA_VERSION
 
 
@@ -536,6 +594,10 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
     media_file.sample_rate = max((stream.sample_rate or 0 for stream in media_file.audio_streams), default=0) or None
     media_file.track_number = primary_audio.track if primary_audio and primary_audio.track else ""
     media_file.bit_rate_mode = primary_audio.bit_rate_mode if primary_audio and primary_audio.bit_rate_mode else ""
+    media_file.chapter_count = len(media_file.chapters) if media_file.chapters else None
+    media_file.chapter_titles_search = _joined_unique(
+        [_normalized_text(chapter.title) for chapter in media_file.chapters]
+    )
     media_file.min_subtitle_language = min(subtitle_languages, default="")
     media_file.min_subtitle_codec = min(subtitle_codecs, default="")
     media_file.audio_codecs_search = _joined_unique(audio_codecs)
@@ -553,6 +615,18 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
             media_file.audio_composer,
             media_file.track_number,
             media_file.bit_rate_mode,
+            media_file.chapter_titles_search,
+            media_file.audiobook_narrator,
+            media_file.audiobook_author,
+            media_file.audiobook_publisher,
+            media_file.audiobook_series,
+            media_file.audiobook_series_part,
+            media_file.audiobook_description,
+            media_file.audiobook_copyright,
+            media_file.audiobook_asin,
+            media_file.audiobook_isbn,
+            media_file.audiobook_language,
+            media_file.audiobook_abridged,
         ]
     )
     media_file.subtitle_languages_search = _joined_unique(subtitle_languages)
@@ -567,7 +641,7 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
         )
         if has_source
     )
-    media_file.search_fields_version = 1
+    media_file.search_fields_version = 3
 
 
 def _apply_analysis_result(
@@ -588,6 +662,15 @@ def _apply_analysis_result(
     )
     _persist_quality_breakdown(media_file, breakdown)
     _update_media_file_search_fields(media_file)
+    if library.type == "audiobooks" and not media_file.audiobook_narrator:
+        media_file.audiobook_narrator = media_file.audio_album_artist or ""
+        _update_media_file_search_fields(media_file)
+    if library.type == "audiobooks" and not media_file.audiobook_author:
+        media_file.audiobook_author = media_file.audio_artist or media_file.audio_composer or ""
+        _update_media_file_search_fields(media_file)
+    media_file.analysis_failure_kind = ""
+    media_file.analysis_failure_reason = ""
+    media_file.analysis_failure_detail = ""
     media_file.last_analyzed_at = utc_now()
     media_file.scan_status = ScanStatus.ready
 
@@ -1372,14 +1455,18 @@ def run_scan(
                             work.media_file.scan_status = ScanStatus.failed
                             job.errors += 1
                             reason, detail = _error_details(exc)
+                            _set_analysis_failure(work.media_file, relative_path, reason, detail)
                             failed_files.add(relative_path, reason, detail)
                     else:
                         work.media_file.scan_status = ScanStatus.failed
                         job.errors += 1
+                        reason = analysis_error or "Unknown analysis failure"
+                        detail = analysis_error_detail or analysis_error or "Unknown analysis failure"
+                        _set_analysis_failure(work.media_file, relative_path, reason, detail)
                         failed_files.add(
                             relative_path,
-                            analysis_error or "Unknown analysis failure",
-                            analysis_error_detail or analysis_error or "Unknown analysis failure",
+                            reason,
+                            detail,
                         )
 
                 if work.needs_duplicate_processing:

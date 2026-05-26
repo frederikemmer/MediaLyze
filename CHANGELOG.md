@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.12.0
+
+>2026-05-26
+
+### ✨ New
+
+- analyze audiobook metadata and chapters, including `.m4b`, `.aa`, and `.aax` discovery, persisted chapter rows, narrator/series fields, table filters/sorts, CSV export, statistics, comparisons, and file-detail chapter display
+- improved settings page, now with sidebar instead of panels
+- add a sticky mobile settings menu that expands into a touch-friendly section picker
+
+### 🐛 Bug fixes
+
+- avoid noisy file-history events when rescans only populate newly supported metadata fields for otherwise unchanged files
+- schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected ([#139](https://github.com/frederikemmer/MediaLyze/issues/139))
+- keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+
 ## v0.11.2
 
 >2026-05-18

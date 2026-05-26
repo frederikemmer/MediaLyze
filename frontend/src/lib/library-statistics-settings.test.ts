@@ -128,6 +128,30 @@ describe("library statistics settings", () => {
     expect(settings.visibility.subtitle_sources.panelEnabled).toBe(false);
   });
 
+  it("shows audiobook-only table columns and panels only for audiobook libraries", () => {
+    const settings = getLibraryStatisticsSettings();
+
+    expect(getVisibleLibraryStatisticTableColumns(settings, "music")).not.toContain("chapter_count");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("chapter_count");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("audiobook_narrator");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("audiobook_author");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("audiobook_publisher");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("audiobook_series");
+    expect(getVisibleLibraryStatisticTableColumns(settings, "audiobooks")).toContain("audiobook_series_part");
+
+    expect(getVisibleLibraryStatisticPanels(settings, "music").map((entry) => entry.id)).not.toContain("chapter_counts");
+    expect(getVisibleLibraryStatisticPanels(settings, "audiobooks").map((entry) => entry.id)).toContain("chapter_counts");
+    expect(getVisibleLibraryStatisticPanels(settings, "audiobooks").map((entry) => entry.id)).toContain(
+      "audiobook_narrators",
+    );
+    expect(getVisibleLibraryStatisticPanels(settings, "audiobooks").map((entry) => entry.id)).toContain(
+      "audiobook_authors",
+    );
+    expect(getVisibleLibraryStatisticPanels(settings, "audiobooks").map((entry) => entry.id)).toContain(
+      "audiobook_publishers",
+    );
+  });
+
   it("preserves an existing stored preset instead of overwriting it with the new defaults", () => {
     window.localStorage.setItem(
       "medialyze-library-statistics-settings",

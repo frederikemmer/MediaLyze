@@ -5,7 +5,7 @@
 
 import type { LibraryType } from "./api";
 
-export type FieldCategory = "video_only" | "audio_only" | "music_only" | "shared";
+export type FieldCategory = "video_only" | "audio_only" | "music_only" | "audiobook_only" | "shared";
 
 // Map of fields to their categories
 export const FIELD_CATEGORIES: Record<string, FieldCategory> = {
@@ -43,6 +43,19 @@ export const FIELD_CATEGORIES: Record<string, FieldCategory> = {
   track_number: "music_only",
   bit_rate_mode: "audio_only",
   has_embedded_cover: "music_only",
+  chapter_count: "audiobook_only",
+  chapter_titles: "audiobook_only",
+  audiobook_narrator: "audiobook_only",
+  audiobook_author: "audiobook_only",
+  audiobook_publisher: "audiobook_only",
+  audiobook_series: "audiobook_only",
+  audiobook_series_part: "audiobook_only",
+  audiobook_description: "audiobook_only",
+  audiobook_copyright: "audiobook_only",
+  audiobook_language: "audiobook_only",
+  audiobook_abridged: "audiobook_only",
+  audiobook_asin: "audiobook_only",
+  audiobook_isbn: "audiobook_only",
 };
 
 /**
@@ -53,9 +66,11 @@ export function shouldShowField(fieldKey: string, libraryType: LibraryType): boo
 
   switch (category) {
     case "video_only":
-      return libraryType !== "music";
+      return libraryType !== "music" && libraryType !== "audiobooks";
     case "music_only":
       return libraryType !== "movies" && libraryType !== "series";
+    case "audiobook_only":
+      return libraryType === "audiobooks";
     case "audio_only":
       return true; // Audio is in all types
     case "shared":

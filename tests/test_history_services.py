@@ -11,6 +11,7 @@ from backend.app.models.entities import (
     JobStatus,
     Library,
     LibraryHistory,
+    MediaContentCategory,
     LibraryType,
     MediaFile,
     MediaFileHistory,
@@ -116,7 +117,9 @@ def test_create_media_file_history_entry_if_changed_avoids_duplicate_snapshot() 
         )
         db.commit()
 
-        history_entries = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.id.asc())).all()
+        history_entries = db.scalars(
+            select(MediaFileHistory).order_by(MediaFileHistory.id.asc())
+        ).all()
 
     assert created_first is True
     assert created_second is False
@@ -124,6 +127,107 @@ def test_create_media_file_history_entry_if_changed_avoids_duplicate_snapshot() 
     assert len(history_entries) == 2
     assert history_entries[0].capture_reason == MediaFileHistoryCaptureReason.scan_analysis
     assert history_entries[1].capture_reason == MediaFileHistoryCaptureReason.quality_recompute
+
+
+def test_media_file_history_ignores_newly_detected_enrichment_fields_without_file_change() -> None:
+    session_factory = _session_factory()
+    resolution_categories = default_resolution_categories()
+
+    with session_factory() as db:
+        library = Library(
+            name="Music",
+            path="/tmp/music",
+            type=LibraryType.music,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = _build_media_file(library.id)
+        media_file.audio_channels = None
+        media_file.sample_rate = None
+        media_file.has_embedded_cover = False
+        media_file.content_category = MediaContentCategory.main
+        db.add(media_file)
+        db.commit()
+
+        created_first = create_media_file_history_entry_if_changed(
+            db,
+            media_file,
+            MediaFileHistoryCaptureReason.scan_analysis,
+            resolution_categories,
+        )
+        db.commit()
+
+        media_file.audio_channels = 6
+        media_file.sample_rate = 48_000
+        media_file.has_embedded_cover = True
+        media_file.content_category = MediaContentCategory.bonus
+        created_second = create_media_file_history_entry_if_changed(
+            db,
+            media_file,
+            MediaFileHistoryCaptureReason.scan_analysis,
+            resolution_categories,
+        )
+        db.commit()
+
+        history_entries = db.scalars(
+            select(MediaFileHistory).order_by(MediaFileHistory.id.asc())
+        ).all()
+
+    assert created_first is True
+    assert created_second is False
+    assert len(history_entries) == 1
+
+
+def test_media_file_history_records_enrichment_fields_when_file_changed() -> None:
+    session_factory = _session_factory()
+    resolution_categories = default_resolution_categories()
+
+    with session_factory() as db:
+        library = Library(
+            name="Music",
+            path="/tmp/music",
+            type=LibraryType.music,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = _build_media_file(library.id)
+        media_file.audio_channels = None
+        media_file.sample_rate = None
+        media_file.has_embedded_cover = False
+        media_file.content_category = MediaContentCategory.main
+        db.add(media_file)
+        db.commit()
+
+        created_first = create_media_file_history_entry_if_changed(
+            db,
+            media_file,
+            MediaFileHistoryCaptureReason.scan_analysis,
+            resolution_categories,
+        )
+        db.commit()
+
+        media_file.audio_channels = 6
+        media_file.sample_rate = 48_000
+        media_file.has_embedded_cover = True
+        media_file.content_category = MediaContentCategory.bonus
+        media_file.mtime = 2.0
+        created_second = create_media_file_history_entry_if_changed(
+            db,
+            media_file,
+            MediaFileHistoryCaptureReason.scan_analysis,
+            resolution_categories,
+        )
+        db.commit()
+
+        history_entries = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.id.asc())).all()
+
+    assert created_first is True
+    assert created_second is True
+    assert len(history_entries) == 2
 
 
 def test_upsert_library_history_snapshot_reuses_same_day_row() -> None:
