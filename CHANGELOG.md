@@ -6,12 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
+- add a sticky mobile settings menu that expands into a touch-friendly section picker
 - analyze audiobook metadata and chapters, including `.m4b`, `.aa`, and `.aax` discovery, persisted chapter rows, narrator/series fields, table filters/sorts, CSV export, statistics, comparisons, and file-detail chapter display
 - improved settings page, now with sidebar instead of panels
 
 ### 🐛 Bug fixes
 
 - avoid noisy file-history events when rescans only populate newly supported metadata fields for otherwise unchanged files
+- embed pattern editor add/remove actions into each pattern row as compact icon buttons
+- embed the telemetry installation-id copy action into its text field
+- align settings dropdown chevrons and spacing across app settings and pattern controls
+- make the active mobile settings menu label easier to read
+- tighten the mobile settings menu control spacing
+- make the sticky mobile settings menu more opaque and frosted
+- align the resolution-category restore button with the updated settings button styling
 - keep the analyzed-files table-view settings aligned with the active library type so enabled metadata columns are rendered and labelled correctly
 - schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected ([#139](https://github.com/frederikemmer/MediaLyze/issues/139))
 - keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))

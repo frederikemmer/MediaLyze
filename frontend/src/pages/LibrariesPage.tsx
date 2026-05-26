@@ -665,6 +665,7 @@ export function LibrariesPage() {
     getActiveSettingsPanel("configuredLibraries"),
   );
   const [isSettingsNavCollapsed, setIsSettingsNavCollapsed] = useState(() => getSettingsNavCollapsed());
+  const [isSettingsMobileMenuOpen, setIsSettingsMobileMenuOpen] = useState(false);
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
   const [recentScanJobsError, setRecentScanJobsError] = useState<string | null>(null);
@@ -783,6 +784,9 @@ export function LibrariesPage() {
   const hadActiveHistoryReconstructionRef = useRef(false);
   const isHistoryReconstructionActive =
     historyReconstruction?.status === "queued" || historyReconstruction?.status === "running";
+  const activeSettingsNavItem =
+    SETTINGS_NAV_ITEMS.find((item) => item.id === activeSettingsPanelId) ?? SETTINGS_NAV_ITEMS[0];
+  const ActiveSettingsNavIcon = activeSettingsNavItem.icon;
 
   useEffect(() => {
     return () => {
@@ -1695,6 +1699,7 @@ export function LibrariesPage() {
 
   function selectSettingsPanel(panelId: SettingsPanelId) {
     setActiveSettingsPanelId(saveActiveSettingsPanel(panelId));
+    setIsSettingsMobileMenuOpen(false);
   }
 
   function toggleSettingsNavCollapsed() {
@@ -2912,46 +2917,50 @@ export function LibrariesPage() {
         {expanded ? (
           <div className="ignore-pattern-section-body">
             <div className="ignore-pattern-row ignore-pattern-row-draft">
-              <input
-                id={inputId}
-                type="text"
-                value={ignorePatternDraft}
-                onChange={(event) => {
-                  setIgnorePatternDraft(event.target.value);
-                  setIgnorePatternsStatus(null);
-                }}
-                placeholder={t("libraries.ignorePatternsPlaceholder")}
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                className="secondary icon-only-button"
-                aria-label={t("libraries.ignorePatternsAddAria")}
-                disabled={isSavingIgnorePatterns || !ignorePatternDraft.trim()}
-                onClick={() => void addIgnorePattern()}
-              >
-                <Plus aria-hidden="true" className="nav-icon" />
-              </button>
+              <div className="ignore-pattern-control">
+                <input
+                  id={inputId}
+                  type="text"
+                  value={ignorePatternDraft}
+                  onChange={(event) => {
+                    setIgnorePatternDraft(event.target.value);
+                    setIgnorePatternsStatus(null);
+                  }}
+                  placeholder={t("libraries.ignorePatternsPlaceholder")}
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="secondary icon-only-button ignore-pattern-action-button"
+                  aria-label={t("libraries.ignorePatternsAddAria")}
+                  disabled={isSavingIgnorePatterns || !ignorePatternDraft.trim()}
+                  onClick={() => void addIgnorePattern()}
+                >
+                  <Plus aria-hidden="true" className="nav-icon" />
+                </button>
+              </div>
             </div>
             <div className="ignore-patterns-stack">
               {patterns.map((pattern, index) => (
                 <div className="ignore-pattern-row ignore-pattern-row-saved" key={`ignore-pattern-${index}`}>
-                  <input
-                    type="text"
-                    value={pattern}
-                    onChange={(event) => updateIgnorePattern(index, event.target.value)}
-                    onBlur={() => void finalizeIgnorePatternEdit(index)}
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className="secondary icon-only-button"
-                    aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
-                    disabled={isSavingIgnorePatterns}
-                    onClick={() => void removeIgnorePattern(index)}
-                  >
-                    <Trash2 aria-hidden="true" className="nav-icon" />
-                  </button>
+                  <div className="ignore-pattern-control">
+                    <input
+                      type="text"
+                      value={pattern}
+                      onChange={(event) => updateIgnorePattern(index, event.target.value)}
+                      onBlur={() => void finalizeIgnorePatternEdit(index)}
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      className="secondary icon-only-button ignore-pattern-action-button"
+                      aria-label={t("libraries.ignorePatternsRemoveAria", { index: index + 1 })}
+                      disabled={isSavingIgnorePatterns}
+                      onClick={() => void removeIgnorePattern(index)}
+                    >
+                      <Trash2 aria-hidden="true" className="nav-icon" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2987,45 +2996,49 @@ export function LibrariesPage() {
         {expanded ? (
           <div className="ignore-pattern-section-body">
             <div className="ignore-pattern-row ignore-pattern-row-draft">
-              <input
-                type="text"
-                value={draftValue}
-                onChange={(event) => {
-                  setPatternRecognitionDrafts((current) => ({ ...current, [key]: event.target.value }));
-                  setPatternRecognitionStatus(null);
-                }}
-                placeholder={placeholder}
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                className="secondary icon-only-button"
-                aria-label={t("libraries.patternRecognition.addPattern")}
-                disabled={isSavingPatternRecognition || !draftValue.trim()}
-                onClick={() => void addPatternRecognitionEntry(key)}
-              >
-                <Plus aria-hidden="true" className="nav-icon" />
-              </button>
+              <div className="ignore-pattern-control">
+                <input
+                  type="text"
+                  value={draftValue}
+                  onChange={(event) => {
+                    setPatternRecognitionDrafts((current) => ({ ...current, [key]: event.target.value }));
+                    setPatternRecognitionStatus(null);
+                  }}
+                  placeholder={placeholder}
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="secondary icon-only-button ignore-pattern-action-button"
+                  aria-label={t("libraries.patternRecognition.addPattern")}
+                  disabled={isSavingPatternRecognition || !draftValue.trim()}
+                  onClick={() => void addPatternRecognitionEntry(key)}
+                >
+                  <Plus aria-hidden="true" className="nav-icon" />
+                </button>
+              </div>
             </div>
             <div className="ignore-patterns-stack">
               {patterns.map((pattern, index) => (
                 <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${key}-${index}`}>
-                  <input
-                    type="text"
-                    value={pattern}
-                    onChange={(event) => updatePatternRecognitionEntry(key, index, event.target.value)}
-                    onBlur={() => void finalizePatternRecognitionEntry(key, index)}
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className="secondary icon-only-button"
-                    aria-label={t("libraries.patternRecognition.removePattern", { index: index + 1 })}
-                    disabled={isSavingPatternRecognition}
-                    onClick={() => void removePatternRecognitionEntry(key, index)}
-                  >
-                    <Trash2 aria-hidden="true" className="nav-icon" />
-                  </button>
+                  <div className="ignore-pattern-control">
+                    <input
+                      type="text"
+                      value={pattern}
+                      onChange={(event) => updatePatternRecognitionEntry(key, index, event.target.value)}
+                      onBlur={() => void finalizePatternRecognitionEntry(key, index)}
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      className="secondary icon-only-button ignore-pattern-action-button"
+                      aria-label={t("libraries.patternRecognition.removePattern", { index: index + 1 })}
+                      disabled={isSavingPatternRecognition}
+                      onClick={() => void removePatternRecognitionEntry(key, index)}
+                    >
+                      <Trash2 aria-hidden="true" className="nav-icon" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -3811,6 +3824,76 @@ export function LibrariesPage() {
     <>
       <div className={`settings-layout${isSettingsNavCollapsed ? " is-settings-nav-collapsed" : ""}`}>
         <aside className="settings-navigation-panel" aria-label={t("libraries.settingsNavigation")}>
+          <button
+            type="button"
+            className="settings-mobile-menu-button"
+            aria-label={
+              isSettingsMobileMenuOpen
+                ? t("libraries.closeMobileSettingsNavigation")
+                : t("libraries.openMobileSettingsNavigation")
+            }
+            aria-expanded={isSettingsMobileMenuOpen}
+            aria-controls="settings-mobile-navigation-menu"
+            onClick={() => setIsSettingsMobileMenuOpen((current) => !current)}
+          >
+            <span className="settings-mobile-menu-button-content">
+              <span className="settings-mobile-menu-current">
+                <ActiveSettingsNavIcon aria-hidden="true" className="nav-icon" />
+                <span>{t(activeSettingsNavItem.labelKey)}</span>
+              </span>
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`settings-mobile-menu-chevron${isSettingsMobileMenuOpen ? " is-open" : ""}`}
+            />
+          </button>
+          <div
+            id="settings-mobile-navigation-menu"
+            className={`settings-mobile-navigation-menu${isSettingsMobileMenuOpen ? " is-open" : ""}`}
+            aria-hidden={!isSettingsMobileMenuOpen}
+          >
+            <nav className="settings-mobile-navigation-list" aria-label={t("libraries.mobileSettingsNavigation")}>
+              {SETTINGS_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const label = t(item.labelKey);
+                const active = activeSettingsPanelId === item.id;
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`settings-navigation-item settings-mobile-navigation-item${active ? " active" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
+                    onClick={() => selectSettingsPanel(item.id)}
+                  >
+                    {active ? <SlidingTogglePill activeKey={item.id} className="nav-active-pill" /> : null}
+                    <span className="settings-navigation-item-content">
+                      <Icon aria-hidden="true" className="nav-icon" />
+                      <span>{label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="settings-mobile-navigation-quick-actions">
+              <div className="settings-navigation-section-label">{t("libraries.quickActions")}</div>
+              <button
+                type="button"
+                className="secondary settings-navigation-quick-action"
+                aria-label={t("libraries.fullScan")}
+                disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
+                tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
+                title={t("libraries.fullScan")}
+                onClick={() => {
+                  setIsSettingsMobileMenuOpen(false);
+                  void runFullScanForAllLibraries();
+                }}
+              >
+                <DatabaseSearch aria-hidden="true" className="nav-icon" />
+                <span>{t("libraries.fullScan")}</span>
+              </button>
+            </div>
+          </div>
           <div className="settings-navigation-header">
             {!isSettingsNavCollapsed ? <span>{t("libraries.settingsNavigationTitle")}</span> : null}
             <button
@@ -4361,7 +4444,7 @@ export function LibrariesPage() {
               <div className="resolution-category-actions">
                 <button
                   type="button"
-                  className="secondary"
+                  className="secondary resolution-category-restore-button"
                   onClick={() => void restoreDefaultResolutionCategories()}
                   disabled={
                     !appSettingsLoaded ||
@@ -4872,22 +4955,24 @@ export function LibrariesPage() {
                   </button>
                 </div>
                 <div className="telemetry-installation-id-row">
-                  <input
-                    type="text"
-                    readOnly
-                    value={telemetryInstallationId || t("telemetry.stats.installationIdMissing")}
-                    aria-label={t("telemetry.stats.installationIdLabel")}
-                  />
-                  <button
-                    type="button"
-                    className="secondary icon-only-button telemetry-copy-id-button"
-                    aria-label={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
-                    data-tooltip={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
-                    disabled={!telemetryInstallationId || !navigator.clipboard?.writeText}
-                    onClick={() => void copyTelemetryInstallationId()}
-                  >
-                    <Copy size={16} aria-hidden="true" />
-                  </button>
+                  <div className="telemetry-installation-id-control">
+                    <input
+                      type="text"
+                      readOnly
+                      value={telemetryInstallationId || t("telemetry.stats.installationIdMissing")}
+                      aria-label={t("telemetry.stats.installationIdLabel")}
+                    />
+                    <button
+                      type="button"
+                      className="secondary icon-only-button telemetry-copy-id-button"
+                      aria-label={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                      data-tooltip={telemetryIdCopied ? t("telemetry.stats.copied") : t("telemetry.stats.copy")}
+                      disabled={!telemetryInstallationId || !navigator.clipboard?.writeText}
+                      onClick={() => void copyTelemetryInstallationId()}
+                    >
+                      <Copy size={16} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
                 <div className="telemetry-preview-actions">
                   <SlidingTogglePill

@@ -1510,6 +1510,35 @@ describe("LibrariesPage settings panels", () => {
     expect(await screen.findByRole("button", { name: "Expand settings menu" })).toBeInTheDocument();
   });
 
+  it("opens the mobile settings menu and closes it after selecting a panel", async () => {
+    renderPage({ activePanel: "appSettings" });
+
+    const trigger = await screen.findByRole("button", { name: "Open settings menu" });
+    expect(trigger).toHaveTextContent("App settings");
+
+    const menu = document.getElementById("settings-mobile-navigation-menu");
+    expect(menu).not.toBeNull();
+    expect(menu).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(trigger);
+
+    expect(await screen.findByRole("button", { name: "Close settings menu" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(menu).toHaveAttribute("aria-hidden", "false");
+    expect(within(menu as HTMLElement).getByRole("button", { name: "full scan" })).toBeInTheDocument();
+
+    fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));
+
+    expect(await screen.findByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
+    expect(menu).toHaveAttribute("aria-hidden", "true");
+    expect(await screen.findByRole("button", { name: "Open settings menu" })).toHaveTextContent(
+      "Resolution categories",
+    );
+  });
+
   it("persists interface language changes to app settings", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({ ui_preferences: { interface_language: "de" } }),
@@ -1816,8 +1845,10 @@ describe("LibrariesPage settings panels", () => {
     renderPage();
 
     const settingsMenu = await screen.findByLabelText("Settings menu");
-    expect(within(settingsMenu).getByText("Quickactions")).toBeInTheDocument();
-    fireEvent.click(within(settingsMenu).getByRole("button", { name: /^full scan$/i }));
+    const desktopQuickActions = settingsMenu.querySelector(".settings-navigation-quick-actions") as HTMLElement | null;
+    expect(desktopQuickActions).not.toBeNull();
+    expect(within(desktopQuickActions as HTMLElement).getByText("Quickactions")).toBeInTheDocument();
+    fireEvent.click(within(desktopQuickActions as HTMLElement).getByRole("button", { name: /^full scan$/i }));
 
     await waitFor(() => {
       expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");

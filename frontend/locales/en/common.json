@@ -88,6 +88,7 @@
   },
   "libraries": {
     "settingsNavigation": "Settings menu",
+    "mobileSettingsNavigation": "Mobile settings menu",
     "settingsNavigationTitle": "Settings",
     "settingsNavigationLibraries": "Libraries",
     "settingsNavigationAddLibrary": "Add library",
@@ -95,6 +96,8 @@
     "quickActions": "Quickactions",
     "collapseSettingsNavigation": "Collapse settings menu",
     "expandSettingsNavigation": "Expand settings menu",
+    "openMobileSettingsNavigation": "Open settings menu",
+    "closeMobileSettingsNavigation": "Close settings menu",
     "configured": "Configured libraries",
     "fullScan": "full scan",
     "addFirstLibrary": "Add first library",
