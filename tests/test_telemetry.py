@@ -252,28 +252,28 @@ def test_telemetry_payload_uses_normalized_backend_version(tmp_path) -> None:
 def test_dev_versions_are_marked_as_test_telemetry(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
-    settings.app_version = "0.11.2-dev003"
+    settings.app_version = "0.12.0-dev003"
 
     with session_factory() as db:
         app_settings = get_app_settings(db, settings)
         payload = build_telemetry_payload(db, settings, app_settings, mode="minimal")
 
-    assert is_dev_app_version("0.11.2") is False
-    assert is_dev_app_version("0.11.2-dev003") is True
-    assert payload["app"]["version"] == "0.11.2-dev003"
+    assert is_dev_app_version("0.12.0") is False
+    assert is_dev_app_version("0.12.0-dev003") is True
+    assert payload["app"]["version"] == "0.12.0-dev003"
     assert payload["is_test"] is True
 
 
 def test_release_versions_are_not_marked_as_test_telemetry(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
-    settings.app_version = "0.11.2"
+    settings.app_version = "0.12.0"
 
     with session_factory() as db:
         app_settings = get_app_settings(db, settings)
         payload = build_telemetry_payload(db, settings, app_settings, mode="minimal")
 
-    assert payload["app"]["version"] == "0.11.2"
+    assert payload["app"]["version"] == "0.12.0"
     assert payload["is_test"] is False
 
 
@@ -386,7 +386,7 @@ def test_send_current_telemetry_snapshot_posts_normal_payload_and_marks_sent(tmp
 def test_send_current_telemetry_snapshot_marks_dev_versions_as_test(tmp_path, monkeypatch) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
-    settings.app_version = "0.11.2-dev003"
+    settings.app_version = "0.12.0-dev003"
     posted = {}
 
     def fake_post_json(url, payload, timeout):
@@ -399,7 +399,7 @@ def test_send_current_telemetry_snapshot_marks_dev_versions_as_test(tmp_path, mo
         sent = send_current_telemetry_snapshot(db, settings, force=True)
 
     assert sent is True
-    assert posted["json"]["app"]["version"] == "0.11.2-dev003"
+    assert posted["json"]["app"]["version"] == "0.12.0-dev003"
     assert posted["json"]["is_test"] is True
 
 
