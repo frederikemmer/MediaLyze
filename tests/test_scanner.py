@@ -132,6 +132,46 @@ def test_quality_recompute_preserves_cancel_requested_during_work(tmp_path: Path
     assert job.status == JobStatus.canceled
 
 
+def test_execute_scan_job_uses_in_memory_cancel_request(tmp_path: Path, monkeypatch) -> None:
+    media_dir = tmp_path / "library"
+    media_dir.mkdir()
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    monkeypatch.setattr(scanner_service, "SessionLocal", session_factory)
+
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path=str(media_dir),
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        job = ScanJob(
+            library_id=library.id,
+            status=JobStatus.queued,
+            job_type="quality_recompute",
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    scanner_service.execute_scan_job(job_id, settings, is_cancel_requested=lambda requested_job_id: requested_job_id == job_id)
+
+    with session_factory() as db:
+        job = db.get(ScanJob, job_id)
+
+    assert job is not None
+    assert job.status == JobStatus.canceled
+    assert job.finished_at is not None
+
+
 def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()

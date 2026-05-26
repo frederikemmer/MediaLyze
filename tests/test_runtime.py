@@ -4,6 +4,7 @@ import time
 from threading import Thread
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -639,6 +640,56 @@ def test_cancel_active_jobs_waits_for_transient_sqlite_writer_lock(monkeypatch, 
         engine.dispose()
 
     assert canceled_ids == [1]
+
+
+def test_cancel_active_jobs_records_best_effort_when_sqlite_lock_persists(monkeypatch, tmp_path) -> None:
+    settings = Settings(
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media",
+        sqlite_busy_timeout_seconds=0.05,
+    )
+    settings.config_path.mkdir(parents=True)
+    engine = create_engine_for_settings(settings)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    monkeypatch.setattr(runtime_module, "SessionLocal", session_factory)
+
+    with session_factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        db.add(
+            ScanJob(
+                library_id=library.id,
+                status=JobStatus.running,
+                job_type="incremental",
+                started_at=datetime.now(UTC),
+            )
+        )
+        db.commit()
+        library_id = library.id
+
+    locker = engine.connect()
+    transaction = locker.begin()
+    locker.execute(text("UPDATE scan_jobs SET files_scanned = files_scanned WHERE library_id = :library_id"), {"library_id": library_id})
+
+    runtime = runtime_module.ScanRuntimeManager(settings)
+    try:
+        with pytest.raises(runtime_module.ScanCancelPersistenceError) as exc_info:
+            runtime.cancel_active_jobs()
+    finally:
+        transaction.rollback()
+        locker.close()
+        engine.dispose()
+
+    assert exc_info.value.canceled_job_ids == [1]
+    assert runtime.is_job_cancel_requested(1) is True
 
 
 def test_cancel_active_jobs_clears_pending_watch_timers_and_buffers(monkeypatch) -> None:

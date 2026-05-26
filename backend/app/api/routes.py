@@ -76,7 +76,7 @@ from backend.app.services.media_service import (
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
-from backend.app.services.runtime import ScanRuntimeManager
+from backend.app.services.runtime import ScanCancelPersistenceError, ScanRuntimeManager
 from backend.app.services.scan_jobs import (
     get_scan_job_detail,
     list_active_scan_jobs,
@@ -389,7 +389,16 @@ def app_settings_update(
 def cancel_active_scan_jobs(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> ScanCancelResponse:
-    canceled_ids = runtime.cancel_active_jobs()
+    try:
+        canceled_ids = runtime.cancel_active_jobs()
+    except ScanCancelPersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Scan cancellation was requested for {len(exc.canceled_job_ids)} active job(s), "
+                "but the database is still busy. Try again shortly."
+            ),
+        ) from exc
     return ScanCancelResponse(canceled_jobs=len(canceled_ids))
 
 
@@ -685,7 +694,16 @@ def library_delete(
     if not library_exists(db, library_id):
         raise HTTPException(status_code=404, detail="Library not found")
 
-    runtime.cancel_library_jobs(library_id)
+    try:
+        runtime.cancel_library_jobs(library_id)
+    except ScanCancelPersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Library deletion requested scan cancellation for {len(exc.canceled_job_ids)} active job(s), "
+                "but the database is still busy. Try again shortly."
+            ),
+        ) from exc
     deleted = delete_library(db, library_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Library not found")

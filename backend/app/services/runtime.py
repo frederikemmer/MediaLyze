@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from tzlocal import get_localzone
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, FileMovedEvent
 from watchdog.observers import Observer
@@ -50,6 +51,18 @@ from backend.app.services.scanner import (
 logger = logging.getLogger(__name__)
 
 
+class ScanCancelPersistenceError(RuntimeError):
+    def __init__(self, canceled_job_ids: list[int]) -> None:
+        self.canceled_job_ids = canceled_job_ids
+        super().__init__(
+            "Scan cancellation was requested, but SQLite could not persist the canceled status because the database is busy."
+        )
+
+
+def _is_sqlite_database_locked(exc: OperationalError) -> bool:
+    return "database is locked" in str(exc).lower()
+
+
 def resolve_scheduler_timezone():
     configured_timezone = os.environ.get("TZ")
     if configured_timezone:
@@ -87,6 +100,7 @@ class ScanRuntimeManager:
         self.watch_trigger_buffers: dict[int, dict] = {}
         self.active_library_ids: set[int] = set()
         self.submitted_job_ids: set[int] = set()
+        self.cancel_requested_job_ids: set[int] = set()
         self.history_compaction_pending = False
         self.history_storage_refresh_submitted = False
         self.stats_warmup_timer: Timer | None = None
@@ -345,12 +359,13 @@ class ScanRuntimeManager:
 
     def _run_job(self, job_id: int, library_id: int) -> None:
         try:
-            execute_scan_job(job_id, self.settings)
+            execute_scan_job(job_id, self.settings, is_cancel_requested=self.is_job_cancel_requested)
         finally:
             should_attempt_compaction = False
             with self.lock:
                 self.submitted_job_ids.discard(job_id)
                 self.active_library_ids.discard(library_id)
+                self.cancel_requested_job_ids.discard(job_id)
                 should_attempt_compaction = self.history_compaction_pending and not self.active_library_ids
             self._submit_next_active_job(library_id)
             self.request_history_storage_refresh()
@@ -406,8 +421,19 @@ class ScanRuntimeManager:
             db.close()
             self.request_history_storage_refresh()
 
+    def is_job_cancel_requested(self, job_id: int | None) -> bool:
+        if job_id is None:
+            return False
+        with self.lock:
+            return job_id in self.cancel_requested_job_ids
+
     def cancel_active_jobs(self) -> list[int]:
         db = SessionLocal()
+        jobs: list[ScanJob] = []
+        canceled_ids: list[int] = []
+        canceled_library_ids: set[int] = set()
+        persistence_error: ScanCancelPersistenceError | None = None
+        persistence_cause: OperationalError | None = None
         try:
             jobs = db.scalars(
                 select(ScanJob)
@@ -415,23 +441,42 @@ class ScanRuntimeManager:
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            canceled_ids: list[int] = []
             for job in jobs:
                 job.status = JobStatus.canceled
                 job.finished_at = utc_now()
                 canceled_ids.append(job.id)
+                canceled_library_ids.add(job.library_id)
 
             if canceled_ids:
-                db.commit()
+                with self.lock:
+                    self.cancel_requested_job_ids.update(canceled_ids)
+
+            if canceled_ids:
+                try:
+                    db.commit()
+                except OperationalError as exc:
+                    db.rollback()
+                    if _is_sqlite_database_locked(exc):
+                        persistence_error = ScanCancelPersistenceError(canceled_ids)
+                        persistence_cause = exc
+                    else:
+                        raise
         finally:
             db.close()
 
         with self.lock:
-            for library_id in {job.library_id for job in jobs}:
+            for library_id in canceled_library_ids:
                 pending_timer = self.debounce_timers.pop(library_id, None)
                 if pending_timer is not None:
                     pending_timer.cancel()
                 self.watch_trigger_buffers.pop(library_id, None)
+
+        if persistence_error is not None:
+            raise persistence_error from persistence_cause
+
+        if canceled_ids:
+            with self.lock:
+                self.cancel_requested_job_ids.difference_update(canceled_ids)
 
         if canceled_ids:
             self.request_history_storage_refresh()
@@ -439,6 +484,9 @@ class ScanRuntimeManager:
 
     def cancel_library_jobs(self, library_id: int) -> list[int]:
         db = SessionLocal()
+        canceled_ids: list[int] = []
+        persistence_error: ScanCancelPersistenceError | None = None
+        persistence_cause: OperationalError | None = None
         try:
             jobs = db.scalars(
                 select(ScanJob)
@@ -449,14 +497,25 @@ class ScanRuntimeManager:
                 .order_by(ScanJob.id.asc())
             ).all()
 
-            canceled_ids: list[int] = []
             for job in jobs:
                 job.status = JobStatus.canceled
                 job.finished_at = utc_now()
                 canceled_ids.append(job.id)
 
             if canceled_ids:
-                db.commit()
+                with self.lock:
+                    self.cancel_requested_job_ids.update(canceled_ids)
+
+            if canceled_ids:
+                try:
+                    db.commit()
+                except OperationalError as exc:
+                    db.rollback()
+                    if _is_sqlite_database_locked(exc):
+                        persistence_error = ScanCancelPersistenceError(canceled_ids)
+                        persistence_cause = exc
+                    else:
+                        raise
         finally:
             db.close()
 
@@ -465,6 +524,13 @@ class ScanRuntimeManager:
             if pending_timer is not None:
                 pending_timer.cancel()
             self.watch_trigger_buffers.pop(library_id, None)
+
+        if persistence_error is not None:
+            raise persistence_error from persistence_cause
+
+        if canceled_ids:
+            with self.lock:
+                self.cancel_requested_job_ids.difference_update(canceled_ids)
 
         if canceled_ids:
             self.request_history_storage_refresh()

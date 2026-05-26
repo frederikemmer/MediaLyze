@@ -211,6 +211,15 @@
   cursor: wait;
 }
 
+.scan-banner-error {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 99, 71, 0.22);
+  background: rgba(255, 99, 71, 0.12);
+  color: #8e2718;
+  font-weight: 700;
+}
+
 .scan-banner-copy span {
   color: var(--muted);
   font-size: 0.9rem;
