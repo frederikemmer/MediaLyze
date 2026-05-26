@@ -371,16 +371,31 @@ const HISTORY_VOLATILE_FIELD_KEYS = new Set([
   "filename",
   "last_seen_at",
   "last_analyzed_at",
-  "scan_status",
   "raw_ffprobe_json",
   "quality_score_breakdown",
 ]);
+
+const HISTORY_STATE_FIELD_KEYS = new Set([
+  "relative_path",
+  "extension",
+  "size_bytes",
+  "mtime",
+  "scan_status",
+  "quality_score",
+  "quality_score_raw",
+  "analysis_failure_kind",
+  "analysis_failure_reason",
+  "analysis_failure_detail",
+]);
+
+const HISTORY_STATE_FIELD_PREFIXES = ["external_subtitles."];
 
 const HISTORY_FIELD_LABELS: Record<string, string> = {
   relative_path: "Path",
   extension: "Container",
   size_bytes: "Size",
   mtime: "Modified",
+  scan_status: "Analysis status",
   quality_score: "Quality",
   quality_score_raw: "Raw quality",
   container: "Container",
@@ -402,6 +417,9 @@ const HISTORY_FIELD_LABELS: Record<string, string> = {
   "media_format.duration": "Format duration",
   "media_format.bit_rate": "Format bitrate",
   "media_format.probe_score": "Probe score",
+  "external_subtitles.path": "External subtitle path",
+  "external_subtitles.language": "External subtitle language",
+  "external_subtitles.format": "External subtitle format",
 };
 
 function stableHistoryValue(value: unknown): unknown {
@@ -451,8 +469,20 @@ function historyStateKey(snapshot: FileHistoryEntry["snapshot"]): string {
   const flattened = flattenHistorySnapshot(snapshot);
   return JSON.stringify(
     Object.keys(flattened)
+      .filter(isHistoryStateFieldKey)
       .sort()
       .map((key) => [key, stableHistoryValue(flattened[key])]),
+  );
+}
+
+function isHistoryStateFieldKey(key: string): boolean {
+  const arraylessKey = key.replace(/\.\d+\./g, ".");
+  return (
+    HISTORY_STATE_FIELD_KEYS.has(key) ||
+    HISTORY_STATE_FIELD_KEYS.has(arraylessKey) ||
+    HISTORY_STATE_FIELD_PREFIXES.some(
+      (prefix) => key.startsWith(prefix) || arraylessKey.startsWith(prefix),
+    )
   );
 }
 
@@ -557,7 +587,9 @@ function buildHistoryDiffMetrics(
   }
   const current = flattenHistorySnapshot(snapshot);
   const previous = flattenHistorySnapshot(previousSnapshot);
-  const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])].sort();
+  const keys = [...new Set([...Object.keys(current), ...Object.keys(previous)])]
+    .filter(isHistoryStateFieldKey)
+    .sort();
 
   return keys.reduce<FileHistoryMetric[]>((metrics, key) => {
     if (JSON.stringify(stableHistoryValue(current[key])) === JSON.stringify(stableHistoryValue(previous[key]))) {

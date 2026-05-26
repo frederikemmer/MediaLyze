@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- avoid noisy file-history events when rescans only populate newly supported metadata fields for otherwise unchanged files
 - keep the analyzed-files table-view settings aligned with the active library type so enabled metadata columns are rendered and labelled correctly
 - schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected ([#139](https://github.com/frederikemmer/MediaLyze/issues/139))
 - keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))

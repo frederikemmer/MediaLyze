@@ -1013,7 +1013,7 @@
 .settings-main-column > .async-panel {
   grid-template-rows: auto auto;
   min-width: 0;
-  margin-top: 2px;
+  margin-top: 0;
   border-color: rgba(31, 28, 22, 0.08);
   border-left-color: rgba(31, 28, 22, 0.12);
   border-top-left-radius: 0;
@@ -1056,7 +1056,7 @@
 
 .settings-navigation-panel {
   position: sticky;
-  top: 98px;
+  top: 96px;
   z-index: 1;
   flex: 0 0 260px;
   width: 260px;
@@ -3342,24 +3342,34 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   align-items: center;
   justify-content: center;
   min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid rgba(31, 28, 22, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  padding: 0 11px;
+  border: 1px solid rgba(31, 28, 22, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.58);
   color: var(--muted);
   font: inherit;
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(31, 28, 22, 0.03);
   transform: none;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .scan-log-copy-button:hover,
 .scan-log-copy-button:focus-visible {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: none;
+  border-color: rgba(31, 28, 22, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 6px 14px rgba(31, 28, 22, 0.06);
   transform: none;
 }
 
@@ -6013,6 +6023,25 @@ html[data-theme="dark"] {
     background: rgba(255, 250, 243, 0.94);
     color: #26231f;
     box-shadow: 0 14px 28px rgba(0, 0, 0, 0.34);
+  }
+
+  .scan-log-copy-button {
+    background: rgba(38, 35, 31, 0.7);
+    border-color: rgba(240, 236, 228, 0.11);
+    color: rgba(240, 236, 228, 0.68);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.055),
+      0 1px 2px rgba(0, 0, 0, 0.18);
+  }
+
+  .scan-log-copy-button:hover,
+  .scan-log-copy-button:focus-visible {
+    background: rgba(240, 236, 228, 0.08);
+    border-color: rgba(240, 236, 228, 0.17);
+    color: rgba(255, 250, 243, 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 8px 18px rgba(0, 0, 0, 0.22);
   }
 
   .settings-main-column .field select {
