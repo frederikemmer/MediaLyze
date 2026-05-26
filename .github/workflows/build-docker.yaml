@@ -93,21 +93,27 @@ jobs:
 
           git fetch --tags origin
 
+          if gh release view "${tag_name}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            release_exists="true"
+          else
+            release_exists="false"
+          fi
+          echo "release_exists=${release_exists}" >> "$GITHUB_OUTPUT"
+
           if git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
             tag_commit="$(git rev-list -n 1 "refs/tags/${tag_name}")"
             if [[ "${tag_commit}" != "${GITHUB_SHA}" ]]; then
+              if [[ "${release_exists}" == "true" ]]; then
+                echo "Tag ${tag_name} already exists on ${tag_commit}; release exists, so this run will skip publishing."
+                echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
               echo "Tag ${tag_name} already exists on ${tag_commit}, expected ${GITHUB_SHA}." >&2
               exit 1
             fi
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if gh release view "${tag_name}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            echo "release_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "release_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Log release target
