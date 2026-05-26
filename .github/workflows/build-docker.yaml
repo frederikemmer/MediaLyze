@@ -1,5 +1,6 @@
 name: publish official release
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
