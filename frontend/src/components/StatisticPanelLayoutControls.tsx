@@ -15,6 +15,7 @@ type StatisticPanelLayoutControlsProps = {
   onSaveEditing: () => void;
   onAddPanel: (statisticId: StatisticPanelLayoutId) => void;
   showAddButton?: boolean;
+  saveButtonFirst?: boolean;
   editButtonLabel?: string;
   editButtonTitle?: string;
   editButtonIcon?: ReactNode;
@@ -29,6 +30,7 @@ export function StatisticPanelLayoutControls({
   onSaveEditing,
   onAddPanel,
   showAddButton = true,
+  saveButtonFirst = false,
   editButtonLabel,
   editButtonTitle,
   editButtonIcon,
@@ -79,6 +81,51 @@ export function StatisticPanelLayoutControls({
     );
   }
 
+  const restoreDefaultButton = (
+    <button
+      type="button"
+      className="statistic-layout-action-button"
+      aria-label={t("panelLayout.restoreDefault")}
+      title={t("panelLayout.restoreDefault")}
+      onClick={() => {
+        setMenuOpen(false);
+        onRestoreDefault();
+      }}
+    >
+      <History className="nav-icon" aria-hidden="true" />
+    </button>
+  );
+
+  const cancelButton = (
+    <button
+      type="button"
+      className="statistic-layout-action-button"
+      aria-label={t("panelLayout.cancel")}
+      title={t("panelLayout.cancel")}
+      onClick={() => {
+        setMenuOpen(false);
+        onCancelEditing();
+      }}
+    >
+      <SaveOff className="nav-icon" aria-hidden="true" />
+    </button>
+  );
+
+  const saveButton = (
+    <button
+      type="button"
+      className="statistic-layout-action-button"
+      aria-label={t("panelLayout.save")}
+      title={t("panelLayout.save")}
+      onClick={() => {
+        setMenuOpen(false);
+        onSaveEditing();
+      }}
+    >
+      <Save className="nav-icon" aria-hidden="true" />
+    </button>
+  );
+
   return (
     <div className="statistic-layout-controls is-editing" ref={menuRef}>
       {showAddButton ? (
@@ -94,42 +141,9 @@ export function StatisticPanelLayoutControls({
           <Grid2x2Plus className="nav-icon" aria-hidden="true" />
         </button>
       ) : null}
-      <button
-        type="button"
-        className="statistic-layout-action-button"
-        aria-label={t("panelLayout.restoreDefault")}
-        title={t("panelLayout.restoreDefault")}
-        onClick={() => {
-          setMenuOpen(false);
-          onRestoreDefault();
-        }}
-      >
-        <History className="nav-icon" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="statistic-layout-action-button"
-        aria-label={t("panelLayout.cancel")}
-        title={t("panelLayout.cancel")}
-        onClick={() => {
-          setMenuOpen(false);
-          onCancelEditing();
-        }}
-      >
-        <SaveOff className="nav-icon" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="statistic-layout-action-button"
-        aria-label={t("panelLayout.save")}
-        title={t("panelLayout.save")}
-        onClick={() => {
-          setMenuOpen(false);
-          onSaveEditing();
-        }}
-      >
-        <Save className="nav-icon" aria-hidden="true" />
-      </button>
+      {saveButtonFirst ? saveButton : restoreDefaultButton}
+      {cancelButton}
+      {saveButtonFirst ? restoreDefaultButton : saveButton}
       {showAddButton && menuOpen ? (
         <div className="statistic-layout-menu" role="menu">
           {availableDefinitions.length > 0 ? (

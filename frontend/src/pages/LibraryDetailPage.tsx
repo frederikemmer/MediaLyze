@@ -3193,46 +3193,46 @@ export function LibraryDetailPage() {
 
   return (
     <>
-      <section className="panel stack statistic-layout-header-panel">
+      <section className="panel stack statistic-layout-header-panel library-statistic-layout-header-panel">
         <div className="panel-title-row panel-title-row-with-actions">
-          <div className="panel-title-row">
+          <div className="panel-title-row library-statistic-title-row">
             <h2>{displayLibrary?.name ?? t("libraryDetail.loading")}</h2>
             {displayLibrary?.path ? (
               <TooltipTrigger ariaLabel={t("libraryDetail.libraryPathAria")} content={displayLibrary.path}>
                 ?
               </TooltipTrigger>
             ) : null}
+            <StatisticPanelLayoutControls
+              availableDefinitions={availableStatisticPanelDefinitions}
+              isEditing={isEditingStatisticLayout}
+              onStartEditing={() => {
+                setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
+                setIsEditingStatisticLayout(true);
+              }}
+              onCancelEditing={() => {
+                setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
+                setDraggedStatisticPanelId(null);
+                setDropTargetStatisticPanelId(null);
+                setIsEditingStatisticLayout(false);
+              }}
+              onRestoreDefault={() => {
+                setDraftStatisticLayout(buildDefaultStatisticPanelLayout("library", statisticLayoutOptions));
+                setDraggedStatisticPanelId(null);
+                setDropTargetStatisticPanelId(null);
+              }}
+              onSaveEditing={() => {
+                persistStatisticLayout(draftStatisticLayout);
+                setDraggedStatisticPanelId(null);
+                setDropTargetStatisticPanelId(null);
+                setIsEditingStatisticLayout(false);
+              }}
+              onAddPanel={(statisticId) =>
+                updateStatisticLayout((current) =>
+                  addStatisticPanelLayoutItem("library", current, statisticId, statisticLayoutOptions)
+                )
+              }
+            />
           </div>
-          <StatisticPanelLayoutControls
-            availableDefinitions={availableStatisticPanelDefinitions}
-            isEditing={isEditingStatisticLayout}
-            onStartEditing={() => {
-              setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
-              setIsEditingStatisticLayout(true);
-            }}
-            onCancelEditing={() => {
-              setDraftStatisticLayout(cloneStatisticPanelLayout(savedStatisticLayout));
-              setDraggedStatisticPanelId(null);
-              setDropTargetStatisticPanelId(null);
-              setIsEditingStatisticLayout(false);
-            }}
-            onRestoreDefault={() => {
-              setDraftStatisticLayout(buildDefaultStatisticPanelLayout("library", statisticLayoutOptions));
-              setDraggedStatisticPanelId(null);
-              setDropTargetStatisticPanelId(null);
-            }}
-            onSaveEditing={() => {
-              persistStatisticLayout(draftStatisticLayout);
-              setDraggedStatisticPanelId(null);
-              setDropTargetStatisticPanelId(null);
-              setIsEditingStatisticLayout(false);
-            }}
-            onAddPanel={(statisticId) =>
-              updateStatisticLayout((current) =>
-                addStatisticPanelLayoutItem("library", current, statisticId, statisticLayoutOptions)
-              )
-            }
-          />
         </div>
         <div className="card-grid grid">
           <StatCard label={t("libraryDetail.files")} value={String(displayLibrary?.file_count ?? filesTotal ?? 0)} />
@@ -3661,6 +3661,7 @@ export function LibraryDetailPage() {
                         availableDefinitions={[]}
                         isEditing={isEditingTableView}
                         showAddButton={false}
+                        saveButtonFirst
                         editButtonLabel={t("libraryDetail.tableView.edit")}
                         editButtonTitle={t("libraryDetail.tableView.edit")}
                         editButtonIcon={<SettingsIcon className="statistic-layout-action-icon" size={18} />}

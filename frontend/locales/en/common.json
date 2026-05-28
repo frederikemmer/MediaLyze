@@ -68,7 +68,7 @@
     "collapseAria": "Collapse {{title}}",
     "expandAria": "Expand {{title}}",
     "loading": "Loading...",
-    "noDataYet": "not data yet"
+    "noDataYet": "No data yet"
   },
   "releaseNotes": {
     "title": "Release history",
