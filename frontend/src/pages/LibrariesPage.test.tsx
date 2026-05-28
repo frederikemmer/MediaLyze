@@ -1874,7 +1874,7 @@ describe("LibrariesPage settings panels", () => {
     expect(titleArea.getByRole("link", { name: "Movies" })).toBeInTheDocument();
     expect(titleArea.getByText("Manual")).toBeInTheDocument();
 
-    fireEvent.mouseEnter(detailsButton);
+    fireEvent.focus(detailsButton);
 
     expect(await screen.findByText("/media/movies")).toBeInTheDocument();
     expect(screen.getByText("0 files")).toBeInTheDocument();

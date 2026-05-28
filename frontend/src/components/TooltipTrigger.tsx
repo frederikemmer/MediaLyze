@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
 import {
   useEffect,
   useEffectEvent,
@@ -20,6 +20,9 @@ type TooltipTriggerProps = {
   maxWidth?: number;
   preserveLineBreaks?: boolean;
   onOpen?: () => void;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  disabled?: boolean;
+  pinOnClick?: boolean;
   children?: ReactNode;
 };
 
@@ -27,6 +30,7 @@ const TOOLTIP_GAP = 10;
 const TOOLTIP_VIEWPORT_MARGIN = 16;
 const TOOLTIP_MAX_WIDTH = 320;
 const TOOLTIP_OPEN_EVENT = "medialyze-tooltip-open";
+const TOOLTIP_HOVER_OPEN_DELAY = 350;
 
 export function TooltipTrigger({
   content,
@@ -37,11 +41,15 @@ export function TooltipTrigger({
   maxWidth = TOOLTIP_MAX_WIDTH,
   preserveLineBreaks = false,
   onOpen,
+  onClick,
+  disabled = false,
+  pinOnClick = true,
   children = "?",
 }: TooltipTriggerProps) {
   const tooltipId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
@@ -50,6 +58,14 @@ export function TooltipTrigger({
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
 
   const isOpen = isHovered || isTooltipHovered || isFocused || isPinned;
+
+  const clearOpenTimer = useEffectEvent(() => {
+    if (openTimerRef.current === null) {
+      return;
+    }
+    window.clearTimeout(openTimerRef.current);
+    openTimerRef.current = null;
+  });
 
   const clearCloseTimer = useEffectEvent(() => {
     if (closeTimerRef.current === null) {
@@ -60,12 +76,22 @@ export function TooltipTrigger({
   });
 
   const scheduleHoverClose = useEffectEvent(() => {
+    clearOpenTimer();
     clearCloseTimer();
     closeTimerRef.current = window.setTimeout(() => {
       setIsHovered(false);
       setIsTooltipHovered(false);
       closeTimerRef.current = null;
     }, 120);
+  });
+
+  const scheduleHoverOpen = useEffectEvent(() => {
+    clearCloseTimer();
+    clearOpenTimer();
+    openTimerRef.current = window.setTimeout(() => {
+      setIsHovered(true);
+      openTimerRef.current = null;
+    }, TOOLTIP_HOVER_OPEN_DELAY);
   });
 
   const updatePosition = useEffectEvent(() => {
@@ -130,6 +156,7 @@ export function TooltipTrigger({
   }, [content, isOpen, updatePosition]);
 
   const closeTooltip = useEffectEvent(() => {
+    clearOpenTimer();
     clearCloseTimer();
     setIsHovered(false);
     setIsTooltipHovered(false);
@@ -137,7 +164,10 @@ export function TooltipTrigger({
     setIsPinned(false);
   });
 
-  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+  useEffect(() => () => {
+    clearOpenTimer();
+    clearCloseTimer();
+  }, [clearCloseTimer, clearOpenTimer]);
 
   useEffect(() => {
     const handleTooltipOpen = (event: Event) => {
@@ -214,7 +244,11 @@ export function TooltipTrigger({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isPinned, closeTooltip]);
 
-  const handleClick = () => {
+  const handleClick: MouseEventHandler<HTMLButtonElement> = (event) => {
+    onClick?.(event);
+    if (event.defaultPrevented || !pinOnClick) {
+      return;
+    }
     if (isPinned) {
       closeTooltip();
       triggerRef.current?.blur();
@@ -240,17 +274,19 @@ export function TooltipTrigger({
         aria-label={ariaLabel}
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-expanded={isOpen}
+        disabled={disabled}
         className={["tooltip-trigger", className ?? ""].filter(Boolean).join(" ")}
         onMouseEnter={() => {
-          clearCloseTimer();
-          setIsHovered(true);
+          scheduleHoverOpen();
         }}
         onMouseLeave={() => scheduleHoverClose()}
         onFocus={() => {
+          clearOpenTimer();
           clearCloseTimer();
           setIsFocused(true);
         }}
         onBlur={() => {
+          clearOpenTimer();
           setIsFocused(false);
           setIsPinned(false);
         }}

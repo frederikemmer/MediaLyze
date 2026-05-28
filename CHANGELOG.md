@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- polish the library detail statistic and duplication panel layout, including panel spacing, shadows, duplicate toggles, and duplicate group sizing
+
+## v0.12.2
+
+>2026-05-28
+
+### ✨ New
+
+- redesign duplications panel
+- new four-state header toggle for all, hash-only, filename-only, and hidden duplicate views ([#144](https://github.com/frederikemmer/MediaLyze/issues/144))
+
+### 🐛 Bug fixes
+
+- fix repeated chevron artifacts in the Library detail comparison-panel field dropdowns without changing other select menus
+
 ## v0.12.1
 
 >2026-05-26

@@ -1262,6 +1262,10 @@ describe("LibraryDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
     expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { level: 3, name: "episode 01" })).not.toBeInTheDocument();
+    expect(screen.queryByText("episode 01")).not.toBeInTheDocument();
+    const modeBadgeTooltip = screen.getByRole("button", { name: "Show detected duplicate value for Filename" });
+    fireEvent.focus(modeBadgeTooltip);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("episode 01");
     expect(libraryDuplicatesSpy).toHaveBeenCalledWith(String(libraryId), expect.objectContaining({ offset: 0, limit: 25 }));
   });
 
@@ -1301,6 +1305,66 @@ describe("LibraryDetailPage", () => {
     expect(variantsList).toHaveClass("scan-log-path-list");
   });
 
+  it("shows duplicate item paths on filename hover and opens details only from the icon button", async () => {
+    const libraryId = 124;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({
+        items: [
+          {
+            mode: "filename",
+            signature: "episode 01",
+            label: "episode 01",
+            file_count: 2,
+            total_size_bytes: 2048,
+            suppressed: false,
+            items: [
+              {
+                id: 1,
+                relative_path: "Season 1/episode-01.mkv",
+                filename: "episode-01.mkv",
+                size_bytes: 1024,
+              },
+              {
+                id: 2,
+                relative_path: "Season 1/episode-01-copy.mkv",
+                filename: "episode-01-copy.mkv",
+                size_bytes: 1024,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
+
+    const firstDuplicateItem = await waitFor(() => {
+      const element = container.querySelector(".duplicate-group-item-card");
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+    const firstDuplicateName = firstDuplicateItem.querySelector(".duplicate-group-item-name");
+    expect(firstDuplicateName).not.toBeNull();
+    expect(firstDuplicateName).toHaveTextContent("episode-01.mkv");
+    expect(firstDuplicateName).not.toHaveAttribute("title");
+    expect(
+      within(firstDuplicateItem).getByRole("button", {
+        name: "Season 1/episode-01.mkv",
+      }),
+    ).toHaveClass("duplicate-group-item-name-tooltip-trigger");
+    expect(within(firstDuplicateItem).queryByRole("link", { name: "episode-01.mkv" })).not.toBeInTheDocument();
+    const openDetailButton = within(firstDuplicateItem).getByRole("button", { name: "Open details for episode-01.mkv" });
+    expect(container.querySelector(".duplicate-group-items-scroll .scan-log-path")).toBeNull();
+    fireEvent.click(openDetailButton);
+    expect(await screen.findByText("File detail 1")).toBeInTheDocument();
+  });
+
   it("marks duplicate groups as not duplicate and reloads the panel", async () => {
     const libraryId = 124;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -1313,7 +1377,16 @@ describe("LibraryDetailPage", () => {
     renderPage(libraryId);
 
     fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark as not duplicate" }));
+    const markNotDuplicateButton = await screen.findByRole("button", { name: "Mark as not duplicate" });
+    expect(markNotDuplicateButton).toHaveClass(
+      "secondary",
+      "icon-only-button",
+      "duplicate-group-action",
+      "duplicate-group-action-tooltip-trigger",
+    );
+    fireEvent.focus(markNotDuplicateButton);
+    expect(await screen.findByText("Mark as not duplicate")).toBeInTheDocument();
+    fireEvent.click(markNotDuplicateButton);
 
     await waitFor(() => {
       expect(suppressSpy).toHaveBeenCalledWith(String(libraryId), { mode: "filename", signature: "episode 01" });
@@ -1355,10 +1428,13 @@ describe("LibraryDetailPage", () => {
 
     renderPage(libraryId);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Show hidden" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show hidden duplicate groups" }));
 
     expect(await screen.findByText("Hidden")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Restore duplicate group" }));
+    const restoreDuplicateButton = screen.getByRole("button", { name: "Restore duplicate group" });
+    fireEvent.focus(restoreDuplicateButton);
+    expect(await screen.findByText("Restore duplicate group")).toBeInTheDocument();
+    fireEvent.click(restoreDuplicateButton);
 
     await waitFor(() => {
       expect(restoreSpy).toHaveBeenCalledWith(String(libraryId), { mode: "filename", signature: "episode 01" });
@@ -1404,13 +1480,143 @@ describe("LibraryDetailPage", () => {
     renderPage(126);
 
     const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
-    expect(duplicatesToggle).toBeDisabled();
+    expect(duplicatesToggle).toHaveAttribute("aria-expanded", "false");
     expect(duplicatesToggle.closest(".statistic-layout-panel-shell")).toHaveClass("is-collapsed-panel");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Show hidden" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show hidden duplicate groups" }));
 
     await waitFor(() => expect(duplicatesToggle).not.toBeDisabled());
     expect(duplicatesToggle.closest(".statistic-layout-panel-shell")).not.toHaveClass("is-collapsed-panel");
+  });
+
+  it("renders a compact animated empty state when the selected duplicate view has no groups", async () => {
+    const libraryId = 127;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({
+        total_groups: 1,
+        duplicate_file_count: 2,
+        suppressed_group_count: 0,
+        items: [
+          {
+            mode: "filehash",
+            signature: "sha256:only-hash",
+            label: "sha256:only-hash",
+            file_count: 2,
+            total_size_bytes: 2048,
+            suppressed: false,
+            items: [
+              { id: 1, relative_path: "movie-a.mkv", filename: "movie-a.mkv", size_bytes: 1024 },
+              { id: 2, relative_path: "movie-b.mkv", filename: "movie-b.mkv", size_bytes: 1024 },
+            ],
+          },
+        ],
+      }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    const { container } = renderPage(libraryId);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show only filename duplicate groups" }));
+
+    const emptyState = await screen.findByText("No duplicate groups match the current view.");
+    expect(emptyState.closest(".duplicate-panel-empty-state")).not.toBeNull();
+    expect(container.querySelector("#library-duplicates-panel-body .notice")).toBeNull();
+    expect(container.querySelector(".duplicate-panel-empty-state-icon")).not.toBeNull();
+  });
+
+  it("filters duplicate groups with the header view toggle and removes the old hidden button", async () => {
+    const libraryId = 126;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const visiblePage = createDuplicateGroupPage({
+      total_groups: 2,
+      suppressed_group_count: 1,
+      items: [
+        {
+          mode: "filename",
+          signature: "episode 01",
+          label: "episode 01",
+          file_count: 2,
+          total_size_bytes: 2048,
+          suppressed: false,
+          items: [
+            { id: 1, relative_path: "episode-01.mkv", filename: "episode-01.mkv", size_bytes: 1024 },
+            { id: 2, relative_path: "episode-01-copy.mkv", filename: "episode-01-copy.mkv", size_bytes: 1024 },
+          ],
+        },
+        {
+          mode: "filehash",
+          signature: "sha256:abc123",
+          label: "sha256:abc123",
+          file_count: 2,
+          total_size_bytes: 3072,
+          suppressed: false,
+          items: [
+            { id: 3, relative_path: "movie-hash-a.mkv", filename: "movie-hash-a.mkv", size_bytes: 1536 },
+            { id: 4, relative_path: "movie-hash-b.mkv", filename: "movie-hash-b.mkv", size_bytes: 1536 },
+          ],
+        },
+      ],
+    });
+    const hiddenPage = createDuplicateGroupPage({
+      total_groups: 0,
+      duplicate_file_count: 0,
+      include_suppressed: true,
+      suppressed_group_count: 1,
+      items: [
+        {
+          mode: "filename",
+          signature: "hidden-episode",
+          label: "hidden-episode",
+          file_count: 2,
+          total_size_bytes: 2048,
+          suppressed: true,
+          items: [
+            { id: 5, relative_path: "hidden-a.mkv", filename: "hidden-a.mkv", size_bytes: 1024 },
+            { id: 6, relative_path: "hidden-b.mkv", filename: "hidden-b.mkv", size_bytes: 1024 },
+          ],
+        },
+      ],
+    });
+    const libraryDuplicatesSpy = vi
+      .spyOn(api, "libraryDuplicates")
+      .mockResolvedValueOnce(visiblePage)
+      .mockResolvedValueOnce(hiddenPage);
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
+
+    expect(screen.queryByRole("button", { name: "Show hidden" })).not.toBeInTheDocument();
+    const duplicatePanelBody = document.getElementById("library-duplicates-panel-body");
+    expect(duplicatePanelBody).not.toBeNull();
+    const duplicatePanelQueries = within(duplicatePanelBody ?? document.body);
+
+    expect((await duplicatePanelQueries.findAllByText("episode-01.mkv")).length).toBeGreaterThan(0);
+    expect(duplicatePanelQueries.getByText("movie-hash-a.mkv")).toBeInTheDocument();
+
+    const hashViewButton = screen.getByRole("button", { name: "Show only hash duplicate groups" });
+    expect(hashViewButton).toHaveAttribute("title", "Show only hash duplicate groups");
+
+    fireEvent.click(hashViewButton);
+    await waitFor(() => {
+      expect(duplicatePanelQueries.queryByText("episode-01.mkv")).not.toBeInTheDocument();
+      expect(duplicatePanelQueries.getByText("movie-hash-a.mkv")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show hidden duplicate groups" }));
+    expect(await duplicatePanelQueries.findByText("hidden-a.mkv")).toBeInTheDocument();
+    expect(duplicatePanelQueries.queryByText("movie-hash-a.mkv")).not.toBeInTheDocument();
+    expect(libraryDuplicatesSpy).toHaveBeenCalledWith(
+      String(libraryId),
+      expect.objectContaining({ includeSuppressed: true }),
+    );
   });
 
   it("hides the score meter when the feature flag is enabled", async () => {

@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "RUN",
+            "type": "shell",
+            "command": "cd \"/Users/frederikemmer/CODE/MediaLyze/.\" && ./scripts/dev-local.sh",
+            "inAgents": true
+        }
+    ]
+}
