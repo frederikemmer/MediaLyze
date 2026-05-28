@@ -68,7 +68,7 @@
     "collapseAria": "Collapse {{title}}",
     "expandAria": "Expand {{title}}",
     "loading": "Loading...",
-    "noDataYet": "not data yet"
+    "noDataYet": "No data yet"
   },
   "releaseNotes": {
     "title": "Release history",
@@ -662,12 +662,20 @@
       "empty": "No duplicate groups found yet.",
       "emptySearch": "No duplicate groups match the current search.",
       "fileCount": "{{count}} files",
+      "detectedValueTooltipAria": "Show detected duplicate value for {{mode}}",
       "searchPlaceholder": "Search duplicates",
       "searchLabel": "Search duplicates",
       "clearSearch": "Clear duplicate search",
-      "showSuppressed": "Show hidden",
-      "hideSuppressed": "Hide hidden",
+      "view": {
+        "label": "Select duplicate view",
+        "all": "Show all duplicate groups",
+        "onlyHash": "Show only hash duplicate groups",
+        "onlyFilename": "Show only filename duplicate groups",
+        "hidden": "Show hidden duplicate groups"
+      },
+      "emptyView": "No duplicate groups match the current view.",
       "suppressedBadge": "Hidden",
+      "openFileDetailAria": "Open details for {{filename}}",
       "markNotDuplicate": "Mark as not duplicate",
       "restoreDuplicate": "Restore duplicate group",
       "suppressFailed": "Could not mark the duplicate group as not duplicate.",

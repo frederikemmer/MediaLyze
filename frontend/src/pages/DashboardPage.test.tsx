@@ -285,12 +285,12 @@ describe("DashboardPage", () => {
     renderPage();
 
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
-    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
 
     resolveDashboard!(createDashboard());
 
     expect(await screen.findByText("MKV")).toBeInTheDocument();
-    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
   });
 
   it("keeps comparison panels loading until their first comparison response arrives", async () => {
@@ -314,12 +314,12 @@ describe("DashboardPage", () => {
     renderPage();
 
     expect(await screen.findByText("Loading...")).toBeInTheDocument();
-    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
 
     resolveComparison!(createComparisonResponse());
 
     expect(await screen.findByTestId("echarts-react")).toBeInTheDocument();
-    expect(screen.queryByText("not data yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
   });
 
   it("shows the dashboard title and persists inline layout changes", async () => {
