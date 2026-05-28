@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-### 🐛 Bug fixes
-
-- polish the library detail statistic and duplication panel layout, including panel spacing, shadows, duplicate toggles, and duplicate group sizing
-
 ## v0.12.2
 
 >2026-05-28
