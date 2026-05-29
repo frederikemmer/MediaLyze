@@ -417,8 +417,8 @@
       "resizedPanel": "Panel \"{{panel}}\" {{axis}} was changed from {{requested}} to {{applied}}.",
       "comparisonSelectionAdjusted": "Metric comparison \"{{instanceId}}\" now uses {{appliedSelection}} instead of the saved {{previousSelection}}.",
       "axes": {
-        "width": "width",
-        "height": "height"
+        "width": "ancho",
+        "height": "alto"
       }
     }
   },
@@ -471,39 +471,39 @@
     "analyzedFiles": "Archivos analizados",
     "series": {
       "title": "Series",
-      "empty": "Recognized series will appear after a scan.",
+      "empty": "Las series reconocidas aparecerán después de un escaneo.",
       "loading": "Cargando series...",
       "viewSeries": "Series",
       "viewFiles": "Archivos",
-      "seasonTitle": "Season {{season}}",
+      "seasonTitle": "Temporada {{season}}",
       "specials": "Especiales",
-      "seasonCount": "{{count}} seasons",
-      "episodeCount": "{{count}} episodes",
+      "seasonCount": "{{count}} temporadas",
+      "episodeCount": "{{count}} episodios",
       "seasons": "Temporadas",
       "episodes": "Episodios",
       "backToLibrary": "Volver a la biblioteca"
     },
-    "indexedEntries": "{{count}} indexed entries",
-    "indexedEntriesFiltered": "{{shown}} of {{total}} indexed entries",
+    "indexedEntries": "{{count}} entradas indexadas",
+    "indexedEntriesFiltered": "{{shown}} de {{total}} entradas indexadas",
     "tableView": {
-      "edit": "Edit table view"
+      "edit": "Editar vista de tabla"
     },
     "export": {
       "aria": "Exportar archivos analizados como CSV",
-      "tooltip": "Exportar the full filtered analyzed-files result set as CSV",
+      "tooltip": "Exportar como CSV el conjunto completo filtrado de resultados de archivos analizados",
       "exporting": "Exportando CSV…",
-      "error": "CSV export failed: {{message}}"
+      "error": "La exportación CSV falló: {{message}}"
     },
     "searchLabel": "Buscar archivos y metadatos",
-    "searchPlaceholder": "search files and metadata",
+    "searchPlaceholder": "buscar archivos y metadatos",
     "searchFields": {
       "addMetadata": "Metadatos",
-      "addMetadataAria": "Añadir metadata search field",
-      "activeMetadata": "Active metadata search fields",
-      "removeAria": "Eliminar {{field}} search field",
-      "tooltipAria": "Show supported search syntax",
+      "addMetadataAria": "Añadir campo de búsqueda de metadatos",
+      "activeMetadata": "Campos de búsqueda de metadatos activos",
+      "removeAria": "Eliminar campo de búsqueda {{field}}",
+      "tooltipAria": "Mostrar la sintaxis de búsqueda compatible",
       "textMatch": {
-        "tooltip": "Text fields support comma-separated AND terms. Prefix a term with ! to exclude matches, for example !en, external."
+        "tooltip": "Los campos de texto admiten términos AND separados por comas. Antepon un ! a un término para excluir coincidencias, por ejemplo !en, external."
       },
       "file": {
         "label": "Archivo y ruta",
@@ -536,7 +536,7 @@
         "placeholder": "p. ej. hevc av1"
       },
       "resolution": {
-        "placeholder": "p. ej. 1080p or 3840x2160"
+        "placeholder": "p. ej. 1080p o 3840x2160"
       },
       "hdr": {
         "placeholder": "p. ej. hdr10, dv, sdr"
@@ -564,25 +564,25 @@
         "placeholder": "p. ej. internal external"
       },
       "validation": {
-        "size": "Usa una comparación como >4GB or <=700MB.",
+        "size": "Usa una comparación como >4GB o <=700MB.",
         "quality_score": "Usa una puntuación de 1 a 10, por ejemplo >=8.",
-        "bitrate": "Usa una bitrate como >8Mb/s or >=256kb/s.",
-        "audio_bitrate": "Usa una bitrate de audio como >512kb/s or >=1Mb/s.",
-        "bit_depth": "Usa una profundidad de bits entera como >=16 or =24.",
-        "duration": "Usa una duración como >90m or >=1h 30m.",
-        "chapter_count": "Usa un número de capítulos como >=10 or =24."
+        "bitrate": "Usa un bitrate como >8Mb/s o >=256kb/s.",
+        "audio_bitrate": "Usa un bitrate de audio como >512kb/s o >=1Mb/s.",
+        "bit_depth": "Usa una profundidad de bits entera como >=16 o =24.",
+        "duration": "Usa una duración como >90m o >=1h 30m.",
+        "chapter_count": "Usa un número de capítulos como >=10 o =24."
       },
       "audio_title": {
-        "placeholder": "p. ej. Song title"
+        "placeholder": "p. ej. Título de la canción"
       },
       "audio_artist": {
-        "placeholder": "p. ej. Artist"
+        "placeholder": "p. ej. Artista"
       },
       "audio_album": {
-        "placeholder": "p. ej. Album"
+        "placeholder": "p. ej. Álbum"
       },
       "audio_album_artist": {
-        "placeholder": "p. ej. Album artist"
+        "placeholder": "p. ej. Artista del álbum"
       },
       "audio_genre": {
         "placeholder": "p. ej. jazz"
@@ -594,7 +594,7 @@
         "placeholder": "p. ej. 1/2"
       },
       "audio_composer": {
-        "placeholder": "p. ej. Composer"
+        "placeholder": "p. ej. Compositor"
       },
       "audio_channels": {
         "placeholder": "p. ej. >=2",
@@ -618,28 +618,28 @@
         "tooltip": "Compatible: >=10, =24, <50"
       },
       "chapter_titles": {
-        "placeholder": "p. ej. Chapter one"
+        "placeholder": "p. ej. Capítulo uno"
       },
       "audiobook_narrator": {
-        "placeholder": "p. ej. Narrator"
+        "placeholder": "p. ej. Narrador"
       },
       "audiobook_author": {
-        "placeholder": "p. ej. Author"
+        "placeholder": "p. ej. Autor"
       },
       "audiobook_publisher": {
-        "placeholder": "p. ej. Publisher"
+        "placeholder": "p. ej. Editorial"
       },
       "audiobook_series": {
-        "placeholder": "p. ej. Series"
+        "placeholder": "p. ej. Serie"
       },
       "audiobook_series_part": {
         "placeholder": "p. ej. 2"
       },
       "audiobook_description": {
-        "placeholder": "p. ej. synopsis term"
+        "placeholder": "p. ej. término de sinopsis"
       },
       "audiobook_copyright": {
-        "placeholder": "p. ej. copyright holder"
+        "placeholder": "p. ej. titular del copyright"
       },
       "audiobook_asin": {
         "placeholder": "p. ej. B000000000"
@@ -648,58 +648,58 @@
         "placeholder": "p. ej. 978..."
       },
       "audiobook_language": {
-        "placeholder": "p. ej. en or de"
+        "placeholder": "p. ej. en o de"
       },
       "audiobook_abridged": {
         "placeholder": "abreviado o íntegro"
       }
     },
     "loadingFiles": "Cargando archivos analizados…",
-    "loadingMore": "Cargando more entries…",
+    "loadingMore": "Cargando más entradas…",
     "noAnalyzedFiles": "Aún no hay archivos analizados.",
     "duplicates": {
       "title": "Duplicados",
-      "empty": "No duplicate groups found yet.",
-      "emptySearch": "No duplicate groups match the current search.",
-      "fileCount": "{{count}} files",
-      "detectedValueTooltipAria": "Show detected duplicate value for {{mode}}",
+      "empty": "Aún no se han encontrado grupos de duplicados.",
+      "emptySearch": "Ningún grupo de duplicados coincide con la búsqueda actual.",
+      "fileCount": "{{count}} archivos",
+      "detectedValueTooltipAria": "Mostrar el valor de duplicado detectado para {{mode}}",
       "searchPlaceholder": "Buscar duplicados",
       "searchLabel": "Buscar duplicados",
       "clearSearch": "Limpiar búsqueda de duplicados",
       "view": {
-        "label": "Seleccionar duplicate view",
-        "all": "Show all duplicate groups",
-        "onlyHash": "Show only hash duplicate groups",
-        "onlyFilename": "Show only filename duplicate groups",
-        "hidden": "Show hidden duplicate groups"
+        "label": "Seleccionar vista de duplicados",
+        "all": "Mostrar todos los grupos de duplicados",
+        "onlyHash": "Mostrar solo grupos de duplicados por hash",
+        "onlyFilename": "Mostrar solo grupos de duplicados por nombre de archivo",
+        "hidden": "Mostrar grupos de duplicados ocultos"
       },
-      "emptyView": "No duplicate groups match the current view.",
-      "suppressedBadge": "Hidden",
-      "openFileDetailAria": "Abrir details for {{filename}}",
-      "markNotDuplicate": "Mark as not duplicate",
-      "restoreDuplicate": "Restaurar duplicate group",
-      "suppressFailed": "Could not mark the duplicate group as not duplicate.",
-      "restoreFailed": "Could not restore the duplicate group."
+      "emptyView": "Ningún grupo de duplicados coincide con la vista actual.",
+      "suppressedBadge": "Oculto",
+      "openFileDetailAria": "Abrir detalles de {{filename}}",
+      "markNotDuplicate": "Marcar como no duplicado",
+      "restoreDuplicate": "Restaurar grupo duplicado",
+      "suppressFailed": "No se pudo marcar el grupo de duplicados como no duplicado.",
+      "restoreFailed": "No se pudo restaurar el grupo de duplicados."
     },
     "history": {
-      "title": "Media library history",
-      "subtitle": "Daily trend snapshots from finished scans",
-      "empty": "History trends will appear after the next finished scan.",
+      "title": "Historial de la biblioteca multimedia",
+      "subtitle": "Instantáneas diarias de tendencias de escaneos finalizados",
+      "empty": "Las tendencias del historial aparecerán después del próximo escaneo completado.",
       "controls": {
-        "metric": "Seleccionar history metric",
-        "range": "Seleccionar history range"
+        "metric": "Seleccionar métrica del historial",
+        "range": "Seleccionar rango del historial"
       },
       "range": {
         "last7Days": "7d",
         "last30Days": "30d",
-        "lastYear": "1y",
-        "all": "All",
-        "custom": "Custom",
-        "previousMonth": "Previous month",
-        "nextMonth": "Next month",
+        "lastYear": "1a",
+        "all": "Todo",
+        "custom": "Personalizado",
+        "previousMonth": "Mes anterior",
+        "nextMonth": "Mes siguiente",
         "cancel": "Cancelar",
         "apply": "Aplicar",
-        "empty": "No history data in the selected range."
+        "empty": "No hay datos de historial en el rango seleccionado."
       },
       "tooltip": {
         "total": "Total"
@@ -711,45 +711,45 @@
       },
       "metrics": {
         "file_count": "Archivos",
-        "total_size_bytes": "Total size",
-        "total_duration_seconds": "Total duration",
-        "average_size_bytes": "Average size",
-        "resolution_mix": "Resolution mix",
-        "average_bitrate": "Average bitrate",
-        "average_audio_bitrate": "Average audio bitrate",
-        "average_duration_seconds": "Average duration",
-        "average_quality_score": "Average quality score",
-        "average_resolution_mp": "Average resolution MP",
-        "library_mix": "Library mix",
-        "container_mix": "Container mix",
-        "video_codec_mix": "Video codec mix",
-        "hdr_type_mix": "Dynamic range mix",
-        "audio_codecs_mix": "Audio codec mix",
-        "audio_spatial_profiles_mix": "Spatial audio mix",
-        "audio_languages_mix": "Audio language mix",
-        "subtitle_languages_mix": "Subtitle language mix",
-        "subtitle_codecs_mix": "Subtitle codec mix",
-        "subtitle_sources_mix": "Subtitle source mix",
-        "scan_status_mix": "Scan status mix",
-        "resolution_distribution": "Resolution distribution",
-        "quality_score_distribution": "Quality score distribution",
-        "duration_distribution": "Duration distribution",
-        "size_distribution": "Size distribution",
-        "bitrate_distribution": "Bitrate distribution",
-        "audio_bitrate_distribution": "Audio bitrate distribution",
-        "resolution_mp_distribution": "Resolution MP distribution"
+        "total_size_bytes": "Tamaño total",
+        "total_duration_seconds": "Duración total",
+        "average_size_bytes": "Tamaño medio",
+        "resolution_mix": "Mezcla de resoluciones",
+        "average_bitrate": "Bitrate medio",
+        "average_audio_bitrate": "Bitrate de audio medio",
+        "average_duration_seconds": "Duración media",
+        "average_quality_score": "Puntuación de calidad media",
+        "average_resolution_mp": "Resolución media en MP",
+        "library_mix": "Mezcla de bibliotecas",
+        "container_mix": "Mezcla de contenedores",
+        "video_codec_mix": "Mezcla de códecs de vídeo",
+        "hdr_type_mix": "Mezcla de rango dinámico",
+        "audio_codecs_mix": "Mezcla de códecs de audio",
+        "audio_spatial_profiles_mix": "Mezcla de audio espacial",
+        "audio_languages_mix": "Mezcla de idiomas de audio",
+        "subtitle_languages_mix": "Mezcla de idiomas de subtítulos",
+        "subtitle_codecs_mix": "Mezcla de códecs de subtítulos",
+        "subtitle_sources_mix": "Mezcla de fuentes de subtítulos",
+        "scan_status_mix": "Mezcla de estados de escaneo",
+        "resolution_distribution": "Distribución de resoluciones",
+        "quality_score_distribution": "Distribución de puntuación de calidad",
+        "duration_distribution": "Distribución de duración",
+        "size_distribution": "Distribución de tamaño",
+        "bitrate_distribution": "Distribución de bitrate",
+        "audio_bitrate_distribution": "Distribución de bitrate de audio",
+        "resolution_mp_distribution": "Distribución de resolución en MP"
       },
-      "unknownLegacyResolutionCategory": "Unknown legacy category: {{id}}"
+      "unknownLegacyResolutionCategory": "Categoría heredada desconocida: {{id}}"
     },
-    "renderedEntries": "{{rendered}} of {{total}} entries rendered",
-    "loadMore": "Load {{count}} more",
-    "resizeColumnAria": "Resize column {{column}}",
+    "renderedEntries": "{{rendered}} de {{total}} entradas renderizadas",
+    "loadMore": "Cargar {{count}} más",
+    "resizeColumnAria": "Redimensionar columna {{column}}",
     "statistics": {
-      "filterByValue": "Filter analyzed files by {{field}}: {{value}}",
-      "filterAlreadyApplied": "Already added to analyzed files filter for {{field}}: {{value}}"
+      "filterByValue": "Filtrar archivos analizados por {{field}}: {{value}}",
+      "filterAlreadyApplied": "Ya se ha añadido al filtro de archivos analizados para {{field}}: {{value}}"
     },
     "recentScanJobs": "Tareas de escaneo recientes",
-    "recentScanJobsSubtitle": "Latest queue and run history",
+    "recentScanJobsSubtitle": "Último historial de cola y ejecución",
     "jobLabel": "Tarea #{{id}}",
     "audio_artists": "Artistas",
     "audio_albums": "Álbumes",
@@ -762,43 +762,43 @@
     "embedded_covers": "Carátulas incrustadas",
     "audiobook_narrators": "Narradores",
     "audiobook_authors": "Autores",
-    "audiobook_publishers": "Editores",
+    "audiobook_publishers": "Editoriales",
     "audiobook_series": "Series de audiolibros",
-    "audiobook_series_parts": "Partes de serie",
+    "audiobook_series_parts": "Partes de la serie",
     "chapter_counts": "Recuento de capítulos"
   },
   "distributionChart": {
     "loading": "Cargando gráfico…",
-    "empty": "No analyzed data yet.",
-    "displayMode": "Chart display mode",
+    "empty": "Aún no hay datos analizados.",
+    "displayMode": "Modo de visualización del gráfico",
     "countMode": "Recuento",
     "percentMode": "Porcentaje",
-    "total": "{{total}} files with {{metric}} data",
+    "total": "{{total}} archivos con datos de {{metric}}",
     "binRange": "Rango",
     "count": "Recuento",
-    "percentage": "Percentage",
+    "percentage": "Porcentaje",
     "metrics": {
-      "quality_score": "quality score",
-      "duration": "duration",
-      "size": "file size",
+      "quality_score": "puntuación de calidad",
+      "duration": "duración",
+      "size": "tamaño de archivo",
       "bitrate": "bitrate",
-      "audio_bitrate": "audio bitrate"
+      "audio_bitrate": "bitrate de audio"
     }
   },
   "comparisonChart": {
-    "empty": "No comparable analyzed data yet.",
-    "summary": "{{included}} of {{total}} files included",
-    "sampled": "Scatter view sampled to {{limit}} points",
+    "empty": "Aún no hay datos analizados comparables.",
+    "summary": "{{included}} de {{total}} archivos incluidos",
+    "sampled": "Vista de dispersión muestreada a {{limit}} puntos",
     "count": "Recuento",
     "axes": {
       "x": "Eje X",
       "y": "Eje Y"
     },
     "controls": {
-      "xField": "Seleccionar X-axis metric",
-      "yField": "Seleccionar Y-axis metric",
-      "renderer": "Seleccionar chart renderer",
-      "swapAxes": "Swap comparison axes"
+      "xField": "Seleccionar métrica del eje X",
+      "yField": "Seleccionar métrica del eje Y",
+      "renderer": "Seleccionar renderizador del gráfico",
+      "swapAxes": "Intercambiar ejes de comparación"
     },
     "renderers": {
       "heatmap": "Mapa de calor",
@@ -811,22 +811,22 @@
   },
   "scanLogs": {
     "title": "Registros recientes de escaneo",
-    "subtitle": "Latest completed scan history across all libraries from the last 24 hours",
-    "empty": "No completed scans yet.",
-    "loadingDetail": "Cargando scan details…",
-    "loadingMore": "Cargando more…",
+    "subtitle": "Historial más reciente de escaneos completados de todas las bibliotecas durante las últimas 24 horas",
+    "empty": "Aún no hay escaneos completados.",
+    "loadingDetail": "Cargando detalles del escaneo…",
+    "loadingMore": "Cargando más…",
     "loadMore": "Cargar más",
     "unknownLibrary": "Biblioteca desconocida",
     "jobLabel": "Tarea #{{id}}",
     "jobTypeIncremental": "Incremental",
-    "jobTypeFull": "Full",
+    "jobTypeFull": "Completo",
     "triggerManual": "Manual",
     "triggerScheduled": "Programado",
-    "triggerWatchdog": "Vigilanciadog",
-    "triggerManualSummary": "Started manually by the user.",
-    "triggerScheduledSummary": "Started by the scheduled interval every {{minutes}} minutes.",
-    "triggerScheduledDailySummary": "Started by the daily schedule at {{time}}.",
-    "triggerWatchdogSummary": "Started after {{count}} watchdog file events.",
+    "triggerWatchdog": "Vigilancia",
+    "triggerManualSummary": "Iniciado manualmente por el usuario.",
+    "triggerScheduledSummary": "Iniciado por el intervalo programado cada {{minutes}} minutos.",
+    "triggerScheduledDailySummary": "Iniciado por la programación diaria a las {{time}}.",
+    "triggerWatchdogSummary": "Iniciado después de {{count}} eventos de archivos del vigilante.",
     "outcomeSuccessful": "Correcto",
     "outcomeCompletedWithIssues": "Completado con incidencias",
     "outcomeFailed": "Fallido",
@@ -837,53 +837,53 @@
     "metricDetected": "Detectados",
     "metricIgnored": "Ignorados",
     "metricAnalyzed": "Analizados",
-    "metricFailed": "Fallido",
+    "metricFailed": "Fallidos",
     "metricDuplicateGroups": "Grupos de duplicados",
     "metricDuplicateFiles": "Archivos duplicados",
     "metricNew": "Nuevos",
     "metricChanged": "Modificados",
     "metricDeleted": "Eliminados",
-    "triggerReason": "Trigger reason",
+    "triggerReason": "Motivo del disparo",
     "ignorePatterns": "Patrones ignorados",
-    "patternHits": "Ignore pattern hits",
-    "newFiles": "New files",
-    "changedFiles": "Changed files",
-    "deletedFiles": "Deleted files",
-    "failedFiles": "Files that could not be analyzed",
-    "duplicatesTitle": "Duplicate processing",
-    "duplicatesSummary": "{{groups}} groups across {{files}} files using {{mode}}",
+    "patternHits": "Coincidencias de patrones ignorados",
+    "newFiles": "Archivos nuevos",
+    "changedFiles": "Archivos modificados",
+    "deletedFiles": "Archivos eliminados",
+    "failedFiles": "Archivos que no se pudieron analizar",
+    "duplicatesTitle": "Procesamiento de duplicados",
+    "duplicatesSummary": "{{groups}} grupos en {{files}} archivos usando {{mode}}",
     "duplicatesMode": "Modo",
     "duplicatesQueued": "En cola",
     "duplicatesProcessed": "Procesados",
-    "duplicatesFailed": "Fallido",
-    "failedFileReasonTooltipAria": "Show analysis failure details for {{path}}",
-    "copyDiagnostics": "Copiar details",
-    "copiedDiagnostics": "Copied",
-    "copyDiagnosticsAria": "Copiar troubleshooting details for {{path}}",
-    "watchEvents": "{{count}} filesystem events were aggregated.",
-    "intervalMinutes": "Schedule interval: {{minutes}} minutes",
-    "coalescedTriggers": "{{count}} additional triggers were merged into this scan.",
-    "moreEntries": "{{count}} more entries not shown",
+    "duplicatesFailed": "Fallidos",
+    "failedFileReasonTooltipAria": "Mostrar detalles del error de análisis para {{path}}",
+    "copyDiagnostics": "Copiar detalles",
+    "copiedDiagnostics": "Copiado",
+    "copyDiagnosticsAria": "Copiar detalles de resolución de problemas para {{path}}",
+    "watchEvents": "Se agruparon {{count}} eventos del sistema de archivos.",
+    "intervalMinutes": "Intervalo programado: {{minutes}} minutos",
+    "coalescedTriggers": "Se fusionaron {{count}} disparadores adicionales en este escaneo.",
+    "moreEntries": "{{count}} entradas más no mostradas",
     "none": "Ninguno"
   },
   "fileTable": {
     "file": "Archivo",
-    "container": "Container",
+    "container": "Contenedor",
     "size": "Tamaño",
     "codec": "Códec",
     "resolution": "Resolución",
-    "hdr": "DynR",
+    "hdr": "RngDin",
     "duration": "Duración",
     "bitrate": "Bitrate",
     "audioBitrate": "Bitrate de audio",
-    "bitDepth": "Bit depth",
+    "bitDepth": "Profundidad de bits",
     "audioCodecs": "Códecs de audio",
     "formatsAndCodecs": "Formatos y códecs",
     "audioSpatialProfiles": "Audio espacial",
     "audioLanguages": "Idiomas de audio",
-    "subtitleLanguages": "Sub languages",
-    "subtitleCodecs": "Sub codecs",
-    "subtitleSources": "Sub source",
+    "subtitleLanguages": "Idiomas de subtítulos",
+    "subtitleCodecs": "Códecs de subtítulos",
+    "subtitleSources": "Fuente de subtítulos",
     "modified": "Modificado",
     "lastAnalyzed": "Último análisis",
     "score": "Puntuación",
@@ -902,11 +902,11 @@
     "trackNumber": "Número de pista",
     "bitRateMode": "Modo de bitrate",
     "embeddedCover": "Carátula incrustada",
-    "chapterCount": "Chapters",
+    "chapterCount": "Capítulos",
     "audiobookNarrator": "Narrador",
     "audiobookAuthor": "Autor",
-    "audiobookPublisher": "Editor",
-    "audiobookSeries": "Series",
+    "audiobookPublisher": "Editorial",
+    "audiobookSeries": "Serie",
     "audiobookSeriesPart": "Parte de la serie",
     "audiobookDescription": "Descripción",
     "audiobookCopyright": "Copyright",
@@ -916,64 +916,64 @@
     "audiobookIsbn": "ISBN"
   },
   "fileDetail": {
-    "eyebrow": "Media file detail",
-    "loading": "Cargando file…",
-    "unknownCodec": "Unknown codec",
-    "unknownResolution": "Unknown resolution",
-    "showFullFilename": "Show full file name",
-    "showFullRelativePath": "Show full relative path",
-    "relativePath": "Relative path",
+    "eyebrow": "Detalle del archivo multimedia",
+    "loading": "Cargando archivo…",
+    "unknownCodec": "Códec desconocido",
+    "unknownResolution": "Resolución desconocida",
+    "showFullFilename": "Mostrar nombre completo del archivo",
+    "showFullRelativePath": "Mostrar ruta relativa completa",
+    "relativePath": "Ruta relativa",
     "size": "Tamaño",
     "duration": "Duración",
-    "quality": "Quality",
-    "qualityBreakdown": "Quality breakdown",
-    "format": "Format",
-    "containerLabel": "Container",
-    "containerFormat": "Format name",
+    "quality": "Calidad",
+    "qualityBreakdown": "Desglose de calidad",
+    "format": "Formato",
+    "containerLabel": "Contenedor",
+    "containerFormat": "Nombre del formato",
     "bitRate": "Bitrate",
-    "probeScore": "Probe score",
-    "videoStreams": "Video streams",
-    "audioStreams": "Audio streams",
-    "cover": "Cover",
+    "probeScore": "Puntuación de análisis",
+    "videoStreams": "Pistas de vídeo",
+    "audioStreams": "Pistas de audio",
+    "cover": "Carátula",
     "coverCodec": "Códec",
-    "coverDimensions": "Dimensions",
-    "coverStream": "Stream index",
-    "chapters": "Chapters",
-    "chapterSearch": "Buscar chapters",
-    "chapterSearchPlaceholder": "Buscar chapter titles",
-    "exportChapters": "Exportar chapters",
-    "showAllChapters": "Show all {{count}} chapters",
-    "showFewerChapters": "Show fewer chapters",
-    "untitledChapter": "Chapter {{number}}",
-    "analysisFailure": "Analysis issue",
-    "subtitles": "Subtitles",
-    "rawJson": "Raw ffprobe JSON",
+    "coverDimensions": "Dimensiones",
+    "coverStream": "Índice de pista",
+    "chapters": "Capítulos",
+    "chapterSearch": "Buscar capítulos",
+    "chapterSearchPlaceholder": "Buscar títulos de capítulos",
+    "exportChapters": "Exportar capítulos",
+    "showAllChapters": "Mostrar los {{count}} capítulos",
+    "showFewerChapters": "Mostrar menos capítulos",
+    "untitledChapter": "Capítulo {{number}}",
+    "analysisFailure": "Problema de análisis",
+    "subtitles": "Subtítulos",
+    "rawJson": "JSON bruto de ffprobe",
     "history": {
-      "title": "File history",
-      "empty": "File history appears after a scan captures a changed snapshot for this file.",
-      "limited": "Showing the latest {{shown}} of {{total}} history entries.",
-      "since": "Since {{start}}",
+      "title": "Historial del archivo",
+      "empty": "El historial del archivo aparece después de que un escaneo capture una instantánea modificada de este archivo.",
+      "limited": "Mostrando las {{shown}} entradas más recientes de {{total}} del historial.",
+      "since": "Desde {{start}}",
       "range": "{{start}} - {{end}}",
-      "noChanges": "No tracked fields changed in this period.",
+      "noChanges": "No cambió ningún campo registrado en este periodo.",
       "qualityValue": "{{value}}/10",
-      "video": "Video",
+      "video": "Vídeo",
       "resolution": "Resolución",
-      "dynamicRange": "DynR",
+      "dynamicRange": "RngDin",
       "audio": "Audio",
-      "subtitles": "Subtitles",
+      "subtitles": "Subtítulos",
       "reason": {
-        "scan_analysis": "Scan",
-        "quality_recompute": "Quality",
-        "history_reconstruction": "Reconstructed"
+        "scan_analysis": "Escaneo",
+        "quality_recompute": "Calidad",
+        "history_reconstruction": "Reconstruido"
       }
     }
   },
   "pathBrowser": {
     "selected": "Seleccionado",
-    "up": "Up",
-    "addCurrent": "Añadir current folder",
-    "remove": "Remove",
-    "noneSelected": "No folders selected"
+    "up": "Subir",
+    "addCurrent": "Añadir carpeta actual",
+    "remove": "Eliminar",
+    "noneSelected": "No hay carpetas seleccionadas"
   },
   "language": {
     "en": "Inglés",
@@ -981,87 +981,87 @@
     "es": "Español"
   },
   "theme": {
-    "system": "System",
-    "light": "Light",
-    "dark": "Dark"
+    "system": "Sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
   },
   "telemetry": {
-    "saveFailed": "Telemetry setting could not be saved.",
-    "environmentDisabled": "Telemetry is locked off by MEDIALYZE_TELEMETRY_DISABLED.",
-    "settingsHint": "Details are available in Settings under Telemetry.",
-    "releaseNotesChooseFirst": "Choose a telemetry mode before closing release history.",
+    "saveFailed": "No se pudo guardar la configuración de telemetría.",
+    "environmentDisabled": "La telemetría está desactivada de forma forzada por MEDIALYZE_TELEMETRY_DISABLED.",
+    "settingsHint": "Los detalles están disponibles en Configuración, en Telemetría.",
+    "releaseNotesChooseFirst": "Elige un modo de telemetría antes de cerrar el historial de versiones.",
     "mode": {
-      "off": "Telemetry off",
-      "minimal": "Minimal telemetry",
-      "enabled": "Help the dev"
+      "off": "Telemetría desactivada",
+      "minimal": "Telemetría mínima",
+      "enabled": "Ayudar al desarrollador"
     },
     "modeTooltipTitles": {
-      "off": "Telemetry off",
-      "minimal": "Minimal telemetry",
-      "enabled": "Help the dev"
+      "off": "Telemetría desactivada",
+      "minimal": "Telemetría mínima",
+      "enabled": "Ayudar al desarrollador"
     },
     "modeTooltips": {
-      "off": "No telemetry payloads are sent.",
-      "minimal": "Tell the Dev which runtime/system you are using, nothing else.",
-      "enabled": "Adds rounded usage counts and app settings to inform development. NO private data."
+      "off": "No se envía ninguna carga de telemetría.",
+      "minimal": "Le indica al desarrollador qué entorno/sistema usas, nada más.",
+      "enabled": "Añade recuentos de uso redondeados y ajustes de la aplicación para ayudar al desarrollo. SIN datos privados."
     },
     "modeDescriptions": {
-      "off": "No telemetry payloads are sent.",
-      "minimal": "Sends install/runtime/system details only. No usage statistics or app settings are included.",
-      "enabled": "Adds rounded usage counts, media-kind counts, enabled feature flags, and selected app settings."
+      "off": "No se envía ninguna carga de telemetría.",
+      "minimal": "Envía solo detalles de instalación/entorno/sistema. No se incluyen estadísticas de uso ni ajustes de la aplicación.",
+      "enabled": "Añade recuentos de uso redondeados, recuentos por tipo de medio, funciones experimentales activadas y ajustes seleccionados de la aplicación."
     },
     "panel": {
-      "title": "Telemetry",
-      "description": "Telemetry is anonymous coarse installation reporting. MediaLyze never sends file paths, media names, library names, search terms, raw ffprobe payloads, or scan diagnostics."
+      "title": "Telemetría",
+      "description": "La telemetría es un informe anónimo y general de la instalación. MediaLyze nunca envía rutas de archivos, nombres de medios, nombres de bibliotecas, términos de búsqueda, cargas brutas de ffprobe ni diagnósticos de escaneo."
     },
     "preview": {
-      "title": "Payload preview",
-      "description": "Generate the anonymous payload shape that would be sent for each telemetry mode.",
-      "previewMinimal": "Preview minimal payload",
-      "previewEnabled": "Preview enabled payload",
+      "title": "Vista previa de la carga",
+      "description": "Genera la estructura de la carga anónima que se enviaría para cada modo de telemetría.",
+      "previewMinimal": "Vista previa de la carga mínima",
+      "previewEnabled": "Vista previa de la carga habilitada",
       "views": {
-        "last": "Last sent",
-        "minimal": "Example minimal",
-        "enabled": "Example full"
+        "last": "Última enviada",
+        "minimal": "Ejemplo mínimo",
+        "enabled": "Ejemplo completo"
       },
-      "jsonLabel": "Telemetry payload JSON preview",
-      "notLoaded": "Seleccionar a payload mode to generate a preview.",
-      "loading": "Cargando telemetry payload preview...",
-      "empty": "No telemetry payload preview is available.",
-      "loadFailed": "Telemetry payload preview failed."
+      "jsonLabel": "Vista previa JSON de la carga de telemetría",
+      "notLoaded": "Selecciona un modo de carga para generar una vista previa.",
+      "loading": "Cargando vista previa de la carga de telemetría...",
+      "empty": "No hay ninguna vista previa disponible de la carga de telemetría.",
+      "loadFailed": "Falló la vista previa de la carga de telemetría."
     },
     "stats": {
-      "title": "Public statistics",
-      "description": "MediaLyze has a public statistics page where you can view the telemetry data contributed by this installation and delete all data yourself by using your randomized installation ID.",
-      "openAria": "Abrir MediaLyze statistics page",
-      "installationIdLabel": "Own installation ID",
-      "installationIdMissing": "No installation ID has been created yet.",
-      "copy": "Copy",
-      "copied": "Copied"
+      "title": "Estadísticas públicas",
+      "description": "MediaLyze tiene una página pública de estadísticas donde puedes ver los datos de telemetría aportados por esta instalación y borrar tú mismo todos los datos usando tu ID de instalación aleatorio.",
+      "openAria": "Abrir la página de estadísticas de MediaLyze",
+      "installationIdLabel": "ID de instalación propio",
+      "installationIdMissing": "Aún no se ha creado ningún ID de instalación.",
+      "copy": "Copiar",
+      "copied": "Copiado"
     },
     "lastPayload": {
-      "title": "Last transmitted payload",
-      "jsonLabel": "Last transmitted telemetry payload JSON",
-      "none": "No user-visible telemetry payload has been sent yet.",
-      "noneAndOff": "No telemetry payload is available, and no telemetry will be sent while telemetry is off or disabled."
+      "title": "Última carga transmitida",
+      "jsonLabel": "JSON de la última carga de telemetría transmitida",
+      "none": "Aún no se ha enviado ninguna carga de telemetría visible para el usuario.",
+      "noneAndOff": "No hay ninguna carga de telemetría disponible y no se enviará ninguna mientras la telemetría esté desactivada o inhabilitada."
     }
   },
   "quality": {
-    "tooltipAria": "Show quality score breakdown",
-    "loading": "Cargando quality breakdown…",
-    "unavailable": "Quality breakdown unavailable.",
-    "rawScore": "Raw {{value}} / 100",
-    "weight": "Weight: {{value}}",
+    "tooltipAria": "Mostrar el desglose de la puntuación de calidad",
+    "loading": "Cargando desglose de calidad…",
+    "unavailable": "Desglose de calidad no disponible.",
+    "rawScore": "Bruto {{value}} / 100",
+    "weight": "Peso: {{value}}",
     "actual": "Actual: {{value}}",
-    "minimum": "Minimum: {{value}}",
+    "minimum": "Mínimo: {{value}}",
     "ideal": "Ideal: {{value}}",
-    "maximum": "Maximum: {{value}}",
-    "skipped": "Skipped",
-    "unknownMapping": "Unknown value mapped neutrally.",
+    "maximum": "Máximo: {{value}}",
+    "skipped": "Omitido",
+    "unknownMapping": "Valor desconocido asignado de forma neutra.",
     "category": {
       "resolution": "Resolución",
-      "visual_density": "Visual density",
-      "video_codec": "Video codec",
+      "visual_density": "Densidad visual",
+      "video_codec": "Códec de vídeo",
       "audio_channels": "Canales de audio",
       "audio_codec": "Códec de audio",
       "dynamic_range": "Rango dinámico",
@@ -1069,32 +1069,32 @@
     }
   },
   "streamDetails": {
-    "videoTooltipAria": "Show video stream details for {{file}}",
-    "audioTooltipAria": "Show audio stream details for {{file}}",
-    "subtitleTooltipAria": "Show subtitle details for {{file}}",
-    "loading": "Cargando stream details…",
-    "unavailable": "Stream details unavailable.",
-    "none": "No stream details available.",
+    "videoTooltipAria": "Mostrar detalles de la pista de vídeo de {{file}}",
+    "audioTooltipAria": "Mostrar detalles de la pista de audio de {{file}}",
+    "subtitleTooltipAria": "Mostrar detalles de subtítulos de {{file}}",
+    "loading": "Cargando detalles de pistas…",
+    "unavailable": "Detalles de pistas no disponibles.",
+    "none": "No hay detalles de pistas disponibles.",
     "audioSpatial": "Audio espacial",
-    "unknownLanguage": "Unknown language",
-    "unknownType": "Unknown media type",
+    "unknownLanguage": "Idioma desconocido",
+    "unknownType": "Tipo de medio desconocido",
     "mono": "Mono",
-    "stereo": "Stereo",
-    "channels": "{{count}} ch",
-    "default": "Default",
-    "forced": "Forced",
-    "internal": "Internal",
-    "external": "External",
-    "text": "Text",
-    "image": "Image",
+    "stereo": "Estéreo",
+    "channels": "{{count}} canales",
+    "default": "Predeterminado",
+    "forced": "Forzado",
+    "internal": "Interno",
+    "external": "Externo",
+    "text": "Texto",
+    "image": "Imagen",
     "spatialAudio": {
       "dolbyAtmos": "Dolby Atmos",
       "dtsX": "DTS:X"
     }
   },
   "common": {
-    "close": "Close",
-    "yes": "Yes",
+    "close": "Cerrar",
+    "yes": "Sí",
     "no": "No"
   }
 }
