@@ -5032,6 +5032,8 @@ export function LibrariesPage() {
                   >
                     <option value="en">{t("language.en")}</option>
                     <option value="de">{t("language.de")}</option>
+                    <option value="es">{t("language.de")}</option>
+
                   </select>
                 </div>
                 <div className="field">
