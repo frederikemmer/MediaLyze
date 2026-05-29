@@ -976,8 +976,9 @@
     "noneSelected": "No folders selected"
   },
   "language": {
-    "en": "English",
-    "de": "German"
+    "en": "Inglés",
+    "de": "Alemán",
+    "es": "Español"
   },
   "theme": {
     "system": "System",
