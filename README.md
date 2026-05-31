@@ -1,7 +1,7 @@
 # MediaLyze
 
 <p align="center">
-  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+  <a href="./LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white">
@@ -262,8 +262,11 @@ MediaLyze is an open-source project under active development. The current focus 
 
 [![Star History Chart](https://api.star-history.com/image?repos=frederikemmer/medialyze&type=date&legend=top-left)](https://www.star-history.com/?repos=frederikemmer%2Fmedialyze&type=date&legend=top-left)
 
-## Contributing & License
+## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-This project is licensed under the [MIT License](LICENSE).
+## License
+
+MediaLyze is licensed under the GNU Affero General Public License v3.0 (`AGPL-3.0`).
+See the [LICENSE](LICENSE) file for details.

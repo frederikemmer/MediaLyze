@@ -4,10 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.12.3
+
+>2026-05-31
+
 ### ✨ New
 
 - add an Unraid Community Applications Docker template and repository profile for MediaLyze deployments, based on original template contribution in [#117](https://github.com/frederikemmer/MediaLyze/issues/117) by [@jvdivx](https://github.com/jvdivx) 
 - solid starting point for Spanish translation [#146](https://github.com/frederikemmer/MediaLyze/pull/146) by [@jvdivx](https://github.com/jvdivx)
+- relicense change from MIT to GNU Affero General Public License v3.0 (`AGPL-3.0`)
 
 ### New Contributors
 
@@ -20,7 +25,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - redesign duplications panel
-- new four-state header toggle for all, hash-only, filename-only, and hidden duplicate views ([#144](https://github.com/frederikemmer/MediaLyze/issues/144))
+- new four-state header toggle for all, hash-only, filename-only, and hidden duplicate views [#144](https://github.com/frederikemmer/MediaLyze/issues/144)
 
 ### 🐛 Bug fixes
 
@@ -48,8 +53,8 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - avoid noisy file-history events when rescans only populate newly supported metadata fields for otherwise unchanged files
-- schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected ([#139](https://github.com/frederikemmer/MediaLyze/issues/139))
-- keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+- schedule daily scans in the configured local timezone instead of UTC so Docker `TZ` settings are respected [#139](https://github.com/frederikemmer/MediaLyze/issues/139)
+- keep Linux AppImage media analysis on the packaged static `ffprobe` binary so scans do not depend on incompatible host FFmpeg shared libraries [#127](https://github.com/frederikemmer/MediaLyze/issues/127)
 
 ## v0.11.2
 
@@ -77,8 +82,8 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` ([#132](https://github.com/frederikemmer/MediaLyze/issues/132))
-- separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels ([#129](https://github.com/frederikemmer/MediaLyze/issues/129))
+- allow creating multiple libraries that share the same root path when they use different selected subdirectories (`scan_config.selected_paths`), and migrate existing SQLite databases to drop the legacy unique constraint on `libraries.path` [#132](https://github.com/frederikemmer/MediaLyze/issues/132)
+- separate video codec, video dynamic-range bit-depth, and HDR-profile statistics so codec panels no longer mix HEVC bit depth into codec labels [#129](https://github.com/frederikemmer/MediaLyze/issues/129)
 
 ## v0.11.0
 
@@ -120,7 +125,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- replace the Linux desktop AppImage `ffprobe` bundle with a pinned static `ffprobe` build so media scans no longer depend on host or bundled FFmpeg shared-library resolution; `FFPROBE_PATH` remains available for explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+- replace the Linux desktop AppImage `ffprobe` bundle with a pinned static `ffprobe` build so media scans no longer depend on host or bundled FFmpeg shared-library resolution; `FFPROBE_PATH` remains available for explicit system `ffprobe` overrides [#127](https://github.com/frederikemmer/MediaLyze/issues/127)
 
 ## v0.10.2
 
@@ -128,8 +133,8 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- route packaged Linux desktop analysis through a bundled `ffprobe` launcher that sets its own library path before executing `ffprobe`, preventing AppImage scans from falling back to incompatible host FFmpeg libraries; `FFPROBE_PATH` still supports explicit system `ffprobe` overrides ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
-- make `MediaLyze.AppImage --version` print the packaged desktop app version so users can verify the exact AppImage build they are running ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+- route packaged Linux desktop analysis through a bundled `ffprobe` launcher that sets its own library path before executing `ffprobe`, preventing AppImage scans from falling back to incompatible host FFmpeg libraries; `FFPROBE_PATH` still supports explicit system `ffprobe` overrides [#127](https://github.com/frederikemmer/MediaLyze/issues/127)
+- make `MediaLyze.AppImage --version` print the packaged desktop app version so users can verify the exact AppImage build they are running [#127](https://github.com/frederikemmer/MediaLyze/issues/127)
 
 ## v0.10.1
 
@@ -137,7 +142,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- bundle Linux desktop `ffprobe` shared-library dependencies into AppImage builds and load them at runtime so scans no longer fail when the host distribution has incompatible FFmpeg library versions ([#127](https://github.com/frederikemmer/MediaLyze/issues/127))
+- bundle Linux desktop `ffprobe` shared-library dependencies into AppImage builds and load them at runtime so scans no longer fail when the host distribution has incompatible FFmpeg library versions [#127](https://github.com/frederikemmer/MediaLyze/issues/127)
 
 ## v0.10.0
 
@@ -145,7 +150,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add **Music** library type and basic audio-file support for `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, and `.wma` files ([#76](https://github.com/frederikemmer/MediaLyze/issues/76))
+- add **Music** library type and basic audio-file support for `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, and `.wma` files [#76](https://github.com/frederikemmer/MediaLyze/issues/76)
 - extract and persist music-specific metadata tags (title, artist, album, album artist, genre, date, disc, composer) from audio files when scanning
 - make file discovery library-type-aware so **Movies** and **Shows** libraries scan only video files, **Music** libraries scan only audio files, and **Mixed**/**Other** libraries scan both
 - filter analyzed-files table columns by library type to hide video-exclusive fields (video codec, resolution, HDR type, bitrate) when viewing Music libraries
@@ -167,7 +172,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - add stable desktop release asset names so README download links can point at `releases/latest/download/...` and always fetch the newest published desktop build
-- add a **Scheduled** scan mode that runs a daily incremental scan at a configurable time of day (HH:MM); the existing interval-based mode is renamed to **Time Interval** in the UI; a tooltip in the time picker explains that only one scan per 24 hours is currently supported and that the `TZ` environment variable should be set correctly ([#124](https://github.com/frederikemmer/MediaLyze/issues/124))
+- add a **Scheduled** scan mode that runs a daily incremental scan at a configurable time of day (HH:MM); the existing interval-based mode is renamed to **Time Interval** in the UI; a tooltip in the time picker explains that only one scan per 24 hours is currently supported and that the `TZ` environment variable should be set correctly [#124](https://github.com/frederikemmer/MediaLyze/issues/124)
 - allow creating one library from multiple selected directories; MediaLyze stores a shared root internally, scans only the selected directories, and keeps the selected directory names in analyzed file relative paths instead of stripping them away
 
 ## v0.9.0
@@ -176,7 +181,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add a **folder & pattern recognition** settings panel with configurable **show/season**, **bonus-content**, and ignore-pattern rules; bonus content can now be excluded from scans or retained as classified bonus media, and Shows/Mixed libraries gain series, season, and episode recognition with tree/detail views ([#74](https://github.com/frederikemmer/MediaLyze/issues/74)) ([#47](https://github.com/frederikemmer/MediaLyze/issues/47))
+- add a **folder & pattern recognition** settings panel with configurable **show/season**, **bonus-content**, and ignore-pattern rules; bonus content can now be excluded from scans or retained as classified bonus media, and Shows/Mixed libraries gain series, season, and episode recognition with tree/detail views [#74](https://github.com/frederikemmer/MediaLyze/issues/74) [#47](https://github.com/frederikemmer/MediaLyze/issues/47)
 - view **changelog** when clicking on version number
 - make the pattern-rule sections individually collapsible, link to the pattern documentation from settings, and classify all videos inside recognized season folders as episodes without requiring configurable episode filename regexes
 - add a `Folder depth` show/season recognition mode with configurable series and season depths, make it the default, and only show regex inputs when the regex mode is selected
@@ -202,7 +207,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- preserve customized dashboard and library panel layouts across updates by avoiding automatic default-panel injection and avoiding write-back during layout reads ([#118](https://github.com/frederikemmer/MediaLyze/issues/118))
+- preserve customized dashboard and library panel layouts across updates by avoiding automatic default-panel injection and avoiding write-back during layout reads [#118](https://github.com/frederikemmer/MediaLyze/issues/118)
 - make the analyzed-files empty state compact and centered instead of showing a large notice box
 - keep the compact empty analyzed-files state stable while search filters are edited, avoiding spinner flicker and layout jumps
 - improve overall app performance
@@ -266,7 +271,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
-- broaden ffprobe-based spatial-audio detection so additional explicit Atmos metadata variants beyond `stream.profile` are recognized during analysis; existing libraries may need a full rescan to refresh previously analyzed files ([#107](https://github.com/frederikemmer/MediaLyze/issues/107))
+- broaden ffprobe-based spatial-audio detection so additional explicit Atmos metadata variants beyond `stream.profile` are recognized during analysis; existing libraries may need a full rescan to refresh previously analyzed files [#107](https://github.com/frederikemmer/MediaLyze/issues/107)
 
 ## v0.7.0
 
@@ -274,8 +279,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add configurable metric-comparison statistic panels on the dashboard and library detail pages, with two-axis selection, heatmap / scatter / bar renderers, and dedicated comparison API endpoints for direct context such as `size` versus `duration` ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
-- extend metric-comparison charts with a numeric `Resolution - MP` axis option, show the active renderer icon directly in the toolbar button, and add an App Settings control for the scatter-plot sample limit ([#102](https://github.com/frederikemmer/MediaLyze/issues/102))
+- add configurable metric-comparison statistic panels on the dashboard and library detail pages, with two-axis selection, heatmap / scatter / bar renderers, and dedicated comparison API endpoints for direct context such as `size` versus `duration` [#102](https://github.com/frederikemmer/MediaLyze/issues/102)
+- extend metric-comparison charts with a numeric `Resolution - MP` axis option, show the active renderer icon directly in the toolbar button, and add an App Settings control for the scatter-plot sample limit [#102](https://github.com/frederikemmer/MediaLyze/issues/102)
 - add inline statistic-panel layout editing on the dashboard and per-library detail pages, including a visible `Dashboard` page title, animated edit controls, add-panel menus, drag-and-drop reordering, per-panel resize controls, and browser-persisted layouts for each page context
 - add curated first-run default layouts for dashboard and library statistic panels, allow intentionally empty saved panel layouts, and add a `History` restore-default action to the inline layout toolbar
 - add a new `unlimited panel size` feature flag that removes the current 4-row height cap for dashboard and library statistic panels while still keeping panel width constrained by the underlying 4-column grid
@@ -286,7 +291,7 @@ All notable changes to this project will be documented in this file.
 - remount statistic charts when resized smaller so comparison and histogram panels redraw correctly after inline panel-size changes, restore top-aligned list panels, and make newly added statistic panels default to `1x2`
 - align dashboard and library statistic layout controls with the existing header-style button design language so Darkmode no longer renders bright low-contrast white action circles
 - bundle macOS desktop `ffprobe` dependencies into the packaged app and rewrite non-system `dylib` loader paths so scans no longer fail on machines without the original Homebrew cellar layout
-- make dashboard statistic panels behave as non-interactive read-only summaries again instead of hinting at missing cross-library drill-downs; only scatter points in dashboard comparison panels still open file details ([#104](https://github.com/frederikemmer/MediaLyze/issues/104))
+- make dashboard statistic panels behave as non-interactive read-only summaries again instead of hinting at missing cross-library drill-downs; only scatter points in dashboard comparison panels still open file details [#104](https://github.com/frederikemmer/MediaLyze/issues/104)
 
 ## v0.6.0
 
@@ -299,7 +304,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - extend structured numeric analyzed-files filters to support comma-separated `AND` ranges such as `>=4GB,<8GB`, including the new bitrate-based search fields used by the histogram panels
-- include `desktop/ffprobe-paths.cjs` in packaged Electron app builds and add desktop packaging regression tests so macOS startup no longer fails with `Cannot find module './ffprobe-paths.cjs'` ([#99](https://github.com/frederikemmer/MediaLyze/issues/99))
+- include `desktop/ffprobe-paths.cjs` in packaged Electron app builds and add desktop packaging regression tests so macOS startup no longer fails with `Cannot find module './ffprobe-paths.cjs'` [#99](https://github.com/frederikemmer/MediaLyze/issues/99)
 
 ## v0.5.0
 
@@ -307,9 +312,9 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add lightweight analyzed-files codec tooltips that lazy-load per-file video, audio, and subtitle stream details, including language, codec, channel layout, and subtitle source metadata, and make table tooltip visibility configurable per statistic column in App Settings ([#93](https://github.com/frederikemmer/MediaLyze/issues/93))
-- add first-class spatial-audio support for `Dolby Atmos` and `DTS:X`, including ffprobe profile detection, analyzed-files filtering and sorting, library statistics, CSV export, and audio tooltip/detail rendering ([#94](https://github.com/frederikemmer/MediaLyze/issues/94))
-- add container statistics and analyzed-files container filtering, sorting, CSV export, and configurable table/panel visibility for library views ([#97](https://github.com/frederikemmer/MediaLyze/issues/97))
+- add lightweight analyzed-files codec tooltips that lazy-load per-file video, audio, and subtitle stream details, including language, codec, channel layout, and subtitle source metadata, and make table tooltip visibility configurable per statistic column in App Settings [#93](https://github.com/frederikemmer/MediaLyze/issues/93)
+- add first-class spatial-audio support for `Dolby Atmos` and `DTS:X`, including ffprobe profile detection, analyzed-files filtering and sorting, library statistics, CSV export, and audio tooltip/detail rendering [#94](https://github.com/frederikemmer/MediaLyze/issues/94)
+- add container statistics and analyzed-files container filtering, sorting, CSV export, and configurable table/panel visibility for library views [#97](https://github.com/frederikemmer/MediaLyze/issues/97)
 - rework the file-detail page so the `Format` panel renders structured metadata rows instead of raw format JSON, and make all detail panels globally collapsible and reorderable with browser-persisted state
 - allow `Container`, `Spatial audio`, `Subtitle codecs`, and `Subtitle sources` to be enabled as optional dashboard statistic panels through the existing statistics settings
 - update the default statistics preset for fresh installs to match the expanded dashboard/table layout while preserving already stored statistic settings on upgrades and only appending newly introduced options
@@ -318,7 +323,7 @@ All notable changes to this project will be documented in this file.
 
 - keep analyzed-files tooltips exclusive so opening or scrolling to another table area closes stale codec and score tooltips instead of leaving multiple overlays on screen
 - fix the desktop release build after `v0.4.1` by completing strict frontend test app-settings mocks for the new feature flags and replacing the Windows `ffprobe` bundle step's brittle Chocolatey install with a direct archive download plus retries
-- reanalyze unchanged media files when external subtitle sidecars are added or removed so subtitle statistics and quality scoring stay in sync with internal subtitles ([#95](https://github.com/frederikemmer/MediaLyze/issues/95))
+- reanalyze unchanged media files when external subtitle sidecars are added or removed so subtitle statistics and quality scoring stay in sync with internal subtitles [#95](https://github.com/frederikemmer/MediaLyze/issues/95)
 
 ## v0.4.1
 
@@ -326,9 +331,9 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- support `!` negation and comma-separated `AND` terms in analyzed-files metadata search filters ([#85](https://github.com/frederikemmer/MediaLyze/issues/85))
-- add feature flags for a full-width `.media-app-shell` layout and hiding the analyzed-files quality score meter ([#91](https://github.com/frederikemmer/MediaLyze/issues/91))
-- add Excel-like drag resizing for analyzed-files table columns, with widths persisted in browser storage ([#91](https://github.com/frederikemmer/MediaLyze/issues/91))
+- support `!` negation and comma-separated `AND` terms in analyzed-files metadata search filters [#85](https://github.com/frederikemmer/MediaLyze/issues/85)
+- add feature flags for a full-width `.media-app-shell` layout and hiding the analyzed-files quality score meter [#91](https://github.com/frederikemmer/MediaLyze/issues/91)
+- add Excel-like drag resizing for analyzed-files table columns, with widths persisted in browser storage [#91](https://github.com/frederikemmer/MediaLyze/issues/91)
 
 ### 🐛 Bug fixes
 
@@ -342,7 +347,7 @@ First "rough" implementation for detecting duplicate files. May break desktop in
 
 ### ✨ New
 
-- add per-library duplicate detection with `off` (default), `filename`, `filehash`, `both` modes ([#16](https://github.com/frederikemmer/MediaLyze/issues/16))
+- add per-library duplicate detection with `off` (default), `filename`, `filehash`, `both` modes [#16](https://github.com/frederikemmer/MediaLyze/issues/16)
 - view and search through duplicates on library page
 - scan performance tuning in `App settings` with separate controls for per-scan analysis workers and parallel library scans
 
@@ -358,12 +363,12 @@ First "rough" implementation for detecting duplicate files. May break desktop in
 
 ### 🐛 Bug fixes
 - restrict `main` release publishing to real version bumps so unchanged-version commits no longer try to recreate existing tags and releases
-- allow adding new resolution categories from the settings UI without tripping the backend's immutable-id validation ([#71](https://github.com/frederikemmer/MediaLyze/issues/71))
-- fix resolution quality-boundary updates in the library quality settings when `minimum` / `ideal` values are changed ([#72](https://github.com/frederikemmer/MediaLyze/pull/72)) - by [@eivarin](https://github.com/eivarin)
+- allow adding new resolution categories from the settings UI without tripping the backend's immutable-id validation [#71](https://github.com/frederikemmer/MediaLyze/issues/71)
+- fix resolution quality-boundary updates in the library quality settings when `minimum` / `ideal` values are changed [#72](https://github.com/frederikemmer/MediaLyze/pull/72) - by [@eivarin](https://github.com/eivarin)
 - keep Windows UNC network-share paths in their normal form for `ffprobe` so desktop scans analyze files on network shares instead of only listing them
-- lower the default resolution-category minimum width and height thresholds by 5% so cropped widescreen encodes stay in their expected buckets, and document the relaxed defaults in the settings tooltip ([#79](https://github.com/frederikemmer/MediaLyze/issues/79))
-- make desktop packaging always create the bundled `backend/ffprobe` structure, auto-detect `ffprobe` on the build machine, and use more robust packaged-path fallbacks at runtime before failing ([#80](https://github.com/frederikemmer/MediaLyze/issues/80))
-- treat NAS snapshot symlink loops under `MEDIA_ROOT` as invalid paths so browse and library setup return `400` or skip the entry instead of crashing with a `500` ([#81](https://github.com/frederikemmer/MediaLyze/issues/81))
+- lower the default resolution-category minimum width and height thresholds by 5% so cropped widescreen encodes stay in their expected buckets, and document the relaxed defaults in the settings tooltip [#79](https://github.com/frederikemmer/MediaLyze/issues/79)
+- make desktop packaging always create the bundled `backend/ffprobe` structure, auto-detect `ffprobe` on the build machine, and use more robust packaged-path fallbacks at runtime before failing [#80](https://github.com/frederikemmer/MediaLyze/issues/80)
+- treat NAS snapshot symlink loops under `MEDIA_ROOT` as invalid paths so browse and library setup return `400` or skip the entry instead of crashing with a `500` [#81](https://github.com/frederikemmer/MediaLyze/issues/81)
 
 ## v0.2.5
 
@@ -373,8 +378,8 @@ First "rough" implementation for detecting duplicate files. May break desktop in
 - The browser now renders scan and library times in the user's local timezone
 
 ### 🐛 Bug fixes
-- serialize API timestamps as explicit UTC `Z` values and restore SQLite datetime fields as UTC ([#66](https://github.com/frederikemmer/MediaLyze/issues/66))
-- align clickable statistics with table - counted streams instead of files ([#67](https://github.com/frederikemmer/MediaLyze/issues/67))
+- serialize API timestamps as explicit UTC `Z` values and restore SQLite datetime fields as UTC [#66](https://github.com/frederikemmer/MediaLyze/issues/66)
+- align clickable statistics with table - counted streams instead of files [#67](https://github.com/frederikemmer/MediaLyze/issues/67)
 
 ## v0.2.4
 
