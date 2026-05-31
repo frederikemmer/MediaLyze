@@ -1,6 +1,6 @@
 {
   "name": "medialyze-frontend",
-  "version": "0.12.3",
+  "version": "0.13.0",
   "private": true,
   "license": "AGPL-3.0",
   "type": "module",

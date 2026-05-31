@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-## v0.12.3
+## v0.13.0
 
 >2026-05-31
 
