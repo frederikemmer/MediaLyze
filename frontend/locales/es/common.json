@@ -1,0 +1,1100 @@
+{
+  "app": {
+    "title": "MediaLyze",
+    "subtitle": "Análisis técnico para grandes bibliotecas de vídeo, normalizado en una base de datos local filtrable."
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "libraries": "Configuración",
+    "homeAria": "Inicio",
+    "settingsAria": "Configuración"
+  },
+  "scanBanner": {
+    "running": "Escaneo en curso...",
+    "searchingFound": "buscando... ({{count}})",
+    "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analizado",
+    "libraryFallback": "Biblioteca #{{id}}",
+    "refreshHint": "Durante los escaneos, el progreso se actualiza en directo. Las estadísticas y las cachés de tablas se refrescan al finalizar para mantener la aplicación ágil.",
+    "stopAria": "Detener escaneos activos",
+    "cancelFailed": "Se ha solicitado detener, pero la base de datos sigue ocupada. Inténtalo de nuevo en breve."
+  },
+  "dashboard": {
+    "liveUpdates": "Las actualizaciones en directo están activas mientras se ejecutan los escaneos. Las métricas del panel se actualizan automáticamente.",
+    "libraries": "Bibliotecas",
+    "files": "Archivos",
+    "storage": "Almacenamiento",
+    "duration": "Duración",
+    "videoCodecs": "Códecs de vídeo",
+    "resolutions": "Resoluciones",
+    "videoBitDepth": "Profundidad de bits de vídeo",
+    "hdrProfile": "Perfil HDR",
+    "audioCodecs": "Códecs de audio",
+    "formatsAndCodecs": "Formatos y códecs",
+    "containers": "Contenedores",
+    "sizeDistribution": "Tamaño de archivo",
+    "durationDistribution": "Duración",
+    "qualityScoreDistribution": "Puntuación de calidad",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Bitrate de audio",
+    "audioBitDepth": "Profundidad de bits de audio",
+    "comparisonPanel": "Comparación de métricas",
+    "audioSpatialProfiles": "Audio espacial",
+    "audioLanguages": "Idiomas de audio",
+    "subtitleLanguages": "Idiomas de subtítulos",
+    "subtitleCodecs": "Códecs de subtítulos",
+    "subtitleSources": "Fuentes de subtítulos",
+    "history": {
+      "title": "Histórico",
+      "subtitle": "Instantáneas diarias de tendencias en las bibliotecas visibles",
+      "empty": "Las tendencias del panel aparecerán tras el siguiente escaneo completado."
+    },
+    "audio_artists": "Artistas",
+    "audio_albums": "Álbumes",
+    "audio_genres": "Géneros",
+    "audio_years": "Años de publicación",
+    "audio_channels": "Canales",
+    "sample_rates": "Frecuencias de muestreo",
+    "track_numbers": "Números de pista",
+    "bit_rate_modes": "Modos de bitrate",
+    "embedded_covers": "Carátulas incrustadas",
+    "audiobook_narrators": "Narradores",
+    "audiobook_authors": "Autores",
+    "audiobook_publishers": "Editores",
+    "audiobook_series": "Series de audiolibros",
+    "audiobook_series_parts": "Partes de serie",
+    "chapter_counts": "Recuento de capítulos"
+  },
+  "panel": {
+    "collapseAria": "Contraer {{title}}",
+    "expandAria": "Expandir {{title}}",
+    "loading": "Cargando...",
+    "noDataYet": "Todavía no hay datos"
+  },
+  "releaseNotes": {
+    "title": "Historial de versiones",
+    "versionHeading": "Versión {{version}}",
+    "current": "Actual",
+    "currentInstalled": "Instalada actualmente",
+    "latestAvailable": "Nueva versión disponible",
+    "updateAvailable": "Actualización disponible: v{{version}}",
+    "download": "Descargar v{{version}}",
+    "downloadLoading": "Descargando...",
+    "downloadSuccess": "Descargado",
+    "downloadRetry": "Reintentar v{{version}}",
+    "openAria": "Mostrar notas de la versión {{version}}",
+    "githubAria": "Abrir repositorio de GitHub",
+    "reportIssueAria": "Informar de un problema",
+    "donateAria": "Apoyar MediaLyze",
+    "closeAria": "Cerrar notas de la versión"
+  },
+  "libraries": {
+    "settingsNavigation": "Menú de ajustes",
+    "mobileSettingsNavigation": "Menú de ajustes móvil",
+    "settingsNavigationTitle": "Configuración",
+    "settingsNavigationLibraries": "Bibliotecas",
+    "settingsNavigationAddLibrary": "Añadir biblioteca",
+    "settingsNavigationPatternRecognition": "Reconocimiento de patrones",
+    "quickActions": "Acciones rápidas",
+    "collapseSettingsNavigation": "Contraer menú de ajustes",
+    "expandSettingsNavigation": "Expandir menú de ajustes",
+    "openMobileSettingsNavigation": "Abrir menú de ajustes",
+    "closeMobileSettingsNavigation": "Cerrar menú de ajustes",
+    "configured": "Bibliotecas configuradas",
+    "fullScan": "escaneo completo",
+    "addFirstLibrary": "Añadir primera biblioteca",
+    "createTitle": "Crear biblioteca",
+    "createSubtitle": "La selección de rutas está restringida a directorios por debajo de MEDIA_ROOT.",
+    "createSubtitleDesktop": "Selecciona una carpeta local, un recurso de red montado o una ruta UNC para analizar.",
+    "createButton": "Crear biblioteca",
+    "creating": "Creando…",
+    "name": "Nombre",
+    "namePlaceholder": "Archivo de películas",
+    "nameRequired": "El nombre de la biblioteca no puede estar vacío.",
+    "type": "Tipo de medio",
+    "typePlaceholder": "Selecciona un tipo de medio",
+    "typeRequired": "Selecciona un tipo de medio.",
+    "typeTooltipAria": "Explicar tipos de medio",
+    "typeTooltip": "Películas: sin reconocimiento de series.\nSeries: el reconocimiento de series y temporadas está activado durante los escaneos.\nMúsica: se activan los metadatos de audio y las estadísticas musicales.\nAudiolibros: se activan los metadatos de audio y las bibliotecas centradas en audiolibros.\nMixto: el reconocimiento de series y temporadas solo se intenta donde coinciden los patrones.\nOtro: sin reconocimiento de series.",
+    "desktopPathPlaceholder": "/Volumes/Media or \\\\server\\share\\videos",
+    "desktopPathMustExist": "Elige una carpeta existente.",
+    "chooseFolder": "Seleccionar carpeta",
+    "scanMode": "Modo de escaneo",
+    "duplicateDetectionMode": "Detección de duplicados",
+    "duplicateDetectionModeTooltipAria": "Explicar duplicate detection modes",
+    "duplicateDetectionModeHint": "Desactivado disables duplicate detection. Filename is fast and approximate. File hash is exact but significantly more expensive during scans. Both stores and shows both duplicate views.",
+    "duplicateDetectionModes": {
+      "off": "Desactivado",
+      "filename": "Nombre de archivo",
+      "filehash": "Hash del archivo",
+      "both": "Ambos"
+    },
+    "intervalMinutes": "Intervalo en minutos",
+    "debounceSeconds": "Debounce en segundos",
+    "scheduledTime": "Hora del escaneo",
+    "scheduledTimeTooltipAria": "Explicar scheduled scan time",
+    "scheduledTimeTooltip": "Set the time of day at which the daily scan starts. Use 24-hour format (HH:MM), e.g. 02:00 or 14:30.\n\nMake sure the TZ environment variable is configured correctly in your docker-compose or env file so the scan runs at the intended local time.",
+    "watchUnavailableNetwork": "El modo Vigilancia solo está disponible para rutas locales. MediaLyze recurre a escaneos programados para ubicaciones de red.",
+    "scanNow": "Escaneo manual",
+    "scanNowTooltip": "Poner en cola un escaneo incremental",
+    "qualityScoreTitle": "Puntuación de calidad",
+    "renamePrompt": "Introduce un nuevo nombre de biblioteca",
+    "renameAria": "Edit library {{name}}",
+    "renameTooltip": "Edit library",
+    "editNameAria": "Edit name for library {{name}}",
+    "editTypeAria": "Edit media type for library {{name}}",
+    "saveEditAria": "Guardar changes for library {{name}}",
+    "saveEditTooltip": "Guardar library changes",
+    "cancelEditAria": "Cancel changes for library {{name}}",
+    "cancelEditTooltip": "Cancel library changes",
+    "deleteAria": "Eliminar library {{name}}",
+    "deleteTooltip": "Eliminar library",
+    "detailsTooltipAria": "Show library details for {{name}}",
+    "showOnDashboardAria": "Show library {{name}} on dashboard",
+    "hideFromDashboardAria": "Hide library {{name}} from dashboard",
+    "showOnDashboardTooltip": "Include this library in dashboard statistics",
+    "hideFromDashboardTooltip": "Exclude this library from dashboard statistics",
+    "lastScan": "Último escaneo",
+    "files": "Archivos",
+    "active": "Activa",
+    "ignorePatternsTitle": "Patrones ignorados",
+    "restoreIgnoreDefaults": "Restaurar patrones ignorados por defecto",
+    "ignorePatternsSubtitle": "Glob patterns are matched against the normalized path relative to each library root before files are indexed or analyzed.",
+    "ignorePatternsLabel": "Patrones glob",
+    "ignorePatternsHint": "Ejecuta un nuevo escaneo después de cambiar los patrones.",
+    "ignorePatternsPlaceholder": "*/@eaDir/*",
+    "ignorePatternsTooltipAria": "Explicar ignore pattern documentation",
+    "ignorePatternsTooltip": "Pattern setup, examples, and recommended scenarios are documented in the pattern docs linked above.",
+    "ignorePatternsAddAria": "Añadir a new ignore pattern",
+    "ignorePatternsRemoveAria": "Eliminar ignore pattern {{index}}",
+    "resolutionCategories": {
+      "title": "Categorías de resolución"
+    },
+    "patternRecognition": {
+      "title": "Reconocimiento de carpetas y patrones",
+      "subtitle": "Configure scan-time series and bonus folder patterns plus ignored paths.",
+      "showSeasonTitle": "Show & Seasons",
+      "showSeasonHint": "Choose whether Shows and Mixed libraries should recognize series and seasons by fixed folder depth or by regex patterns. Every video inside a recognized season folder is treated as an episode.",
+      "showSeasonTooltipAria": "Explicar show and season recognition modes",
+      "modeLabel": "Modo de reconocimiento",
+      "modeFolderDepth": "Profundidad de carpeta",
+      "modeRegex": "Patrones regex",
+      "seriesFolderDepth": "Series folder depth",
+      "seasonFolderDepth": "Season folder depth",
+      "seriesFolderRegexes": "Series folder regexes",
+      "seasonFolderRegexes": "Season folder regexes",
+      "bonusTitle": "Contenido adicional",
+      "bonusHint": "Bonus folder patterns are matched case-insensitively and are always active during scans.",
+      "bonusTooltipAria": "Explicar bonus folder patterns",
+      "bonusFolders": "Bonus folder patterns",
+      "restoreDefaults": "Restaurar valores por defecto",
+      "restoreShowSeasonDefaults": "Restaurar Show & Seasons defaults",
+      "restoreBonusDefaults": "Restaurar bonus defaults",
+      "clearCustom": "Limpiar personalizados",
+      "addPattern": "Añadir patrón",
+      "removePattern": "Eliminar pattern {{index}}",
+      "docsHint": "Pattern examples and matching rules are documented separately.",
+      "docsLink": "Abrir pattern docs",
+      "rescanTooltipAria": "Explicar when a new scan is needed after changing patterns",
+      "saving": "Saving pattern recognition..."
+    },
+    "appSettings": "Configuración de la aplicación",
+    "language": "Idioma de la interfaz",
+    "theme": "Tema",
+    "scanSettingsTitle": "Configuración de escaneo",
+    "plotsChartsTitle": "Gráficas y gráficos",
+    "scanPerformanceTitle": "Rendimiento de escaneo",
+    "scanWorkerCount": "Per-scan analysis workers",
+    "scanWorkerCountTooltipAria": "Explicar per-scan worker memory impact",
+    "scanWorkerCountTooltip": "Increase this if one large scan should finish faster.\n\nHigher values can noticeably increase CPU, disk, and memory usage. Adjust it carefully to match your system.\nMaximum: {{max}}.",
+    "parallelScanJobs": "Parallel library scans",
+    "parallelScanJobsTooltipAria": "Explicar parallel scan memory impact",
+    "parallelScanJobsTooltip": "This controls how many libraries MediaLyze may scan at the same time.\n\nHigher values increase overall resource usage. Keep an eye on CPU, disk, and memory pressure.\nMaximum: {{max}}.",
+    "comparisonScatterPointLimit": "Scatter plot points",
+    "comparisonScatterPointLimitTooltipAria": "Explicar scatter plot point sampling",
+    "comparisonScatterPointLimitTooltip": "Caps how many points MediaLyze returns for comparison scatter plots.\n\nHeatmaps and bar charts stay exact; only scatter plots are sampled for readability and browser performance.\n\nWarning: very high values can noticeably increase browser memory use and make large comparison views sluggish.\nMaximum: {{max}}.",
+    "telemetryPreview": {
+      "title": "Telemetry preview",
+      "description": "Generate the anonymous payload shape that would be sent for each telemetry mode.",
+      "previewMinimal": "Preview minimal payload",
+      "previewEnabled": "Preview enabled payload",
+      "jsonLabel": "Telemetry payload JSON preview",
+      "notLoaded": "Seleccionar a payload mode to generate a preview.",
+      "empty": "No telemetry payload preview is available.",
+      "loadFailed": "Telemetry payload preview failed."
+    },
+    "historyRetention": {
+      "title": "History retention",
+      "loading": "Cargando storage forecast…",
+      "bucketLabel": "History type",
+      "daysLabel": "Retention days",
+      "daysTooltipAria": "Explicar retention days",
+      "daysTooltip": "How many days MediaLyze keeps entries for this history type before pruning older records.\n\n0 means unlimited.",
+      "storageLimitLabel": "Storage limit (GB)",
+      "storageLimitTooltipAria": "Explicar storage limit",
+      "storageLimitTooltip": "The maximum estimated storage this history type may use before MediaLyze prunes the oldest records.\n\n0 means unlimited.",
+      "zeroUnlimited": "0 = unlimited",
+      "scopeNote": "File history retention only affects per-file snapshots; dashboard and media library trends use the separate media library history.",
+      "reconstructButton": "Reconstruct history",
+      "reconstructing": "Reconstructing…",
+      "reconstructTooltipAria": "Explicar reconstructed history accuracy",
+      "reconstructTooltip": "Builds approximate past history from the current media set and inferred add dates based mainly on file mtimes.\n\nThis can be inaccurate: mtimes are not guaranteed to match when a file was actually added, and deleted or changed files from the past cannot be reconstructed reliably.\n\nReconstruction only fills as much history as would still be kept by the current retention days and storage limits configured in this panel.\n\nMissing earlier history is filled in, and older existing snapshots can be enriched with trend metrics that were not stored at the time.",
+      "reconstructActiveScanHint": "Wait until active scans finish before reconstructing approximate history.",
+      "reconstructNoChanges": "No missing historical entries were reconstructed.",
+      "reconstructSuccess": "Reconstructed {{libraryEntries}} library snapshots and {{fileEntries}} initial file-history entries.",
+      "reconstructSuccessWithUpdates": "Reconstructed {{libraryEntries}} library snapshots, enriched {{updatedLibraryEntries}} existing snapshots, and created {{fileEntries}} initial file-history entries.",
+      "reconstructFailed": "History reconstruction failed.",
+      "progressQueued": "Waiting to start",
+      "progressLoadingLibraries": "Preparing libraries",
+      "progressLoadingLibrary": "Loading media files",
+      "progressFileHistory": "Reconstructing file history",
+      "progressLibraryHistory": "Reconstructing library snapshots",
+      "progressCompleted": "Completed",
+      "progressFailed": "Fallido",
+      "progressLibraries": "{{completed}} of {{total}} libraries",
+      "progressCurrentLibrary": "Current library: {{name}}",
+      "progressFiles": "{{completed}} of {{total}} media files",
+      "progressDays": "{{completed}} of {{total}} days",
+      "progressEntries": "{{libraryEntries}} library snapshots created, {{updatedLibraryEntries}} existing snapshots enriched, and {{fileEntries}} file-history entries created so far.",
+      "currentStorage": "Current storage",
+      "averagePerDay": "Average per day",
+      "projected30Days": "Projected 30 days",
+      "projectedConfigured": "Projected configured window",
+      "reclaimableNote": "{{reclaimable}} can be reclaimed from the database file. Physical compaction may wait until scans are idle.",
+      "buckets": {
+        "file_history": {
+          "title": "File history"
+        },
+        "library_history": {
+          "title": "Media library history"
+        },
+        "scan_history": {
+          "title": "Scan history"
+        }
+      }
+    },
+    "featureFlagsTitle": "Funciones experimentales",
+    "featureFlags": {
+      "showAnalyzedFilesCsvExport": "Show analyzed-files CSV export",
+      "showFullWidthAppShell": "Use full-width app shell",
+      "hideQualityScoreMeter": "Hide quality score meter",
+      "showMusicQualityScore": "Show quality score in music libraries",
+      "unlimitedPanelSize": "Unlimited panel size",
+      "inDepthDolbyVisionProfiles": "In-depth Dolby Vision profiles",
+      "showAnalyzedFilesCsvExportTooltipAria": "Explicar analyzed-files CSV export feature flag",
+      "showAnalyzedFilesCsvExportTooltip": "Shows the CSV export button on the analyzed-files view for the current filtered result set.",
+      "showFullWidthAppShellTooltipAria": "Explicar full-width app shell feature flag",
+      "showFullWidthAppShellTooltip": "Expands the main .media-app-shell container from its default max-width to the full available page width.",
+      "hideQualityScoreMeterTooltipAria": "Explicar quality score meter visibility feature flag",
+      "hideQualityScoreMeterTooltip": "Hides the bar-style score meter in the analyzed-files table while keeping the numeric quality score visible.",
+      "showMusicQualityScoreTooltipAria": "Explicar music quality score visibility feature flag",
+      "showMusicQualityScoreTooltip": "Shows quality score metrics for pure music libraries. Disabled by default because scoring currently targets video-focused quality categories.",
+      "unlimitedPanelSizeTooltipAria": "Explicar unlimited panel size feature flag",
+      "unlimitedPanelSizeTooltip": "Removes the current 4-row panel-height cap in dashboard and library statistic layouts. Panel width still remains limited by the underlying grid.",
+      "inDepthDolbyVisionProfilesTooltipAria": "Explicar in-depth Dolby Vision profile display",
+      "inDepthDolbyVisionProfilesTooltip": "Shows detected Dolby Vision profile, level, compatibility, and Profile 7 layer details where ffprobe exposes them.\n\nWhen disabled, Dolby Vision variants are grouped as plain Dolby Vision for simpler dashboards, tables, and file details."
+    },
+    "pathKinds": {
+      "local": "Ruta local",
+      "network": "Ruta de red",
+      "unknown": "Tipo de ruta desconocido"
+    },
+    "quality": {
+      "category": "Categoría",
+      "weight": "Peso",
+      "minimum": "Mínimo",
+      "ideal": "Ideal",
+      "maximum": "Máximo",
+      "selectedValues": "Seleccionado",
+      "noneSelected": "Sin selección",
+      "resolution": "Resolución",
+      "visual_density": "Visual density",
+      "visualDensityTooltipAria": "Explicar visual density quality setting",
+      "visualDensityHint": "Enter the video storage for a typical 1080p title in GB per minute. Higher resolutions are scaled upward by pixel count, lower ones downward. Example: 0.02 means about 20 MB per minute for 1080p video-only data.",
+      "video_codec": "Video codec",
+      "audio_channels": "Canales de audio",
+      "audio_codec": "Códec de audio",
+      "dynamic_range": "Rango dinámico",
+      "language_preferences": "Preferencias de idioma",
+      "audioLanguages": "Idiomas de audio",
+      "subtitleLanguages": "Idiomas de subtítulos",
+      "addLanguage": "Añadir",
+      "languageCodePlaceholder": "Código ISO",
+      "languageCodeInvalid": "Enter a valid two-letter ISO 639-1 language code, for example de or en."
+    },
+    "languageHint": "Se aplica inmediatamente y se guarda en el navegador.",
+    "themeHint": "Se aplica inmediatamente y se guarda en el navegador."
+  },
+  "libraryStatistics": {
+    "title": "Vista de tabla",
+    "subtitle": "Choose which metrics appear in the analyzed-files table and which of those columns expose hover tooltips. Drag rows to change the order.",
+    "name": "Nombre",
+    "table": "Tabla",
+    "tooltips": "Tooltips",
+    "dragHint": "Arrastrar para reordenar",
+    "unavailable": "No disponible",
+    "noPanelsSelected": "No statistic panels selected.",
+    "noDashboardSelected": "No dashboard statistic panels selected.",
+    "items": {
+      "size": "Tamaño de archivo",
+      "resolutionMp": "Resolution - MP",
+      "container": "Container",
+      "videoCodec": "Video codec",
+      "resolution": "Resolución",
+      "dynamicRange": "Rango dinámico",
+      "videoBitDepth": "Profundidad de bits de vídeo",
+      "hdrProfile": "Perfil HDR",
+      "duration": "Duración",
+      "bitrate": "Bitrate",
+      "audioBitrate": "Bitrate de audio",
+      "bitDepth": "Bit depth",
+      "audioBitDepth": "Profundidad de bits de audio",
+      "audioCodecs": "Códecs de audio",
+      "audioSpatialProfiles": "Audio espacial",
+      "audioLanguages": "Idiomas de audio",
+      "subtitleLanguages": "Idiomas de subtítulos",
+      "subtitleCodecs": "Códecs de subtítulos",
+      "subtitleSources": "Fuentes de subtítulos",
+      "qualityScore": "Puntuación de calidad",
+      "comparison": "Comparación de métricas",
+      "audio_artists": "Artistas",
+      "audio_albums": "Álbumes",
+      "audio_genres": "Géneros",
+      "audio_years": "Años de publicación",
+      "audio_channels": "Canales",
+      "sample_rates": "Frecuencias de muestreo",
+      "track_numbers": "Números de pista",
+      "bit_rate_modes": "Modos de bitrate",
+      "embedded_covers": "Carátulas incrustadas",
+      "audio_title": "Título",
+      "audio_artist": "Artista",
+      "audio_album": "Álbum",
+      "audio_album_artist": "Artista del álbum",
+      "audio_genre": "Género",
+      "audio_date": "Año / fecha",
+      "audio_disc": "Disco",
+      "audio_composer": "Compositor",
+      "sample_rate": "Frecuencia de muestreo",
+      "track_number": "Número de pista",
+      "bit_rate_mode": "Modo de bitrate",
+      "has_embedded_cover": "Carátula incrustada",
+      "chapter_count": "Número de capítulos",
+      "chapter_titles": "Títulos de capítulos",
+      "audiobook_narrator": "Narrador",
+      "audiobook_author": "Autor",
+      "audiobook_publisher": "Editor",
+      "audiobook_series": "Series de audiolibros",
+      "audiobook_series_part": "Parte de la serie",
+      "audiobook_series_parts": "Partes de serie",
+      "audiobook_description": "Descripción",
+      "audiobook_copyright": "Copyright",
+      "audiobook_language": "Idioma del audiolibro",
+      "audiobook_abridged": "Versión abreviada",
+      "audiobook_asin": "ASIN",
+      "audiobook_isbn": "ISBN"
+    }
+  },
+  "panelLayout": {
+    "edit": "Editar diseño de paneles",
+    "add": "Añadir panel",
+    "save": "Guardar diseño de paneles",
+    "cancel": "Discard panel layout changes",
+    "restoreDefault": "Restaurar diseño por defecto",
+    "remove": "Eliminar panel",
+    "noMorePanels": "All available panels are already shown.",
+    "expandWidth": "Expand panel width",
+    "shrinkWidth": "Shrink panel width",
+    "expandHeight": "Expand panel height",
+    "shrinkHeight": "Shrink panel height",
+    "migration": {
+      "title": "Diseño actualizado",
+      "description": "Some saved layout settings could not be carried over after the update.",
+      "invalidJson": "The saved layout data could not be read, so the default layout is shown.",
+      "invalidLayout": "The saved layout format is no longer supported, so the default layout is shown.",
+      "invalidItem": "Entry {{position}} was skipped because it is not a valid panel.",
+      "unsupportedPanel": "Panel \"{{panel}}\" at position {{position}} is no longer available and was skipped.",
+      "duplicatePanel": "Duplicate panel \"{{panel}}\" was skipped.",
+      "duplicateInstance": "Panel \"{{panel}}\" used the duplicate layout ID \"{{instanceId}}\" and was skipped.",
+      "resizedPanel": "Panel \"{{panel}}\" {{axis}} was changed from {{requested}} to {{applied}}.",
+      "comparisonSelectionAdjusted": "Metric comparison \"{{instanceId}}\" now uses {{appliedSelection}} instead of the saved {{previousSelection}}.",
+      "axes": {
+        "width": "ancho",
+        "height": "alto"
+      }
+    }
+  },
+  "libraryTypes": {
+    "movies": "Películas",
+    "series": "Series",
+    "music": "Música (alfa)",
+    "audiobooks": "Audiolibros",
+    "mixed": "Mixto",
+    "other": "Otro"
+  },
+  "scanModes": {
+    "manual": "Manual",
+    "scheduled": "Intervalo de tiempo",
+    "scheduled_daily": "Programado",
+    "watch": "Vigilancia"
+  },
+  "sort": {
+    "prefix": "Ordenar",
+    "asc": "Ascendente",
+    "desc": "Descendente"
+  },
+  "libraryDetail": {
+    "scanInProgress": "Escaneo en curso",
+    "loading": "Cargando biblioteca…",
+    "libraryPathAria": "Ruta de la biblioteca",
+    "files": "Archivos",
+    "storage": "Almacenamiento",
+    "duration": "Duración",
+    "lastScan": "Último escaneo",
+    "containers": "Contenedores",
+    "videoCodecs": "Códecs de vídeo",
+    "resolutions": "Resoluciones",
+    "videoBitDepth": "Profundidad de bits de vídeo",
+    "hdrProfile": "Perfil HDR",
+    "sizeDistribution": "Tamaño de archivo",
+    "durationDistribution": "Duración",
+    "qualityScoreDistribution": "Puntuación de calidad",
+    "bitrateDistribution": "Bitrate",
+    "audioBitrateDistribution": "Bitrate de audio",
+    "audioBitDepth": "Profundidad de bits de audio",
+    "comparisonPanel": "Comparación de métricas",
+    "audioCodecs": "Códecs de audio",
+    "formatsAndCodecs": "Formatos y códecs",
+    "audioSpatialProfiles": "Audio espacial",
+    "audioLanguages": "Idiomas de audio",
+    "subtitleLanguages": "Idiomas de subtítulos",
+    "subtitleCodecs": "Códecs de subtítulos",
+    "subtitleSources": "Fuentes de subtítulos",
+    "analyzedFiles": "Archivos analizados",
+    "series": {
+      "title": "Series",
+      "empty": "Las series reconocidas aparecerán después de un escaneo.",
+      "loading": "Cargando series...",
+      "viewSeries": "Series",
+      "viewFiles": "Archivos",
+      "seasonTitle": "Temporada {{season}}",
+      "specials": "Especiales",
+      "seasonCount": "{{count}} temporadas",
+      "episodeCount": "{{count}} episodios",
+      "seasons": "Temporadas",
+      "episodes": "Episodios",
+      "backToLibrary": "Volver a la biblioteca"
+    },
+    "indexedEntries": "{{count}} entradas indexadas",
+    "indexedEntriesFiltered": "{{shown}} de {{total}} entradas indexadas",
+    "tableView": {
+      "edit": "Editar vista de tabla"
+    },
+    "export": {
+      "aria": "Exportar archivos analizados como CSV",
+      "tooltip": "Exportar como CSV el conjunto completo filtrado de resultados de archivos analizados",
+      "exporting": "Exportando CSV…",
+      "error": "La exportación CSV falló: {{message}}"
+    },
+    "searchLabel": "Buscar archivos y metadatos",
+    "searchPlaceholder": "buscar archivos y metadatos",
+    "searchFields": {
+      "addMetadata": "Metadatos",
+      "addMetadataAria": "Añadir campo de búsqueda de metadatos",
+      "activeMetadata": "Campos de búsqueda de metadatos activos",
+      "removeAria": "Eliminar campo de búsqueda {{field}}",
+      "tooltipAria": "Mostrar la sintaxis de búsqueda compatible",
+      "textMatch": {
+        "tooltip": "Los campos de texto admiten términos AND separados por comas. Antepon un ! a un término para excluir coincidencias, por ejemplo !en, external."
+      },
+      "file": {
+        "label": "Archivo y ruta",
+        "placeholder": "Buscar archivo y ruta"
+      },
+      "size": {
+        "placeholder": "p. ej. >4GB",
+        "tooltip": "Compatible: >4GB, >=700MB, <1.5GiB, =800MB"
+      },
+      "container": {
+        "placeholder": "p. ej. mkv mp4"
+      },
+      "qualityScore": {
+        "placeholder": "p. ej. >=8",
+        "tooltip": "Compatible: >=8, =10, <5"
+      },
+      "bitrate": {
+        "placeholder": "p. ej. >=8Mb/s",
+        "tooltip": "Compatible: >4Mb/s, >=256kb/s, <12Mb/s"
+      },
+      "audioBitrate": {
+        "placeholder": "p. ej. >=512kb/s",
+        "tooltip": "Compatible: >256kb/s, >=1Mb/s, <2Mb/s"
+      },
+      "bitDepth": {
+        "placeholder": "p. ej. >=10",
+        "tooltip": "Compatible: >=8, =10, <32"
+      },
+      "videoCodec": {
+        "placeholder": "p. ej. hevc av1"
+      },
+      "resolution": {
+        "placeholder": "p. ej. 1080p o 3840x2160"
+      },
+      "hdr": {
+        "placeholder": "p. ej. hdr10, dv, sdr"
+      },
+      "duration": {
+        "placeholder": "p. ej. >=1h 30m",
+        "tooltip": "Compatible: >90m, <=2h, =5400s, >=1h 30m"
+      },
+      "audioCodecs": {
+        "placeholder": "p. ej. dts aac"
+      },
+      "audioSpatialProfiles": {
+        "placeholder": "p. ej. atmos dts:x"
+      },
+      "audioLanguages": {
+        "placeholder": "p. ej. en german"
+      },
+      "subtitleLanguages": {
+        "placeholder": "p. ej. en de"
+      },
+      "subtitleCodecs": {
+        "placeholder": "p. ej. srt ass"
+      },
+      "subtitleSources": {
+        "placeholder": "p. ej. internal external"
+      },
+      "validation": {
+        "size": "Usa una comparación como >4GB o <=700MB.",
+        "quality_score": "Usa una puntuación de 1 a 10, por ejemplo >=8.",
+        "bitrate": "Usa un bitrate como >8Mb/s o >=256kb/s.",
+        "audio_bitrate": "Usa un bitrate de audio como >512kb/s o >=1Mb/s.",
+        "bit_depth": "Usa una profundidad de bits entera como >=16 o =24.",
+        "duration": "Usa una duración como >90m o >=1h 30m.",
+        "chapter_count": "Usa un número de capítulos como >=10 o =24."
+      },
+      "audio_title": {
+        "placeholder": "p. ej. Título de la canción"
+      },
+      "audio_artist": {
+        "placeholder": "p. ej. Artista"
+      },
+      "audio_album": {
+        "placeholder": "p. ej. Álbum"
+      },
+      "audio_album_artist": {
+        "placeholder": "p. ej. Artista del álbum"
+      },
+      "audio_genre": {
+        "placeholder": "p. ej. jazz"
+      },
+      "audio_date": {
+        "placeholder": "p. ej. 2024"
+      },
+      "audio_disc": {
+        "placeholder": "p. ej. 1/2"
+      },
+      "audio_composer": {
+        "placeholder": "p. ej. Compositor"
+      },
+      "audio_channels": {
+        "placeholder": "p. ej. >=2",
+        "tooltip": "Compatible: >=2, =6, <8"
+      },
+      "sample_rate": {
+        "placeholder": "p. ej. >=48000",
+        "tooltip": "Compatible: >=44100, =96000"
+      },
+      "track_number": {
+        "placeholder": "p. ej. 03"
+      },
+      "bit_rate_mode": {
+        "placeholder": "p. ej. VBR"
+      },
+      "has_embedded_cover": {
+        "placeholder": "sí o no"
+      },
+      "chapter_count": {
+        "placeholder": "p. ej. >=10",
+        "tooltip": "Compatible: >=10, =24, <50"
+      },
+      "chapter_titles": {
+        "placeholder": "p. ej. Capítulo uno"
+      },
+      "audiobook_narrator": {
+        "placeholder": "p. ej. Narrador"
+      },
+      "audiobook_author": {
+        "placeholder": "p. ej. Autor"
+      },
+      "audiobook_publisher": {
+        "placeholder": "p. ej. Editorial"
+      },
+      "audiobook_series": {
+        "placeholder": "p. ej. Serie"
+      },
+      "audiobook_series_part": {
+        "placeholder": "p. ej. 2"
+      },
+      "audiobook_description": {
+        "placeholder": "p. ej. término de sinopsis"
+      },
+      "audiobook_copyright": {
+        "placeholder": "p. ej. titular del copyright"
+      },
+      "audiobook_asin": {
+        "placeholder": "p. ej. B000000000"
+      },
+      "audiobook_isbn": {
+        "placeholder": "p. ej. 978..."
+      },
+      "audiobook_language": {
+        "placeholder": "p. ej. en o de"
+      },
+      "audiobook_abridged": {
+        "placeholder": "abreviado o íntegro"
+      }
+    },
+    "loadingFiles": "Cargando archivos analizados…",
+    "loadingMore": "Cargando más entradas…",
+    "noAnalyzedFiles": "Aún no hay archivos analizados.",
+    "duplicates": {
+      "title": "Duplicados",
+      "empty": "Aún no se han encontrado grupos de duplicados.",
+      "emptySearch": "Ningún grupo de duplicados coincide con la búsqueda actual.",
+      "fileCount": "{{count}} archivos",
+      "detectedValueTooltipAria": "Mostrar el valor de duplicado detectado para {{mode}}",
+      "searchPlaceholder": "Buscar duplicados",
+      "searchLabel": "Buscar duplicados",
+      "clearSearch": "Limpiar búsqueda de duplicados",
+      "view": {
+        "label": "Seleccionar vista de duplicados",
+        "all": "Mostrar todos los grupos de duplicados",
+        "onlyHash": "Mostrar solo grupos de duplicados por hash",
+        "onlyFilename": "Mostrar solo grupos de duplicados por nombre de archivo",
+        "hidden": "Mostrar grupos de duplicados ocultos"
+      },
+      "emptyView": "Ningún grupo de duplicados coincide con la vista actual.",
+      "suppressedBadge": "Oculto",
+      "openFileDetailAria": "Abrir detalles de {{filename}}",
+      "markNotDuplicate": "Marcar como no duplicado",
+      "restoreDuplicate": "Restaurar grupo duplicado",
+      "suppressFailed": "No se pudo marcar el grupo de duplicados como no duplicado.",
+      "restoreFailed": "No se pudo restaurar el grupo de duplicados."
+    },
+    "history": {
+      "title": "Historial de la biblioteca multimedia",
+      "subtitle": "Instantáneas diarias de tendencias de escaneos finalizados",
+      "empty": "Las tendencias del historial aparecerán después del próximo escaneo completado.",
+      "controls": {
+        "metric": "Seleccionar métrica del historial",
+        "range": "Seleccionar rango del historial"
+      },
+      "range": {
+        "last7Days": "7d",
+        "last30Days": "30d",
+        "lastYear": "1a",
+        "all": "Todo",
+        "custom": "Personalizado",
+        "previousMonth": "Mes anterior",
+        "nextMonth": "Mes siguiente",
+        "cancel": "Cancelar",
+        "apply": "Aplicar",
+        "empty": "No hay datos de historial en el rango seleccionado."
+      },
+      "tooltip": {
+        "total": "Total"
+      },
+      "groups": {
+        "summary": "Resumen",
+        "category": "Mezcla",
+        "distribution": "Distribución"
+      },
+      "metrics": {
+        "file_count": "Archivos",
+        "total_size_bytes": "Tamaño total",
+        "total_duration_seconds": "Duración total",
+        "average_size_bytes": "Tamaño medio",
+        "resolution_mix": "Mezcla de resoluciones",
+        "average_bitrate": "Bitrate medio",
+        "average_audio_bitrate": "Bitrate de audio medio",
+        "average_duration_seconds": "Duración media",
+        "average_quality_score": "Puntuación de calidad media",
+        "average_resolution_mp": "Resolución media en MP",
+        "library_mix": "Mezcla de bibliotecas",
+        "container_mix": "Mezcla de contenedores",
+        "video_codec_mix": "Mezcla de códecs de vídeo",
+        "hdr_type_mix": "Mezcla de rango dinámico",
+        "audio_codecs_mix": "Mezcla de códecs de audio",
+        "audio_spatial_profiles_mix": "Mezcla de audio espacial",
+        "audio_languages_mix": "Mezcla de idiomas de audio",
+        "subtitle_languages_mix": "Mezcla de idiomas de subtítulos",
+        "subtitle_codecs_mix": "Mezcla de códecs de subtítulos",
+        "subtitle_sources_mix": "Mezcla de fuentes de subtítulos",
+        "scan_status_mix": "Mezcla de estados de escaneo",
+        "resolution_distribution": "Distribución de resoluciones",
+        "quality_score_distribution": "Distribución de puntuación de calidad",
+        "duration_distribution": "Distribución de duración",
+        "size_distribution": "Distribución de tamaño",
+        "bitrate_distribution": "Distribución de bitrate",
+        "audio_bitrate_distribution": "Distribución de bitrate de audio",
+        "resolution_mp_distribution": "Distribución de resolución en MP"
+      },
+      "unknownLegacyResolutionCategory": "Categoría heredada desconocida: {{id}}"
+    },
+    "renderedEntries": "{{rendered}} de {{total}} entradas renderizadas",
+    "loadMore": "Cargar {{count}} más",
+    "resizeColumnAria": "Redimensionar columna {{column}}",
+    "statistics": {
+      "filterByValue": "Filtrar archivos analizados por {{field}}: {{value}}",
+      "filterAlreadyApplied": "Ya se ha añadido al filtro de archivos analizados para {{field}}: {{value}}"
+    },
+    "recentScanJobs": "Tareas de escaneo recientes",
+    "recentScanJobsSubtitle": "Último historial de cola y ejecución",
+    "jobLabel": "Tarea #{{id}}",
+    "audio_artists": "Artistas",
+    "audio_albums": "Álbumes",
+    "audio_genres": "Géneros",
+    "audio_years": "Años de publicación",
+    "audio_channels": "Canales",
+    "sample_rates": "Frecuencias de muestreo",
+    "track_numbers": "Números de pista",
+    "bit_rate_modes": "Modos de bitrate",
+    "embedded_covers": "Carátulas incrustadas",
+    "audiobook_narrators": "Narradores",
+    "audiobook_authors": "Autores",
+    "audiobook_publishers": "Editoriales",
+    "audiobook_series": "Series de audiolibros",
+    "audiobook_series_parts": "Partes de la serie",
+    "chapter_counts": "Recuento de capítulos"
+  },
+  "distributionChart": {
+    "loading": "Cargando gráfico…",
+    "empty": "Aún no hay datos analizados.",
+    "displayMode": "Modo de visualización del gráfico",
+    "countMode": "Recuento",
+    "percentMode": "Porcentaje",
+    "total": "{{total}} archivos con datos de {{metric}}",
+    "binRange": "Rango",
+    "count": "Recuento",
+    "percentage": "Porcentaje",
+    "metrics": {
+      "quality_score": "puntuación de calidad",
+      "duration": "duración",
+      "size": "tamaño de archivo",
+      "bitrate": "bitrate",
+      "audio_bitrate": "bitrate de audio"
+    }
+  },
+  "comparisonChart": {
+    "empty": "Aún no hay datos analizados comparables.",
+    "summary": "{{included}} de {{total}} archivos incluidos",
+    "sampled": "Vista de dispersión muestreada a {{limit}} puntos",
+    "count": "Recuento",
+    "axes": {
+      "x": "Eje X",
+      "y": "Eje Y"
+    },
+    "controls": {
+      "xField": "Seleccionar métrica del eje X",
+      "yField": "Seleccionar métrica del eje Y",
+      "renderer": "Seleccionar renderizador del gráfico",
+      "swapAxes": "Intercambiar ejes de comparación"
+    },
+    "renderers": {
+      "heatmap": "Mapa de calor",
+      "scatter": "Gráfico de dispersión",
+      "bar": "Gráfico de barras"
+    },
+    "bar": {
+      "average": "Media"
+    }
+  },
+  "scanLogs": {
+    "title": "Registros recientes de escaneo",
+    "subtitle": "Historial más reciente de escaneos completados de todas las bibliotecas durante las últimas 24 horas",
+    "empty": "Aún no hay escaneos completados.",
+    "loadingDetail": "Cargando detalles del escaneo…",
+    "loadingMore": "Cargando más…",
+    "loadMore": "Cargar más",
+    "unknownLibrary": "Biblioteca desconocida",
+    "jobLabel": "Tarea #{{id}}",
+    "jobTypeIncremental": "Incremental",
+    "jobTypeFull": "Completo",
+    "triggerManual": "Manual",
+    "triggerScheduled": "Programado",
+    "triggerWatchdog": "Vigilancia",
+    "triggerManualSummary": "Iniciado manualmente por el usuario.",
+    "triggerScheduledSummary": "Iniciado por el intervalo programado cada {{minutes}} minutos.",
+    "triggerScheduledDailySummary": "Iniciado por la programación diaria a las {{time}}.",
+    "triggerWatchdogSummary": "Iniciado después de {{count}} eventos de archivos del vigilante.",
+    "outcomeSuccessful": "Correcto",
+    "outcomeCompletedWithIssues": "Completado con incidencias",
+    "outcomeFailed": "Fallido",
+    "outcomeCanceled": "Cancelado",
+    "startedAt": "Iniciado",
+    "finishedAt": "Finalizado",
+    "duration": "Duración",
+    "metricDetected": "Detectados",
+    "metricIgnored": "Ignorados",
+    "metricAnalyzed": "Analizados",
+    "metricFailed": "Fallidos",
+    "metricDuplicateGroups": "Grupos de duplicados",
+    "metricDuplicateFiles": "Archivos duplicados",
+    "metricNew": "Nuevos",
+    "metricChanged": "Modificados",
+    "metricDeleted": "Eliminados",
+    "triggerReason": "Motivo del disparo",
+    "ignorePatterns": "Patrones ignorados",
+    "patternHits": "Coincidencias de patrones ignorados",
+    "newFiles": "Archivos nuevos",
+    "changedFiles": "Archivos modificados",
+    "deletedFiles": "Archivos eliminados",
+    "failedFiles": "Archivos que no se pudieron analizar",
+    "duplicatesTitle": "Procesamiento de duplicados",
+    "duplicatesSummary": "{{groups}} grupos en {{files}} archivos usando {{mode}}",
+    "duplicatesMode": "Modo",
+    "duplicatesQueued": "En cola",
+    "duplicatesProcessed": "Procesados",
+    "duplicatesFailed": "Fallidos",
+    "failedFileReasonTooltipAria": "Mostrar detalles del error de análisis para {{path}}",
+    "copyDiagnostics": "Copiar detalles",
+    "copiedDiagnostics": "Copiado",
+    "copyDiagnosticsAria": "Copiar detalles de resolución de problemas para {{path}}",
+    "watchEvents": "Se agruparon {{count}} eventos del sistema de archivos.",
+    "intervalMinutes": "Intervalo programado: {{minutes}} minutos",
+    "coalescedTriggers": "Se fusionaron {{count}} disparadores adicionales en este escaneo.",
+    "moreEntries": "{{count}} entradas más no mostradas",
+    "none": "Ninguno"
+  },
+  "fileTable": {
+    "file": "Archivo",
+    "container": "Contenedor",
+    "size": "Tamaño",
+    "codec": "Códec",
+    "resolution": "Resolución",
+    "hdr": "RngDin",
+    "duration": "Duración",
+    "bitrate": "Bitrate",
+    "audioBitrate": "Bitrate de audio",
+    "bitDepth": "Profundidad de bits",
+    "audioCodecs": "Códecs de audio",
+    "formatsAndCodecs": "Formatos y códecs",
+    "audioSpatialProfiles": "Audio espacial",
+    "audioLanguages": "Idiomas de audio",
+    "subtitleLanguages": "Idiomas de subtítulos",
+    "subtitleCodecs": "Códecs de subtítulos",
+    "subtitleSources": "Fuente de subtítulos",
+    "modified": "Modificado",
+    "lastAnalyzed": "Último análisis",
+    "score": "Puntuación",
+    "na": "N/D",
+    "sdr": "SDR",
+    "audioTitle": "Título",
+    "audioArtist": "Artista",
+    "audioAlbum": "Álbum",
+    "audioAlbumArtist": "Artista del álbum",
+    "audioGenre": "Género",
+    "audioDate": "Año / fecha",
+    "audioDisc": "Disco",
+    "audioComposer": "Compositor",
+    "audioChannels": "Canales",
+    "sampleRate": "Frecuencia de muestreo",
+    "trackNumber": "Número de pista",
+    "bitRateMode": "Modo de bitrate",
+    "embeddedCover": "Carátula incrustada",
+    "chapterCount": "Capítulos",
+    "audiobookNarrator": "Narrador",
+    "audiobookAuthor": "Autor",
+    "audiobookPublisher": "Editorial",
+    "audiobookSeries": "Serie",
+    "audiobookSeriesPart": "Parte de la serie",
+    "audiobookDescription": "Descripción",
+    "audiobookCopyright": "Copyright",
+    "audiobookLanguage": "Idioma del audiolibro",
+    "audiobookAbridged": "Versión abreviada",
+    "audiobookAsin": "ASIN",
+    "audiobookIsbn": "ISBN"
+  },
+  "fileDetail": {
+    "eyebrow": "Detalle del archivo multimedia",
+    "loading": "Cargando archivo…",
+    "unknownCodec": "Códec desconocido",
+    "unknownResolution": "Resolución desconocida",
+    "showFullFilename": "Mostrar nombre completo del archivo",
+    "showFullRelativePath": "Mostrar ruta relativa completa",
+    "relativePath": "Ruta relativa",
+    "size": "Tamaño",
+    "duration": "Duración",
+    "quality": "Calidad",
+    "qualityBreakdown": "Desglose de calidad",
+    "format": "Formato",
+    "containerLabel": "Contenedor",
+    "containerFormat": "Nombre del formato",
+    "bitRate": "Bitrate",
+    "probeScore": "Puntuación de análisis",
+    "videoStreams": "Pistas de vídeo",
+    "audioStreams": "Pistas de audio",
+    "cover": "Carátula",
+    "coverCodec": "Códec",
+    "coverDimensions": "Dimensiones",
+    "coverStream": "Índice de pista",
+    "chapters": "Capítulos",
+    "chapterSearch": "Buscar capítulos",
+    "chapterSearchPlaceholder": "Buscar títulos de capítulos",
+    "exportChapters": "Exportar capítulos",
+    "showAllChapters": "Mostrar los {{count}} capítulos",
+    "showFewerChapters": "Mostrar menos capítulos",
+    "untitledChapter": "Capítulo {{number}}",
+    "analysisFailure": "Problema de análisis",
+    "subtitles": "Subtítulos",
+    "rawJson": "JSON bruto de ffprobe",
+    "history": {
+      "title": "Historial del archivo",
+      "empty": "El historial del archivo aparece después de que un escaneo capture una instantánea modificada de este archivo.",
+      "limited": "Mostrando las {{shown}} entradas más recientes de {{total}} del historial.",
+      "since": "Desde {{start}}",
+      "range": "{{start}} - {{end}}",
+      "noChanges": "No cambió ningún campo registrado en este periodo.",
+      "qualityValue": "{{value}}/10",
+      "video": "Vídeo",
+      "resolution": "Resolución",
+      "dynamicRange": "RngDin",
+      "audio": "Audio",
+      "subtitles": "Subtítulos",
+      "reason": {
+        "scan_analysis": "Escaneo",
+        "quality_recompute": "Calidad",
+        "history_reconstruction": "Reconstruido"
+      }
+    }
+  },
+  "pathBrowser": {
+    "selected": "Seleccionado",
+    "up": "Subir",
+    "addCurrent": "Añadir carpeta actual",
+    "remove": "Eliminar",
+    "noneSelected": "No hay carpetas seleccionadas"
+  },
+  "language": {
+    "en": "Inglés",
+    "de": "Alemán",
+    "es": "Español"
+  },
+  "theme": {
+    "system": "Sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
+  "telemetry": {
+    "saveFailed": "No se pudo guardar la configuración de telemetría.",
+    "environmentDisabled": "La telemetría está desactivada de forma forzada por MEDIALYZE_TELEMETRY_DISABLED.",
+    "settingsHint": "Los detalles están disponibles en Configuración, en Telemetría.",
+    "releaseNotesChooseFirst": "Elige un modo de telemetría antes de cerrar el historial de versiones.",
+    "mode": {
+      "off": "Telemetría desactivada",
+      "minimal": "Telemetría mínima",
+      "enabled": "Ayudar al desarrollador"
+    },
+    "modeTooltipTitles": {
+      "off": "Telemetría desactivada",
+      "minimal": "Telemetría mínima",
+      "enabled": "Ayudar al desarrollador"
+    },
+    "modeTooltips": {
+      "off": "No se envía ninguna carga de telemetría.",
+      "minimal": "Le indica al desarrollador qué entorno/sistema usas, nada más.",
+      "enabled": "Añade recuentos de uso redondeados y ajustes de la aplicación para ayudar al desarrollo. SIN datos privados."
+    },
+    "modeDescriptions": {
+      "off": "No se envía ninguna carga de telemetría.",
+      "minimal": "Envía solo detalles de instalación/entorno/sistema. No se incluyen estadísticas de uso ni ajustes de la aplicación.",
+      "enabled": "Añade recuentos de uso redondeados, recuentos por tipo de medio, funciones experimentales activadas y ajustes seleccionados de la aplicación."
+    },
+    "panel": {
+      "title": "Telemetría",
+      "description": "La telemetría es un informe anónimo y general de la instalación. MediaLyze nunca envía rutas de archivos, nombres de medios, nombres de bibliotecas, términos de búsqueda, cargas brutas de ffprobe ni diagnósticos de escaneo."
+    },
+    "preview": {
+      "title": "Vista previa de la carga",
+      "description": "Genera la estructura de la carga anónima que se enviaría para cada modo de telemetría.",
+      "previewMinimal": "Vista previa de la carga mínima",
+      "previewEnabled": "Vista previa de la carga habilitada",
+      "views": {
+        "last": "Última enviada",
+        "minimal": "Ejemplo mínimo",
+        "enabled": "Ejemplo completo"
+      },
+      "jsonLabel": "Vista previa JSON de la carga de telemetría",
+      "notLoaded": "Selecciona un modo de carga para generar una vista previa.",
+      "loading": "Cargando vista previa de la carga de telemetría...",
+      "empty": "No hay ninguna vista previa disponible de la carga de telemetría.",
+      "loadFailed": "Falló la vista previa de la carga de telemetría."
+    },
+    "stats": {
+      "title": "Estadísticas públicas",
+      "description": "MediaLyze tiene una página pública de estadísticas donde puedes ver los datos de telemetría aportados por esta instalación y borrar tú mismo todos los datos usando tu ID de instalación aleatorio.",
+      "openAria": "Abrir la página de estadísticas de MediaLyze",
+      "installationIdLabel": "ID de instalación propio",
+      "installationIdMissing": "Aún no se ha creado ningún ID de instalación.",
+      "copy": "Copiar",
+      "copied": "Copiado"
+    },
+    "lastPayload": {
+      "title": "Última carga transmitida",
+      "jsonLabel": "JSON de la última carga de telemetría transmitida",
+      "none": "Aún no se ha enviado ninguna carga de telemetría visible para el usuario.",
+      "noneAndOff": "No hay ninguna carga de telemetría disponible y no se enviará ninguna mientras la telemetría esté desactivada o inhabilitada."
+    }
+  },
+  "quality": {
+    "tooltipAria": "Mostrar el desglose de la puntuación de calidad",
+    "loading": "Cargando desglose de calidad…",
+    "unavailable": "Desglose de calidad no disponible.",
+    "rawScore": "Bruto {{value}} / 100",
+    "weight": "Peso: {{value}}",
+    "actual": "Actual: {{value}}",
+    "minimum": "Mínimo: {{value}}",
+    "ideal": "Ideal: {{value}}",
+    "maximum": "Máximo: {{value}}",
+    "skipped": "Omitido",
+    "unknownMapping": "Valor desconocido asignado de forma neutra.",
+    "category": {
+      "resolution": "Resolución",
+      "visual_density": "Densidad visual",
+      "video_codec": "Códec de vídeo",
+      "audio_channels": "Canales de audio",
+      "audio_codec": "Códec de audio",
+      "dynamic_range": "Rango dinámico",
+      "language_preferences": "Preferencias de idioma"
+    }
+  },
+  "streamDetails": {
+    "videoTooltipAria": "Mostrar detalles de la pista de vídeo de {{file}}",
+    "audioTooltipAria": "Mostrar detalles de la pista de audio de {{file}}",
+    "subtitleTooltipAria": "Mostrar detalles de subtítulos de {{file}}",
+    "loading": "Cargando detalles de pistas…",
+    "unavailable": "Detalles de pistas no disponibles.",
+    "none": "No hay detalles de pistas disponibles.",
+    "audioSpatial": "Audio espacial",
+    "unknownLanguage": "Idioma desconocido",
+    "unknownType": "Tipo de medio desconocido",
+    "mono": "Mono",
+    "stereo": "Estéreo",
+    "channels": "{{count}} canales",
+    "default": "Predeterminado",
+    "forced": "Forzado",
+    "internal": "Interno",
+    "external": "Externo",
+    "text": "Texto",
+    "image": "Imagen",
+    "spatialAudio": {
+      "dolbyAtmos": "Dolby Atmos",
+      "dtsX": "DTS:X"
+    }
+  },
+  "common": {
+    "close": "Cerrar",
+    "yes": "Sí",
+    "no": "No"
+  }
+}
