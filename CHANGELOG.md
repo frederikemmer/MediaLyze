@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add an Unraid Community Applications Docker template and repository profile for MediaLyze deployments, based on original template contribution in [#117](https://github.com/frederikemmer/MediaLyze/issues/117) by [@jvdivx](https://github.com/jvdivx) 
+- solid starting point for Spanish translation [#146](https://github.com/frederikemmer/MediaLyze/pull/146) by [@jvdivx](https://github.com/jvdivx)
+
+### New Contributors
+
+[@jvdivx](https://github.com/jvdivx) in [#117](https://github.com/frederikemmer/MediaLyze/issues/117) & [#146](https://github.com/frederikemmer/MediaLyze/pull/146)
+
 ## v0.12.2
 
 >2026-05-28
