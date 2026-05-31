@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>
+    MediaLyze provides a self-hosted media analysis application. MediaLyze scans video and audio libraries with ffprobe, stores normalized technical metadata in SQLite, and exposes inspection, statistics, and scan-management workflows through a web UI.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/frontend/public/favicon-512.png</Icon>
+  <WebPage>https://github.com/frederikemmer/MediaLyze</WebPage>
+  <DonateLink>https://github.com/sponsors/frederikemmer</DonateLink>
+  <DonateText>Support MediaLyze</DonateText>
+</CommunityApplications>

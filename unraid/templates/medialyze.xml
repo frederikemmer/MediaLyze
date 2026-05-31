@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>MediaLyze</Name>
+  <Repository>ghcr.io/frederikemmer/medialyze:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <MyMAC/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+
+  <Support>https://github.com/frederikemmer/MediaLyze/issues</Support>
+  <Project>https://github.com/frederikemmer/MediaLyze</Project>
+  <ReadMe>https://github.com/frederikemmer/MediaLyze#readme</ReadMe>
+
+  <Overview>Self-hosted technical media analysis for large video and audio collections.</Overview>
+  <Description>
+    <![CDATA[
+    <p><strong>MediaLyze</strong> scans local media libraries with <code>ffprobe</code>, stores normalized technical metadata in SQLite, and exposes inspection, statistics, and scan-management workflows through a web UI.</p>
+    <p>MediaLyze is designed for analysis, not playback or file modification. Mount your media libraries read-only.</p>
+    <ul>
+      <li><code>/config</code>: persistent configuration and SQLite database storage.</li>
+      <li><code>/media</code>: MediaLyze media root. Mount each Unraid share as a separate folder below this path, for example <code>/media/Media</code>, <code>/media/Movies</code>, <code>/media/Shows</code>, or <code>/media/Music</code>. Do not mount one share directly to <code>/media</code> and another below it.</li>
+    </ul>
+    ]]>
+  </Description>
+
+  <Category>MediaApp:Tools MediaServer:Management Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/unraid/templates/medialyze.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/frontend/public/favicon-512.png</Icon>
+
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText>Support MediaLyze</DonateText>
+  <DonateLink>https://github.com/sponsors/frederikemmer</DonateLink>
+  <Requires>Persistent storage for /config and read-only media mounts below /media.</Requires>
+
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp" Description="External port for the MediaLyze web interface." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/medialyze" Mode="rw" Description="Persistent configuration and SQLite database storage." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/medialyze</Config>
+  <Config Name="Primary Media Mount" Target="/media/Media" Default="/mnt/user/media" Mode="ro" Description="Required read-only media mount. Change the container path to your preferred visible name, but keep it below /media, for example /media/Movies." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media</Config>
+  <Config Name="Movies Media Mount" Target="/media/Movies" Default="" Mode="ro" Description="Optional additional read-only media mount. Change the container path to your preferred visible name, but keep it below /media, for example /media/Movies." Type="Path" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Shows Media Mount" Target="/media/Shows" Default="" Mode="ro" Description="Optional additional read-only media mount. Change the container path to your preferred visible name, but keep it below /media, for example /media/Shows." Type="Path" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Music Media Mount" Target="/media/Music" Default="" Mode="ro" Description="Optional additional read-only media mount. Change the container path to your preferred visible name, but keep it below /media, for example /media/Music." Type="Path" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Timezone" Target="TZ" Default="UTC" Mode="" Description="Container timezone, for example Europe/Berlin or America/New_York." Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="Optional runtime user id. On Unraid, 99 is usually nobody." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Optional runtime group id. On Unraid, 100 is usually users." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+
+  <TailscaleStateDir/>
+</Container>
