@@ -5059,9 +5059,6 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 .file-history-list {
   display: grid;
   gap: 8px;
-  max-height: min(520px, 68vh);
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .file-history-entry {
@@ -5919,8 +5916,7 @@ body.is-column-resizing {
 
 .json-preview {
   margin: 0;
-  max-height: 480px;
-  overflow: auto;
+  overflow-x: auto;
   padding: 14px;
   border-radius: 16px;
   background: #171717;
