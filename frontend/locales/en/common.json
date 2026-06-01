@@ -918,8 +918,19 @@
   "fileDetail": {
     "eyebrow": "Media file detail",
     "loading": "Loading file…",
+    "navigation": {
+      "label": "File detail menu",
+      "mobileLabel": "Mobile file detail menu",
+      "title": "Details",
+      "overview": "Overview",
+      "collapse": "Collapse file detail menu",
+      "expand": "Expand file detail menu",
+      "openMobile": "Open file detail menu",
+      "closeMobile": "Close file detail menu"
+    },
     "unknownCodec": "Unknown codec",
     "unknownResolution": "Unknown resolution",
+    "bonusContent": "Bonus",
     "showFullFilename": "Show full file name",
     "showFullRelativePath": "Show full relative path",
     "relativePath": "Relative path",
@@ -934,6 +945,7 @@
     "probeScore": "Probe score",
     "videoStreams": "Video streams",
     "audioStreams": "Audio streams",
+    "audioMetadata": "Audio metadata",
     "cover": "Cover",
     "coverCodec": "Codec",
     "coverDimensions": "Dimensions",

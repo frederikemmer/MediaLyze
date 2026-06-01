@@ -918,8 +918,19 @@
   "fileDetail": {
     "eyebrow": "Mediendatei-Details",
     "loading": "Datei wird geladen…",
+    "navigation": {
+      "label": "Dateidetailmenü",
+      "mobileLabel": "Mobiles Dateidetailmenü",
+      "title": "Details",
+      "overview": "Übersicht",
+      "collapse": "Dateidetailmenü einklappen",
+      "expand": "Dateidetailmenü ausklappen",
+      "openMobile": "Dateidetailmenü öffnen",
+      "closeMobile": "Dateidetailmenü schließen"
+    },
     "unknownCodec": "Unbekannter Codec",
     "unknownResolution": "Unbekannte Auflösung",
+    "bonusContent": "Bonus",
     "showFullFilename": "Vollständigen Dateinamen anzeigen",
     "showFullRelativePath": "Vollständigen relativen Pfad anzeigen",
     "relativePath": "Relativer Pfad",
@@ -934,6 +945,7 @@
     "probeScore": "Probe-Score",
     "videoStreams": "Video-Streams",
     "audioStreams": "Audio-Streams",
+    "audioMetadata": "Audio-Metadaten",
     "cover": "Cover",
     "coverCodec": "Codec",
     "coverDimensions": "Abmessungen",

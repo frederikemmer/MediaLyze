@@ -918,8 +918,19 @@
   "fileDetail": {
     "eyebrow": "Detalle del archivo multimedia",
     "loading": "Cargando archivo…",
+    "navigation": {
+      "label": "Menú de detalles del archivo",
+      "mobileLabel": "Menú móvil de detalles del archivo",
+      "title": "Detalles",
+      "overview": "Resumen",
+      "collapse": "Contraer menú de detalles del archivo",
+      "expand": "Expandir menú de detalles del archivo",
+      "openMobile": "Abrir menú de detalles del archivo",
+      "closeMobile": "Cerrar menú de detalles del archivo"
+    },
     "unknownCodec": "Códec desconocido",
     "unknownResolution": "Resolución desconocida",
+    "bonusContent": "Bonus",
     "showFullFilename": "Mostrar nombre completo del archivo",
     "showFullRelativePath": "Mostrar ruta relativa completa",
     "relativePath": "Ruta relativa",
@@ -934,6 +945,7 @@
     "probeScore": "Puntuación de análisis",
     "videoStreams": "Pistas de vídeo",
     "audioStreams": "Pistas de audio",
+    "audioMetadata": "Metadatos de audio",
     "cover": "Carátula",
     "coverCodec": "Códec",
     "coverDimensions": "Dimensiones",

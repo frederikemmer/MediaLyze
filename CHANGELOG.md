@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- redesign the file-detail page with a Settings-style navigation sidebar and context-aware sections for video, audio, subtitles, cover art, chapters, history, and raw metadata
+
 ## v0.13.0
 
 >2026-05-31
