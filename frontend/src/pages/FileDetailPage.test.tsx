@@ -398,10 +398,12 @@ describe("FileDetailPage", () => {
       analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
       analysis_failure_detail: "Invalid data found when processing input",
     };
-    const downloadCover = vi.spyOn(api, "downloadFileCover").mockResolvedValue({
-      blob: new Blob(["cover"], { type: "image/png" }),
-      filename: "movie-cover.png",
-    });
+    let resolveCover: ((payload: { blob: Blob; filename: string }) => void) | undefined;
+    const downloadCover = vi.spyOn(api, "downloadFileCover").mockReturnValue(
+      new Promise((resolve) => {
+        resolveCover = resolve;
+      }),
+    );
     const createObjectUrl = vi.fn(() => "blob:cover");
     const revokeObjectUrl = vi.fn();
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
@@ -422,8 +424,13 @@ describe("FileDetailPage", () => {
     expect(downloadCover).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Load cover" }));
+    expect(screen.getByRole("button", { name: "Loading cover" })).toBeDisabled();
     await waitFor(() => expect(downloadCover).toHaveBeenCalledWith(file.id));
-    expect(createObjectUrl).toHaveBeenCalled();
+    resolveCover?.({
+      blob: new Blob(["cover"], { type: "image/png" }),
+      filename: "movie-cover.png",
+    });
+    await waitFor(() => expect(createObjectUrl).toHaveBeenCalled());
     expect(await screen.findByRole("img", { name: `Embedded cover for ${file.filename}` })).toHaveAttribute("src", "blob:cover");
 
     fireEvent.click(screen.getByRole("button", { name: "Download cover" }));

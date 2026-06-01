@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { LoaderCircleIcon } from "../components/LoaderCircleIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { StreamDetailsList } from "../components/StreamDetailsList";
@@ -368,7 +369,11 @@ function CoverDetailsList({
     <div className="stream-tooltip-content stream-tooltip-content-panel file-detail-cover-panel">
       <div className="file-detail-cover-actions">
         <button type="button" className="secondary small file-detail-cover-button" onClick={() => void loadCover()} disabled={isCoverLoading}>
-          <ImageIcon size={16} aria-hidden="true" />
+          {isCoverLoading ? (
+            <LoaderCircleIcon size={16} aria-hidden="true" />
+          ) : (
+            <ImageIcon size={16} aria-hidden="true" />
+          )}
           {isCoverLoading ? t("fileDetail.coverLoading") : t("fileDetail.loadCover")}
         </button>
         {coverUrl ? (

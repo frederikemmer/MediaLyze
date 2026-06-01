@@ -108,6 +108,7 @@ FileSortKey = Literal[
 FileSortDirection = Literal["asc", "desc"]
 
 CSV_EXPORT_BATCH_SIZE = 500
+COVER_PNG_CACHE: dict[tuple[int, str, int | None, int, int], tuple[str, bytes]] = {}
 CSV_EXPORT_HEADERS = [
     "relative_path",
     "filename",
@@ -1091,6 +1092,17 @@ def generate_media_cover_png(
     file_path = _media_file_path(media_file)
     if not file_path.is_file():
         return None
+    file_stat = file_path.stat()
+    cache_key = (
+        media_file.id,
+        str(file_path),
+        media_file.embedded_cover_stream_index,
+        file_stat.st_mtime_ns,
+        file_stat.st_size,
+    )
+    cached = COVER_PNG_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
 
     command = [
         ffmpeg_path,
@@ -1127,7 +1139,9 @@ def generate_media_cover_png(
 
     if not completed.stdout:
         raise RuntimeError("ffmpeg did not return cover image data")
-    return _safe_cover_filename(media_file.filename), completed.stdout
+    payload = (_safe_cover_filename(media_file.filename), completed.stdout)
+    COVER_PNG_CACHE[cache_key] = payload
+    return payload
 
 
 def list_library_files(

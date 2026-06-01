@@ -42,6 +42,7 @@ from backend.app.schemas.history import (
 from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
+from backend.app.services.media_service import COVER_PNG_CACHE
 from backend.app.services.update_status import UPDATE_STATUS_KEY
 from backend.app.services.runtime import ScanCancelPersistenceError
 
@@ -186,6 +187,7 @@ def test_file_chapters_export_csv_returns_chapter_detail_rows() -> None:
 
 
 def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> None:
+    COVER_PNG_CACHE.clear()
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -193,8 +195,11 @@ def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> No
     source_path.parent.mkdir()
     source_path.write_bytes(b"audio")
     captured: dict[str, object] = {}
+    run_count = 0
 
     def fake_run(command, *, check, capture_output, timeout):
+        nonlocal run_count
+        run_count += 1
         captured["command"] = command
         captured["check"] = check
         captured["capture_output"] = capture_output
@@ -224,12 +229,16 @@ def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> No
         client = _build_test_app(db)
         client.app.dependency_overrides[get_app_settings] = lambda: Settings(ffmpeg_path="/custom/ffmpeg")
         response = client.get(f"/api/files/{media_file.id}/cover?download=1")
+        cached_response = client.get(f"/api/files/{media_file.id}/cover")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/png")
     assert response.headers["cache-control"] == "no-store"
     assert 'filename="song-cover.png"' in response.headers["content-disposition"]
     assert response.content == b"\x89PNG\r\n"
+    assert cached_response.status_code == 200
+    assert cached_response.content == b"\x89PNG\r\n"
+    assert run_count == 1
     assert captured["command"] == [
         "/custom/ffmpeg",
         "-v",
