@@ -2,7 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  packagedFfmpegCandidates,
   packagedFfprobeCandidates,
+  resolveFfmpegPath,
   resolveFfprobePath,
 } = require("./ffprobe-paths.cjs");
 
@@ -49,4 +51,27 @@ test("resolveFfprobePath defaults to PATH lookup in development", () => {
   });
 
   assert.equal(resolved, "ffprobe");
+});
+
+test("resolveFfmpegPath falls back to bundled packaged candidates", () => {
+  const candidates = packagedFfmpegCandidates("/app/resources", "linux");
+  const resolved = resolveFfmpegPath({
+    isPackaged: true,
+    resourcesPath: "/app/resources",
+    platform: "linux",
+    env: {},
+    exists: (candidate) => candidate === candidates[0],
+  });
+
+  assert.equal(resolved, candidates[0]);
+});
+
+test("resolveFfmpegPath defaults to PATH lookup in development", () => {
+  const resolved = resolveFfmpegPath({
+    isPackaged: false,
+    env: {},
+    exists: () => false,
+  });
+
+  assert.equal(resolved, "ffmpeg");
 });

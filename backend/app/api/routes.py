@@ -1,3 +1,4 @@
+import io
 from datetime import datetime
 from typing import Literal
 
@@ -64,6 +65,7 @@ from backend.app.services.library_service import (
 from backend.app.services.media_search import LibraryFileSearchFilters, SearchValidationError
 from backend.app.services.media_service import (
     generate_media_chapters_csv_export,
+    generate_media_cover_png,
     generate_library_files_csv_export,
     get_media_file_detail,
     get_media_file_history,
@@ -1242,6 +1244,28 @@ def file_chapters_export(file_id: int, db: Session = Depends(get_db_session)) ->
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/files/{file_id}/cover")
+def file_cover(
+    file_id: int,
+    download: bool = Query(default=False),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> StreamingResponse:
+    try:
+        export = generate_media_cover_png(db, file_id, ffmpeg_path=settings.ffmpeg_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not export:
+        raise HTTPException(status_code=404, detail="Embedded cover not found")
+    filename, content = export
+    headers = {"Cache-Control": "no-store"}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return StreamingResponse(io.BytesIO(content), media_type="image/png", headers=headers)
 
 
 @router.get("/files/{file_id}/streams", response_model=MediaFileStreamDetails)

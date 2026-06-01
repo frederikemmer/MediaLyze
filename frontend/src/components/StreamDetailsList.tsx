@@ -12,6 +12,7 @@ type StreamDetailsListProps = {
   isLoading?: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
   surface?: "tooltip" | "panel";
+  showSummary?: boolean;
   inDepthDolbyVisionProfiles?: boolean;
 };
 
@@ -166,6 +167,7 @@ export function StreamDetailsList({
   isLoading = false,
   t,
   surface = "tooltip",
+  showSummary = true,
   inDepthDolbyVisionProfiles = false,
 }: StreamDetailsListProps): ReactNode {
   if (isLoading) {
@@ -182,10 +184,12 @@ export function StreamDetailsList({
 
   return (
     <div className={["stream-tooltip-content", surface === "panel" ? "stream-tooltip-content-panel" : ""].filter(Boolean).join(" ")}>
-      <div className="stream-tooltip-summary">
-        <strong>{title}</strong>
-        <span>{count}</span>
-      </div>
+      {showSummary ? (
+        <div className="stream-tooltip-summary">
+          <strong>{title}</strong>
+          <span>{count}</span>
+        </div>
+      ) : null}
       {rows.map((row) => (
         <div className="stream-tooltip-row" key={row.key}>
           <div className="stream-tooltip-head">

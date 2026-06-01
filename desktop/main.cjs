@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { resolveFfprobePath } = require("./ffprobe-paths.cjs");
+const { resolveFfmpegPath, resolveFfprobePath } = require("./ffprobe-paths.cjs");
 const { buildLatestInstallerDownload, isAllowedInstallerDownloadUrl } = require("./update-download.cjs");
 
 let mainWindow = null;
@@ -130,6 +130,10 @@ function startBackend(port) {
     APP_PORT: String(port),
     CONFIG_PATH: configPath,
     FRONTEND_DIST_PATH: resolveFrontendDistPath(),
+    FFMPEG_PATH: resolveFfmpegPath({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+    }),
     FFPROBE_PATH: resolveFfprobePath({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,

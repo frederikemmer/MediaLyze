@@ -1280,6 +1280,22 @@ export const api = {
       filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),
     };
   },
+  downloadFileCover: async (
+    id: string | number,
+    options: { download?: boolean; signal?: AbortSignal } = {},
+  ): Promise<DownloadedCsv> => {
+    const query = options.download ? "?download=1" : "";
+    const response = await fetch(`${API_PREFIX}/files/${id}/cover${query}`, { signal: options.signal });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const detail = payload?.detail ?? response.statusText;
+      throw new Error(detail);
+    }
+    return {
+      blob: await response.blob(),
+      filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),
+    };
+  },
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   fileStreams: (id: string | number) => request<MediaFileStreamDetails>(`/files/${id}/streams`),

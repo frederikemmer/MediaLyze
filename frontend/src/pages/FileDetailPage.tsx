@@ -3,6 +3,7 @@ import {
   AudioLines,
   Captions,
   ChevronDown,
+  Download,
   FileClock,
   FileJson,
   Film,
@@ -166,10 +167,6 @@ function FormatDetailsList({
 
   return (
     <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content">
-      <div className="stream-tooltip-summary">
-        <strong>{t("fileDetail.format")}</strong>
-        <span>{rows.length}</span>
-      </div>
       {rows.map((row) => (
         <div className="stream-tooltip-row" key={row.key}>
           <div className="stream-tooltip-head format-details-row">
@@ -284,6 +281,32 @@ function CoverDetailsList({
   detail: MediaFileDetail | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverBlob, setCoverBlob] = useState<Blob | null>(null);
+  const [coverFilename, setCoverFilename] = useState<string | null>(null);
+  const [isCoverLoading, setIsCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCoverBlob(null);
+    setCoverFilename(null);
+    setCoverError(null);
+    setCoverUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  }, [detail?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (coverUrl) {
+        URL.revokeObjectURL(coverUrl);
+      }
+    };
+  }, [coverUrl]);
+
   if (!detail) {
     return t("streamDetails.unavailable");
   }
@@ -305,8 +328,62 @@ function CoverDetailsList({
         : "n/a",
     },
   ];
+  const fallbackCoverFilename = `${detail.filename.replace(/\.[^.]+$/, "") || "cover"}-cover.png`;
+
+  async function loadCover() {
+    if (!detail) {
+      return;
+    }
+    setIsCoverLoading(true);
+    setCoverError(null);
+    try {
+      const payload = await api.downloadFileCover(detail.id);
+      const objectUrl = URL.createObjectURL(payload.blob);
+      setCoverUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return objectUrl;
+      });
+      setCoverBlob(payload.blob);
+      setCoverFilename(payload.filename ?? fallbackCoverFilename);
+    } catch (error) {
+      setCoverError(error instanceof Error ? error.message : t("fileDetail.coverLoadError"));
+    } finally {
+      setIsCoverLoading(false);
+    }
+  }
+
+  function downloadCover() {
+    if (!coverBlob || !coverUrl) {
+      return;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = coverUrl;
+    anchor.download = coverFilename ?? fallbackCoverFilename;
+    anchor.click();
+  }
+
   return (
-    <div className="stream-tooltip-content stream-tooltip-content-panel">
+    <div className="stream-tooltip-content stream-tooltip-content-panel file-detail-cover-panel">
+      <div className="file-detail-cover-actions">
+        <button type="button" className="secondary small file-detail-cover-button" onClick={() => void loadCover()} disabled={isCoverLoading}>
+          <ImageIcon size={16} aria-hidden="true" />
+          {isCoverLoading ? t("fileDetail.coverLoading") : t("fileDetail.loadCover")}
+        </button>
+        {coverUrl ? (
+          <button type="button" className="secondary small file-detail-cover-button" onClick={downloadCover}>
+            <Download size={16} aria-hidden="true" />
+            {t("fileDetail.downloadCover")}
+          </button>
+        ) : null}
+      </div>
+      {coverError ? <div className="notice compact file-detail-cover-error">{coverError}</div> : null}
+      {coverUrl ? (
+        <figure className="file-detail-cover-preview">
+          <img src={coverUrl} alt={t("fileDetail.coverPreviewAlt", { filename: detail.filename })} />
+        </figure>
+      ) : null}
       {rows.map((row) => (
         <div className="stream-tooltip-row" key={row.key}>
           <div className="stream-tooltip-head format-details-row">
@@ -1010,6 +1087,7 @@ export function FileDetailPage() {
           detail={file ?? undefined}
           t={t}
           surface="panel"
+          showSummary={false}
           inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
         />
       ),
@@ -1021,7 +1099,7 @@ export function FileDetailPage() {
       body: (
         <div className="file-detail-audio-panel">
           <AudioMetadataList detail={file} t={t} />
-          <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" />
+          <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" showSummary={false} />
         </div>
       ),
     },
@@ -1035,7 +1113,7 @@ export function FileDetailPage() {
       title: t("fileDetail.subtitles"),
       loading: !file && !error,
       error,
-      body: <StreamDetailsList kind="subtitle" detail={file ?? undefined} t={t} surface="panel" />,
+      body: <StreamDetailsList kind="subtitle" detail={file ?? undefined} t={t} surface="panel" showSummary={false} />,
     },
     rawJson: {
       title: t("fileDetail.rawJson"),

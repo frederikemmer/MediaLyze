@@ -1,6 +1,6 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -328,6 +328,8 @@ describe("FileDetailPage", () => {
 
     await selectFileDetailPanel("Format");
     expect(await screen.findByRole("heading", { name: "Format" })).toBeInTheDocument();
+    const activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
+    expect(within(activePanel).getAllByRole("heading", { name: "Format" })).toHaveLength(1);
     expect(screen.getByText("Container")).toBeInTheDocument();
     expect(screen.getByText("Matroska")).toBeInTheDocument();
     expect(screen.getByText("25 Mbps")).toBeInTheDocument();
@@ -335,6 +337,7 @@ describe("FileDetailPage", () => {
 
     await selectFileDetailPanel("Video streams");
     expect(await screen.findByRole("heading", { name: "Video streams" })).toBeInTheDocument();
+    expect(within(activePanel).getAllByRole("heading", { name: "Video streams" })).toHaveLength(1);
     expect(screen.getByText("Main 10")).toBeInTheDocument();
 
     await selectFileDetailPanel("Audio streams");
@@ -395,6 +398,15 @@ describe("FileDetailPage", () => {
       analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
       analysis_failure_detail: "Invalid data found when processing input",
     };
+    const downloadCover = vi.spyOn(api, "downloadFileCover").mockResolvedValue({
+      blob: new Blob(["cover"], { type: "image/png" }),
+      filename: "movie-cover.png",
+    });
+    const createObjectUrl = vi.fn(() => "blob:cover");
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectUrl, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectUrl, configurable: true });
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
@@ -407,6 +419,15 @@ describe("FileDetailPage", () => {
     await selectFileDetailPanel("Cover");
     expect(await screen.findByText("600x900")).toBeInTheDocument();
     expect(screen.getByText("mjpeg")).toBeInTheDocument();
+    expect(downloadCover).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load cover" }));
+    await waitFor(() => expect(downloadCover).toHaveBeenCalledWith(file.id));
+    expect(createObjectUrl).toHaveBeenCalled();
+    expect(await screen.findByRole("img", { name: `Embedded cover for ${file.filename}` })).toHaveAttribute("src", "blob:cover");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download cover" }));
+    expect(anchorClick).toHaveBeenCalled();
   });
 
   it("renders file history snapshots in the selected detail panel", async () => {

@@ -1419,6 +1419,50 @@
   margin-bottom: 2px;
 }
 
+.file-detail-cover-panel {
+  gap: 12px;
+}
+
+.file-detail-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-detail-cover-button.secondary.small {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-weight: 750;
+}
+
+.file-detail-cover-preview {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(31, 28, 22, 0.03);
+}
+
+.file-detail-cover-preview img {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 12px 30px rgba(31, 28, 22, 0.14);
+}
+
+.file-detail-cover-error {
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-layout,
   .settings-navigation-panel,

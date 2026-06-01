@@ -14,11 +14,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildPyInstallerArgs,
+  bundleFfmpeg,
   bundleMacosFfprobeDependencies,
   bundleFfprobe,
+  bundledFfmpegName,
   bundledFfprobeName,
   parseOtoolDependencies,
   parseOtoolRpaths,
+  resolveBundledFfmpegSource,
   resolveBundledFfprobeSource,
 } from "./build-backend.mjs";
 
@@ -71,6 +74,27 @@ test("resolveBundledFfprobeSource falls back to a PATH lookup", () => {
   });
 });
 
+test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
+  const resolved = resolveBundledFfmpegSource({
+    env: {},
+    platform: "win32",
+    exists: (candidate) => candidate === "C:\\ffmpeg\\bin\\ffmpeg.exe",
+    stat: () => {
+      throw new Error("stat should not be used when no explicit directory is configured");
+    },
+    lookup: () => ({
+      status: 0,
+      stdout: "C:\\ffmpeg\\bin\\ffmpeg.exe\r\n",
+    }),
+  });
+
+  assert.deepEqual(resolved, {
+    kind: "file",
+    sourcePath: "C:\\ffmpeg\\bin\\ffmpeg.exe",
+    executableName: "ffmpeg.exe",
+  });
+});
+
 test("bundleFfprobe creates the expected ffprobe folder structure", () => {
   withTempDir((tempDir) => {
     const sourceBinary = path.join(tempDir, "ffprobe.exe");
@@ -89,6 +113,27 @@ test("bundleFfprobe creates the expected ffprobe folder structure", () => {
     );
     assert.equal(existsSync(bundledExecutable), true);
     assert.equal(readFileSync(bundledExecutable, "utf8"), "ffprobe-binary");
+  });
+});
+
+test("bundleFfmpeg creates the expected ffmpeg folder structure", () => {
+  withTempDir((tempDir) => {
+    const sourceBinary = path.join(tempDir, "ffmpeg.exe");
+    const outputDir = path.join(tempDir, "desktop-backend");
+    writeFileSync(sourceBinary, "ffmpeg-binary");
+    mkdirSync(outputDir, { recursive: true });
+
+    const bundledExecutable = bundleFfmpeg(outputDir, {
+      env: { MEDIALYZE_FFMPEG_DIR: sourceBinary },
+      platform: "win32",
+    });
+
+    assert.equal(
+      bundledExecutable,
+      path.join(outputDir, "ffmpeg", bundledFfmpegName("win32"))
+    );
+    assert.equal(existsSync(bundledExecutable), true);
+    assert.equal(readFileSync(bundledExecutable, "utf8"), "ffmpeg-binary");
   });
 });
 
