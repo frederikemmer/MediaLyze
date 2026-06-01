@@ -113,9 +113,12 @@ function createFileDetail(): MediaFileDetail {
         channel_layout: "5.1",
         sample_rate: 48_000,
         bit_rate: 768_000,
+        bit_depth: 24,
+        bit_rate_mode: "CBR",
         language: "en",
         default_flag: true,
         forced_flag: false,
+        title: "English Atmos",
       },
     ],
     subtitle_streams: [
@@ -342,9 +345,15 @@ describe("FileDetailPage", () => {
 
     await selectFileDetailPanel("Audio streams");
     expect(await screen.findByRole("heading", { name: "Audio streams" })).toBeInTheDocument();
-    expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
-    expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
-    expect(screen.getByText("5.1")).toBeInTheDocument();
+    expect(screen.getAllByText("Dolby Digital Plus").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Dolby Atmos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5.1").length).toBeGreaterThan(0);
+    expect(screen.getByText("Stream #1")).toBeInTheDocument();
+    expect(screen.getByText("Sample rate")).toBeInTheDocument();
+    expect(screen.getByText("48000 Hz")).toBeInTheDocument();
+    expect(screen.getByText("Bit depth")).toBeInTheDocument();
+    expect(screen.getAllByText("24-bit").length).toBeGreaterThan(0);
+    expect(screen.getByText("English Atmos")).toBeInTheDocument();
 
     await selectFileDetailPanel("Subtitles");
     expect(await screen.findByRole("heading", { name: "Subtitles" })).toBeInTheDocument();
@@ -594,7 +603,12 @@ describe("FileDetailPage", () => {
   });
 
   it("keeps music and audiobook metadata out of ordinary video files", async () => {
-    const file = createFileDetail();
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      audio_album: "Unexpected soundtrack album",
+      audio_composer: "Unexpected composer",
+      audiobook_language: "de",
+    };
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
@@ -603,10 +617,11 @@ describe("FileDetailPage", () => {
 
     expect(await screen.findByRole("button", { name: "Video streams" })).toBeInTheDocument();
     await selectFileDetailPanel("Audio streams");
-    expect(await screen.findByText("Dolby Digital Plus")).toBeInTheDocument();
+    expect((await screen.findAllByText("Dolby Digital Plus")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Audio metadata")).not.toBeInTheDocument();
-    expect(screen.queryByText("Album")).not.toBeInTheDocument();
-    expect(screen.queryByText("Composer")).not.toBeInTheDocument();
+    expect(screen.queryByText("Book language")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unexpected soundtrack album")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unexpected composer")).not.toBeInTheDocument();
   });
 
   it("falls back to overview when a stored panel is not available for the current file", async () => {

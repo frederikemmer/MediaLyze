@@ -5019,6 +5019,71 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   color: var(--ink);
 }
 
+.stream-detail-entry {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(31, 28, 22, 0.08);
+}
+
+.stream-detail-entry:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.stream-detail-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.stream-detail-entry-head::-webkit-details-marker {
+  display: none;
+}
+
+.stream-detail-entry-head::before {
+  content: "›";
+  color: var(--muted);
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.stream-detail-entry[open] > .stream-detail-entry-head::before {
+  transform: rotate(90deg);
+}
+
+.stream-detail-entry-head > span {
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stream-detail-entry-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.stream-detail-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stream-detail-field-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.stream-detail-field-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .file-detail-chapter-tools {
   display: flex;
   flex-wrap: wrap;

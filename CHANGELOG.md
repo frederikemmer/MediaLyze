@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.13.1
+
+>2026-06-01
+
 ### ✨ New
 
 - redesign the file-detail page with a Settings-style navigation sidebar and context-aware sections for video, audio, subtitles, cover art, chapters, history, and raw metadata
+- show each audio stream in the file-detail Audio Streams section as an expandable entry with full stream metadata
 - add on-demand embedded cover preview and download actions to the file-detail cover section
 
 ## v0.13.0

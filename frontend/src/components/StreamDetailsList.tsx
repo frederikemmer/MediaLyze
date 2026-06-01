@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { MediaFileStreamDetails } from "../lib/api";
+import type { AudioStream, MediaFileStreamDetails } from "../lib/api";
 import { formatCodecLabel, formatSpatialAudioProfileLabel } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
@@ -76,6 +76,101 @@ function formatSubtitleType(
     return t("streamDetails.image");
   }
   return t("streamDetails.unknownType");
+}
+
+function formatAudioBitRate(value: number | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (!value || !Number.isFinite(value) || value <= 0) {
+    return t("fileTable.na");
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)} Mbps`;
+  }
+  return `${Math.round(value / 1000)} kbps`;
+}
+
+function formatAudioSampleRate(value: number | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (!value || !Number.isFinite(value) || value <= 0) {
+    return t("fileTable.na");
+  }
+  return `${value} Hz`;
+}
+
+function formatOptionalStreamText(value: string | number | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : t("fileTable.na");
+  }
+  const normalized = value?.trim();
+  return normalized ? normalized : t("fileTable.na");
+}
+
+function formatStreamFlag(value: boolean, t: (key: string, options?: Record<string, unknown>) => string): string {
+  return value ? t("common.yes") : t("common.no");
+}
+
+function buildAudioStreamDetailRows(
+  stream: AudioStream,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): Array<{ key: string; label: string; value: string }> {
+  return [
+    { key: "streamIndex", label: t("streamDetails.streamIndex"), value: String(stream.stream_index) },
+    {
+      key: "codec",
+      label: t("streamDetails.codec"),
+      value: stream.codec ? formatCodecLabel(stream.codec, "audio") : t("fileTable.na"),
+    },
+    { key: "profile", label: t("streamDetails.profile"), value: formatOptionalStreamText(stream.profile, t) },
+    {
+      key: "spatialAudio",
+      label: t("streamDetails.audioSpatial"),
+      value: stream.spatial_audio_profile ? formatSpatialAudioProfileLabel(stream.spatial_audio_profile) : t("fileTable.na"),
+    },
+    {
+      key: "channels",
+      label: t("streamDetails.channelCount"),
+      value: stream.channels ? String(stream.channels) : t("fileTable.na"),
+    },
+    {
+      key: "channelLayout",
+      label: t("streamDetails.channelLayout"),
+      value: formatOptionalStreamText(stream.channel_layout, t),
+    },
+    { key: "sampleRate", label: t("streamDetails.sampleRate"), value: formatAudioSampleRate(stream.sample_rate, t) },
+    { key: "bitRate", label: t("streamDetails.bitRate"), value: formatAudioBitRate(stream.bit_rate, t) },
+    {
+      key: "bitDepth",
+      label: t("streamDetails.bitDepth"),
+      value: stream.bit_depth ? `${stream.bit_depth}-bit` : t("fileTable.na"),
+    },
+    { key: "bitRateMode", label: t("streamDetails.bitRateMode"), value: formatOptionalStreamText(stream.bit_rate_mode, t) },
+    {
+      key: "compressionMode",
+      label: t("streamDetails.compressionMode"),
+      value: formatOptionalStreamText(stream.compression_mode, t),
+    },
+    { key: "replayGain", label: t("streamDetails.replayGain"), value: formatOptionalStreamText(stream.replay_gain, t) },
+    {
+      key: "replayGainPeak",
+      label: t("streamDetails.replayGainPeak"),
+      value: formatOptionalStreamText(stream.replay_gain_peak, t),
+    },
+    {
+      key: "writingLibrary",
+      label: t("streamDetails.writingLibrary"),
+      value: formatOptionalStreamText(stream.writing_library, t),
+    },
+    { key: "md5", label: t("streamDetails.md5Unencoded"), value: formatOptionalStreamText(stream.md5_unencoded, t) },
+    { key: "language", label: t("streamDetails.language"), value: formatTooltipLanguage(stream.language, t) },
+    { key: "default", label: t("streamDetails.default"), value: formatStreamFlag(stream.default_flag, t) },
+    { key: "forced", label: t("streamDetails.forced"), value: formatStreamFlag(stream.forced_flag, t) },
+    { key: "title", label: t("fileTable.audioTitle"), value: formatOptionalStreamText(stream.title, t) },
+    { key: "artist", label: t("fileTable.audioArtist"), value: formatOptionalStreamText(stream.artist, t) },
+    { key: "album", label: t("fileTable.audioAlbum"), value: formatOptionalStreamText(stream.album, t) },
+    { key: "albumArtist", label: t("fileTable.audioAlbumArtist"), value: formatOptionalStreamText(stream.album_artist, t) },
+    { key: "genre", label: t("fileTable.audioGenre"), value: formatOptionalStreamText(stream.genre, t) },
+    { key: "date", label: t("fileTable.audioDate"), value: formatOptionalStreamText(stream.date, t) },
+    { key: "disc", label: t("fileTable.audioDisc"), value: formatOptionalStreamText(stream.disc, t) },
+    { key: "composer", label: t("fileTable.audioComposer"), value: formatOptionalStreamText(stream.composer, t) },
+  ];
 }
 
 function buildStreamRows(
@@ -180,6 +275,50 @@ export function StreamDetailsList({
   const { title, count, rows } = buildStreamRows(kind, detail, t, inDepthDolbyVisionProfiles);
   if (rows.length === 0) {
     return t("streamDetails.none");
+  }
+
+  if (kind === "audio" && surface === "panel") {
+    return (
+      <div className="stream-tooltip-content stream-tooltip-content-panel">
+        {showSummary ? (
+          <div className="stream-tooltip-summary">
+            <strong>{title}</strong>
+            <span>{count}</span>
+          </div>
+        ) : null}
+        {detail.audio_streams.map((stream, index) => {
+          const row = rows[index];
+          const detailRows = buildAudioStreamDetailRows(stream, t);
+          return (
+            <details className="stream-detail-entry" key={`audio-detail-${stream.stream_index}`} open={index === 0}>
+              <summary className="stream-detail-entry-head">
+                <div className="stream-tooltip-inline">
+                  <strong>{row?.lead ?? t("fileTable.na")}</strong>
+                  {row?.meta.length ? (
+                    <div className="stream-tooltip-meta">
+                      {row.meta.map((item) => (
+                        <span className="stream-tooltip-pill" key={`audio-detail-${stream.stream_index}-${item}`}>
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <span>{t("streamDetails.streamNumber", { number: stream.stream_index })}</span>
+              </summary>
+              <div className="stream-detail-entry-body">
+                {detailRows.map((detailRow) => (
+                  <div className="stream-detail-field" key={`${stream.stream_index}-${detailRow.key}`}>
+                    <span className="stream-detail-field-label">{detailRow.label}</span>
+                    <strong className="stream-detail-field-value">{detailRow.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    );
   }
 
   return (

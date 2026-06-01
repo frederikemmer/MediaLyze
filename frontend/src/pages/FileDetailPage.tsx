@@ -426,35 +426,37 @@ function hasAudioMetadata(file: MediaFileDetail | null): boolean {
   if (!file) {
     return false;
   }
+  const hasVideo = hasVideoMetadata(file);
   return (
     file.audio_streams.length > 0 ||
     file.audio_codecs.length > 0 ||
     file.audio_languages.length > 0 ||
-    hasAnyValue([
-      file.audio_title,
-      file.audio_artist,
-      file.audio_album,
-      file.audio_album_artist,
-      file.audio_genre,
-      file.audio_date,
-      file.audio_disc,
-      file.audio_composer,
-      file.audio_channels,
-      file.sample_rate,
-      file.track_number,
-      file.bit_rate_mode,
-      file.audiobook_narrator,
-      file.audiobook_author,
-      file.audiobook_publisher,
-      file.audiobook_series,
-      file.audiobook_series_part,
-      file.audiobook_description,
-      file.audiobook_copyright,
-      file.audiobook_asin,
-      file.audiobook_isbn,
-      file.audiobook_language,
-      file.audiobook_abridged,
-    ])
+    (!hasVideo &&
+      hasAnyValue([
+        file.audio_title,
+        file.audio_artist,
+        file.audio_album,
+        file.audio_album_artist,
+        file.audio_genre,
+        file.audio_date,
+        file.audio_disc,
+        file.audio_composer,
+        file.audio_channels,
+        file.sample_rate,
+        file.track_number,
+        file.bit_rate_mode,
+        file.audiobook_narrator,
+        file.audiobook_author,
+        file.audiobook_publisher,
+        file.audiobook_series,
+        file.audiobook_series_part,
+        file.audiobook_description,
+        file.audiobook_copyright,
+        file.audiobook_asin,
+        file.audiobook_isbn,
+        file.audiobook_language,
+        file.audiobook_abridged,
+      ]))
   );
 }
 
@@ -586,6 +588,9 @@ function AudioMetadataList({
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
   if (!detail) {
+    return null;
+  }
+  if (hasVideoMetadata(detail)) {
     return null;
   }
 
