@@ -109,6 +109,24 @@ test("resolveBundledFfmpegSource prefers a static ffmpeg package path", () => {
   });
 });
 
+test("resolveBundledFfmpegSource prefers MEDIALYZE_FFMPEG_DIR over static path", () => {
+  const resolved = resolveBundledFfmpegSource({
+    env: { MEDIALYZE_FFMPEG_DIR: "/opt/custom/ffmpeg" },
+    platform: "linux",
+    exists: (candidate) => candidate === "/opt/custom/ffmpeg",
+    stat: () => ({
+      isDirectory: () => false,
+    }),
+    staticSourceResolver: () => "/opt/ffmpeg-static/ffmpeg",
+  });
+
+  assert.deepEqual(resolved, {
+    kind: "file",
+    sourcePath: "/opt/custom/ffmpeg",
+    executableName: "ffmpeg",
+  });
+});
+
 test("bundleFfprobe creates the expected ffprobe folder structure", () => {
   withTempDir((tempDir) => {
     const sourceBinary = path.join(tempDir, "ffprobe.exe");

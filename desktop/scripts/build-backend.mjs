@@ -84,13 +84,16 @@ export function resolveBundledFfmpegSource({
   lookup = (command, args) => spawnSync(command, args, { encoding: "utf8" }),
   staticSourceResolver = resolveStaticFfmpegSource,
 } = {}) {
-  const staticSourcePath = staticSourceResolver();
-  if (staticSourcePath) {
-    return {
-      kind: "file",
-      sourcePath: staticSourcePath,
-      executableName: bundledFfmpegName(platform),
-    };
+  const configuredPath = env.MEDIALYZE_FFMPEG_DIR?.trim();
+  if (!configuredPath) {
+    const staticSourcePath = staticSourceResolver();
+    if (staticSourcePath) {
+      return {
+        kind: "file",
+        sourcePath: staticSourcePath,
+        executableName: bundledFfmpegName(platform),
+      };
+    }
   }
 
   return resolveBundledToolSource({
