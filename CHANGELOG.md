@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - bundle a static `ffmpeg` binary into the desktop backend so release artifacts no longer depend on the runner or target system having ffmpeg installed
 - update frontend `vitest` and override desktop transitive `tmp` to remediate current Dependabot security alerts without changing app behavior
+- rework active scan progress so discovery stays streamed for throughput, the progress bar stays indeterminate until the queued-work total is stable, unchanged files are communicated explicitly, and live scan progress writes avoid repeated heavy summary updates [#141](https://github.com/frederikemmer/MediaLyze/issues/141)
 
 ## v0.13.1
 

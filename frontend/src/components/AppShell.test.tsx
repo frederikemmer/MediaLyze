@@ -228,6 +228,38 @@ describe("AppShell", () => {
     );
   });
 
+  it("shows indeterminate discovery progress with explicit unchanged and queued counts", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    vi.mocked(api.activeScanJobs).mockResolvedValue([
+      {
+        id: 1,
+        library_id: 1,
+        library_name: "Movies",
+        status: "running",
+        job_type: "incremental",
+        discovered_files: 4641,
+        unchanged_files: 2200,
+        discovery_complete: false,
+        files_total: 1800,
+        files_scanned: 300,
+        errors: 0,
+        started_at: "2026-05-26T10:00:00Z",
+        finished_at: null,
+        progress_percent: 16.7,
+        progress_mode: "indeterminate",
+        phase_label: "Discovering files",
+        phase_detail: null,
+      },
+    ]);
+
+    renderShell();
+
+    expect(
+      await screen.findByText("4641 files found so far; 2200 unchanged, 1800 queued, 300 processed"),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".scan-banner .progress.is-indeterminate")).toBeTruthy();
+  });
+
   it("keeps active scans visible and shows an error when cancel fails", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
     vi.mocked(api.activeScanJobs).mockResolvedValue([

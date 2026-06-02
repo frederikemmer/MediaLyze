@@ -122,6 +122,17 @@ type LibraryIdentityForm = {
   type: LibraryType;
 };
 
+function isDeterminateScanProgress(
+  progressMode: "indeterminate" | "determinate" | undefined,
+  filesTotal: number,
+  phaseLabel: string,
+): boolean {
+  if (progressMode) {
+    return progressMode === "determinate";
+  }
+  return filesTotal > 0 && phaseLabel !== "Discovering files";
+}
+
 type PersistedIgnorePatterns = Record<IgnorePatternGroup, string[]>;
 
 type IgnorePatternGroup = "user" | "default";
@@ -4070,7 +4081,9 @@ export function LibrariesPage() {
                                 .filter((job) => job.library_id === library.id)
                                 .map((job) => (
                                   <span className="badge scan-badge" key={job.id}>
-                                    {job.files_total > 0 ? `${job.progress_percent}%` : t("libraries.active")}
+                                    {isDeterminateScanProgress(job.progress_mode, job.files_total, job.phase_label)
+                                      ? `${job.progress_percent}%`
+                                      : t("libraries.scanning")}
                                   </span>
                                 ))}
                             </div>
@@ -4158,10 +4171,26 @@ export function LibrariesPage() {
                     </div>
                   </div>
                   {activeJobs.find((job) => job.library_id === library.id) ? (
-                    <div className="progress">
+                    <div
+                      className={`progress${
+                        isDeterminateScanProgress(
+                          activeJobs.find((job) => job.library_id === library.id)?.progress_mode,
+                          activeJobs.find((job) => job.library_id === library.id)?.files_total ?? 0,
+                          activeJobs.find((job) => job.library_id === library.id)?.phase_label ?? "",
+                        )
+                          ? ""
+                          : " is-indeterminate"
+                      }`.trim()}
+                    >
                       <span
                         style={{
-                          width: `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`,
+                          width: isDeterminateScanProgress(
+                            activeJobs.find((job) => job.library_id === library.id)?.progress_mode,
+                            activeJobs.find((job) => job.library_id === library.id)?.files_total ?? 0,
+                            activeJobs.find((job) => job.library_id === library.id)?.phase_label ?? "",
+                          )
+                            ? `${activeJobs.find((job) => job.library_id === library.id)?.progress_percent ?? 0}%`
+                            : undefined,
                         }}
                       />
                     </div>

@@ -848,12 +848,15 @@ export type ScanJob = {
   status: string;
   job_type: string;
   discovered_files?: number;
+  unchanged_files?: number;
+  discovery_complete?: boolean;
   files_total: number;
   files_scanned: number;
   errors: number;
   started_at: string | null;
   finished_at: string | null;
   progress_percent: number;
+  progress_mode?: "indeterminate" | "determinate";
   phase_label: string;
   phase_detail: string | null;
 };

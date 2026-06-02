@@ -25,6 +25,7 @@ def test_serialize_scan_job_for_discovery_phase() -> None:
 
     assert payload.phase_label == "Discovering files"
     assert payload.progress_percent == 0.0
+    assert payload.progress_mode == "indeterminate"
 
 
 def test_serialize_scan_job_for_analysis_phase() -> None:
@@ -33,6 +34,7 @@ def test_serialize_scan_job_for_analysis_phase() -> None:
         library_id=2,
         status=JobStatus.running,
         job_type="incremental",
+        discovery_complete=True,
         files_total=20,
         files_scanned=5,
         errors=0,
@@ -42,8 +44,9 @@ def test_serialize_scan_job_for_analysis_phase() -> None:
 
     payload = serialize_scan_job(job)
 
-    assert payload.phase_label == "Analyzing media"
+    assert payload.phase_label == "Processing queued files"
     assert payload.progress_percent == 25.0
+    assert payload.progress_mode == "determinate"
 
 
 def test_serialize_completed_scan_job_with_file_issues_uses_warning_phase() -> None:
@@ -66,7 +69,7 @@ def test_serialize_completed_scan_job_with_file_issues_uses_warning_phase() -> N
     payload = serialize_scan_job(job)
 
     assert payload.phase_label == "Completed with issues"
-    assert payload.phase_detail == "20 of 20 files processed; 1 issue"
+    assert payload.phase_detail == "20 of 20 queued files processed; 1 issue"
 
 
 def test_list_active_scan_jobs_deduplicates_per_library() -> None:
@@ -90,6 +93,7 @@ def test_list_active_scan_jobs_deduplicates_per_library() -> None:
                     library_id=library.id,
                     status=JobStatus.running,
                     job_type="incremental",
+                    discovery_complete=True,
                     files_total=100,
                     files_scanned=10,
                     errors=0,
@@ -135,15 +139,16 @@ def test_list_active_scan_jobs_prefers_running_scan_over_queued_quality_recomput
                     status=JobStatus.queued,
                     job_type="quality_recompute",
                 ),
-                ScanJob(
-                    library_id=library.id,
-                    status=JobStatus.running,
-                    job_type="incremental",
-                    files_total=100,
-                    files_scanned=10,
-                    errors=0,
-                    started_at=datetime.now(UTC),
-                ),
+                    ScanJob(
+                        library_id=library.id,
+                        status=JobStatus.running,
+                        job_type="incremental",
+                        discovery_complete=True,
+                        files_total=100,
+                        files_scanned=10,
+                        errors=0,
+                        started_at=datetime.now(UTC),
+                    ),
             ]
         )
         db.commit()
@@ -152,7 +157,7 @@ def test_list_active_scan_jobs_prefers_running_scan_over_queued_quality_recomput
 
     assert len(jobs) == 1
     assert jobs[0].job_type == "incremental"
-    assert jobs[0].phase_label == "Analyzing media"
+    assert jobs[0].phase_label == "Processing queued files"
 
 
 def test_list_recent_scan_jobs_filters_quality_recompute_and_serializes_summary() -> None:

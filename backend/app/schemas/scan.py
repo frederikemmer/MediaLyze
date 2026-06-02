@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.entities import DuplicateDetectionMode, JobStatus, ScanTriggerSource
@@ -17,12 +19,15 @@ class ScanJobRead(BaseModel):
     status: JobStatus
     job_type: str
     discovered_files: int = 0
+    unchanged_files: int = 0
+    discovery_complete: bool = False
     files_total: int
     files_scanned: int
     errors: int
     started_at: UtcDateTime | None
     finished_at: UtcDateTime | None
     progress_percent: float = 0.0
+    progress_mode: Literal["indeterminate", "determinate"] = "indeterminate"
     phase_label: str = "queued"
     phase_detail: str | None = None
 

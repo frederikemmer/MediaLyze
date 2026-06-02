@@ -27,15 +27,35 @@ const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
 
-function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
-  if (job.phase_label === "Discovering files") {
-    return t("scanBanner.searchingFound", { count: job.discovered_files ?? job.files_total });
+function isDeterminateScanProgress(job: ScanJob): boolean {
+  if (job.progress_mode) {
+    return job.progress_mode === "determinate";
   }
-  if (job.phase_label === "Analyzing media" && job.files_total > 0) {
-    return t("scanBanner.analyzingProgress", {
-      scanned: job.files_scanned,
+  return job.files_total > 0 && job.phase_label !== "Discovering files";
+}
+
+function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
+  if (job.status === "queued") {
+    return t("scanBanner.waiting");
+  }
+  if (job.job_type !== "quality_recompute" && !isDeterminateScanProgress(job)) {
+    const discovered = job.discovered_files ?? 0;
+    const unchanged = job.unchanged_files ?? 0;
+    if (job.discovery_complete && job.files_total === 0) {
+      return t("scanBanner.upToDate", { discovered, unchanged });
+    }
+    return t("scanBanner.discoveryProgress", {
+      discovered,
+      unchanged,
+      queued: job.files_total,
+      processed: job.files_scanned,
+    });
+  }
+  if (job.job_type !== "quality_recompute" && job.files_total > 0) {
+    return t("scanBanner.processingProgress", {
+      processed: job.files_scanned,
       total: job.files_total,
-      percent: Math.round((job.files_scanned / job.files_total) * 100),
+      percent: Math.round(job.progress_percent),
     });
   }
   return job.phase_detail ?? job.phase_label;
@@ -299,8 +319,8 @@ export function AppShell() {
                     <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
                     <span>{renderActiveJobDetail(t, job)}</span>
                   </div>
-                  <div className="progress">
-                    <span style={{ width: `${job.progress_percent}%` }} />
+                  <div className={`progress${isDeterminateScanProgress(job) ? "" : " is-indeterminate"}`.trim()}>
+                    <span style={isDeterminateScanProgress(job) ? { width: `${job.progress_percent}%` } : undefined} />
                   </div>
                 </div>
               ))}
