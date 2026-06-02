@@ -78,6 +78,7 @@ test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
   const resolved = resolveBundledFfmpegSource({
     env: {},
     platform: "win32",
+    staticSourceResolver: () => null,
     exists: (candidate) => candidate === "C:\\ffmpeg\\bin\\ffmpeg.exe",
     stat: () => {
       throw new Error("stat should not be used when no explicit directory is configured");
