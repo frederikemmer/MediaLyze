@@ -6203,7 +6203,6 @@ body.is-column-resizing {
     grid-row: 2;
     width: fit-content;
     justify-content: flex-start;
-    border-radius: 14px;
   }
 
   .media-nav-libraries {

@@ -4,11 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-### 🐛 Bug fixes
-
-- fix scan card background animation not working on Windows (Edge browser and Electron desktop build) by replacing the `background-position` keyframe animation with a compositor-threaded `transform: translateX` approach on a `::before` pseudo-element [#141](https://github.com/frederikemmer/MediaLyze/issues/141)
-- fix per-library cancel buttons in the scan banner canceling all active scans instead of only the scan for that library
-
 ## v0.13.2
 
 >2026-06-02
