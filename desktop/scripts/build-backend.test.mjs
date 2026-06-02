@@ -95,6 +95,20 @@ test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
   });
 });
 
+test("resolveBundledFfmpegSource prefers a static ffmpeg package path", () => {
+  const resolved = resolveBundledFfmpegSource({
+    env: {},
+    platform: "linux",
+    staticSourceResolver: () => "/opt/ffmpeg-static/ffmpeg",
+  });
+
+  assert.deepEqual(resolved, {
+    kind: "file",
+    sourcePath: "/opt/ffmpeg-static/ffmpeg",
+    executableName: "ffmpeg",
+  });
+});
+
 test("bundleFfprobe creates the expected ffprobe folder structure", () => {
   withTempDir((tempDir) => {
     const sourceBinary = path.join(tempDir, "ffprobe.exe");

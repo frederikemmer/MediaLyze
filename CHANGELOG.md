@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- bundle a static `ffmpeg` binary into the desktop backend so release artifacts no longer depend on the runner or target system having ffmpeg installed
+
 ## v0.13.1
 
 >2026-06-01
