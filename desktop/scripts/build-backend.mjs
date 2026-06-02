@@ -6,6 +6,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -16,6 +17,7 @@ const repoRoot = path.resolve(scriptDir, "..", "..");
 const outputDir = path.join(repoRoot, "dist", "desktop-backend");
 const workDir = path.join(repoRoot, "dist", "pyinstaller-work");
 const specDir = path.join(repoRoot, "dist", "pyinstaller-spec");
+const require = createRequire(import.meta.url);
 
 export function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
@@ -80,7 +82,17 @@ export function resolveBundledFfmpegSource({
   exists = existsSync,
   stat = statSync,
   lookup = (command, args) => spawnSync(command, args, { encoding: "utf8" }),
+  staticSourceResolver = resolveStaticFfmpegSource,
 } = {}) {
+  const staticSourcePath = staticSourceResolver();
+  if (staticSourcePath) {
+    return {
+      kind: "file",
+      sourcePath: staticSourcePath,
+      executableName: bundledFfmpegName(platform),
+    };
+  }
+
   return resolveBundledToolSource({
     env,
     platform,
@@ -91,6 +103,21 @@ export function resolveBundledFfmpegSource({
     envName: "MEDIALYZE_FFMPEG_DIR",
     toolName: "ffmpeg",
   });
+}
+
+function resolveStaticFfmpegSource() {
+  try {
+    const staticBinaryPath = require("ffmpeg-static");
+    if (typeof staticBinaryPath === "string" && staticBinaryPath.trim()) {
+      return staticBinaryPath;
+    }
+  } catch (error) {
+    if (error?.code !== "MODULE_NOT_FOUND" && error?.code !== "ERR_MODULE_NOT_FOUND") {
+      throw error;
+    }
+  }
+
+  return null;
 }
 
 function resolveBundledToolSource({
