@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 
-import type { AudioStream, MediaFileStreamDetails } from "../lib/api";
+import type { AudioStream, MediaFileStreamDetails, VideoStream } from "../lib/api";
 import { formatCodecLabel, formatSpatialAudioProfileLabel } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
 export type StreamDetailsKind = "video" | "audio" | "subtitle";
+export type AudioStreamPrimaryMode = "quality" | "language";
 
 type StreamDetailsListProps = {
   kind: StreamDetailsKind;
@@ -14,6 +15,7 @@ type StreamDetailsListProps = {
   surface?: "tooltip" | "panel";
   showSummary?: boolean;
   inDepthDolbyVisionProfiles?: boolean;
+  audioPrimaryMode?: AudioStreamPrimaryMode;
 };
 
 function formatTooltipLanguage(
@@ -95,6 +97,13 @@ function formatAudioSampleRate(value: number | null | undefined, t: (key: string
   return `${value} Hz`;
 }
 
+function formatVideoFrameRate(value: number | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (!value || !Number.isFinite(value) || value <= 0) {
+    return t("fileTable.na");
+  }
+  return `${Number.isInteger(value) ? value : value.toFixed(3).replace(/\.?0+$/, "")} fps`;
+}
+
 function formatOptionalStreamText(value: string | number | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string {
   if (typeof value === "number") {
     return Number.isFinite(value) ? String(value) : t("fileTable.na");
@@ -105,6 +114,53 @@ function formatOptionalStreamText(value: string | number | null | undefined, t: 
 
 function formatStreamFlag(value: boolean, t: (key: string, options?: Record<string, unknown>) => string): string {
   return value ? t("common.yes") : t("common.no");
+}
+
+function buildVideoStreamDetailRows(
+  stream: VideoStream,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  inDepthDolbyVisionProfiles = false,
+): Array<{ key: string; label: string; value: string }> {
+  return [
+    { key: "streamIndex", label: t("streamDetails.streamIndex"), value: String(stream.stream_index) },
+    {
+      key: "codec",
+      label: t("streamDetails.codec"),
+      value: stream.codec ? formatCodecLabel(stream.codec, "video") : t("fileTable.na"),
+    },
+    { key: "profile", label: t("streamDetails.profile"), value: formatOptionalStreamText(stream.profile, t) },
+    {
+      key: "resolution",
+      label: t("streamDetails.resolution"),
+      value: formatTooltipResolution(stream.width, stream.height, t),
+    },
+    { key: "width", label: t("streamDetails.width"), value: formatOptionalStreamText(stream.width, t) },
+    { key: "height", label: t("streamDetails.height"), value: formatOptionalStreamText(stream.height, t) },
+    { key: "pixelFormat", label: t("streamDetails.pixelFormat"), value: formatOptionalStreamText(stream.pix_fmt, t) },
+    { key: "colorSpace", label: t("streamDetails.colorSpace"), value: formatOptionalStreamText(stream.color_space, t) },
+    {
+      key: "colorTransfer",
+      label: t("streamDetails.colorTransfer"),
+      value: formatOptionalStreamText(stream.color_transfer, t),
+    },
+    {
+      key: "colorPrimaries",
+      label: t("streamDetails.colorPrimaries"),
+      value: formatOptionalStreamText(stream.color_primaries, t),
+    },
+    { key: "frameRate", label: t("streamDetails.frameRate"), value: formatVideoFrameRate(stream.frame_rate, t) },
+    { key: "bitRate", label: t("streamDetails.bitRate"), value: formatAudioBitRate(stream.bit_rate, t) },
+    {
+      key: "bitDepth",
+      label: t("streamDetails.bitDepth"),
+      value: stream.bit_depth ? `${stream.bit_depth}-bit` : t("fileTable.na"),
+    },
+    {
+      key: "dynamicRange",
+      label: t("streamDetails.dynamicRange"),
+      value: formatHdrType(stream.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr"),
+    },
+  ];
 }
 
 function buildAudioStreamDetailRows(
@@ -264,6 +320,7 @@ export function StreamDetailsList({
   surface = "tooltip",
   showSummary = true,
   inDepthDolbyVisionProfiles = false,
+  audioPrimaryMode = "quality",
 }: StreamDetailsListProps): ReactNode {
   if (isLoading) {
     return t("streamDetails.loading");
@@ -277,7 +334,7 @@ export function StreamDetailsList({
     return t("streamDetails.none");
   }
 
-  if (kind === "audio" && surface === "panel") {
+  if ((kind === "video" || kind === "audio") && surface === "panel") {
     return (
       <div className="stream-tooltip-content stream-tooltip-content-panel">
         {showSummary ? (
@@ -286,29 +343,40 @@ export function StreamDetailsList({
             <span>{count}</span>
           </div>
         ) : null}
-        {detail.audio_streams.map((stream, index) => {
+        {(kind === "video" ? detail.video_streams : detail.audio_streams).map((stream, index) => {
           const row = rows[index];
-          const detailRows = buildAudioStreamDetailRows(stream, t);
+          const detailRows =
+            kind === "video"
+              ? buildVideoStreamDetailRows(stream as VideoStream, t, inDepthDolbyVisionProfiles)
+              : buildAudioStreamDetailRows(stream as AudioStream, t);
+          const streamKey = `${kind}-detail-${stream.stream_index}`;
+          const showLanguageAsPrimary = kind === "audio" && audioPrimaryMode === "language";
           return (
-            <details className="stream-detail-entry" key={`audio-detail-${stream.stream_index}`} open={index === 0}>
+            <details className="stream-detail-entry" key={streamKey} open={index === 0}>
               <summary className="stream-detail-entry-head">
                 <div className="stream-tooltip-inline">
-                  <strong>{row?.lead ?? t("fileTable.na")}</strong>
+                  <strong>{showLanguageAsPrimary ? row?.trail ?? t("fileTable.na") : row?.lead ?? t("fileTable.na")}</strong>
                   {row?.meta.length ? (
                     <div className="stream-tooltip-meta">
                       {row.meta.map((item) => (
-                        <span className="stream-tooltip-pill" key={`audio-detail-${stream.stream_index}-${item}`}>
+                        <span className="stream-tooltip-pill" key={`${streamKey}-${item}`}>
                           {item}
                         </span>
                       ))}
                     </div>
                   ) : null}
                 </div>
-                <span>{t("streamDetails.streamNumber", { number: stream.stream_index })}</span>
+                {showLanguageAsPrimary ? (
+                  <div className="stream-detail-secondary-summary">
+                    <strong>{row?.lead ?? t("fileTable.na")}</strong>
+                  </div>
+                ) : (
+                  <span>{row?.trail ?? t("streamDetails.streamNumber", { number: stream.stream_index })}</span>
+                )}
               </summary>
               <div className="stream-detail-entry-body">
                 {detailRows.map((detailRow) => (
-                  <div className="stream-detail-field" key={`${stream.stream_index}-${detailRow.key}`}>
+                  <div className="stream-detail-field" key={`${streamKey}-${detailRow.key}`}>
                     <span className="stream-detail-field-label">{detailRow.label}</span>
                     <strong className="stream-detail-field-value">{detailRow.value}</strong>
                   </div>

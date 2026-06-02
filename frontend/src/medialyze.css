@@ -4466,6 +4466,25 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   color: #b42318;
 }
 
+.audio-stream-primary-toggle {
+  flex: 0 0 auto;
+}
+
+.stream-detail-secondary-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.stream-detail-secondary-summary > strong {
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .telemetry-mode-button.is-selected.telemetry-mode-minimal {
   color: #a15c07;
 }

@@ -1,5 +1,4 @@
 import {
-  Archive,
   AudioLines,
   Captions,
   ChevronDown,
@@ -16,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -23,12 +23,20 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
+import { CopyIcon } from "../components/CopyIcon";
 import { LoaderCircleIcon } from "../components/LoaderCircleIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
-import { api, type MediaFileDetail, type MediaFileHistory, type MediaFileQualityScoreDetail } from "../lib/api";
+import {
+  api,
+  type MediaFileDetail,
+  type MediaFileHistory,
+  type MediaFileQualityScoreDetail,
+  type QualityCategoryBreakdown,
+} from "../lib/api";
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
@@ -39,7 +47,6 @@ function JsonPreview({ value }: { value: unknown }) {
 
 type FileDetailPanelId =
   | "overview"
-  | "format"
   | "qualityBreakdown"
   | "videoStreams"
   | "audioStreams"
@@ -57,11 +64,12 @@ type FileDetailNavItem = {
 
 const FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY = "medialyze-file-detail-active-panel";
 const FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY = "medialyze-file-detail-sidebar-collapsed";
+const FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY = "medialyze-file-detail-audio-stream-primary";
 const DEFAULT_FILE_DETAIL_PANEL_ID: FileDetailPanelId = "overview";
+const DEFAULT_AUDIO_STREAM_PRIMARY_MODE: AudioStreamPrimaryMode = "quality";
 
 const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
   { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
-  { id: "format", labelKey: "fileDetail.format", icon: Archive },
   { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
   { id: "videoStreams", labelKey: "fileDetail.videoStreams", icon: Film },
   { id: "audioStreams", labelKey: "fileDetail.audioStreams", icon: AudioLines },
@@ -81,7 +89,13 @@ function readStoredFileDetailPanelId(): FileDetailPanelId {
     return DEFAULT_FILE_DETAIL_PANEL_ID;
   }
   const value = window.localStorage.getItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY);
-  return isFileDetailPanelId(value) ? value : DEFAULT_FILE_DETAIL_PANEL_ID;
+  if (isFileDetailPanelId(value)) {
+    return value;
+  }
+  if (value !== null) {
+    window.localStorage.setItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY, DEFAULT_FILE_DETAIL_PANEL_ID);
+  }
+  return DEFAULT_FILE_DETAIL_PANEL_ID;
 }
 
 function readStoredFileDetailNavCollapsed(): boolean {
@@ -89,6 +103,18 @@ function readStoredFileDetailNavCollapsed(): boolean {
     return false;
   }
   return window.localStorage.getItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY) === "true";
+}
+
+function isAudioStreamPrimaryMode(value: string | null): value is AudioStreamPrimaryMode {
+  return value === "quality" || value === "language";
+}
+
+function readStoredAudioStreamPrimaryMode(): AudioStreamPrimaryMode {
+  if (typeof window === "undefined") {
+    return DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
+  }
+  const value = window.localStorage.getItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY);
+  return isAudioStreamPrimaryMode(value) ? value : DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
 }
 
 function formatContainerFormatLabel(value: string | null | undefined): string {
@@ -127,55 +153,136 @@ function formatProbeScore(value: number | null | undefined): string {
   return `${value}/100`;
 }
 
-function FormatDetailsList({
-  detail,
+function formatQualityNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return value.toFixed(6).replace(/\.?0+$/, "");
+}
+
+function formatQualityBreakdownValue(
+  value: QualityCategoryBreakdown["actual"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((entry) => (typeof entry === "number" ? formatQualityNumber(entry) : String(entry).trim()))
+      .filter(Boolean);
+    return entries.length > 0 ? entries.join(", ") : t("fileTable.na");
+  }
+  if (typeof value === "number") {
+    return formatQualityNumber(value);
+  }
+  if (typeof value === "string") {
+    return value.trim() || t("fileTable.na");
+  }
+  return t("fileTable.na");
+}
+
+function formatQualityNote(note: string, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const translated = t(`quality.note.${note}`);
+  if (translated !== `quality.note.${note}`) {
+    return translated;
+  }
+  return note
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function QualityBreakdownCategoryList({
+  qualityDetail,
   t,
 }: {
-  detail: MediaFileDetail | null;
+  qualityDetail: MediaFileQualityScoreDetail;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
-  if (!detail) {
-    return t("streamDetails.unavailable");
-  }
-
-  const rows = [
-    {
-      key: "container",
-      label: t("fileDetail.containerLabel"),
-      value: formatContainerLabel(detail.container ?? detail.extension),
-    },
-    {
-      key: "containerFormat",
-      label: t("fileDetail.containerFormat"),
-      value: formatContainerFormatLabel(detail.media_format?.container_format),
-    },
-    {
-      key: "duration",
-      label: t("fileDetail.duration"),
-      value: formatDuration(detail.media_format?.duration ?? detail.duration ?? null),
-    },
-    {
-      key: "bitRate",
-      label: t("fileDetail.bitRate"),
-      value: formatBitRate(detail.media_format?.bit_rate),
-    },
-    {
-      key: "probeScore",
-      label: t("fileDetail.probeScore"),
-      value: formatProbeScore(detail.media_format?.probe_score),
-    },
-  ];
-
   return (
-    <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content">
-      {rows.map((row) => (
-        <div className="stream-tooltip-row" key={row.key}>
-          <div className="stream-tooltip-head format-details-row">
-            <span className="format-details-label">{row.label}</span>
-            <strong className="format-details-value">{row.value}</strong>
-          </div>
-        </div>
-      ))}
+    <div className="quality-tooltip-content quality-detail-list">
+      <div className="quality-tooltip-summary">
+        <strong>{qualityDetail.score}/10</strong>
+        <span>{t("quality.rawScore", { value: qualityDetail.score_raw.toFixed(2) })}</span>
+      </div>
+      {qualityDetail.breakdown.categories.map((category, index) => {
+        const meta = [
+          t("quality.weight", { value: category.weight }),
+          !category.active ? t("quality.inactive") : null,
+          category.skipped ? t("quality.skipped") : null,
+          category.unknown_mapping ? t("quality.unknownMapping") : null,
+        ].filter((entry): entry is string => Boolean(entry));
+        const detailRows = [
+          {
+            key: "actual",
+            label: t("quality.actualLabel"),
+            value: formatQualityBreakdownValue(category.actual, t),
+          },
+          {
+            key: "minimum",
+            label: t("quality.minimumLabel"),
+            value: formatQualityBreakdownValue(category.minimum, t),
+          },
+          {
+            key: "ideal",
+            label: t("quality.idealLabel"),
+            value: formatQualityBreakdownValue(category.ideal, t),
+          },
+          category.maximum !== undefined
+            ? {
+                key: "maximum",
+                label: t("quality.maximumLabel"),
+                value: formatQualityBreakdownValue(category.maximum ?? null, t),
+              }
+            : null,
+          category.notes.length > 0
+            ? {
+                key: "notes",
+                label: t("quality.notes"),
+                value: category.notes.map((note) => formatQualityNote(note, t)).join(", "),
+              }
+            : null,
+          category.skipped
+            ? {
+                key: "skipped",
+                label: t("quality.status"),
+                value: t("quality.skipped"),
+              }
+            : null,
+          category.unknown_mapping
+            ? {
+                key: "unknownMapping",
+                label: t("quality.status"),
+                value: t("quality.unknownMapping"),
+              }
+            : null,
+        ].filter((row): row is { key: string; label: string; value: string } => Boolean(row));
+
+        return (
+          <details className="stream-detail-entry quality-detail-entry" key={category.key} open={index === 0}>
+            <summary className="stream-detail-entry-head quality-detail-entry-head">
+              <div className="stream-tooltip-inline">
+                <strong>{t(`quality.category.${category.key}`)}</strong>
+                {meta.length > 0 ? (
+                  <div className="stream-tooltip-meta">
+                    {meta.map((item) => (
+                      <span className="stream-tooltip-pill" key={`${category.key}-${item}`}>
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <span>{formatQualityNumber(category.score)} / 100</span>
+            </summary>
+            <div className="stream-detail-entry-body">
+              {detailRows.map((row) => (
+                <div className="stream-detail-field" key={`${category.key}-${row.key}`}>
+                  <span className="stream-detail-field-label">{row.label}</span>
+                  <strong className="stream-detail-field-value">{row.value}</strong>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }
@@ -480,7 +587,7 @@ function buildAvailableFileDetailPanelIds(
   file: MediaFileDetail | null,
   qualityDetail: MediaFileQualityScoreDetail | null,
 ): FileDetailPanelId[] {
-  const ids: FileDetailPanelId[] = ["overview", "format"];
+  const ids: FileDetailPanelId[] = ["overview"];
   if (hasQualityMetadata(file, qualityDetail)) {
     ids.push("qualityBreakdown");
   }
@@ -529,6 +636,21 @@ function OverviewPanel({
     { key: "size", label: t("fileDetail.size"), value: formatBytes(file.size_bytes) },
     { key: "duration", label: t("fileDetail.duration"), value: formatDuration(file.duration ?? 0) },
     { key: "quality", label: t("fileDetail.quality"), value: `${file.quality_score}/10` },
+    {
+      key: "containerFormat",
+      label: t("fileDetail.containerFormat"),
+      value: formatContainerFormatLabel(file.media_format?.container_format),
+    },
+    {
+      key: "bitRate",
+      label: t("fileDetail.bitRate"),
+      value: formatBitRate(file.media_format?.bit_rate),
+    },
+    {
+      key: "probeScore",
+      label: t("fileDetail.probeScore"),
+      value: formatProbeScore(file.media_format?.probe_score),
+    },
   ];
 
   const badges = [
@@ -992,6 +1114,11 @@ export function FileDetailPage() {
   const [activePanelId, setActivePanelId] = useState<FileDetailPanelId>(() => readStoredFileDetailPanelId());
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => readStoredFileDetailNavCollapsed());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [audioStreamPrimaryMode, setAudioStreamPrimaryMode] = useState<AudioStreamPrimaryMode>(() =>
+    readStoredAudioStreamPrimaryMode(),
+  );
+  const [rawJsonCopied, setRawJsonCopied] = useState(false);
+  const rawJsonCopyResetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     api
@@ -1022,12 +1149,49 @@ export function FileDetailPage() {
       .catch((reason: Error) => setFileHistoryError(reason.message));
   }, [fileId]);
 
+  useEffect(
+    () => () => {
+      if (rawJsonCopyResetTimeoutRef.current !== null) {
+        window.clearTimeout(rawJsonCopyResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const rawJsonText = useMemo(() => JSON.stringify(file?.raw_ffprobe_json ?? {}, null, 2), [file?.raw_ffprobe_json]);
+  const canCopyRawJson = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText);
+  const rawJsonCopyLabel = rawJsonCopied ? t("fileDetail.rawJsonCopied") : t("fileDetail.copyRawJson");
+
+  const copyRawJson = useCallback(async () => {
+    const clipboard = navigator.clipboard;
+    if (!clipboard?.writeText) {
+      return;
+    }
+    await clipboard.writeText(rawJsonText);
+    setRawJsonCopied(true);
+    if (rawJsonCopyResetTimeoutRef.current !== null) {
+      window.clearTimeout(rawJsonCopyResetTimeoutRef.current);
+    }
+    rawJsonCopyResetTimeoutRef.current = window.setTimeout(() => {
+      setRawJsonCopied(false);
+      rawJsonCopyResetTimeoutRef.current = null;
+    }, 1800);
+  }, [rawJsonText]);
+
+  const changeAudioStreamPrimaryMode = useCallback((mode: AudioStreamPrimaryMode) => {
+    setAudioStreamPrimaryMode(mode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY, mode);
+    }
+  }, []);
+
   const panels: Record<
     FileDetailPanelId,
     {
       title: string;
       loading: boolean;
       error: string | null;
+      actions?: ReactNode;
       body: ReactNode;
     }
   > = {
@@ -1042,32 +1206,10 @@ export function FileDetailPage() {
       loading: !qualityDetail && !qualityError && !error,
       error: null,
       body: qualityDetail ? (
-        <div className="quality-tooltip-content quality-detail-list">
-          <div className="quality-tooltip-summary">
-            <strong>{qualityDetail.score}/10</strong>
-            <span>{t("quality.rawScore", { value: qualityDetail.score_raw.toFixed(2) })}</span>
-          </div>
-          {qualityDetail.breakdown.categories.map((category) => (
-            <div className="quality-tooltip-row" key={category.key}>
-              <div className="quality-tooltip-head">
-                <strong>{t(`quality.category.${category.key}`)}</strong>
-                <span>{category.score.toFixed(1)}</span>
-              </div>
-              <div>{t("quality.weight", { value: category.weight })}</div>
-              {category.skipped ? <div>{t("quality.skipped")}</div> : null}
-              {category.unknown_mapping ? <div>{t("quality.unknownMapping")}</div> : null}
-            </div>
-          ))}
-        </div>
+        <QualityBreakdownCategoryList qualityDetail={qualityDetail} t={t} />
       ) : (
         <div className="notice">{t("quality.unavailable")}</div>
       ),
-    },
-    format: {
-      title: t("fileDetail.format"),
-      loading: !file && !error,
-      error,
-      body: <FormatDetailsList detail={file} t={t} />,
     },
     cover: {
       title: t("fileDetail.cover"),
@@ -1106,10 +1248,23 @@ export function FileDetailPage() {
       title: t("fileDetail.audioStreams"),
       loading: !file && !error,
       error,
+      actions: (
+        <AudioStreamPrimaryToggle
+          mode={audioStreamPrimaryMode}
+          onChange={changeAudioStreamPrimaryMode}
+        />
+      ),
       body: (
         <div className="file-detail-audio-panel">
           <AudioMetadataList detail={file} t={t} />
-          <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" showSummary={false} />
+          <StreamDetailsList
+            kind="audio"
+            detail={file ?? undefined}
+            t={t}
+            surface="panel"
+            showSummary={false}
+            audioPrimaryMode={audioStreamPrimaryMode}
+          />
         </div>
       ),
     },
@@ -1129,6 +1284,19 @@ export function FileDetailPage() {
       title: t("fileDetail.rawJson"),
       loading: !file && !error,
       error,
+      actions: (
+        <button
+          type="button"
+          className="secondary icon-only-button file-detail-raw-json-copy-button"
+          aria-label={rawJsonCopyLabel}
+          data-tooltip={rawJsonCopyLabel}
+          title={rawJsonCopyLabel}
+          disabled={!canCopyRawJson || !file}
+          onClick={() => void copyRawJson()}
+        >
+          <CopyIcon aria-hidden="true" className="nav-icon" size={20} />
+        </button>
+      ),
       body: <JsonPreview value={file?.raw_ffprobe_json ?? {}} />,
     },
   };
@@ -1272,6 +1440,7 @@ export function FileDetailPage() {
           loading={activePanel.loading}
           error={activePanel.error}
           className="file-detail-active-panel"
+          collapseActions={activePanel.actions}
         >
           {activePanel.body}
         </AsyncPanel>
