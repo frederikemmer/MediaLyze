@@ -5,8 +5,10 @@ import base64
 import io
 import json
 import re
+import subprocess
 from types import SimpleNamespace
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterator, Literal
 
 from sqlalchemy import Float, String, and_, case, cast, func, literal, or_, select, union_all
@@ -106,6 +108,7 @@ FileSortKey = Literal[
 FileSortDirection = Literal["asc", "desc"]
 
 CSV_EXPORT_BATCH_SIZE = 500
+COVER_PNG_CACHE: dict[tuple[int, str, int | None, int, int], tuple[str, bytes]] = {}
 CSV_EXPORT_HEADERS = [
     "relative_path",
     "filename",
@@ -1051,6 +1054,94 @@ def generate_media_chapters_csv_export(db: Session, file_id: int) -> tuple[str, 
         yield buffer.getvalue().encode("utf-8")
 
     return filename, iter_csv_chunks()
+
+
+def _media_file_path(media_file: MediaFile) -> Path:
+    base_path = Path(media_file.library.path).resolve()
+    file_path = (base_path / media_file.relative_path).resolve()
+    try:
+        file_path.relative_to(base_path)
+    except ValueError as exc:
+        raise ValueError("Media file path escapes its library root") from exc
+    return file_path
+
+
+def _safe_cover_filename(filename: str) -> str:
+    stem = Path(filename).stem.strip() or "cover"
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._") or "cover"
+    return f"{safe_stem}-cover.png"
+
+
+def generate_media_cover_png(
+    db: Session,
+    file_id: int,
+    *,
+    ffmpeg_path: str,
+    timeout_seconds: float = 20.0,
+) -> tuple[str, bytes] | None:
+    media_file = db.scalar(
+        select(MediaFile)
+        .where(MediaFile.id == file_id)
+        .options(selectinload(MediaFile.library))
+    )
+    if media_file is None or not media_file.has_embedded_cover:
+        return None
+    if media_file.embedded_cover_stream_index is None:
+        return None
+
+    file_path = _media_file_path(media_file)
+    if not file_path.is_file():
+        return None
+    file_stat = file_path.stat()
+    cache_key = (
+        media_file.id,
+        str(file_path),
+        media_file.embedded_cover_stream_index,
+        file_stat.st_mtime_ns,
+        file_stat.st_size,
+    )
+    cached = COVER_PNG_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    command = [
+        ffmpeg_path,
+        "-v",
+        "error",
+        "-nostdin",
+        "-i",
+        str(file_path),
+        "-map",
+        f"0:{media_file.embedded_cover_stream_index}",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "png",
+        "pipe:1",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg is not available") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Cover extraction timed out") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode("utf-8", errors="replace").strip()
+        reason = stderr.splitlines()[0].strip() if stderr else "ffmpeg could not extract the embedded cover"
+        raise RuntimeError(reason[:300]) from exc
+
+    if not completed.stdout:
+        raise RuntimeError("ffmpeg did not return cover image data")
+    payload = (_safe_cover_filename(media_file.filename), completed.stdout)
+    COVER_PNG_CACHE[cache_key] = payload
+    return payload
 
 
 def list_library_files(

@@ -1,29 +1,43 @@
-import { GripVertical } from "lucide-react";
+import {
+  AudioLines,
+  Captions,
+  ChevronDown,
+  Download,
+  FileClock,
+  FileJson,
+  Film,
+  Gauge,
+  ImageIcon,
+  Info,
+  ListVideo,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
+import { CopyIcon } from "../components/CopyIcon";
+import { LoaderCircleIcon } from "../components/LoaderCircleIcon";
+import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
+import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
-import { api, type MediaFileDetail, type MediaFileHistory, type MediaFileQualityScoreDetail } from "../lib/api";
-import { useAppData } from "../lib/app-data";
 import {
-  type FileDetailPanelId,
-  getFileDetailPanelSettings,
-  moveFileDetailPanel,
-  saveFileDetailPanelSettings,
-  toggleFileDetailPanelCollapsed,
-} from "../lib/file-detail-panels";
+  api,
+  type MediaFileDetail,
+  type MediaFileHistory,
+  type MediaFileQualityScoreDetail,
+  type QualityCategoryBreakdown,
+} from "../lib/api";
+import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
@@ -31,79 +45,76 @@ function JsonPreview({ value }: { value: unknown }) {
   return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
 }
 
-const FILE_DETAIL_PANEL_GAP = 10;
-const FILE_DETAIL_PANEL_MIN_WIDTH = 320;
-const WIDE_FILE_DETAIL_PANEL_IDS = new Set<FileDetailPanelId>(["rawJson"]);
+type FileDetailPanelId =
+  | "overview"
+  | "qualityBreakdown"
+  | "videoStreams"
+  | "audioStreams"
+  | "subtitles"
+  | "cover"
+  | "chapters"
+  | "fileHistory"
+  | "rawJson";
 
-type FileDetailPanelLayoutItem = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-type FileDetailPanelLayout = Partial<Record<FileDetailPanelId, FileDetailPanelLayoutItem>>;
-
-type FileDetailPanelDragState = {
+type FileDetailNavItem = {
   id: FileDetailPanelId;
-  pointerId: number;
-  offsetX: number;
-  offsetY: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  labelKey: string;
+  icon: typeof Info;
 };
 
-type FileDetailPanelSettingsTransform = (
-  current: ReturnType<typeof getFileDetailPanelSettings>,
-) => ReturnType<typeof getFileDetailPanelSettings>;
+const FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY = "medialyze-file-detail-active-panel";
+const FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY = "medialyze-file-detail-sidebar-collapsed";
+const FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY = "medialyze-file-detail-audio-stream-primary";
+const DEFAULT_FILE_DETAIL_PANEL_ID: FileDetailPanelId = "overview";
+const DEFAULT_AUDIO_STREAM_PRIMARY_MODE: AudioStreamPrimaryMode = "quality";
 
-function getFileDetailPanelColumnCount(containerWidth: number): number {
-  return Math.max(
-    1,
-    Math.floor((containerWidth + FILE_DETAIL_PANEL_GAP) / (FILE_DETAIL_PANEL_MIN_WIDTH + FILE_DETAIL_PANEL_GAP)),
-  );
+const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
+  { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
+  { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
+  { id: "videoStreams", labelKey: "fileDetail.videoStreams", icon: Film },
+  { id: "audioStreams", labelKey: "fileDetail.audioStreams", icon: AudioLines },
+  { id: "subtitles", labelKey: "fileDetail.subtitles", icon: Captions },
+  { id: "cover", labelKey: "fileDetail.cover", icon: ImageIcon },
+  { id: "chapters", labelKey: "fileDetail.chapters", icon: ListVideo },
+  { id: "fileHistory", labelKey: "fileDetail.history.title", icon: FileClock },
+  { id: "rawJson", labelKey: "fileDetail.rawJson", icon: FileJson },
+];
+
+function isFileDetailPanelId(value: string | null): value is FileDetailPanelId {
+  return FILE_DETAIL_NAV_ITEMS.some((item) => item.id === value);
 }
 
-function pointIsInsideLayoutItem(x: number, y: number, item: FileDetailPanelLayoutItem): boolean {
-  return x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height;
+function readStoredFileDetailPanelId(): FileDetailPanelId {
+  if (typeof window === "undefined") {
+    return DEFAULT_FILE_DETAIL_PANEL_ID;
+  }
+  const value = window.localStorage.getItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY);
+  if (isFileDetailPanelId(value)) {
+    return value;
+  }
+  if (value !== null) {
+    window.localStorage.setItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY, DEFAULT_FILE_DETAIL_PANEL_ID);
+  }
+  return DEFAULT_FILE_DETAIL_PANEL_ID;
 }
 
-function findPanelDropTarget(
-  x: number,
-  y: number,
-  draggedId: FileDetailPanelId,
-  order: FileDetailPanelId[],
-  layout: FileDetailPanelLayout,
-): FileDetailPanelId | null {
-  const containingTarget = order.find((panelId) => {
-    const item = layout[panelId];
-    return panelId !== draggedId && item ? pointIsInsideLayoutItem(x, y, item) : false;
-  });
-  if (containingTarget) {
-    return containingTarget;
+function readStoredFileDetailNavCollapsed(): boolean {
+  if (typeof window === "undefined") {
+    return false;
   }
+  return window.localStorage.getItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY) === "true";
+}
 
-  let closest: { id: FileDetailPanelId; distance: number; threshold: number } | null = null;
-  for (const panelId of order) {
-    if (panelId === draggedId) {
-      continue;
-    }
-    const item = layout[panelId];
-    if (!item) {
-      continue;
-    }
-    const centerX = item.x + item.width / 2;
-    const centerY = item.y + item.height / 2;
-    const distance = Math.hypot(centerX - x, centerY - y);
-    const threshold = Math.max(item.width, item.height) * 0.8;
-    if (!closest || distance < closest.distance) {
-      closest = { id: panelId, distance, threshold };
-    }
+function isAudioStreamPrimaryMode(value: string | null): value is AudioStreamPrimaryMode {
+  return value === "quality" || value === "language";
+}
+
+function readStoredAudioStreamPrimaryMode(): AudioStreamPrimaryMode {
+  if (typeof window === "undefined") {
+    return DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
   }
-
-  return closest && closest.distance <= closest.threshold ? closest.id : null;
+  const value = window.localStorage.getItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY);
+  return isAudioStreamPrimaryMode(value) ? value : DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
 }
 
 function formatContainerFormatLabel(value: string | null | undefined): string {
@@ -142,59 +153,136 @@ function formatProbeScore(value: number | null | undefined): string {
   return `${value}/100`;
 }
 
-function FormatDetailsList({
-  detail,
+function formatQualityNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return value.toFixed(6).replace(/\.?0+$/, "");
+}
+
+function formatQualityBreakdownValue(
+  value: QualityCategoryBreakdown["actual"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((entry) => (typeof entry === "number" ? formatQualityNumber(entry) : String(entry).trim()))
+      .filter(Boolean);
+    return entries.length > 0 ? entries.join(", ") : t("fileTable.na");
+  }
+  if (typeof value === "number") {
+    return formatQualityNumber(value);
+  }
+  if (typeof value === "string") {
+    return value.trim() || t("fileTable.na");
+  }
+  return t("fileTable.na");
+}
+
+function formatQualityNote(note: string, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const translated = t(`quality.note.${note}`);
+  if (translated !== `quality.note.${note}`) {
+    return translated;
+  }
+  return note
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function QualityBreakdownCategoryList({
+  qualityDetail,
   t,
 }: {
-  detail: MediaFileDetail | null;
+  qualityDetail: MediaFileQualityScoreDetail;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
-  if (!detail) {
-    return t("streamDetails.unavailable");
-  }
-
-  const rows = [
-    {
-      key: "container",
-      label: t("fileDetail.containerLabel"),
-      value: formatContainerLabel(detail.container ?? detail.extension),
-    },
-    {
-      key: "containerFormat",
-      label: t("fileDetail.containerFormat"),
-      value: formatContainerFormatLabel(detail.media_format?.container_format),
-    },
-    {
-      key: "duration",
-      label: t("fileDetail.duration"),
-      value: formatDuration(detail.media_format?.duration ?? detail.duration ?? null),
-    },
-    {
-      key: "bitRate",
-      label: t("fileDetail.bitRate"),
-      value: formatBitRate(detail.media_format?.bit_rate),
-    },
-    {
-      key: "probeScore",
-      label: t("fileDetail.probeScore"),
-      value: formatProbeScore(detail.media_format?.probe_score),
-    },
-  ];
-
   return (
-    <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content">
-      <div className="stream-tooltip-summary">
-        <strong>{t("fileDetail.format")}</strong>
-        <span>{rows.length}</span>
+    <div className="quality-tooltip-content quality-detail-list">
+      <div className="quality-tooltip-summary">
+        <strong>{qualityDetail.score}/10</strong>
+        <span>{t("quality.rawScore", { value: qualityDetail.score_raw.toFixed(2) })}</span>
       </div>
-      {rows.map((row) => (
-        <div className="stream-tooltip-row" key={row.key}>
-          <div className="stream-tooltip-head format-details-row">
-            <span className="format-details-label">{row.label}</span>
-            <strong className="format-details-value">{row.value}</strong>
-          </div>
-        </div>
-      ))}
+      {qualityDetail.breakdown.categories.map((category, index) => {
+        const meta = [
+          t("quality.weight", { value: category.weight }),
+          !category.active ? t("quality.inactive") : null,
+          category.skipped ? t("quality.skipped") : null,
+          category.unknown_mapping ? t("quality.unknownMapping") : null,
+        ].filter((entry): entry is string => Boolean(entry));
+        const detailRows = [
+          {
+            key: "actual",
+            label: t("quality.actualLabel"),
+            value: formatQualityBreakdownValue(category.actual, t),
+          },
+          {
+            key: "minimum",
+            label: t("quality.minimumLabel"),
+            value: formatQualityBreakdownValue(category.minimum, t),
+          },
+          {
+            key: "ideal",
+            label: t("quality.idealLabel"),
+            value: formatQualityBreakdownValue(category.ideal, t),
+          },
+          category.maximum !== undefined
+            ? {
+                key: "maximum",
+                label: t("quality.maximumLabel"),
+                value: formatQualityBreakdownValue(category.maximum ?? null, t),
+              }
+            : null,
+          category.notes.length > 0
+            ? {
+                key: "notes",
+                label: t("quality.notes"),
+                value: category.notes.map((note) => formatQualityNote(note, t)).join(", "),
+              }
+            : null,
+          category.skipped
+            ? {
+                key: "skipped",
+                label: t("quality.status"),
+                value: t("quality.skipped"),
+              }
+            : null,
+          category.unknown_mapping
+            ? {
+                key: "unknownMapping",
+                label: t("quality.status"),
+                value: t("quality.unknownMapping"),
+              }
+            : null,
+        ].filter((row): row is { key: string; label: string; value: string } => Boolean(row));
+
+        return (
+          <details className="stream-detail-entry quality-detail-entry" key={category.key} open={index === 0}>
+            <summary className="stream-detail-entry-head quality-detail-entry-head">
+              <div className="stream-tooltip-inline">
+                <strong>{t(`quality.category.${category.key}`)}</strong>
+                {meta.length > 0 ? (
+                  <div className="stream-tooltip-meta">
+                    {meta.map((item) => (
+                      <span className="stream-tooltip-pill" key={`${category.key}-${item}`}>
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <span>{formatQualityNumber(category.score)} / 100</span>
+            </summary>
+            <div className="stream-detail-entry-body">
+              {detailRows.map((row) => (
+                <div className="stream-detail-field" key={`${category.key}-${row.key}`}>
+                  <span className="stream-detail-field-label">{row.label}</span>
+                  <strong className="stream-detail-field-value">{row.value}</strong>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }
@@ -301,6 +389,32 @@ function CoverDetailsList({
   detail: MediaFileDetail | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverBlob, setCoverBlob] = useState<Blob | null>(null);
+  const [coverFilename, setCoverFilename] = useState<string | null>(null);
+  const [isCoverLoading, setIsCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCoverBlob(null);
+    setCoverFilename(null);
+    setCoverError(null);
+    setCoverUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  }, [detail?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (coverUrl) {
+        URL.revokeObjectURL(coverUrl);
+      }
+    };
+  }, [coverUrl]);
+
   if (!detail) {
     return t("streamDetails.unavailable");
   }
@@ -322,8 +436,322 @@ function CoverDetailsList({
         : "n/a",
     },
   ];
+  const fallbackCoverFilename = `${detail.filename.replace(/\.[^.]+$/, "") || "cover"}-cover.png`;
+
+  async function loadCover() {
+    if (!detail) {
+      return;
+    }
+    setIsCoverLoading(true);
+    setCoverError(null);
+    try {
+      const payload = await api.downloadFileCover(detail.id);
+      const objectUrl = URL.createObjectURL(payload.blob);
+      setCoverUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return objectUrl;
+      });
+      setCoverBlob(payload.blob);
+      setCoverFilename(payload.filename ?? fallbackCoverFilename);
+    } catch (error) {
+      setCoverError(error instanceof Error ? error.message : t("fileDetail.coverLoadError"));
+    } finally {
+      setIsCoverLoading(false);
+    }
+  }
+
+  function downloadCover() {
+    if (!coverBlob || !coverUrl) {
+      return;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = coverUrl;
+    anchor.download = coverFilename ?? fallbackCoverFilename;
+    anchor.click();
+  }
+
   return (
-    <div className="stream-tooltip-content stream-tooltip-content-panel">
+    <div className="stream-tooltip-content stream-tooltip-content-panel file-detail-cover-panel">
+      <div className="file-detail-cover-actions">
+        <button type="button" className="secondary small file-detail-cover-button" onClick={() => void loadCover()} disabled={isCoverLoading}>
+          {isCoverLoading ? (
+            <LoaderCircleIcon size={16} aria-hidden="true" />
+          ) : (
+            <ImageIcon size={16} aria-hidden="true" />
+          )}
+          {isCoverLoading ? t("fileDetail.coverLoading") : t("fileDetail.loadCover")}
+        </button>
+        {coverUrl ? (
+          <button type="button" className="secondary small file-detail-cover-button" onClick={downloadCover}>
+            <Download size={16} aria-hidden="true" />
+            {t("fileDetail.downloadCover")}
+          </button>
+        ) : null}
+      </div>
+      {coverError ? <div className="notice compact file-detail-cover-error">{coverError}</div> : null}
+      {coverUrl ? (
+        <figure className="file-detail-cover-preview">
+          <img src={coverUrl} alt={t("fileDetail.coverPreviewAlt", { filename: detail.filename })} />
+        </figure>
+      ) : null}
+      {rows.map((row) => (
+        <div className="stream-tooltip-row" key={row.key}>
+          <div className="stream-tooltip-head format-details-row">
+            <span className="format-details-label">{row.label}</span>
+            <strong className="format-details-value">{row.value}</strong>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function nonEmptyText(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function hasAnyValue(values: Array<string | number | boolean | null | undefined>): boolean {
+  return values.some((value) => {
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    return value !== null && value !== undefined;
+  });
+}
+
+function hasVideoMetadata(file: MediaFileDetail | null): boolean {
+  if (!file) {
+    return false;
+  }
+  return file.video_streams.length > 0 || hasAnyValue([file.video_codec, file.resolution, file.hdr_type]);
+}
+
+function hasAudioMetadata(file: MediaFileDetail | null): boolean {
+  if (!file) {
+    return false;
+  }
+  const hasVideo = hasVideoMetadata(file);
+  return (
+    file.audio_streams.length > 0 ||
+    file.audio_codecs.length > 0 ||
+    file.audio_languages.length > 0 ||
+    (!hasVideo &&
+      hasAnyValue([
+        file.audio_title,
+        file.audio_artist,
+        file.audio_album,
+        file.audio_album_artist,
+        file.audio_genre,
+        file.audio_date,
+        file.audio_disc,
+        file.audio_composer,
+        file.audio_channels,
+        file.sample_rate,
+        file.track_number,
+        file.bit_rate_mode,
+        file.audiobook_narrator,
+        file.audiobook_author,
+        file.audiobook_publisher,
+        file.audiobook_series,
+        file.audiobook_series_part,
+        file.audiobook_description,
+        file.audiobook_copyright,
+        file.audiobook_asin,
+        file.audiobook_isbn,
+        file.audiobook_language,
+        file.audiobook_abridged,
+      ]))
+  );
+}
+
+function hasSubtitleMetadata(file: MediaFileDetail | null): boolean {
+  return Boolean(file && (file.subtitle_streams.length > 0 || file.external_subtitles.length > 0));
+}
+
+function hasCoverMetadata(file: MediaFileDetail | null): boolean {
+  return Boolean(
+    file &&
+      (file.has_embedded_cover ||
+        hasAnyValue([file.embedded_cover_codec, file.embedded_cover_width, file.embedded_cover_height])),
+  );
+}
+
+function hasQualityMetadata(file: MediaFileDetail | null, qualityDetail: MediaFileQualityScoreDetail | null): boolean {
+  return Boolean(qualityDetail || (file && Number.isFinite(file.quality_score)));
+}
+
+function buildAvailableFileDetailPanelIds(
+  file: MediaFileDetail | null,
+  qualityDetail: MediaFileQualityScoreDetail | null,
+): FileDetailPanelId[] {
+  const ids: FileDetailPanelId[] = ["overview"];
+  if (hasQualityMetadata(file, qualityDetail)) {
+    ids.push("qualityBreakdown");
+  }
+  if (hasVideoMetadata(file)) {
+    ids.push("videoStreams");
+  }
+  if (hasAudioMetadata(file)) {
+    ids.push("audioStreams");
+  }
+  if (hasSubtitleMetadata(file)) {
+    ids.push("subtitles");
+  }
+  if (hasCoverMetadata(file)) {
+    ids.push("cover");
+  }
+  if ((file?.chapters ?? []).length > 0) {
+    ids.push("chapters");
+  }
+  ids.push("fileHistory", "rawJson");
+  return ids;
+}
+
+function normalizeFileDetailPanelId(
+  candidate: FileDetailPanelId,
+  availablePanelIds: FileDetailPanelId[],
+): FileDetailPanelId {
+  return availablePanelIds.includes(candidate) ? candidate : DEFAULT_FILE_DETAIL_PANEL_ID;
+}
+
+function OverviewPanel({
+  file,
+  t,
+  inDepthDolbyVisionProfiles = false,
+}: {
+  file: MediaFileDetail | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  inDepthDolbyVisionProfiles?: boolean;
+}): ReactNode {
+  if (!file) {
+    return t("streamDetails.unavailable");
+  }
+
+  const rows = [
+    { key: "relativePath", label: t("fileDetail.relativePath"), value: file.relative_path },
+    { key: "container", label: t("fileDetail.containerLabel"), value: formatContainerLabel(file.container ?? file.extension) },
+    { key: "size", label: t("fileDetail.size"), value: formatBytes(file.size_bytes) },
+    { key: "duration", label: t("fileDetail.duration"), value: formatDuration(file.duration ?? 0) },
+    { key: "quality", label: t("fileDetail.quality"), value: `${file.quality_score}/10` },
+    {
+      key: "containerFormat",
+      label: t("fileDetail.containerFormat"),
+      value: formatContainerFormatLabel(file.media_format?.container_format),
+    },
+    {
+      key: "bitRate",
+      label: t("fileDetail.bitRate"),
+      value: formatBitRate(file.media_format?.bit_rate),
+    },
+    {
+      key: "probeScore",
+      label: t("fileDetail.probeScore"),
+      value: formatProbeScore(file.media_format?.probe_score),
+    },
+  ];
+
+  const badges = [
+    hasVideoMetadata(file) && file.video_codec ? formatCodecLabel(file.video_codec, "video") : null,
+    hasVideoMetadata(file) ? file.resolution_category_label ?? file.resolution ?? null : null,
+    hasVideoMetadata(file) ? formatHdrType(file.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr") : null,
+    hasAudioMetadata(file) && file.audio_codecs.length > 0
+      ? file.audio_codecs.map((codec) => formatCodecLabel(codec, "audio")).join(", ")
+      : null,
+    file.content_category === "bonus" ? t("fileDetail.bonusContent") : null,
+  ].filter((entry): entry is string => Boolean(entry));
+
+  return (
+    <div className="file-detail-overview">
+      <div className="file-detail-title-row">
+        <h3 className="file-detail-title">{file.filename}</h3>
+        {file.relative_path ? (
+          <TooltipTrigger ariaLabel={t("fileDetail.showFullRelativePath")} content={file.relative_path}>
+            ?
+          </TooltipTrigger>
+        ) : null}
+      </div>
+      {badges.length > 0 ? (
+        <div className="meta-tags">
+          {badges.map((badge) => (
+            <span className="badge" key={badge}>
+              {badge}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content">
+        {rows.map((row) => (
+          <div className="stream-tooltip-row" key={row.key}>
+            <div className="stream-tooltip-head format-details-row">
+              <span className="format-details-label">{row.label}</span>
+              <strong className="format-details-value">{row.value}</strong>
+            </div>
+          </div>
+        ))}
+      </div>
+      {file.analysis_failure_reason ? (
+        <div className="notice file-detail-analysis-warning">
+          <strong>{t("fileDetail.analysisFailure")}</strong>
+          <span>{file.analysis_failure_reason}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AudioMetadataList({
+  detail,
+  t,
+}: {
+  detail: MediaFileDetail | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): ReactNode {
+  if (!detail) {
+    return null;
+  }
+  if (hasVideoMetadata(detail)) {
+    return null;
+  }
+
+  const rows = [
+    { key: "title", label: t("fileTable.audioTitle"), value: nonEmptyText(detail.audio_title) },
+    { key: "artist", label: t("fileTable.audioArtist"), value: nonEmptyText(detail.audio_artist) },
+    { key: "album", label: t("fileTable.audioAlbum"), value: nonEmptyText(detail.audio_album) },
+    { key: "albumArtist", label: t("fileTable.audioAlbumArtist"), value: nonEmptyText(detail.audio_album_artist) },
+    { key: "genre", label: t("fileTable.audioGenre"), value: nonEmptyText(detail.audio_genre) },
+    { key: "date", label: t("fileTable.audioDate"), value: nonEmptyText(detail.audio_date) },
+    { key: "disc", label: t("fileTable.audioDisc"), value: nonEmptyText(detail.audio_disc) },
+    { key: "composer", label: t("fileTable.audioComposer"), value: nonEmptyText(detail.audio_composer) },
+    { key: "channels", label: t("fileTable.audioChannels"), value: detail.audio_channels ? String(detail.audio_channels) : null },
+    { key: "sampleRate", label: t("fileTable.sampleRate"), value: detail.sample_rate ? `${detail.sample_rate} Hz` : null },
+    { key: "trackNumber", label: t("fileTable.trackNumber"), value: nonEmptyText(detail.track_number) },
+    { key: "bitRateMode", label: t("fileTable.bitRateMode"), value: nonEmptyText(detail.bit_rate_mode) },
+    { key: "narrator", label: t("fileTable.audiobookNarrator"), value: nonEmptyText(detail.audiobook_narrator) },
+    { key: "author", label: t("fileTable.audiobookAuthor"), value: nonEmptyText(detail.audiobook_author) },
+    { key: "publisher", label: t("fileTable.audiobookPublisher"), value: nonEmptyText(detail.audiobook_publisher) },
+    { key: "series", label: t("fileTable.audiobookSeries"), value: nonEmptyText(detail.audiobook_series) },
+    { key: "seriesPart", label: t("fileTable.audiobookSeriesPart"), value: nonEmptyText(detail.audiobook_series_part) },
+    { key: "description", label: t("fileTable.audiobookDescription"), value: nonEmptyText(detail.audiobook_description) },
+    { key: "copyright", label: t("fileTable.audiobookCopyright"), value: nonEmptyText(detail.audiobook_copyright) },
+    { key: "language", label: t("fileTable.audiobookLanguage"), value: nonEmptyText(detail.audiobook_language) },
+    { key: "abridged", label: t("fileTable.audiobookAbridged"), value: nonEmptyText(detail.audiobook_abridged) },
+    { key: "asin", label: t("fileTable.audiobookAsin"), value: nonEmptyText(detail.audiobook_asin) },
+    { key: "isbn", label: t("fileTable.audiobookIsbn"), value: nonEmptyText(detail.audiobook_isbn) },
+  ].filter((row): row is { key: string; label: string; value: string } => Boolean(row.value));
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content file-detail-audio-metadata">
+      <div className="stream-tooltip-summary">
+        <strong>{t("fileDetail.audioMetadata")}</strong>
+        <span>{rows.length}</span>
+      </div>
       {rows.map((row) => (
         <div className="stream-tooltip-row" key={row.key}>
           <div className="stream-tooltip-head format-details-row">
@@ -679,33 +1107,18 @@ export function FileDetailPage() {
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [file, setFile] = useState<MediaFileDetail | null>(null);
   const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
+  const [qualityError, setQualityError] = useState(false);
   const [fileHistory, setFileHistory] = useState<MediaFileHistory | null>(null);
   const [fileHistoryError, setFileHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [panelSettings, setPanelSettings] = useState(() => getFileDetailPanelSettings());
-  const [draggedPanelId, setDraggedPanelId] = useState<FileDetailPanelId | null>(null);
-  const [dropTargetPanelId, setDropTargetPanelId] = useState<FileDetailPanelId | null>(null);
-  const [panelLayout, setPanelLayout] = useState<FileDetailPanelLayout>({});
-  const [panelContainerHeight, setPanelContainerHeight] = useState(0);
-  const [dragState, setDragState] = useState<FileDetailPanelDragState | null>(null);
-  const panelContainerRef = useRef<HTMLDivElement | null>(null);
-  const panelShellRefs = useRef<Partial<Record<FileDetailPanelId, HTMLDivElement | null>>>({});
-  const panelSettingsRef = useRef(panelSettings);
-  const panelLayoutRef = useRef<FileDetailPanelLayout>({});
-  const dragStateRef = useRef<FileDetailPanelDragState | null>(null);
-  const layoutFrameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    panelSettingsRef.current = panelSettings;
-  }, [panelSettings]);
-
-  useEffect(() => {
-    panelLayoutRef.current = panelLayout;
-  }, [panelLayout]);
-
-  useEffect(() => {
-    dragStateRef.current = dragState;
-  }, [dragState]);
+  const [activePanelId, setActivePanelId] = useState<FileDetailPanelId>(() => readStoredFileDetailPanelId());
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() => readStoredFileDetailNavCollapsed());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [audioStreamPrimaryMode, setAudioStreamPrimaryMode] = useState<AudioStreamPrimaryMode>(() =>
+    readStoredAudioStreamPrimaryMode(),
+  );
+  const [rawJsonCopied, setRawJsonCopied] = useState(false);
+  const rawJsonCopyResetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     api
@@ -715,10 +1128,18 @@ export function FileDetailPage() {
         setError(null);
       })
       .catch((reason: Error) => setError(reason.message));
+    setQualityDetail(null);
+    setQualityError(false);
     api
       .fileQualityScore(fileId)
-      .then((payload) => setQualityDetail(payload))
-      .catch(() => setQualityDetail(null));
+      .then((payload) => {
+        setQualityDetail(payload);
+        setQualityError(false);
+      })
+      .catch(() => {
+        setQualityDetail(null);
+        setQualityError(true);
+      });
     api
       .fileHistory(fileId)
       .then((payload) => {
@@ -728,239 +1149,41 @@ export function FileDetailPage() {
       .catch((reason: Error) => setFileHistoryError(reason.message));
   }, [fileId]);
 
-  const measurePanelLayout = useCallback(() => {
-    const container = panelContainerRef.current;
-    if (!container) {
+  useEffect(
+    () => () => {
+      if (rawJsonCopyResetTimeoutRef.current !== null) {
+        window.clearTimeout(rawJsonCopyResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const rawJsonText = useMemo(() => JSON.stringify(file?.raw_ffprobe_json ?? {}, null, 2), [file?.raw_ffprobe_json]);
+  const canCopyRawJson = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText);
+  const rawJsonCopyLabel = rawJsonCopied ? t("fileDetail.rawJsonCopied") : t("fileDetail.copyRawJson");
+
+  const copyRawJson = useCallback(async () => {
+    const clipboard = navigator.clipboard;
+    if (!clipboard?.writeText) {
       return;
     }
-
-    const containerWidth = container.clientWidth;
-    if (containerWidth <= 0) {
-      return;
+    await clipboard.writeText(rawJsonText);
+    setRawJsonCopied(true);
+    if (rawJsonCopyResetTimeoutRef.current !== null) {
+      window.clearTimeout(rawJsonCopyResetTimeoutRef.current);
     }
+    rawJsonCopyResetTimeoutRef.current = window.setTimeout(() => {
+      setRawJsonCopied(false);
+      rawJsonCopyResetTimeoutRef.current = null;
+    }, 1800);
+  }, [rawJsonText]);
 
-    const columnCount = getFileDetailPanelColumnCount(containerWidth);
-    const columnWidth = (containerWidth - FILE_DETAIL_PANEL_GAP * (columnCount - 1)) / columnCount;
-    const columnHeights = Array.from({ length: columnCount }, () => 0);
-    const nextLayout: FileDetailPanelLayout = {};
-
-    for (const panelId of panelSettingsRef.current.order) {
-      const shell = panelShellRefs.current[panelId];
-      const isWide = WIDE_FILE_DETAIL_PANEL_IDS.has(panelId);
-      const itemWidth = isWide ? containerWidth : columnWidth;
-      if (shell) {
-        shell.style.width = `${itemWidth}px`;
-      }
-      const itemHeight = Math.max(1, Math.ceil(shell?.getBoundingClientRect().height ?? 1));
-
-      if (isWide) {
-        const y = Math.max(...columnHeights);
-        nextLayout[panelId] = { x: 0, y, width: itemWidth, height: itemHeight };
-        columnHeights.fill(y + itemHeight + FILE_DETAIL_PANEL_GAP);
-        continue;
-      }
-
-      const columnIndex = columnHeights.reduce(
-        (shortestIndex, currentHeight, currentIndex) =>
-          currentHeight < columnHeights[shortestIndex] ? currentIndex : shortestIndex,
-        0,
-      );
-      const x = columnIndex * (columnWidth + FILE_DETAIL_PANEL_GAP);
-      const y = columnHeights[columnIndex];
-      nextLayout[panelId] = { x, y, width: itemWidth, height: itemHeight };
-      columnHeights[columnIndex] = y + itemHeight + FILE_DETAIL_PANEL_GAP;
+  const changeAudioStreamPrimaryMode = useCallback((mode: AudioStreamPrimaryMode) => {
+    setAudioStreamPrimaryMode(mode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY, mode);
     }
-
-    const nextHeight = Math.max(0, Math.max(...columnHeights) - FILE_DETAIL_PANEL_GAP);
-    panelLayoutRef.current = nextLayout;
-    setPanelLayout(nextLayout);
-    setPanelContainerHeight(nextHeight);
   }, []);
-
-  const schedulePanelLayoutMeasure = useCallback(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (layoutFrameRef.current !== null) {
-      window.cancelAnimationFrame(layoutFrameRef.current);
-    }
-    layoutFrameRef.current = window.requestAnimationFrame(() => {
-      layoutFrameRef.current = null;
-      measurePanelLayout();
-    });
-  }, [measurePanelLayout]);
-
-  useLayoutEffect(() => {
-    measurePanelLayout();
-  }, [file, qualityDetail, fileHistory, fileHistoryError, error, panelSettings, measurePanelLayout]);
-
-  useEffect(() => {
-    const container = panelContainerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    schedulePanelLayoutMeasure();
-    window.addEventListener("resize", schedulePanelLayoutMeasure);
-
-    if (typeof ResizeObserver === "undefined") {
-      return () => {
-        window.removeEventListener("resize", schedulePanelLayoutMeasure);
-        if (layoutFrameRef.current !== null) {
-          window.cancelAnimationFrame(layoutFrameRef.current);
-          layoutFrameRef.current = null;
-        }
-      };
-    }
-
-    const observer = new ResizeObserver(() => schedulePanelLayoutMeasure());
-    observer.observe(container);
-    for (const panelId of panelSettingsRef.current.order) {
-      const shell = panelShellRefs.current[panelId];
-      if (shell) {
-        observer.observe(shell);
-      }
-    }
-
-    return () => {
-      window.removeEventListener("resize", schedulePanelLayoutMeasure);
-      observer.disconnect();
-      if (layoutFrameRef.current !== null) {
-        window.cancelAnimationFrame(layoutFrameRef.current);
-        layoutFrameRef.current = null;
-      }
-    };
-  }, [panelSettings.order, schedulePanelLayoutMeasure]);
-
-  const updatePanelSettings = useCallback(
-    (transform: FileDetailPanelSettingsTransform) => {
-      setPanelSettings((current) => {
-        const next = saveFileDetailPanelSettings(transform(current));
-        panelSettingsRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
-
-  const updateTransientPanelSettings = useCallback(
-    (transform: FileDetailPanelSettingsTransform) => {
-      setPanelSettings((current) => {
-        const next = transform(current);
-        panelSettingsRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
-
-  function handlePanelDrop(targetId: FileDetailPanelId) {
-    if (!draggedPanelId) {
-      return;
-    }
-
-    updatePanelSettings((current) => moveFileDetailPanel(current, draggedPanelId, targetId));
-    setDraggedPanelId(null);
-    setDropTargetPanelId(null);
-  }
-
-  const updatePointerDrag = useCallback((event: PointerEvent) => {
-    const currentDragState = dragStateRef.current;
-    const container = panelContainerRef.current;
-    if (!currentDragState || !container || event.pointerId !== currentDragState.pointerId) {
-      return;
-    }
-
-    const containerRect = container.getBoundingClientRect();
-    const pointerX = event.clientX - containerRect.left;
-    const pointerY = event.clientY - containerRect.top;
-    const nextDragState = {
-      ...currentDragState,
-      x: pointerX - currentDragState.offsetX,
-      y: pointerY - currentDragState.offsetY,
-    };
-    dragStateRef.current = nextDragState;
-    setDragState(nextDragState);
-
-    const targetId = findPanelDropTarget(
-      pointerX,
-      pointerY,
-      currentDragState.id,
-      panelSettingsRef.current.order,
-      panelLayoutRef.current,
-    );
-    if (!targetId) {
-      setDropTargetPanelId(null);
-      return;
-    }
-
-    setDropTargetPanelId(targetId);
-    updateTransientPanelSettings((current) => moveFileDetailPanel(current, currentDragState.id, targetId));
-  }, [updateTransientPanelSettings]);
-
-  const finishPointerDrag = useCallback((event: PointerEvent) => {
-    const currentDragState = dragStateRef.current;
-    if (!currentDragState || event.pointerId !== currentDragState.pointerId) {
-      return;
-    }
-
-    const savedSettings = saveFileDetailPanelSettings(panelSettingsRef.current);
-    panelSettingsRef.current = savedSettings;
-    setPanelSettings(savedSettings);
-    dragStateRef.current = null;
-    setDragState(null);
-    setDraggedPanelId(null);
-    setDropTargetPanelId(null);
-    schedulePanelLayoutMeasure();
-  }, [schedulePanelLayoutMeasure]);
-
-  useEffect(() => {
-    if (!dragState) {
-      return undefined;
-    }
-
-    window.addEventListener("pointermove", updatePointerDrag);
-    window.addEventListener("pointerup", finishPointerDrag);
-    window.addEventListener("pointercancel", finishPointerDrag);
-
-    return () => {
-      window.removeEventListener("pointermove", updatePointerDrag);
-      window.removeEventListener("pointerup", finishPointerDrag);
-      window.removeEventListener("pointercancel", finishPointerDrag);
-    };
-  }, [dragState?.pointerId, finishPointerDrag, updatePointerDrag]);
-
-  function handlePanelPointerDown(panelId: FileDetailPanelId, event: ReactPointerEvent<HTMLElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    const shell = panelShellRefs.current[panelId];
-    const layout = panelLayoutRef.current[panelId];
-    const container = panelContainerRef.current;
-    if (!shell || !layout || !container) {
-      return;
-    }
-
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    const shellRect = shell.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const nextDragState = {
-      id: panelId,
-      pointerId: event.pointerId,
-      offsetX: event.clientX - shellRect.left,
-      offsetY: event.clientY - shellRect.top,
-      x: shellRect.left - containerRect.left,
-      y: shellRect.top - containerRect.top,
-      width: layout.width,
-      height: layout.height,
-    };
-    dragStateRef.current = nextDragState;
-    setDragState(nextDragState);
-    setDraggedPanelId(panelId);
-    setDropTargetPanelId(null);
-  }
 
   const panels: Record<
     FileDetailPanelId,
@@ -968,39 +1191,25 @@ export function FileDetailPage() {
       title: string;
       loading: boolean;
       error: string | null;
+      actions?: ReactNode;
       body: ReactNode;
-      isWide?: boolean;
     }
   > = {
-    qualityBreakdown: {
-      title: t("fileDetail.qualityBreakdown"),
-      loading: !qualityDetail && !error,
-      error: null,
-      body: qualityDetail ? (
-        <div className="quality-tooltip-content quality-detail-list">
-          <div className="quality-tooltip-summary">
-            <strong>{qualityDetail.score}/10</strong>
-            <span>{t("quality.rawScore", { value: qualityDetail.score_raw.toFixed(2) })}</span>
-          </div>
-          {qualityDetail.breakdown.categories.map((category) => (
-            <div className="quality-tooltip-row" key={category.key}>
-              <div className="quality-tooltip-head">
-                <strong>{t(`quality.category.${category.key}`)}</strong>
-                <span>{category.score.toFixed(1)}</span>
-              </div>
-              <div>{t("quality.weight", { value: category.weight })}</div>
-              {category.skipped ? <div>{t("quality.skipped")}</div> : null}
-              {category.unknown_mapping ? <div>{t("quality.unknownMapping")}</div> : null}
-            </div>
-          ))}
-        </div>
-      ) : null,
-    },
-    format: {
-      title: t("fileDetail.format"),
+    overview: {
+      title: t("fileDetail.navigation.overview"),
       loading: !file && !error,
       error,
-      body: <FormatDetailsList detail={file} t={t} />,
+      body: <OverviewPanel file={file} t={t} inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles} />,
+    },
+    qualityBreakdown: {
+      title: t("fileDetail.qualityBreakdown"),
+      loading: !qualityDetail && !qualityError && !error,
+      error: null,
+      body: qualityDetail ? (
+        <QualityBreakdownCategoryList qualityDetail={qualityDetail} t={t} />
+      ) : (
+        <div className="notice">{t("quality.unavailable")}</div>
+      ),
     },
     cover: {
       title: t("fileDetail.cover"),
@@ -1030,6 +1239,7 @@ export function FileDetailPage() {
           detail={file ?? undefined}
           t={t}
           surface="panel"
+          showSummary={false}
           inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}
         />
       ),
@@ -1038,7 +1248,25 @@ export function FileDetailPage() {
       title: t("fileDetail.audioStreams"),
       loading: !file && !error,
       error,
-      body: <StreamDetailsList kind="audio" detail={file ?? undefined} t={t} surface="panel" />,
+      actions: (
+        <AudioStreamPrimaryToggle
+          mode={audioStreamPrimaryMode}
+          onChange={changeAudioStreamPrimaryMode}
+        />
+      ),
+      body: (
+        <div className="file-detail-audio-panel">
+          <AudioMetadataList detail={file} t={t} />
+          <StreamDetailsList
+            kind="audio"
+            detail={file ?? undefined}
+            t={t}
+            surface="panel"
+            showSummary={false}
+            audioPrimaryMode={audioStreamPrimaryMode}
+          />
+        </div>
+      ),
     },
     chapters: {
       title: t("fileDetail.chapters"),
@@ -1050,140 +1278,173 @@ export function FileDetailPage() {
       title: t("fileDetail.subtitles"),
       loading: !file && !error,
       error,
-      body: <StreamDetailsList kind="subtitle" detail={file ?? undefined} t={t} surface="panel" />,
+      body: <StreamDetailsList kind="subtitle" detail={file ?? undefined} t={t} surface="panel" showSummary={false} />,
     },
     rawJson: {
       title: t("fileDetail.rawJson"),
       loading: !file && !error,
       error,
+      actions: (
+        <button
+          type="button"
+          className="secondary icon-only-button file-detail-raw-json-copy-button"
+          aria-label={rawJsonCopyLabel}
+          data-tooltip={rawJsonCopyLabel}
+          title={rawJsonCopyLabel}
+          disabled={!canCopyRawJson || !file}
+          onClick={() => void copyRawJson()}
+        >
+          <CopyIcon aria-hidden="true" className="nav-icon" size={20} />
+        </button>
+      ),
       body: <JsonPreview value={file?.raw_ffprobe_json ?? {}} />,
-      isWide: true,
     },
   };
-  const hasPanelLayout = panelSettings.order.every((panelId) => Boolean(panelLayout[panelId]));
-  const panelContainerStyle: CSSProperties | undefined = hasPanelLayout
-    ? { height: `${panelContainerHeight}px` }
-    : undefined;
+
+  const availablePanelIds = useMemo(
+    () => buildAvailableFileDetailPanelIds(file, qualityDetail),
+    [file, qualityDetail],
+  );
+  const navItems = FILE_DETAIL_NAV_ITEMS.filter((item) => availablePanelIds.includes(item.id));
+  const normalizedActivePanelId = normalizeFileDetailPanelId(activePanelId, availablePanelIds);
+  const activePanel = panels[normalizedActivePanelId];
+  const activeNavItem = navItems.find((item) => item.id === normalizedActivePanelId) ?? navItems[0];
+  const ActiveNavIcon = activeNavItem.icon;
+
+  useEffect(() => {
+    if (!file && !error) {
+      return;
+    }
+    const normalized = normalizeFileDetailPanelId(activePanelId, availablePanelIds);
+    if (normalized !== activePanelId) {
+      setActivePanelId(normalized);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY, normalized);
+      }
+    }
+  }, [activePanelId, availablePanelIds, error, file]);
+
+  const selectPanel = useCallback((panelId: FileDetailPanelId) => {
+    setActivePanelId(panelId);
+    setIsMobileMenuOpen(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(FILE_DETAIL_ACTIVE_PANEL_STORAGE_KEY, panelId);
+    }
+  }, []);
+
+  const toggleNavCollapsed = useCallback(() => {
+    setIsNavCollapsed((current) => {
+      const next = !current;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY, next ? "true" : "false");
+      }
+      return next;
+    });
+  }, []);
+
+  function renderNavItem(item: FileDetailNavItem, mobile = false): ReactNode {
+    const Icon = item.icon;
+    const label = t(item.labelKey);
+    const active = normalizedActivePanelId === item.id;
+    return (
+      <button
+        type="button"
+        key={item.id}
+        className={`settings-navigation-item${mobile ? " settings-mobile-navigation-item" : ""}${active ? " active" : ""}`}
+        aria-current={active ? "page" : undefined}
+        aria-label={label}
+        title={!mobile && isNavCollapsed ? label : undefined}
+        data-file-detail-panel-id={item.id}
+        data-toggle-key={item.id}
+        tabIndex={mobile && !isMobileMenuOpen ? -1 : undefined}
+        onClick={() => selectPanel(item.id)}
+      >
+        {active ? <SlidingTogglePill activeKey={item.id} className="nav-active-pill" /> : null}
+        <span className="settings-navigation-item-content">
+          <Icon aria-hidden="true" className="nav-icon" />
+          {mobile || !isNavCollapsed ? <span>{label}</span> : null}
+        </span>
+      </button>
+    );
+  }
 
   return (
-    <>
-      <section className="panel stack">
-        <div className="file-detail-title-row">
-          <h2 className="file-detail-title">{file?.filename ?? t("fileDetail.loading")}</h2>
-          {file?.relative_path ? (
-            <TooltipTrigger ariaLabel={t("fileDetail.showFullRelativePath")} content={file.relative_path}>
-              ?
-            </TooltipTrigger>
-          ) : null}
-        </div>
-        <div className="meta-tags">
-          <span className="badge">{file?.video_codec ? formatCodecLabel(file.video_codec, "video") : t("fileDetail.unknownCodec")}</span>
-          {file?.resolution_category_label ? (
-            <TooltipTrigger
-              ariaLabel="Show exact resolution"
-              content={file.resolution ?? t("fileDetail.unknownResolution")}
-              className="file-detail-badge-tooltip-trigger"
-            >
-              <span className="badge">{file.resolution_category_label}</span>
-            </TooltipTrigger>
-          ) : (
-            <span className="badge">{file?.resolution ?? t("fileDetail.unknownResolution")}</span>
-          )}
-          <span className="badge">
-            {formatHdrType(file?.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr")}
+    <div className={`settings-layout file-detail-layout${isNavCollapsed ? " is-settings-nav-collapsed" : ""}`}>
+      <aside className="settings-navigation-panel file-detail-navigation-panel" aria-label={t("fileDetail.navigation.label")}>
+        <button
+          type="button"
+          className="settings-mobile-menu-button"
+          aria-label={
+            isMobileMenuOpen
+              ? t("fileDetail.navigation.closeMobile")
+              : t("fileDetail.navigation.openMobile")
+          }
+          aria-expanded={isMobileMenuOpen}
+          aria-controls="file-detail-mobile-navigation-menu"
+          onClick={() => setIsMobileMenuOpen((current) => !current)}
+        >
+          <span className="settings-mobile-menu-button-content">
+            <span className="settings-mobile-menu-current">
+              <ActiveNavIcon aria-hidden="true" className="nav-icon" />
+              <span>{t(activeNavItem.labelKey)}</span>
+            </span>
           </span>
-          <span className="badge">{formatBytes(file?.size_bytes ?? 0)}</span>
-          <span className="badge">{formatDuration(file?.duration ?? 0)}</span>
-          <span className="badge">{file ? `${file.quality_score}/10` : "…"}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`settings-mobile-menu-chevron${isMobileMenuOpen ? " is-open" : ""}`}
+          />
+        </button>
+        <div
+          id="file-detail-mobile-navigation-menu"
+          className={`settings-mobile-navigation-menu${isMobileMenuOpen ? " is-open" : ""}`}
+          aria-hidden={!isMobileMenuOpen}
+        >
+          <nav className="settings-mobile-navigation-list" aria-label={t("fileDetail.navigation.mobileLabel")}>
+            {navItems.map((item) => renderNavItem(item, true))}
+          </nav>
         </div>
-        {file?.analysis_failure_reason ? (
-          <div className="notice file-detail-analysis-warning">
-            <strong>{t("fileDetail.analysisFailure")}</strong>
-            <span>{file.analysis_failure_reason}</span>
-          </div>
-        ) : null}
-      </section>
+        <div className="settings-navigation-header">
+          {!isNavCollapsed ? <span>{t("fileDetail.navigation.title")}</span> : null}
+          <button
+            type="button"
+            className="secondary icon-only-button settings-navigation-collapse-button"
+            aria-label={
+              isNavCollapsed
+                ? t("fileDetail.navigation.expand")
+                : t("fileDetail.navigation.collapse")
+            }
+            title={
+              isNavCollapsed
+                ? t("fileDetail.navigation.expand")
+                : t("fileDetail.navigation.collapse")
+            }
+            aria-expanded={!isNavCollapsed}
+            onClick={toggleNavCollapsed}
+          >
+            <PanelLeftToggleIcon
+              aria-hidden="true"
+              collapsed={isNavCollapsed}
+              className="settings-navigation-toggle-icon"
+              size={24}
+            />
+          </button>
+        </div>
+        <nav className="settings-navigation-list">
+          {navItems.map((item) => renderNavItem(item))}
+        </nav>
+      </aside>
 
-      <div
-        ref={panelContainerRef}
-        className={`media-grid file-detail-panels-grid${hasPanelLayout ? " is-masonry-ready" : ""}${
-          dragState ? " is-reordering" : ""
-        }`}
-        style={panelContainerStyle}
-      >
-        {panelSettings.order.map((panelId) => {
-          const panel = panels[panelId];
-          const layout = panelLayout[panelId];
-          const isDragging = dragState?.id === panelId;
-          const x = isDragging && dragState ? dragState.x : layout?.x ?? 0;
-          const y = isDragging && dragState ? dragState.y : layout?.y ?? 0;
-          const width = isDragging && dragState ? dragState.width : layout?.width;
-          const shellStyle: CSSProperties | undefined = layout
-            ? {
-                width: width ? `${width}px` : undefined,
-                transform: `translate3d(${x}px, ${y}px, 0)`,
-                zIndex: isDragging ? 40 : undefined,
-              }
-            : undefined;
-          return (
-            <div
-              key={panelId}
-              ref={(node) => {
-                panelShellRefs.current[panelId] = node;
-              }}
-              className={`file-detail-panel-shell${panel.isWide ? " is-wide" : ""}${
-                dropTargetPanelId === panelId ? " is-drop-target" : ""
-              }${isDragging ? " is-dragging" : ""}`}
-              style={shellStyle}
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (draggedPanelId && draggedPanelId !== panelId) {
-                  setDropTargetPanelId(panelId);
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                handlePanelDrop(panelId);
-              }}
-            >
-              <AsyncPanel
-                title={panel.title}
-                loading={panel.loading}
-                error={panel.error}
-                headerAddon={
-                  <span
-                    className={`statistics-drag-handle file-detail-panel-drag-handle${draggedPanelId === panelId ? " is-dragging" : ""}`}
-                    draggable
-                    onPointerDown={(event) => handlePanelPointerDown(panelId, event)}
-                    onDragStart={(event) => {
-                      if (event.dataTransfer) {
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData("text/plain", panelId);
-                      }
-                      setDraggedPanelId(panelId);
-                      setDropTargetPanelId(null);
-                    }}
-                    onDragEnd={() => {
-                      setDraggedPanelId(null);
-                      setDropTargetPanelId(null);
-                    }}
-                    aria-hidden="true"
-                  >
-                    <GripVertical className="nav-icon" />
-                  </span>
-                }
-                collapseState={{
-                  collapsed: panelSettings.collapsed[panelId],
-                  onToggle: () => updatePanelSettings((current) => toggleFileDetailPanelCollapsed(current, panelId)),
-                  bodyId: `file-detail-panel-${panelId}`,
-                }}
-              >
-                {panel.body}
-              </AsyncPanel>
-            </div>
-          );
-        })}
+      <div className="settings-main-column file-detail-main-column">
+        <AsyncPanel
+          title={activePanel.title}
+          loading={activePanel.loading}
+          error={activePanel.error}
+          className="file-detail-active-panel"
+          collapseActions={activePanel.actions}
+        >
+          {activePanel.body}
+        </AsyncPanel>
       </div>
-    </>
+    </div>
   );
 }

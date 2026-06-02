@@ -21,6 +21,10 @@ export function bundledFfprobeName(platform = process.platform) {
   return platform === "win32" ? "ffprobe.exe" : "ffprobe";
 }
 
+export function bundledFfmpegName(platform = process.platform) {
+  return platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+}
+
 function runCommand(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -38,10 +42,10 @@ function runCommand(command, args, options = {}) {
   return result;
 }
 
-function commandLookupInvocation(platform = process.platform) {
+function commandLookupInvocation(executableName, platform = process.platform) {
   return platform === "win32"
-    ? { command: "where", args: ["ffprobe"] }
-    : { command: "which", args: ["ffprobe"] };
+    ? { command: "where", args: [executableName] }
+    : { command: "which", args: [executableName] };
 }
 
 function firstExistingLine(value) {
@@ -58,13 +62,52 @@ export function resolveBundledFfprobeSource({
   stat = statSync,
   lookup = (command, args) => spawnSync(command, args, { encoding: "utf8" }),
 } = {}) {
-  const executableName = bundledFfprobeName(platform);
-  const configuredPath = env.MEDIALYZE_FFPROBE_DIR?.trim();
+  return resolveBundledToolSource({
+    env,
+    platform,
+    exists,
+    stat,
+    lookup,
+    executableName: bundledFfprobeName(platform),
+    envName: "MEDIALYZE_FFPROBE_DIR",
+    toolName: "ffprobe",
+  });
+}
 
+export function resolveBundledFfmpegSource({
+  env = process.env,
+  platform = process.platform,
+  exists = existsSync,
+  stat = statSync,
+  lookup = (command, args) => spawnSync(command, args, { encoding: "utf8" }),
+} = {}) {
+  return resolveBundledToolSource({
+    env,
+    platform,
+    exists,
+    stat,
+    lookup,
+    executableName: bundledFfmpegName(platform),
+    envName: "MEDIALYZE_FFMPEG_DIR",
+    toolName: "ffmpeg",
+  });
+}
+
+function resolveBundledToolSource({
+  env,
+  platform,
+  exists,
+  stat,
+  lookup,
+  executableName,
+  envName,
+  toolName,
+}) {
+  const configuredPath = env[envName]?.trim();
   if (configuredPath) {
     if (!exists(configuredPath)) {
       throw new Error(
-        `MEDIALYZE_FFPROBE_DIR does not exist: ${configuredPath}`
+        `${envName} does not exist: ${configuredPath}`
       );
     }
     const configuredStat = stat(configuredPath);
@@ -72,7 +115,7 @@ export function resolveBundledFfprobeSource({
       const bundledExecutable = path.join(configuredPath, executableName);
       if (!exists(bundledExecutable)) {
         throw new Error(
-          `MEDIALYZE_FFPROBE_DIR does not contain ${executableName}: ${configuredPath}`
+          `${envName} does not contain ${executableName}: ${configuredPath}`
         );
       }
       return {
@@ -88,18 +131,18 @@ export function resolveBundledFfprobeSource({
     };
   }
 
-  const lookupInvocation = commandLookupInvocation(platform);
+  const lookupInvocation = commandLookupInvocation(executableName, platform);
   const lookupResult = lookup(lookupInvocation.command, lookupInvocation.args);
   if (lookupResult.status !== 0) {
     throw new Error(
-      "Unable to locate ffprobe for desktop packaging. Set MEDIALYZE_FFPROBE_DIR or install ffprobe on PATH."
+      `Unable to locate ${toolName} for desktop packaging. Set ${envName} or install ${toolName} on PATH.`
     );
   }
 
   const detectedExecutable = firstExistingLine(lookupResult.stdout ?? "");
   if (!detectedExecutable || !exists(detectedExecutable)) {
     throw new Error(
-      "ffprobe lookup did not return a usable executable path for desktop packaging."
+      `${toolName} lookup did not return a usable executable path for desktop packaging.`
     );
   }
 
@@ -354,8 +397,24 @@ export function bundleMacosFfprobeDependencies(
 }
 
 export function bundleFfprobe(outputPath, options = {}) {
-  const source = resolveBundledFfprobeSource(options);
-  const targetDir = path.join(outputPath, "ffprobe");
+  return bundleMediaTool(outputPath, {
+    ...options,
+    toolName: "ffprobe",
+    resolveSource: resolveBundledFfprobeSource,
+  });
+}
+
+export function bundleFfmpeg(outputPath, options = {}) {
+  return bundleMediaTool(outputPath, {
+    ...options,
+    toolName: "ffmpeg",
+    resolveSource: resolveBundledFfmpegSource,
+  });
+}
+
+function bundleMediaTool(outputPath, options = {}) {
+  const source = options.resolveSource(options);
+  const targetDir = path.join(outputPath, options.toolName);
   rmSync(targetDir, { recursive: true, force: true });
   mkdirSync(targetDir, { recursive: true });
 
@@ -488,6 +547,7 @@ export function main() {
   }
 
   bundleFfprobe(outputDir);
+  bundleFfmpeg(outputDir);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

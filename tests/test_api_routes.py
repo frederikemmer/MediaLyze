@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import subprocess
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -41,6 +42,7 @@ from backend.app.schemas.history import (
 from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
+from backend.app.services.media_service import COVER_PNG_CACHE
 from backend.app.services.update_status import UPDATE_STATUS_KEY
 from backend.app.services.runtime import ScanCancelPersistenceError
 
@@ -182,6 +184,144 @@ def test_file_chapters_export_csv_returns_chapter_detail_rows() -> None:
     assert "book.m4b-chapters.csv" in response.headers["content-disposition"]
     assert "chapter_index" in response.text
     assert "Opening" in response.text
+
+
+def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> None:
+    COVER_PNG_CACHE.clear()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    source_path = tmp_path / "album" / "song.mp3"
+    source_path.parent.mkdir()
+    source_path.write_bytes(b"audio")
+    captured: dict[str, object] = {}
+    run_count = 0
+
+    def fake_run(command, *, check, capture_output, timeout):
+        nonlocal run_count
+        run_count += 1
+        captured["command"] = command
+        captured["check"] = check
+        captured["capture_output"] = capture_output
+        captured["timeout"] = timeout
+        return subprocess.CompletedProcess(command, 0, stdout=b"\x89PNG\r\n", stderr=b"")
+
+    monkeypatch.setattr("backend.app.services.media_service.subprocess.run", fake_run)
+
+    with session_factory() as db:
+        library = Library(name="Music", path=str(tmp_path), type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="album/song.mp3",
+            filename="song.mp3",
+            extension="mp3",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            has_embedded_cover=True,
+            embedded_cover_stream_index=2,
+        )
+        db.add(media_file)
+        db.commit()
+
+        client = _build_test_app(db)
+        client.app.dependency_overrides[get_app_settings] = lambda: Settings(ffmpeg_path="/custom/ffmpeg")
+        response = client.get(f"/api/files/{media_file.id}/cover?download=1")
+        cached_response = client.get(f"/api/files/{media_file.id}/cover")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.headers["cache-control"] == "no-store"
+    assert 'filename="song-cover.png"' in response.headers["content-disposition"]
+    assert response.content == b"\x89PNG\r\n"
+    assert cached_response.status_code == 200
+    assert cached_response.content == b"\x89PNG\r\n"
+    assert run_count == 1
+    assert captured["command"] == [
+        "/custom/ffmpeg",
+        "-v",
+        "error",
+        "-nostdin",
+        "-i",
+        str(source_path),
+        "-map",
+        "0:2",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "png",
+        "pipe:1",
+    ]
+    assert captured["check"] is True
+    assert captured["capture_output"] is True
+
+
+def test_file_cover_returns_404_without_embedded_cover(tmp_path) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Music", path=str(tmp_path), type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="song.mp3",
+            filename="song.mp3",
+            extension="mp3",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            has_embedded_cover=False,
+        )
+        db.add(media_file)
+        db.commit()
+
+        response = _build_test_app(db).get(f"/api/files/{media_file.id}/cover")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Embedded cover not found"}
+
+
+def test_file_cover_returns_500_for_ffmpeg_failure(tmp_path, monkeypatch) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    source_path = tmp_path / "song.mp3"
+    source_path.write_bytes(b"audio")
+
+    def fake_run(command, **_kwargs):
+        raise subprocess.CalledProcessError(1, command, stderr=b"cover stream failed\nmore")
+
+    monkeypatch.setattr("backend.app.services.media_service.subprocess.run", fake_run)
+
+    with session_factory() as db:
+        library = Library(name="Music", path=str(tmp_path), type=LibraryType.music, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="song.mp3",
+            filename="song.mp3",
+            extension="mp3",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+            has_embedded_cover=True,
+            embedded_cover_stream_index=1,
+        )
+        db.add(media_file)
+        db.commit()
+
+        response = _build_test_app(db).get(f"/api/files/{media_file.id}/cover")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "cover stream failed"}
 
 
 def test_health_returns_backend_version() -> None:

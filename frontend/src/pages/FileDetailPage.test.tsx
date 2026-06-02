@@ -1,6 +1,6 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -12,7 +12,6 @@ import {
   type MediaFileHistory,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
-import { FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, getFileDetailPanelSettings } from "../lib/file-detail-panels";
 import { FileDetailPage } from "./FileDetailPage";
 
 type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
@@ -101,6 +100,7 @@ function createFileDetail(): MediaFileDetail {
         color_primaries: "bt2020",
         frame_rate: 23.976,
         bit_rate: 20_000_000,
+        bit_depth: 10,
         hdr_type: "Dolby Vision",
       },
     ],
@@ -114,9 +114,12 @@ function createFileDetail(): MediaFileDetail {
         channel_layout: "5.1",
         sample_rate: 48_000,
         bit_rate: 768_000,
+        bit_depth: 24,
+        bit_rate_mode: "CBR",
         language: "en",
         default_flag: true,
         forced_flag: false,
+        title: "English Atmos",
       },
     ],
     subtitle_streams: [
@@ -160,7 +163,57 @@ function createQualityDetail(): MediaFileQualityScoreDetail {
     breakdown: {
       score: 9,
       score_raw: 91.2,
-      categories: [],
+      categories: [
+        {
+          key: "resolution",
+          score: 100,
+          weight: 8,
+          active: true,
+          skipped: false,
+          minimum: "1080p",
+          ideal: "4k",
+          actual: "4k",
+          unknown_mapping: false,
+          notes: [],
+        },
+        {
+          key: "visual_density",
+          score: 87.5,
+          weight: 10,
+          active: true,
+          skipped: false,
+          minimum: 0.02,
+          ideal: 0.04,
+          maximum: 0.08,
+          actual: 0.0525,
+          unknown_mapping: false,
+          notes: ["missing_value"],
+        },
+        {
+          key: "video_codec",
+          score: 60,
+          weight: 5,
+          active: true,
+          skipped: false,
+          minimum: ["h264", "hevc"],
+          ideal: ["av1"],
+          actual: "vp9",
+          unknown_mapping: true,
+          notes: [],
+        },
+        {
+          key: "language_preferences",
+          score: 0,
+          weight: 6,
+          active: true,
+          skipped: true,
+          minimum: null,
+          ideal: null,
+          actual: [],
+          unknown_mapping: false,
+          notes: ["no_preferences"],
+        },
+      ],
     },
   };
 }
@@ -294,19 +347,10 @@ function renderPage(fileId: number) {
   );
 }
 
-function getPanelShell(title: string): HTMLElement {
-  const titleButton = screen.getByRole("button", { name: title });
-  const shell = titleButton.closest(".file-detail-panel-shell");
-  if (!(shell instanceof HTMLElement)) {
-    throw new Error(`Panel shell for "${title}" not found`);
-  }
-  return shell;
-}
-
-function getPanelOrder(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll(".file-detail-panel-shell .panel-header h2")).map((heading) =>
-    heading.textContent?.trim() ?? "",
-  );
+async function selectFileDetailPanel(name: string) {
+  const items = await screen.findAllByRole("button", { name });
+  const desktopItem = items.find((item) => item.closest(".settings-navigation-list"));
+  fireEvent.click(desktopItem ?? items[0]);
 }
 
 afterEach(() => {
@@ -316,7 +360,7 @@ afterEach(() => {
 });
 
 describe("FileDetailPage", () => {
-  it("renders header badges and exposes the relative path in the title tooltip", async () => {
+  it("renders overview badges and swaps active panels from the navigation", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -324,33 +368,109 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByText("UHD")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByText("UHD")).toBeInTheDocument();
     expect(screen.getByText("10.0 GB")).toBeInTheDocument();
     expect(screen.getAllByText("56m").length).toBeGreaterThan(0);
     expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
     expect(container.querySelector(".path-segment")).not.toBeInTheDocument();
     expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Format" })).not.toBeInTheDocument();
+    expect(screen.getByText("Container")).toBeInTheDocument();
+    expect(screen.getByText("Format name")).toBeInTheDocument();
+    expect(screen.getByText("Matroska")).toBeInTheDocument();
+    expect(screen.getByText("25 Mbps")).toBeInTheDocument();
+    expect(screen.getByText("100/100")).toBeInTheDocument();
 
     const pathTooltipTrigger = screen.getByRole("button", { name: "Show full relative path" });
     fireEvent.mouseEnter(pathTooltipTrigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(file.relative_path);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show exact resolution" }));
-    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent(file.resolution ?? ""));
+    await selectFileDetailPanel("Video streams");
+    expect(await screen.findByRole("heading", { name: "Video streams" })).toBeInTheDocument();
+    let activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
+    expect(within(activePanel).getAllByRole("heading", { name: "Video streams" })).toHaveLength(1);
+    expect(screen.getAllByText("Main 10").length).toBeGreaterThan(0);
+    expect(screen.getByText("Stream index")).toBeInTheDocument();
+    expect(screen.getByText("Pixel format")).toBeInTheDocument();
+    expect(screen.getByText("yuv420p10le")).toBeInTheDocument();
 
-    expect(screen.getByText("Container")).toBeInTheDocument();
-    expect(screen.getByText("Matroska")).toBeInTheDocument();
-    expect(screen.getByText("25 Mbps")).toBeInTheDocument();
-    expect(screen.getByText("100/100")).toBeInTheDocument();
-    expect(screen.getByText("Main 10")).toBeInTheDocument();
-    expect(screen.getByText("Dolby Digital Plus")).toBeInTheDocument();
-    expect(screen.getByText("Dolby Atmos")).toBeInTheDocument();
-    expect(screen.getByText("5.1")).toBeInTheDocument();
+    await selectFileDetailPanel("Audio streams");
+    expect(await screen.findByRole("heading", { name: "Audio streams" })).toBeInTheDocument();
+    activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
+    expect(within(activePanel).getAllByRole("heading", { name: "Audio streams" })).toHaveLength(1);
+    expect(screen.getAllByText("Dolby Digital Plus").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Dolby Atmos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5.1").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Stream #1")).not.toBeInTheDocument();
+    expect(screen.getByText("Stream index")).toBeInTheDocument();
+    expect(screen.getAllByText("en").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sample rate")).toBeInTheDocument();
+    expect(screen.getByText("48000 Hz")).toBeInTheDocument();
+    expect(screen.getByText("Bit depth")).toBeInTheDocument();
+    expect(screen.getAllByText("24-bit").length).toBeGreaterThan(0);
+    expect(screen.getByText("English Atmos")).toBeInTheDocument();
+
+    await selectFileDetailPanel("Subtitles");
+    expect(await screen.findByRole("heading", { name: "Subtitles" })).toBeInTheDocument();
     expect(screen.getAllByText("SubRip (SRT)")).toHaveLength(2);
     expect(screen.getByText("External")).toBeInTheDocument();
   });
 
-  it("renders audiobook chapters with timings and fallback titles", async () => {
+  it("shows video streams as expandable detail entries", async () => {
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      video_streams: [
+        ...createFileDetail().video_streams,
+        {
+          stream_index: 3,
+          codec: "h264",
+          profile: "High",
+          width: 1920,
+          height: 1080,
+          pix_fmt: "yuv420p",
+          color_space: "bt709",
+          color_transfer: "bt709",
+          color_primaries: "bt709",
+          frame_rate: 24,
+          bit_rate: 8_000_000,
+          bit_depth: 8,
+          hdr_type: null,
+        },
+      ],
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Video streams");
+    expect(await screen.findByRole("heading", { name: "Video streams" })).toBeInTheDocument();
+    const entries = Array.from(container.querySelectorAll(".file-detail-active-panel details.stream-detail-entry"));
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toHaveAttribute("open");
+    expect(entries[1]).not.toHaveAttribute("open");
+    expect(entries[0].querySelector(".stream-detail-entry-head")).toHaveTextContent("HEVC");
+    expect(entries[0].querySelector(".stream-detail-entry-head")).toHaveTextContent("3840x1606");
+    expect(entries[0]).toHaveTextContent("Frame rate");
+    expect(entries[0]).toHaveTextContent("23.976 fps");
+    expect(entries[0]).toHaveTextContent("Bit depth");
+    expect(entries[0]).toHaveTextContent("10-bit");
+    expect(entries[0]).toHaveTextContent("Dynamic range");
+    expect(entries[0]).toHaveTextContent("Dolby Vision");
+
+    fireEvent.click(entries[1].querySelector("summary") as HTMLElement);
+    expect(entries[1]).toHaveAttribute("open");
+    expect(entries[1]).toHaveTextContent("Resolution");
+    expect(entries[1]).toHaveTextContent("1920x1080");
+    expect(entries[1]).toHaveTextContent("Color space");
+    expect(entries[1]).toHaveTextContent("bt709");
+    expect(entries[1]).toHaveTextContent("8.0 Mbps");
+    expect(entries[1]).toHaveTextContent("SDR");
+  });
+
+  it("renders audiobook chapters with timings and fallback titles through navigation", async () => {
     const file = createFileDetail();
     const downloadChapters = vi.spyOn(api, "downloadFileChaptersCsv").mockResolvedValue({
       blob: new Blob(["chapter_index,title\n0,Opening\n"], { type: "text/csv" }),
@@ -367,8 +487,8 @@ describe("FileDetailPage", () => {
 
     renderPage(file.id);
 
-    expect(await screen.findByRole("button", { name: "Chapters" })).toBeInTheDocument();
-    expect(screen.getByText("Opening")).toBeInTheDocument();
+    await selectFileDetailPanel("Chapters");
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
     expect(screen.getByText("Chapter 2")).toBeInTheDocument();
     expect(screen.getAllByText("1m").length).toBeGreaterThan(0);
 
@@ -383,7 +503,7 @@ describe("FileDetailPage", () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:chapters");
   });
 
-  it("renders cover details and persisted analysis diagnostics", async () => {
+  it("renders cover details and keeps analysis diagnostics in overview", async () => {
     const file = {
       ...createFileDetail(),
       scan_status: "failed",
@@ -396,20 +516,46 @@ describe("FileDetailPage", () => {
       analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
       analysis_failure_detail: "Invalid data found when processing input",
     };
+    let resolveCover: ((payload: { blob: Blob; filename: string }) => void) | undefined;
+    const downloadCover = vi.spyOn(api, "downloadFileCover").mockReturnValue(
+      new Promise((resolve) => {
+        resolveCover = resolve;
+      }),
+    );
+    const createObjectUrl = vi.fn(() => "blob:cover");
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectUrl, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectUrl, configurable: true });
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
 
     renderPage(file.id);
 
-    expect(await screen.findByRole("button", { name: "Cover" })).toBeInTheDocument();
-    expect(screen.getByText("600x900")).toBeInTheDocument();
-    expect(screen.getByText("mjpeg")).toBeInTheDocument();
-    expect(screen.getByText("Analysis issue")).toBeInTheDocument();
+    expect(await screen.findByText("Analysis issue")).toBeInTheDocument();
     expect(screen.getByText("Probably DRM-protected or unreadable by ffprobe.")).toBeInTheDocument();
+
+    await selectFileDetailPanel("Cover");
+    expect(await screen.findByText("600x900")).toBeInTheDocument();
+    expect(screen.getByText("mjpeg")).toBeInTheDocument();
+    expect(downloadCover).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load cover" }));
+    expect(screen.getByRole("button", { name: "Loading cover" })).toBeDisabled();
+    await waitFor(() => expect(downloadCover).toHaveBeenCalledWith(file.id));
+    resolveCover?.({
+      blob: new Blob(["cover"], { type: "image/png" }),
+      filename: "movie-cover.png",
+    });
+    await waitFor(() => expect(createObjectUrl).toHaveBeenCalled());
+    expect(await screen.findByRole("img", { name: `Embedded cover for ${file.filename}` })).toHaveAttribute("src", "blob:cover");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download cover" }));
+    expect(anchorClick).toHaveBeenCalled();
   });
 
-  it("renders file history snapshots in the detail panel", async () => {
+  it("renders file history snapshots in the selected detail panel", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -418,7 +564,8 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByRole("button", { name: "File history" })).toBeInTheDocument();
+    await selectFileDetailPanel("File history");
+    expect(await screen.findByRole("heading", { name: "File history" })).toBeInTheDocument();
     expect(screen.getAllByText("Quality").length).toBeGreaterThan(0);
     expect(screen.getAllByText("8.0 GB").length).toBeGreaterThan(0);
     expect(screen.getAllByText("9/10").length).toBeGreaterThan(0);
@@ -441,7 +588,8 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByRole("button", { name: "File history" })).toBeInTheDocument();
+    await selectFileDetailPanel("File history");
+    expect(await screen.findByRole("heading", { name: "File history" })).toBeInTheDocument();
     const historyList = container.querySelector(".file-history-list");
     expect(historyList?.querySelectorAll(".file-history-entry")).toHaveLength(1);
     expect(historyList?.textContent).not.toContain("Audio Channels");
@@ -458,12 +606,64 @@ describe("FileDetailPage", () => {
     const { container } = renderPage(file.id);
 
     expect(await screen.findByText("UHD")).toBeInTheDocument();
-    expect(screen.getByText("Quality breakdown")).toBeInTheDocument();
+    await selectFileDetailPanel("Quality breakdown");
+    expect(await screen.findByText("Quality breakdown unavailable.")).toBeInTheDocument();
     expect(container.querySelector(".card-grid")).not.toBeInTheDocument();
     expect(screen.queryByText("quality unavailable")).not.toBeInTheDocument();
   });
 
-  it("persists collapsed panel state across file detail pages", async () => {
+  it("shows quality score categories as expandable stream-style detail entries", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Quality breakdown");
+    expect(await screen.findByRole("heading", { name: "Quality breakdown" })).toBeInTheDocument();
+    const entries = Array.from(container.querySelectorAll("details.quality-detail-entry"));
+    expect(entries).toHaveLength(4);
+    expect(entries[0]).toHaveAttribute("open");
+    expect(entries[1]).not.toHaveAttribute("open");
+    expect(entries[0].querySelector(".stream-detail-entry-head")).toHaveTextContent("Resolution");
+    expect(entries[0].querySelector(".stream-detail-entry-head")).toHaveTextContent("100 / 100");
+    expect(entries[0]).toHaveTextContent("Weight: 8");
+    expect(entries[0]).toHaveTextContent("Actual");
+    expect(entries[0]).toHaveTextContent("4k");
+
+    fireEvent.click(entries[1].querySelector("summary") as HTMLElement);
+    expect(entries[1]).toHaveAttribute("open");
+    expect(entries[1]).toHaveTextContent("Maximum");
+    expect(entries[1]).toHaveTextContent("0.08");
+    expect(entries[1]).toHaveTextContent("Missing value");
+
+    fireEvent.click(entries[2].querySelector("summary") as HTMLElement);
+    expect(entries[2]).toHaveTextContent("h264, hevc");
+    expect(entries[2]).toHaveTextContent("Unknown value mapped neutrally.");
+
+    fireEvent.click(entries[3].querySelector("summary") as HTMLElement);
+    expect(entries[3]).toHaveTextContent("n/a");
+    expect(entries[3]).toHaveTextContent("No preferences configured");
+    expect(entries[3]).toHaveTextContent("Skipped");
+  });
+
+  it("falls back to overview when the stored active panel is the retired format panel", async () => {
+    const file = createFileDetail();
+    window.localStorage.setItem("medialyze-file-detail-active-panel", "format");
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Format" })).not.toBeInTheDocument();
+    expect(screen.getByText("Matroska")).toBeInTheDocument();
+    await waitFor(() => expect(window.localStorage.getItem("medialyze-file-detail-active-panel")).toBe("overview"));
+  });
+
+  it("persists active navigation selection across file detail pages", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -471,19 +671,18 @@ describe("FileDetailPage", () => {
 
     renderPage(file.id);
 
-    expect(await screen.findByText("Matroska")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Format" }));
-    await waitFor(() => expect(screen.queryByText("Matroska")).not.toBeInTheDocument());
+    await selectFileDetailPanel("Video streams");
+    expect(await screen.findByRole("heading", { name: "Video streams" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("medialyze-file-detail-active-panel")).toBe("videoStreams");
 
     cleanup();
     renderPage(file.id + 1);
 
-    expect(await screen.findByRole("button", { name: "Format" })).toBeInTheDocument();
-    expect(screen.queryByText("Matroska")).not.toBeInTheDocument();
-    expect(getFileDetailPanelSettings().collapsed.format).toBe(true);
+    expect(await screen.findByRole("heading", { name: "Video streams" })).toBeInTheDocument();
+    expect(screen.getAllByText("Main 10").length).toBeGreaterThan(0);
   });
 
-  it("persists reordered panels across file detail pages", async () => {
+  it("persists collapsed navigation state", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -491,68 +690,197 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    await screen.findByText("Matroska");
-
-    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
-    const qualityShell = getPanelShell("Quality breakdown");
-    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
-    expect(rawJsonHandle).toBeTruthy();
-
-    fireEvent.dragStart(rawJsonHandle as Element);
-    fireEvent.dragOver(qualityShell);
-    fireEvent.drop(qualityShell);
-    fireEvent.dragEnd(rawJsonHandle as Element);
-
-    await waitFor(() =>
-      expect(getPanelOrder(container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]),
-    );
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse file detail menu" }));
+    expect(window.localStorage.getItem("medialyze-file-detail-sidebar-collapsed")).toBe("true");
+    expect(container.querySelector(".file-detail-layout")).toHaveClass("is-settings-nav-collapsed");
 
     cleanup();
     const rerendered = renderPage(file.id + 1);
-    await screen.findByText("Matroska");
-
-    expect(getPanelOrder(rerendered.container).slice(0, 2)).toEqual(["Raw ffprobe JSON", "Quality breakdown"]);
-    expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain("\"rawJson\",\"qualityBreakdown\"");
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(rerendered.container.querySelector(".file-detail-layout")).toHaveClass("is-settings-nav-collapsed");
   });
 
-  it("reorders panels while following pointer drag", async () => {
+  it("does not render legacy drag handles or top-level panel grid", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getMockRect(this: HTMLElement) {
-      if (this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid")) {
-        return { x: 0, y: 0, left: 0, top: 0, width: 700, height: 600, right: 700, bottom: 600, toJSON: () => ({}) };
-      }
-      if (this instanceof HTMLElement && this.classList.contains("file-detail-panel-shell")) {
-        const width = Number.parseFloat(this.style.width || "345");
-        const height = this.textContent?.includes("Raw ffprobe JSON") ? 180 : 100;
-        return { x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height, toJSON: () => ({}) };
-      }
-      return { x: 0, y: 0, left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, toJSON: () => ({}) };
-    });
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function getMockClientWidth(this: HTMLElement) {
-      return this instanceof HTMLElement && this.classList.contains("file-detail-panels-grid") ? 700 : 345;
-    });
 
     const { container } = renderPage(file.id);
 
-    await waitFor(() => expect(container.querySelector(".file-detail-panels-grid")).toHaveClass("is-masonry-ready"));
-    const rawJsonShell = getPanelShell("Raw ffprobe JSON");
-    const rawJsonHandle = rawJsonShell.querySelector(".file-detail-panel-drag-handle");
-    expect(rawJsonHandle).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(container.querySelector(".file-detail-panels-grid")).not.toBeInTheDocument();
+    expect(container.querySelector(".file-detail-panel-drag-handle")).not.toBeInTheDocument();
+  });
 
-    fireEvent.pointerDown(rawJsonHandle as Element, { pointerId: 1, button: 0, clientX: 20, clientY: 20 });
-    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 40 });
-    expect(rawJsonShell).toHaveClass("is-dragging");
-    expect(rawJsonShell.style.transform).toContain("translate3d");
+  it("hides video-specific panels for audio files and shows audio metadata", async () => {
+    const audioFile: MediaFileDetail = {
+      ...createFileDetail(),
+      filename: "Song.mp3",
+      relative_path: "Music/Album/Song.mp3",
+      extension: "mp3",
+      container: "mp3",
+      video_codec: null,
+      resolution: null,
+      resolution_category_id: null,
+      resolution_category_label: null,
+      hdr_type: null,
+      video_streams: [],
+      subtitle_streams: [],
+      external_subtitles: [],
+      subtitle_languages: [],
+      subtitle_codecs: [],
+      subtitle_sources: [],
+      chapters: [],
+      has_embedded_cover: true,
+      embedded_cover_codec: "mjpeg",
+      embedded_cover_width: 500,
+      embedded_cover_height: 500,
+      audio_title: "Song title",
+      audio_artist: "Artist A",
+      audio_album: "Album A",
+      audio_composer: "Composer A",
+      raw_ffprobe_json: { format: { tags: { artist: "Artist A" } } },
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(audioFile);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
 
-    fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 40 });
+    renderPage(audioFile.id);
 
-    await waitFor(() =>
-      expect(window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY)).toContain(
-        "\"rawJson\",\"qualityBreakdown\"",
-      ),
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Video streams" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Subtitles" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Chapters" })).not.toBeInTheDocument();
+
+    await selectFileDetailPanel("Audio streams");
+    expect(await screen.findByText("Audio metadata")).toBeInTheDocument();
+    expect(screen.getByText("Song title")).toBeInTheDocument();
+    expect(screen.getByText("Artist A")).toBeInTheDocument();
+    expect(screen.getByText("Album A")).toBeInTheDocument();
+    expect(screen.getByText("Composer A")).toBeInTheDocument();
+  });
+
+  it("keeps music and audiobook metadata out of ordinary video files", async () => {
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      audio_album: "Unexpected soundtrack album",
+      audio_composer: "Unexpected composer",
+      audiobook_language: "de",
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("button", { name: "Video streams" })).toBeInTheDocument();
+    await selectFileDetailPanel("Audio streams");
+    expect((await screen.findAllByText("Dolby Digital Plus")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Audio metadata")).not.toBeInTheDocument();
+    expect(screen.queryByText("Book language")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unexpected soundtrack album")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unexpected composer")).not.toBeInTheDocument();
+  });
+
+  it("lets audio stream headers switch between quality-first and language-first display", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Audio streams");
+    expect(await screen.findByRole("heading", { name: "Audio streams" })).toBeInTheDocument();
+    const activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
+    const firstHeader = activePanel.querySelector(".stream-detail-entry-head") as HTMLElement;
+    expect(firstHeader.querySelector(".stream-tooltip-inline strong")).toHaveTextContent("Dolby Digital Plus");
+    expect(firstHeader.querySelector(":scope > span")).toHaveTextContent("en");
+    expect(within(activePanel).getByRole("button", { name: "Show quality first" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
+
+    fireEvent.click(within(activePanel).getByRole("button", { name: "Show language first" }));
+    expect(window.localStorage.getItem("medialyze-file-detail-audio-stream-primary")).toBe("language");
+    expect(firstHeader.querySelector(".stream-tooltip-inline strong")).toHaveTextContent("en");
+    expect(firstHeader.querySelector(".stream-tooltip-inline .stream-tooltip-meta")).toHaveTextContent("5.1");
+    expect(firstHeader.querySelector(".stream-tooltip-inline .stream-tooltip-meta")).toHaveTextContent("Dolby Atmos");
+    expect(firstHeader.querySelector(".stream-detail-secondary-summary")).toHaveTextContent("Dolby Digital Plus");
+    expect(firstHeader.querySelector(".stream-detail-secondary-summary")).not.toHaveTextContent("Dolby Atmos");
+    expect(within(activePanel).getByText("Stream index")).toBeInTheDocument();
+    expect(within(activePanel).getByText("Language")).toBeInTheDocument();
+    expect(within(activePanel).getAllByText("en").length).toBeGreaterThan(0);
+  });
+
+  it("persists audio stream primary mode and falls back to quality for invalid values", async () => {
+    const file = createFileDetail();
+    window.localStorage.setItem("medialyze-file-detail-audio-stream-primary", "language");
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Audio streams");
+    expect(await screen.findByRole("heading", { name: "Audio streams" })).toBeInTheDocument();
+    let activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
+    let firstHeader = activePanel.querySelector(".stream-detail-entry-head") as HTMLElement;
+    expect(firstHeader.querySelector(".stream-tooltip-inline strong")).toHaveTextContent("en");
+
+    cleanup();
+    window.localStorage.setItem("medialyze-file-detail-audio-stream-primary", "unexpected");
+    renderPage(file.id + 1);
+
+    await selectFileDetailPanel("Audio streams");
+    activePanel = document.querySelector(".file-detail-active-panel") as HTMLElement;
+    firstHeader = activePanel.querySelector(".stream-detail-entry-head") as HTMLElement;
+    expect(firstHeader.querySelector(".stream-tooltip-inline strong")).toHaveTextContent("Dolby Digital Plus");
+    expect(within(activePanel).getByRole("button", { name: "Show quality first" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("falls back to overview when a stored panel is not available for the current file", async () => {
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      chapters: [],
+    };
+    window.localStorage.setItem("medialyze-file-detail-active-panel", "chapters");
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    await waitFor(() => expect(window.localStorage.getItem("medialyze-file-detail-active-panel")).toBe("overview"));
+    expect(screen.queryByRole("button", { name: "Chapters" })).not.toBeInTheDocument();
+  });
+
+  it("keeps raw JSON reachable through navigation", async () => {
+    const file = createFileDetail();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    renderPage(file.id);
+
+    await selectFileDetailPanel("Raw ffprobe JSON");
+    expect(await screen.findByRole("heading", { name: "Raw ffprobe JSON" })).toBeInTheDocument();
+    expect(screen.getAllByText(/streams/).length).toBeGreaterThan(0);
+    const copyButton = screen.getByRole("button", { name: "Copy raw ffprobe JSON" });
+    expect(copyButton).toHaveAttribute("data-tooltip", "Copy raw ffprobe JSON");
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(JSON.stringify(file.raw_ffprobe_json, null, 2)));
+    expect(screen.getByRole("button", { name: "Copied raw ffprobe JSON" })).toBeInTheDocument();
   });
 });

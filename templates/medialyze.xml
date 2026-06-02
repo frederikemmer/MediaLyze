@@ -27,7 +27,7 @@
 
   <Category>MediaApp:Tools MediaServer:Management Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/unraid/templates/medialyze.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/templates/medialyze.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/frontend/public/favicon-512.png</Icon>
 
   <ExtraParams/>

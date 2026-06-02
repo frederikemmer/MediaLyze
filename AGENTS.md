@@ -59,7 +59,7 @@ MediaLyze currently implements:
 * dashboard and per-library statistics
 * dashboard and per-library metric-comparison panels with selectable X/Y dimensions and heatmap, scatter, or bar renderers where supported
 * theme selection and feature flags
-* English and German UI translations
+* English, German, and Spanish UI translations
 * Docker-first deployment and GHCR image publishing
 * native desktop packaging for Windows, macOS, and Linux with a local backend sidecar
 
@@ -531,9 +531,11 @@ Implemented UI behavior includes:
 Current translation state:
 
 * default language: English
-* additional shipped language: German
+* additional shipped languages: German and Spanish
 * translation assets stored under `frontend/locales/`
 * frontend uses `i18next`
+* when adding or changing UI text, settings, feature labels, validation messages, or other user-visible copy, update **all shipped locale files** under `frontend/locales/`, not only English and German
+* if more languages are added later, they become part of the same maintenance contract and must be kept in sync for future user-visible changes
 
 ## 8.4 Theme And Feature Flags
 

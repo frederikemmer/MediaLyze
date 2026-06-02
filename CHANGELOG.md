@@ -4,13 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.13.1
+
+>2026-06-01
+
+### ✨ New
+
+- redesign the file-detail page with a Settings-style navigation sidebar and context-aware sections for video, audio, subtitles, cover art, chapters, history, and raw metadata
+- add on-demand embedded cover preview and download actions to the file-detail cover section
+- add a copy action for the file-detail raw ffprobe JSON output
+
 ## v0.13.0
 
 >2026-05-31
 
 ### ✨ New
 
-- add an Unraid Community Applications Docker template and repository profile for MediaLyze deployments, based on original template contribution in [#117](https://github.com/frederikemmer/MediaLyze/issues/117) by [@jvdivx](https://github.com/jvdivx) 
+- add an Unraid Community Applications Docker template and repository profile for MediaLyze deployments, with the template in the CA-expected `templates/` repository path, based on original template contribution in [#117](https://github.com/frederikemmer/MediaLyze/issues/117) by [@jvdivx](https://github.com/jvdivx)
 - solid starting point for Spanish translation [#146](https://github.com/frederikemmer/MediaLyze/pull/146) by [@jvdivx](https://github.com/jvdivx)
 - relicense change from MIT to GNU Affero General Public License v3.0 (`AGPL-3.0`)
 
