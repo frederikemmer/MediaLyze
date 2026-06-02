@@ -199,7 +199,8 @@ Scan-job tracking now includes:
 * trigger source tracking
 * trigger details
 * progress state and phase labels
-* separate live discovery counts and worker-queue progress counts for active scans
+* separate live discovery counts, unchanged-file counts, and worker-queue progress counts for active scans
+* active scan progress bars stay indeterminate while discovery is still growing the queued-work total, and only switch to a determinate percent once discovery has completed and the queued-work total is stable
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file

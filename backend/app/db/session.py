@@ -186,6 +186,12 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "format": "ALTER TABLE external_subtitles ADD COLUMN format VARCHAR(32)",
     },
     "scan_jobs": {
+        "discovered_files": "ALTER TABLE scan_jobs ADD COLUMN discovered_files INTEGER NOT NULL DEFAULT 0",
+        "unchanged_files": "ALTER TABLE scan_jobs ADD COLUMN unchanged_files INTEGER NOT NULL DEFAULT 0",
+        "discovery_complete": "ALTER TABLE scan_jobs ADD COLUMN discovery_complete BOOLEAN NOT NULL DEFAULT 0",
+        "new_files_live": "ALTER TABLE scan_jobs ADD COLUMN new_files_live INTEGER NOT NULL DEFAULT 0",
+        "deleted_files_live": "ALTER TABLE scan_jobs ADD COLUMN deleted_files_live INTEGER NOT NULL DEFAULT 0",
+        "modified_files_live": "ALTER TABLE scan_jobs ADD COLUMN modified_files_live INTEGER NOT NULL DEFAULT 0",
         "trigger_source": "ALTER TABLE scan_jobs ADD COLUMN trigger_source VARCHAR(16) NOT NULL DEFAULT 'manual'",
         "trigger_details": "ALTER TABLE scan_jobs ADD COLUMN trigger_details JSON NOT NULL DEFAULT '{}'",
         "scan_summary": "ALTER TABLE scan_jobs ADD COLUMN scan_summary JSON NOT NULL DEFAULT '{}'",

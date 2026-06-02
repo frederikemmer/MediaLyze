@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bug, ChevronDown, ChevronRight, Download, House, SearchX, Settings, X } from "lucide-react";
-import { motion } from "motion/react";
+import { Bug, ChevronDown, ChevronRight, Download, House, Settings, X } from "lucide-react";
+import { FilePlusCorner, FileXCorner, File, FileDiff, FileExclamationPoint, FileSearchCorner, FileCheckCorner } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
+import { BanIcon } from "./BanIcon";
+import { FolderInputIcon } from "./FolderInputIcon";
+import { FolderOutputIcon } from "./FolderOutputIcon";
 import { HandCoinsIcon } from "./HandCoinsIcon";
 import { TelemetryModeToggle } from "./TelemetryModeToggle";
 import { api, type ScanJob, type TelemetryMode, type UpdateStatus } from "../lib/api";
@@ -27,23 +31,125 @@ const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
 
-function renderActiveJobDetail(t: (key: string, options?: Record<string, unknown>) => string, job: ScanJob): string {
-  if (job.phase_label === "Discovering files") {
-    return t("scanBanner.searchingFound", { count: job.discovered_files ?? job.files_total });
+function isDeterminateScanProgress(job: ScanJob): boolean {
+  if (job.progress_mode) {
+    return job.progress_mode === "determinate";
   }
-  if (job.phase_label === "Analyzing media" && job.files_total > 0) {
-    return t("scanBanner.analyzingProgress", {
-      scanned: job.files_scanned,
-      total: job.files_total,
-      percent: Math.round((job.files_scanned / job.files_total) * 100),
-    });
-  }
-  return job.phase_detail ?? job.phase_label;
+  return job.files_total > 0 && job.phase_label !== "Discovering files";
 }
+
+type ScanMetric = {
+  key: string;
+  icon: React.ComponentType<{ size?: number }>;
+  label: string;
+  value: number;
+};
+
+function ScanJobCard({
+  job,
+  onStop,
+  stopping,
+}: {
+  job: ScanJob;
+  onStop: () => void;
+  stopping: boolean;
+}) {
+  const { t } = useTranslation();
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(max-width: 500px)").matches;
+  });
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+    return !window.matchMedia("(max-width: 500px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(max-width: 500px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const metrics: ScanMetric[] = [
+    { key: "new", icon: FilePlusCorner, label: t("scanBanner.metrics.newFiles"), value: job.new_files_live ?? 0 },
+    { key: "deleted", icon: FileXCorner, label: t("scanBanner.metrics.deletedFiles"), value: job.deleted_files_live ?? 0 },
+    { key: "unchanged", icon: File, label: t("scanBanner.metrics.unchangedFiles"), value: job.unchanged_files ?? 0 },
+    { key: "modified", icon: FileDiff, label: t("scanBanner.metrics.modifiedFiles"), value: job.modified_files_live ?? 0 },
+    { key: "errors", icon: FileExclamationPoint, label: t("scanBanner.metrics.errors"), value: job.errors },
+    { key: "queued", icon: FileSearchCorner, label: t("scanBanner.metrics.queued"), value: job.files_total },
+    { key: "analyzed", icon: FileCheckCorner, label: t("scanBanner.metrics.analyzed"), value: job.files_scanned },
+  ].filter((m) => m.value > 0);
+
+  const isDeterminate = isDeterminateScanProgress(job);
+  const libraryLabel = job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id });
+
+  return (
+    <div
+      className={`scan-job-card${isDeterminate ? " is-determinate" : " is-indeterminate"}`}
+      style={isDeterminate ? { "--scan-progress": `${job.progress_percent}%` } as React.CSSProperties : undefined}
+    >
+      <div className="scan-job-card-main">
+        <AnimatedSearchIcon className="scan-job-card-search-icon" />
+        <span className="scan-job-card-name" title={libraryLabel}>
+          {libraryLabel}
+        </span>
+        <AnimatePresence>
+          {expanded && metrics.length > 0 && (
+            <motion.div
+              className="scan-job-metrics"
+              initial={isMobile ? { opacity: 0, y: 8 } : { opacity: 0, x: 16 }}
+              animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, x: 0 }}
+              exit={isMobile ? { opacity: 0, y: 8 } : { opacity: 0, x: 16 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              {metrics.map((metric, i) => (
+                <span key={metric.key} className="scan-job-metric-item">
+                  {i > 0 && <span className="scan-job-metric-sep" aria-hidden="true" />}
+                  <span title={metric.label} className="scan-job-metric-icon-wrap">
+                    <metric.icon size={14} aria-label={metric.label} />
+                    <span className="scan-job-metric-value">{metric.value.toLocaleString()}</span>
+                  </span>
+                </span>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="scan-job-card-actions">
+          <button
+            type="button"
+            className="secondary icon-only-button scan-job-toggle-button"
+            aria-label={t("scanBanner.metrics.toggleMetrics")}
+            title={t("scanBanner.metrics.toggleMetrics")}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded
+              ? <FolderInputIcon size={16} aria-hidden="true" />
+              : <FolderOutputIcon size={16} aria-hidden="true" />
+            }
+          </button>
+          <span className="scan-job-action-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="secondary icon-only-button scan-banner-stop"
+            aria-label={t("scanBanner.metrics.stopJob")}
+            title={t("scanBanner.metrics.stopJob")}
+            disabled={stopping}
+            onClick={onStop}
+          >
+            <BanIcon size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export function AppShell() {
   const { t } = useTranslation();
-  const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
+  const { activeJobs, hasActiveJobs, stopLibrary } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
@@ -259,34 +365,6 @@ export function AppShell() {
         </div>
         {activeJobs.length > 0 ? (
           <div className="scan-banner">
-            <div className="scan-banner-header">
-              <div className="scan-banner-copy">
-                <strong className="scan-banner-status">
-                  <AnimatedSearchIcon className="scan-banner-icon" />
-                  <span>{t("scanBanner.running")}</span>
-                </strong>
-              </div>
-              <button
-                type="button"
-                className="scan-banner-stop"
-                aria-label={t("scanBanner.stopAria")}
-                title={t("scanBanner.stopAria")}
-                disabled={stoppingScans}
-                onClick={async () => {
-                  setStoppingScans(true);
-                  setScanCancelError(null);
-                  try {
-                    await stopAll();
-                  } catch {
-                    setScanCancelError(t("scanBanner.cancelFailed"));
-                  } finally {
-                    setStoppingScans(false);
-                  }
-                }}
-              >
-                <SearchX aria-hidden="true" className="nav-icon" />
-              </button>
-            </div>
             {scanCancelError ? (
               <div className="scan-banner-error" role="alert">
                 {scanCancelError}
@@ -294,15 +372,22 @@ export function AppShell() {
             ) : null}
             <div className="scan-banner-list">
               {activeJobs.map((job) => (
-                <div className="scan-banner-job" key={job.id}>
-                  <div className="distribution-copy">
-                    <strong>{job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id })}</strong>
-                    <span>{renderActiveJobDetail(t, job)}</span>
-                  </div>
-                  <div className="progress">
-                    <span style={{ width: `${job.progress_percent}%` }} />
-                  </div>
-                </div>
+                <ScanJobCard
+                  key={job.id}
+                  job={job}
+                  stopping={stoppingScans}
+                  onStop={async () => {
+                    setStoppingScans(true);
+                    setScanCancelError(null);
+                    try {
+                      await stopLibrary(job.library_id);
+                    } catch {
+                      setScanCancelError(t("scanBanner.cancelFailed"));
+                    } finally {
+                      setStoppingScans(false);
+                    }
+                  }}
+                />
               ))}
             </div>
           </div>

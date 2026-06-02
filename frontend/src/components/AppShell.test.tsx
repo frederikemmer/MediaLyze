@@ -219,13 +219,47 @@ describe("AppShell", () => {
 
     renderShell();
 
-    const stopButton = await screen.findByRole("button", { name: "Stop active scans" });
+    const stopButton = await screen.findByRole("button", { name: "Stop this scan" });
 
-    expect(stopButton).toHaveAttribute("title", "Stop active scans");
+    expect(stopButton).toHaveAttribute("title", "Stop this scan");
     expect(stopButton.closest(".scan-banner")).not.toHaveAttribute(
       "title",
       "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
     );
+  });
+
+  it("shows indeterminate discovery progress and metrics toggle", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+    vi.mocked(api.activeScanJobs).mockResolvedValue([
+      {
+        id: 1,
+        library_id: 1,
+        library_name: "Movies",
+        status: "running",
+        job_type: "incremental",
+        discovered_files: 4641,
+        unchanged_files: 2200,
+        discovery_complete: false,
+        files_total: 1800,
+        files_scanned: 300,
+        errors: 0,
+        started_at: "2026-05-26T10:00:00Z",
+        finished_at: null,
+        progress_percent: 16.7,
+        progress_mode: "indeterminate",
+        phase_label: "Discovering files",
+        phase_detail: null,
+      },
+    ]);
+
+    renderShell();
+
+    // Library name is shown in card
+    expect(await screen.findByText("Movies")).toBeInTheDocument();
+    // Indeterminate: card itself carries the class
+    expect(document.querySelector(".scan-job-card.is-indeterminate")).toBeTruthy();
+    // Metrics toggle button is present
+    expect(screen.getByRole("button", { name: "Toggle scan metrics" })).toBeInTheDocument();
   });
 
   it("keeps active scans visible and shows an error when cancel fails", async () => {
@@ -251,7 +285,7 @@ describe("AppShell", () => {
 
     renderShell();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Stop active scans" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop this scan" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stop was requested, but the database is still busy. Try again shortly.",

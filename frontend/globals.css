@@ -366,6 +366,26 @@ h3 {
   background: var(--accent-2);
 }
 
+.progress.is-indeterminate span {
+  width: 38%;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-2) 24%, var(--accent-2) 76%, transparent 100%);
+  animation: progress-indeterminate 1.6s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-130%);
+  }
+
+  50% {
+    transform: translateX(65%);
+  }
+
+  100% {
+    transform: translateX(230%);
+  }
+}
+
 @media (max-width: 900px) {
 
   .app-header {

@@ -41,9 +41,70 @@ def _scan_outcome(scan_job: ScanJob, summary: ScanSummaryRead) -> str:
     return "failed"
 
 
+def _queue_progress_percent(files_total: int, files_scanned: int) -> float:
+    if files_total <= 0 or files_scanned <= 0:
+        return 0.0
+    return min(100.0, round((files_scanned / files_total) * 100, 1))
+
+
+def _live_discovered_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.discovered_files or 0, summary.discovery.discovered_files)
+
+
+def _live_unchanged_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.unchanged_files or 0, summary.changes.unchanged_files)
+
+
+def _live_new_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.new_files_live or 0, summary.changes.new_files.count)
+
+
+def _live_deleted_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.deleted_files_live or 0, summary.changes.deleted_files.count)
+
+
+def _live_modified_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.modified_files_live or 0, summary.changes.modified_files.count)
+
+
+def _discovery_phase_detail(
+    discovered_files: int,
+    unchanged_files: int,
+    queued_files: int,
+    processed_files: int,
+) -> str:
+    if discovered_files <= 0:
+        return "Scanning directories"
+    return (
+        f"{discovered_files} files found so far; "
+        f"{unchanged_files} unchanged, {queued_files} queued, {processed_files} processed"
+    )
+
+
+def _completed_scan_detail(
+    *,
+    discovered_files: int,
+    unchanged_files: int,
+    files_total: int,
+    files_scanned: int,
+) -> str:
+    if files_total > 0:
+        return f"{files_scanned} of {files_total} queued files processed"
+    if discovered_files > 0 and unchanged_files >= discovered_files:
+        return f"{discovered_files} files checked; all unchanged"
+    if discovered_files > 0:
+        return f"{discovered_files} files checked; nothing needed processing"
+    return "No media files found"
+
+
 def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     summary = _normalize_scan_summary(scan_job.scan_summary)
-    discovered_files = summary.discovery.discovered_files
+    discovered_files = _live_discovered_files(scan_job, summary)
+    unchanged_files = _live_unchanged_files(scan_job, summary)
+    new_files_live = _live_new_files(scan_job, summary)
+    deleted_files_live = _live_deleted_files(scan_job, summary)
+    modified_files_live = _live_modified_files(scan_job, summary)
+    discovery_complete = bool(scan_job.discovery_complete)
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
     has_file_issues = _scan_has_file_issues(scan_job, summary)
@@ -53,8 +114,7 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     )
     issue_label = "issue" if issue_count == 1 else "issues"
     progress_percent = 0.0
-    if files_total > 0 and files_scanned > 0:
-        progress_percent = min(100.0, round((files_scanned / files_total) * 100, 1))
+    progress_mode = "indeterminate"
 
     is_quality_recompute = scan_job.job_type == "quality_recompute"
     if scan_job.status == JobStatus.queued and is_quality_recompute:
@@ -70,21 +130,49 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
             if files_total > 0
             else "Loading analyzed files"
         )
-    elif scan_job.status == JobStatus.running and files_scanned == 0:
+        if files_total > 0:
+            progress_percent = _queue_progress_percent(files_total, files_scanned)
+            progress_mode = "determinate"
+    elif scan_job.status == JobStatus.running and not discovery_complete:
         phase_label = "Discovering files"
-        phase_detail = f"{discovered_files} files found so far" if discovered_files > 0 else "Scanning directories"
+        phase_detail = _discovery_phase_detail(discovered_files, unchanged_files, files_total, files_scanned)
+    elif scan_job.status == JobStatus.running and files_total > 0:
+        phase_label = "Processing queued files"
+        phase_detail = f"{files_scanned} of {files_total} queued files processed"
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate"
     elif scan_job.status == JobStatus.running:
-        phase_label = "Analyzing media"
-        phase_detail = f"{files_scanned} of {files_total} files analyzed"
+        phase_label = "Finalizing scan"
+        phase_detail = _completed_scan_detail(
+            discovered_files=discovered_files,
+            unchanged_files=unchanged_files,
+            files_total=files_total,
+            files_scanned=files_scanned,
+        )
     elif scan_job.status == JobStatus.completed and has_file_issues:
         phase_label = "Completed with issues"
-        phase_detail = f"{files_scanned} of {files_total} files processed; {issue_count} {issue_label}"
+        phase_detail = (
+            f"{files_scanned} of {files_total} queued files processed; {issue_count} {issue_label}"
+            if files_total > 0
+            else f"{_completed_scan_detail(discovered_files=discovered_files, unchanged_files=unchanged_files, files_total=files_total, files_scanned=files_scanned)}; {issue_count} {issue_label}"
+        )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     elif scan_job.status == JobStatus.completed and is_quality_recompute:
         phase_label = "Completed"
         phase_detail = f"{files_scanned} of {files_total} quality scores updated"
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     elif scan_job.status == JobStatus.completed:
         phase_label = "Completed"
-        phase_detail = f"{files_scanned} of {files_total} files analyzed"
+        phase_detail = _completed_scan_detail(
+            discovered_files=discovered_files,
+            unchanged_files=unchanged_files,
+            files_total=files_total,
+            files_scanned=files_scanned,
+        )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     elif scan_job.status == JobStatus.canceled and is_quality_recompute:
         phase_label = "Canceled"
         phase_detail = (
@@ -92,13 +180,21 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
             if files_total > 0
             else "Stopped before recompute started"
         )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     elif scan_job.status == JobStatus.canceled:
         phase_label = "Canceled"
         phase_detail = (
-            f"Stopped after {files_scanned} of {files_total} files"
+            f"Stopped after {files_scanned} of {files_total} queued files"
             if files_total > 0
-            else "Stopped before analysis started"
+            else (
+                f"Stopped after checking {discovered_files} files"
+                if discovered_files > 0
+                else "Stopped before discovery started"
+            )
         )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     elif is_quality_recompute:
         phase_label = "Failed"
         phase_detail = (
@@ -106,13 +202,21 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
             if files_total > 0
             else "Quality recompute failed before processing started"
         )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
     else:
         phase_label = "Failed"
         phase_detail = (
-            f"Failed after {files_scanned} of {files_total} files"
+            f"Failed after {files_scanned} of {files_total} queued files"
             if files_total > 0
-            else "Scan failed before analysis started"
+            else (
+                f"Scan failed after checking {discovered_files} files"
+                if discovered_files > 0
+                else "Scan failed before discovery started"
+            )
         )
+        progress_percent = _queue_progress_percent(files_total, files_scanned)
+        progress_mode = "determinate" if files_total > 0 else "indeterminate"
 
     return ScanJobRead(
         id=scan_job.id,
@@ -121,12 +225,18 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         status=scan_job.status,
         job_type=scan_job.job_type,
         discovered_files=discovered_files,
+        unchanged_files=unchanged_files,
+        discovery_complete=discovery_complete,
+        new_files_live=new_files_live,
+        deleted_files_live=deleted_files_live,
+        modified_files_live=modified_files_live,
         files_total=files_total,
         files_scanned=files_scanned,
         errors=scan_job.errors,
         started_at=scan_job.started_at,
         finished_at=scan_job.finished_at,
         progress_percent=progress_percent,
+        progress_mode=progress_mode,
         phase_label=phase_label,
         phase_detail=phase_detail,
     )

@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "motion/react";
 import { Grid2x2Plus, History, Save, SaveOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -65,22 +66,6 @@ export function StatisticPanelLayoutControls({
     };
   }, [menuOpen]);
 
-  if (!isEditing) {
-    return (
-      <div className="statistic-layout-controls">
-        <button
-          type="button"
-          className="statistic-layout-action-button"
-          aria-label={editButtonLabel ?? t("panelLayout.edit")}
-          title={editButtonTitle ?? editButtonLabel ?? t("panelLayout.edit")}
-          onClick={onStartEditing}
-        >
-          {editButtonIcon ?? <LayoutPanelTopIcon className="statistic-layout-action-icon" size={18} />}
-        </button>
-      </div>
-    );
-  }
-
   const restoreDefaultButton = (
     <button
       type="button"
@@ -127,45 +112,76 @@ export function StatisticPanelLayoutControls({
   );
 
   return (
-    <div className="statistic-layout-controls is-editing" ref={menuRef}>
-      {showAddButton ? (
-        <button
-          type="button"
-          className="statistic-layout-action-button"
-          aria-label={t("panelLayout.add")}
-          title={t("panelLayout.add")}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((current) => !current)}
-          disabled={availableDefinitions.length === 0}
+    <AnimatePresence mode="wait">
+      {!isEditing ? (
+        <motion.div
+          key="view"
+          className="statistic-layout-controls"
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 8 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
         >
-          <Grid2x2Plus className="nav-icon" aria-hidden="true" />
-        </button>
-      ) : null}
-      {saveButtonFirst ? saveButton : restoreDefaultButton}
-      {cancelButton}
-      {saveButtonFirst ? restoreDefaultButton : saveButton}
-      {showAddButton && menuOpen ? (
-        <div className="statistic-layout-menu" role="menu">
-          {availableDefinitions.length > 0 ? (
-            availableDefinitions.map((definition) => (
-              <button
-                key={definition.id}
-                type="button"
-                role="menuitem"
-                className="statistic-layout-menu-item"
-                onClick={() => {
-                  onAddPanel(definition.id);
-                  setMenuOpen(false);
-                }}
-              >
-                {t(definition.nameKey)}
-              </button>
-            ))
-          ) : (
-            <div className="statistic-layout-menu-empty">{t("panelLayout.noMorePanels")}</div>
-          )}
-        </div>
-      ) : null}
-    </div>
+          <button
+            type="button"
+            className="statistic-layout-action-button"
+            aria-label={editButtonLabel ?? t("panelLayout.edit")}
+            title={editButtonTitle ?? editButtonLabel ?? t("panelLayout.edit")}
+            onClick={onStartEditing}
+          >
+            {editButtonIcon ?? <LayoutPanelTopIcon className="statistic-layout-action-icon" size={18} />}
+          </button>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="editing"
+          className="statistic-layout-controls is-editing"
+          ref={menuRef}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 8 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          {showAddButton ? (
+            <button
+              type="button"
+              className="statistic-layout-action-button"
+              aria-label={t("panelLayout.add")}
+              title={t("panelLayout.add")}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+              disabled={availableDefinitions.length === 0}
+            >
+              <Grid2x2Plus className="nav-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+          {saveButtonFirst ? saveButton : restoreDefaultButton}
+          {cancelButton}
+          {saveButtonFirst ? restoreDefaultButton : saveButton}
+          {showAddButton && menuOpen ? (
+            <div className="statistic-layout-menu" role="menu">
+              {availableDefinitions.length > 0 ? (
+                availableDefinitions.map((definition) => (
+                  <button
+                    key={definition.id}
+                    type="button"
+                    role="menuitem"
+                    className="statistic-layout-menu-item"
+                    onClick={() => {
+                      onAddPanel(definition.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {t(definition.nameKey)}
+                  </button>
+                ))
+              ) : (
+                <div className="statistic-layout-menu-empty">{t("panelLayout.noMorePanels")}</div>
+              )}
+            </div>
+          ) : null}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

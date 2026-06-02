@@ -1366,14 +1366,46 @@ def run_scan(
     discovery_progress_counter = 0
     processing_progress_counter = 0
 
+    def _build_current_scan_summary(*, include_duplicate_counts: bool) -> dict:
+        return _build_scan_summary(
+            discovery,
+            queued_for_analysis,
+            queued_for_duplicate_processing,
+            include_duplicate_counts=include_duplicate_counts,
+        )
+
+    def _sync_live_progress(*, discovery_complete_override: bool | None = None) -> None:
+        job.discovered_files = discovery.file_count
+        job.unchanged_files = unchanged_files
+        job.new_files_live = new_files.count
+        job.deleted_files_live = deleted_files.count
+        job.modified_files_live = modified_files.count
+        job.files_total = queued_work_total
+        if discovery_complete_override is not None:
+            job.discovery_complete = discovery_complete_override
+
+    def _commit_live_progress(*, discovery_complete_override: bool | None = None) -> None:
+        _sync_live_progress(discovery_complete_override=discovery_complete_override)
+        db.commit()
+
+    def _persist_partial_scan_state(*, include_duplicate_counts: bool) -> None:
+        try:
+            _sync_live_progress()
+            job.scan_summary = _build_current_scan_summary(include_duplicate_counts=include_duplicate_counts)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to persist partial scan state for job %s", job.id)
+
     job.files_total = 0
     job.files_scanned = 0
-    job.scan_summary = _build_scan_summary(
-        discovery,
-        queued_for_analysis,
-        queued_for_duplicate_processing,
-        include_duplicate_counts=False,
-    )
+    job.discovered_files = 0
+    job.unchanged_files = 0
+    job.discovery_complete = False
+    job.new_files_live = 0
+    job.deleted_files_live = 0
+    job.modified_files_live = 0
+    job.scan_summary = _build_current_scan_summary(include_duplicate_counts=False)
     db.commit()
 
     def _safe_process_work(
@@ -1425,310 +1457,305 @@ def run_scan(
     scan_worker_count = max(1, app_settings.scan_performance.scan_worker_count)
     discovery_progress_interval = max(1, min(settings.scan_discovery_batch_size, 25))
 
-    def _commit_scan_progress(*, include_duplicate_counts: bool) -> None:
-        job.files_total = queued_work_total
-        job.scan_summary = _build_scan_summary(
-            discovery,
-            queued_for_analysis,
-            queued_for_duplicate_processing,
-            include_duplicate_counts=include_duplicate_counts,
-        )
-        db.commit()
+    try:
+        with ThreadPoolExecutor(max_workers=scan_worker_count) as executor:
+            pending: dict[Future, QueuedMediaWork] = {}
+            max_in_flight = max(1, scan_worker_count * 2)
 
-    with ThreadPoolExecutor(max_workers=scan_worker_count) as executor:
-        pending: dict[Future, QueuedMediaWork] = {}
-        max_in_flight = max(1, scan_worker_count * 2)
+            def _poll_completed_work(*, wait_for_completion: bool) -> int:
+                nonlocal analyzed_successfully
+                nonlocal duplicate_processed_successfully
+                nonlocal duplicate_processing_failed
+                nonlocal processing_progress_counter
 
-        def _poll_completed_work(*, wait_for_completion: bool) -> int:
-            nonlocal analyzed_successfully
-            nonlocal duplicate_processed_successfully
-            nonlocal duplicate_processing_failed
-            nonlocal processing_progress_counter
+                if not pending:
+                    return 0
 
-            if not pending:
-                return 0
+                done, _ = wait(
+                    pending.keys(),
+                    timeout=None if wait_for_completion else 0,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not done:
+                    return 0
 
-            done, _ = wait(
-                pending.keys(),
-                timeout=None if wait_for_completion else 0,
-                return_when=FIRST_COMPLETED,
-            )
-            if not done:
-                return 0
-
-            processed_count = 0
-            for future in done:
-                work = pending.pop(future)
-                (
-                    relative_path,
-                    payload,
-                    subtitles,
-                    analysis_error,
-                    analysis_error_detail,
-                    duplicate_payload,
-                    duplicate_error,
-                    duplicate_error_detail,
-                ) = future.result()
-                if work.needs_analysis:
-                    if analysis_error is None and payload is not None:
-                        try:
-                            _apply_analysis_result(
-                                work.media_file,
-                                payload,
-                                subtitles,
-                                library,
-                                app_settings.resolution_categories,
-                            )
-                            create_media_file_history_entry_if_changed(
-                                db,
-                                work.media_file,
-                                MediaFileHistoryCaptureReason.scan_analysis,
-                                app_settings.resolution_categories,
-                            )
-                            analyzed_successfully += 1
-                        except Exception as exc:
-                            logger.exception("Media normalization failed for %s", relative_path)
+                processed_count = 0
+                for future in done:
+                    work = pending.pop(future)
+                    (
+                        relative_path,
+                        payload,
+                        subtitles,
+                        analysis_error,
+                        analysis_error_detail,
+                        duplicate_payload,
+                        duplicate_error,
+                        duplicate_error_detail,
+                    ) = future.result()
+                    if work.needs_analysis:
+                        if analysis_error is None and payload is not None:
+                            try:
+                                _apply_analysis_result(
+                                    work.media_file,
+                                    payload,
+                                    subtitles,
+                                    library,
+                                    app_settings.resolution_categories,
+                                )
+                                create_media_file_history_entry_if_changed(
+                                    db,
+                                    work.media_file,
+                                    MediaFileHistoryCaptureReason.scan_analysis,
+                                    app_settings.resolution_categories,
+                                )
+                                analyzed_successfully += 1
+                            except Exception as exc:
+                                logger.exception("Media normalization failed for %s", relative_path)
+                                work.media_file.scan_status = ScanStatus.failed
+                                job.errors += 1
+                                reason, detail = _error_details(exc)
+                                _set_analysis_failure(work.media_file, relative_path, reason, detail)
+                                failed_files.add(relative_path, reason, detail)
+                        else:
                             work.media_file.scan_status = ScanStatus.failed
                             job.errors += 1
-                            reason, detail = _error_details(exc)
+                            reason = analysis_error or "Unknown analysis failure"
+                            detail = analysis_error_detail or analysis_error or "Unknown analysis failure"
                             _set_analysis_failure(work.media_file, relative_path, reason, detail)
-                            failed_files.add(relative_path, reason, detail)
-                    else:
-                        work.media_file.scan_status = ScanStatus.failed
-                        job.errors += 1
-                        reason = analysis_error or "Unknown analysis failure"
-                        detail = analysis_error_detail or analysis_error or "Unknown analysis failure"
-                        _set_analysis_failure(work.media_file, relative_path, reason, detail)
-                        failed_files.add(
-                            relative_path,
-                            reason,
-                            detail,
-                        )
+                            failed_files.add(
+                                relative_path,
+                                reason,
+                                detail,
+                            )
 
-                if work.needs_duplicate_processing:
-                    if duplicate_error is None and duplicate_payload is not None:
-                        try:
-                            duplicate_strategy.apply_payload(work.media_file, duplicate_payload)
-                            duplicate_processed_successfully += 1
-                        except Exception as exc:
-                            logger.exception("Duplicate persistence failed for %s", relative_path)
+                    if work.needs_duplicate_processing:
+                        if duplicate_error is None and duplicate_payload is not None:
+                            try:
+                                duplicate_strategy.apply_payload(work.media_file, duplicate_payload)
+                                duplicate_processed_successfully += 1
+                            except Exception as exc:
+                                logger.exception("Duplicate persistence failed for %s", relative_path)
+                                duplicate_processing_failed += 1
+                                job.errors += 1
+                                reason, detail = _error_details(exc)
+                                duplicate_failed_files.add(relative_path, reason, detail)
+                        else:
                             duplicate_processing_failed += 1
                             job.errors += 1
-                            reason, detail = _error_details(exc)
-                            duplicate_failed_files.add(relative_path, reason, detail)
-                    else:
-                        duplicate_processing_failed += 1
-                        job.errors += 1
-                        duplicate_failed_files.add(
-                            relative_path,
-                            duplicate_error or "Unknown duplicate processing failure",
-                            duplicate_error_detail or duplicate_error or "Unknown duplicate processing failure",
+                            duplicate_failed_files.add(
+                                relative_path,
+                                duplicate_error or "Unknown duplicate processing failure",
+                                duplicate_error_detail or duplicate_error or "Unknown duplicate processing failure",
+                            )
+
+                    db.flush()
+                    job.files_scanned += 1
+                    processing_progress_counter += 1
+                    processed_count += 1
+
+                if processing_progress_counter >= settings.scan_commit_batch_size:
+                    _commit_live_progress()
+                    processing_progress_counter = 0
+
+                return processed_count
+
+            def _submit_work(work: QueuedMediaWork) -> None:
+                while len(pending) >= max_in_flight:
+                    if _should_cancel():
+                        for future in pending:
+                            future.cancel()
+                        raise ScanCanceled()
+                    _poll_completed_work(wait_for_completion=True)
+                pending[executor.submit(_safe_process_work, work)] = work
+
+            for scan_root in scan_roots:
+                if not scan_root.exists() or not scan_root.is_dir():
+                    continue
+                for discovered_media_file in _stream_media_files(
+                    scan_root,
+                    get_allowed_media_extensions(library.type),
+                    discovery=discovery,
+                    ignore_patterns=ignore_patterns,
+                    relative_root=root,
+                    pattern_recognition_settings=pattern_recognition_settings,
+                    should_cancel=_should_cancel,
+                ):
+                    file_path = discovered_media_file.path
+                    relative_path = file_path.relative_to(root).as_posix()
+                    seen_relative_paths.add(relative_path)
+                    discovery_progress_counter += 1
+                    stat = file_path.stat()
+                    media_file = existing_by_path.get(relative_path)
+
+                    if media_file is None:
+                        rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
+                        created_media_file = rename_candidate is None
+                        if rename_candidate is None:
+                            media_file = MediaFile(
+                                library_id=library.id,
+                                relative_path=relative_path,
+                                filename=file_path.name,
+                                extension=file_path.suffix.lower().lstrip("."),
+                                size_bytes=stat.st_size,
+                                mtime=stat.st_mtime,
+                                last_seen_at=utc_now(),
+                                scan_status=ScanStatus.pending,
+                            )
+                            db.add(media_file)
+                            db.flush([media_file])
+                            _recognize_media_file(media_file, relative_path)
+                            new_files.add(relative_path)
+                        else:
+                            existing_by_path.pop(rename_candidate.relative_path, None)
+                            media_file = rename_candidate
+                            media_file.relative_path = relative_path
+                            media_file.filename = file_path.name
+                            media_file.extension = file_path.suffix.lower().lstrip(".")
+                            media_file.size_bytes = stat.st_size
+                            media_file.mtime = stat.st_mtime
+                            media_file.last_seen_at = utc_now()
+                            media_file.scan_status = ScanStatus.pending
+                            _recognize_media_file(media_file, relative_path)
+                            modified_files.add(relative_path)
+                        queued_work_total += 1
+                        queued_for_analysis += 1
+                        queued_for_duplicate_processing += 1
+                        if created_media_file:
+                            db.commit()
+                        _submit_work(
+                            QueuedMediaWork(
+                                media_file=media_file,
+                                path=file_path,
+                                needs_analysis=True,
+                                needs_duplicate_processing=True,
+                            )
                         )
-
-                job.files_scanned += 1
-                processing_progress_counter += 1
-                processed_count += 1
-
-            if processing_progress_counter >= settings.scan_commit_batch_size:
-                _commit_scan_progress(include_duplicate_counts=False)
-                processing_progress_counter = 0
-
-            return processed_count
-
-        def _submit_work(work: QueuedMediaWork) -> None:
-            while len(pending) >= max_in_flight:
-                if _should_cancel():
-                    for future in pending:
-                        future.cancel()
-                    raise ScanCanceled()
-                _poll_completed_work(wait_for_completion=True)
-            pending[executor.submit(_safe_process_work, work)] = work
-
-        for scan_root in scan_roots:
-            if not scan_root.exists() or not scan_root.is_dir():
-                continue
-            for discovered_media_file in _stream_media_files(
-                scan_root,
-                get_allowed_media_extensions(library.type),
-                discovery=discovery,
-                ignore_patterns=ignore_patterns,
-                relative_root=root,
-                pattern_recognition_settings=pattern_recognition_settings,
-                should_cancel=_should_cancel,
-            ):
-                file_path = discovered_media_file.path
-                relative_path = file_path.relative_to(root).as_posix()
-                seen_relative_paths.add(relative_path)
-                discovery_progress_counter += 1
-                stat = file_path.stat()
-                media_file = existing_by_path.get(relative_path)
-
-                if media_file is None:
-                    rename_candidate = _find_rename_candidate(relative_path, stat.st_size, stat.st_mtime)
-                    if rename_candidate is None:
-                        media_file = MediaFile(
-                            library_id=library.id,
-                            relative_path=relative_path,
-                            filename=file_path.name,
-                            extension=file_path.suffix.lower().lstrip("."),
-                            size_bytes=stat.st_size,
-                            mtime=stat.st_mtime,
-                            last_seen_at=utc_now(),
-                            scan_status=ScanStatus.pending,
-                        )
-                        db.add(media_file)
-                        db.flush()
-                        _recognize_media_file(media_file, relative_path)
-                        new_files.add(relative_path)
                     else:
-                        existing_by_path.pop(rename_candidate.relative_path, None)
-                        media_file = rename_candidate
-                        media_file.relative_path = relative_path
+                        changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
+                        analysis_incomplete = media_file.id in incomplete_analysis_ids
+                        external_subtitles_changed = False
+                        if not changed and scan_type != "full" and not analysis_incomplete:
+                            current_external_subtitles = _visible_external_subtitles(
+                                file_path,
+                                root,
+                                settings.subtitle_extensions,
+                                ignore_patterns,
+                                sibling_filenames=discovered_media_file.sibling_filenames,
+                            )
+                            external_subtitles_changed = (
+                                _external_subtitle_signature(current_external_subtitles)
+                                != _external_subtitle_signature(media_file.external_subtitles)
+                            )
                         media_file.filename = file_path.name
                         media_file.extension = file_path.suffix.lower().lstrip(".")
                         media_file.size_bytes = stat.st_size
                         media_file.mtime = stat.st_mtime
                         media_file.last_seen_at = utc_now()
-                        media_file.scan_status = ScanStatus.pending
                         _recognize_media_file(media_file, relative_path)
-                        modified_files.add(relative_path)
-                    queued_work_total += 1
-                    queued_for_analysis += 1
-                    queued_for_duplicate_processing += 1
-                    db.commit()
-                    _submit_work(
-                        QueuedMediaWork(
-                            media_file=media_file,
-                            path=file_path,
-                            needs_analysis=True,
-                            needs_duplicate_processing=True,
+                        needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
+                        needs_analysis = (
+                            changed
+                            or scan_type == "full"
+                            or analysis_incomplete
+                            or external_subtitles_changed
                         )
-                    )
-                else:
-                    changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
-                    analysis_incomplete = media_file.id in incomplete_analysis_ids
-                    external_subtitles_changed = False
-                    if not changed and scan_type != "full" and not analysis_incomplete:
-                        current_external_subtitles = _visible_external_subtitles(
-                            file_path,
-                            root,
-                            settings.subtitle_extensions,
-                            ignore_patterns,
-                            sibling_filenames=discovered_media_file.sibling_filenames,
-                        )
-                        external_subtitles_changed = (
-                            _external_subtitle_signature(current_external_subtitles)
-                            != _external_subtitle_signature(media_file.external_subtitles)
-                        )
-                    media_file.filename = file_path.name
-                    media_file.extension = file_path.suffix.lower().lstrip(".")
-                    media_file.size_bytes = stat.st_size
-                    media_file.mtime = stat.st_mtime
-                    media_file.last_seen_at = utc_now()
-                    _recognize_media_file(media_file, relative_path)
-                    needs_duplicate_processing = changed or duplicate_strategy.needs_processing(media_file)
-                    needs_analysis = (
-                        changed
-                        or scan_type == "full"
-                        or analysis_incomplete
-                        or external_subtitles_changed
-                    )
-                    if needs_analysis or needs_duplicate_processing:
-                        if changed or external_subtitles_changed:
-                            modified_files.add(relative_path)
-                        elif analysis_incomplete:
-                            reanalyzed_incomplete_files += 1
-                        if needs_analysis:
-                            media_file.scan_status = ScanStatus.pending
+                        if needs_analysis or needs_duplicate_processing:
+                            if changed or external_subtitles_changed:
+                                modified_files.add(relative_path)
+                            elif analysis_incomplete:
+                                reanalyzed_incomplete_files += 1
+                            if needs_analysis:
+                                media_file.scan_status = ScanStatus.pending
+                            else:
+                                unchanged_files += 1
+
+                            queued_work_total += 1
+                            if needs_analysis:
+                                queued_for_analysis += 1
+                            if needs_duplicate_processing:
+                                queued_for_duplicate_processing += 1
+                            _submit_work(
+                                QueuedMediaWork(
+                                    media_file=media_file,
+                                    path=file_path,
+                                    needs_analysis=needs_analysis,
+                                    needs_duplicate_processing=needs_duplicate_processing,
+                                )
+                            )
                         else:
                             unchanged_files += 1
 
-                        queued_work_total += 1
-                        if needs_analysis:
-                            queued_for_analysis += 1
-                        if needs_duplicate_processing:
-                            queued_for_duplicate_processing += 1
-                        db.commit()
-                        _submit_work(
-                            QueuedMediaWork(
-                                media_file=media_file,
-                                path=file_path,
-                                needs_analysis=needs_analysis,
-                                needs_duplicate_processing=needs_duplicate_processing,
-                            )
-                        )
-                    else:
-                        unchanged_files += 1
+                    _poll_completed_work(wait_for_completion=False)
+                    if discovery_progress_counter >= discovery_progress_interval:
+                        _commit_live_progress()
+                        discovery_progress_counter = 0
+                        if _should_cancel():
+                            raise ScanCanceled()
 
-                _poll_completed_work(wait_for_completion=False)
-                if discovery_progress_counter >= discovery_progress_interval:
-                    _commit_scan_progress(include_duplicate_counts=False)
-                    discovery_progress_counter = 0
-                    if _should_cancel():
-                        raise ScanCanceled()
+            stale_ids = [
+                media_file.id
+                for relative_path, media_file in existing_by_path.items()
+                if relative_path not in seen_relative_paths
+            ]
+            for relative_path, media_file in existing_by_path.items():
+                if relative_path not in seen_relative_paths:
+                    deleted_files.add(relative_path)
+            if stale_ids:
+                db.execute(delete(MediaFile).where(MediaFile.id.in_(stale_ids)))
+            _cleanup_empty_series_entries(db, library.id)
 
-        stale_ids = [
-            media_file.id
-            for relative_path, media_file in existing_by_path.items()
-            if relative_path not in seen_relative_paths
-        ]
-        for relative_path, media_file in existing_by_path.items():
-            if relative_path not in seen_relative_paths:
-                deleted_files.add(relative_path)
-        if stale_ids:
-            db.execute(delete(MediaFile).where(MediaFile.id.in_(stale_ids)))
-        _cleanup_empty_series_entries(db, library.id)
+            _commit_live_progress(discovery_complete_override=True)
+            discovery_progress_counter = 0
+            if _should_cancel():
+                raise ScanCanceled()
 
-        _commit_scan_progress(include_duplicate_counts=False)
-        discovery_progress_counter = 0
+            while pending:
+                if _should_cancel():
+                    for future in pending:
+                        future.cancel()
+                    raise ScanCanceled()
+                _poll_completed_work(wait_for_completion=True)
+
+            if processing_progress_counter:
+                _commit_live_progress(discovery_complete_override=True)
+                processing_progress_counter = 0
+
         if _should_cancel():
             raise ScanCanceled()
+        db.refresh(job)
+        if job.status == JobStatus.canceled:
+            raise ScanCanceled()
+        library.last_scan_at = utc_now()
+        job.status = JobStatus.completed
+        job.finished_at = utc_now()
+        _sync_live_progress(discovery_complete_override=True)
+        job.scan_summary = _build_current_scan_summary(include_duplicate_counts=True)
+        upsert_library_history_snapshot(
+            db,
+            library,
+            source_scan_job_id=job.id,
+            scan_summary=job.scan_summary,
+            captured_at=job.finished_at,
+        )
+        db.commit()
+        stats_cache.invalidate(cache_key, job.library_id)
+        from backend.app.services.library_service import get_library_statistics, get_library_summary
+        from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+        from backend.app.services.stats import build_dashboard
 
-        while pending:
-            if _should_cancel():
-                for future in pending:
-                    future.cancel()
-                raise ScanCanceled()
-            _poll_completed_work(wait_for_completion=True)
-
-        if processing_progress_counter:
-            _commit_scan_progress(include_duplicate_counts=False)
-            processing_progress_counter = 0
-
-    if _should_cancel():
-        raise ScanCanceled()
-    db.refresh(job)
-    if job.status == JobStatus.canceled:
-        raise ScanCanceled()
-    library.last_scan_at = utc_now()
-    job.status = JobStatus.completed
-    job.finished_at = utc_now()
-    job.scan_summary = _build_scan_summary(
-        discovery,
-        queued_for_analysis,
-        queued_for_duplicate_processing,
-        include_duplicate_counts=True,
-    )
-    upsert_library_history_snapshot(
-        db,
-        library,
-        source_scan_job_id=job.id,
-        scan_summary=job.scan_summary,
-        captured_at=job.finished_at,
-    )
-    db.commit()
-    stats_cache.invalidate(cache_key, job.library_id)
-    from backend.app.services.library_service import get_library_statistics, get_library_summary
-    from backend.app.services.library_history_service import get_dashboard_history, get_library_history
-    from backend.app.services.stats import build_dashboard
-
-    get_library_summary(db, job.library_id)
-    get_library_statistics(db, job.library_id)
-    get_library_history(db, job.library_id)
-    build_dashboard(db)
-    get_dashboard_history(db)
-    db.refresh(job)
-    return job
+        get_library_summary(db, job.library_id)
+        get_library_statistics(db, job.library_id)
+        get_library_history(db, job.library_id)
+        build_dashboard(db)
+        get_dashboard_history(db)
+        db.refresh(job)
+        return job
+    except ScanCanceled:
+        _persist_partial_scan_state(include_duplicate_counts=False)
+        raise
+    except Exception:
+        _persist_partial_scan_state(include_duplicate_counts=False)
+        raise
 
 
 def run_quality_recompute(
@@ -1777,6 +1804,9 @@ def run_quality_recompute(
 
     job.files_total = len(media_files)
     job.files_scanned = 0
+    job.discovered_files = len(media_files)
+    job.unchanged_files = 0
+    job.discovery_complete = True
     db.commit()
 
     batch_counter = 0

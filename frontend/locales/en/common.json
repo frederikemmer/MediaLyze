@@ -11,12 +11,25 @@
   },
   "scanBanner": {
     "running": "Scan running...",
-    "searchingFound": "searching... ({{count}})",
-    "analyzingProgress": "{{scanned}}/{{total}} ~ {{percent}}% analyzed",
+    "waiting": "Waiting to start",
+    "discoveryProgress": "{{discovered}} files found so far; {{unchanged}} unchanged, {{queued}} queued, {{processed}} processed",
+    "processingProgress": "{{processed}}/{{total}} queued files processed ~ {{percent}}%",
+    "upToDate": "{{discovered}} files checked; {{unchanged}} unchanged and nothing needed processing",
     "libraryFallback": "Library #{{id}}",
     "refreshHint": "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
     "stopAria": "Stop active scans",
-    "cancelFailed": "Stop was requested, but the database is still busy. Try again shortly."
+    "cancelFailed": "Stop was requested, but the database is still busy. Try again shortly.",
+    "metrics": {
+      "newFiles": "New files found",
+      "deletedFiles": "Files removed",
+      "unchangedFiles": "Unchanged files",
+      "modifiedFiles": "Changed files",
+      "errors": "Analysis errors",
+      "queued": "Files queued for analysis",
+      "analyzed": "Files analyzed",
+      "toggleMetrics": "Toggle scan metrics",
+      "stopJob": "Stop this scan"
+    }
   },
   "dashboard": {
     "liveUpdates": "Live updates are active while scans run. Dashboard metrics refresh automatically.",
@@ -53,16 +66,16 @@
     "audio_genres": "Genres",
     "audio_years": "Release years",
     "audio_channels": "Channels",
-      "sample_rates": "Sample rates",
-      "track_numbers": "Track numbers",
-      "bit_rate_modes": "Bitrate modes",
-      "embedded_covers": "Embedded covers",
-      "audiobook_narrators": "Narrators",
-      "audiobook_authors": "Authors",
-      "audiobook_publishers": "Publishers",
-      "audiobook_series": "Audiobook series",
-      "audiobook_series_parts": "Series parts",
-      "chapter_counts": "Chapter counts"
+    "sample_rates": "Sample rates",
+    "track_numbers": "Track numbers",
+    "bit_rate_modes": "Bitrate modes",
+    "embedded_covers": "Embedded covers",
+    "audiobook_narrators": "Narrators",
+    "audiobook_authors": "Authors",
+    "audiobook_publishers": "Publishers",
+    "audiobook_series": "Audiobook series",
+    "audiobook_series_parts": "Series parts",
+    "chapter_counts": "Chapter counts"
   },
   "panel": {
     "collapseAria": "Collapse {{title}}",
@@ -156,6 +169,7 @@
     "lastScan": "Last scan",
     "files": "Files",
     "active": "Active",
+    "scanning": "Scanning…",
     "ignorePatternsTitle": "Ignore patterns",
     "restoreIgnoreDefaults": "Restore ignore defaults",
     "ignorePatternsSubtitle": "Glob patterns are matched against the normalized path relative to each library root before files are indexed or analyzed.",

@@ -78,6 +78,7 @@ test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
   const resolved = resolveBundledFfmpegSource({
     env: {},
     platform: "win32",
+    staticSourceResolver: () => null,
     exists: (candidate) => candidate === "C:\\ffmpeg\\bin\\ffmpeg.exe",
     stat: () => {
       throw new Error("stat should not be used when no explicit directory is configured");
@@ -86,6 +87,7 @@ test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
       status: 0,
       stdout: "C:\\ffmpeg\\bin\\ffmpeg.exe\r\n",
     }),
+    staticSourceResolver: () => null,
   });
 
   assert.deepEqual(resolved, {
@@ -105,6 +107,24 @@ test("resolveBundledFfmpegSource prefers a static ffmpeg package path", () => {
   assert.deepEqual(resolved, {
     kind: "file",
     sourcePath: "/opt/ffmpeg-static/ffmpeg",
+    executableName: "ffmpeg",
+  });
+});
+
+test("resolveBundledFfmpegSource prefers MEDIALYZE_FFMPEG_DIR over static path", () => {
+  const resolved = resolveBundledFfmpegSource({
+    env: { MEDIALYZE_FFMPEG_DIR: "/opt/custom/ffmpeg" },
+    platform: "linux",
+    exists: (candidate) => candidate === "/opt/custom/ffmpeg",
+    stat: () => ({
+      isDirectory: () => false,
+    }),
+    staticSourceResolver: () => "/opt/ffmpeg-static/ffmpeg",
+  });
+
+  assert.deepEqual(resolved, {
+    kind: "file",
+    sourcePath: "/opt/custom/ffmpeg",
     executableName: "ffmpeg",
   });
 });
@@ -140,6 +160,7 @@ test("bundleFfmpeg creates the expected ffmpeg folder structure", () => {
     const bundledExecutable = bundleFfmpeg(outputDir, {
       env: { MEDIALYZE_FFMPEG_DIR: sourceBinary },
       platform: "win32",
+      staticSourceResolver: () => null,
     });
 
     assert.equal(

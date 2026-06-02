@@ -1968,10 +1968,12 @@ describe("LibraryDetailPage", () => {
     fireEvent.focus(window);
 
     await waitFor(() => expect(libraryHistorySpy.mock.calls.length).toBeGreaterThanOrEqual(2));
-    const chart = (await screen.findAllByTestId("echarts-react")).find(
-      (candidate) => candidate.getAttribute("data-series-count") === "3",
-    );
-    expect(chart).toBeDefined();
+    await waitFor(async () => {
+      const chart = (await screen.findAllByTestId("echarts-react")).find(
+        (candidate) => candidate.getAttribute("data-series-count") === "3",
+      );
+      expect(chart).toBeDefined();
+    });
   });
 
   it("renders a safe fallback label for unknown legacy resolution categories", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "medialyze-frontend",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "private": true,
   "license": "AGPL-3.0",
   "type": "module",
@@ -32,6 +32,6 @@
     "jsdom": "^28.1.0",
     "typescript": "^5.8.2",
     "vite": "^6.4.2",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.8"
   }
 }

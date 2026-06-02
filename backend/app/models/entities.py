@@ -524,6 +524,12 @@ class ScanJob(Base):
         nullable=False,
     )
     job_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    discovered_files: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unchanged_files: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    discovery_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    new_files_live: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deleted_files_live: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    modified_files_live: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     files_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     files_scanned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     errors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
