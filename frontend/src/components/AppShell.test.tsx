@@ -219,16 +219,16 @@ describe("AppShell", () => {
 
     renderShell();
 
-    const stopButton = await screen.findByRole("button", { name: "Stop active scans" });
+    const stopButton = await screen.findByRole("button", { name: "Stop this scan" });
 
-    expect(stopButton).toHaveAttribute("title", "Stop active scans");
+    expect(stopButton).toHaveAttribute("title", "Stop this scan");
     expect(stopButton.closest(".scan-banner")).not.toHaveAttribute(
       "title",
       "During scans, scan progress updates live. Statistics and table caches refresh after the scan finishes to keep the app responsive.",
     );
   });
 
-  it("shows indeterminate discovery progress with explicit unchanged and queued counts", async () => {
+  it("shows indeterminate discovery progress and metrics toggle", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
     vi.mocked(api.activeScanJobs).mockResolvedValue([
       {
@@ -254,10 +254,12 @@ describe("AppShell", () => {
 
     renderShell();
 
-    expect(
-      await screen.findByText("4641 files found so far; 2200 unchanged, 1800 queued, 300 processed"),
-    ).toBeInTheDocument();
+    // Library name is shown in card
+    expect(await screen.findByText("Movies")).toBeInTheDocument();
+    // Indeterminate progress bar is rendered
     expect(document.querySelector(".scan-banner .progress.is-indeterminate")).toBeTruthy();
+    // Metrics toggle button is present
+    expect(screen.getByRole("button", { name: "Toggle scan metrics" })).toBeInTheDocument();
   });
 
   it("keeps active scans visible and shows an error when cancel fails", async () => {
@@ -283,7 +285,7 @@ describe("AppShell", () => {
 
     renderShell();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Stop active scans" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop this scan" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stop was requested, but the database is still busy. Try again shortly.",

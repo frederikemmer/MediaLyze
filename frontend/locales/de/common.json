@@ -18,7 +18,18 @@
     "libraryFallback": "Bibliothek #{{id}}",
     "refreshHint": "Während Scans laufen, aktualisiert sich der Scan-Fortschritt live. Statistiken und Tabellen-Caches werden nach dem Scan aktualisiert, damit die App reaktionsfähig bleibt.",
     "stopAria": "Aktive Scans stoppen",
-    "cancelFailed": "Stop wurde angefordert, aber die Datenbank ist noch beschäftigt. Bitte gleich erneut versuchen."
+    "cancelFailed": "Stop wurde angefordert, aber die Datenbank ist noch beschäftigt. Bitte gleich erneut versuchen.",
+    "metrics": {
+      "newFiles": "Neue Dateien gefunden",
+      "deletedFiles": "Dateien entfernt",
+      "unchangedFiles": "Unveränderte Dateien",
+      "modifiedFiles": "Geänderte Dateien",
+      "errors": "Analysefehler",
+      "queued": "Dateien in der Warteschlange",
+      "analyzed": "Analysierte Dateien",
+      "toggleMetrics": "Scan-Metriken ein-/ausblenden",
+      "stopJob": "Diesen Scan stoppen"
+    }
   },
   "dashboard": {
     "liveUpdates": "Live-Aktualisierungen sind aktiv, während Scans laufen. Die Dashboard-Metriken werden automatisch aktualisiert.",
@@ -55,16 +66,16 @@
     "audio_genres": "Genres",
     "audio_years": "Erscheinungsjahre",
     "audio_channels": "Kanalzahl",
-      "sample_rates": "Sample-Raten",
-      "track_numbers": "Tracknummern",
-      "bit_rate_modes": "Bitraten-Modi",
-      "embedded_covers": "Eingebettete Cover",
-      "audiobook_narrators": "Erzähler",
-      "audiobook_authors": "Autoren",
-      "audiobook_publishers": "Verlage",
-      "audiobook_series": "Hörbuchreihe",
-      "audiobook_series_parts": "Reihenteile",
-      "chapter_counts": "Kapitelanzahl"
+    "sample_rates": "Sample-Raten",
+    "track_numbers": "Tracknummern",
+    "bit_rate_modes": "Bitraten-Modi",
+    "embedded_covers": "Eingebettete Cover",
+    "audiobook_narrators": "Erzähler",
+    "audiobook_authors": "Autoren",
+    "audiobook_publishers": "Verlage",
+    "audiobook_series": "Hörbuchreihe",
+    "audiobook_series_parts": "Reihenteile",
+    "chapter_counts": "Kapitelanzahl"
   },
   "panel": {
     "collapseAria": "{{title}} einklappen",

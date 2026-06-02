@@ -850,6 +850,9 @@ export type ScanJob = {
   discovered_files?: number;
   unchanged_files?: number;
   discovery_complete?: boolean;
+  new_files_live?: number;
+  deleted_files_live?: number;
+  modified_files_live?: number;
   files_total: number;
   files_scanned: number;
   errors: number;

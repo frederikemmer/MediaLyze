@@ -156,59 +156,11 @@
 .scan-banner {
   margin-top: 18px;
   display: grid;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 10px 12px;
   border-radius: 18px;
   background: rgba(27, 153, 139, 0.12);
   border: 1px solid rgba(27, 153, 139, 0.18);
-}
-
-.scan-banner-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.scan-banner-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.scan-banner-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.scan-banner-icon {
-  display: inline-flex;
-  color: #0e6b62;
-}
-
-.scan-banner-stop {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(31, 28, 22, 0.1);
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--ink);
-  box-shadow: none;
-}
-
-.scan-banner-stop:hover {
-  transform: none;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 16px rgba(31, 28, 22, 0.08);
-}
-
-.scan-banner-stop:disabled {
-  opacity: 0.65;
-  cursor: wait;
 }
 
 .scan-banner-error {
@@ -220,19 +172,142 @@
   font-weight: 700;
 }
 
-.scan-banner-copy span {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
 .scan-banner-list {
   display: grid;
   gap: 8px;
 }
 
-.scan-banner-job {
+/* Per-job card — mirrors duplicate-group-item-card layout */
+.scan-job-card {
   display: grid;
   gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 28, 22, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 8px 18px rgba(31, 28, 22, 0.04);
+}
+
+.scan-job-card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.scan-job-card-search-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: #0e6b62;
+}
+
+.scan-job-card-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Metrics panel — slides in to the right of the name */
+.scan-job-metrics {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.scan-job-metric-item {
+  display: flex;
+  align-items: center;
+}
+
+.scan-job-metric-sep {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background: rgba(31, 28, 22, 0.14);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+.scan-job-metric-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.scan-job-metric-icon-wrap:hover {
+  color: var(--ink);
+}
+
+.scan-job-metric-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Action buttons group */
+.scan-job-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.scan-job-action-sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(31, 28, 22, 0.12);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.scan-job-toggle-button.secondary.icon-only-button,
+.scan-banner-stop.secondary.icon-only-button {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 1px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.scan-job-toggle-button.secondary.icon-only-button:hover,
+.scan-job-toggle-button.secondary.icon-only-button:focus-visible,
+.scan-banner-stop.secondary.icon-only-button:hover,
+.scan-banner-stop.secondary.icon-only-button:focus-visible {
+  transform: none;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.scan-job-toggle-button.secondary.icon-only-button:focus-visible,
+.scan-banner-stop.secondary.icon-only-button:focus-visible {
+  outline: 2px solid rgba(31, 28, 22, 0.28);
+  outline-offset: 2px;
+}
+
+.scan-banner-stop.secondary.icon-only-button:disabled {
+  opacity: 0.4;
+  cursor: wait;
 }
 
 .release-notes-backdrop {
@@ -3947,6 +4022,25 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
   }
 }
 
+/* On very narrow viewports, stack scan metrics vertically under the card header */
+@media (max-width: 500px) {
+  .scan-job-card-main {
+    flex-wrap: wrap;
+  }
+
+  .scan-job-metrics {
+    order: 10;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .scan-job-metric-item {
+    flex: 0 0 auto;
+  }
+}
+
 .path-entry {
   width: 100%;
   justify-content: space-between;
@@ -6599,14 +6693,33 @@ html[data-theme="dark"] {
     border-color: rgba(27, 153, 139, 0.22);
   }
 
-  .scan-banner-stop {
-    background: rgba(46, 43, 39, 0.82);
-    border-color: rgba(240, 236, 228, 0.12);
+  .scan-job-card {
+    background: rgba(38, 35, 31, 0.72);
+    border-color: rgba(240, 236, 228, 0.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 8px 18px rgba(0, 0, 0, 0.18);
   }
 
-  .scan-banner-stop:hover {
-    background: rgba(58, 54, 50, 0.96);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.20);
+  .scan-job-card-name {
+    color: rgba(240, 236, 228, 0.92);
+  }
+
+  .scan-job-metric-sep,
+  .scan-job-action-sep {
+    background: rgba(240, 236, 228, 0.14);
+  }
+
+  .scan-job-metric-icon-wrap {
+    color: rgba(240, 236, 228, 0.5);
+  }
+
+  .scan-job-metric-icon-wrap:hover {
+    color: rgba(240, 236, 228, 0.9);
+  }
+
+  .scan-job-card-search-icon {
+    color: #3ec5b8;
   }
 
   .statistic-layout-action-button,
@@ -6640,10 +6753,6 @@ html[data-theme="dark"] {
     border-color: transparent;
     box-shadow: none;
     transform: none;
-  }
-
-  .scan-banner-icon {
-    color: #3ec5b8;
   }
 
   .settings-navigation-panel {

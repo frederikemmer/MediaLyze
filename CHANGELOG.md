@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - update frontend `vitest` and override desktop transitive `tmp` to remediate current Dependabot security alerts without changing app behavior
 - rework active scan progress so discovery stays streamed for throughput, the progress bar stays indeterminate until the queued-work total is stable, unchanged files are communicated explicitly, and live scan progress writes avoid repeated heavy summary updates [#141](https://github.com/frederikemmer/MediaLyze/issues/141)
 
+### ✨ New
+
+- redesign the active scan banner: each library scan is now shown as an individual card styled after the duplicate-group layout, with an animated search icon, a per-job cancel button (icon-only, no border), and a collapsible metrics panel (toggled via FolderSync icon button) that reveals non-zero per-file counters for new, removed, unchanged, modified, error, queued, and analyzed files using lucide icons with hover tooltips; metrics slide in from the right on desktop and from below on mobile; backend now tracks `new_files_live`, `deleted_files_live`, and `modified_files_live` counters in the scan-job model and serializes them in the active-scan API response
+
 ## v0.13.1
 
 >2026-06-01

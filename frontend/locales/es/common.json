@@ -18,7 +18,18 @@
     "libraryFallback": "Biblioteca #{{id}}",
     "refreshHint": "Durante los escaneos, el progreso se actualiza en directo. Las estadísticas y las cachés de tablas se refrescan al finalizar para mantener la aplicación ágil.",
     "stopAria": "Detener escaneos activos",
-    "cancelFailed": "Se ha solicitado detener, pero la base de datos sigue ocupada. Inténtalo de nuevo en breve."
+    "cancelFailed": "Se ha solicitado detener, pero la base de datos sigue ocupada. Inténtalo de nuevo en breve.",
+    "metrics": {
+      "newFiles": "Nuevos archivos encontrados",
+      "deletedFiles": "Archivos eliminados",
+      "unchangedFiles": "Archivos sin cambios",
+      "modifiedFiles": "Archivos modificados",
+      "errors": "Errores de análisis",
+      "queued": "Archivos en cola para análisis",
+      "analyzed": "Archivos analizados",
+      "toggleMetrics": "Mostrar/ocultar métricas de escaneo",
+      "stopJob": "Detener este escaneo"
+    }
   },
   "dashboard": {
     "liveUpdates": "Las actualizaciones en directo están activas mientras se ejecutan los escaneos. Las métricas del panel se actualizan automáticamente.",

@@ -1377,6 +1377,9 @@ def run_scan(
     def _sync_live_progress(*, discovery_complete_override: bool | None = None) -> None:
         job.discovered_files = discovery.file_count
         job.unchanged_files = unchanged_files
+        job.new_files_live = new_files.count
+        job.deleted_files_live = deleted_files.count
+        job.modified_files_live = modified_files.count
         job.files_total = queued_work_total
         if discovery_complete_override is not None:
             job.discovery_complete = discovery_complete_override
@@ -1399,6 +1402,9 @@ def run_scan(
     job.discovered_files = 0
     job.unchanged_files = 0
     job.discovery_complete = False
+    job.new_files_live = 0
+    job.deleted_files_live = 0
+    job.modified_files_live = 0
     job.scan_summary = _build_current_scan_summary(include_duplicate_counts=False)
     db.commit()
 

@@ -21,6 +21,9 @@ class ScanJobRead(BaseModel):
     discovered_files: int = 0
     unchanged_files: int = 0
     discovery_complete: bool = False
+    new_files_live: int = 0
+    deleted_files_live: int = 0
+    modified_files_live: int = 0
     files_total: int
     files_scanned: int
     errors: int

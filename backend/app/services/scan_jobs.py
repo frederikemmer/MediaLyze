@@ -55,6 +55,18 @@ def _live_unchanged_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
     return max(scan_job.unchanged_files or 0, summary.changes.unchanged_files)
 
 
+def _live_new_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.new_files_live or 0, summary.changes.new_files.count)
+
+
+def _live_deleted_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.deleted_files_live or 0, summary.changes.deleted_files.count)
+
+
+def _live_modified_files(scan_job: ScanJob, summary: ScanSummaryRead) -> int:
+    return max(scan_job.modified_files_live or 0, summary.changes.modified_files.count)
+
+
 def _discovery_phase_detail(
     discovered_files: int,
     unchanged_files: int,
@@ -89,6 +101,9 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
     summary = _normalize_scan_summary(scan_job.scan_summary)
     discovered_files = _live_discovered_files(scan_job, summary)
     unchanged_files = _live_unchanged_files(scan_job, summary)
+    new_files_live = _live_new_files(scan_job, summary)
+    deleted_files_live = _live_deleted_files(scan_job, summary)
+    modified_files_live = _live_modified_files(scan_job, summary)
     discovery_complete = bool(scan_job.discovery_complete)
     files_total = scan_job.files_total or 0
     files_scanned = scan_job.files_scanned or 0
@@ -212,6 +227,9 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         discovered_files=discovered_files,
         unchanged_files=unchanged_files,
         discovery_complete=discovery_complete,
+        new_files_live=new_files_live,
+        deleted_files_live=deleted_files_live,
+        modified_files_live=modified_files_live,
         files_total=files_total,
         files_scanned=files_scanned,
         errors=scan_job.errors,

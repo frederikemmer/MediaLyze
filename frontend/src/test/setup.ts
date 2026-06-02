@@ -14,8 +14,12 @@ vi.mock("motion/react", () => {
     },
   );
 
+  const AnimatePresence = ({ children }: { children?: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children);
+
   return {
     motion,
+    AnimatePresence,
     useAnimation: () => ({
       start: vi.fn(() => Promise.resolve()),
     }),
