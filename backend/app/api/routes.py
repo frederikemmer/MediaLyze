@@ -1203,6 +1203,27 @@ def library_files_export_csv(
     )
 
 
+@router.post("/libraries/{library_id}/scan/cancel", response_model=ScanCancelResponse)
+def library_scan_cancel(
+    library_id: int,
+    db: Session = Depends(get_db_session),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> ScanCancelResponse:
+    if not library_exists(db, library_id):
+        raise HTTPException(status_code=404, detail="Library not found")
+    try:
+        canceled_ids = runtime.cancel_library_jobs(library_id)
+    except ScanCancelPersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Scan cancellation was requested for {len(exc.canceled_job_ids)} active job(s), "
+                "but the database is still busy. Try again shortly."
+            ),
+        ) from exc
+    return ScanCancelResponse(canceled_jobs=len(canceled_ids))
+
+
 @router.post("/libraries/{library_id}/scan", response_model=ScanJobRead, status_code=202)
 def library_scan(
     library_id: int,

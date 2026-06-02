@@ -144,7 +144,7 @@ function ScanJobCard({
 
 export function AppShell() {
   const { t } = useTranslation();
-  const { activeJobs, hasActiveJobs, stopAll } = useScanJobs();
+  const { activeJobs, hasActiveJobs, stopLibrary } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
   const [releaseNotes] = useState<ReleaseNotes | null>(() => getCurrentReleaseNotes());
@@ -375,7 +375,7 @@ export function AppShell() {
                     setStoppingScans(true);
                     setScanCancelError(null);
                     try {
-                      await stopAll();
+                      await stopLibrary(job.library_id);
                     } catch {
                       setScanCancelError(t("scanBanner.cancelFailed"));
                     } finally {

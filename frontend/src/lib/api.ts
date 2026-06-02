@@ -1424,4 +1424,8 @@ export const api = {
     request<ScanCancelResponse>("/scan-jobs/active/cancel", {
       method: "POST",
     }),
+  cancelLibraryScanJobs: (libraryId: number) =>
+    request<ScanCancelResponse>(`/libraries/${libraryId}/scan/cancel`, {
+      method: "POST",
+    }),
 };

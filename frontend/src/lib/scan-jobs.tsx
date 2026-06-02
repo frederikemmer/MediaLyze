@@ -9,6 +9,7 @@ type ScanJobsContextValue = {
   refresh: () => Promise<void>;
   trackJob: (job: ScanJob) => void;
   stopAll: () => Promise<void>;
+  stopLibrary: (libraryId: number) => Promise<void>;
 };
 
 const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
@@ -33,6 +34,11 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
   const stopAll = useEffectEvent(async () => {
     await api.cancelActiveScanJobs();
     setActiveJobs([]);
+  });
+
+  const stopLibrary = useEffectEvent(async (libraryId: number) => {
+    await api.cancelLibraryScanJobs(libraryId);
+    setActiveJobs((current) => current.filter((job) => job.library_id !== libraryId));
   });
 
   const trackJob = useEffectEvent((job: ScanJob) => {
@@ -96,6 +102,7 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
       refresh,
       trackJob,
       stopAll,
+      stopLibrary,
     }),
     [activeJobs],
   );
