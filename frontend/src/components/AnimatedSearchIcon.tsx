@@ -10,8 +10,8 @@ export function AnimatedSearchIcon({ className, size = 22, ...props }: AnimatedS
     <div className={className} {...props}>
       <motion.svg
         animate={{
-          x: [0, 0, -3, 0],
-          y: [0, -4, 0, 0],
+          x: [0, 0, -2, 0],
+          y: [0, -2, 0, 0],
         }}
         fill="none"
         height={size}

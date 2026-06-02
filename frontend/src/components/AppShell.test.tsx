@@ -256,8 +256,8 @@ describe("AppShell", () => {
 
     // Library name is shown in card
     expect(await screen.findByText("Movies")).toBeInTheDocument();
-    // Indeterminate progress bar is rendered
-    expect(document.querySelector(".scan-banner .progress.is-indeterminate")).toBeTruthy();
+    // Indeterminate: card itself carries the class
+    expect(document.querySelector(".scan-job-card.is-indeterminate")).toBeTruthy();
     // Metrics toggle button is present
     expect(screen.getByRole("button", { name: "Toggle scan metrics" })).toBeInTheDocument();
   });

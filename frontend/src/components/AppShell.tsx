@@ -7,7 +7,8 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { BanIcon } from "./BanIcon";
-import { FolderSyncIcon } from "./FolderSyncIcon";
+import { FolderInputIcon } from "./FolderInputIcon";
+import { FolderOutputIcon } from "./FolderOutputIcon";
 import { HandCoinsIcon } from "./HandCoinsIcon";
 import { TelemetryModeToggle } from "./TelemetryModeToggle";
 import { api, type ScanJob, type TelemetryMode, type UpdateStatus } from "../lib/api";
@@ -80,7 +81,10 @@ function ScanJobCard({
   const libraryLabel = job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id });
 
   return (
-    <div className="scan-job-card">
+    <div
+      className={`scan-job-card${isDeterminate ? " is-determinate" : " is-indeterminate"}`}
+      style={isDeterminate ? { "--scan-progress": `${job.progress_percent}%` } as React.CSSProperties : undefined}
+    >
       <div className="scan-job-card-main">
         <AnimatedSearchIcon className="scan-job-card-search-icon" />
         <span className="scan-job-card-name" title={libraryLabel}>
@@ -115,7 +119,10 @@ function ScanJobCard({
             title={t("scanBanner.metrics.toggleMetrics")}
             onClick={() => setExpanded((v) => !v)}
           >
-            <FolderSyncIcon size={16} aria-hidden="true" />
+            {expanded
+              ? <FolderInputIcon size={16} aria-hidden="true" />
+              : <FolderOutputIcon size={16} aria-hidden="true" />
+            }
           </button>
           <span className="scan-job-action-sep" aria-hidden="true" />
           <button
@@ -129,9 +136,6 @@ function ScanJobCard({
             <BanIcon size={16} aria-hidden="true" />
           </button>
         </div>
-      </div>
-      <div className={`progress${isDeterminate ? "" : " is-indeterminate"}`.trim()}>
-        <span style={isDeterminate ? { width: `${job.progress_percent}%` } : undefined} />
       </div>
     </div>
   );
