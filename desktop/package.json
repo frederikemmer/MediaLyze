@@ -70,5 +70,8 @@
       "artifactName": "${productName}.Setup.${ext}",
       "icon": "medialyze.ico"
     }
+  },
+  "overrides": {
+    "tmp": "^0.2.7"
   }
 }

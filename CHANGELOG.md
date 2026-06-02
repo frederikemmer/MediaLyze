@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - bundle a static `ffmpeg` binary into the desktop backend so release artifacts no longer depend on the runner or target system having ffmpeg installed
+- update frontend `vitest` and override desktop transitive `tmp` to remediate current Dependabot security alerts without changing app behavior
 
 ## v0.13.1
 

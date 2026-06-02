@@ -87,6 +87,7 @@ test("resolveBundledFfmpegSource falls back to a PATH lookup", () => {
       status: 0,
       stdout: "C:\\ffmpeg\\bin\\ffmpeg.exe\r\n",
     }),
+    staticSourceResolver: () => null,
   });
 
   assert.deepEqual(resolved, {
@@ -159,6 +160,7 @@ test("bundleFfmpeg creates the expected ffmpeg folder structure", () => {
     const bundledExecutable = bundleFfmpeg(outputDir, {
       env: { MEDIALYZE_FFMPEG_DIR: sourceBinary },
       platform: "win32",
+      staticSourceResolver: () => null,
     });
 
     assert.equal(
