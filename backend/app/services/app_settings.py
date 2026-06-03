@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
-from backend.app.models.entities import AppSetting, Library
+from backend.app.models.entities import AppSetting, Library, QualityProfileDefinition
 from backend.app.schemas.app_settings import (
     AppSettingsRead,
     AppSettingsUpdate,
@@ -28,6 +28,7 @@ from backend.app.services.pattern_recognition import (
     validate_pattern_recognition_settings,
 )
 from backend.app.services.quality import normalize_quality_profile
+from backend.app.services.quality_profiles import media_type_for_library_type
 from backend.app.services.resolution_categories import (
     ResolutionCategoryUpdateResult,
     default_resolution_categories,
@@ -346,7 +347,29 @@ def _update_libraries_for_resolution_categories(
             library.quality_profile = next_profile
             affected_library_ids.append(library.id)
 
-    return affected_library_ids
+    for profile in db.scalars(select(QualityProfileDefinition).order_by(QualityProfileDefinition.id.asc())).all():
+        current_profile = normalize_quality_profile(profile.profile, current_categories)
+        next_profile = normalize_quality_profile(current_profile, categories)
+        if removed_ids and "resolution" in next_profile:
+            for key in ("minimum", "ideal"):
+                next_profile["resolution"][key] = resolve_resolution_category_fallback(
+                    str(current_profile["resolution"][key]),
+                    categories,
+                )
+        if current_profile != next_profile or profile.profile != next_profile:
+            profile.profile = next_profile
+            affected_library_ids.extend(
+                library.id
+                for library in db.scalars(select(Library).where(Library.quality_profile_id == profile.id)).all()
+            )
+            if profile.is_default:
+                affected_library_ids.extend(
+                    library.id
+                    for library in db.scalars(select(Library).order_by(Library.id.asc())).all()
+                    if library.quality_profile_id is None and media_type_for_library_type(library.type) == profile.media_type
+                )
+
+    return sorted(set(affected_library_ids))
 
 
 def update_app_settings(

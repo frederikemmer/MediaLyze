@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, Boolean, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
@@ -29,6 +29,12 @@ class LibraryType(str, Enum):
     audiobooks = "audiobooks"
     mixed = "mixed"
     other = "other"
+
+
+class QualityProfileMediaType(str, Enum):
+    video = "video"
+    music = "music"
+    audiobook = "audiobook"
 
 
 class ScanMode(str, Enum):
@@ -97,12 +103,20 @@ class Library(TimestampMixin, Base):
     )
     scan_config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     quality_profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
+    quality_profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quality_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     show_on_dashboard: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     media_files: Mapped[list[MediaFile]] = relationship(
         back_populates="library",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    assigned_quality_profile: Mapped[QualityProfileDefinition | None] = relationship(
+        back_populates="libraries",
+        foreign_keys=[quality_profile_id],
     )
     scan_jobs: Mapped[list[ScanJob]] = relationship(
         back_populates="library",
@@ -136,6 +150,28 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class QualityProfileDefinition(TimestampMixin, Base):
+    __tablename__ = "quality_profiles"
+    __table_args__ = (
+        UniqueConstraint("media_type", "name", name="uq_quality_profiles_media_type_name"),
+        Index("ix_quality_profiles_media_type_default", "media_type", "is_default"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    media_type: Mapped[QualityProfileMediaType] = mapped_column(
+        SqlEnum(QualityProfileMediaType, native_enum=False),
+        nullable=False,
+    )
+    profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    libraries: Mapped[list[Library]] = relationship(
+        back_populates="assigned_quality_profile",
+        foreign_keys=[Library.quality_profile_id],
+    )
 
 
 class DuplicateGroupSuppression(TimestampMixin, Base):

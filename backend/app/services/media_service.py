@@ -4,6 +4,7 @@ import csv
 import base64
 import io
 import json
+import mimetypes
 import re
 import subprocess
 from types import SimpleNamespace
@@ -55,6 +56,11 @@ from backend.app.services.numeric_distributions import (
     bitrate_value_expression,
     build_audio_bitrate_subquery,
 )
+from backend.app.services.quality import (
+    build_quality_score_input_from_media_file,
+    calculate_quality_score,
+)
+from backend.app.services.quality_profiles import effective_quality_profile_for_media_file
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.video_queries import primary_video_streams_subquery
@@ -1072,6 +1078,38 @@ def _safe_cover_filename(filename: str) -> str:
     return f"{safe_stem}-cover.png"
 
 
+def _safe_media_filename(filename: str, fallback_stem: str) -> str:
+    candidate = Path(filename).name.strip()
+    if not candidate:
+        candidate = fallback_stem
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", candidate).strip("._")
+    return safe_name or fallback_stem
+
+
+def get_media_file_source(
+    db: Session,
+    file_id: int,
+) -> tuple[Path, str, str] | None:
+    media_file = db.scalar(
+        select(MediaFile)
+        .where(MediaFile.id == file_id)
+        .options(selectinload(MediaFile.library))
+    )
+    if media_file is None:
+        return None
+
+    file_path = _media_file_path(media_file)
+    if not file_path.is_file():
+        return None
+
+    media_type, _encoding = mimetypes.guess_type(file_path.name)
+    return (
+        file_path,
+        _safe_media_filename(media_file.filename, f"file-{file_id}{file_path.suffix}"),
+        media_type or "application/octet-stream",
+    )
+
+
 def generate_media_cover_png(
     db: Session,
     file_id: int,
@@ -1669,7 +1707,19 @@ def get_media_file_stream_details(db: Session, file_id: int) -> MediaFileStreamD
 
 
 def get_media_file_quality_score_detail(db: Session, file_id: int) -> MediaFileQualityScoreDetail | None:
-    media_file = db.get(MediaFile, file_id)
+    media_file = db.scalar(
+        select(MediaFile)
+        .where(MediaFile.id == file_id)
+        .options(
+            selectinload(MediaFile.library),
+            selectinload(MediaFile.media_format),
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+        )
+    )
     if media_file is None:
         return None
 
@@ -1678,12 +1728,69 @@ def get_media_file_quality_score_detail(db: Session, file_id: int) -> MediaFileQ
         "score_raw": media_file.quality_score_raw,
         "categories": [],
     }
+    if _quality_breakdown_needs_audio_only_refresh(media_file, breakdown_payload):
+        app_settings = get_app_settings(db)
+        breakdown_payload = calculate_quality_score(
+            build_quality_score_input_from_media_file(media_file),
+            effective_quality_profile_for_media_file(db, media_file, app_settings.resolution_categories),
+            app_settings.resolution_categories,
+        ).model_dump(mode="json")
+        breakdown_payload = _mark_audio_only_video_categories_not_applicable(media_file, breakdown_payload)
+    breakdown = QualityBreakdownRead.model_validate(breakdown_payload)
     return MediaFileQualityScoreDetail(
         id=media_file.id,
-        score=media_file.quality_score,
-        score_raw=media_file.quality_score_raw,
-        breakdown=QualityBreakdownRead.model_validate(breakdown_payload),
+        score=breakdown.score,
+        score_raw=breakdown.score_raw,
+        breakdown=breakdown,
     )
+
+
+def _mark_audio_only_video_categories_not_applicable(media_file: MediaFile, breakdown_payload: dict) -> dict:
+    if media_file.video_streams or not media_file.audio_streams:
+        return breakdown_payload
+    video_category_keys = {"resolution", "visual_density", "video_codec", "dynamic_range"}
+    categories = breakdown_payload.get("categories")
+    if not isinstance(categories, list):
+        return breakdown_payload
+    next_categories = []
+    changed = False
+    for category in categories:
+        if not isinstance(category, dict) or category.get("key") not in video_category_keys:
+            next_categories.append(category)
+            continue
+        next_category = {
+            **category,
+            "score": 0.0,
+            "actual": None,
+            "minimum": None,
+            "ideal": None,
+            "maximum": None,
+            "skipped": True,
+            "notes": ["not_applicable"],
+        }
+        next_categories.append(next_category)
+        changed = True
+    if not changed:
+        return breakdown_payload
+    return {**breakdown_payload, "categories": next_categories}
+
+
+def _quality_breakdown_needs_audio_only_refresh(media_file: MediaFile, breakdown_payload: dict) -> bool:
+    if media_file.video_streams or not media_file.audio_streams:
+        return False
+    for category in breakdown_payload.get("categories", []):
+        if not isinstance(category, dict) or category.get("key") not in {
+            "resolution",
+            "visual_density",
+            "video_codec",
+            "dynamic_range",
+        }:
+            continue
+        if category.get("skipped") is not True:
+            return True
+        if category.get("actual") is not None:
+            return True
+    return False
 
 
 def get_media_file_history(db: Session, file_id: int, *, limit: int = 50) -> MediaFileHistoryRead | None:

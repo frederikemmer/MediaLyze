@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- separat settings menu for Quality Scoring, specify different profiles now
+- add a file-detail `Preview` panel that can stream video or audio files directly in the app (Beta, may not work with all codecs)
+
+### 🐛 Bug fixes
+
+- merge file-history periods that only differ by missing-vs-null tracked values so unchanged intermediate snapshots no longer appear as separate empty sections
+
 ## v0.13.2
 
 >2026-06-02

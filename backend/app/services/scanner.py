@@ -54,6 +54,7 @@ from backend.app.services.quality import (
     build_quality_score_input_from_media_file,
     calculate_quality_score,
 )
+from backend.app.services.quality_profiles import effective_quality_profile_for_media_file, ensure_default_quality_profiles
 from backend.app.services.pattern_recognition import (
     PathRecognition,
     matches_bonus_path,
@@ -659,6 +660,7 @@ def _update_media_file_search_fields(media_file: MediaFile) -> None:
 
 
 def _apply_analysis_result(
+    db: Session,
     media_file: MediaFile,
     payload: dict,
     subtitles: list[dict[str, str | None]],
@@ -669,9 +671,10 @@ def _apply_analysis_result(
     normalized = normalize_ffprobe_payload(payload)
     media_file.raw_ffprobe_json = payload
     _replace_analysis(media_file, normalized, subtitles)
+    quality_profile = effective_quality_profile_for_media_file(db, media_file, resolution_categories)
     breakdown = calculate_quality_score(
         build_quality_score_input(normalized, subtitles, size_bytes=media_file.size_bytes),
-        library.quality_profile,
+        quality_profile,
         resolution_categories,
     )
     _persist_quality_breakdown(media_file, breakdown)
@@ -1151,6 +1154,7 @@ def run_scan(
     }
     incomplete_analysis_ids = _incomplete_analysis_file_ids(db, library_id)
     app_settings = get_app_settings(db, settings)
+    ensure_default_quality_profiles(db, app_settings.resolution_categories)
     ignore_patterns = tuple(app_settings.ignore_patterns)
     pattern_recognition_settings = app_settings.pattern_recognition
     duplicate_strategy = get_duplicate_detection_strategy(library.duplicate_detection_mode)
@@ -1496,6 +1500,7 @@ def run_scan(
                         if analysis_error is None and payload is not None:
                             try:
                                 _apply_analysis_result(
+                                    db,
                                     work.media_file,
                                     payload,
                                     subtitles,
@@ -1784,6 +1789,9 @@ def run_quality_recompute(
     def _should_cancel() -> bool:
         return _scan_job_is_canceled(db, job.id) or bool(is_cancel_requested and is_cancel_requested(job.id))
 
+    resolution_categories = get_app_settings(db).resolution_categories
+    ensure_default_quality_profiles(db, resolution_categories)
+
     media_files = db.scalars(
         select(MediaFile)
         .where(
@@ -1796,6 +1804,7 @@ def run_quality_recompute(
             selectinload(MediaFile.media_format),
             selectinload(MediaFile.video_streams),
             selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.chapters),
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
         )
@@ -1810,13 +1819,12 @@ def run_quality_recompute(
     db.commit()
 
     batch_counter = 0
-    resolution_categories = get_app_settings(db).resolution_categories
     for media_file in media_files:
         if _should_cancel():
             raise ScanCanceled()
         breakdown = calculate_quality_score(
             build_quality_score_input_from_media_file(media_file),
-            library.quality_profile,
+            effective_quality_profile_for_media_file(db, media_file, resolution_categories),
             resolution_categories,
         )
         _persist_quality_breakdown(media_file, breakdown)

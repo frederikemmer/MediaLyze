@@ -67,6 +67,54 @@ DYNAMIC_RANGE_RANKS = {
     "dolby_vision": 4.0,
 }
 REFERENCE_1080P_PIXELS = 1920 * 1080
+BASE_QUALITY_METRICS = (
+    "resolution",
+    "visual_density",
+    "video_codec",
+    "audio_channels",
+    "audio_codec",
+    "dynamic_range",
+    "language_preferences",
+)
+VIDEO_QUALITY_METRICS = BASE_QUALITY_METRICS
+MUSIC_QUALITY_METRICS = (
+    "audio_channels",
+    "audio_codec",
+    "audio_bitrate",
+    "sample_rate",
+    "music_tags",
+)
+AUDIOBOOK_QUALITY_METRICS = (
+    "audio_channels",
+    "audio_codec",
+    "audio_bitrate",
+    "sample_rate",
+    "audiobook_tags",
+    "audiobook_chapters",
+)
+QUALITY_METRIC_KEYS = tuple(dict.fromkeys((*BASE_QUALITY_METRICS, *MUSIC_QUALITY_METRICS, *AUDIOBOOK_QUALITY_METRICS)))
+
+MUSIC_TAG_FIELDS = (
+    "title",
+    "artist",
+    "album",
+    "album_artist",
+    "genre",
+    "date",
+    "disc",
+    "composer",
+)
+AUDIOBOOK_TAG_FIELDS = (
+    "narrator",
+    "author",
+    "publisher",
+    "series",
+    "series_part",
+    "description",
+    "language",
+    "isbn",
+    "asin",
+)
 
 
 @dataclass(slots=True)
@@ -87,6 +135,7 @@ class QualityAudioStream:
     channels: int | None
     channel_layout: str | None
     bit_rate: int | None
+    sample_rate: int | None
     language: str | None
     default_flag: bool
 
@@ -105,10 +154,58 @@ class QualityScoreInput:
     audio_streams: list[QualityAudioStream] = field(default_factory=list)
     subtitle_streams: list[QualitySubtitle] = field(default_factory=list)
     external_subtitles: list[QualitySubtitle] = field(default_factory=list)
+    music_tags: dict[str, str | None] = field(default_factory=dict)
+    audiobook_tags: dict[str, str | None] = field(default_factory=dict)
+    chapter_count: int | None = None
+    chapter_titles: list[str] = field(default_factory=list)
 
 
 def default_quality_profile() -> dict[str, Any]:
-    return QualityProfile().model_dump(mode="json", exclude_none=True)
+    return default_quality_profile_for_media_type("video")
+
+
+def default_quality_profile_for_media_type(media_type: str) -> dict[str, Any]:
+    profile = QualityProfile()
+    if media_type == "music":
+        profile = profile.model_copy(
+            update={
+                "active_metrics": list(MUSIC_QUALITY_METRICS),
+                "resolution": profile.resolution.model_copy(update={"weight": 0}),
+                "visual_density": profile.visual_density.model_copy(update={"weight": 0}),
+                "video_codec": profile.video_codec.model_copy(update={"weight": 0}),
+                "dynamic_range": profile.dynamic_range.model_copy(update={"weight": 0}),
+                "audio_bitrate": profile.audio_bitrate.model_copy(update={"weight": 4, "minimum": 96000, "ideal": 256000, "maximum": 512000}),
+                "sample_rate": profile.sample_rate.model_copy(update={"weight": 3, "minimum": 44100, "ideal": 48000, "maximum": 96000}),
+                "music_tags": profile.music_tags.model_copy(update={"weight": 6}),
+                "language_preferences": profile.language_preferences.model_copy(update={"weight": 0}),
+            }
+        )
+    elif media_type == "audiobook":
+        profile = profile.model_copy(
+            update={
+                "active_metrics": list(AUDIOBOOK_QUALITY_METRICS),
+                "resolution": profile.resolution.model_copy(update={"weight": 0}),
+                "visual_density": profile.visual_density.model_copy(update={"weight": 0}),
+                "video_codec": profile.video_codec.model_copy(update={"weight": 0}),
+                "dynamic_range": profile.dynamic_range.model_copy(update={"weight": 0}),
+                "audio_codec": profile.audio_codec.model_copy(update={"weight": 4, "minimum": "mp3", "ideal": "aac"}),
+                "audio_bitrate": profile.audio_bitrate.model_copy(update={"weight": 4, "minimum": 64000, "ideal": 128000, "maximum": 256000}),
+                "sample_rate": profile.sample_rate.model_copy(update={"weight": 2, "minimum": 22050, "ideal": 44100, "maximum": 48000}),
+                "audiobook_tags": profile.audiobook_tags.model_copy(update={"weight": 6}),
+                "audiobook_chapters": profile.audiobook_chapters.model_copy(update={"weight": 5}),
+                "language_preferences": profile.language_preferences.model_copy(update={"weight": 0}),
+            }
+        )
+    else:
+        profile = profile.model_copy(update={"active_metrics": list(VIDEO_QUALITY_METRICS)})
+    return normalize_quality_profile(profile)
+
+
+def _first_resolution_category_id(categories: list[ResolutionCategory]) -> str:
+    first = categories[0]
+    if isinstance(first, dict):
+        return str(first["id"])
+    return first.id
 
 
 def normalize_quality_profile(
@@ -117,8 +214,13 @@ def normalize_quality_profile(
 ) -> dict[str, Any]:
     categories = resolution_categories or default_resolution_categories()
     profile = payload if isinstance(payload, QualityProfile) else QualityProfile.model_validate(payload or {})
+    active_metrics = _normalize_active_metrics(profile)
     resolution_minimum = resolve_resolution_category_fallback(str(profile.resolution.minimum), categories)
     resolution_ideal = resolve_resolution_category_fallback(str(profile.resolution.ideal), categories)
+    resolution_maximum = resolve_resolution_category_fallback(
+        str(profile.resolution.maximum),
+        categories,
+    ) if profile.resolution.maximum is not None else _first_resolution_category_id(categories)
     video_codec_minimum_values, video_codec_ideal_values = _normalized_tiered_quality_values(profile.video_codec)
     dynamic_range_minimum_values, dynamic_range_ideal_values = _normalized_tiered_quality_values(profile.dynamic_range)
     normalized = profile.model_copy(
@@ -127,6 +229,7 @@ def normalize_quality_profile(
                 update={
                     "minimum": resolution_minimum,
                     "ideal": resolution_ideal,
+                    "maximum": resolution_maximum,
                 }
             ),
             "video_codec": profile.video_codec.model_copy(
@@ -143,15 +246,42 @@ def normalize_quality_profile(
                     "ideal_values": dynamic_range_ideal_values,
                 }
             ),
+            "audio_channels": profile.audio_channels.model_copy(
+                update={"maximum": profile.audio_channels.maximum or "7.1"}
+            ),
             "language_preferences": profile.language_preferences.model_copy(
                 update={
                     "audio_languages": _normalized_language_list(profile.language_preferences.audio_languages),
                     "subtitle_languages": _normalized_language_list(profile.language_preferences.subtitle_languages),
                 }
-            )
+            ),
+            "active_metrics": active_metrics,
         }
     )
+    normalized = _apply_inactive_metric_weights(normalized, active_metrics)
     return normalized.model_dump(mode="json", exclude_none=True)
+
+
+def _normalize_active_metrics(profile: QualityProfile) -> list[str]:
+    if profile.active_metrics is None:
+        return [key for key in BASE_QUALITY_METRICS if getattr(profile, key).weight > 0]
+    normalized: list[str] = []
+    for metric in profile.active_metrics:
+        candidate = str(metric).strip()
+        if candidate in QUALITY_METRIC_KEYS and candidate not in normalized:
+            normalized.append(candidate)
+    return normalized
+
+
+def _apply_inactive_metric_weights(profile: QualityProfile, active_metrics: list[str]) -> QualityProfile:
+    active = set(active_metrics)
+    updates: dict[str, Any] = {}
+    for key in QUALITY_METRIC_KEYS:
+        category = getattr(profile, key, None)
+        if category is None or key in active:
+            continue
+        updates[key] = category.model_copy(update={"weight": 0})
+    return profile.model_copy(update=updates)
 
 
 def build_quality_score_input(
@@ -182,6 +312,7 @@ def build_quality_score_input(
                 channels=stream.channels,
                 channel_layout=stream.channel_layout,
                 bit_rate=stream.bit_rate,
+                sample_rate=stream.sample_rate,
                 language=stream.language,
                 default_flag=stream.default_flag,
             )
@@ -189,6 +320,10 @@ def build_quality_score_input(
         ],
         subtitle_streams=[QualitySubtitle(language=stream.language) for stream in probe_result.subtitle_streams],
         external_subtitles=[QualitySubtitle(language=item.get("language")) for item in (external_subtitles or [])],
+        music_tags=_music_tags_from_probe(probe_result),
+        audiobook_tags=_audiobook_tags_from_probe(probe_result),
+        chapter_count=len(probe_result.chapters) or None,
+        chapter_titles=[chapter.title or "" for chapter in probe_result.chapters],
     )
 
 
@@ -216,6 +351,7 @@ def build_quality_score_input_from_media_file(media_file) -> QualityScoreInput:
                 channels=stream.channels,
                 channel_layout=stream.channel_layout,
                 bit_rate=stream.bit_rate,
+                sample_rate=stream.sample_rate,
                 language=stream.language,
                 default_flag=stream.default_flag,
             )
@@ -223,7 +359,52 @@ def build_quality_score_input_from_media_file(media_file) -> QualityScoreInput:
         ],
         subtitle_streams=[QualitySubtitle(language=stream.language) for stream in media_file.subtitle_streams],
         external_subtitles=[QualitySubtitle(language=stream.language) for stream in media_file.external_subtitles],
+        music_tags={
+            "title": getattr(media_file, "audio_title", ""),
+            "artist": getattr(media_file, "audio_artist", ""),
+            "album": getattr(media_file, "audio_album", ""),
+            "album_artist": getattr(media_file, "audio_album_artist", ""),
+            "genre": getattr(media_file, "audio_genre", ""),
+            "date": getattr(media_file, "audio_date", ""),
+            "disc": getattr(media_file, "audio_disc", ""),
+            "composer": getattr(media_file, "audio_composer", ""),
+        },
+        audiobook_tags={
+            "narrator": getattr(media_file, "audiobook_narrator", ""),
+            "author": getattr(media_file, "audiobook_author", ""),
+            "publisher": getattr(media_file, "audiobook_publisher", ""),
+            "series": getattr(media_file, "audiobook_series", ""),
+            "series_part": getattr(media_file, "audiobook_series_part", ""),
+            "description": getattr(media_file, "audiobook_description", ""),
+            "language": getattr(media_file, "audiobook_language", ""),
+            "isbn": getattr(media_file, "audiobook_isbn", ""),
+            "asin": getattr(media_file, "audiobook_asin", ""),
+        },
+        chapter_count=getattr(media_file, "chapter_count", None) or (len(media_file.chapters) if hasattr(media_file, "chapters") else None),
+        chapter_titles=[chapter.title or "" for chapter in getattr(media_file, "chapters", [])],
     )
+
+
+def _music_tags_from_probe(probe_result: ProbeResult) -> dict[str, str | None]:
+    selected = next((stream for stream in probe_result.audio_streams if stream.default_flag), None)
+    selected = selected or (probe_result.audio_streams[0] if probe_result.audio_streams else None)
+    if selected is None:
+        return {}
+    return {field: getattr(selected, field, None) for field in MUSIC_TAG_FIELDS}
+
+
+def _audiobook_tags_from_probe(probe_result: ProbeResult) -> dict[str, str | None]:
+    return {
+        "narrator": probe_result.audiobook_narrator,
+        "author": probe_result.audiobook_author,
+        "publisher": probe_result.audiobook_publisher,
+        "series": probe_result.audiobook_series,
+        "series_part": probe_result.audiobook_series_part,
+        "description": probe_result.audiobook_description,
+        "language": probe_result.audiobook_language,
+        "isbn": probe_result.audiobook_isbn,
+        "asin": probe_result.audiobook_asin,
+    }
 
 
 def calculate_quality_score(
@@ -234,33 +415,52 @@ def calculate_quality_score(
     categories = resolution_categories or default_resolution_categories()
     resolution_ranks = resolution_category_rank_map(categories)
     profile = QualityProfile.model_validate(normalize_quality_profile(quality_profile, categories))
+    active_metrics = set(profile.active_metrics or [])
     primary_video = _primary_video_stream(score_input.video_streams)
     selected_audio = _select_audio_stream(score_input.audio_streams, profile.language_preferences.audio_languages)
     resolution_category = (
         classify_resolution_category(primary_video.width, primary_video.height, categories) if primary_video else None
     )
 
-    categories = [
-        _rank_category(
-            key="resolution",
-            config=profile.resolution,
-            actual_key=resolution_category.id if resolution_category else None,
-            actual_value=resolution_ranks.get(resolution_category.id) if resolution_category else None,
-            ranks=resolution_ranks,
-            missing_is_zero=True,
-        ),
-        _numeric_category(
-            key="visual_density",
-            config=profile.visual_density,
-            actual=_visual_density(score_input, primary_video),
-            missing_is_zero=True,
-        ),
-        _value_set_category(
-            key="video_codec",
-            config=profile.video_codec,
-            actual_key=_normalize_video_codec(primary_video.codec) if primary_video else None,
+    if primary_video is None:
+        video_categories = [
+            _skipped_category("resolution", profile.resolution.weight),
+            _skipped_category("visual_density", profile.visual_density.weight),
+            _skipped_category("video_codec", profile.video_codec.weight),
+        ]
+        dynamic_range_category = _skipped_category("dynamic_range", profile.dynamic_range.weight)
+    else:
+        video_categories = [
+            _rank_category(
+                key="resolution",
+                config=profile.resolution,
+                actual_key=resolution_category.id if resolution_category else None,
+                actual_value=resolution_ranks.get(resolution_category.id) if resolution_category else None,
+                ranks=resolution_ranks,
+                missing_is_zero=True,
+            ),
+            _numeric_category(
+                key="visual_density",
+                config=profile.visual_density,
+                actual=_visual_density(score_input, primary_video),
+                missing_is_zero=True,
+            ),
+            _value_set_category(
+                key="video_codec",
+                config=profile.video_codec,
+                actual_key=_normalize_video_codec(primary_video.codec),
+                missing_is_zero=False,
+            ),
+        ]
+        dynamic_range_category = _value_set_category(
+            key="dynamic_range",
+            config=profile.dynamic_range,
+            actual_key=_normalize_dynamic_range(primary_video.hdr_type),
             missing_is_zero=False,
-        ),
+        )
+
+    score_categories = [
+        *video_categories,
         _rank_category(
             key="audio_channels",
             config=profile.audio_channels,
@@ -277,13 +477,37 @@ def calculate_quality_score(
             ranks=AUDIO_CODEC_RANKS,
             missing_is_zero=False,
         ),
-        _value_set_category(
-            key="dynamic_range",
-            config=profile.dynamic_range,
-            actual_key=_normalize_dynamic_range(primary_video.hdr_type) if primary_video else "sdr",
-            missing_is_zero=False,
-        ),
+        dynamic_range_category,
         _language_category(score_input, profile.language_preferences),
+        _numeric_category(
+            key="audio_bitrate",
+            config=profile.audio_bitrate,
+            actual=selected_audio.bit_rate if selected_audio else None,
+            missing_is_zero=True,
+        ),
+        _numeric_category(
+            key="sample_rate",
+            config=profile.sample_rate,
+            actual=_audio_sample_rate(selected_audio),
+            missing_is_zero=True,
+        ),
+        _metadata_presence_category(
+            key="music_tags",
+            config=profile.music_tags,
+            values=score_input.music_tags,
+            required_fields=MUSIC_TAG_FIELDS,
+        ),
+        _metadata_presence_category(
+            key="audiobook_tags",
+            config=profile.audiobook_tags,
+            values=score_input.audiobook_tags,
+            required_fields=AUDIOBOOK_TAG_FIELDS,
+        ),
+        _audiobook_chapters_category(score_input, profile.audiobook_chapters),
+    ]
+    categories = [
+        category if category.key in active_metrics else _inactive_category(category.key)
+        for category in score_categories
     ]
 
     weighted_total = 0.0
@@ -297,6 +521,73 @@ def calculate_quality_score(
     score_raw = weighted_total / total_weight if total_weight > 0 else 0.0
     score = _round_score_10(score_raw)
     return QualityBreakdownRead(score=score, score_raw=round(score_raw, 2), categories=categories)
+
+
+def _skipped_category(key: str, weight: int) -> QualityCategoryBreakdownRead:
+    return QualityCategoryBreakdownRead(
+        key=key,
+        score=0.0,
+        weight=weight,
+        active=weight > 0,
+        skipped=True,
+        notes=["not_applicable"],
+    )
+
+
+def _inactive_category(key: str) -> QualityCategoryBreakdownRead:
+    return QualityCategoryBreakdownRead(key=key, score=0.0, weight=0, active=False)
+
+
+def _metadata_presence_category(
+    *,
+    key: str,
+    config: QualityCategoryConfig,
+    values: dict[str, str | None],
+    required_fields: tuple[str, ...],
+) -> QualityCategoryBreakdownRead:
+    if config.weight <= 0:
+        return QualityCategoryBreakdownRead(key=key, score=0.0, weight=0, active=False)
+    present = [
+        field
+        for field in required_fields
+        if str(values.get(field) or "").strip()
+    ]
+    score = (len(present) / len(required_fields)) * 100 if required_fields else 0.0
+    return QualityCategoryBreakdownRead(
+        key=key,
+        score=round(score, 2),
+        weight=config.weight,
+        active=True,
+        minimum="partial",
+        ideal="complete",
+        actual=present,
+        notes=["metadata_presence"],
+    )
+
+
+def _audiobook_chapters_category(
+    score_input: QualityScoreInput,
+    config: QualityCategoryConfig,
+) -> QualityCategoryBreakdownRead:
+    if config.weight <= 0:
+        return QualityCategoryBreakdownRead(key="audiobook_chapters", score=0.0, weight=0, active=False)
+    chapter_count = score_input.chapter_count or 0
+    titled_count = len([title for title in score_input.chapter_titles if str(title or "").strip()])
+    if chapter_count <= 0:
+        score = 0.0
+    elif titled_count >= chapter_count:
+        score = 100.0
+    else:
+        score = 60.0
+    return QualityCategoryBreakdownRead(
+        key="audiobook_chapters",
+        score=score,
+        weight=config.weight,
+        active=True,
+        minimum="chapters",
+        ideal="chapters_with_titles",
+        actual=f"{titled_count}/{chapter_count}",
+    )
 
 
 def _round_score_10(score_raw: float) -> int:
@@ -448,6 +739,10 @@ def _audio_channel_key(stream: QualityAudioStream | None) -> str | None:
     if channels <= 6:
         return "5.1"
     return "7.1"
+
+
+def _audio_sample_rate(stream: QualityAudioStream | None) -> int | None:
+    return stream.sample_rate if stream else None
 
 
 def _audio_stream_sort_key(stream: QualityAudioStream) -> tuple[float, float, int, int]:
@@ -631,7 +926,7 @@ def _rank_category(
             active=True,
             minimum=minimum,
             ideal=ideal,
-            maximum=None,
+            maximum=config.maximum,
             actual=None,
             notes=["missing_value"],
         )
@@ -644,15 +939,21 @@ def _rank_category(
             active=True,
             minimum=minimum,
             ideal=ideal,
-            maximum=None,
+            maximum=config.maximum,
             actual=actual_key,
             unknown_mapping=True,
         )
 
-    if minimum not in ranks or ideal not in ranks:
+    maximum = str(config.maximum) if config.maximum is not None else None
+    if minimum not in ranks or ideal not in ranks or (maximum is not None and maximum not in ranks):
         raise ValueError(f"Invalid quality profile mapping for {key}")
 
-    score = _score_value(actual_value or 0.0, ranks[minimum], ranks[ideal])
+    score = _score_value(
+        actual_value or 0.0,
+        ranks[minimum],
+        ranks[ideal],
+        ranks[maximum] if maximum is not None else None,
+    )
     return QualityCategoryBreakdownRead(
         key=key,
         score=round(score, 2),
@@ -660,7 +961,7 @@ def _rank_category(
         active=True,
         minimum=minimum,
         ideal=ideal,
-        maximum=None,
+        maximum=maximum,
         actual=actual_key,
     )
 

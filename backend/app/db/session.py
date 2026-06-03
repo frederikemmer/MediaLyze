@@ -52,7 +52,10 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         ),
         "scan_config": "ALTER TABLE libraries ADD COLUMN scan_config JSON NOT NULL DEFAULT '{}'",
         "quality_profile": "ALTER TABLE libraries ADD COLUMN quality_profile JSON NOT NULL DEFAULT '{}'",
+        "quality_profile_id": "ALTER TABLE libraries ADD COLUMN quality_profile_id INTEGER",
         "show_on_dashboard": "ALTER TABLE libraries ADD COLUMN show_on_dashboard BOOLEAN NOT NULL DEFAULT 1",
+        "created_at": "ALTER TABLE libraries ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at": "ALTER TABLE libraries ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
     },
     "media_files": {
         "last_seen_at": "ALTER TABLE media_files ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
@@ -272,6 +275,7 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_external_subtitles_media_file_id ON external_subtitles (media_file_id)",
     "CREATE INDEX IF NOT EXISTS ix_scan_jobs_status ON scan_jobs (status)",
     "CREATE INDEX IF NOT EXISTS ix_scan_jobs_library_id ON scan_jobs (library_id)",
+    "CREATE INDEX IF NOT EXISTS ix_libraries_quality_profile_id ON libraries (quality_profile_id)",
     (
         "CREATE INDEX IF NOT EXISTS ix_media_file_history_library_path_captured_at "
         "ON media_file_history (library_id, relative_path, captured_at)"
@@ -667,10 +671,17 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
 def init_db(engine: Engine | None = None) -> None:
     from backend.app.db.base import Base
     from backend.app.models import entities  # noqa: F401
+    from backend.app.services.app_settings import get_app_settings
+    from backend.app.services.quality_profiles import migrate_legacy_library_quality_profiles
 
     active_engine = engine or ENGINE
     Base.metadata.create_all(active_engine)
     _apply_sqlite_additive_migrations(active_engine)
+    session_factory = sessionmaker(bind=active_engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    with session_factory() as db:
+        app_settings = get_app_settings(db)
+        migrate_legacy_library_quality_profiles(db, app_settings.resolution_categories)
+        db.commit()
     with active_engine.begin() as connection:
         connection.execute(text("PRAGMA optimize;"))
 

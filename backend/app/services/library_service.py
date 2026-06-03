@@ -23,12 +23,18 @@ from backend.app.models.entities import (
 )
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.media import DistributionItem
+from backend.app.schemas.quality import QualityProfile
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.container_formats import format_container_label
 from backend.app.services.languages import normalize_language_code
 from backend.app.services.numeric_distributions import build_numeric_distributions
 from backend.app.services.path_access import is_watch_supported_for_library, resolve_library_path, resolve_library_paths
 from backend.app.services.quality import normalize_quality_profile
+from backend.app.services.quality_profiles import (
+    effective_quality_profile_for_library,
+    ensure_default_quality_profiles,
+    validate_library_quality_profile,
+)
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
@@ -142,8 +148,17 @@ def _group_resolution_distribution(
     ]
 
 
-def _library_summary_from_model(library: Library, aggregate: dict[str, int | float] | None = None) -> LibrarySummary:
+def _library_summary_from_model(
+    db: Session,
+    library: Library,
+    aggregate: dict[str, int | float] | None = None,
+    resolution_categories=None,
+) -> LibrarySummary:
+    app_resolution_categories = resolution_categories or load_app_settings(db).resolution_categories
     summary = LibrarySummary.model_validate(library)
+    summary.quality_profile = QualityProfile.model_validate(
+        effective_quality_profile_for_library(db, library, app_resolution_categories)
+    )
     for key, value in (aggregate or {}).items():
         setattr(summary, key, value)
     return summary
@@ -277,6 +292,8 @@ def _normalize_library_scan_settings(
 def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> Library:
     cache_key = str(id(db.get_bind()))
     app_settings = load_app_settings(db, settings)
+    ensure_default_quality_profiles(db, app_settings.resolution_categories)
+    selected_profile = validate_library_quality_profile(db, payload.type, payload.quality_profile_id)
     if payload.paths:
         safe_path, selected_paths = resolve_library_paths(settings, payload.paths)
     else:
@@ -299,6 +316,7 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
         duplicate_detection_mode=payload.duplicate_detection_mode,
         scan_config=scan_config,
         quality_profile=normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories),
+        quality_profile_id=selected_profile.id if selected_profile else None,
         show_on_dashboard=payload.show_on_dashboard,
     )
     db.add(library)
@@ -321,6 +339,7 @@ def update_library_settings(
 
     quality_profile_changed = False
     app_settings = load_app_settings(db, settings)
+    ensure_default_quality_profiles(db, app_settings.resolution_categories)
 
     if payload.name is not None:
         next_name = payload.name.strip()
@@ -329,6 +348,12 @@ def update_library_settings(
         library.name = next_name
     if payload.type is not None:
         library.type = payload.type
+        try:
+            compatible_profile = validate_library_quality_profile(db, library.type, library.quality_profile_id)
+        except ValueError:
+            compatible_profile = None
+        if compatible_profile is None:
+            library.quality_profile_id = None
 
     if payload.scan_mode is not None:
         next_scan_config = dict(library.scan_config or {})
@@ -341,6 +366,12 @@ def update_library_settings(
         )
     if payload.duplicate_detection_mode is not None:
         library.duplicate_detection_mode = payload.duplicate_detection_mode
+    if "quality_profile_id" in payload.model_fields_set:
+        selected_profile = validate_library_quality_profile(db, library.type, payload.quality_profile_id)
+        next_profile_id = selected_profile.id if selected_profile else None
+        if library.quality_profile_id != next_profile_id:
+            library.quality_profile_id = next_profile_id
+            quality_profile_changed = True
     if payload.quality_profile is not None:
         next_quality_profile = normalize_quality_profile(payload.quality_profile, app_settings.resolution_categories)
         current_quality_profile = normalize_quality_profile(library.quality_profile, app_settings.resolution_categories)
@@ -437,8 +468,13 @@ def list_libraries(db: Session) -> list[LibrarySummary]:
         return cached
 
     libraries = db.scalars(select(Library).order_by(Library.name.asc())).all()
+    app_settings = load_app_settings(db)
+    ensure_default_quality_profiles(db, app_settings.resolution_categories)
     aggregates = _library_aggregate_map(db)
-    result = [_library_summary_from_model(library, aggregates.get(library.id)) for library in libraries]
+    result = [
+        _library_summary_from_model(db, library, aggregates.get(library.id), app_settings.resolution_categories)
+        for library in libraries
+    ]
     stats_cache.set_libraries(cache_key, result)
     return result
 
@@ -453,7 +489,9 @@ def get_library_summary(db: Session, library_id: int) -> LibrarySummary | None:
     if not library:
         return None
 
-    payload = _library_summary_from_model(library, _library_aggregate(db, library_id))
+    app_settings = load_app_settings(db)
+    ensure_default_quality_profiles(db, app_settings.resolution_categories)
+    payload = _library_summary_from_model(db, library, _library_aggregate(db, library_id), app_settings.resolution_categories)
     stats_cache.set_library_summary(cache_key, library_id, payload)
     return payload
 

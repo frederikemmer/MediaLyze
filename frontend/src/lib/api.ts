@@ -185,6 +185,7 @@ export type QualityCategoryConfig = {
   weight: number;
   minimum: string | number;
   ideal: string | number;
+  maximum?: string | number | null;
   values?: string[];
   minimum_values?: string[];
   ideal_values?: string[];
@@ -206,6 +207,7 @@ export type QualityLanguagePreferencesConfig = {
 
 export type QualityProfile = {
   version: number;
+  active_metrics?: string[] | null;
   resolution: QualityCategoryConfig;
   visual_density: QualityNumericCategoryConfig;
   video_codec: QualityCategoryConfig;
@@ -213,6 +215,11 @@ export type QualityProfile = {
   audio_codec: QualityCategoryConfig;
   dynamic_range: QualityCategoryConfig;
   language_preferences: QualityLanguagePreferencesConfig;
+  audio_bitrate?: QualityNumericCategoryConfig;
+  sample_rate?: QualityNumericCategoryConfig;
+  music_tags?: QualityCategoryConfig;
+  audiobook_tags?: QualityCategoryConfig;
+  audiobook_chapters?: QualityCategoryConfig;
 };
 
 export type QualityCategoryBreakdown = {
@@ -240,13 +247,32 @@ export type LibraryType = "movies" | "series" | "music" | "audiobooks" | "mixed"
 
 export const DEFAULT_QUALITY_PROFILE: QualityProfile = {
   version: 1,
-  resolution: { weight: 8, minimum: "1080p", ideal: "4k" },
+  active_metrics: ["resolution", "visual_density", "video_codec", "audio_channels", "audio_codec", "dynamic_range", "language_preferences"],
+  resolution: { weight: 8, minimum: "1080p", ideal: "4k", maximum: "8k" },
   visual_density: { weight: 10, minimum: 0.02, ideal: 0.04, maximum: 0.08 },
   video_codec: { weight: 5, minimum: "h264", ideal: "hevc", minimum_values: ["h264"], ideal_values: ["hevc"] },
-  audio_channels: { weight: 4, minimum: "stereo", ideal: "5.1" },
+  audio_channels: { weight: 4, minimum: "stereo", ideal: "5.1", maximum: "7.1" },
   audio_codec: { weight: 3, minimum: "aac", ideal: "eac3" },
   dynamic_range: { weight: 4, minimum: "sdr", ideal: "hdr10", minimum_values: ["sdr"], ideal_values: ["hdr10"] },
   language_preferences: { weight: 6, mode: "partial", audio_languages: [], subtitle_languages: [] },
+  audio_bitrate: { weight: 0, minimum: 96000, ideal: 256000, maximum: 512000 },
+  sample_rate: { weight: 0, minimum: 44100, ideal: 48000, maximum: 96000 },
+  music_tags: { weight: 0, minimum: "partial", ideal: "complete" },
+  audiobook_tags: { weight: 0, minimum: "partial", ideal: "complete" },
+  audiobook_chapters: { weight: 0, minimum: "chapters", ideal: "chapters_with_titles" },
+};
+
+export type QualityProfileMediaType = "video" | "music" | "audiobook";
+
+export type QualityProfileDefinition = {
+  id: number;
+  name: string;
+  media_type: QualityProfileMediaType;
+  profile: QualityProfile;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  library_count: number;
 };
 
 export type DashboardResponse = {
@@ -293,6 +319,7 @@ export type LibrarySummary = {
   created_at: string;
   updated_at: string;
   quality_profile: QualityProfile;
+  quality_profile_id?: number | null;
   show_on_dashboard: boolean;
   file_count: number;
   total_size_bytes: number;
@@ -1118,6 +1145,11 @@ function buildLibraryFilesPath(
   return `/libraries/${id}${suffix}${query ? `?${query}` : ""}`;
 }
 
+function buildFileMediaPath(id: string | number, options: { download?: boolean } = {}): string {
+  const query = options.download ? "?download=1" : "";
+  return `/files/${id}/media${query}`;
+}
+
 function extractFilenameFromDisposition(value: string | null): string | null {
   if (!value) {
     return null;
@@ -1146,6 +1178,33 @@ function buildPanelQuery(panels?: readonly string[] | null): string {
 
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
+  qualityProfiles: () => request<QualityProfileDefinition[]>("/quality-profiles"),
+  createQualityProfile: (payload: {
+    name: string;
+    media_type: QualityProfileMediaType;
+    profile: QualityProfile;
+    is_default?: boolean;
+  }) =>
+    request<QualityProfileDefinition>("/quality-profiles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateQualityProfile: (
+    profileId: number,
+    payload: {
+      name?: string;
+      profile?: QualityProfile;
+      is_default?: boolean;
+    },
+  ) =>
+    request<QualityProfileDefinition>(`/quality-profiles/${profileId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteQualityProfile: (profileId: number) =>
+    request<void>(`/quality-profiles/${profileId}`, {
+      method: "DELETE",
+    }),
   updateStatus: () => request<UpdateStatus>("/update-status"),
   dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
   dashboardHistory: (signal?: AbortSignal) =>
@@ -1302,6 +1361,7 @@ export const api = {
       filename: extractFilenameFromDisposition(response.headers.get("Content-Disposition")),
     };
   },
+  fileMediaUrl: (id: string | number, options: { download?: boolean } = {}) => `${API_PREFIX}${buildFileMediaPath(id, options)}`,
   libraryScanJobs: (id: string | number) => request<ScanJob[]>(`/libraries/${id}/scan-jobs`),
   file: (id: string | number) => request<MediaFileDetail>(`/files/${id}`),
   fileStreams: (id: string | number) => request<MediaFileStreamDetails>(`/files/${id}/streams`),
@@ -1389,6 +1449,7 @@ export const api = {
     duplicate_detection_mode?: DuplicateDetectionMode;
     scan_config?: Record<string, ScanConfigValue>;
     quality_profile?: QualityProfile;
+    quality_profile_id?: number | null;
     show_on_dashboard?: boolean;
   }) =>
     request<LibrarySummary>("/libraries", {
@@ -1404,6 +1465,7 @@ export const api = {
       duplicate_detection_mode?: DuplicateDetectionMode;
       scan_config?: Record<string, ScanConfigValue>;
       quality_profile?: QualityProfile;
+      quality_profile_id?: number | null;
       show_on_dashboard?: boolean;
     },
   ) =>

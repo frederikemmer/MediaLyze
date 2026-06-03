@@ -130,6 +130,43 @@ def test_update_status_returns_persisted_latest_release() -> None:
     assert payload["release_notes"][0]["version"] == "9.9.9"
 
 
+def test_quality_profiles_route_seeds_defaults_and_protects_default_delete() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.get("/api/quality-profiles")
+        assert response.status_code == 200
+        profiles = response.json()
+        assert {profile["media_type"] for profile in profiles} == {"video", "music", "audiobook"}
+        assert all(profile["is_default"] for profile in profiles)
+
+        delete_response = client.delete(f"/api/quality-profiles/{profiles[0]['id']}")
+        assert delete_response.status_code == 400
+
+
+def test_library_update_rejects_incompatible_quality_profile() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        library = Library(name="Movies", path="/tmp/movies", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.commit()
+        client = _build_test_app(db)
+        music_profile = next(
+            profile for profile in client.get("/api/quality-profiles").json() if profile["media_type"] == "music"
+        )
+
+        response = client.patch(f"/api/libraries/{library.id}", json={"quality_profile_id": music_profile["id"]})
+
+        assert response.status_code == 400
+        assert "not compatible" in response.json()["detail"]
+
+
 def test_library_files_export_csv_returns_404_for_unknown_library() -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
@@ -258,6 +295,71 @@ def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> No
     ]
     assert captured["check"] is True
     assert captured["capture_output"] is True
+
+
+def test_file_media_returns_streamable_content_and_download_headers(tmp_path) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    source_path = tmp_path / "videos" / "movie.mp4"
+    source_path.parent.mkdir()
+    source_path.write_bytes(b"video-bytes")
+
+    with session_factory() as db:
+        library = Library(name="Movies", path=str(tmp_path), type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="videos/movie.mp4",
+            filename="movie.mp4",
+            extension="mp4",
+            size_bytes=source_path.stat().st_size,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+        )
+        db.add(media_file)
+        db.commit()
+
+        client = _build_test_app(db)
+        preview_response = client.get(f"/api/files/{media_file.id}/media")
+        download_response = client.get(f"/api/files/{media_file.id}/media?download=1")
+
+    assert preview_response.status_code == 200
+    assert preview_response.content == b"video-bytes"
+    assert preview_response.headers["content-type"].startswith("video/mp4")
+    assert preview_response.headers["cache-control"] == "no-store"
+    assert "content-disposition" not in preview_response.headers
+    assert download_response.status_code == 200
+    assert download_response.content == b"video-bytes"
+    assert 'attachment; filename="movie.mp4"' in download_response.headers["content-disposition"]
+
+
+def test_file_media_returns_404_for_missing_file_source(tmp_path) -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(name="Movies", path=str(tmp_path), type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.flush()
+        media_file = MediaFile(
+            library_id=library.id,
+            relative_path="missing/movie.mp4",
+            filename="movie.mp4",
+            extension="mp4",
+            size_bytes=1024,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+        )
+        db.add(media_file)
+        db.commit()
+
+        response = _build_test_app(db).get(f"/api/files/{media_file.id}/media")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Media file not found"}
 
 
 def test_file_cover_returns_404_without_embedded_cover(tmp_path) -> None:

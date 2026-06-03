@@ -2,7 +2,6 @@ import {
   AudioLines,
   Captions,
   ChevronDown,
-  Download,
   FileClock,
   FileJson,
   Film,
@@ -10,6 +9,7 @@ import {
   ImageIcon,
   Info,
   ListVideo,
+  Play,
 } from "lucide-react";
 import {
   useCallback,
@@ -25,6 +25,8 @@ import { useParams } from "react-router-dom";
 import { AsyncPanel } from "../components/AsyncPanel";
 import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
 import { CopyIcon } from "../components/CopyIcon";
+import { DownloadIcon, type DownloadIconHandle } from "../components/DownloadIcon";
+import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
 import { LoaderCircleIcon } from "../components/LoaderCircleIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
@@ -47,6 +49,7 @@ function JsonPreview({ value }: { value: unknown }) {
 
 type FileDetailPanelId =
   | "overview"
+  | "preview"
   | "qualityBreakdown"
   | "videoStreams"
   | "audioStreams"
@@ -70,6 +73,7 @@ const DEFAULT_AUDIO_STREAM_PRIMARY_MODE: AudioStreamPrimaryMode = "quality";
 
 const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
   { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
+  { id: "preview", labelKey: "fileDetail.preview", icon: Play },
   { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
   { id: "videoStreams", labelKey: "fileDetail.videoStreams", icon: Film },
   { id: "audioStreams", labelKey: "fileDetail.audioStreams", icon: AudioLines },
@@ -394,6 +398,7 @@ function CoverDetailsList({
   const [coverFilename, setCoverFilename] = useState<string | null>(null);
   const [isCoverLoading, setIsCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const downloadCoverIconRef = useRef<DownloadIconHandle>(null);
 
   useEffect(() => {
     setCoverBlob(null);
@@ -484,8 +489,16 @@ function CoverDetailsList({
           {isCoverLoading ? t("fileDetail.coverLoading") : t("fileDetail.loadCover")}
         </button>
         {coverUrl ? (
-          <button type="button" className="secondary small file-detail-cover-button" onClick={downloadCover}>
-            <Download size={16} aria-hidden="true" />
+          <button
+            type="button"
+            className="secondary small file-detail-cover-button"
+            onClick={downloadCover}
+            onFocus={() => downloadCoverIconRef.current?.startAnimation()}
+            onBlur={() => downloadCoverIconRef.current?.stopAnimation()}
+            onMouseEnter={() => downloadCoverIconRef.current?.startAnimation()}
+            onMouseLeave={() => downloadCoverIconRef.current?.stopAnimation()}
+          >
+            <DownloadIcon ref={downloadCoverIconRef} size={16} aria-hidden="true" />
             {t("fileDetail.downloadCover")}
           </button>
         ) : null}
@@ -504,6 +517,37 @@ function CoverDetailsList({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PreviewDetailsPanel({
+  detail,
+  t,
+}: {
+  detail: MediaFileDetail | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): ReactNode {
+  if (!detail) {
+    return t("streamDetails.unavailable");
+  }
+
+  const isVideoPreview = hasVideoMetadata(detail);
+  const previewUrl = api.fileMediaUrl(detail.id);
+
+  return (
+    <div className="file-detail-preview-panel">
+      <div className="file-detail-preview-player-shell">
+        {isVideoPreview ? (
+          <video className="file-detail-preview-player" controls preload="metadata" src={previewUrl}>
+            {t("fileDetail.previewUnsupported")}
+          </video>
+        ) : (
+          <audio className="file-detail-preview-player file-detail-preview-player-audio" controls preload="metadata" src={previewUrl}>
+            {t("fileDetail.previewUnsupported")}
+          </audio>
+        )}
+      </div>
     </div>
   );
 }
@@ -571,6 +615,10 @@ function hasSubtitleMetadata(file: MediaFileDetail | null): boolean {
   return Boolean(file && (file.subtitle_streams.length > 0 || file.external_subtitles.length > 0));
 }
 
+function hasPreviewMetadata(file: MediaFileDetail | null): boolean {
+  return Boolean(file && (hasVideoMetadata(file) || hasAudioMetadata(file)));
+}
+
 function hasCoverMetadata(file: MediaFileDetail | null): boolean {
   return Boolean(
     file &&
@@ -588,6 +636,9 @@ function buildAvailableFileDetailPanelIds(
   qualityDetail: MediaFileQualityScoreDetail | null,
 ): FileDetailPanelId[] {
   const ids: FileDetailPanelId[] = ["overview"];
+  if (hasPreviewMetadata(file)) {
+    ids.push("preview");
+  }
   if (hasQualityMetadata(file, qualityDetail)) {
     ids.push("qualityBreakdown");
   }
@@ -893,16 +944,6 @@ function flattenHistorySnapshot(value: unknown, prefix = ""): Record<string, unk
   return prefix ? { [prefix]: stableHistoryValue(value) } : {};
 }
 
-function historyStateKey(snapshot: FileHistoryEntry["snapshot"]): string {
-  const flattened = flattenHistorySnapshot(snapshot);
-  return JSON.stringify(
-    Object.keys(flattened)
-      .filter(isHistoryStateFieldKey)
-      .sort()
-      .map((key) => [key, stableHistoryValue(flattened[key])]),
-  );
-}
-
 function isHistoryStateFieldKey(key: string): boolean {
   const arraylessKey = key.replace(/\.\d+\./g, ".");
   return (
@@ -914,28 +955,41 @@ function isHistoryStateFieldKey(key: string): boolean {
   );
 }
 
-function collapseHistoryStates(items: FileHistoryEntry[]): FileHistoryState[] {
+function collapseHistoryStates(
+  items: FileHistoryEntry[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+  inDepthDolbyVisionProfiles = false,
+): FileHistoryState[] {
+  const chronologicalItems = [...items].reverse();
   const grouped: Array<{ entries: FileHistoryEntry[] }> = [];
 
-  for (const item of items) {
+  for (const item of chronologicalItems) {
     const currentGroup = grouped.at(-1);
-    if (currentGroup && historyStateKey(currentGroup.entries[0].snapshot) === historyStateKey(item.snapshot)) {
+    const currentLatestEntry = currentGroup?.entries.at(-1);
+    if (
+      currentGroup &&
+      currentLatestEntry &&
+      buildHistoryDiffMetrics(item.snapshot, currentLatestEntry.snapshot, t, inDepthDolbyVisionProfiles).length === 0
+    ) {
       currentGroup.entries.push(item);
       continue;
     }
     grouped.push({ entries: [item] });
   }
 
-  return grouped.map((group, index) => {
-    const oldestEntry = group.entries.at(-1) ?? group.entries[0];
-    const newerGroup = grouped[index - 1];
-    const newerOldestEntry = newerGroup?.entries.at(-1) ?? newerGroup?.entries[0] ?? null;
-    return {
-      entry: group.entries[0],
-      startedAt: oldestEntry.captured_at,
-      endedAt: newerOldestEntry?.captured_at ?? null,
-    };
-  });
+  return grouped
+    .map((group, index) => {
+      const oldestEntry = group.entries[0];
+      const newestEntry = group.entries.at(-1) ?? group.entries[0];
+      const newerGroup = grouped[index + 1];
+      const newerOldestEntry = newerGroup?.entries[0] ?? null;
+      return {
+        entry: newestEntry,
+        startedAt: oldestEntry.captured_at,
+        endedAt: newerOldestEntry?.captured_at ?? null,
+      };
+    })
+    .reverse();
 }
 
 function formatHistoryRange(
@@ -1053,7 +1107,14 @@ function FileHistoryPanel({
     return <div className="notice">{t("fileDetail.history.empty")}</div>;
   }
 
-  const states = collapseHistoryStates(items);
+  const states = collapseHistoryStates(items, t, inDepthDolbyVisionProfiles);
+  const renderableStates = states
+    .map((state, index) => {
+      const previousSnapshot = states[index + 1]?.entry.snapshot;
+      const metrics = buildHistoryDiffMetrics(state.entry.snapshot, previousSnapshot, t, inDepthDolbyVisionProfiles);
+      return { metrics, state };
+    })
+    .filter(({ metrics }) => metrics.length > 0);
 
   return (
     <div className="file-history-list">
@@ -1065,34 +1126,30 @@ function FileHistoryPanel({
           })}
         </div>
       ) : null}
-      {states.map((state, index) => {
+      {renderableStates.length === 0 ? (
+        <DuplicatePanelEmptyState message={t("fileDetail.history.noChanges")} />
+      ) : null}
+      {renderableStates.map(({ metrics, state }, index) => {
         const entry = state.entry;
-        const snapshot = entry.snapshot;
-        const previousSnapshot = states[index + 1]?.entry.snapshot;
-        const metrics = buildHistoryDiffMetrics(snapshot, previousSnapshot, t, inDepthDolbyVisionProfiles);
 
         return (
           <details className="file-history-entry" key={entry.id} open={index === 0}>
             <summary className="file-history-entry-head">
               <strong>{formatHistoryRange(state, t)}</strong>
             </summary>
-            {metrics.length > 0 ? (
-              <dl className="file-history-metrics">
-                {metrics.map((metric) => (
-                  <div className="file-history-metric has-changed" key={metric.key}>
-                    <dt>{metric.label}</dt>
-                    <dd>
-                      {metric.previousValue !== null ? (
-                        <span className="file-history-old-value">{metric.previousValue}</span>
-                      ) : null}
-                      <strong>{metric.value}</strong>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : (
-              <div className="notice">{t("fileDetail.history.noChanges")}</div>
-            )}
+            <dl className="file-history-metrics">
+              {metrics.map((metric) => (
+                <div className="file-history-metric has-changed" key={metric.key}>
+                  <dt>{metric.label}</dt>
+                  <dd>
+                    {metric.previousValue !== null ? (
+                      <span className="file-history-old-value">{metric.previousValue}</span>
+                    ) : null}
+                    <strong>{metric.value}</strong>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </details>
         );
       })}
@@ -1191,6 +1248,8 @@ export function FileDetailPage() {
       title: string;
       loading: boolean;
       error: string | null;
+      titleAddon?: ReactNode;
+      subtitleAddon?: ReactNode;
       actions?: ReactNode;
       body: ReactNode;
     }
@@ -1200,6 +1259,22 @@ export function FileDetailPage() {
       loading: !file && !error,
       error,
       body: <OverviewPanel file={file} t={t} inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles} />,
+    },
+    preview: {
+      title: t("fileDetail.preview"),
+      loading: !file && !error,
+      error,
+      titleAddon: (
+        <TooltipTrigger
+          ariaLabel={t("fileDetail.previewPlaybackWarningAria")}
+          className="file-detail-preview-warning-tooltip"
+          content={t("fileDetail.previewPlaybackWarning")}
+        >
+          <Info size={14} aria-hidden="true" />
+        </TooltipTrigger>
+      ),
+      subtitleAddon: <p className="file-detail-preview-supported-formats">{t("fileDetail.previewSupportedFormats")}</p>,
+      body: <PreviewDetailsPanel detail={file} t={t} />,
     },
     qualityBreakdown: {
       title: t("fileDetail.qualityBreakdown"),
@@ -1440,6 +1515,8 @@ export function FileDetailPage() {
           loading={activePanel.loading}
           error={activePanel.error}
           className="file-detail-active-panel"
+          titleAddon={activePanel.titleAddon}
+          subtitleAddon={activePanel.subtitleAddon}
           collapseActions={activePanel.actions}
         >
           {activePanel.body}
