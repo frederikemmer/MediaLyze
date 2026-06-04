@@ -18,3 +18,4 @@ config/
 media/
 .local-config
 .codex
+node_modules
