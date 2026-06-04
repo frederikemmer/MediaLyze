@@ -1336,6 +1336,38 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.getByText("Video codec")).toBeInTheDocument();
   });
 
+  it("edits visual density profile values as 1080p-equivalent GB per hour", async () => {
+    const updateSpy = vi.spyOn(api, "updateQualityProfile").mockResolvedValue(createQualityProfileDefinition());
+
+    renderPage({ activePanel: "qualityProfiles" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Configure Visual density metric" }));
+    const minimumInput = await screen.findByLabelText("Minimum (GB/hour)");
+    const idealInput = screen.getByLabelText("Ideal (GB/hour)");
+    const maximumInput = screen.getByLabelText("Maximum (GB/hour)");
+    expect(minimumInput).toHaveValue(1.2);
+    expect(idealInput).toHaveValue(2.4);
+    expect(maximumInput).toHaveValue(4.8);
+
+    fireEvent.change(idealInput, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          profile: expect.objectContaining({
+            visual_density: expect.objectContaining({
+              minimum: 0.02,
+              ideal: 0.05,
+              maximum: 0.08,
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
   it("adds and removes metrics in quality score profiles", async () => {
     const updateSpy = vi.spyOn(api, "updateQualityProfile").mockResolvedValue(
       createQualityProfileDefinition({

@@ -56,6 +56,11 @@ import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { formatBytes, formatCodecLabel, formatDate, formatDuration } from "../lib/format";
 import { getIgnorePatternSectionState, saveIgnorePatternSectionState } from "../lib/ignore-pattern-sections";
 import {
+  formatVisualDensityGbPerHour,
+  gbPerHourToRawVisualDensity,
+  rawVisualDensityToGbPerHour,
+} from "../lib/quality-format";
+import {
   DEFAULT_SHOW_SEASON_PATTERN_INPUTS,
   defaultBonusFolderPatternInputs,
   defaultPatternRecognitionSettings,
@@ -442,6 +447,14 @@ function normalizeVisualDensityBounds(minimum: number, ideal: number, maximum: n
     ideal: nextIdeal,
     maximum: nextMaximum,
   };
+}
+
+function normalizeVisualDensityGbPerHourBounds(minimum: number, ideal: number, maximum: number) {
+  return normalizeVisualDensityBounds(
+    gbPerHourToRawVisualDensity(minimum),
+    gbPerHourToRawVisualDensity(ideal),
+    gbPerHourToRawVisualDensity(maximum),
+  );
 }
 
 function toLibrarySettingsForm(library: LibrarySummary): LibrarySettingsForm {
@@ -3896,16 +3909,28 @@ export function LibrariesPage() {
       const category = draft.profile.visual_density;
       return (
         <div className="quality-profile-metric-settings-grid">
-          {renderQualityProfileNumberField(t("libraries.quality.minimum"), Number(category.minimum), "0.001", (value) => {
-            const bounds = normalizeVisualDensityBounds(value, Number(category.ideal), Number(category.maximum));
+          {renderQualityProfileNumberField(t("libraries.quality.minimumGbPerHour"), rawVisualDensityToGbPerHour(Number(category.minimum)), "0.1", (value) => {
+            const bounds = normalizeVisualDensityGbPerHourBounds(
+              value,
+              rawVisualDensityToGbPerHour(Number(category.ideal)),
+              rawVisualDensityToGbPerHour(Number(category.maximum)),
+            );
             updateQualityProfileMetric("visual_density", bounds);
           })}
-          {renderQualityProfileNumberField(t("libraries.quality.ideal"), Number(category.ideal), "0.001", (value) => {
-            const bounds = normalizeVisualDensityBounds(Number(category.minimum), value, Number(category.maximum));
+          {renderQualityProfileNumberField(t("libraries.quality.idealGbPerHour"), rawVisualDensityToGbPerHour(Number(category.ideal)), "0.1", (value) => {
+            const bounds = normalizeVisualDensityGbPerHourBounds(
+              rawVisualDensityToGbPerHour(Number(category.minimum)),
+              value,
+              rawVisualDensityToGbPerHour(Number(category.maximum)),
+            );
             updateQualityProfileMetric("visual_density", bounds);
           })}
-          {renderQualityProfileNumberField(t("libraries.quality.maximum"), Number(category.maximum), "0.001", (value) => {
-            const bounds = normalizeVisualDensityBounds(Number(category.minimum), Number(category.ideal), value);
+          {renderQualityProfileNumberField(t("libraries.quality.maximumGbPerHour"), rawVisualDensityToGbPerHour(Number(category.maximum)), "0.1", (value) => {
+            const bounds = normalizeVisualDensityGbPerHourBounds(
+              rawVisualDensityToGbPerHour(Number(category.minimum)),
+              rawVisualDensityToGbPerHour(Number(category.ideal)),
+              value,
+            );
             updateQualityProfileMetric("visual_density", bounds);
           })}
         </div>
@@ -4238,19 +4263,19 @@ export function LibrariesPage() {
                 </th>
                 <td>
                   <div className="field">
-                    <label>{t("libraries.quality.minimum")}</label>
+                    <label>{t("libraries.quality.minimumGbPerHour")}</label>
                     <input
                       className="quality-density-input"
                       type="number"
                       min={0}
-                      step="0.001"
-                      value={Number(profile.visual_density.minimum)}
+                      step="0.1"
+                      value={formatVisualDensityGbPerHour(Number(profile.visual_density.minimum))}
                       onChange={(event) =>
                         updateLibraryQualityProfile(library.id, (current) => {
-                          const bounds = normalizeVisualDensityBounds(
+                          const bounds = normalizeVisualDensityGbPerHourBounds(
                             Number(event.target.value),
-                            Number(current.visual_density.ideal),
-                            Number(current.visual_density.maximum),
+                            rawVisualDensityToGbPerHour(Number(current.visual_density.ideal)),
+                            rawVisualDensityToGbPerHour(Number(current.visual_density.maximum)),
                           );
                           return {
                             ...current,
@@ -4264,19 +4289,19 @@ export function LibrariesPage() {
                 <td>
                   <div className="quality-density-ideal-stack">
                     <div className="field">
-                      <label>{t("libraries.quality.ideal")}</label>
+                      <label>{t("libraries.quality.idealGbPerHour")}</label>
                       <input
                         className="quality-density-input"
                         type="number"
-                        min={Number(profile.visual_density.minimum)}
-                        step="0.001"
-                        value={Number(profile.visual_density.ideal)}
+                        min={formatVisualDensityGbPerHour(Number(profile.visual_density.minimum))}
+                        step="0.1"
+                        value={formatVisualDensityGbPerHour(Number(profile.visual_density.ideal))}
                         onChange={(event) =>
                           updateLibraryQualityProfile(library.id, (current) => {
-                            const bounds = normalizeVisualDensityBounds(
-                              Number(current.visual_density.minimum),
+                            const bounds = normalizeVisualDensityGbPerHourBounds(
+                              rawVisualDensityToGbPerHour(Number(current.visual_density.minimum)),
                               Number(event.target.value),
-                              Number(current.visual_density.maximum),
+                              rawVisualDensityToGbPerHour(Number(current.visual_density.maximum)),
                             );
                             return {
                               ...current,
@@ -4290,18 +4315,18 @@ export function LibrariesPage() {
                       />
                     </div>
                     <div className="field">
-                      <label>{t("libraries.quality.maximum")}</label>
+                      <label>{t("libraries.quality.maximumGbPerHour")}</label>
                       <input
                         className="quality-density-input"
                         type="number"
-                        min={Number(profile.visual_density.ideal)}
-                        step="0.001"
-                        value={Number(profile.visual_density.maximum)}
+                        min={formatVisualDensityGbPerHour(Number(profile.visual_density.ideal))}
+                        step="0.1"
+                        value={formatVisualDensityGbPerHour(Number(profile.visual_density.maximum))}
                         onChange={(event) =>
                           updateLibraryQualityProfile(library.id, (current) => {
-                            const bounds = normalizeVisualDensityBounds(
-                              Number(current.visual_density.minimum),
-                              Number(current.visual_density.ideal),
+                            const bounds = normalizeVisualDensityGbPerHourBounds(
+                              rawVisualDensityToGbPerHour(Number(current.visual_density.minimum)),
+                              rawVisualDensityToGbPerHour(Number(current.visual_density.ideal)),
                               Number(event.target.value),
                             );
                             return {
@@ -4709,6 +4734,7 @@ export function LibrariesPage() {
                                 className="quality-profile-metric-tooltip"
                                 content={t(`libraries.qualityProfiles.metricHints.${metric}`)}
                                 align="start"
+                                preserveLineBreaks
                               />
                               {metric === "resolution" ? (
                                 <span
@@ -6115,8 +6141,6 @@ export function LibrariesPage() {
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div className="field">
                   </div>
                 </div>
               </div>

@@ -454,6 +454,14 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("25 Mbps")).toBeInTheDocument();
     expect(screen.getByText("100/100")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Explain ffprobe format name" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("raw ffprobe format name");
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain ffprobe probe score" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("not the MediaLyze quality score");
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+
     const pathTooltipTrigger = screen.getByRole("button", { name: "Show full relative path" });
     fireEvent.mouseEnter(pathTooltipTrigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(file.relative_path);
@@ -635,13 +643,22 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    await selectFileDetailPanel("Preview");
-    expect(await screen.findByRole("heading", { name: "Preview" })).toBeInTheDocument();
+    await selectFileDetailPanel("Preview (Beta)");
+    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
     expect(
       screen.getByText(
         "Browser playback currently works best with MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio. Codec support may vary by browser.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "If a media file does not play correctly, please report it or upload a sample so the preview feature can be improved.",
+      ),
+    ).toBeInTheDocument();
+    const reportLink = screen.getByRole("link", { name: "Report file" });
+    expect(reportLink).toHaveAttribute("href", "https://www.medialyze.app/report?source=file_detail_page");
+    expect(reportLink).toHaveAttribute("target", "_blank");
+    expect(reportLink).toHaveClass("file-detail-cover-button");
     expect(screen.queryByText("Playback is not optimized yet and may take a while to start or may not run smoothly.")).not.toBeInTheDocument();
     fireEvent.focus(screen.getByRole("button", { name: "Show playback warning" }));
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
@@ -681,8 +698,8 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    await selectFileDetailPanel("Preview");
-    expect(await screen.findByRole("heading", { name: "Preview" })).toBeInTheDocument();
+    await selectFileDetailPanel("Preview (Beta)");
+    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
     const player = container.querySelector(".file-detail-preview-player") as HTMLAudioElement | null;
     expect(player?.tagName).toBe("AUDIO");
     expect(player).toHaveAttribute("src", `/api/files/${file.id}/media`);
@@ -799,7 +816,9 @@ describe("FileDetailPage", () => {
     fireEvent.click(entries[1].querySelector("summary") as HTMLElement);
     expect(entries[1]).toHaveAttribute("open");
     expect(entries[1]).toHaveTextContent("Maximum");
-    expect(entries[1]).toHaveTextContent("0.08");
+    expect(entries[1]).toHaveTextContent("4.8 GB/hour (1080p equivalent)");
+    expect(entries[1]).toHaveTextContent("3.1 GB/hour (1080p equivalent)");
+    expect(entries[1]).not.toHaveTextContent("0.08");
     expect(entries[1]).toHaveTextContent("Missing value");
 
     fireEvent.click(entries[2].querySelector("summary") as HTMLElement);
@@ -1043,6 +1062,7 @@ describe("FileDetailPage", () => {
     expect(screen.getAllByText(/streams/).length).toBeGreaterThan(0);
     const copyButton = screen.getByRole("button", { name: "Copy raw ffprobe JSON" });
     expect(copyButton).toHaveAttribute("data-tooltip", "Copy raw ffprobe JSON");
+    expect(copyButton).toHaveClass("async-panel-toggle-icon-button-flat");
     fireEvent.click(copyButton);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(JSON.stringify(file.raw_ffprobe_json, null, 2)));
     expect(screen.getByRole("button", { name: "Copied raw ffprobe JSON" })).toBeInTheDocument();

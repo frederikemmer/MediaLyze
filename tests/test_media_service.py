@@ -113,6 +113,61 @@ def test_list_library_files_paginates_and_sorts_by_quality_score() -> None:
     assert [item.quality_score for item in second_page.items] == [3]
 
 
+def test_list_library_files_cursor_paginates_default_file_sort() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Cursor Movies",
+            path="/tmp/cursor-movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        for filename in ("alpha.mkv", "bravo.mkv", "charlie.mkv"):
+            db.add(
+                MediaFile(
+                    library_id=library.id,
+                    relative_path=filename,
+                    filename=filename,
+                    extension="mkv",
+                    size_bytes=1,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                )
+            )
+        db.commit()
+
+        first_page = list_library_files(
+            db,
+            library.id,
+            limit=2,
+            sort_key="file",
+            sort_direction="asc",
+            include_total=False,
+        )
+        second_page = list_library_files(
+            db,
+            library.id,
+            limit=2,
+            sort_key="file",
+            sort_direction="asc",
+            cursor=first_page.next_cursor,
+            include_total=False,
+        )
+
+    assert [item.filename for item in first_page.items] == ["alpha.mkv", "bravo.mkv"]
+    assert first_page.next_cursor is not None
+    assert [item.filename for item in second_page.items] == ["charlie.mkv"]
+    assert second_page.next_cursor is None
+
+
 def test_quality_score_detail_refreshes_stale_audio_only_video_categories() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -1532,6 +1587,72 @@ def test_list_library_files_sorts_and_filters_by_audio_bit_depth_only() -> None:
     assert [item.filename for item in sorted_page.items] == ["higher.mkv", "lower.mkv"]
     assert [item.bit_depth for item in sorted_page.items] == [24, 16]
     assert [item.filename for item in filtered_page.items] == ["higher.mkv"]
+
+
+def test_list_library_files_cursor_paginates_audio_bit_depth_sort() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        library = Library(
+            name="Bit depth cursor",
+            path="/tmp/bit-depth-cursor",
+            type=LibraryType.mixed,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+
+        media_files: list[MediaFile] = []
+        for filename in ("sixteen.mkv", "twenty-four.mkv", "thirty-two.mkv"):
+            media_file = MediaFile(
+                library_id=library.id,
+                relative_path=filename,
+                filename=filename,
+                extension="mkv",
+                size_bytes=1,
+                mtime=1.0,
+                scan_status=ScanStatus.ready,
+                quality_score=5,
+            )
+            db.add(media_file)
+            media_files.append(media_file)
+        db.flush()
+        db.add_all(
+            [
+                AudioStream(media_file_id=media_files[0].id, stream_index=1, codec="flac", bit_depth=16),
+                AudioStream(media_file_id=media_files[1].id, stream_index=1, codec="flac", bit_depth=24),
+                AudioStream(media_file_id=media_files[2].id, stream_index=1, codec="flac", bit_depth=32),
+            ]
+        )
+        db.commit()
+
+        first_page = list_library_files(
+            db,
+            library.id,
+            limit=2,
+            sort_key="bit_depth",
+            sort_direction="desc",
+            include_total=False,
+        )
+        second_page = list_library_files(
+            db,
+            library.id,
+            limit=2,
+            sort_key="bit_depth",
+            sort_direction="desc",
+            cursor=first_page.next_cursor,
+            include_total=False,
+        )
+
+    assert [item.filename for item in first_page.items] == ["thirty-two.mkv", "twenty-four.mkv"]
+    assert [item.bit_depth for item in first_page.items] == [32, 24]
+    assert first_page.next_cursor is not None
+    assert [item.filename for item in second_page.items] == ["sixteen.mkv"]
+    assert [item.bit_depth for item in second_page.items] == [16]
+    assert second_page.next_cursor is None
 
 
 def test_list_library_files_supports_negated_field_search_terms_and_comma_intersections() -> None:

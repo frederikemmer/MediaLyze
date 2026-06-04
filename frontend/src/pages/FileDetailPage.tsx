@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { ArrowUpRightIcon, type ArrowUpRightIconHandle } from "../components/ArrowUpRightIcon";
 import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
 import { CopyIcon } from "../components/CopyIcon";
 import { DownloadIcon, type DownloadIconHandle } from "../components/DownloadIcon";
@@ -42,6 +43,7 @@ import {
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
+import { formatVisualDensityGbPerHour } from "../lib/quality-format";
 
 function JsonPreview({ value }: { value: unknown }) {
   return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
@@ -70,6 +72,7 @@ const FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY = "medialyze-file-detail-sidebar-col
 const FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY = "medialyze-file-detail-audio-stream-primary";
 const DEFAULT_FILE_DETAIL_PANEL_ID: FileDetailPanelId = "overview";
 const DEFAULT_AUDIO_STREAM_PRIMARY_MODE: AudioStreamPrimaryMode = "quality";
+const PREVIEW_REPORT_URL = "https://www.medialyze.app/report?source=file_detail_page";
 
 const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
   { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
@@ -165,6 +168,7 @@ function formatQualityNumber(value: number): string {
 }
 
 function formatQualityBreakdownValue(
+  categoryKey: string,
   value: QualityCategoryBreakdown["actual"],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
@@ -175,6 +179,11 @@ function formatQualityBreakdownValue(
     return entries.length > 0 ? entries.join(", ") : t("fileTable.na");
   }
   if (typeof value === "number") {
+    if (categoryKey === "visual_density") {
+      return t("quality.visualDensityGbPerHourValue", {
+        value: formatVisualDensityGbPerHour(value),
+      });
+    }
     return formatQualityNumber(value);
   }
   if (typeof value === "string") {
@@ -217,23 +226,23 @@ function QualityBreakdownCategoryList({
           {
             key: "actual",
             label: t("quality.actualLabel"),
-            value: formatQualityBreakdownValue(category.actual, t),
+            value: formatQualityBreakdownValue(category.key, category.actual, t),
           },
           {
             key: "minimum",
             label: t("quality.minimumLabel"),
-            value: formatQualityBreakdownValue(category.minimum, t),
+            value: formatQualityBreakdownValue(category.key, category.minimum, t),
           },
           {
             key: "ideal",
             label: t("quality.idealLabel"),
-            value: formatQualityBreakdownValue(category.ideal, t),
+            value: formatQualityBreakdownValue(category.key, category.ideal, t),
           },
           category.maximum !== undefined
             ? {
                 key: "maximum",
                 label: t("quality.maximumLabel"),
-                value: formatQualityBreakdownValue(category.maximum ?? null, t),
+                value: formatQualityBreakdownValue(category.key, category.maximum ?? null, t),
               }
             : null,
           category.notes.length > 0
@@ -690,6 +699,8 @@ function OverviewPanel({
     {
       key: "containerFormat",
       label: t("fileDetail.containerFormat"),
+      tooltip: t("fileDetail.containerFormatTooltip"),
+      tooltipAria: t("fileDetail.containerFormatTooltipAria"),
       value: formatContainerFormatLabel(file.media_format?.container_format),
     },
     {
@@ -700,6 +711,8 @@ function OverviewPanel({
     {
       key: "probeScore",
       label: t("fileDetail.probeScore"),
+      tooltip: t("fileDetail.probeScoreTooltip"),
+      tooltipAria: t("fileDetail.probeScoreTooltipAria"),
       value: formatProbeScore(file.media_format?.probe_score),
     },
   ];
@@ -737,7 +750,20 @@ function OverviewPanel({
         {rows.map((row) => (
           <div className="stream-tooltip-row" key={row.key}>
             <div className="stream-tooltip-head format-details-row">
-              <span className="format-details-label">{row.label}</span>
+              <span className="format-details-label">
+                {row.label}
+                {row.tooltip ? (
+                  <TooltipTrigger
+                    ariaLabel={row.tooltipAria}
+                    className="file-detail-field-tooltip"
+                    content={row.tooltip}
+                    maxWidth={360}
+                    preserveLineBreaks
+                  >
+                    <Info aria-hidden="true" size={13} strokeWidth={2.4} />
+                  </TooltipTrigger>
+                ) : null}
+              </span>
               <strong className="format-details-value">{row.value}</strong>
             </div>
           </div>
@@ -1176,6 +1202,7 @@ export function FileDetailPage() {
   );
   const [rawJsonCopied, setRawJsonCopied] = useState(false);
   const rawJsonCopyResetTimeoutRef = useRef<number | null>(null);
+  const previewReportIconRef = useRef<ArrowUpRightIconHandle>(null);
 
   useEffect(() => {
     api
@@ -1273,7 +1300,27 @@ export function FileDetailPage() {
           <Info size={14} aria-hidden="true" />
         </TooltipTrigger>
       ),
-      subtitleAddon: <p className="file-detail-preview-supported-formats">{t("fileDetail.previewSupportedFormats")}</p>,
+      subtitleAddon: (
+        <div className="file-detail-preview-supported-formats">
+          <p>{t("fileDetail.previewSupportedFormats")}</p>
+          <div className="file-detail-preview-report">
+            <p>{t("fileDetail.previewReportPrompt")}</p>
+            <a
+              className="secondary small file-detail-cover-button file-detail-preview-report-button"
+              href={PREVIEW_REPORT_URL}
+              onBlur={() => previewReportIconRef.current?.stopAnimation()}
+              onFocus={() => previewReportIconRef.current?.startAnimation()}
+              onMouseEnter={() => previewReportIconRef.current?.startAnimation()}
+              onMouseLeave={() => previewReportIconRef.current?.stopAnimation()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ArrowUpRightIcon ref={previewReportIconRef} size={16} aria-hidden="true" />
+              {t("fileDetail.previewReportLink")}
+            </a>
+          </div>
+        </div>
+      ),
       body: <PreviewDetailsPanel detail={file} t={t} />,
     },
     qualityBreakdown: {
@@ -1362,7 +1409,7 @@ export function FileDetailPage() {
       actions: (
         <button
           type="button"
-          className="secondary icon-only-button file-detail-raw-json-copy-button"
+          className="secondary icon-only-button async-panel-toggle-icon-button-flat file-detail-raw-json-copy-button"
           aria-label={rawJsonCopyLabel}
           data-tooltip={rawJsonCopyLabel}
           title={rawJsonCopyLabel}

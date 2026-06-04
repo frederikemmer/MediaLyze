@@ -660,61 +660,101 @@ def _subtitle_source_sort_expr(subtitle_aggregates):
 
 
 def _sort_expression(sort_key: FileSortKey, primary_video_streams, audio_aggregates, subtitle_aggregates):
-    resolution_pixels = case(
-        (
-            and_(primary_video_streams.c.width.is_not(None), primary_video_streams.c.height.is_not(None)),
-            primary_video_streams.c.width * primary_video_streams.c.height,
-        ),
-        else_=-1,
-    )
-
-    sort_map = {
-        "file": func.lower(MediaFile.relative_path),
-        "container": func.lower(func.coalesce(MediaFile.extension, "")),
-        "size": MediaFile.size_bytes,
-        "video_codec": func.lower(func.coalesce(primary_video_streams.c.codec, "")),
-        "resolution": resolution_pixels,
-        "hdr_type": func.lower(func.coalesce(primary_video_streams.c.hdr_type, "")),
-        "duration": func.coalesce(MediaFile.duration_seconds, 0),
-        "bitrate": func.coalesce(cast(MediaFile.bitrate, Float), cast(MediaFile.audio_bitrate, Float), 0),
-        "audio_bitrate": func.coalesce(cast(MediaFile.audio_bitrate, Float), 0),
-        "bit_depth": func.coalesce(audio_aggregates.c.max_audio_bit_depth, 0),
-        "audio_title": func.lower(MediaFile.audio_title),
-        "audio_artist": func.lower(MediaFile.audio_artist),
-        "audio_album": func.lower(MediaFile.audio_album),
-        "audio_album_artist": func.lower(MediaFile.audio_album_artist),
-        "audio_genre": func.lower(MediaFile.audio_genre),
-        "audio_date": func.lower(MediaFile.audio_date),
-        "audio_disc": func.lower(MediaFile.audio_disc),
-        "audio_composer": func.lower(MediaFile.audio_composer),
-        "audio_channels": func.coalesce(MediaFile.audio_channels, 0),
-        "sample_rate": func.coalesce(MediaFile.sample_rate, 0),
-        "track_number": func.lower(MediaFile.track_number),
-        "bit_rate_mode": func.lower(MediaFile.bit_rate_mode),
-        "has_embedded_cover": MediaFile.has_embedded_cover,
-        "audio_codecs": func.coalesce(audio_aggregates.c.min_audio_codec, ""),
-        "audio_spatial_profiles": func.coalesce(audio_aggregates.c.min_audio_spatial_profile, ""),
-        "audio_languages": func.coalesce(audio_aggregates.c.min_audio_language, ""),
-        "subtitle_languages": func.coalesce(subtitle_aggregates.c.min_subtitle_language, ""),
-        "subtitle_codecs": func.coalesce(subtitle_aggregates.c.min_subtitle_codec, ""),
-        "subtitle_sources": _subtitle_source_sort_expr(subtitle_aggregates),
-        "mtime": MediaFile.mtime,
-        "last_analyzed_at": func.coalesce(cast(MediaFile.last_analyzed_at, String), ""),
-        "quality_score": case((MediaFile.quality_score_raw > 0, MediaFile.quality_score_raw), else_=MediaFile.quality_score * 10),
-        "chapter_count": func.coalesce(MediaFile.chapter_count, 0),
-        "audiobook_narrator": func.lower(MediaFile.audiobook_narrator),
-        "audiobook_author": func.lower(MediaFile.audiobook_author),
-        "audiobook_publisher": func.lower(MediaFile.audiobook_publisher),
-        "audiobook_series": func.lower(MediaFile.audiobook_series),
-        "audiobook_series_part": func.lower(MediaFile.audiobook_series_part),
-        "audiobook_description": func.lower(MediaFile.audiobook_description),
-        "audiobook_copyright": func.lower(MediaFile.audiobook_copyright),
-        "audiobook_language": func.lower(MediaFile.audiobook_language),
-        "audiobook_abridged": func.lower(MediaFile.audiobook_abridged),
-        "audiobook_asin": func.lower(MediaFile.audiobook_asin),
-        "audiobook_isbn": func.lower(MediaFile.audiobook_isbn),
-    }
-    return sort_map[sort_key]
+    if sort_key == "file":
+        return func.lower(MediaFile.relative_path)
+    if sort_key == "container":
+        return func.lower(func.coalesce(MediaFile.extension, ""))
+    if sort_key == "size":
+        return MediaFile.size_bytes
+    if sort_key == "video_codec":
+        return func.lower(func.coalesce(primary_video_streams.c.codec, ""))
+    if sort_key == "resolution":
+        return case(
+            (
+                and_(primary_video_streams.c.width.is_not(None), primary_video_streams.c.height.is_not(None)),
+                primary_video_streams.c.width * primary_video_streams.c.height,
+            ),
+            else_=-1,
+        )
+    if sort_key == "hdr_type":
+        return func.lower(func.coalesce(primary_video_streams.c.hdr_type, ""))
+    if sort_key == "duration":
+        return func.coalesce(MediaFile.duration_seconds, 0)
+    if sort_key == "bitrate":
+        return func.coalesce(cast(MediaFile.bitrate, Float), cast(MediaFile.audio_bitrate, Float), 0)
+    if sort_key == "audio_bitrate":
+        return func.coalesce(cast(MediaFile.audio_bitrate, Float), 0)
+    if sort_key == "bit_depth":
+        return func.coalesce(audio_aggregates.c.max_audio_bit_depth, 0)
+    if sort_key == "audio_title":
+        return func.lower(MediaFile.audio_title)
+    if sort_key == "audio_artist":
+        return func.lower(MediaFile.audio_artist)
+    if sort_key == "audio_album":
+        return func.lower(MediaFile.audio_album)
+    if sort_key == "audio_album_artist":
+        return func.lower(MediaFile.audio_album_artist)
+    if sort_key == "audio_genre":
+        return func.lower(MediaFile.audio_genre)
+    if sort_key == "audio_date":
+        return func.lower(MediaFile.audio_date)
+    if sort_key == "audio_disc":
+        return func.lower(MediaFile.audio_disc)
+    if sort_key == "audio_composer":
+        return func.lower(MediaFile.audio_composer)
+    if sort_key == "audio_channels":
+        return func.coalesce(MediaFile.audio_channels, 0)
+    if sort_key == "sample_rate":
+        return func.coalesce(MediaFile.sample_rate, 0)
+    if sort_key == "track_number":
+        return func.lower(MediaFile.track_number)
+    if sort_key == "bit_rate_mode":
+        return func.lower(MediaFile.bit_rate_mode)
+    if sort_key == "has_embedded_cover":
+        return MediaFile.has_embedded_cover
+    if sort_key == "audio_codecs":
+        return func.coalesce(audio_aggregates.c.min_audio_codec, "")
+    if sort_key == "audio_spatial_profiles":
+        return func.coalesce(audio_aggregates.c.min_audio_spatial_profile, "")
+    if sort_key == "audio_languages":
+        return func.coalesce(audio_aggregates.c.min_audio_language, "")
+    if sort_key == "subtitle_languages":
+        return func.coalesce(subtitle_aggregates.c.min_subtitle_language, "")
+    if sort_key == "subtitle_codecs":
+        return func.coalesce(subtitle_aggregates.c.min_subtitle_codec, "")
+    if sort_key == "subtitle_sources":
+        return _subtitle_source_sort_expr(subtitle_aggregates)
+    if sort_key == "mtime":
+        return MediaFile.mtime
+    if sort_key == "last_analyzed_at":
+        return func.coalesce(cast(MediaFile.last_analyzed_at, String), "")
+    if sort_key == "quality_score":
+        return case((MediaFile.quality_score_raw > 0, MediaFile.quality_score_raw), else_=MediaFile.quality_score * 10)
+    if sort_key == "chapter_count":
+        return func.coalesce(MediaFile.chapter_count, 0)
+    if sort_key == "audiobook_narrator":
+        return func.lower(MediaFile.audiobook_narrator)
+    if sort_key == "audiobook_author":
+        return func.lower(MediaFile.audiobook_author)
+    if sort_key == "audiobook_publisher":
+        return func.lower(MediaFile.audiobook_publisher)
+    if sort_key == "audiobook_series":
+        return func.lower(MediaFile.audiobook_series)
+    if sort_key == "audiobook_series_part":
+        return func.lower(MediaFile.audiobook_series_part)
+    if sort_key == "audiobook_description":
+        return func.lower(MediaFile.audiobook_description)
+    if sort_key == "audiobook_copyright":
+        return func.lower(MediaFile.audiobook_copyright)
+    if sort_key == "audiobook_language":
+        return func.lower(MediaFile.audiobook_language)
+    if sort_key == "audiobook_abridged":
+        return func.lower(MediaFile.audiobook_abridged)
+    if sort_key == "audiobook_asin":
+        return func.lower(MediaFile.audiobook_asin)
+    if sort_key == "audiobook_isbn":
+        return func.lower(MediaFile.audiobook_isbn)
+    return func.lower(MediaFile.relative_path)
 
 
 def _load_media_files_by_ids(db: Session, selected_ids: list[int]) -> list[MediaFile]:
@@ -1224,6 +1264,11 @@ def list_library_files(
                 min_audio_codec=MediaFile.min_audio_codec,
                 min_audio_spatial_profile=MediaFile.min_audio_spatial_profile,
                 total_audio_bitrate=MediaFile.audio_bitrate,
+                max_audio_bit_depth=(
+                    select(func.max(AudioStream.bit_depth))
+                    .where(AudioStream.media_file_id == MediaFile.id)
+                    .scalar_subquery()
+                ),
             )
         )
         subtitle_aggregates = SimpleNamespace(
