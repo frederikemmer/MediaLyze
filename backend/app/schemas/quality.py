@@ -9,6 +9,7 @@ class QualityCategoryConfig(BaseModel):
     weight: int = Field(default=0, ge=0, le=10)
     minimum: str | float
     ideal: str | float
+    maximum: str | float | None = None
     values: list[str] | None = None
     minimum_values: list[str] | None = None
     ideal_values: list[str] | None = None
@@ -40,8 +41,9 @@ class QualityLanguagePreferencesConfig(BaseModel):
 
 class QualityProfile(BaseModel):
     version: int = 1
+    active_metrics: list[str] | None = None
     resolution: QualityCategoryConfig = Field(
-        default_factory=lambda: QualityCategoryConfig(weight=8, minimum="1080p", ideal="4k")
+        default_factory=lambda: QualityCategoryConfig(weight=8, minimum="1080p", ideal="4k", maximum="8k")
     )
     visual_density: QualityNumericCategoryConfig = Field(
         default_factory=lambda: QualityNumericCategoryConfig(weight=10, minimum=0.02, ideal=0.04, maximum=0.08)
@@ -56,7 +58,7 @@ class QualityProfile(BaseModel):
         )
     )
     audio_channels: QualityCategoryConfig = Field(
-        default_factory=lambda: QualityCategoryConfig(weight=4, minimum="stereo", ideal="5.1")
+        default_factory=lambda: QualityCategoryConfig(weight=4, minimum="stereo", ideal="5.1", maximum="7.1")
     )
     audio_codec: QualityCategoryConfig = Field(
         default_factory=lambda: QualityCategoryConfig(weight=3, minimum="aac", ideal="eac3")
@@ -72,6 +74,21 @@ class QualityProfile(BaseModel):
     )
     language_preferences: QualityLanguagePreferencesConfig = Field(
         default_factory=lambda: QualityLanguagePreferencesConfig(weight=6, mode="partial")
+    )
+    audio_bitrate: QualityNumericCategoryConfig = Field(
+        default_factory=lambda: QualityNumericCategoryConfig(weight=0, minimum=96000, ideal=256000, maximum=512000)
+    )
+    sample_rate: QualityNumericCategoryConfig = Field(
+        default_factory=lambda: QualityNumericCategoryConfig(weight=0, minimum=44100, ideal=48000, maximum=96000)
+    )
+    music_tags: QualityCategoryConfig = Field(
+        default_factory=lambda: QualityCategoryConfig(weight=0, minimum="partial", ideal="complete")
+    )
+    audiobook_tags: QualityCategoryConfig = Field(
+        default_factory=lambda: QualityCategoryConfig(weight=0, minimum="partial", ideal="complete")
+    )
+    audiobook_chapters: QualityCategoryConfig = Field(
+        default_factory=lambda: QualityCategoryConfig(weight=0, minimum="chapters", ideal="chapters_with_titles")
     )
 
 

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.14.0
+
+>2026-06-04
+
+### ✨ New
+
+- new settings menu for Quality Scoring with different profiles
+- add a file-detail `Preview` panel that can stream video or audio files directly in the app (Beta, may not work with all codecs)
+- show and edit visual-density quality targets as 1080p-equivalent GB/hour instead of raw per-minute scoring values
+
+### 🐛 Bug fixes
+
+- fix cursor-based analyzed-files scrolling after audio bit-depth sorting support was added [#151](https://github.com/frederikemmer/MediaLyze/issues/151)
+- update React Router to remediate current Dependabot security alerts
+- make the release-history dialog header and version labels fit better on narrow mobile screens
+
 ## v0.13.2
 
 >2026-06-02

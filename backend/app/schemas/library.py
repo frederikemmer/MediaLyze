@@ -15,6 +15,7 @@ class LibraryCreate(BaseModel):
     duplicate_detection_mode: DuplicateDetectionMode = DuplicateDetectionMode.off
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
+    quality_profile_id: int | None = None
     show_on_dashboard: bool = True
 
 
@@ -25,6 +26,7 @@ class LibraryUpdate(BaseModel):
     duplicate_detection_mode: DuplicateDetectionMode | None = None
     scan_config: dict = Field(default_factory=dict)
     quality_profile: QualityProfile | None = None
+    quality_profile_id: int | None = None
     show_on_dashboard: bool | None = None
 
 
@@ -42,6 +44,7 @@ class LibrarySummary(BaseModel):
     created_at: UtcDateTime
     updated_at: UtcDateTime
     quality_profile: QualityProfile = Field(default_factory=QualityProfile)
+    quality_profile_id: int | None = None
     show_on_dashboard: bool = True
     file_count: int = 0
     total_size_bytes: int = 0

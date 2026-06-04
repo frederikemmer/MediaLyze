@@ -1,9 +1,10 @@
 import io
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runtime
@@ -32,6 +33,7 @@ from backend.app.schemas.media import (
     MediaFileTablePage,
 )
 from backend.app.schemas.path_access import PathInspectRequest, PathInspectResponse
+from backend.app.schemas.quality_profiles import QualityProfileCreate, QualityProfileRead, QualityProfileUpdate
 from backend.app.schemas.scan import (
     RecentScanJobPageRead,
     RecentScanJobRead,
@@ -69,6 +71,7 @@ from backend.app.services.media_service import (
     generate_library_files_csv_export,
     get_media_file_detail,
     get_media_file_history,
+    get_media_file_source,
     get_media_file_quality_score_detail,
     get_media_file_stream_details,
     get_grouped_library_series_detail,
@@ -78,6 +81,13 @@ from backend.app.services.media_service import (
     list_library_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
+from backend.app.services.quality_profiles import (
+    create_quality_profile,
+    delete_quality_profile,
+    ensure_default_quality_profiles,
+    list_quality_profiles,
+    update_quality_profile,
+)
 from backend.app.services.runtime import ScanCancelPersistenceError, ScanRuntimeManager
 from backend.app.services.scan_jobs import (
     get_scan_job_detail,
@@ -385,6 +395,75 @@ def app_settings_update(
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
     return updated_settings
+
+
+@router.get("/quality-profiles", response_model=list[QualityProfileRead])
+def quality_profiles_list(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> list[QualityProfileRead]:
+    app_settings_payload = load_app_settings(db, settings)
+    ensure_default_quality_profiles(db, app_settings_payload.resolution_categories)
+    db.commit()
+    return list_quality_profiles(db)
+
+
+@router.post("/quality-profiles", response_model=QualityProfileRead)
+def quality_profile_create(
+    payload: QualityProfileCreate,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> QualityProfileRead:
+    app_settings_payload = load_app_settings(db, settings)
+    try:
+        profile, recompute_library_ids = create_quality_profile(db, payload, app_settings_payload.resolution_categories)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    for library_id in recompute_library_ids:
+        runtime.request_quality_recompute(library_id)
+    return QualityProfileRead.model_validate(profile)
+
+
+@router.patch("/quality-profiles/{profile_id}", response_model=QualityProfileRead)
+def quality_profile_update(
+    profile_id: int,
+    payload: QualityProfileUpdate,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> QualityProfileRead:
+    app_settings_payload = load_app_settings(db, settings)
+    try:
+        profile, recompute_library_ids = update_quality_profile(
+            db,
+            profile_id,
+            payload,
+            app_settings_payload.resolution_categories,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Quality profile not found")
+    for library_id in recompute_library_ids:
+        runtime.request_quality_recompute(library_id)
+    return QualityProfileRead.model_validate(profile)
+
+
+@router.delete("/quality-profiles/{profile_id}", status_code=204)
+def quality_profile_delete(
+    profile_id: int,
+    db: Session = Depends(get_db_session),
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> None:
+    try:
+        deleted, recompute_library_ids = delete_quality_profile(db, profile_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Quality profile not found")
+    for library_id in recompute_library_ids:
+        runtime.request_quality_recompute(library_id)
 
 
 @router.post("/scan-jobs/active/cancel", response_model=ScanCancelResponse)
@@ -1287,6 +1366,30 @@ def file_cover(
     if download:
         headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return StreamingResponse(io.BytesIO(content), media_type="image/png", headers=headers)
+
+
+@router.get("/files/{file_id}/media")
+def file_media(
+    file_id: int,
+    download: bool = Query(default=False),
+    db: Session = Depends(get_db_session),
+) -> FileResponse:
+    try:
+        source = get_media_file_source(db, file_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not source:
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    file_path, filename, media_type = source
+    response = FileResponse(
+        path=Path(file_path),
+        media_type=media_type,
+        filename=filename if download else None,
+        content_disposition_type="attachment" if download else "inline",
+        headers={"Cache-Control": "no-store"},
+    )
+    return response
 
 
 @router.get("/files/{file_id}/streams", response_model=MediaFileStreamDetails)

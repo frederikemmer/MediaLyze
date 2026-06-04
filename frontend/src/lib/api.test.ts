@@ -83,3 +83,10 @@ describe("api.libraryFiles", () => {
     expect(String(requestPath)).toContain("sort_direction=desc");
   });
 });
+
+describe("api.fileMediaUrl", () => {
+  it("builds preview and download URLs from the configured API prefix", () => {
+    expect(api.fileMediaUrl(42)).toBe("/api/files/42/media");
+    expect(api.fileMediaUrl(42, { download: true })).toBe("/api/files/42/media?download=1");
+  });
+});

@@ -524,6 +524,7 @@ Implemented UI behavior includes:
 * lightweight hover tooltips on analyzed-files codec, language, subtitle-source, and quality-score cells that lazy-load per-file details, stay exclusive while hovering or scrolling, and can be enabled or disabled per table statistic column in App Settings
 * globally persisted collapse and drag-order preferences for the file-detail panels, including the structured `Format` metadata panel
 * per-file quality tooltip and full breakdown view
+* a file-detail `Preview` panel that can attempt in-browser playback for video and audio files, plus a direct file download action with explicit warnings that playback and download performance are not optimized yet
 * persistent app theme preference
 * persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
@@ -679,6 +680,7 @@ Important library contract concepts:
 ## 9.6 Files
 
 * `GET /api/files/{file_id}`
+* `GET /api/files/{file_id}/media`
 * `GET /api/files/{file_id}/streams`
 * `GET /api/files/{file_id}/quality-score`
 

@@ -16,6 +16,7 @@ import {
   type HistoryStorage,
   type LibrarySummary,
   type PathInspection,
+  type QualityProfileDefinition,
   type RecentScanJobPage,
   type RecentScanJob,
   type ScanJob,
@@ -219,12 +220,27 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
     quality_profile: DEFAULT_QUALITY_PROFILE,
+    quality_profile_id: null,
     show_on_dashboard: true,
     file_count: 0,
     total_size_bytes: 0,
     total_duration_seconds: 0,
     ready_files: 0,
     pending_files: 0,
+    ...overrides,
+  };
+}
+
+function createQualityProfileDefinition(overrides: Partial<QualityProfileDefinition> = {}): QualityProfileDefinition {
+  return {
+    id: 1,
+    name: "Default video",
+    media_type: "video",
+    profile: DEFAULT_QUALITY_PROFILE,
+    is_default: true,
+    created_at: "2026-03-15T12:00:00Z",
+    updated_at: "2026-03-15T12:00:00Z",
+    library_count: 0,
     ...overrides,
   };
 }
@@ -431,6 +447,10 @@ beforeEach(() => {
   vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage());
   vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail());
   vi.spyOn(api, "updateAppSettings").mockResolvedValue(createAppSettings());
+  vi.spyOn(api, "qualityProfiles").mockResolvedValue([createQualityProfileDefinition()]);
+  vi.spyOn(api, "createQualityProfile").mockResolvedValue(createQualityProfileDefinition({ id: 2, name: "New video profile", is_default: false }));
+  vi.spyOn(api, "updateQualityProfile").mockResolvedValue(createQualityProfileDefinition());
+  vi.spyOn(api, "deleteQualityProfile").mockResolvedValue(undefined);
   delete window.medialyzeDesktop;
 });
 
@@ -1293,7 +1313,7 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
-  it("clamps visual density maximum when the ideal is raised above it", async () => {
+  it("shows active metrics in the quality profiles settings panel", async () => {
     const library = createLibrarySummary();
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
     vi.spyOn(api, "appSettings").mockResolvedValue(
@@ -1311,46 +1331,87 @@ describe("LibrariesPage ignore patterns", () => {
 
     renderPage({ activePanel: "configuredLibraries" });
 
-    await screen.findByRole("link", { name: "Movies" });
-    fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
-    expect(await screen.findByText("UHD")).toBeInTheDocument();
-    const visualDensityTitle = await screen.findByText("Visual density");
-    const visualDensityGroup = visualDensityTitle.closest(".quality-settings-group");
-    if (!(visualDensityGroup instanceof HTMLElement)) {
-      throw new Error("Expected visual density settings group");
-    }
-    const idealInput = within(visualDensityGroup).getByDisplayValue("0.04") as HTMLInputElement;
-    const maximumInput = within(visualDensityGroup).getByDisplayValue("0.08") as HTMLInputElement;
-    fireEvent.change(idealInput, { target: { value: "0.09" } });
-
-    await waitFor(() => expect(maximumInput).toHaveValue(0.09));
+    fireEvent.click(await screen.findByRole("button", { name: "Quality profiles" }));
+    expect(await screen.findByText("Visual density")).toBeInTheDocument();
+    expect(screen.getByText("Video codec")).toBeInTheDocument();
   });
 
-  it("shows recognized codec options in quality score settings", async () => {
+  it("edits visual density profile values as 1080p-equivalent GB per hour", async () => {
+    const updateSpy = vi.spyOn(api, "updateQualityProfile").mockResolvedValue(createQualityProfileDefinition());
+
+    renderPage({ activePanel: "qualityProfiles" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Configure Visual density metric" }));
+    const minimumInput = await screen.findByLabelText("Minimum (GB/hour)");
+    const idealInput = screen.getByLabelText("Ideal (GB/hour)");
+    const maximumInput = screen.getByLabelText("Maximum (GB/hour)");
+    expect(minimumInput).toHaveValue(1.2);
+    expect(idealInput).toHaveValue(2.4);
+    expect(maximumInput).toHaveValue(4.8);
+
+    fireEvent.change(idealInput, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          profile: expect.objectContaining({
+            visual_density: expect.objectContaining({
+              minimum: 0.02,
+              ideal: 0.05,
+              maximum: 0.08,
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("adds and removes metrics in quality score profiles", async () => {
+    const updateSpy = vi.spyOn(api, "updateQualityProfile").mockResolvedValue(
+      createQualityProfileDefinition({
+        profile: {
+          ...DEFAULT_QUALITY_PROFILE,
+          active_metrics: ["audio_channels", "audio_codec", "music_tags"],
+        },
+      }),
+    );
+    vi.spyOn(api, "qualityProfiles").mockResolvedValue([
+      createQualityProfileDefinition({
+        id: 2,
+        name: "Default music",
+        media_type: "music",
+        is_default: true,
+        profile: {
+          ...DEFAULT_QUALITY_PROFILE,
+          active_metrics: ["audio_channels", "audio_codec"],
+          resolution: { ...DEFAULT_QUALITY_PROFILE.resolution, weight: 0 },
+          visual_density: { ...DEFAULT_QUALITY_PROFILE.visual_density, weight: 0 },
+          video_codec: { ...DEFAULT_QUALITY_PROFILE.video_codec, weight: 0 },
+          dynamic_range: { ...DEFAULT_QUALITY_PROFILE.dynamic_range, weight: 0 },
+          music_tags: { weight: 0, minimum: "partial", ideal: "complete" },
+        },
+      }),
+    ]);
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
 
-    renderPage({ activePanel: "configuredLibraries" });
+    renderPage({ activePanel: "qualityProfiles" });
 
-    await screen.findByRole("link", { name: "Movies" });
-    fireEvent.click(screen.getByRole("button", { name: "Quality score" }));
-
-    const videoCodecTitle = await screen.findByText("Video codec");
-    const videoCodecGroup = videoCodecTitle.closest(".quality-settings-group");
-    if (!(videoCodecGroup instanceof HTMLElement)) {
-      throw new Error("Expected video codec settings group");
-    }
-    fireEvent.click(within(videoCodecGroup).getAllByRole("button")[0]);
-    expect(await within(videoCodecGroup).findByRole("menuitemcheckbox", { name: "VP9" })).toBeInTheDocument();
-    expect(within(videoCodecGroup).getByRole("menuitemcheckbox", { name: "Apple ProRes" })).toBeInTheDocument();
-
-    const audioCodecTitle = await screen.findByText("Audio codec");
-    const audioCodecGroup = audioCodecTitle.closest(".quality-settings-group");
-    if (!(audioCodecGroup instanceof HTMLElement)) {
-      throw new Error("Expected audio codec settings group");
-    }
-    fireEvent.click(within(audioCodecGroup).getAllByRole("button")[0]);
-    expect(await within(audioCodecGroup).findByRole("menuitemcheckbox", { name: "Opus" })).toBeInTheDocument();
-    expect(within(audioCodecGroup).getByRole("menuitemcheckbox", { name: "Vorbis" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Music" }));
+    fireEvent.change(await screen.findByLabelText("Add metric"), { target: { value: "music_tags" } });
+    expect(await screen.findByText("Music tags")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({
+          profile: expect.objectContaining({
+            active_metrics: expect.arrayContaining(["music_tags"]),
+          }),
+        }),
+      ),
+    );
   });
 });
 

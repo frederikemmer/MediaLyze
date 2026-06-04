@@ -1,5 +1,6 @@
 from backend.app.services.ffprobe_parser import (
     NormalizedAudioStream,
+    NormalizedChapter,
     NormalizedFormat,
     NormalizedVideoStream,
     ProbeResult,
@@ -100,6 +101,128 @@ def test_quality_score_maps_opus_audio_codec_instead_of_neutral_unknown() -> Non
     assert audio_codec.actual == "opus"
     assert audio_codec.unknown_mapping is False
     assert audio_codec.score == 100.0
+
+
+def test_quality_score_skips_video_categories_for_audio_only_media() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(
+            container_format="mp3",
+            duration=3600,
+            bit_rate=128000,
+            probe_score=100,
+        ),
+        audio_streams=[
+            NormalizedAudioStream(
+                stream_index=0,
+                codec="mp3",
+                profile=None,
+                spatial_audio_profile=None,
+                channels=2,
+                channel_layout="stereo",
+                sample_rate=44100,
+                bit_rate=128000,
+                language=None,
+                default_flag=True,
+                forced_flag=False,
+            )
+        ],
+    )
+
+    breakdown = calculate_quality_score(build_quality_score_input(probe))
+    categories = {category.key: category for category in breakdown.categories}
+
+    for key in ("resolution", "visual_density", "video_codec", "dynamic_range"):
+        assert categories[key].skipped is True
+        assert categories[key].actual is None
+        assert categories[key].notes == ["not_applicable"]
+    assert categories["dynamic_range"].minimum is None
+    assert categories["dynamic_range"].ideal is None
+    assert categories["audio_channels"].skipped is False
+    assert categories["audio_codec"].skipped is False
+
+
+def test_quality_score_omits_inactive_metrics_from_weighted_score() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(container_format="mp3", duration=300, bit_rate=128000, probe_score=100),
+        audio_streams=[
+            NormalizedAudioStream(
+                stream_index=0,
+                codec="mp3",
+                profile=None,
+                spatial_audio_profile=None,
+                channels=2,
+                channel_layout="stereo",
+                sample_rate=44100,
+                bit_rate=128000,
+                language=None,
+                default_flag=True,
+                forced_flag=False,
+                title="Song",
+                artist="Artist",
+            )
+        ],
+    )
+
+    breakdown = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={
+            "active_metrics": ["music_tags"],
+            "music_tags": {"weight": 10, "minimum": "partial", "ideal": "complete"},
+            "audio_codec": {"weight": 10, "minimum": "aac", "ideal": "flac"},
+        },
+    )
+    categories = {category.key: category for category in breakdown.categories}
+
+    assert categories["audio_codec"].active is False
+    assert categories["music_tags"].active is True
+    assert categories["music_tags"].actual == ["title", "artist"]
+
+
+def test_quality_score_scores_audiobook_metadata_and_chapters() -> None:
+    probe = ProbeResult(
+        raw={},
+        media_format=NormalizedFormat(container_format="m4b", duration=3600, bit_rate=128000, probe_score=100),
+        audio_streams=[
+            NormalizedAudioStream(
+                stream_index=0,
+                codec="aac",
+                profile=None,
+                spatial_audio_profile=None,
+                channels=2,
+                channel_layout="stereo",
+                sample_rate=44100,
+                bit_rate=128000,
+                language="de",
+                default_flag=True,
+                forced_flag=False,
+            )
+        ],
+        chapters=[
+            NormalizedChapter(chapter_index=0, start_time=0, end_time=60, duration=60, title="Intro"),
+            NormalizedChapter(chapter_index=1, start_time=60, end_time=120, duration=60, title="Chapter 1"),
+        ],
+        audiobook_narrator="Narrator",
+        audiobook_author="Author",
+        audiobook_publisher="Publisher",
+        audiobook_language="de",
+        audiobook_isbn="123",
+    )
+
+    breakdown = calculate_quality_score(
+        build_quality_score_input(probe),
+        quality_profile={
+            "active_metrics": ["audiobook_tags", "audiobook_chapters"],
+            "audiobook_tags": {"weight": 5, "minimum": "partial", "ideal": "complete"},
+            "audiobook_chapters": {"weight": 5, "minimum": "chapters", "ideal": "chapters_with_titles"},
+        },
+    )
+    categories = {category.key: category for category in breakdown.categories}
+
+    assert categories["audiobook_tags"].active is True
+    assert "narrator" in categories["audiobook_tags"].actual
+    assert categories["audiobook_chapters"].score == 100.0
 
 
 def test_quality_score_uses_video_codec_multi_selection_without_rank_hierarchy() -> None:

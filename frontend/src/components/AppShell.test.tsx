@@ -101,12 +101,12 @@ describe("AppShell", () => {
     renderShell();
 
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
-    expect(screen.getAllByText("Version 0.8.3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("v0.8.3").length).toBeGreaterThan(0);
     expect(screen.getByText(/default the full-width app shell feature flag/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /version 0\.8\.2/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /v0\.8\.2/i })).toBeInTheDocument();
     expect(screen.queryByText(/backfill legacy library-history snapshots/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /version 0\.8\.2/i }));
+    fireEvent.click(screen.getByRole("button", { name: /v0\.8\.2/i }));
 
     expect(screen.getByText(/backfill legacy library-history snapshots/i)).toBeInTheDocument();
     expect(screen.queryByText(/default the full-width app shell feature flag/i)).not.toBeInTheDocument();

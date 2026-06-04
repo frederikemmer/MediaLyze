@@ -12,6 +12,7 @@ import {
   type MediaFileHistory,
   type MediaFileQualityScoreDetail,
 } from "../lib/api";
+import { formatDate } from "../lib/format";
 import { FileDetailPage } from "./FileDetailPage";
 
 type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
@@ -325,6 +326,77 @@ function createEnrichmentOnlyFileHistory(): MediaFileHistory {
   };
 }
 
+function createFileHistoryWithUnchangedGap(): MediaFileHistory {
+  const current = createFileDetail();
+  const { mtime: _ignoredMtime, ...snapshotWithoutMtime } = current;
+
+  return {
+    file_id: current.id,
+    library_id: current.library_id,
+    relative_path: current.relative_path,
+    total: 4,
+    items: [
+      {
+        id: 4,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-05-21T12:53:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "newest",
+        snapshot: {
+          ...current,
+          quality_score_raw: 78.96,
+        },
+      },
+      {
+        id: 3,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-05-21T12:52:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "gap-visible",
+        snapshot: {
+          ...current,
+          quality_score_raw: 80.67,
+          mtime: undefined,
+        },
+      },
+      {
+        id: 2,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-05-19T23:09:00Z",
+        capture_reason: "quality_recompute",
+        snapshot_hash: "gap-hidden",
+        snapshot: {
+          ...snapshotWithoutMtime,
+          quality_score_raw: 80.67,
+        },
+      },
+      {
+        id: 1,
+        media_file_id: current.id,
+        library_id: current.library_id,
+        relative_path: current.relative_path,
+        filename: current.filename,
+        captured_at: "2026-04-20T17:52:00Z",
+        capture_reason: "scan_analysis",
+        snapshot_hash: "older",
+        snapshot: {
+          ...current,
+          quality_score_raw: 78.96,
+        },
+      },
+    ],
+  };
+}
+
 function renderPage(fileId: number) {
   if (!vi.isMockFunction(api.fileHistory)) {
     vi.spyOn(api, "fileHistory").mockResolvedValue({
@@ -381,6 +453,14 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("Matroska")).toBeInTheDocument();
     expect(screen.getByText("25 Mbps")).toBeInTheDocument();
     expect(screen.getByText("100/100")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain ffprobe format name" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("raw ffprobe format name");
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain ffprobe probe score" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("not the MediaLyze quality score");
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
 
     const pathTooltipTrigger = screen.getByRole("button", { name: "Show full relative path" });
     fireEvent.mouseEnter(pathTooltipTrigger);
@@ -555,6 +635,76 @@ describe("FileDetailPage", () => {
     expect(anchorClick).toHaveBeenCalled();
   });
 
+  it("renders a preview panel for video files with playback and download warnings", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Preview (Beta)");
+    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Browser playback currently works best with MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio. Codec support may vary by browser.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "If a media file does not play correctly, please report it or upload a sample so the preview feature can be improved.",
+      ),
+    ).toBeInTheDocument();
+    const reportLink = screen.getByRole("link", { name: "Report file" });
+    expect(reportLink).toHaveAttribute("href", "https://www.medialyze.app/report?source=file_detail_page");
+    expect(reportLink).toHaveAttribute("target", "_blank");
+    expect(reportLink).toHaveClass("file-detail-cover-button");
+    expect(screen.queryByText("Playback is not optimized yet and may take a while to start or may not run smoothly.")).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByRole("button", { name: "Show playback warning" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Playback is not optimized yet and may take a while to start or may not run smoothly.",
+    );
+    expect(screen.queryByRole("link", { name: "Download media" })).not.toBeInTheDocument();
+    const player = container.querySelector(".file-detail-preview-player") as HTMLVideoElement | null;
+    expect(player?.tagName).toBe("VIDEO");
+    expect(player).toHaveAttribute("src", `/api/files/${file.id}/media`);
+  });
+
+  it("renders an audio preview panel for audio-only files", async () => {
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      filename: "Novel.m4b",
+      relative_path: "Audiobooks/Novel.m4b",
+      extension: "m4b",
+      container: "m4b",
+      video_codec: null,
+      resolution: null,
+      resolution_category_id: null,
+      resolution_category_label: null,
+      hdr_type: null,
+      video_streams: [],
+      bitrate: 128_000,
+      audio_bitrate: 128_000,
+      audio_title: "Novel",
+      audio_artist: "Narrator",
+      audiobook_author: "Author",
+      chapters: [],
+      subtitle_streams: [],
+      external_subtitles: [],
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Preview (Beta)");
+    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
+    const player = container.querySelector(".file-detail-preview-player") as HTMLAudioElement | null;
+    expect(player?.tagName).toBe("AUDIO");
+    expect(player).toHaveAttribute("src", `/api/files/${file.id}/media`);
+  });
+
   it("renders file history snapshots in the selected detail panel", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
@@ -575,7 +725,7 @@ describe("FileDetailPage", () => {
     expect(oldValues).toContain("8.0 GB");
     expect(oldValues).toContain("Shows/Season01/Old_File_Name.mkv");
     expect(screen.getAllByText("Shows/Season01/Old_File_Name.mkv").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll(".file-history-entry")).toHaveLength(2);
+    expect(container.querySelectorAll(".file-history-entry")).toHaveLength(1);
     expect(container.querySelectorAll(".file-history-entry[open]")).toHaveLength(1);
   });
 
@@ -591,10 +741,41 @@ describe("FileDetailPage", () => {
     await selectFileDetailPanel("File history");
     expect(await screen.findByRole("heading", { name: "File history" })).toBeInTheDocument();
     const historyList = container.querySelector(".file-history-list");
-    expect(historyList?.querySelectorAll(".file-history-entry")).toHaveLength(1);
+    expect(historyList?.querySelectorAll(".file-history-entry")).toHaveLength(0);
     expect(historyList?.textContent).not.toContain("Audio Channels");
     expect(historyList?.textContent).not.toContain("Sample Rate");
-    expect(historyList?.textContent).toContain("No tracked fields changed in this period.");
+    expect(screen.getByRole("status")).toHaveTextContent("No tracked fields changed in this period.");
+    expect(screen.getByRole("status")).toHaveClass("duplicate-panel-empty-state");
+  });
+
+  it("merges unchanged gap snapshots into the surrounding history period", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(api, "fileHistory").mockResolvedValue(createFileHistoryWithUnchangedGap());
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("File history");
+    expect(await screen.findByRole("heading", { name: "File history" })).toBeInTheDocument();
+    expect(container.querySelectorAll(".file-history-entry")).toHaveLength(2);
+    expect(screen.queryByText("No tracked fields changed in this period.")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `${formatDate("2026-05-19T23:09:00Z")} - ${formatDate("2026-05-21T12:53:00Z")}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        `${formatDate("2026-05-21T12:52:00Z")} - ${formatDate("2026-05-21T12:53:00Z")}`,
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        `${formatDate("2026-05-19T23:09:00Z")} - ${formatDate("2026-05-21T12:52:00Z")}`,
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("stays stable when the quality detail request fails", async () => {
@@ -635,7 +816,9 @@ describe("FileDetailPage", () => {
     fireEvent.click(entries[1].querySelector("summary") as HTMLElement);
     expect(entries[1]).toHaveAttribute("open");
     expect(entries[1]).toHaveTextContent("Maximum");
-    expect(entries[1]).toHaveTextContent("0.08");
+    expect(entries[1]).toHaveTextContent("4.8 GB/hour (1080p equivalent)");
+    expect(entries[1]).toHaveTextContent("3.1 GB/hour (1080p equivalent)");
+    expect(entries[1]).not.toHaveTextContent("0.08");
     expect(entries[1]).toHaveTextContent("Missing value");
 
     fireEvent.click(entries[2].querySelector("summary") as HTMLElement);
@@ -879,6 +1062,7 @@ describe("FileDetailPage", () => {
     expect(screen.getAllByText(/streams/).length).toBeGreaterThan(0);
     const copyButton = screen.getByRole("button", { name: "Copy raw ffprobe JSON" });
     expect(copyButton).toHaveAttribute("data-tooltip", "Copy raw ffprobe JSON");
+    expect(copyButton).toHaveClass("async-panel-toggle-icon-button-flat");
     fireEvent.click(copyButton);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(JSON.stringify(file.raw_ffprobe_json, null, 2)));
     expect(screen.getByRole("button", { name: "Copied raw ffprobe JSON" })).toBeInTheDocument();
