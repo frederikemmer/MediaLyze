@@ -26,6 +26,7 @@ from backend.app.schemas.media import (
     MediaFileDetail,
     MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
+    MediaFileSearchResponse,
     MediaSeriesGroupedDetailRead,
     MediaSeriesDetailRead,
     MediaSeriesSummaryRead,
@@ -79,6 +80,7 @@ from backend.app.services.media_service import (
     list_grouped_library_files,
     list_library_series,
     list_library_files,
+    search_media_files,
 )
 from backend.app.services.path_access import inspect_desktop_path
 from backend.app.services.quality_profiles import (
@@ -1323,6 +1325,18 @@ def library_scan(
     if job is None:
         raise HTTPException(status_code=500, detail="Failed to load scan job")
     return serialize_scan_job(job)
+
+
+@router.get("/files/search", response_model=MediaFileSearchResponse)
+def file_search(
+    query: str = Query(default="", max_length=200),
+    library_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db_session),
+) -> MediaFileSearchResponse:
+    if library_id is not None and not library_exists(db, library_id):
+        raise HTTPException(status_code=404, detail="Library not found")
+    return search_media_files(db, query=query, library_id=library_id, limit=limit)
 
 
 @router.get("/files/{file_id}", response_model=MediaFileDetail)

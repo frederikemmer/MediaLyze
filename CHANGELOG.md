@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
-- add a hidden development-only UI elements catalog for reviewing frontend components, states, and layout patterns
+- add duplication comparison
+- add Quickscan button for each library page
+- add back button on file-detail page
 
 ### 🐛 Bug fixes
 

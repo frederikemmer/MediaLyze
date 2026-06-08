@@ -7,6 +7,7 @@
     "dashboard": "Panel",
     "libraries": "Configuración",
     "homeAria": "Inicio",
+    "compareAria": "Comparar archivos",
     "settingsAria": "Configuración"
   },
   "scanBanner": {
@@ -515,6 +516,8 @@
   },
   "libraryDetail": {
     "scanInProgress": "Escaneo en curso",
+    "quickScan": "Escaneo rápido",
+    "quickScanError": "El escaneo rápido falló: {{message}}",
     "loading": "Cargando biblioteca…",
     "libraryPathAria": "Ruta de la biblioteca",
     "files": "Archivos",
@@ -748,6 +751,8 @@
       "emptyView": "Ningún grupo de duplicados coincide con la vista actual.",
       "suppressedBadge": "Oculto",
       "openFileDetailAria": "Abrir detalles de {{filename}}",
+      "compareFiles": "Comparar archivos duplicados",
+      "compareFilesUnavailable": "Se necesitan al menos dos archivos para comparar",
       "markNotDuplicate": "Marcar como no duplicado",
       "restoreDuplicate": "Restaurar grupo duplicado",
       "suppressFailed": "No se pudo marcar el grupo de duplicados como no duplicado.",
@@ -994,6 +999,7 @@
       "label": "Menú de detalles del archivo",
       "mobileLabel": "Menú móvil de detalles del archivo",
       "title": "Detalles",
+      "back": "Volver",
       "overview": "Resumen",
       "collapse": "Contraer menú de detalles del archivo",
       "expand": "Expandir menú de detalles del archivo",
@@ -1073,6 +1079,45 @@
         "quality_recompute": "Calidad",
         "history_reconstruction": "Reconstruido"
       }
+    }
+  },
+  "fileCompare": {
+    "title": "Comparar archivos",
+    "subtitle": "Coloca dos archivos multimedia analizados lado a lado y resalta diferencias de metadatos.",
+    "comparisonTitle": "Comparación de archivos",
+    "emptySelection": "Selecciona dos archivos para comparar.",
+    "left": "Archivo izquierdo",
+    "right": "Archivo derecho",
+    "yes": "Sí",
+    "no": "No",
+    "changedCount": "{{count}} cambiados",
+    "showAllChapters": "Mostrar los {{count}} capítulos",
+    "showLessChapters": "Mostrar menos",
+    "showFullRawJson": "Mostrar JSON completo",
+    "hideFullRawJson": "Ocultar JSON completo",
+    "swapFiles": "Intercambiar archivos comparados",
+    "search": {
+      "label": "Buscar {{side}}",
+      "placeholder": "Buscar nombre o ruta",
+      "searchAria": "Buscar archivos",
+      "clear": "Limpiar búsqueda de archivo",
+      "empty": "No se encontraron archivos.",
+      "alreadySelected": "Ya está seleccionado en el otro lado.",
+      "libraryFilterAria": "Filtrar búsqueda por biblioteca",
+      "allLibraries": "Todas las bibliotecas",
+      "filteredBy": "Filtrado por {{library}}"
+    },
+    "rows": {
+      "filename": "Nombre de archivo",
+      "library": "ID de biblioteca",
+      "rawQuality": "Calidad bruta",
+      "streamCount": "Número de pistas",
+      "stream": "Pista {{number}}",
+      "externalSubtitleCount": "Subtítulos externos",
+      "externalSubtitlePaths": "Rutas de subtítulos externos",
+      "chapter": "Capítulo {{number}}",
+      "rawJsonPresent": "JSON bruto presente",
+      "rawJsonKeys": "Claves del JSON bruto"
     }
   },
   "pathBrowser": {
@@ -1187,6 +1232,11 @@
       "video_codec": "Códec de vídeo",
       "audio_channels": "Canales de audio",
       "audio_codec": "Códec de audio",
+      "audio_bitrate": "Bitrate de audio",
+      "sample_rate": "Frecuencia de muestreo",
+      "music_tags": "Etiquetas de música",
+      "audiobook_tags": "Etiquetas de audiolibro",
+      "audiobook_chapters": "Capítulos de audiolibro",
       "dynamic_range": "Rango dinámico",
       "language_preferences": "Preferencias de idioma"
     }

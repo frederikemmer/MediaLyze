@@ -362,6 +362,99 @@ def test_file_media_returns_404_for_missing_file_source(tmp_path) -> None:
     assert response.json() == {"detail": "Media file not found"}
 
 
+def test_file_search_returns_cross_library_matches_with_library_metadata() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        movies = Library(name="Movies", path="/media/movies", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        archive = Library(name="Archive", path="/media/archive", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add_all([movies, archive])
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=movies.id,
+                    relative_path="Arrival/Arrival.mkv",
+                    filename="Arrival.mkv",
+                    extension="mkv",
+                    size_bytes=1000,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=8,
+                ),
+                MediaFile(
+                    library_id=archive.id,
+                    relative_path="Arrival/Arrival.copy.mkv",
+                    filename="Arrival.copy.mkv",
+                    extension="mkv",
+                    size_bytes=2000,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=7,
+                ),
+                MediaFile(
+                    library_id=archive.id,
+                    relative_path="Other/File.mkv",
+                    filename="File.mkv",
+                    extension="mkv",
+                    size_bytes=3000,
+                    mtime=3.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=6,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = _build_test_app(db).get("/api/files/search?query=arrival&limit=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    items_by_filename = {item["filename"]: item for item in payload["items"]}
+    assert set(items_by_filename) == {"Arrival.mkv", "Arrival.copy.mkv"}
+    assert items_by_filename["Arrival.mkv"]["library_name"] == "Movies"
+    assert items_by_filename["Arrival.mkv"]["library_type"] == "movies"
+    assert items_by_filename["Arrival.copy.mkv"]["library_name"] == "Archive"
+
+
+def test_file_search_filters_by_library_and_bounds_empty_query() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        movies = Library(name="Movies", path="/media/movies", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        archive = Library(name="Archive", path="/media/archive", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add_all([movies, archive])
+        db.flush()
+        for index in range(4):
+            db.add(
+                MediaFile(
+                    library_id=movies.id if index % 2 == 0 else archive.id,
+                    relative_path=f"File-{index}.mkv",
+                    filename=f"File-{index}.mkv",
+                    extension="mkv",
+                    size_bytes=1000 + index,
+                    mtime=float(index),
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                )
+            )
+        db.commit()
+
+        response = _build_test_app(db).get(f"/api/files/search?library_id={archive.id}&limit=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["library_id"] == archive.id
+    assert payload["limit"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["library_name"] == "Archive"
+    assert payload["items"][0]["library_type"] == "movies"
+
+
 def test_file_cover_returns_404_without_embedded_cover(tmp_path) -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

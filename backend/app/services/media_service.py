@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 from backend.app.models.entities import (
     AudioStream,
     ExternalSubtitle,
+    Library,
     MediaChapter,
     MediaFile,
     MediaFileHistory,
@@ -34,6 +35,8 @@ from backend.app.schemas.media import (
     MediaFileHistoryEntryRead,
     MediaFileHistoryRead,
     MediaFileQualityScoreDetail,
+    MediaFileSearchResponse,
+    MediaFileSearchResult,
     MediaFileStreamDetails,
     MediaFileTablePage,
     MediaFileTableRow,
@@ -1305,6 +1308,82 @@ def list_library_files(
         next_cursor=next_cursor,
         has_more=has_more,
         items=rows,
+    )
+
+
+def search_media_files(
+    db: Session,
+    *,
+    query: str = "",
+    library_id: int | None = None,
+    limit: int = 20,
+) -> MediaFileSearchResponse:
+    normalized_query = query.strip()
+    normalized_limit = max(1, min(limit, 50))
+    pattern_tokens = [token for token in re.split(r"[\s,]+", normalized_query.lower()) if token]
+
+    statement = (
+        select(MediaFile)
+        .join(Library, Library.id == MediaFile.library_id)
+        .options(
+            selectinload(MediaFile.library),
+            selectinload(MediaFile.media_format),
+            selectinload(MediaFile.video_streams),
+            selectinload(MediaFile.audio_streams),
+            selectinload(MediaFile.subtitle_streams),
+            selectinload(MediaFile.external_subtitles),
+            selectinload(MediaFile.series),
+            selectinload(MediaFile.season),
+        )
+    )
+    if library_id is not None:
+        statement = statement.where(MediaFile.library_id == library_id)
+    for token in pattern_tokens:
+        pattern = f"%{token}%"
+        statement = statement.where(
+            or_(
+                func.lower(MediaFile.filename).like(pattern),
+                func.lower(MediaFile.relative_path).like(pattern),
+            )
+        )
+
+    if pattern_tokens:
+        first_token_pattern = f"%{pattern_tokens[0]}%"
+        statement = statement.order_by(
+            case((func.lower(MediaFile.filename).like(first_token_pattern), 0), else_=1).asc(),
+            case((func.lower(MediaFile.relative_path).like(first_token_pattern), 0), else_=1).asc(),
+            func.lower(MediaFile.relative_path).asc(),
+        )
+    else:
+        statement = statement.order_by(func.lower(Library.name).asc(), func.lower(MediaFile.relative_path).asc())
+
+    files = list(db.scalars(statement.limit(normalized_limit)).all())
+    resolution_categories = get_app_settings(db).resolution_categories
+    items = []
+    for media_file in files:
+        row = _row_from_model(media_file, resolution_categories)
+        items.append(
+            MediaFileSearchResult(
+                id=row.id,
+                library_id=row.library_id,
+                library_name=media_file.library.name,
+                library_type=getattr(media_file.library.type, "value", media_file.library.type),
+                filename=row.filename,
+                relative_path=row.relative_path,
+                size_bytes=row.size_bytes,
+                container=row.container,
+                duration=row.duration,
+                quality_score=row.quality_score,
+                video_codec=row.video_codec,
+                resolution=row.resolution,
+                hdr_type=row.hdr_type,
+            )
+        )
+    return MediaFileSearchResponse(
+        query=normalized_query,
+        library_id=library_id,
+        limit=normalized_limit,
+        items=items,
     )
 
 

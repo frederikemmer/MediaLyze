@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "r
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowUpRight,
+  AudioLines,
   CalendarDays,
   Check,
   ChevronDown,
@@ -10,6 +12,7 @@ import {
   Columns3,
   Copy,
   Database,
+  Diff,
   Download,
   Eye,
   EyeOff,
@@ -20,6 +23,7 @@ import {
   FileSearchCorner,
   FileVideo,
   Folder,
+  GitCompare,
   History,
   House,
   Info,
@@ -47,6 +51,9 @@ import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
 import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
+import { ChevronsRightLeftIcon } from "../components/ChevronsRightLeftIcon";
+import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
+import { GithubIcon } from "../components/GithubIcon";
 import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
 import { PanelEmptyState } from "../components/PanelEmptyState";
 import { PathBrowser } from "../components/PathBrowser";
@@ -643,7 +650,7 @@ function ScanJobFixture({ determinate = false }: { determinate?: boolean }) {
   return (
     <div className={`scan-job-card ${determinate ? "is-determinate ui-elements-determinate-scan" : "is-indeterminate"}`.trim()}>
       <div className="scan-job-card-main">
-        <AnimatedSearchIcon className="scan-job-card-search-icon" />
+        <AnimatedSearchIcon animateOnMount className="scan-job-card-search-icon" />
         <span className="scan-job-card-name">{determinate ? "Music library" : "Movies archive"}</span>
         <div className="scan-job-metrics">
           {[
@@ -757,6 +764,12 @@ function FileDetailNavigationFixture() {
             </button>
           </nav>
         </div>
+        <div className="settings-navigation-quick-actions file-detail-navigation-actions">
+          <button type="button" className="secondary small settings-panel-header-action file-detail-navigation-back-button" aria-label="Back" title="Back">
+            <ArrowLeft className="nav-icon" aria-hidden="true" />
+            <span>Back</span>
+          </button>
+        </div>
         <div className="settings-navigation-header">
           <span>File details</span>
           <button type="button" className="secondary icon-only-button settings-navigation-collapse-button" aria-label="Collapse file detail navigation" aria-expanded="true">
@@ -827,6 +840,9 @@ function DuplicateGroupFixture({ suppressed = false }: { suppressed?: boolean })
           </button>
           <strong>arrival 2016</strong>
         </div>
+        <button type="button" className="secondary icon-only-button duplicate-group-action duplicate-group-compare-action" aria-label="Compare files">
+          <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} />
+        </button>
         <button type="button" className="secondary icon-only-button duplicate-group-action" aria-label="Hide group">
           {suppressed ? <Eye className="duplicate-group-action-icon is-suppressed" /> : <EyeOff className="duplicate-group-action-icon" />}
         </button>
@@ -905,8 +921,8 @@ function ReleaseDialogFixture() {
             <span>Downloaded</span>
           </button>
           <TelemetryModeToggle compact mode="minimal" onChange={() => undefined} />
-          <a href="/releases" className="release-notes-icon-link" aria-label="Support" onClick={preventCatalogNavigation}>
-            <Sparkles aria-hidden="true" className="nav-icon" />
+          <a href="/releases" className="release-notes-icon-link" aria-label="Open GitHub repository" onClick={preventCatalogNavigation}>
+            <GithubIcon className="release-notes-github-icon" size={18} aria-hidden="true" />
           </a>
           <button type="button" className="release-notes-close" aria-label="Close">
             <X aria-hidden="true" className="nav-icon" />
@@ -1032,6 +1048,11 @@ export function UiElementsPage() {
                       <House aria-hidden="true" className="nav-icon" />
                     </span>
                   </a>
+                  <a href="/files/compare" className="icon-nav-button" aria-label="Compare files" onClick={preventCatalogNavigation}>
+                    <span className="nav-link-content">
+                      <GitCompare aria-hidden="true" className="nav-icon" />
+                    </span>
+                  </a>
                   <a href="/settings" className="icon-nav-button is-first-library-attention" aria-label="Settings" onClick={preventCatalogNavigation}>
                     <span className="nav-link-content">
                       <Settings aria-hidden="true" className="nav-icon" />
@@ -1108,8 +1129,23 @@ export function UiElementsPage() {
                   </label>
                 </div>
               </VariantCard>
-              <VariantCard title="Structured search" source={`${libraryDetail} > Analyzed files`} classes={["metadata-search-control", "metadata-search-icon-button", "metadata-search-remove"]}>
+              <VariantCard title="Structured search" source={`${libraryDetail} > Analyzed files`} classes={["metadata-search-control", "metadata-search-icon-button", "metadata-search-remove", "data-table-search-layout"]}>
                 <div className="stack">
+                  <div className="library-layout-panel-analyzed-files">
+                    <div className="panel-header">
+                      <div className="data-table-search-layout">
+                        <div className="metadata-search-control metadata-search-control-base search-filter-picker">
+                          <button type="button" className="search-filter-picker-button" aria-label="Add metadata search field">
+                            <Plus size={18} aria-hidden="true" />
+                          </button>
+                          <span className="metadata-search-icon-button metadata-search-icon-button-middle" aria-hidden="true">
+                            <Search size={16} />
+                          </span>
+                          <input type="search" placeholder="Search file and path" aria-label="Search files and metadata" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <SearchFilterFixture />
                   <SearchFilterFixture invalid />
                 </div>
@@ -1145,11 +1181,21 @@ export function UiElementsPage() {
                   onAddPanel={() => undefined}
                 />
               </VariantCard>
-              <VariantCard title="Page-specific icon buttons" source={`${scanLogs} / ${fileDetail} / ${libraryDetail}`} classes={["scan-log-copy-button", "file-detail-cover-button", "duplicate-group-open-button"]}>
+              <VariantCard title="Page-specific icon buttons" source={`${scanLogs} / ${fileDetail} / ${libraryDetail}`} classes={["scan-log-copy-button", "file-detail-cover-button", "duplicate-group-open-button", "library-quickscan-button", "file-detail-navigation-actions"]}>
                 <div className="ui-elements-control-grid">
                   <button type="button" className="scan-log-copy-button" aria-label="Copy"><Copy className="nav-icon" /></button>
                   <button type="button" className="file-detail-cover-button secondary small"><Download className="nav-icon" /> Download cover</button>
                   <button type="button" className="secondary icon-only-button duplicate-group-open-button" aria-label="Open"><ArrowUpRight className="duplicate-group-open-icon" /></button>
+                  <button type="button" className="secondary icon-only-button duplicate-group-action duplicate-group-compare-action" aria-label="Compare">
+                    <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} />
+                  </button>
+                  <button type="button" className="statistic-layout-action-button library-quickscan-button" aria-label="Quick scan" title="Quick scan">
+                    <AnimatedSearchIcon className="statistic-layout-action-icon" size={18} aria-hidden="true" />
+                  </button>
+                  <button type="button" className="secondary small settings-panel-header-action file-detail-navigation-back-button" aria-label="Back" title="Back">
+                    <ArrowLeft className="nav-icon" aria-hidden="true" />
+                    <span>Back</span>
+                  </button>
                 </div>
               </VariantCard>
             </VariantGroup>
@@ -1311,6 +1357,78 @@ export function UiElementsPage() {
                 <div className="duplicate-group-list">
                   <DuplicateGroupFixture />
                   <DuplicateGroupFixture suppressed />
+                </div>
+              </VariantCard>
+              <VariantCard title="File comparison rows" source="FileComparePage" classes={["file-compare-search-card", "file-compare-row", "has-difference", "is-identical"]} wide>
+                <div className="file-compare-page">
+                  <div className="file-compare-search-grid">
+                    <div className="file-compare-search-card">
+                      <div className="file-compare-search-label">
+                        <strong title="Movies / Sci-Fi/Arrival.2016.UHD.mkv">Arrival.2016.UHD.mkv</strong>
+                      </div>
+                      <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
+                        <button type="button" className="search-filter-picker-button" aria-label="Filter library"><ListFilter size={18} /></button>
+                        <input type="search" placeholder="Search filename or path" aria-label="Search left file" />
+                      </div>
+                      <div className="file-compare-search-results">
+                        <button type="button" className="file-compare-search-result is-disabled" disabled title="Already selected on the other side.">
+                          <span className="file-compare-search-result-main" title="Movies / Sci-Fi/Arrival.2016.Remux.mkv">Arrival.2016.Remux.mkv</span>
+                          <span className="file-compare-search-result-meta">21.1 GB - Video - Movies</span>
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="file-compare-swap-button"
+                      aria-label="Swap compared files"
+                      title="Swap compared files"
+                    >
+                      <ChevronsRightLeftIcon size={22} aria-hidden="true" />
+                    </button>
+                    <div className="file-compare-search-card">
+                      <div className="file-compare-search-label">
+                        <strong title="Movies / Sci-Fi/Arrival.2016.Remux.mkv">Arrival.2016.Remux.mkv</strong>
+                      </div>
+                      <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
+                        <button type="button" className="search-filter-picker-button is-open" aria-label="Filter library"><ListFilter size={18} /></button>
+                        <input type="search" placeholder="Search filename or path" aria-label="Search right file" />
+                      </div>
+                    </div>
+                  </div>
+                  <section className="panel file-compare-section">
+                    <button type="button" className="file-compare-section-toggle" aria-expanded="true">
+                      <span className="file-compare-section-title">
+                        <FileDiff size={18} />
+                        Overview
+                        <span className="badge file-compare-section-diff-badge" aria-label="2 changed" title="2 changed">
+                          <Diff size={14} aria-hidden="true" />
+                          <span>2</span>
+                        </span>
+                      </span>
+                      <ChevronDown size={18} />
+                    </button>
+                    <div className="file-compare-row-list">
+                      <div className="file-compare-row has-difference">
+                        <div className="file-compare-row-label">Size</div>
+                        <div className="file-compare-cell file-compare-cell-left">18.4 GB</div>
+                        <div className="file-compare-cell file-compare-cell-right">21.1 GB</div>
+                      </div>
+                      <div className="file-compare-row is-identical">
+                        <div className="file-compare-row-label">Resolution</div>
+                        <div className="file-compare-cell file-compare-cell-left">3840x2160</div>
+                        <div className="file-compare-cell file-compare-cell-right">3840x2160</div>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="panel file-compare-section">
+                    <button type="button" className="file-compare-section-toggle" aria-expanded="false">
+                      <span className="file-compare-section-title">
+                        <AudioLines size={18} />
+                        Audio streams
+                      </span>
+                      <ChevronRight size={18} />
+                    </button>
+                  </section>
                 </div>
               </VariantCard>
               <VariantCard title="Path browser fixture" source={`${settings} > Create library`} classes={["path-browser", "path-entry", "path-browser-selected-item"]}>

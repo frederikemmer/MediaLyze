@@ -30,12 +30,14 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { AnimatedSearchIcon, type AnimatedSearchIconHandle } from "../components/AnimatedSearchIcon";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
 import { EyeIcon } from "../components/EyeIcon";
 import { EyeOffIcon } from "../components/EyeOffIcon";
 import { FolderInputIcon } from "../components/FolderInputIcon";
+import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
@@ -221,6 +223,15 @@ type FilePageLoadBehavior = {
 type LibraryFileSearchFilters = Partial<Record<"file" | LibraryFileMetadataSearchField, string>>;
 type DuplicatePanelViewMode = "all" | "filehash" | "filename" | "hidden";
 
+type LibraryDetailTableState = {
+  sortKey: FileColumnKey;
+  sortDirection: SortDirection;
+  baseSearch: string;
+  selectedMetadataFields: LibraryFileMetadataSearchField[];
+  fieldValues: Partial<Record<LibraryFileMetadataSearchField, string>>;
+  appliedSearchFilters: LibraryFileSearchFilters;
+};
+
 type CaretStableSearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "type" | "value"> & {
   value: string;
   onValueChange: (value: string) => void;
@@ -258,6 +269,53 @@ const HEADER_FONT = `600 ${HEADER_FONT_SIZE_PX}px "Space Grotesk", system-ui, sa
 const BODY_FONT = `400 ${BODY_FONT_SIZE_PX}px "Space Grotesk", system-ui, sans-serif`;
 const HEADER_LETTER_SPACING_PX = HEADER_FONT_SIZE_PX * 0.08;
 const CELL_HORIZONTAL_PADDING_PX = 20;
+const LIBRARY_DETAIL_TABLE_STATE_STORAGE_PREFIX = "medialyze-library-detail-table-state";
+const MEDIA_FILE_SORT_KEYS = new Set<FileColumnKey>([
+  "file",
+  "container",
+  "size",
+  "video_codec",
+  "resolution",
+  "hdr_type",
+  "duration",
+  "bitrate",
+  "audio_bitrate",
+  "bit_depth",
+  "audio_title",
+  "audio_artist",
+  "audio_album",
+  "audio_album_artist",
+  "audio_genre",
+  "audio_date",
+  "audio_disc",
+  "audio_composer",
+  "audio_channels",
+  "sample_rate",
+  "track_number",
+  "bit_rate_mode",
+  "has_embedded_cover",
+  "chapter_count",
+  "audiobook_narrator",
+  "audiobook_author",
+  "audiobook_publisher",
+  "audiobook_series",
+  "audiobook_series_part",
+  "audiobook_description",
+  "audiobook_copyright",
+  "audiobook_language",
+  "audiobook_abridged",
+  "audiobook_asin",
+  "audiobook_isbn",
+  "audio_codecs",
+  "audio_spatial_profiles",
+  "audio_languages",
+  "subtitle_languages",
+  "subtitle_codecs",
+  "subtitle_sources",
+  "mtime",
+  "last_analyzed_at",
+  "quality_score",
+]);
 const SORT_INDICATOR_WIDTH_PX = 18;
 const librarySummaryCache = new LruCache<string, LibrarySummary>(32);
 const libraryStatisticsCache = new LruCache<string, LibraryStatistics>(16);
@@ -1263,6 +1321,102 @@ function buildFileCacheKey(
   return `${libraryId}::${searchFilters}::${sortKey}::${sortDirection}`;
 }
 
+function buildLibraryDetailTableStateStorageKey(libraryId: string) {
+  return `${LIBRARY_DETAIL_TABLE_STATE_STORAGE_PREFIX}:${libraryId}`;
+}
+
+function isSortDirection(value: unknown): value is SortDirection {
+  return value === "asc" || value === "desc";
+}
+
+function isFileColumnKey(value: unknown): value is FileColumnKey {
+  return typeof value === "string" && MEDIA_FILE_SORT_KEYS.has(value as FileColumnKey);
+}
+
+function sanitizeMetadataFieldValues(value: unknown): Partial<Record<LibraryFileMetadataSearchField, string>> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const next: Partial<Record<LibraryFileMetadataSearchField, string>> = {};
+  for (const field of LIBRARY_METADATA_SEARCH_FIELDS) {
+    const fieldValue = (value as Record<string, unknown>)[field];
+    if (typeof fieldValue === "string") {
+      next[field] = fieldValue;
+    }
+  }
+  return next;
+}
+
+function sanitizeLibraryFileSearchFilters(value: unknown): LibraryFileSearchFilters {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const next: LibraryFileSearchFilters = {};
+  const fileValue = (value as Record<string, unknown>).file;
+  if (typeof fileValue === "string") {
+    next.file = fileValue;
+  }
+  for (const field of LIBRARY_METADATA_SEARCH_FIELDS) {
+    const fieldValue = (value as Record<string, unknown>)[field];
+    if (typeof fieldValue === "string") {
+      next[field] = fieldValue;
+    }
+  }
+  return next;
+}
+
+function readLibraryDetailTableState(libraryId: string): LibraryDetailTableState {
+  const fallback: LibraryDetailTableState = {
+    sortKey: "file",
+    sortDirection: "asc",
+    baseSearch: "",
+    selectedMetadataFields: [],
+    fieldValues: {},
+    appliedSearchFilters: {},
+  };
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const raw = window.sessionStorage.getItem(buildLibraryDetailTableStateStorageKey(libraryId));
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const selectedMetadataFields = Array.isArray(parsed.selectedMetadataFields)
+      ? parsed.selectedMetadataFields.filter(
+          (field): field is LibraryFileMetadataSearchField =>
+            typeof field === "string" && LIBRARY_METADATA_SEARCH_FIELDS.includes(field as LibraryFileMetadataSearchField),
+        )
+      : [];
+
+    return {
+      sortKey: isFileColumnKey(parsed.sortKey) ? parsed.sortKey : fallback.sortKey,
+      sortDirection: isSortDirection(parsed.sortDirection) ? parsed.sortDirection : fallback.sortDirection,
+      baseSearch: typeof parsed.baseSearch === "string" ? parsed.baseSearch : fallback.baseSearch,
+      selectedMetadataFields,
+      fieldValues: sanitizeMetadataFieldValues(parsed.fieldValues),
+      appliedSearchFilters: sanitizeLibraryFileSearchFilters(parsed.appliedSearchFilters),
+    };
+  } catch {
+    window.sessionStorage.removeItem(buildLibraryDetailTableStateStorageKey(libraryId));
+    return fallback;
+  }
+}
+
+function saveLibraryDetailTableState(libraryId: string, state: LibraryDetailTableState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(buildLibraryDetailTableStateStorageKey(libraryId), JSON.stringify(state));
+}
+
 function hasActiveSearchFilters(filters: LibraryFileSearchFilters): boolean {
   return Object.values(filters).some((value) => Boolean(value?.trim()));
 }
@@ -1401,6 +1555,11 @@ export function LibraryDetailPage() {
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
   const tableViewSettingsScope = useMemo(() => buildLibraryTableViewSettingsScope(libraryId), [libraryId]);
+  const initialTableStateRef = useRef<LibraryDetailTableState | null>(null);
+  if (initialTableStateRef.current === null) {
+    initialTableStateRef.current = readLibraryDetailTableState(libraryId);
+  }
+  const skipNextTableStateSaveRef = useRef(false);
   const statisticLayoutOptions = useMemo(
     () => ({ unlimitedHeight: appSettings.feature_flags.unlimited_panel_size }),
     [appSettings.feature_flags.unlimited_panel_size],
@@ -1473,13 +1632,19 @@ export function LibraryDetailPage() {
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<LibraryFileColumnWidths>(() =>
     getLibraryFileColumnWidths(),
   );
-  const [sortKey, setSortKey] = useState<FileColumnKey>("file");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [baseSearch, setBaseSearch] = useState("");
-  const [selectedMetadataFields, setSelectedMetadataFields] = useState<LibraryFileMetadataSearchField[]>([]);
-  const [fieldValues, setFieldValues] = useState<Partial<Record<LibraryFileMetadataSearchField, string>>>({});
+  const [sortKey, setSortKey] = useState<FileColumnKey>(() => initialTableStateRef.current!.sortKey);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => initialTableStateRef.current!.sortDirection);
+  const [baseSearch, setBaseSearch] = useState(() => initialTableStateRef.current!.baseSearch);
+  const [selectedMetadataFields, setSelectedMetadataFields] = useState<LibraryFileMetadataSearchField[]>(
+    () => initialTableStateRef.current!.selectedMetadataFields,
+  );
+  const [fieldValues, setFieldValues] = useState<Partial<Record<LibraryFileMetadataSearchField, string>>>(
+    () => initialTableStateRef.current!.fieldValues,
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>({});
+  const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>(
+    () => initialTableStateRef.current!.appliedSearchFilters,
+  );
   const [exportError, setExportError] = useState<string | null>(null);
   const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
     readDuplicatePanelCollapsedPreference(libraryId),
@@ -1494,8 +1659,11 @@ export function LibraryDetailPage() {
   const [qualityScoreLoading, setQualityScoreLoading] = useState<Record<number, boolean>>({});
   const [streamDetails, setStreamDetails] = useState<Record<number, MediaFileStreamDetails>>({});
   const [streamDetailsLoading, setStreamDetailsLoading] = useState<Record<number, boolean>>({});
-  const { activeJobs } = useScanJobs();
+  const { activeJobs, trackJob } = useScanJobs();
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
+  const quickScanIconRef = useRef<AnimatedSearchIconHandle>(null);
+  const [isQuickScanStarting, setIsQuickScanStarting] = useState(false);
+  const [quickScanError, setQuickScanError] = useState<string | null>(null);
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
@@ -1510,6 +1678,7 @@ export function LibraryDetailPage() {
   const showAnalyzedFilesCsvExport = appSettings.feature_flags.show_analyzed_files_csv_export;
   const hideQualityScoreMeter = appSettings.feature_flags.hide_quality_score_meter;
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
+  const canStartQuickScan = Boolean(displayLibrary) && !activeJob && !isQuickScanStarting;
   const loadQualityScoreDetail = useEffectEvent(async (fileId: number) => {
     if (qualityScoreDetails[fileId] || qualityScoreLoading[fileId]) {
       return;
@@ -1546,6 +1715,23 @@ export function LibraryDetailPage() {
       });
     }
   });
+
+  async function startQuickScan() {
+    if (!displayLibrary || activeJob || isQuickScanStarting) {
+      return;
+    }
+
+    setIsQuickScanStarting(true);
+    setQuickScanError(null);
+    try {
+      const job = await api.scanLibrary(displayLibrary.id, "incremental");
+      trackJob(job);
+    } catch (reason) {
+      setQuickScanError((reason as Error).message);
+    } finally {
+      setIsQuickScanStarting(false);
+    }
+  }
   const tooltipEnabledColumns = useMemo(
     () =>
       new Set<FileColumnKey>(
@@ -2471,9 +2657,34 @@ export function LibraryDetailPage() {
   }, [fileQueryKey]);
 
   useEffect(() => {
+    const nextTableState = readLibraryDetailTableState(libraryId);
+    initialTableStateRef.current = nextTableState;
+    skipNextTableStateSaveRef.current = true;
+    setSortKey(nextTableState.sortKey);
+    setSortDirection(nextTableState.sortDirection);
+    setBaseSearch(nextTableState.baseSearch);
+    setSelectedMetadataFields(nextTableState.selectedMetadataFields);
+    setFieldValues(nextTableState.fieldValues);
+    setAppliedSearchFilters(nextTableState.appliedSearchFilters);
     setIsDuplicatesPanelCollapsed(readDuplicatePanelCollapsedPreference(libraryId));
     setIsHistoryPanelCollapsed(readHistoryPanelCollapsedPreference(libraryId));
   }, [libraryId]);
+
+  useEffect(() => {
+    if (skipNextTableStateSaveRef.current) {
+      skipNextTableStateSaveRef.current = false;
+      return;
+    }
+
+    saveLibraryDetailTableState(libraryId, {
+      sortKey,
+      sortDirection,
+      baseSearch,
+      selectedMetadataFields,
+      fieldValues,
+      appliedSearchFilters,
+    });
+  }, [appliedSearchFilters, baseSearch, fieldValues, libraryId, selectedMetadataFields, sortDirection, sortKey]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -3232,8 +3443,28 @@ export function LibraryDetailPage() {
                 )
               }
             />
+            <button
+              type="button"
+              className="statistic-layout-action-button library-quickscan-button"
+              aria-label={activeJob ? t("libraryDetail.scanInProgress") : t("libraryDetail.quickScan")}
+              title={activeJob ? t("libraryDetail.scanInProgress") : t("libraryDetail.quickScan")}
+              disabled={!canStartQuickScan}
+              onMouseEnter={() => quickScanIconRef.current?.startAnimation()}
+              onMouseLeave={() => quickScanIconRef.current?.stopAnimation()}
+              onFocus={() => quickScanIconRef.current?.startAnimation()}
+              onBlur={() => quickScanIconRef.current?.stopAnimation()}
+              onClick={() => void startQuickScan()}
+            >
+              <AnimatedSearchIcon
+                ref={quickScanIconRef}
+                className="statistic-layout-action-icon"
+                size={18}
+                aria-hidden="true"
+              />
+            </button>
           </div>
         </div>
+        {quickScanError ? <div className="alert">{t("libraryDetail.quickScanError", { message: quickScanError })}</div> : null}
         <div className="card-grid grid">
           <StatCard label={t("libraryDetail.files")} value={String(displayLibrary?.file_count ?? filesTotal ?? 0)} />
           <StatCard
@@ -3569,6 +3800,29 @@ export function LibraryDetailPage() {
                                 ) : null}
                               </div>
                             </div>
+                            <TooltipTrigger
+                              content={
+                                group.items.length >= 2
+                                  ? t("libraryDetail.duplicates.compareFiles")
+                                  : t("libraryDetail.duplicates.compareFilesUnavailable")
+                              }
+                              ariaLabel={
+                                group.items.length >= 2
+                                  ? t("libraryDetail.duplicates.compareFiles")
+                                  : t("libraryDetail.duplicates.compareFilesUnavailable")
+                              }
+                              className="secondary icon-only-button duplicate-group-action duplicate-group-compare-action"
+                              disabled={group.items.length < 2}
+                              maxWidth={240}
+                              pinOnClick={false}
+                              onClick={() => {
+                                if (group.items.length >= 2) {
+                                  navigate(`/files/compare?left=${group.items[0].id}&right=${group.items[1].id}`);
+                                }
+                              }}
+                            >
+                              <GitCompareArrowsIcon size={17} aria-hidden="true" className="duplicate-group-action-icon" />
+                            </TooltipTrigger>
                             {group.mode === "filename" || group.mode === "filehash" ? (
                               <TooltipTrigger
                                 content={

@@ -8,6 +8,7 @@ import { isDevelopmentVersion } from "./lib/release-notes";
 import { ScanJobsProvider } from "./lib/scan-jobs";
 import { ThemeProvider } from "./lib/theme";
 import { DashboardPage } from "./pages/DashboardPage";
+import { FileComparePage } from "./pages/FileComparePage";
 import { FileDetailPage } from "./pages/FileDetailPage";
 import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryDetailPage } from "./pages/LibraryDetailPage";
@@ -37,6 +38,7 @@ export function App() {
               />
               <Route path="/libraries/:libraryId/series/:seriesId" element={<SeriesDetailPage />} />
               <Route path="/libraries/:libraryId" element={<LibraryDetailPage />} />
+              <Route path="/files/compare" element={<FileComparePage />} />
               <Route path="/files/:fileId" element={<FileDetailPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
