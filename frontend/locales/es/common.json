@@ -1240,6 +1240,54 @@
       "dtsX": "DTS:X"
     }
   },
+  "uiElements": {
+    "eyebrow": "Referencia de desarrollo",
+    "title": "Elementos de interfaz",
+    "subtitle": "Un inventario de diseño oculto para comparar componentes reales de MediaLyze, variantes locales, estados y ubicaciones de uso.",
+    "devOnly": "Solo dev",
+    "sampleAction": "Acción de ejemplo",
+    "indexTitle": "Catálogo",
+    "indexAria": "Secciones del catálogo de elementos de interfaz",
+    "source": "Origen",
+    "themePreview": "Vista previa del tema",
+    "sections": {
+      "foundation": "Tokens de diseño y tipografía",
+      "headerNav": "Cabecera y navegación",
+      "settings": "Variantes de ajustes",
+      "forms": "Formularios y búsqueda",
+      "buttons": "Botones y acciones",
+      "panels": "Paneles y edición de diseño",
+      "tables": "Tablas",
+      "stats": "Estadísticas y gráficos",
+      "runtime": "Ejecución y logs de escaneo",
+      "fileLibrary": "Biblioteca y detalle de archivo",
+      "duplicatesPathTelemetry": "Duplicados, rutas y telemetría",
+      "dialogs": "Diálogos, popovers y tooltips"
+    },
+    "descriptions": {
+      "foundation": "Tokens de color principales, jerarquía de texto y superficies base de la aplicación.",
+      "headerNav": "Navegación principal, etiquetas de versión, enlaces de bibliotecas y estados de atención.",
+      "settings": "Barra lateral de ajustes, acciones rápidas, selectores y controles de vista de tabla.",
+      "forms": "Inputs, selects, filas de casillas, búsqueda estructurada, patrones ignorados y controles de calidad.",
+      "buttons": "Variantes globales de botones y botones de acción específicos de páginas, mostrados juntos.",
+      "panels": "Paneles reutilizables, estados de carga/error, superposiciones de edición de diseño y avisos de migración.",
+      "tables": "Tablas de ajustes, tablas de resumen de escaneo y superficie de la tabla virtualizada de archivos analizados.",
+      "stats": "Tarjetas métricas, listas de distribución, controles de gráficos y variantes de la barra de comparación.",
+      "runtime": "Tarjetas de escaneo activo, tarjetas de logs, insignias de resultado y controles de diagnóstico.",
+      "fileLibrary": "Navegación de detalle de archivo, superficies de vista previa, detalles de pistas y filas de puntuación de calidad.",
+      "duplicatesPathTelemetry": "Tarjetas de duplicados, estados del explorador de rutas y superficies de selección de telemetría.",
+      "dialogs": "Notas de versión, diálogos para crear biblioteca, popovers de filtro, popovers de calidad y disparadores de tooltip."
+    },
+    "sources": {
+      "dashboard": "Panel",
+      "settings": "Configuración",
+      "libraryDetail": "Detalle de biblioteca",
+      "fileDetail": "Detalle de archivo",
+      "scanLogs": "Logs de escaneo",
+      "releaseNotes": "Historial de versiones",
+      "header": "Cabecera"
+    }
+  },
   "common": {
     "close": "Cerrar",
     "yes": "Sí",

@@ -9,7 +9,13 @@ import { api, type AppSettings } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { AppShell } from "./AppShell";
 
-vi.mock("../lib/app-version", () => ({ APP_VERSION: "0.8.3" }));
+const appVersionMock = vi.hoisted(() => ({ value: "0.8.3" }));
+
+vi.mock("../lib/app-version", () => ({
+  get APP_VERSION() {
+    return appVersionMock.value;
+  },
+}));
 
 type AppSettingsOverrides = Omit<Partial<AppSettings>, "scan_performance" | "feature_flags"> & {
   scan_performance?: Partial<NonNullable<AppSettings["scan_performance"]>>;
@@ -61,6 +67,8 @@ function renderShell() {
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<div>Dashboard</div>} />
+              <Route path="/settings" element={<div>Settings page</div>} />
+              <Route path="/ui-elements" element={<div>UI elements page</div>} />
             </Route>
           </Routes>
         </ScanJobsProvider>
@@ -70,6 +78,7 @@ function renderShell() {
 }
 
 beforeEach(() => {
+  appVersionMock.value = "0.8.3";
   window.localStorage.clear();
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
   vi.spyOn(api, "libraries").mockResolvedValue([]);
@@ -90,6 +99,52 @@ afterEach(() => {
 });
 
 describe("AppShell", () => {
+  it("opens the hidden UI elements page after three quick settings icon clicks in dev builds", async () => {
+    appVersionMock.value = "dev";
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "dev");
+
+    renderShell();
+
+    const settingsLink = await screen.findByRole("link", { name: "Settings" });
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+
+    expect(await screen.findByText("UI elements page")).toBeInTheDocument();
+  });
+
+  it("does not open the hidden UI elements page from stable builds", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+
+    renderShell();
+
+    const settingsLink = await screen.findByRole("link", { name: "Settings" });
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+
+    expect(await screen.findByText("Settings page")).toBeInTheDocument();
+    expect(screen.queryByText("UI elements page")).not.toBeInTheDocument();
+  });
+
+  it("resets the hidden UI elements click counter after the activation window", async () => {
+    appVersionMock.value = "dev";
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "dev");
+    const nowSpy = vi.spyOn(Date, "now");
+
+    renderShell();
+
+    const settingsLink = await screen.findByRole("link", { name: "Settings" });
+    nowSpy.mockReturnValue(1000);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    nowSpy.mockReturnValue(1200);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+    nowSpy.mockReturnValue(3000);
+    fireEvent.click(settingsLink.querySelector(".nav-link-content")!);
+
+    expect(screen.queryByText("UI elements page")).not.toBeInTheDocument();
+  });
+
   it("gently highlights settings while no library has been added yet", async () => {
     renderShell();
 

@@ -155,6 +155,33 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.pattern_recognition.show_season_patterns.episode_file_regexes == []
 
 
+def test_get_app_settings_preserves_season_zero_bonus_patterns(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "pattern_recognition": {
+                        "bonus_content": {
+                            "user_folder_patterns": ["*/Season 00/*"],
+                            "default_folder_patterns": ["*/Specials/*", "*/Season 00/*"],
+                        },
+                    },
+                },
+            )
+        )
+        db.commit()
+
+        loaded = get_app_settings(db, settings)
+
+    assert "*/Season 00/*" in loaded.pattern_recognition.bonus_content.default_folder_patterns
+    assert loaded.pattern_recognition.bonus_content.user_folder_patterns == ["*/Season 00/*"]
+    assert loaded.pattern_recognition.bonus_content.effective_folder_patterns == ["*/Season 00/*", "*/Specials/*"]
+
+
 def test_update_app_settings_persists_pattern_recognition(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)

@@ -528,6 +528,14 @@ Implemented UI behavior includes:
 * persistent app theme preference
 * persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
 
+UI catalog maintenance rule:
+
+* the hidden development-only `/ui-elements` catalog is the canonical visual inventory for frontend UI patterns
+* whenever an existing frontend UI element, state, layout pattern, component style, or page-local variant is changed, update the matching catalog entry in `frontend/src/pages/UiElementsPage.tsx` in the same change set
+* whenever a new reusable component, page-specific UI pattern, visual state, popover/dialog, table/list variant, settings control, chart/stat panel, scan/runtime element, or file/library detail element is added, add a representative entry to `/ui-elements`
+* catalog examples should use exported shared components where possible; for non-exported page-local patterns, reproduce the real DOM shape and classes closely and keep catalog-specific CSS limited to layout/annotation only
+* the catalog should remain useful for comparing light and dark theme behavior, related variants, and source locations so future design consolidation work can rely on it
+
 ## 8.3 Internationalization
 
 Current translation state:

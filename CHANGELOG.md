@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add a hidden development-only UI elements catalog for reviewing frontend components, states, and layout patterns
+
+### 🐛 Bug fixes
+
+- update Starlette to remediate Host header validation security alert
+- group TV-show bonus pattern folders such as `Season 0`, `Season 00`, and custom specials folders under their show hierarchy as `Specials` [#153](https://github.com/frederikemmer/MediaLyze/issues/153)
+
 ## v0.14.0
 
 >2026-06-04

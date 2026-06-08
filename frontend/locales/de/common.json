@@ -1240,6 +1240,54 @@
       "dtsX": "DTS:X"
     }
   },
+  "uiElements": {
+    "eyebrow": "Entwicklungsreferenz",
+    "title": "UI-Elemente",
+    "subtitle": "Ein verstecktes Design-Inventar zum Vergleichen echter MediaLyze-Komponenten, lokaler Varianten, Zustände und Einsatzorte.",
+    "devOnly": "Nur Dev",
+    "sampleAction": "Beispielaktion",
+    "indexTitle": "Katalog",
+    "indexAria": "Abschnitte des UI-Elemente-Katalogs",
+    "source": "Quelle",
+    "themePreview": "Theme-Vorschau",
+    "sections": {
+      "foundation": "Design-Tokens & Typografie",
+      "headerNav": "Header & Navigation",
+      "settings": "Settings-Varianten",
+      "forms": "Formulare & Suche",
+      "buttons": "Buttons & Aktionen",
+      "panels": "Panels & Layout-Bearbeitung",
+      "tables": "Tabellen",
+      "stats": "Statistiken & Charts",
+      "runtime": "Runtime & Scan-Logs",
+      "fileLibrary": "Library & File Detail",
+      "duplicatesPathTelemetry": "Duplikate, Pfade & Telemetrie",
+      "dialogs": "Dialoge, Popover & Tooltips"
+    },
+    "descriptions": {
+      "foundation": "Zentrale Farb-Tokens, Texthierarchie und Basisflächen der App.",
+      "headerNav": "Primäre Header-Navigation, Versionslabels, Bibliothekslinks und Attention-States.",
+      "settings": "Settings-Sidebar, Quick Actions, Choice Picker und Table-View-Controls.",
+      "forms": "Inputs, Selects, Checkbox-Zeilen, strukturierte Suche, Ignore-Patterns und Quality-Controls.",
+      "buttons": "Globale Button-Varianten und seitenbezogene Aktionsbuttons direkt nebeneinander.",
+      "panels": "Wiederverwendbare Panel-Shells, Loading-/Error-Zustände, Layout-Edit-Overlays und Migrationshinweise.",
+      "tables": "Settings-Tabellen, Scan-Summary-Tabellen und die Oberfläche der virtualisierten Analyzed-Files-Tabelle.",
+      "stats": "Metrik-Karten, Verteilungslisten, Chart-Controls und Comparison-Toolbar-Varianten.",
+      "runtime": "Aktive Scan-Karten, Scan-Log-Karten, Outcome-Badges und Diagnose-Controls.",
+      "fileLibrary": "File-Detail-Navigation, Preview-Flächen, Stream-Details und Quality-Score-Zeilen.",
+      "duplicatesPathTelemetry": "Duplikat-Karten, Path-Browser-Zustände und Telemetrie-Auswahlflächen.",
+      "dialogs": "Release Notes, Create-Library-Dialoge, Filter-Popover, Quality-Popover und Tooltip-Trigger."
+    },
+    "sources": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "libraryDetail": "Library Detail",
+      "fileDetail": "File Detail",
+      "scanLogs": "Scan-Logs",
+      "releaseNotes": "Versionsverlauf",
+      "header": "Header"
+    }
+  },
   "common": {
     "close": "Schliessen",
     "yes": "Ja",

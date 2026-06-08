@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Bug, ChevronDown, ChevronRight, Download, House, Settings, X } from "lucide-react";
 import { FilePlusCorner, FileXCorner, File, FileDiff, FileExclamationPoint, FileSearchCorner, FileCheckCorner } from "lucide-react";
@@ -17,6 +17,7 @@ import { useAppData } from "../lib/app-data";
 import {
   getAllReleaseNotes,
   getCurrentReleaseNotes,
+  isDevelopmentVersion,
   isFirstOpenAfterUpdate,
   markReleaseNotesSeen,
   mergeReleaseNotes,
@@ -30,6 +31,8 @@ import { useScanJobs } from "../lib/scan-jobs";
 const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
+const UI_ELEMENTS_CLICK_WINDOW_MS = 1500;
+const UI_ELEMENTS_CLICK_COUNT = 3;
 
 const CIRCLE_CHEVRON_TRANSITION: Transition = {
   times: [0, 0.4, 1],
@@ -190,6 +193,7 @@ function ScanJobCard({
 
 export function AppShell() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { activeJobs, hasActiveJobs, stopLibrary } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
@@ -209,6 +213,7 @@ export function AppShell() {
   const [downloadState, setDownloadState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [releaseActionsMenuOpen, setReleaseActionsMenuOpen] = useState(false);
   const hadActiveJobsRef = useRef(hasActiveJobs);
+  const settingsIconClickRef = useRef({ count: 0, lastClickedAt: 0 });
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
   const latestAvailableVersion = updateStatus?.latest_version ?? null;
   const updateAvailable = APP_VERSION !== "dev" && Boolean(updateStatus?.update_available && latestAvailableVersion);
@@ -281,6 +286,27 @@ export function AppShell() {
     setShowUpdateTelemetryAttention(false);
     setReleaseActionsMenuOpen(false);
     setShowReleaseNotes(true);
+  }
+
+  function handleSettingsIconClick(event: MouseEvent<HTMLElement>) {
+    if (!isDevelopmentVersion(APP_VERSION)) {
+      return;
+    }
+
+    const now = Date.now();
+    const clickState = settingsIconClickRef.current;
+    clickState.count = now - clickState.lastClickedAt <= UI_ELEMENTS_CLICK_WINDOW_MS ? clickState.count + 1 : 1;
+    clickState.lastClickedAt = now;
+
+    if (clickState.count < UI_ELEMENTS_CLICK_COUNT) {
+      return;
+    }
+
+    clickState.count = 0;
+    clickState.lastClickedAt = 0;
+    event.preventDefault();
+    event.stopPropagation();
+    navigate("/ui-elements");
   }
 
   useEffect(() => {
@@ -376,7 +402,7 @@ export function AppShell() {
                         transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
-                    <span className="nav-link-content">
+                    <span className="nav-link-content" onClick={handleSettingsIconClick}>
                       <Settings aria-hidden="true" className="nav-icon" />
                     </span>
                   </>

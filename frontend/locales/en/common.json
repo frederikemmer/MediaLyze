@@ -1240,6 +1240,54 @@
       "dtsX": "DTS:X"
     }
   },
+  "uiElements": {
+    "eyebrow": "Development reference",
+    "title": "UI elements",
+    "subtitle": "A hidden design inventory for comparing real MediaLyze components, local variants, states, and source locations.",
+    "devOnly": "Dev only",
+    "sampleAction": "Sample action",
+    "indexTitle": "Catalog",
+    "indexAria": "UI element catalog sections",
+    "source": "Source",
+    "themePreview": "Theme preview",
+    "sections": {
+      "foundation": "Design tokens & typography",
+      "headerNav": "Header & navigation",
+      "settings": "Settings variants",
+      "forms": "Forms & search",
+      "buttons": "Buttons & actions",
+      "panels": "Panels & layout editing",
+      "tables": "Tables",
+      "stats": "Statistics & charts",
+      "runtime": "Runtime & scan logs",
+      "fileLibrary": "Library & file detail",
+      "duplicatesPathTelemetry": "Duplicates, paths & telemetry",
+      "dialogs": "Dialogs, popovers & tooltips"
+    },
+    "descriptions": {
+      "foundation": "Core color tokens, text hierarchy, and base app surfaces.",
+      "headerNav": "Primary header navigation, version labels, library links, and attention states.",
+      "settings": "Settings sidebar, quick actions, choice pickers, and table-view controls.",
+      "forms": "Inputs, selects, checkbox rows, structured search, ignore patterns, and quality controls.",
+      "buttons": "Global button variants and page-specific action buttons shown side by side.",
+      "panels": "Reusable panel shells, loading/error states, layout editing overlays, and migration notices.",
+      "tables": "Settings tables, scan summary tables, and the analyzed-files virtual table surface.",
+      "stats": "Metric cards, distribution lists, chart controls, and comparison toolbar variants.",
+      "runtime": "Active scan cards, scan log cards, outcome badges, and diagnostic controls.",
+      "fileLibrary": "File-detail navigation, preview surfaces, stream details, and quality score rows.",
+      "duplicatesPathTelemetry": "Duplicate cards, path browser states, and telemetry selection surfaces.",
+      "dialogs": "Release notes, create-library dialog shells, filter popovers, quality popovers, and tooltip triggers."
+    },
+    "sources": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "libraryDetail": "Library detail",
+      "fileDetail": "File detail",
+      "scanLogs": "Scan logs",
+      "releaseNotes": "Release notes",
+      "header": "Header"
+    }
+  },
   "common": {
     "close": "Close",
     "yes": "Yes",

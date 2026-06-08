@@ -31,10 +31,12 @@ from backend.app.models.entities import (
     ScanStatus,
     SubtitleStream,
 )
+from backend.app.schemas.app_settings import ShowSeasonRecognitionMode
 from backend.app.schemas.quality import QualityBreakdownRead
 from backend.app.services import scanner as scanner_service
 from backend.app.services.library_service import get_library_statistics
 from backend.app.services.duplicates import list_library_duplicate_groups
+from backend.app.services.media_service import get_grouped_library_series_detail, list_grouped_library_files
 from backend.app.services.pattern_recognition import default_pattern_recognition_settings, recognize_media_path
 from backend.app.services.scanner import _iter_media_files
 from backend.app.services.scanner import ScanCanceled
@@ -1365,12 +1367,131 @@ def test_scan_classifies_series_and_marks_bonus_content(tmp_path: Path, monkeypa
     assert episode.episode_number is None
     assert getattr(episode.content_category, "value", episode.content_category) == "main"
     assert getattr(bonus.content_category, "value", bonus.content_category) == "bonus"
-    assert bonus.series_id is None
+    assert bonus.series_id == episode.series_id
+    assert bonus.season_id is not None
+    assert len(series_entries) == 1
+    assert len(season_entries) == 2
+    assert sorted(season.season_number for season in season_entries) == [0, 1]
+    assert job.scan_summary["pattern_recognition"]["series_detected"] == 1
+    assert job.scan_summary["pattern_recognition"]["seasons_detected"] == 2
+    assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 2
+
+
+def test_scan_classifies_season_zero_and_double_zero_as_series_specials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    show_dir = media_dir / "Example Show"
+    season_zero_dir = show_dir / "Season 0"
+    season_double_zero_dir = show_dir / "Season 00"
+    season_zero_dir.mkdir(parents=True)
+    season_double_zero_dir.mkdir(parents=True)
+    (season_zero_dir / "S00E01 Special One.mkv").write_text("video")
+    (season_double_zero_dir / "S00E02 Special Two.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {"format_name": "matroska", "duration": "60.0", "bit_rate": "1000", "probe_score": 100},
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1)
+
+    with session_factory() as db:
+        db.add(AppSetting(key="global", value={"user_ignore_patterns": [], "default_ignore_patterns": []}))
+        library = Library(name="Shows", path=str(media_dir), type=LibraryType.series, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.commit()
+
+        job = run_scan(db, settings, library.id, "incremental")
+        files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        series_entries = db.scalars(select(MediaSeries)).all()
+        season_entries = db.scalars(select(MediaSeason)).all()
+        grouped_page = list_grouped_library_files(db, library.id, limit=50)
+        grouped_detail = get_grouped_library_series_detail(db, library.id, series_entries[0].id)
+
+    assert {getattr(media_file.content_category, "value", media_file.content_category) for media_file in files} == {"bonus"}
+    assert all(media_file.series_id is not None for media_file in files)
+    assert all(media_file.season_id is not None for media_file in files)
     assert len(series_entries) == 1
     assert len(season_entries) == 1
+    assert season_entries[0].season_number == 0
+    assert season_entries[0].title == "Specials"
+    assert {media_file.season_id for media_file in files} == {season_entries[0].id}
     assert job.scan_summary["pattern_recognition"]["series_detected"] == 1
     assert job.scan_summary["pattern_recognition"]["seasons_detected"] == 1
-    assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 1
+    assert job.scan_summary["pattern_recognition"]["episodes_classified"] == 2
+    assert grouped_page.total == 1
+    assert [item.kind for item in grouped_page.items] == ["series"]
+    assert grouped_detail is not None
+    assert grouped_detail.season_count == 1
+    assert grouped_detail.seasons[0].season_number == 0
+    assert grouped_detail.seasons[0].episode_count == 2
+    assert grouped_detail.episodes_without_season == []
+
+
+def test_scan_classifies_custom_bonus_folder_as_series_specials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media_dir = tmp_path / "library"
+    featurettes_dir = media_dir / "Example Show" / "Featurettes"
+    featurettes_dir.mkdir(parents=True)
+    (featurettes_dir / "Making Of.mkv").write_text("video")
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    payload = {
+        "format": {"format_name": "matroska", "duration": "60.0", "bit_rate": "1000", "probe_score": 100},
+        "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+    }
+    monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path, ffprobe_worker_count=1)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={
+                    "user_ignore_patterns": [],
+                    "default_ignore_patterns": [],
+                    "pattern_recognition": {
+                        "bonus_content": {
+                            "user_folder_patterns": ["*/Featurettes/*"],
+                            "default_folder_patterns": [],
+                        },
+                    },
+                },
+            )
+        )
+        library = Library(name="Shows", path=str(media_dir), type=LibraryType.series, scan_mode=ScanMode.manual, scan_config={})
+        db.add(library)
+        db.commit()
+
+        run_scan(db, settings, library.id, "incremental")
+        media_file = db.scalar(select(MediaFile))
+        season = db.scalar(select(MediaSeason))
+        grouped_page = list_grouped_library_files(db, library.id, limit=50)
+        grouped_detail = get_grouped_library_series_detail(db, library.id, media_file.series_id)
+
+    assert media_file is not None
+    assert season is not None
+    assert getattr(media_file.content_category, "value", media_file.content_category) == "bonus"
+    assert media_file.series_id is not None
+    assert media_file.season_id == season.id
+    assert season.season_number == 0
+    assert season.title == "Specials"
+    assert grouped_page.total == 1
+    assert [item.kind for item in grouped_page.items] == ["series"]
+    assert grouped_detail is not None
+    assert grouped_detail.seasons[0].season_number == 0
+    assert grouped_detail.seasons[0].episodes[0].filename == "Making Of.mkv"
 
 
 def test_recognize_media_path_accepts_season_folder_suffix_metadata() -> None:
@@ -1398,6 +1519,50 @@ def test_recognize_media_path_accepts_season_folder_suffix_metadata() -> None:
     assert with_year.season_number == 5
     assert with_year_and_tags.series_title == "SERIENNAME1"
     assert with_year_and_tags.season_number == 4
+
+
+def test_recognize_media_path_accepts_season_zero_folder_names() -> None:
+    settings = default_pattern_recognition_settings()
+
+    season_zero = recognize_media_path(
+        "Example Show/Season 0/S00E01 Special One.mkv",
+        LibraryType.series,
+        settings,
+    )
+    season_double_zero = recognize_media_path(
+        "Example Show/Season 00/S00E02 Special Two.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert season_zero.content_category == "bonus"
+    assert season_zero.series_title == "Example Show"
+    assert season_zero.season_number == 0
+    assert season_zero.season_title == "Specials"
+    assert season_zero.episode_number == 1
+    assert season_double_zero.content_category == "bonus"
+    assert season_double_zero.series_title == "Example Show"
+    assert season_double_zero.season_number == 0
+    assert season_double_zero.season_title == "Specials"
+    assert season_double_zero.episode_number == 2
+
+
+def test_recognize_media_path_accepts_season_double_zero_in_regex_mode() -> None:
+    settings = default_pattern_recognition_settings()
+    settings.show_season_patterns.recognition_mode = ShowSeasonRecognitionMode.regex
+
+    recognized = recognize_media_path(
+        "Library/Example Show/Season 00/S00E01 Special.mkv",
+        LibraryType.series,
+        settings,
+    )
+
+    assert recognized.content_category == "bonus"
+    assert recognized.series_title == "Example Show"
+    assert recognized.series_relative_path == "Library/Example Show"
+    assert recognized.season_number == 0
+    assert recognized.season_title == "Specials"
+    assert recognized.episode_number == 1
 
 
 def test_recognize_media_path_uses_configured_folder_depth_mode() -> None:
