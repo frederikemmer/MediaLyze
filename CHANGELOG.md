@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.15.0
+
+>2026-06-08
+
 ### ✨ New
 
 - add duplication comparison
@@ -14,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 - update Starlette to remediate Host header validation security alert
 - group TV-show bonus pattern folders such as `Season 0`, `Season 00`, and custom specials folders under their show hierarchy as `Specials` [#153](https://github.com/frederikemmer/MediaLyze/issues/153)
+- protect shipped quality profiles while keeping user profiles editable and selectable as defaults
 
 ## v0.14.0
 

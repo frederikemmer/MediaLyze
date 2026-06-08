@@ -28,6 +28,7 @@ class QualityProfileRead(BaseModel):
     media_type: QualityProfileMediaType
     profile: QualityProfile
     is_default: bool
+    is_builtin: bool
     created_at: UtcDateTime
     updated_at: UtcDateTime
     library_count: int = 0

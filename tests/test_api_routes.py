@@ -27,6 +27,8 @@ from backend.app.models.entities import (
     MediaFormat,
     MediaSeason,
     MediaSeries,
+    QualityProfileDefinition,
+    QualityProfileMediaType,
     ScanJob,
     ScanMode,
     ScanStatus,
@@ -142,9 +144,102 @@ def test_quality_profiles_route_seeds_defaults_and_protects_default_delete() -> 
         profiles = response.json()
         assert {profile["media_type"] for profile in profiles} == {"video", "music", "audiobook"}
         assert all(profile["is_default"] for profile in profiles)
+        assert all(profile["is_builtin"] for profile in profiles)
 
         delete_response = client.delete(f"/api/quality-profiles/{profiles[0]['id']}")
         assert delete_response.status_code == 400
+
+        update_response = client.patch(
+            f"/api/quality-profiles/{profiles[0]['id']}",
+            json={"name": "Custom default name"},
+        )
+        assert update_response.status_code == 400
+
+
+def test_quality_profiles_keep_user_default_and_refresh_builtin_defaults() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        custom_default = QualityProfileDefinition(
+            name="My active music profile",
+            media_type=QualityProfileMediaType.music,
+            profile={},
+            is_default=True,
+            is_builtin=False,
+        )
+        reserved_name_user_profile = QualityProfileDefinition(
+            name="Default audiobook",
+            media_type=QualityProfileMediaType.music,
+            profile={},
+            is_default=False,
+            is_builtin=False,
+        )
+        stale_builtin = QualityProfileDefinition(
+            name="Default video",
+            media_type=QualityProfileMediaType.video,
+            profile={},
+            is_default=True,
+            is_builtin=True,
+        )
+        db.add_all([custom_default, reserved_name_user_profile, stale_builtin])
+        db.commit()
+
+        profiles = _build_test_app(db).get("/api/quality-profiles").json()
+
+        builtins = {profile["media_type"]: profile for profile in profiles if profile["is_builtin"]}
+        assert set(builtins) == {"video", "music", "audiobook"}
+        assert builtins["video"]["profile"]["active_metrics"]
+        active_music_defaults = [
+            profile for profile in profiles if profile["media_type"] == "music" and profile["is_default"]
+        ]
+        assert [profile["name"] for profile in active_music_defaults] == ["My active music profile"]
+        assert any(profile["name"] == "Default audiobook custom" for profile in profiles)
+
+
+def test_quality_profile_names_are_global_case_insensitive_and_default_names_reserved() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        profiles = client.get("/api/quality-profiles").json()
+        video_profile = next(profile for profile in profiles if profile["media_type"] == "video")
+
+        duplicate_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": video_profile["name"].upper(),
+                "media_type": "music",
+                "profile": video_profile["profile"],
+            },
+        )
+        assert duplicate_response.status_code == 400
+
+        reserved_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": "Default audiobook",
+                "media_type": "video",
+                "profile": video_profile["profile"],
+            },
+        )
+        assert reserved_response.status_code == 400
+
+        custom_default_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": "My Video Default",
+                "media_type": "video",
+                "profile": video_profile["profile"],
+                "is_default": True,
+            },
+        )
+        assert custom_default_response.status_code == 200
+        assert custom_default_response.json()["is_default"] is True
+        assert custom_default_response.json()["is_builtin"] is False
 
 
 def test_library_update_rejects_incompatible_quality_profile() -> None:

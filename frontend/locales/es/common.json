@@ -164,7 +164,10 @@
       "duplicate": "Duplicar perfil",
       "selectProfile": "Seleccionar perfil",
       "defaultBadge": "Predeterminado",
+      "builtInBadge": "Integrado",
       "defaultDeleteHint": "Los perfiles predeterminados no se pueden eliminar.",
+      "builtInProtectedAria": "Protección de perfil predeterminado integrado",
+      "builtInProtectedHint": "Los perfiles predeterminados integrados están protegidos para las actualizaciones de la app. Duplica este perfil o crea uno nuevo para hacer cambios.",
       "name": "Nombre del perfil",
       "mediaType": "Tipo de medio",
       "addMetric": "Añadir métrica",
@@ -1086,6 +1089,7 @@
     "subtitle": "Coloca dos archivos multimedia analizados lado a lado y resalta diferencias de metadatos.",
     "comparisonTitle": "Comparación de archivos",
     "emptySelection": "Selecciona dos archivos para comparar.",
+    "noDifferences": "No se encontraron diferencias.",
     "left": "Archivo izquierdo",
     "right": "Archivo derecho",
     "yes": "Sí",
@@ -1096,6 +1100,12 @@
     "showFullRawJson": "Mostrar JSON completo",
     "hideFullRawJson": "Ocultar JSON completo",
     "swapFiles": "Intercambiar archivos comparados",
+    "removeFile": "Quitar {{filename}} de la comparación",
+    "displayMode": {
+      "label": "Seleccionar visualización de comparación",
+      "all": "Mostrar todas las categorías, metadatos y métricas",
+      "differences": "Mostrar solo diferencias"
+    },
     "search": {
       "label": "Buscar {{side}}",
       "placeholder": "Buscar nombre o ruta",

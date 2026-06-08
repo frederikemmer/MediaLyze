@@ -164,7 +164,10 @@
       "duplicate": "Profil duplizieren",
       "selectProfile": "Profil auswählen",
       "defaultBadge": "Default",
+      "builtInBadge": "Mitgeliefert",
       "defaultDeleteHint": "Default-Profile können nicht gelöscht werden.",
+      "builtInProtectedAria": "Schutz für mitgeliefertes Default-Profil",
+      "builtInProtectedHint": "Mitgelieferte Default-Profile sind für App-Updates geschützt. Dupliziere dieses Profil oder erstelle ein neues Profil, um Änderungen vorzunehmen.",
       "name": "Profilname",
       "mediaType": "Medientyp",
       "addMetric": "Metrik hinzufügen",
@@ -1086,6 +1089,7 @@
     "subtitle": "Stelle zwei analysierte Mediendateien gegenueber und hebe Metadaten-Unterschiede hervor.",
     "comparisonTitle": "Dateivergleich",
     "emptySelection": "Waehle zwei Dateien zum Vergleichen aus.",
+    "noDifferences": "Keine Unterschiede gefunden.",
     "left": "Linke Datei",
     "right": "Rechte Datei",
     "yes": "Ja",
@@ -1096,6 +1100,12 @@
     "showFullRawJson": "Vollstaendiges JSON anzeigen",
     "hideFullRawJson": "Vollstaendiges JSON ausblenden",
     "swapFiles": "Verglichene Dateien vertauschen",
+    "removeFile": "{{filename}} aus dem Vergleich entfernen",
+    "displayMode": {
+      "label": "Vergleichsanzeige auswählen",
+      "all": "Alle Kategorien, Metadaten und Metriken anzeigen",
+      "differences": "Nur Unterschiede anzeigen"
+    },
     "search": {
       "label": "{{side}} suchen",
       "placeholder": "Dateiname oder Pfad suchen",

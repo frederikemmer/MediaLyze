@@ -41,23 +41,75 @@ def media_type_for_media_file(media_file: MediaFile) -> QualityProfileMediaType:
 
 
 def ensure_default_quality_profiles(db: Session, resolution_categories: list[ResolutionCategory]) -> None:
-    existing_defaults = set(
-        db.scalars(select(QualityProfileDefinition.media_type).where(QualityProfileDefinition.is_default.is_(True))).all()
-    )
-    for media_type in QualityProfileMediaType:
-        if media_type in existing_defaults:
+    for existing_profile in db.scalars(
+        select(QualityProfileDefinition).where(QualityProfileDefinition.is_builtin.is_(False))
+    ).all():
+        reserved_media_type = _media_type_for_reserved_default_profile_name(existing_profile.name)
+        if reserved_media_type is None:
             continue
-        db.add(
-            QualityProfileDefinition(
-                name=DEFAULT_PROFILE_NAMES[media_type],
-                media_type=media_type,
-                profile=normalize_quality_profile(
-                    default_quality_profile_for_media_type(media_type.value),
-                    resolution_categories,
-                ),
-                is_default=True,
+        reserved_profile = normalize_quality_profile(
+            default_quality_profile_for_media_type(reserved_media_type.value),
+            resolution_categories,
+        )
+        if (
+            existing_profile.media_type == reserved_media_type
+            and normalize_quality_profile(existing_profile.profile, resolution_categories) == reserved_profile
+        ):
+            continue
+        existing_profile.name = _unique_profile_name(
+            db,
+            f"{existing_profile.name} custom",
+            profile_id=existing_profile.id,
+        )
+    for media_type in QualityProfileMediaType:
+        name = DEFAULT_PROFILE_NAMES[media_type]
+        default_profile = normalize_quality_profile(
+            default_quality_profile_for_media_type(media_type.value),
+            resolution_categories,
+        )
+        profile = db.scalar(
+            select(QualityProfileDefinition).where(
+                QualityProfileDefinition.media_type == media_type,
+                QualityProfileDefinition.is_builtin.is_(True),
             )
         )
+        if profile is None:
+            profile = db.scalar(
+                select(QualityProfileDefinition).where(
+                    QualityProfileDefinition.media_type == media_type,
+                    func.lower(QualityProfileDefinition.name) == name.casefold(),
+                )
+            )
+            if (
+                profile is not None
+                and normalize_quality_profile(profile.profile, resolution_categories) == default_profile
+            ):
+                profile.is_builtin = True
+            elif profile is not None:
+                profile.name = _unique_profile_name(db, f"{name} custom", profile_id=profile.id)
+                profile = None
+        if profile is None:
+            profile = QualityProfileDefinition(
+                name=name,
+                media_type=media_type,
+                profile=default_profile,
+                is_default=False,
+                is_builtin=True,
+            )
+            db.add(profile)
+            db.flush()
+        else:
+            profile.name = name
+            profile.profile = default_profile
+            profile.is_builtin = True
+        has_active_default = db.scalar(
+            select(QualityProfileDefinition.id).where(
+                QualityProfileDefinition.media_type == media_type,
+                QualityProfileDefinition.is_default.is_(True),
+            )
+        )
+        if has_active_default is None:
+            profile.is_default = True
     db.flush()
 
 
@@ -94,10 +146,11 @@ def migrate_legacy_library_quality_profiles(
         profile = imported_by_key.get(key)
         if profile is None:
             profile = QualityProfileDefinition(
-                name=_unique_profile_name(db, media_type, f"{library.name} quality"),
+                name=_unique_profile_name(db, f"{library.name} quality"),
                 media_type=media_type,
                 profile=current,
                 is_default=False,
+                is_builtin=False,
             )
             db.add(profile)
             db.flush()
@@ -125,12 +178,13 @@ def create_quality_profile(
     resolution_categories: list[ResolutionCategory],
 ) -> tuple[QualityProfileDefinition, list[int]]:
     name = _clean_name(payload.name)
-    _assert_unique_name(db, payload.media_type, name)
+    _assert_profile_name_allowed(db, name)
     profile = QualityProfileDefinition(
         name=name,
         media_type=payload.media_type,
         profile=normalize_quality_profile(payload.profile, resolution_categories),
         is_default=False,
+        is_builtin=False,
     )
     db.add(profile)
     db.flush()
@@ -152,10 +206,12 @@ def update_quality_profile(
     profile = db.get(QualityProfileDefinition, profile_id)
     if profile is None:
         return None, []
+    if profile.is_builtin and (payload.name is not None or payload.profile is not None):
+        raise ValueError("Built-in quality profiles are protected and cannot be edited")
     affected_library_ids = _affected_library_ids_for_profile(db, profile)
     if payload.name is not None:
         name = _clean_name(payload.name)
-        _assert_unique_name(db, profile.media_type, name, profile_id=profile.id)
+        _assert_profile_name_allowed(db, name, profile_id=profile.id)
         profile.name = name
     if payload.profile is not None:
         profile.profile = normalize_quality_profile(payload.profile, resolution_categories)
@@ -171,8 +227,8 @@ def delete_quality_profile(db: Session, profile_id: int) -> tuple[bool, list[int
     profile = db.get(QualityProfileDefinition, profile_id)
     if profile is None:
         return False, []
-    if profile.is_default:
-        raise ValueError("Default quality profiles cannot be deleted")
+    if profile.is_builtin:
+        raise ValueError("Built-in quality profiles are protected and cannot be deleted")
     affected_library_ids = _affected_library_ids_for_profile(db, profile)
     db.execute(update(Library).where(Library.quality_profile_id == profile.id).values(quality_profile_id=None))
     db.delete(profile)
@@ -314,33 +370,49 @@ def _clean_name(name: str) -> str:
     return candidate
 
 
-def _assert_unique_name(
+def _assert_profile_name_allowed(
     db: Session,
-    media_type: QualityProfileMediaType,
     name: str,
     *,
     profile_id: int | None = None,
 ) -> None:
     existing = db.scalar(
-        select(QualityProfileDefinition.id).where(
-            QualityProfileDefinition.media_type == media_type,
-            QualityProfileDefinition.name == name,
+        select(QualityProfileDefinition).where(
+            func.lower(QualityProfileDefinition.name) == name.casefold(),
         )
     )
-    if existing is not None and existing != profile_id:
-        raise ValueError("A quality profile with this name already exists for this media type")
+    if existing is not None and existing.id != profile_id:
+        raise ValueError("A quality profile with this name already exists")
+    if _is_reserved_default_profile_name(name) and (
+        existing is None or not existing.is_builtin or existing.id != profile_id
+    ):
+        raise ValueError("This quality profile name is reserved for built-in default profiles")
 
 
-def _unique_profile_name(db: Session, media_type: QualityProfileMediaType, base_name: str) -> str:
+def _unique_profile_name(db: Session, base_name: str, *, profile_id: int | None = None) -> str:
     existing = set(
-        db.scalars(select(QualityProfileDefinition.name).where(QualityProfileDefinition.media_type == media_type)).all()
+        name.casefold()
+        for row_id, name in db.execute(select(QualityProfileDefinition.id, QualityProfileDefinition.name)).all()
+        if row_id != profile_id
     )
-    if base_name not in existing:
+    if base_name.casefold() not in existing and not _is_reserved_default_profile_name(base_name):
         return base_name
     index = 2
-    while f"{base_name} {index}" in existing:
+    while f"{base_name} {index}".casefold() in existing or _is_reserved_default_profile_name(f"{base_name} {index}"):
         index += 1
     return f"{base_name} {index}"
+
+
+def _is_reserved_default_profile_name(name: str) -> bool:
+    return _media_type_for_reserved_default_profile_name(name) is not None
+
+
+def _media_type_for_reserved_default_profile_name(name: str) -> QualityProfileMediaType | None:
+    normalized = name.strip().casefold()
+    for media_type, reserved in DEFAULT_PROFILE_NAMES.items():
+        if normalized == reserved.casefold():
+            return media_type
+    return None
 
 
 def _profile_key(profile: dict[str, Any]) -> str:

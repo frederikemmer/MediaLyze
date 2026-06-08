@@ -27,9 +27,11 @@ import {
   History,
   House,
   Info,
+  Layers,
   LayoutPanelTop,
   ListFilter,
   LoaderCircle,
+  Lock,
   PanelBottomClose,
   PanelLeftClose,
   PanelRightClose,
@@ -52,6 +54,7 @@ import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
 import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
 import { ChevronsRightLeftIcon } from "../components/ChevronsRightLeftIcon";
+import { DeleteIcon } from "../components/DeleteIcon";
 import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { GithubIcon } from "../components/GithubIcon";
 import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
@@ -530,6 +533,34 @@ function QualityProfileFixture() {
         <button type="button" className="quality-profile-segment">
           <span>Music</span>
         </button>
+      </div>
+      <div className="quality-profile-picker is-protected">
+        <div className="quality-profile-picker-control">
+          <button type="button" className="quality-profile-picker-trigger">
+            <span className="quality-profile-picker-name">
+              <span>Default video</span>
+              <span className="badge">Default</span>
+              <span className="badge">Built-in</span>
+            </span>
+            <ChevronDown className="nav-icon" aria-hidden="true" />
+          </button>
+          <div className="quality-profile-picker-actions">
+            <TooltipTrigger
+              ariaLabel="Built-in default profile protection"
+              className="quality-profile-protected-tooltip"
+              content="Built-in default profiles are protected for app updates. Duplicate this profile or create a new one to make changes."
+              align="start"
+            >
+              <Lock className="nav-icon" aria-hidden="true" size={16} />
+            </TooltipTrigger>
+            <button type="button" className="quality-profile-action-button" disabled title="Built-in default profiles are protected for app updates.">
+              <Save className="nav-icon" aria-hidden="true" />
+            </button>
+            <button type="button" className="quality-profile-action-button" title="Duplicate profile">
+              <Copy className="nav-icon" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
       </div>
       <div className="quality-profile-metric-list">
         <div className="quality-profile-metric-item">
@@ -1040,35 +1071,35 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[1]}>
             <VariantGroup title="Header variants">
-              <VariantCard title="Primary nav icons" source={header} classes={["media-nav-icons", "icon-nav-button", "nav-active-pill"]}>
-                <div className="media-nav-icons">
-                  <a href="/" className="icon-nav-button active" aria-label="Dashboard" onClick={preventCatalogNavigation}>
-                    <span className="nav-active-pill" />
-                    <span className="nav-link-content">
-                      <House aria-hidden="true" className="nav-icon" />
-                    </span>
-                  </a>
-                  <a href="/files/compare" className="icon-nav-button" aria-label="Compare files" onClick={preventCatalogNavigation}>
-                    <span className="nav-link-content">
-                      <GitCompare aria-hidden="true" className="nav-icon" />
-                    </span>
-                  </a>
-                  <a href="/settings" className="icon-nav-button is-first-library-attention" aria-label="Settings" onClick={preventCatalogNavigation}>
-                    <span className="nav-link-content">
-                      <Settings aria-hidden="true" className="nav-icon" />
-                    </span>
-                  </a>
-                </div>
-              </VariantCard>
-              <VariantCard title="Library nav links" source={header} classes={["media-nav-libraries", "library-nav-link", "active"]}>
-                <div className="media-nav-libraries ui-elements-library-nav">
-                  <a href="/libraries/1" className="library-nav-link active" onClick={preventCatalogNavigation}>
-                    <span className="nav-active-pill" />
-                    <span className="nav-link-content">Movies</span>
-                  </a>
-                  <a href="/libraries/2" className="library-nav-link" onClick={preventCatalogNavigation}>
-                    <span className="nav-link-content">Music</span>
-                  </a>
+              <VariantCard title="Primary and library nav" source={header} classes={["media-nav-panel", "media-nav-icons", "media-nav-libraries", "library-nav-link", "icon-nav-button", "nav-active-pill"]}>
+                <div className="media-nav-panel">
+                  <div className="media-nav-icons">
+                    <a href="/" className="icon-nav-button active" aria-label="Dashboard" onClick={preventCatalogNavigation}>
+                      <span className="nav-active-pill" />
+                      <span className="nav-link-content">
+                        <House aria-hidden="true" className="nav-icon" />
+                      </span>
+                    </a>
+                    <a href="/files/compare" className="icon-nav-button" aria-label="Compare files" onClick={preventCatalogNavigation}>
+                      <span className="nav-link-content">
+                        <GitCompare aria-hidden="true" className="nav-icon" />
+                      </span>
+                    </a>
+                    <a href="/settings" className="icon-nav-button is-first-library-attention" aria-label="Settings" onClick={preventCatalogNavigation}>
+                      <span className="nav-link-content">
+                        <Settings aria-hidden="true" className="nav-icon" />
+                      </span>
+                    </a>
+                  </div>
+                  <div className="media-nav-libraries ui-elements-library-nav">
+                    <a href="/libraries/1" className="library-nav-link active" onClick={preventCatalogNavigation}>
+                      <span className="nav-active-pill" />
+                      <span className="nav-link-content">Movies</span>
+                    </a>
+                    <a href="/libraries/2" className="library-nav-link" onClick={preventCatalogNavigation}>
+                      <span className="nav-link-content">Music</span>
+                    </a>
+                  </div>
                 </div>
               </VariantCard>
               <VariantCard title="Version and update labels" source={header} classes={["app-version", "app-version-update"]}>
@@ -1361,10 +1392,26 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard title="File comparison rows" source="FileComparePage" classes={["file-compare-search-card", "file-compare-row", "has-difference", "is-identical"]} wide>
                 <div className="file-compare-page">
-                  <div className="file-compare-search-grid">
+                  <div className="file-compare-toolbar has-file-labels">
+                    <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
+                      <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
+                      <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
+                        <span className="distribution-chart-mode-button-content">
+                          <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                      <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
+                        <span className="distribution-chart-mode-button-content">
+                          <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                    </div>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.UHD.mkv">Arrival.2016.UHD.mkv</strong>
+                        <button type="button" className="file-compare-clear-file-button" aria-label="Remove Arrival.2016.UHD.mkv from comparison" title="Remove Arrival.2016.UHD.mkv from comparison">
+                          <DeleteIcon size={16} aria-hidden="true" />
+                        </button>
                       </div>
                       <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
                         <button type="button" className="search-filter-picker-button" aria-label="Filter library"><ListFilter size={18} /></button>
@@ -1388,6 +1435,9 @@ export function UiElementsPage() {
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.Remux.mkv">Arrival.2016.Remux.mkv</strong>
+                        <button type="button" className="file-compare-clear-file-button" aria-label="Remove Arrival.2016.Remux.mkv from comparison" title="Remove Arrival.2016.Remux.mkv from comparison">
+                          <DeleteIcon size={16} aria-hidden="true" />
+                        </button>
                       </div>
                       <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
                         <button type="button" className="search-filter-picker-button is-open" aria-label="Filter library"><ListFilter size={18} /></button>

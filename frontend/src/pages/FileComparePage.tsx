@@ -8,6 +8,7 @@ import {
   Funnel,
   Gauge,
   Info,
+  Layers,
   Library,
   X,
 } from "lucide-react";
@@ -22,9 +23,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
-import { AsyncPanel } from "../components/AsyncPanel";
 import { ChevronsRightLeftIcon } from "../components/ChevronsRightLeftIcon";
+import { DeleteIcon } from "../components/DeleteIcon";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
+import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import {
   api,
   type LibrarySummary,
@@ -37,6 +39,7 @@ import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, format
 import { formatHdrType } from "../lib/hdr";
 
 type CompareSide = "left" | "right";
+type CompareDisplayMode = "all" | "differences";
 
 type CompareFileState = {
   detail: MediaFileDetail | null;
@@ -97,6 +100,10 @@ function normalizedCompareValue(value: unknown): string {
     return JSON.stringify(value);
   }
   return String(value).trim().toLowerCase();
+}
+
+function compareRowHasDifference(entry: CompareRow): boolean {
+  return normalizedCompareValue(entry.leftValue) !== normalizedCompareValue(entry.rightValue);
 }
 
 function searchResultMediaTypeLabel(result: MediaFileSearchResult, t: ReturnType<typeof useTranslation>["t"]): string {
@@ -345,6 +352,7 @@ function SearchSelect({
   libraryId,
   blockedFileId,
   onChangeLibrary,
+  onClear,
   onSelect,
 }: {
   side: CompareSide;
@@ -353,6 +361,7 @@ function SearchSelect({
   libraryId: number | null;
   blockedFileId: number | null;
   onChangeLibrary: (libraryId: number | null) => void;
+  onClear: () => void;
   onSelect: (fileId: number) => void;
 }) {
   const { t } = useTranslation();
@@ -406,6 +415,16 @@ function SearchSelect({
       {selected ? (
         <div className="file-compare-search-label">
           <strong title={selectedPathTitle}>{selected.filename}</strong>
+          <button
+            type="button"
+            className="file-compare-clear-file-button"
+            aria-label={t("fileCompare.removeFile", { filename: selected.filename })}
+            data-tooltip={t("fileCompare.removeFile", { filename: selected.filename })}
+            title={t("fileCompare.removeFile", { filename: selected.filename })}
+            onClick={onClear}
+          >
+            <DeleteIcon size={16} aria-hidden="true" />
+          </button>
         </div>
       ) : null}
       <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
@@ -523,9 +542,15 @@ function SearchSelect({
   );
 }
 
-function CompareSectionView({ section }: { section: CompareSection }) {
+function CompareSectionView({
+  section,
+  showOnlyDifferences = false,
+}: {
+  section: CompareSection;
+  showOnlyDifferences?: boolean;
+}) {
   const { t } = useTranslation();
-  const changedCount = section.rows.filter((entry) => normalizedCompareValue(entry.leftValue) !== normalizedCompareValue(entry.rightValue)).length;
+  const changedCount = section.rows.filter(compareRowHasDifference).length;
   const [open, setOpen] = useState(() => changedCount > 0);
   const [showAllChapters, setShowAllChapters] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
@@ -533,10 +558,14 @@ function CompareSectionView({ section }: { section: CompareSection }) {
   const rawCopyResetTimeoutRef = useRef<number | null>(null);
   const Icon = section.icon;
   const isChaptersSection = section.id === "chapters";
-  const shouldLimitChapters = isChaptersSection && section.rows.length > CHAPTER_COMPARE_PREVIEW_LIMIT + 1;
+  const filteredRows = showOnlyDifferences ? section.rows.filter(compareRowHasDifference) : section.rows;
+  const shouldLimitChapters = isChaptersSection && filteredRows.length > CHAPTER_COMPARE_PREVIEW_LIMIT + 1;
+  const showAllChapterCount = showOnlyDifferences
+    ? filteredRows.length
+    : Math.max(0, section.rows.length - 1);
   const visibleRows = shouldLimitChapters && !showAllChapters
-    ? section.rows.slice(0, CHAPTER_COMPARE_PREVIEW_LIMIT + 1)
-    : section.rows;
+    ? filteredRows.slice(0, CHAPTER_COMPARE_PREVIEW_LIMIT + 1)
+    : filteredRows;
   const hasRawJson = Boolean(section.rawJson);
   const canCopyRawJson = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText);
 
@@ -594,7 +623,7 @@ function CompareSectionView({ section }: { section: CompareSection }) {
       {open ? (
         <div className="file-compare-row-list">
           {visibleRows.map((entry) => {
-            const changed = normalizedCompareValue(entry.leftValue) !== normalizedCompareValue(entry.rightValue);
+            const changed = compareRowHasDifference(entry);
             return (
               <div key={entry.key} className={`file-compare-row${changed ? " has-difference" : " is-identical"}`}>
                 <div className="file-compare-row-label">{entry.label}</div>
@@ -612,7 +641,7 @@ function CompareSectionView({ section }: { section: CompareSection }) {
               >
                 {showAllChapters
                   ? t("fileCompare.showLessChapters")
-                  : t("fileCompare.showAllChapters", { count: section.rows.length - 1 })}
+                  : t("fileCompare.showAllChapters", { count: showAllChapterCount })}
               </button>
             </div>
           ) : null}
@@ -670,6 +699,7 @@ export function FileComparePage() {
   const [rightState, setRightState] = useState<CompareFileState>(DEFAULT_FILE_STATE);
   const [leftLibraryFilter, setLeftLibraryFilter] = useState<number | null>(null);
   const [rightLibraryFilter, setRightLibraryFilter] = useState<number | null>(null);
+  const [displayMode, setDisplayMode] = useState<CompareDisplayMode>("all");
 
   useEffect(() => {
     if (!librariesLoaded) {
@@ -704,6 +734,17 @@ export function FileComparePage() {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set(side, String(fileId));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const clearSelectedFile = useCallback(
+    (side: CompareSide) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete(side);
         return next;
       });
     },
@@ -793,77 +834,120 @@ export function FileComparePage() {
   const loading = leftState.loading || rightState.loading;
   const error = leftState.error ?? rightState.error;
   const canCompare = Boolean(leftState.detail && rightState.detail);
+  const displayModeOptions = useMemo(
+    () => [
+      { key: "all" as const, label: t("fileCompare.displayMode.all"), icon: Layers },
+      { key: "differences" as const, label: t("fileCompare.displayMode.differences"), icon: Diff },
+    ],
+    [t],
+  );
+  const visibleSections = displayMode === "differences"
+    ? sections.filter((section) => section.rows.some(compareRowHasDifference))
+    : sections;
 
   return (
     <div className="file-compare-page">
-      <section className="panel file-compare-header">
+      <section className="panel file-compare-panel">
         <div className="panel-title-row panel-title-row-with-actions">
           <div className="file-compare-title-block">
             <h2>{t("fileCompare.title")}</h2>
             <p className="subtitle">{t("fileCompare.subtitle")}</p>
           </div>
         </div>
-        <div className="file-compare-search-grid">
-          <SearchSelect
-            side="left"
-            selected={leftState.detail}
-            libraries={libraries}
-            libraryId={leftLibraryFilter}
-            blockedFileId={rightState.detail?.id ?? null}
-            onChangeLibrary={setLeftLibraryFilter}
-            onSelect={(fileId) => updateSelectedFile("left", fileId)}
-          />
-          <button
-            type="button"
-            className="file-compare-swap-button"
-            aria-label={t("fileCompare.swapFiles")}
-            data-tooltip={t("fileCompare.swapFiles")}
-            title={t("fileCompare.swapFiles")}
-            onClick={swapSelectedFiles}
-            disabled={!leftId && !rightId}
-          >
-            <ChevronsRightLeftIcon size={22} aria-hidden="true" />
-          </button>
-          <SearchSelect
-            side="right"
-            selected={rightState.detail}
-            libraries={libraries}
-            libraryId={rightLibraryFilter}
-            blockedFileId={leftState.detail?.id ?? null}
-            onChangeLibrary={setRightLibraryFilter}
-            onSelect={(fileId) => updateSelectedFile("right", fileId)}
-          />
-        </div>
-      </section>
-
-      <AsyncPanel
-        title={t("fileCompare.comparisonTitle")}
-        loading={loading}
-        error={error}
-        className="file-compare-results-panel"
-      >
-        {!canCompare ? (
-          <div className="duplicate-panel-empty-state" role="status">
-            {t("fileCompare.emptySelection")}
-          </div>
-        ) : (
-          <>
-            <div className="file-compare-column-heads">
-              <div>
-                <strong>{leftState.detail?.filename}</strong>
-              </div>
-              <div>
-                <strong>{rightState.detail?.filename}</strong>
-              </div>
-            </div>
-            <div className="file-compare-sections">
-              {sections.map((section) => (
-                <CompareSectionView key={section.id} section={section} />
+        <div className="file-compare-body">
+          <div className={`file-compare-toolbar${leftState.detail || rightState.detail ? " has-file-labels" : ""}`}>
+            <div
+              className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
+              role="group"
+              aria-label={t("fileCompare.displayMode.label")}
+            >
+              <SlidingTogglePill
+                activeKey={displayMode}
+                className="nav-active-pill distribution-chart-mode-pill"
+              />
+              {displayModeOptions.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  data-toggle-key={key}
+                  className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
+                    displayMode === key ? " active" : ""
+                  }`}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => setDisplayMode(key)}
+                >
+                  <span className="distribution-chart-mode-button-content">
+                    <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                  </span>
+                </button>
               ))}
             </div>
-          </>
-        )}
-      </AsyncPanel>
+            <SearchSelect
+              side="left"
+              selected={leftState.detail}
+              libraries={libraries}
+              libraryId={leftLibraryFilter}
+              blockedFileId={rightState.detail?.id ?? null}
+              onChangeLibrary={setLeftLibraryFilter}
+              onClear={() => clearSelectedFile("left")}
+              onSelect={(fileId) => updateSelectedFile("left", fileId)}
+            />
+            <button
+              type="button"
+              className="file-compare-swap-button"
+              aria-label={t("fileCompare.swapFiles")}
+              data-tooltip={t("fileCompare.swapFiles")}
+              title={t("fileCompare.swapFiles")}
+              onClick={swapSelectedFiles}
+              disabled={!leftId && !rightId}
+            >
+              <ChevronsRightLeftIcon size={22} aria-hidden="true" />
+            </button>
+            <SearchSelect
+              side="right"
+              selected={rightState.detail}
+              libraries={libraries}
+              libraryId={rightLibraryFilter}
+              blockedFileId={leftState.detail?.id ?? null}
+              onChangeLibrary={setRightLibraryFilter}
+              onClear={() => clearSelectedFile("right")}
+              onSelect={(fileId) => updateSelectedFile("right", fileId)}
+            />
+          </div>
+          <div className="file-compare-results-body">
+            {loading ? (
+              <div className="panel-loader" role="status" aria-live="polite">
+                <LoaderPinwheelIcon className="panel-loader-icon" size={30} />
+                <span>{t("panel.loading")}</span>
+              </div>
+            ) : null}
+            {error ? <div className="alert">{error}</div> : null}
+            {!loading && !error && !canCompare ? (
+              <div className="duplicate-panel-empty-state" role="status">
+                {t("fileCompare.emptySelection")}
+              </div>
+            ) : null}
+            {!loading && !error && canCompare ? (
+              visibleSections.length > 0 ? (
+                <div className="file-compare-sections">
+                  {visibleSections.map((section) => (
+                    <CompareSectionView
+                      key={section.id}
+                      section={section}
+                      showOnlyDifferences={displayMode === "differences"}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="duplicate-panel-empty-state" role="status">
+                  {t("fileCompare.noDifferences")}
+                </div>
+              )
+            ) : null}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

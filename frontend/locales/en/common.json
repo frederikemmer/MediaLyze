@@ -164,7 +164,10 @@
       "duplicate": "Duplicate profile",
       "selectProfile": "Select profile",
       "defaultBadge": "Default",
+      "builtInBadge": "Built-in",
       "defaultDeleteHint": "Default profiles cannot be deleted.",
+      "builtInProtectedAria": "Built-in default profile protection",
+      "builtInProtectedHint": "Built-in default profiles are protected for app updates. Duplicate this profile or create a new one to make changes.",
       "name": "Profile name",
       "mediaType": "Media type",
       "addMetric": "Add metric",
@@ -1086,6 +1089,7 @@
     "subtitle": "Place two analyzed media files side by side and highlight metadata differences.",
     "comparisonTitle": "File comparison",
     "emptySelection": "Select two files to compare.",
+    "noDifferences": "No differences found.",
     "left": "Left file",
     "right": "Right file",
     "yes": "Yes",
@@ -1096,6 +1100,12 @@
     "showFullRawJson": "Show full JSON",
     "hideFullRawJson": "Hide full JSON",
     "swapFiles": "Swap compared files",
+    "removeFile": "Remove {{filename}} from comparison",
+    "displayMode": {
+      "label": "Select comparison display",
+      "all": "Show all categories, metadata, and metrics",
+      "differences": "Show differences only"
+    },
     "search": {
       "label": "Search {{side}}",
       "placeholder": "Search filename or path",

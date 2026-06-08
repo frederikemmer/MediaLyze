@@ -11,6 +11,7 @@ import {
   DatabaseSearch,
   FingerprintPattern,
   History,
+  Lock,
   Plus,
   Proportions,
   Radio,
@@ -1143,7 +1144,7 @@ export function LibrariesPage() {
 
   function updateQualityProfileDraftProfile(transform: (profile: QualityProfile) => QualityProfile) {
     setQualityProfileDraft((current) =>
-      current ? { ...current, profile: transform(cloneQualityProfile(current.profile)) } : current,
+      current && !current.is_builtin ? { ...current, profile: transform(cloneQualityProfile(current.profile)) } : current,
     );
   }
 
@@ -1187,7 +1188,7 @@ export function LibrariesPage() {
   }
 
   async function saveQualityProfileDraft() {
-    if (!qualityProfileDraft) {
+    if (!qualityProfileDraft || qualityProfileDraft.is_builtin) {
       return;
     }
     setQualityProfileSaving(true);
@@ -1211,7 +1212,7 @@ export function LibrariesPage() {
   }
 
   async function deleteSelectedQualityProfile() {
-    if (!qualityProfileDraft || qualityProfileDraft.is_default) {
+    if (!qualityProfileDraft || qualityProfileDraft.is_builtin) {
       return;
     }
     setQualityProfileSaving(true);
@@ -3512,6 +3513,7 @@ export function LibrariesPage() {
     optionLabels?: Map<string, string>,
     closeOnSelect = true,
     includeHiddenLabel = true,
+    disabled = false,
   ) {
     const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
     const displayOptions = [...new Set([...options, ...values])];
@@ -3524,6 +3526,8 @@ export function LibrariesPage() {
             className={`quality-picker-field${open ? " is-open" : ""}`}
             aria-label={label}
             aria-expanded={open}
+            disabled={disabled}
+            title={disabled ? t("libraries.qualityProfiles.builtInProtectedHint") : undefined}
             onClick={() => toggleQualityPicker(libraryId, fieldKey)}
           >
             <div className="quality-picker-values">
@@ -3538,7 +3542,7 @@ export function LibrariesPage() {
               )}
             </div>
           </button>
-          {open ? (
+          {open && !disabled ? (
             <div className={`search-filter-picker-popover quality-picker-popover ${popoverClassName}`.trim()}>
               {customEntry ? (
                 <div className="quality-picker-custom-entry">
@@ -3604,6 +3608,7 @@ export function LibrariesPage() {
     value: T,
     options: Array<{ value: T; label: string; disabled?: boolean }>,
     onSelect: (value: T) => void,
+    disabled = false,
   ) {
     const open = qualityPickerOpenKey === qualityPickerKey(libraryId, fieldKey);
     const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
@@ -3616,12 +3621,14 @@ export function LibrariesPage() {
           className={`settings-choice-picker-field${open ? " is-open" : ""}`}
           aria-label={label}
           aria-expanded={open}
+          disabled={disabled}
+          title={disabled ? t("libraries.qualityProfiles.builtInProtectedHint") : undefined}
           onClick={() => toggleQualityPicker(libraryId, fieldKey)}
         >
           <span className="settings-choice-picker-value">{selectedLabel}</span>
           <ChevronDown aria-hidden="true" className="nav-icon settings-choice-picker-chevron" />
         </button>
-        {open ? (
+        {open && !disabled ? (
           <div className="search-filter-picker-popover quality-picker-popover settings-choice-picker-popover">
             {options.map((option) => {
               const isSelected = option.value === value;
@@ -3735,6 +3742,7 @@ export function LibrariesPage() {
     options: string[],
     onChange: (value: string) => void,
     labels?: Map<string, string>,
+    disabled = false,
   ) {
     return (
       <div className="quality-profile-boundary-field">
@@ -3746,6 +3754,7 @@ export function LibrariesPage() {
           value,
           options.map((option) => ({ value: option, label: labels?.get(option) ?? option })),
           onChange,
+          disabled,
         )}
       </div>
     );
@@ -3756,6 +3765,7 @@ export function LibrariesPage() {
     value: number,
     step: string,
     onChange: (value: number) => void,
+    disabled = false,
   ) {
     return (
       <label className="quality-profile-boundary-field">
@@ -3766,6 +3776,8 @@ export function LibrariesPage() {
           min={0}
           step={step}
           value={value}
+          disabled={disabled}
+          title={disabled ? t("libraries.qualityProfiles.builtInProtectedHint") : undefined}
           onChange={(event) => onChange(Number(event.target.value))}
         />
       </label>
@@ -3783,6 +3795,7 @@ export function LibrariesPage() {
 
   function renderQualityProfileMetricSettings(draft: QualityProfileDefinition, metric: string) {
     const pickerScope = -100000 - draft.id;
+    const isBuiltInProtected = draft.is_builtin;
     if (metric === "resolution") {
       const category = draft.profile.resolution;
       const minimumValue = String(category.minimum);
@@ -3798,6 +3811,7 @@ export function LibrariesPage() {
             resolutionOptionIds.filter((option) => ranks[option] <= ranks[idealValue]),
             (value) => updateQualityProfileOrderedBoundary("resolution", "minimum", value),
             resolutionOptionLabels,
+            isBuiltInProtected,
           )}
           {renderQualityProfileSelectField(
             `profile:${draft.id}:resolution:ideal`,
@@ -3806,6 +3820,7 @@ export function LibrariesPage() {
             resolutionOptionIds.filter((option) => ranks[option] >= ranks[minimumValue] && ranks[option] <= ranks[maximumValue]),
             (value) => updateQualityProfileOrderedBoundary("resolution", "ideal", value),
             resolutionOptionLabels,
+            isBuiltInProtected,
           )}
           {renderQualityProfileSelectField(
             `profile:${draft.id}:resolution:maximum`,
@@ -3814,6 +3829,7 @@ export function LibrariesPage() {
             resolutionOptionIds.filter((option) => ranks[option] >= ranks[idealValue]),
             (value) => updateQualityProfileOrderedBoundary("resolution", "maximum", value),
             resolutionOptionLabels,
+            isBuiltInProtected,
           )}
         </div>
       );
@@ -3842,6 +3858,7 @@ export function LibrariesPage() {
               labels,
               false,
               false,
+              isBuiltInProtected,
             ),
           )}
           {renderQualityProfileBoundaryPicker(
@@ -3860,6 +3877,7 @@ export function LibrariesPage() {
               labels,
               false,
               false,
+              isBuiltInProtected,
             ),
           )}
         </div>
@@ -3883,6 +3901,7 @@ export function LibrariesPage() {
             options.filter((option) => ranks[option] <= ranks[idealValue]),
             (value) => updateQualityProfileOrderedBoundary(metric, "minimum", value),
             labels,
+            isBuiltInProtected,
           )}
           {renderQualityProfileSelectField(
             `profile:${draft.id}:${metric}:ideal`,
@@ -3891,6 +3910,7 @@ export function LibrariesPage() {
             options.filter((option) => ranks[option] >= ranks[minimumValue] && (!hasMaximum || ranks[option] <= ranks[maximumValue])),
             (value) => updateQualityProfileOrderedBoundary(metric, "ideal", value),
             labels,
+            isBuiltInProtected,
           )}
           {hasMaximum ? (
             renderQualityProfileSelectField(
@@ -3900,6 +3920,7 @@ export function LibrariesPage() {
               options.filter((option) => ranks[option] >= ranks[idealValue]),
               (value) => updateQualityProfileOrderedBoundary(metric, "maximum", value),
               labels,
+              isBuiltInProtected,
             )
           ) : null}
         </div>
@@ -3916,7 +3937,7 @@ export function LibrariesPage() {
               rawVisualDensityToGbPerHour(Number(category.maximum)),
             );
             updateQualityProfileMetric("visual_density", bounds);
-          })}
+          }, isBuiltInProtected)}
           {renderQualityProfileNumberField(t("libraries.quality.idealGbPerHour"), rawVisualDensityToGbPerHour(Number(category.ideal)), "0.1", (value) => {
             const bounds = normalizeVisualDensityGbPerHourBounds(
               rawVisualDensityToGbPerHour(Number(category.minimum)),
@@ -3924,7 +3945,7 @@ export function LibrariesPage() {
               rawVisualDensityToGbPerHour(Number(category.maximum)),
             );
             updateQualityProfileMetric("visual_density", bounds);
-          })}
+          }, isBuiltInProtected)}
           {renderQualityProfileNumberField(t("libraries.quality.maximumGbPerHour"), rawVisualDensityToGbPerHour(Number(category.maximum)), "0.1", (value) => {
             const bounds = normalizeVisualDensityGbPerHourBounds(
               rawVisualDensityToGbPerHour(Number(category.minimum)),
@@ -3932,7 +3953,7 @@ export function LibrariesPage() {
               value,
             );
             updateQualityProfileMetric("visual_density", bounds);
-          })}
+          }, isBuiltInProtected)}
         </div>
       );
     }
@@ -3942,12 +3963,15 @@ export function LibrariesPage() {
         <div className="quality-profile-metric-settings-grid">
           {renderQualityProfileNumberField(t("libraries.quality.minimum"), Number(category?.minimum ?? 0), "1", (value) =>
             updateQualityProfileMetric(metric, { minimum: Math.max(0, Math.round(value)) }),
+            isBuiltInProtected,
           )}
           {renderQualityProfileNumberField(t("libraries.quality.ideal"), Number(category?.ideal ?? 0), "1", (value) =>
             updateQualityProfileMetric(metric, { ideal: Math.max(0, Math.round(value)) }),
+            isBuiltInProtected,
           )}
           {renderQualityProfileNumberField(t("libraries.quality.maximum"), Number(category?.maximum ?? 0), "1", (value) =>
             updateQualityProfileMetric(metric, { maximum: Math.max(0, Math.round(value)) }),
+            isBuiltInProtected,
           )}
         </div>
       );
@@ -3971,6 +3995,7 @@ export function LibrariesPage() {
               undefined,
               false,
               false,
+              isBuiltInProtected,
             ),
           )}
           {renderQualityProfileBoundaryPicker(
@@ -3989,6 +4014,7 @@ export function LibrariesPage() {
               undefined,
               false,
               false,
+              isBuiltInProtected,
             ),
           )}
         </div>
@@ -4005,6 +4031,8 @@ export function LibrariesPage() {
             String(category.minimum),
             options,
             (value) => updateQualityProfileMetric(metric, { minimum: value }),
+            undefined,
+            isBuiltInProtected,
           )}
           {renderQualityProfileSelectField(
             `profile:${draft.id}:${metric}:ideal`,
@@ -4012,6 +4040,8 @@ export function LibrariesPage() {
             String(category.ideal),
             options,
             (value) => updateQualityProfileMetric(metric, { ideal: value }),
+            undefined,
+            isBuiltInProtected,
           )}
         </div>
       );
@@ -4498,7 +4528,10 @@ export function LibrariesPage() {
     const visibleProfiles = qualityProfiles.filter((profile) => profile.media_type === activeQualityProfileMediaType);
     const draft = qualityProfileDraft;
     const selectedPersistedProfile = draft ? qualityProfiles.find((profile) => profile.id === draft.id) ?? null : null;
-    const hasUnsavedQualityProfileChanges = hasQualityProfileDraftChanges(draft, selectedPersistedProfile);
+    const isBuiltInProtected = Boolean(draft?.is_builtin);
+    const builtInProtectedHint = t("libraries.qualityProfiles.builtInProtectedHint");
+    const hasUnsavedQualityProfileChanges =
+      !isBuiltInProtected && hasQualityProfileDraftChanges(draft, selectedPersistedProfile);
     const draftMetrics = draft ? activeQualityMetrics(draft.profile) : [];
     const availableMetrics = QUALITY_METRICS_BY_MEDIA_TYPE[activeQualityProfileMediaType].filter(
       (metric) => !draftMetrics.includes(metric),
@@ -4552,7 +4585,7 @@ export function LibrariesPage() {
             ))}
           </div>
           {draft ? (
-            <div className="quality-profile-picker">
+            <div className={`quality-profile-picker${isBuiltInProtected ? " is-protected" : ""}`}>
               <div className="quality-profile-picker-control">
                 {isRenamingQualityProfile ? (
                   <input
@@ -4562,6 +4595,8 @@ export function LibrariesPage() {
                     aria-label={t("libraries.qualityProfiles.name")}
                     type="text"
                     value={draft.name}
+                    disabled={isBuiltInProtected}
+                    title={isBuiltInProtected ? builtInProtectedHint : undefined}
                     onChange={(event) => setQualityProfileDraft({ ...draft, name: event.target.value })}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
@@ -4587,11 +4622,22 @@ export function LibrariesPage() {
                     <span className="quality-profile-picker-name">
                       <span>{draft.name}</span>
                       {draft.is_default ? <span className="badge">{t("libraries.qualityProfiles.defaultBadge")}</span> : null}
+                      {draft.is_builtin ? <span className="badge">{t("libraries.qualityProfiles.builtInBadge")}</span> : null}
                     </span>
                     <ChevronDown aria-hidden="true" className="nav-icon" />
                   </button>
                 )}
                 <div className="quality-profile-picker-actions">
+                  {isBuiltInProtected ? (
+                    <TooltipTrigger
+                      ariaLabel={t("libraries.qualityProfiles.builtInProtectedAria")}
+                      className="quality-profile-protected-tooltip"
+                      content={builtInProtectedHint}
+                      align="start"
+                    >
+                      <Lock aria-hidden="true" className="nav-icon" size={16} />
+                    </TooltipTrigger>
+                  ) : null}
                   {hasUnsavedQualityProfileChanges ? (
                     <button
                       type="button"
@@ -4607,8 +4653,8 @@ export function LibrariesPage() {
                   <button
                     type="button"
                     className="quality-profile-action-button"
-                    disabled={qualityProfileSaving}
-                    title={t("libraries.qualityProfiles.rename")}
+                    disabled={isBuiltInProtected || qualityProfileSaving}
+                    title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.rename")}
                     aria-label={t("libraries.qualityProfiles.rename")}
                     onClick={() => {
                       setQualityProfilePickerOpen(false);
@@ -4640,8 +4686,8 @@ export function LibrariesPage() {
                   <button
                     type="button"
                     className="quality-profile-action-button"
-                    disabled={draft.is_default || qualityProfileSaving}
-                    title={draft.is_default ? t("libraries.qualityProfiles.defaultDeleteHint") : t("libraries.qualityProfiles.delete")}
+                    disabled={isBuiltInProtected || qualityProfileSaving}
+                    title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.delete")}
                     aria-label={t("libraries.qualityProfiles.delete")}
                     onClick={() => void deleteSelectedQualityProfile()}
                   >
@@ -4680,6 +4726,8 @@ export function LibrariesPage() {
                       <select
                         className="settings-choice-input"
                         value=""
+                        disabled={isBuiltInProtected}
+                        title={isBuiltInProtected ? builtInProtectedHint : undefined}
                         aria-label={t("libraries.qualityProfiles.addMetric")}
                         onChange={(event) => {
                           const metric = event.target.value;
@@ -4769,8 +4817,9 @@ export function LibrariesPage() {
                               step={1}
                               inputMode="numeric"
                               aria-label={t("libraries.qualityProfiles.weightHintAria")}
-                              title={t("libraries.qualityProfiles.weightHint")}
                               value={category?.weight ?? 0}
+                              disabled={isBuiltInProtected}
+                              title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.weightHint")}
                               onChange={(event) => {
                                 const weight = Math.max(0, Math.min(10, Math.trunc(Number(event.target.value) || 0)));
                                 updateQualityProfileDraftProfile((profile) => ({
@@ -4787,7 +4836,8 @@ export function LibrariesPage() {
                             type="button"
                             className="secondary icon-only-button quality-profile-metric-remove-button"
                             aria-label={t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
-                            title={t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
+                            title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
+                            disabled={isBuiltInProtected}
                             onClick={() => updateQualityProfileDraftProfile((profile) => setQualityMetricActive(profile, metric, false))}
                           >
                             <RemoveIcon aria-hidden="true" className="nav-icon" size={18} />

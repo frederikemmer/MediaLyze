@@ -214,6 +214,35 @@ describe("FileComparePage", () => {
     expect(screen.getByRole("button", { name: "Video streams" })).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("can show only differing comparison rows without the old comparison header", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrary(1, "Movies")]);
+    vi.spyOn(api, "file").mockImplementation(async (id) =>
+      Number(id) === 1 ? createFile(1) : createFile(2, { filename: "File-2.mkv", size_bytes: 12_000_000_000 }),
+    );
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue({
+      id: 1,
+      score: 8,
+      score_raw: 82,
+      breakdown: { score: 8, score_raw: 82, categories: [] },
+    });
+
+    const { container } = renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Compare files" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "File comparison" })).not.toBeInTheDocument();
+    expect(screen.getByText("Resolution")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show differences only" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".file-compare-display-button.active")?.getAttribute("aria-label")).toBe(
+        "Show differences only",
+      );
+    });
+    expect(screen.queryByText("Resolution")).not.toBeInTheDocument();
+    expect(screen.getByText("Size")).toBeInTheDocument();
+  });
+
   it("swaps the compared file sides", async () => {
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrary(1, "Movies")]);
@@ -233,6 +262,32 @@ describe("FileComparePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Swap compared files" }));
     await waitFor(() =>
       expect(screen.getByLabelText("current path")).toHaveTextContent("/files/compare?left=2&right=1"),
+    );
+  });
+
+  it("removes selected files from either comparison side", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrary(1, "Movies")]);
+    vi.spyOn(api, "file").mockImplementation(async (id) =>
+      Number(id) === 1 ? createFile(1) : createFile(2, { filename: "File-2.mkv" }),
+    );
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue({
+      id: 1,
+      score: 8,
+      score_raw: 82,
+      breakdown: { score: 8, score_raw: 82, categories: [] },
+    });
+
+    renderPage();
+
+    expect(await screen.findByLabelText("current path")).toHaveTextContent("/files/compare?left=1&right=2");
+    fireEvent.click(screen.getByRole("button", { name: "Remove File-1.mkv from comparison" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("current path")).toHaveTextContent("/files/compare?right=2"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove File-2.mkv from comparison" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("current path")).toHaveTextContent("/files/compare"),
     );
   });
 
@@ -294,7 +349,7 @@ describe("FileComparePage", () => {
     });
 
     await waitFor(() => expect(searchSpy).toHaveBeenCalledWith(expect.objectContaining({ query: "copy", libraryId: 2 })));
-    const alreadySelectedResult = await screen.findByRole("button", { name: /File-1.mkv/ });
+    const alreadySelectedResult = await screen.findByTitle("Already selected on the other side.");
     expect(alreadySelectedResult).toBeDisabled();
     expect(alreadySelectedResult).toHaveAttribute("title", "Already selected on the other side.");
     expect(await screen.findByText("2.0 KB - Video - Archive")).toBeInTheDocument();

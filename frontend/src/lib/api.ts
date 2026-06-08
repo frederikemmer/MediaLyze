@@ -270,6 +270,7 @@ export type QualityProfileDefinition = {
   media_type: QualityProfileMediaType;
   profile: QualityProfile;
   is_default: boolean;
+  is_builtin: boolean;
   created_at: string;
   updated_at: string;
   library_count: number;
