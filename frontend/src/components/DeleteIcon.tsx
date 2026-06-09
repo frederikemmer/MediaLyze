@@ -1,15 +1,16 @@
-import { motion, useAnimation, type Transition, type Variants } from "motion/react";
-import type { HTMLAttributes, MouseEvent } from "react";
+import type { Transition, Variants } from "motion/react";
+import { motion, useAnimation } from "motion/react";
+import type { HTMLAttributes, MouseEvent as ReactMouseEvent } from "react";
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 
-export type DeleteIconHandle = {
+export interface DeleteIconHandle {
   startAnimation: () => void;
   stopAnimation: () => void;
-};
+}
 
-type DeleteIconProps = HTMLAttributes<HTMLSpanElement> & {
+interface DeleteIconProps extends HTMLAttributes<HTMLDivElement> {
   size?: number;
-};
+}
 
 const LID_VARIANTS: Variants = {
   normal: { y: 0 },
@@ -23,20 +24,21 @@ const SPRING_TRANSITION: Transition = {
 };
 
 export const DeleteIcon = forwardRef<DeleteIconHandle, DeleteIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 20, ...props }, ref) => {
+  ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
     const controls = useAnimation();
     const isControlledRef = useRef(false);
 
     useImperativeHandle(ref, () => {
       isControlledRef.current = true;
+
       return {
-        startAnimation: () => controls.start("animate"),
-        stopAnimation: () => controls.start("normal"),
+        startAnimation: () => void controls.start("animate"),
+        stopAnimation: () => void controls.start("normal"),
       };
     });
 
     const handleMouseEnter = useCallback(
-      (event: MouseEvent<HTMLSpanElement>) => {
+      (event: ReactMouseEvent<HTMLDivElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(event);
           return;
@@ -47,7 +49,7 @@ export const DeleteIcon = forwardRef<DeleteIconHandle, DeleteIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (event: MouseEvent<HTMLSpanElement>) => {
+      (event: ReactMouseEvent<HTMLDivElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(event);
           return;
@@ -58,7 +60,7 @@ export const DeleteIcon = forwardRef<DeleteIconHandle, DeleteIconProps>(
     );
 
     return (
-      <span
+      <div
         className={className}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -75,7 +77,11 @@ export const DeleteIcon = forwardRef<DeleteIconHandle, DeleteIconProps>(
           width={size}
           xmlns="http://www.w3.org/2000/svg"
         >
-          <motion.g animate={controls} transition={SPRING_TRANSITION} variants={LID_VARIANTS}>
+          <motion.g
+            animate={controls}
+            transition={SPRING_TRANSITION}
+            variants={LID_VARIANTS}
+          >
             <path d="M3 6h18" />
             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
           </motion.g>
@@ -113,7 +119,7 @@ export const DeleteIcon = forwardRef<DeleteIconHandle, DeleteIconProps>(
             y2="17"
           />
         </svg>
-      </span>
+      </div>
     );
   },
 );

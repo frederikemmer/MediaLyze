@@ -270,6 +270,7 @@ export type QualityProfileDefinition = {
   media_type: QualityProfileMediaType;
   profile: QualityProfile;
   is_default: boolean;
+  is_builtin: boolean;
   created_at: string;
   updated_at: string;
   library_count: number;
@@ -606,6 +607,29 @@ export type MediaFileTablePage = {
   next_cursor: string | null;
   has_more: boolean;
   items: MediaFileRow[];
+};
+
+export type MediaFileSearchResult = {
+  id: number;
+  library_id: number;
+  library_name: string;
+  library_type: LibraryType;
+  filename: string;
+  relative_path: string;
+  size_bytes: number;
+  container: string | null;
+  duration: number | null;
+  quality_score: number;
+  video_codec: string | null;
+  resolution: string | null;
+  hdr_type: string | null;
+};
+
+export type MediaFileSearchResponse = {
+  query: string;
+  library_id: number | null;
+  limit: number;
+  items: MediaFileSearchResult[];
 };
 
 export type MediaFileDetail = MediaFileRow &
@@ -1310,6 +1334,22 @@ export const api = {
     request<MediaFileTablePage>(buildLibraryFilesPath(id, params), {
       signal: params?.signal,
     }),
+  fileSearch: (params?: { query?: string; libraryId?: number | null; limit?: number; signal?: AbortSignal }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.query) {
+      searchParams.set("query", params.query);
+    }
+    if (params?.libraryId) {
+      searchParams.set("library_id", String(params.libraryId));
+    }
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    const query = searchParams.toString();
+    return request<MediaFileSearchResponse>(`/files/search${query ? `?${query}` : ""}`, {
+      signal: params?.signal,
+    });
+  },
   libraryGroupedFiles: (id: string | number, params?: LibraryFilesRequestParams) =>
     request<GroupedMediaTablePage>(buildLibraryFilesPath(id, params, "/files/grouped"), {
       signal: params?.signal,

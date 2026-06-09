@@ -57,6 +57,9 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "created_at": "ALTER TABLE libraries ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "updated_at": "ALTER TABLE libraries ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
     },
+    "quality_profiles": {
+        "is_builtin": "ALTER TABLE quality_profiles ADD COLUMN is_builtin BOOLEAN NOT NULL DEFAULT 0",
+    },
     "media_files": {
         "last_seen_at": "ALTER TABLE media_files ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "last_analyzed_at": "ALTER TABLE media_files ADD COLUMN last_analyzed_at DATETIME",

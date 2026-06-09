@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "libraries": "Settings",
     "homeAria": "Home",
+    "compareAria": "Compare files",
     "settingsAria": "Settings"
   },
   "scanBanner": {
@@ -163,7 +164,10 @@
       "duplicate": "Duplicate profile",
       "selectProfile": "Select profile",
       "defaultBadge": "Default",
+      "builtInBadge": "Built-in",
       "defaultDeleteHint": "Default profiles cannot be deleted.",
+      "builtInProtectedAria": "Built-in default profile protection",
+      "builtInProtectedHint": "Built-in default profiles are protected for app updates. Duplicate this profile or create a new one to make changes.",
       "name": "Profile name",
       "mediaType": "Media type",
       "addMetric": "Add metric",
@@ -515,6 +519,8 @@
   },
   "libraryDetail": {
     "scanInProgress": "Scan in progress",
+    "quickScan": "Quick scan",
+    "quickScanError": "Quick scan failed: {{message}}",
     "loading": "Loading library…",
     "libraryPathAria": "Library path",
     "files": "Files",
@@ -748,6 +754,8 @@
       "emptyView": "No duplicate groups match the current view.",
       "suppressedBadge": "Hidden",
       "openFileDetailAria": "Open details for {{filename}}",
+      "compareFiles": "Compare duplicate files",
+      "compareFilesUnavailable": "At least two files are required for comparison",
       "markNotDuplicate": "Mark as not duplicate",
       "restoreDuplicate": "Restore duplicate group",
       "suppressFailed": "Could not mark the duplicate group as not duplicate.",
@@ -994,6 +1002,7 @@
       "label": "File detail menu",
       "mobileLabel": "Mobile file detail menu",
       "title": "Details",
+      "back": "Back",
       "overview": "Overview",
       "collapse": "Collapse file detail menu",
       "expand": "Expand file detail menu",
@@ -1073,6 +1082,60 @@
         "quality_recompute": "Quality",
         "history_reconstruction": "Reconstructed"
       }
+    }
+  },
+  "fileCompare": {
+    "title": "Compare files",
+    "subtitle": "Place two analyzed media files side by side and highlight metadata differences.",
+    "comparisonTitle": "File comparison",
+    "emptySelection": "Select two files to compare.",
+    "noDifferences": "No differences found.",
+    "left": "Left file",
+    "right": "Right file",
+    "third": "Third file",
+    "fourth": "Fourth file",
+    "yes": "Yes",
+    "no": "No",
+    "changedCount": "{{count}} changed",
+    "showAllChapters": "Show all {{count}} chapters",
+    "showLessChapters": "Show less",
+    "showFullRawJson": "Show full JSON",
+    "hideFullRawJson": "Hide full JSON",
+    "swapFiles": "Swap compared files",
+    "removeFile": "Remove {{filename}} from comparison",
+    "displayMode": {
+      "label": "Select comparison display",
+      "all": "Show all categories, metadata, and metrics",
+      "differences": "Show differences only"
+    },
+    "columnCount": {
+      "label": "Select comparison columns",
+      "2": "2 columns",
+      "3": "3 columns",
+      "4": "4 columns"
+    },
+    "search": {
+      "label": "Search {{side}}",
+      "placeholder": "Search filename or path",
+      "searchAria": "Search files",
+      "clear": "Clear file search",
+      "empty": "No files found.",
+      "alreadySelected": "Already selected on the other side.",
+      "libraryFilterAria": "Filter search by library",
+      "allLibraries": "All libraries",
+      "filteredBy": "Filtered by {{library}}"
+    },
+    "rows": {
+      "filename": "Filename",
+      "library": "Library ID",
+      "rawQuality": "Raw quality",
+      "streamCount": "Stream count",
+      "stream": "Stream {{number}}",
+      "externalSubtitleCount": "External subtitles",
+      "externalSubtitlePaths": "External subtitle paths",
+      "chapter": "Chapter {{number}}",
+      "rawJsonPresent": "Raw JSON present",
+      "rawJsonKeys": "Raw JSON keys"
     }
   },
   "pathBrowser": {
@@ -1187,6 +1250,11 @@
       "video_codec": "Video codec",
       "audio_channels": "Audio channels",
       "audio_codec": "Audio codec",
+      "audio_bitrate": "Audio bitrate",
+      "sample_rate": "Sample rate",
+      "music_tags": "Music tags",
+      "audiobook_tags": "Audiobook tags",
+      "audiobook_chapters": "Audiobook chapters",
       "dynamic_range": "Dynamic range",
       "language_preferences": "Language preferences"
     }
@@ -1238,6 +1306,54 @@
     "spatialAudio": {
       "dolbyAtmos": "Dolby Atmos",
       "dtsX": "DTS:X"
+    }
+  },
+  "uiElements": {
+    "eyebrow": "Development reference",
+    "title": "UI elements",
+    "subtitle": "A hidden design inventory for comparing real MediaLyze components, local variants, states, and source locations.",
+    "devOnly": "Dev only",
+    "sampleAction": "Sample action",
+    "indexTitle": "Catalog",
+    "indexAria": "UI element catalog sections",
+    "source": "Source",
+    "themePreview": "Theme preview",
+    "sections": {
+      "foundation": "Design tokens & typography",
+      "headerNav": "Header & navigation",
+      "settings": "Settings variants",
+      "forms": "Forms & search",
+      "buttons": "Buttons & actions",
+      "panels": "Panels & layout editing",
+      "tables": "Tables",
+      "stats": "Statistics & charts",
+      "runtime": "Runtime & scan logs",
+      "fileLibrary": "Library & file detail",
+      "duplicatesPathTelemetry": "Duplicates, paths & telemetry",
+      "dialogs": "Dialogs, popovers & tooltips"
+    },
+    "descriptions": {
+      "foundation": "Core color tokens, text hierarchy, and base app surfaces.",
+      "headerNav": "Primary header navigation, version labels, library links, and attention states.",
+      "settings": "Settings sidebar, quick actions, choice pickers, and table-view controls.",
+      "forms": "Inputs, selects, checkbox rows, structured search, ignore patterns, and quality controls.",
+      "buttons": "Global button variants and page-specific action buttons shown side by side.",
+      "panels": "Reusable panel shells, loading/error states, layout editing overlays, and migration notices.",
+      "tables": "Settings tables, scan summary tables, and the analyzed-files virtual table surface.",
+      "stats": "Metric cards, distribution lists, chart controls, and comparison toolbar variants.",
+      "runtime": "Active scan cards, scan log cards, outcome badges, and diagnostic controls.",
+      "fileLibrary": "File-detail navigation, preview surfaces, stream details, and quality score rows.",
+      "duplicatesPathTelemetry": "Duplicate cards, path browser states, and telemetry selection surfaces.",
+      "dialogs": "Release notes, create-library dialog shells, filter popovers, quality popovers, and tooltip triggers."
+    },
+    "sources": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "libraryDetail": "Library detail",
+      "fileDetail": "File detail",
+      "scanLogs": "Scan logs",
+      "releaseNotes": "Release notes",
+      "header": "Header"
     }
   },
   "common": {

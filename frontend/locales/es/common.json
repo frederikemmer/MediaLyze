@@ -7,6 +7,7 @@
     "dashboard": "Panel",
     "libraries": "Configuración",
     "homeAria": "Inicio",
+    "compareAria": "Comparar archivos",
     "settingsAria": "Configuración"
   },
   "scanBanner": {
@@ -163,7 +164,10 @@
       "duplicate": "Duplicar perfil",
       "selectProfile": "Seleccionar perfil",
       "defaultBadge": "Predeterminado",
+      "builtInBadge": "Integrado",
       "defaultDeleteHint": "Los perfiles predeterminados no se pueden eliminar.",
+      "builtInProtectedAria": "Protección de perfil predeterminado integrado",
+      "builtInProtectedHint": "Los perfiles predeterminados integrados están protegidos para las actualizaciones de la app. Duplica este perfil o crea uno nuevo para hacer cambios.",
       "name": "Nombre del perfil",
       "mediaType": "Tipo de medio",
       "addMetric": "Añadir métrica",
@@ -515,6 +519,8 @@
   },
   "libraryDetail": {
     "scanInProgress": "Escaneo en curso",
+    "quickScan": "Escaneo rápido",
+    "quickScanError": "El escaneo rápido falló: {{message}}",
     "loading": "Cargando biblioteca…",
     "libraryPathAria": "Ruta de la biblioteca",
     "files": "Archivos",
@@ -748,6 +754,8 @@
       "emptyView": "Ningún grupo de duplicados coincide con la vista actual.",
       "suppressedBadge": "Oculto",
       "openFileDetailAria": "Abrir detalles de {{filename}}",
+      "compareFiles": "Comparar archivos duplicados",
+      "compareFilesUnavailable": "Se necesitan al menos dos archivos para comparar",
       "markNotDuplicate": "Marcar como no duplicado",
       "restoreDuplicate": "Restaurar grupo duplicado",
       "suppressFailed": "No se pudo marcar el grupo de duplicados como no duplicado.",
@@ -994,6 +1002,7 @@
       "label": "Menú de detalles del archivo",
       "mobileLabel": "Menú móvil de detalles del archivo",
       "title": "Detalles",
+      "back": "Volver",
       "overview": "Resumen",
       "collapse": "Contraer menú de detalles del archivo",
       "expand": "Expandir menú de detalles del archivo",
@@ -1073,6 +1082,60 @@
         "quality_recompute": "Calidad",
         "history_reconstruction": "Reconstruido"
       }
+    }
+  },
+  "fileCompare": {
+    "title": "Comparar archivos",
+    "subtitle": "Coloca dos archivos multimedia analizados lado a lado y resalta diferencias de metadatos.",
+    "comparisonTitle": "Comparación de archivos",
+    "emptySelection": "Selecciona dos archivos para comparar.",
+    "noDifferences": "No se encontraron diferencias.",
+    "left": "Archivo izquierdo",
+    "right": "Archivo derecho",
+    "third": "Tercer archivo",
+    "fourth": "Cuarto archivo",
+    "yes": "Sí",
+    "no": "No",
+    "changedCount": "{{count}} cambiados",
+    "showAllChapters": "Mostrar los {{count}} capítulos",
+    "showLessChapters": "Mostrar menos",
+    "showFullRawJson": "Mostrar JSON completo",
+    "hideFullRawJson": "Ocultar JSON completo",
+    "swapFiles": "Intercambiar archivos comparados",
+    "removeFile": "Quitar {{filename}} de la comparación",
+    "displayMode": {
+      "label": "Seleccionar visualización de comparación",
+      "all": "Mostrar todas las categorías, metadatos y métricas",
+      "differences": "Mostrar solo diferencias"
+    },
+    "columnCount": {
+      "label": "Seleccionar columnas de comparación",
+      "2": "2 columnas",
+      "3": "3 columnas",
+      "4": "4 columnas"
+    },
+    "search": {
+      "label": "Buscar {{side}}",
+      "placeholder": "Buscar nombre o ruta",
+      "searchAria": "Buscar archivos",
+      "clear": "Limpiar búsqueda de archivo",
+      "empty": "No se encontraron archivos.",
+      "alreadySelected": "Ya está seleccionado en el otro lado.",
+      "libraryFilterAria": "Filtrar búsqueda por biblioteca",
+      "allLibraries": "Todas las bibliotecas",
+      "filteredBy": "Filtrado por {{library}}"
+    },
+    "rows": {
+      "filename": "Nombre de archivo",
+      "library": "ID de biblioteca",
+      "rawQuality": "Calidad bruta",
+      "streamCount": "Número de pistas",
+      "stream": "Pista {{number}}",
+      "externalSubtitleCount": "Subtítulos externos",
+      "externalSubtitlePaths": "Rutas de subtítulos externos",
+      "chapter": "Capítulo {{number}}",
+      "rawJsonPresent": "JSON bruto presente",
+      "rawJsonKeys": "Claves del JSON bruto"
     }
   },
   "pathBrowser": {
@@ -1187,6 +1250,11 @@
       "video_codec": "Códec de vídeo",
       "audio_channels": "Canales de audio",
       "audio_codec": "Códec de audio",
+      "audio_bitrate": "Bitrate de audio",
+      "sample_rate": "Frecuencia de muestreo",
+      "music_tags": "Etiquetas de música",
+      "audiobook_tags": "Etiquetas de audiolibro",
+      "audiobook_chapters": "Capítulos de audiolibro",
       "dynamic_range": "Rango dinámico",
       "language_preferences": "Preferencias de idioma"
     }
@@ -1238,6 +1306,54 @@
     "spatialAudio": {
       "dolbyAtmos": "Dolby Atmos",
       "dtsX": "DTS:X"
+    }
+  },
+  "uiElements": {
+    "eyebrow": "Referencia de desarrollo",
+    "title": "Elementos de interfaz",
+    "subtitle": "Un inventario de diseño oculto para comparar componentes reales de MediaLyze, variantes locales, estados y ubicaciones de uso.",
+    "devOnly": "Solo dev",
+    "sampleAction": "Acción de ejemplo",
+    "indexTitle": "Catálogo",
+    "indexAria": "Secciones del catálogo de elementos de interfaz",
+    "source": "Origen",
+    "themePreview": "Vista previa del tema",
+    "sections": {
+      "foundation": "Tokens de diseño y tipografía",
+      "headerNav": "Cabecera y navegación",
+      "settings": "Variantes de ajustes",
+      "forms": "Formularios y búsqueda",
+      "buttons": "Botones y acciones",
+      "panels": "Paneles y edición de diseño",
+      "tables": "Tablas",
+      "stats": "Estadísticas y gráficos",
+      "runtime": "Ejecución y logs de escaneo",
+      "fileLibrary": "Biblioteca y detalle de archivo",
+      "duplicatesPathTelemetry": "Duplicados, rutas y telemetría",
+      "dialogs": "Diálogos, popovers y tooltips"
+    },
+    "descriptions": {
+      "foundation": "Tokens de color principales, jerarquía de texto y superficies base de la aplicación.",
+      "headerNav": "Navegación principal, etiquetas de versión, enlaces de bibliotecas y estados de atención.",
+      "settings": "Barra lateral de ajustes, acciones rápidas, selectores y controles de vista de tabla.",
+      "forms": "Inputs, selects, filas de casillas, búsqueda estructurada, patrones ignorados y controles de calidad.",
+      "buttons": "Variantes globales de botones y botones de acción específicos de páginas, mostrados juntos.",
+      "panels": "Paneles reutilizables, estados de carga/error, superposiciones de edición de diseño y avisos de migración.",
+      "tables": "Tablas de ajustes, tablas de resumen de escaneo y superficie de la tabla virtualizada de archivos analizados.",
+      "stats": "Tarjetas métricas, listas de distribución, controles de gráficos y variantes de la barra de comparación.",
+      "runtime": "Tarjetas de escaneo activo, tarjetas de logs, insignias de resultado y controles de diagnóstico.",
+      "fileLibrary": "Navegación de detalle de archivo, superficies de vista previa, detalles de pistas y filas de puntuación de calidad.",
+      "duplicatesPathTelemetry": "Tarjetas de duplicados, estados del explorador de rutas y superficies de selección de telemetría.",
+      "dialogs": "Notas de versión, diálogos para crear biblioteca, popovers de filtro, popovers de calidad y disparadores de tooltip."
+    },
+    "sources": {
+      "dashboard": "Panel",
+      "settings": "Configuración",
+      "libraryDetail": "Detalle de biblioteca",
+      "fileDetail": "Detalle de archivo",
+      "scanLogs": "Logs de escaneo",
+      "releaseNotes": "Historial de versiones",
+      "header": "Cabecera"
     }
   },
   "common": {

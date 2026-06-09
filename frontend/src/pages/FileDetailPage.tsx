@@ -1,5 +1,6 @@
 import {
   AudioLines,
+  ArrowLeft,
   Captions,
   ChevronDown,
   FileClock,
@@ -20,7 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { AsyncPanel } from "../components/AsyncPanel";
 import { ArrowUpRightIcon, type ArrowUpRightIconHandle } from "../components/ArrowUpRightIcon";
@@ -1186,6 +1187,8 @@ function FileHistoryPanel({
 export function FileDetailPage() {
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { appSettings } = useAppData();
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
   const [file, setFile] = useState<MediaFileDetail | null>(null);
@@ -1203,6 +1206,18 @@ export function FileDetailPage() {
   const [rawJsonCopied, setRawJsonCopied] = useState(false);
   const rawJsonCopyResetTimeoutRef = useRef<number | null>(null);
   const previewReportIconRef = useRef<ArrowUpRightIconHandle>(null);
+
+  const goBack = useCallback(() => {
+    if (location.key !== "default") {
+      navigate(-1);
+      return;
+    }
+    if (file?.library_id) {
+      navigate(`/libraries/${file.library_id}`, { replace: true });
+      return;
+    }
+    navigate("/", { replace: true });
+  }, [file?.library_id, location.key, navigate]);
 
   useEffect(() => {
     api
@@ -1522,8 +1537,30 @@ export function FileDetailPage() {
           aria-hidden={!isMobileMenuOpen}
         >
           <nav className="settings-mobile-navigation-list" aria-label={t("fileDetail.navigation.mobileLabel")}>
+            <button
+              type="button"
+              className="secondary settings-navigation-quick-action settings-mobile-navigation-quick-action"
+              aria-label={t("fileDetail.navigation.back")}
+              onClick={goBack}
+              tabIndex={!isMobileMenuOpen ? -1 : undefined}
+            >
+              <ArrowLeft className="nav-icon" aria-hidden="true" />
+              <span>{t("fileDetail.navigation.back")}</span>
+            </button>
             {navItems.map((item) => renderNavItem(item, true))}
           </nav>
+        </div>
+        <div className="settings-navigation-quick-actions file-detail-navigation-actions">
+          <button
+            type="button"
+            className="secondary small settings-panel-header-action file-detail-navigation-back-button"
+            aria-label={t("fileDetail.navigation.back")}
+            title={t("fileDetail.navigation.back")}
+            onClick={goBack}
+          >
+            <ArrowLeft className="nav-icon" aria-hidden="true" />
+            {!isNavCollapsed ? <span>{t("fileDetail.navigation.back")}</span> : null}
+          </button>
         </div>
         <div className="settings-navigation-header">
           {!isNavCollapsed ? <span>{t("fileDetail.navigation.title")}</span> : null}

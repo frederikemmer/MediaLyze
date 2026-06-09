@@ -4,7 +4,7 @@ import json
 import re
 import ssl
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 import certifi
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from backend.app.schemas.update_status import UpdateStatusRead
 from backend.app.utils.time import utc_now
 
 UPDATE_STATUS_KEY = "update_status"
+UPDATE_STATUS_MAX_AGE = timedelta(hours=12)
 LATEST_RELEASE_URL = "https://api.github.com/repos/frederikemmer/MediaLyze/releases/latest"
 REMOTE_CHANGELOG_URL = "https://raw.githubusercontent.com/frederikemmer/MediaLyze/main/CHANGELOG.md"
 SEMVER_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
@@ -51,6 +52,12 @@ def _clean_markdown_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _clean_release_note_item_text(value: str) -> str:
+    value = re.sub(r"`([^`]+)`", r"\1", value)
+    value = re.sub(r"\*\*([^*]+)\*\*", r"\1", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def _parse_release_notes_block(version: str, block: str) -> dict | None:
     payload = {"version": version, "date": None, "sections": []}
     current_section: dict | None = None
@@ -71,7 +78,7 @@ def _parse_release_notes_block(version: str, block: str) -> dict | None:
             if current_section is None:
                 current_section = {"title": "", "items": []}
                 payload["sections"].append(current_section)
-            current_section["items"].append(_clean_markdown_text(item_match.group(1)))
+            current_section["items"].append(_clean_release_note_item_text(item_match.group(1)))
     return payload if any(section["items"] for section in payload["sections"]) else None
 
 
@@ -111,6 +118,19 @@ def get_update_status(db: Session, settings: Settings) -> UpdateStatusRead:
     payload["current_version"] = settings.app_version
     payload["update_available"] = is_newer_stable_version(payload.get("latest_version"), settings.app_version)
     return UpdateStatusRead.model_validate(payload)
+
+
+def _is_update_status_stale(status: UpdateStatusRead) -> bool:
+    if status.checked_at is None:
+        return True
+    return utc_now() - status.checked_at > UPDATE_STATUS_MAX_AGE
+
+
+def get_or_check_update_status(db: Session, settings: Settings) -> UpdateStatusRead:
+    status = get_update_status(db, settings)
+    if not _is_update_status_stale(status):
+        return status
+    return check_for_updates(db, settings) or status
 
 
 def check_for_updates(db: Session, settings: Settings) -> UpdateStatusRead | None:

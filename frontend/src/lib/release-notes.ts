@@ -34,6 +34,14 @@ function cleanMarkdownText(value: string): string {
     .trim();
 }
 
+function cleanReleaseNoteItemText(value: string): string {
+  return value
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function parseReleaseNotes(markdown: string, version: string): ReleaseNotes | null {
   const normalizedVersion = normalizeReleaseVersion(version);
   if (!normalizedVersion || isDevelopmentVersion(normalizedVersion)) {
@@ -76,7 +84,7 @@ function parseReleaseNotesBlock(version: string, block: string): ReleaseNotes | 
         currentSection = { title: "", items: [] };
         releaseNotes.sections.push(currentSection);
       }
-      currentSection.items.push(cleanMarkdownText(itemMatch[1]));
+      currentSection.items.push(cleanReleaseNoteItemText(itemMatch[1]));
     }
   }
 

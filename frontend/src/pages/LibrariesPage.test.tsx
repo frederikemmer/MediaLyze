@@ -238,6 +238,7 @@ function createQualityProfileDefinition(overrides: Partial<QualityProfileDefinit
     media_type: "video",
     profile: DEFAULT_QUALITY_PROFILE,
     is_default: true,
+    is_builtin: false,
     created_at: "2026-03-15T12:00:00Z",
     updated_at: "2026-03-15T12:00:00Z",
     library_count: 0,
@@ -1334,6 +1335,30 @@ describe("LibrariesPage ignore patterns", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Quality profiles" }));
     expect(await screen.findByText("Visual density")).toBeInTheDocument();
     expect(screen.getByText("Video codec")).toBeInTheDocument();
+  });
+
+  it("shows built-in quality profiles as protected and read-only", async () => {
+    vi.spyOn(api, "qualityProfiles").mockResolvedValue([
+      createQualityProfileDefinition({
+        is_builtin: true,
+        profile: {
+          ...DEFAULT_QUALITY_PROFILE,
+          active_metrics: ["resolution", "visual_density"],
+        },
+      }),
+    ]);
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+
+    renderPage({ activePanel: "qualityProfiles" });
+
+    expect(await screen.findByRole("button", { name: "Built-in default profile protection" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rename profile" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete profile" })).toBeDisabled();
+    expect(screen.getByLabelText("Add metric")).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure Visual density metric" }));
+    expect(await screen.findByLabelText("Minimum (GB/hour)")).toBeDisabled();
+    expect(screen.getAllByLabelText("Explain metric weight").every((input) => input.hasAttribute("disabled"))).toBe(true);
   });
 
   it("edits visual density profile values as 1080p-equivalent GB per hour", async () => {

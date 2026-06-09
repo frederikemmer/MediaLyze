@@ -224,6 +224,29 @@ class MediaFileTablePage(BaseModel):
     items: list[MediaFileTableRow]
 
 
+class MediaFileSearchResult(BaseModel):
+    id: int
+    library_id: int
+    library_name: str
+    library_type: str
+    filename: str
+    relative_path: str
+    size_bytes: int
+    container: str | None = None
+    duration: float | None = None
+    quality_score: int
+    video_codec: str | None = None
+    resolution: str | None = None
+    hdr_type: str | None = None
+
+
+class MediaFileSearchResponse(BaseModel):
+    query: str
+    library_id: int | None = None
+    limit: int
+    items: list[MediaFileSearchResult]
+
+
 class MediaFileQualityScoreDetail(BaseModel):
     id: int
     score: int

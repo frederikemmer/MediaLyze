@@ -167,6 +167,7 @@ class QualityProfileDefinition(TimestampMixin, Base):
     )
     profile: Mapped[dict] = mapped_column(JSON, default=default_quality_profile, nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     libraries: Mapped[list[Library]] = relationship(
         back_populates="assigned_quality_profile",

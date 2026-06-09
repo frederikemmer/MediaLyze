@@ -272,6 +272,99 @@ def _parse_episode_metadata(path: Path) -> tuple[int | None, int | None, str | N
     return episode_number, episode_number_end, episode_title
 
 
+def _specials_season_relative_path(series_relative_path: str) -> str:
+    return f"{series_relative_path}/Specials" if series_relative_path else "Specials"
+
+
+def _find_bonus_folder_index(path: Path, settings: PatternRecognitionSettings) -> int | None:
+    parts = path.parts
+    for index in range(len(parts) - 1):
+        candidate_path = "/".join(parts[: index + 1])
+        if matching_bonus_patterns(candidate_path, settings, is_dir=True):
+            return index
+    return None
+
+
+def _recognize_bonus_special_by_folder_depth(
+    path: Path,
+    settings: PatternRecognitionSettings,
+    matched_patterns: tuple[str, ...],
+) -> PathRecognition:
+    parts = path.parts
+    show_settings = settings.show_season_patterns
+    series_index = show_settings.series_folder_depth - 1
+    bonus_index = _find_bonus_folder_index(path, settings)
+    if bonus_index is None or len(parts) <= series_index or bonus_index <= series_index:
+        return PathRecognition(content_category="bonus", matched_patterns=matched_patterns)
+
+    parsed_series = _parse_series_folder(parts[series_index], show_settings)
+    if not parsed_series:
+        return PathRecognition(content_category="bonus", matched_patterns=matched_patterns)
+    series_title, series_year = parsed_series
+    series_relative_path = "/".join(parts[: series_index + 1])
+    episode_number, episode_number_end, episode_title = _parse_episode_metadata(path)
+
+    return PathRecognition(
+        content_category="bonus",
+        series_title=series_title,
+        series_normalized_title=normalize_series_title(series_title),
+        series_relative_path=series_relative_path,
+        series_year=series_year,
+        season_number=0,
+        season_title="Specials",
+        season_relative_path=_specials_season_relative_path(series_relative_path),
+        episode_number=episode_number,
+        episode_number_end=episode_number_end,
+        episode_title=episode_title,
+        matched_patterns=matched_patterns,
+    )
+
+
+def _recognize_bonus_special_by_regex(
+    path: Path,
+    settings: PatternRecognitionSettings,
+    matched_patterns: tuple[str, ...],
+) -> PathRecognition:
+    parts = path.parts
+    bonus_index = _find_bonus_folder_index(path, settings)
+    if bonus_index is None or bonus_index == 0:
+        return PathRecognition(content_category="bonus", matched_patterns=matched_patterns)
+
+    show_settings = settings.show_season_patterns
+    series_index = bonus_index - 1
+    parsed_series = _parse_series_folder(parts[series_index], show_settings)
+    if not parsed_series:
+        return PathRecognition(content_category="bonus", matched_patterns=matched_patterns)
+    series_title, series_year = parsed_series
+    series_relative_path = "/".join(parts[: series_index + 1])
+    episode_number, episode_number_end, episode_title = _parse_episode_metadata(path)
+
+    return PathRecognition(
+        content_category="bonus",
+        series_title=series_title,
+        series_normalized_title=normalize_series_title(series_title),
+        series_relative_path=series_relative_path,
+        series_year=series_year,
+        season_number=0,
+        season_title="Specials",
+        season_relative_path=_specials_season_relative_path(series_relative_path),
+        episode_number=episode_number,
+        episode_number_end=episode_number_end,
+        episode_title=episode_title,
+        matched_patterns=matched_patterns,
+    )
+
+
+def _recognize_bonus_special_path(
+    path: Path,
+    settings: PatternRecognitionSettings,
+    matched_patterns: tuple[str, ...],
+) -> PathRecognition:
+    if settings.show_season_patterns.recognition_mode == ShowSeasonRecognitionMode.folder_depth:
+        return _recognize_bonus_special_by_folder_depth(path, settings, matched_patterns)
+    return _recognize_bonus_special_by_regex(path, settings, matched_patterns)
+
+
 def _recognize_media_path_by_folder_depth(path: Path, settings: ShowSeasonPatternSettings) -> PathRecognition:
     parts = path.parts
     season_index = settings.season_folder_depth - 1
@@ -291,7 +384,7 @@ def _recognize_media_path_by_folder_depth(path: Path, settings: ShowSeasonPatter
     episode_number, episode_number_end, episode_title = _parse_episode_metadata(path)
 
     return PathRecognition(
-        content_category="main",
+        content_category="bonus" if season_number == 0 else "main",
         series_title=series_title,
         series_normalized_title=normalize_series_title(series_title),
         series_relative_path="/".join(parts[: series_index + 1]),
@@ -334,7 +427,7 @@ def _recognize_media_path_by_regex(path: Path, settings: ShowSeasonPatternSettin
     episode_number, episode_number_end, episode_title = _parse_episode_metadata(path)
 
     return PathRecognition(
-        content_category="main",
+        content_category="bonus" if season_number == 0 else "main",
         series_title=series_title,
         series_normalized_title=normalize_series_title(series_title),
         series_relative_path="/".join(parts[:season_index]),
@@ -354,14 +447,15 @@ def recognize_media_path(
     settings: PatternRecognitionSettings,
 ) -> PathRecognition:
     bonus_matches = matching_bonus_patterns(relative_path, settings)
-    if bonus_matches:
-        return PathRecognition(content_category="bonus", matched_patterns=tuple(bonus_matches))
-
     library_type_value = getattr(library_type, "value", library_type)
     if str(library_type_value) not in {LibraryType.series.value, LibraryType.mixed.value}:
+        if bonus_matches:
+            return PathRecognition(content_category="bonus", matched_patterns=tuple(bonus_matches))
         return PathRecognition()
 
     path = Path(relative_path)
+    if bonus_matches:
+        return _recognize_bonus_special_path(path, settings, tuple(bonus_matches))
     if settings.show_season_patterns.recognition_mode == ShowSeasonRecognitionMode.folder_depth:
         return _recognize_media_path_by_folder_depth(path, settings.show_season_patterns)
     return _recognize_media_path_by_regex(path, settings.show_season_patterns)

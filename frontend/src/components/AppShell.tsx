@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bug, ChevronDown, ChevronRight, Download, House, Settings, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Download, GitCompare, House, Settings, X } from "lucide-react";
 import { FilePlusCorner, FileXCorner, File, FileDiff, FileExclamationPoint, FileSearchCorner, FileCheckCorner } from "lucide-react";
 import { AnimatePresence, motion, useAnimation, type Transition } from "motion/react";
 
@@ -9,6 +9,7 @@ import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { BanIcon } from "./BanIcon";
 import { FolderInputIcon } from "./FolderInputIcon";
 import { FolderOutputIcon } from "./FolderOutputIcon";
+import { GithubIcon } from "./GithubIcon";
 import { HandCoinsIcon } from "./HandCoinsIcon";
 import { TelemetryModeToggle } from "./TelemetryModeToggle";
 import { api, type ScanJob, type TelemetryMode, type UpdateStatus } from "../lib/api";
@@ -17,6 +18,7 @@ import { useAppData } from "../lib/app-data";
 import {
   getAllReleaseNotes,
   getCurrentReleaseNotes,
+  isDevelopmentVersion,
   isFirstOpenAfterUpdate,
   markReleaseNotesSeen,
   mergeReleaseNotes,
@@ -30,11 +32,39 @@ import { useScanJobs } from "../lib/scan-jobs";
 const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
+const UI_ELEMENTS_CLICK_WINDOW_MS = 1500;
+const UI_ELEMENTS_CLICK_COUNT = 3;
+const RELEASE_NOTE_LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
 
 const CIRCLE_CHEVRON_TRANSITION: Transition = {
   times: [0, 0.4, 1],
   duration: 0.5,
 };
+
+function renderReleaseNoteItem(item: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of item.matchAll(RELEASE_NOTE_LINK_PATTERN)) {
+    const matchIndex = match.index ?? 0;
+    const [fullMatch, label, href] = match;
+    if (matchIndex > lastIndex) {
+      parts.push(item.slice(lastIndex, matchIndex));
+    }
+    parts.push(
+      <a key={`${href}-${matchIndex}`} href={href} target="_blank" rel="noreferrer">
+        {label}
+      </a>,
+    );
+    lastIndex = matchIndex + fullMatch.length;
+  }
+
+  if (lastIndex < item.length) {
+    parts.push(item.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts.map((part, index) => <Fragment key={index}>{part}</Fragment>) : item;
+}
 
 function ReleaseNotesMenuIcon({ open, size = 24 }: { open: boolean; size?: number }) {
   const controls = useAnimation();
@@ -132,7 +162,7 @@ function ScanJobCard({
       style={isDeterminate ? { "--scan-progress": `${job.progress_percent}%` } as React.CSSProperties : undefined}
     >
       <div className="scan-job-card-main">
-        <AnimatedSearchIcon className="scan-job-card-search-icon" />
+        <AnimatedSearchIcon animateOnMount className="scan-job-card-search-icon" />
         <span className="scan-job-card-name" title={libraryLabel}>
           {libraryLabel}
         </span>
@@ -190,6 +220,7 @@ function ScanJobCard({
 
 export function AppShell() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { activeJobs, hasActiveJobs, stopLibrary } = useScanJobs();
   const { appSettings, appSettingsLoaded, libraries, librariesLoaded, loadDashboard, loadLibraries, setAppSettings } = useAppData();
   const [localReleaseNotes] = useState<ReleaseNotes[]>(() => getAllReleaseNotes());
@@ -209,6 +240,7 @@ export function AppShell() {
   const [downloadState, setDownloadState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [releaseActionsMenuOpen, setReleaseActionsMenuOpen] = useState(false);
   const hadActiveJobsRef = useRef(hasActiveJobs);
+  const settingsIconClickRef = useRef({ count: 0, lastClickedAt: 0 });
   const versionLabel = APP_VERSION === "dev" ? "dev" : `v${APP_VERSION}`;
   const latestAvailableVersion = updateStatus?.latest_version ?? null;
   const updateAvailable = APP_VERSION !== "dev" && Boolean(updateStatus?.update_available && latestAvailableVersion);
@@ -281,6 +313,27 @@ export function AppShell() {
     setShowUpdateTelemetryAttention(false);
     setReleaseActionsMenuOpen(false);
     setShowReleaseNotes(true);
+  }
+
+  function handleSettingsIconClick(event: MouseEvent<HTMLElement>) {
+    if (!isDevelopmentVersion(APP_VERSION)) {
+      return;
+    }
+
+    const now = Date.now();
+    const clickState = settingsIconClickRef.current;
+    clickState.count = now - clickState.lastClickedAt <= UI_ELEMENTS_CLICK_WINDOW_MS ? clickState.count + 1 : 1;
+    clickState.lastClickedAt = now;
+
+    if (clickState.count < UI_ELEMENTS_CLICK_COUNT) {
+      return;
+    }
+
+    clickState.count = 0;
+    clickState.lastClickedAt = 0;
+    event.preventDefault();
+    event.stopPropagation();
+    navigate("/ui-elements");
   }
 
   useEffect(() => {
@@ -360,6 +413,27 @@ export function AppShell() {
                 )}
               </NavLink>
               <NavLink
+                to="/files/compare"
+                end
+                aria-label={t("nav.compareAria")}
+                className={({ isActive }) => `icon-nav-button ${isActive ? "active" : ""}`.trim()}
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive ? (
+                      <motion.span
+                        layoutId="primary-nav-pill"
+                        className="nav-active-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
+                    <span className="nav-link-content">
+                      <GitCompare aria-hidden="true" className="nav-icon" />
+                    </span>
+                  </>
+                )}
+              </NavLink>
+              <NavLink
                 to="/settings"
                 end
                 aria-label={t("nav.settingsAria")}
@@ -376,7 +450,7 @@ export function AppShell() {
                         transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
                       />
                     ) : null}
-                    <span className="nav-link-content">
+                    <span className="nav-link-content" onClick={handleSettingsIconClick}>
                       <Settings aria-hidden="true" className="nav-icon" />
                     </span>
                   </>
@@ -519,15 +593,7 @@ export function AppShell() {
                     aria-label={t("releaseNotes.githubAria")}
                     data-tooltip={t("releaseNotes.githubAria")}
                   >
-                    <svg viewBox="0 0 1024 1024" fill="none" className="release-notes-github-icon" aria-hidden="true">
-                      <path
-                        fillRule="evenodd"
-                        clipRule="evenodd"
-                        d="M8 0C3.58 0 0 3.58 0 8C0 11.54 2.29 14.53 5.47 15.59C5.87 15.66 6.02 15.42 6.02 15.21C6.02 15.02 6.01 14.39 6.01 13.72C4 14.09 3.48 13.23 3.32 12.78C3.23 12.55 2.84 11.84 2.5 11.65C2.22 11.5 1.82 11.13 2.49 11.12C3.12 11.11 3.57 11.7 3.72 11.94C4.44 13.15 5.59 12.81 6.05 12.6C6.12 12.08 6.33 11.73 6.56 11.53C4.78 11.33 2.92 10.64 2.92 7.58C2.92 6.71 3.23 5.99 3.74 5.43C3.66 5.23 3.38 4.41 3.82 3.31C3.82 3.31 4.49 3.1 6.02 4.13C6.66 3.95 7.34 3.86 8.02 3.86C8.7 3.86 9.38 3.95 10.02 4.13C11.55 3.09 12.22 3.31 12.22 3.31C12.66 4.41 12.38 5.23 12.3 5.43C12.81 5.99 13.12 6.7 13.12 7.58C13.12 10.65 11.25 11.33 9.47 11.53C9.76 11.78 10.01 12.26 10.01 13.01C10.01 14.08 10 14.94 10 15.21C10 15.42 10.15 15.67 10.55 15.59C13.71 14.53 16 11.53 16 8C16 3.58 12.42 0 8 0Z"
-                        transform="scale(64)"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <GithubIcon className="release-notes-github-icon" size={18} aria-hidden="true" />
                   </a>
                 </div>
                 <button
@@ -585,7 +651,7 @@ export function AppShell() {
                             {section.title ? <h3>{section.title}</h3> : null}
                             <ul>
                               {section.items.map((item, itemIndex) => (
-                                <li key={`${itemIndex}-${item}`}>{item}</li>
+                                <li key={`${itemIndex}-${item}`}>{renderReleaseNoteItem(item)}</li>
                               ))}
                             </ul>
                           </section>

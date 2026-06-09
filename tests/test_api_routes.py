@@ -27,6 +27,8 @@ from backend.app.models.entities import (
     MediaFormat,
     MediaSeason,
     MediaSeries,
+    QualityProfileDefinition,
+    QualityProfileMediaType,
     ScanJob,
     ScanMode,
     ScanStatus,
@@ -109,7 +111,7 @@ def test_update_status_returns_persisted_latest_release() -> None:
                 key=UPDATE_STATUS_KEY,
                 value={
                     "latest_version": "9.9.9",
-                    "checked_at": "2026-05-15T00:00:00+00:00",
+                    "checked_at": datetime.now(UTC).isoformat(),
                     "release_notes": [
                         {
                             "version": "9.9.9",
@@ -142,9 +144,102 @@ def test_quality_profiles_route_seeds_defaults_and_protects_default_delete() -> 
         profiles = response.json()
         assert {profile["media_type"] for profile in profiles} == {"video", "music", "audiobook"}
         assert all(profile["is_default"] for profile in profiles)
+        assert all(profile["is_builtin"] for profile in profiles)
 
         delete_response = client.delete(f"/api/quality-profiles/{profiles[0]['id']}")
         assert delete_response.status_code == 400
+
+        update_response = client.patch(
+            f"/api/quality-profiles/{profiles[0]['id']}",
+            json={"name": "Custom default name"},
+        )
+        assert update_response.status_code == 400
+
+
+def test_quality_profiles_keep_user_default_and_refresh_builtin_defaults() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        custom_default = QualityProfileDefinition(
+            name="My active music profile",
+            media_type=QualityProfileMediaType.music,
+            profile={},
+            is_default=True,
+            is_builtin=False,
+        )
+        reserved_name_user_profile = QualityProfileDefinition(
+            name="Default audiobook",
+            media_type=QualityProfileMediaType.music,
+            profile={},
+            is_default=False,
+            is_builtin=False,
+        )
+        stale_builtin = QualityProfileDefinition(
+            name="Default video",
+            media_type=QualityProfileMediaType.video,
+            profile={},
+            is_default=True,
+            is_builtin=True,
+        )
+        db.add_all([custom_default, reserved_name_user_profile, stale_builtin])
+        db.commit()
+
+        profiles = _build_test_app(db).get("/api/quality-profiles").json()
+
+        builtins = {profile["media_type"]: profile for profile in profiles if profile["is_builtin"]}
+        assert set(builtins) == {"video", "music", "audiobook"}
+        assert builtins["video"]["profile"]["active_metrics"]
+        active_music_defaults = [
+            profile for profile in profiles if profile["media_type"] == "music" and profile["is_default"]
+        ]
+        assert [profile["name"] for profile in active_music_defaults] == ["My active music profile"]
+        assert any(profile["name"] == "Default audiobook custom" for profile in profiles)
+
+
+def test_quality_profile_names_are_global_case_insensitive_and_default_names_reserved() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        profiles = client.get("/api/quality-profiles").json()
+        video_profile = next(profile for profile in profiles if profile["media_type"] == "video")
+
+        duplicate_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": video_profile["name"].upper(),
+                "media_type": "music",
+                "profile": video_profile["profile"],
+            },
+        )
+        assert duplicate_response.status_code == 400
+
+        reserved_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": "Default audiobook",
+                "media_type": "video",
+                "profile": video_profile["profile"],
+            },
+        )
+        assert reserved_response.status_code == 400
+
+        custom_default_response = client.post(
+            "/api/quality-profiles",
+            json={
+                "name": "My Video Default",
+                "media_type": "video",
+                "profile": video_profile["profile"],
+                "is_default": True,
+            },
+        )
+        assert custom_default_response.status_code == 200
+        assert custom_default_response.json()["is_default"] is True
+        assert custom_default_response.json()["is_builtin"] is False
 
 
 def test_library_update_rejects_incompatible_quality_profile() -> None:
@@ -360,6 +455,99 @@ def test_file_media_returns_404_for_missing_file_source(tmp_path) -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Media file not found"}
+
+
+def test_file_search_returns_cross_library_matches_with_library_metadata() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        movies = Library(name="Movies", path="/media/movies", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        archive = Library(name="Archive", path="/media/archive", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add_all([movies, archive])
+        db.flush()
+        db.add_all(
+            [
+                MediaFile(
+                    library_id=movies.id,
+                    relative_path="Arrival/Arrival.mkv",
+                    filename="Arrival.mkv",
+                    extension="mkv",
+                    size_bytes=1000,
+                    mtime=1.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=8,
+                ),
+                MediaFile(
+                    library_id=archive.id,
+                    relative_path="Arrival/Arrival.copy.mkv",
+                    filename="Arrival.copy.mkv",
+                    extension="mkv",
+                    size_bytes=2000,
+                    mtime=2.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=7,
+                ),
+                MediaFile(
+                    library_id=archive.id,
+                    relative_path="Other/File.mkv",
+                    filename="File.mkv",
+                    extension="mkv",
+                    size_bytes=3000,
+                    mtime=3.0,
+                    scan_status=ScanStatus.ready,
+                    quality_score=6,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = _build_test_app(db).get("/api/files/search?query=arrival&limit=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    items_by_filename = {item["filename"]: item for item in payload["items"]}
+    assert set(items_by_filename) == {"Arrival.mkv", "Arrival.copy.mkv"}
+    assert items_by_filename["Arrival.mkv"]["library_name"] == "Movies"
+    assert items_by_filename["Arrival.mkv"]["library_type"] == "movies"
+    assert items_by_filename["Arrival.copy.mkv"]["library_name"] == "Archive"
+
+
+def test_file_search_filters_by_library_and_bounds_empty_query() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        movies = Library(name="Movies", path="/media/movies", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        archive = Library(name="Archive", path="/media/archive", type=LibraryType.movies, scan_mode=ScanMode.manual, scan_config={})
+        db.add_all([movies, archive])
+        db.flush()
+        for index in range(4):
+            db.add(
+                MediaFile(
+                    library_id=movies.id if index % 2 == 0 else archive.id,
+                    relative_path=f"File-{index}.mkv",
+                    filename=f"File-{index}.mkv",
+                    extension="mkv",
+                    size_bytes=1000 + index,
+                    mtime=float(index),
+                    scan_status=ScanStatus.ready,
+                    quality_score=5,
+                )
+            )
+        db.commit()
+
+        response = _build_test_app(db).get(f"/api/files/search?library_id={archive.id}&limit=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["library_id"] == archive.id
+    assert payload["limit"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["library_name"] == "Archive"
+    assert payload["items"][0]["library_type"] == "movies"
 
 
 def test_file_cover_returns_404_without_embedded_cover(tmp_path) -> None:

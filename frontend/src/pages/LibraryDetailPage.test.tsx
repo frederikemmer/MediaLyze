@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import i18next from "i18next";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useParams } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useLocation, useParams } from "react-router-dom";
 
 import { AppDataProvider } from "../lib/app-data";
 import { LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/library-file-column-widths";
@@ -556,6 +556,10 @@ function renderPage(libraryId: number, { strictMode = false }: { strictMode?: bo
     const { fileId = "" } = useParams();
     return <div>{`File detail ${fileId}`}</div>;
   };
+  const CompareRoute = () => {
+    const location = useLocation();
+    return <div>Compare route {location.search}</div>;
+  };
 
   const tree = (
     <MemoryRouter initialEntries={[`/libraries/${libraryId}`]}>
@@ -563,6 +567,7 @@ function renderPage(libraryId: number, { strictMode = false }: { strictMode?: bo
         <ScanJobsProvider>
           <Routes>
             <Route path="/libraries/:libraryId" element={<LibraryDetailPage />} />
+            <Route path="/files/compare" element={<CompareRoute />} />
             <Route path="/files/:fileId" element={<FileRoute />} />
           </Routes>
         </ScanJobsProvider>
@@ -1827,6 +1832,22 @@ describe("LibraryDetailPage", () => {
     expect(within(collapsedToggle.closest("section") ?? document.body).getAllByText(/^2$/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
     expect(screen.queryByText("bonus-scene-copy.mkv")).not.toBeInTheDocument();
+  });
+
+  it("opens duplicate comparison for the first two files in a duplicate group", async () => {
+    const libraryId = 122;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Compare duplicate files" }));
+
+    expect(await screen.findByText("Compare route ?left=1&right=2")).toBeInTheDocument();
   });
 
   it("still loads statistics and files under strict mode remounts", async () => {

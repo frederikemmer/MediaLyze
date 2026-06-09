@@ -93,7 +93,8 @@ services:
       # use .env or change "./media" to the path of your media directory
       - ./media:/media:ro
 
-      # additional media mounts, if needed. Extend this pattern if needed:
+      # additional media mounts by extending this pattern if needed:
+      # /PATH/TO/MEDIA0:/media/MEDIA0:ro
       # /PATH/TO/MEDIA1:/media/MEDIA1:ro
 ```
 

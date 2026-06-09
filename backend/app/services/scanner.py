@@ -792,7 +792,7 @@ def _apply_path_recognition(
         "matched_patterns": list(recognition.matched_patterns),
     } if recognition.matched_patterns else None
 
-    if not recognition.is_bonus and recognition.is_episode:
+    if recognition.is_episode:
         series = _get_or_create_series(db, library, recognition)
         season = _get_or_create_season(db, library, series, recognition) if series else None
         media_file.series_id = series.id if series else None
