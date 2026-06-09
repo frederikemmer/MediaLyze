@@ -1,6 +1,10 @@
 import {
   ChevronDown,
   ChevronRight,
+  Columns2,
+  Columns3,
+  Columns3Cog,
+  Columns4,
   Copy as CopyIcon,
   Diff,
   FileJson,
@@ -13,11 +17,13 @@ import {
   X,
 } from "lucide-react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,8 +44,9 @@ import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 
-type CompareSide = "left" | "right";
+type CompareSlotKey = "left" | "right" | "third" | "fourth";
 type CompareDisplayMode = "all" | "differences";
+type CompareColumnCount = 2 | 3 | 4;
 
 type CompareFileState = {
   detail: MediaFileDetail | null;
@@ -51,10 +58,14 @@ type CompareFileState = {
 type CompareRow = {
   key: string;
   label: string;
-  left: ReactNode;
-  right: ReactNode;
-  leftValue: unknown;
-  rightValue: unknown;
+  cells: CompareCell[];
+};
+
+type CompareCell = {
+  key: CompareSlotKey;
+  content: ReactNode;
+  value: unknown;
+  isEmptySlot?: boolean;
 };
 
 type CompareSection = {
@@ -62,19 +73,58 @@ type CompareSection = {
   title: string;
   icon: typeof Info;
   rows: CompareRow[];
-  rawJson?: {
-    left: Record<string, unknown> | null;
-    right: Record<string, unknown> | null;
-  };
+  rawJson?: CompareRawJsonEntry[];
+};
+
+type CompareSlot = {
+  key: CompareSlotKey;
+  param: string;
+};
+
+type CompareFileColumn = CompareSlot & {
+  detail: MediaFileDetail | null;
+  quality: MediaFileQualityScoreDetail | null;
+};
+
+type CompareRawJsonEntry = {
+  key: CompareSlotKey;
+  label: string;
+  value: Record<string, unknown> | null;
 };
 
 const CHAPTER_COMPARE_PREVIEW_LIMIT = 10;
+const COMPARE_COLUMN_COUNT_STORAGE_KEY = "medialyze-file-compare-column-count";
+const COMPARE_SLOTS: CompareSlot[] = [
+  { key: "left", param: "left" },
+  { key: "right", param: "right" },
+  { key: "third", param: "third" },
+  { key: "fourth", param: "fourth" },
+];
+const COMPARE_COLUMN_OPTIONS: Array<{ count: CompareColumnCount; icon: typeof Columns2 }> = [
+  { count: 2, icon: Columns2 },
+  { count: 3, icon: Columns3 },
+  { count: 4, icon: Columns4 },
+];
 
 const DEFAULT_FILE_STATE: CompareFileState = {
   detail: null,
   quality: null,
   loading: false,
   error: null,
+};
+
+const DEFAULT_FILE_STATES: Record<CompareSlotKey, CompareFileState> = {
+  left: { ...DEFAULT_FILE_STATE },
+  right: { ...DEFAULT_FILE_STATE },
+  third: { ...DEFAULT_FILE_STATE },
+  fourth: { ...DEFAULT_FILE_STATE },
+};
+
+const DEFAULT_LIBRARY_FILTERS: Record<CompareSlotKey, number | null> = {
+  left: null,
+  right: null,
+  third: null,
+  fourth: null,
 };
 
 function JsonPreview({ value }: { value: unknown }) {
@@ -103,7 +153,11 @@ function normalizedCompareValue(value: unknown): string {
 }
 
 function compareRowHasDifference(entry: CompareRow): boolean {
-  return normalizedCompareValue(entry.leftValue) !== normalizedCompareValue(entry.rightValue);
+  const comparableCells = entry.cells.filter((cellEntry) => !cellEntry.isEmptySlot);
+  if (comparableCells.length < 2) {
+    return false;
+  }
+  return new Set(comparableCells.map((cellEntry) => normalizedCompareValue(cellEntry.value))).size > 1;
 }
 
 function searchResultMediaTypeLabel(result: MediaFileSearchResult, t: ReturnType<typeof useTranslation>["t"]): string {
@@ -137,82 +191,92 @@ function compactList(values: Array<string | null | undefined>, fallback: string)
   return entries.length > 0 ? entries.join(", ") : fallback;
 }
 
+function getSlotLabel(slotKey: CompareSlotKey, t: (key: string, options?: Record<string, unknown>) => string): string {
+  return t(`fileCompare.${slotKey}`);
+}
+
+function readStoredCompareColumnCount(searchParams: URLSearchParams): CompareColumnCount {
+  const stored = typeof window !== "undefined"
+    ? Number(window.localStorage.getItem(COMPARE_COLUMN_COUNT_STORAGE_KEY))
+    : 2;
+  const highestParamCount = searchParams.get("fourth") ? 4 : searchParams.get("third") ? 3 : 2;
+  const storedCount = stored === 3 || stored === 4 ? stored : 2;
+  return Math.max(storedCount, highestParamCount) as CompareColumnCount;
+}
+
+function compareCell(key: CompareSlotKey, content: ReactNode, value: unknown = content, isEmptySlot = false): CompareCell {
+  return { key, content, value, isEmptySlot };
+}
+
 function row(
   key: string,
   label: string,
-  left: ReactNode,
-  right: ReactNode,
-  leftValue: unknown = left,
-  rightValue: unknown = right,
+  cells: CompareCell[],
 ): CompareRow {
-  return { key, label, left, right, leftValue, rightValue };
+  return { key, label, cells };
 }
 
 function buildOverviewRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
   inDepthDolbyVisionProfiles: boolean,
 ): CompareRow[] {
   return [
-    row("filename", t("fileCompare.rows.filename"), left?.filename ?? "n/a", right?.filename ?? "n/a", left?.filename, right?.filename),
-    row("relativePath", t("fileDetail.relativePath"), left?.relative_path ?? "n/a", right?.relative_path ?? "n/a", left?.relative_path, right?.relative_path),
-    row("library", t("fileCompare.rows.library"), left?.library_id ?? "n/a", right?.library_id ?? "n/a", left?.library_id, right?.library_id),
-    row("container", t("fileDetail.containerLabel"), formatContainerLabel(left?.container ?? left?.extension), formatContainerLabel(right?.container ?? right?.extension), left?.container ?? left?.extension, right?.container ?? right?.extension),
-    row("size", t("fileDetail.size"), left ? formatBytes(left.size_bytes) : "n/a", right ? formatBytes(right.size_bytes) : "n/a", left?.size_bytes, right?.size_bytes),
-    row("duration", t("fileDetail.duration"), formatDuration(left?.duration ?? null), formatDuration(right?.duration ?? null), left?.duration, right?.duration),
-    row("quality", t("fileDetail.quality"), left ? `${left.quality_score}/10` : "n/a", right ? `${right.quality_score}/10` : "n/a", left?.quality_score, right?.quality_score),
-    row("videoCodec", t("fileTable.codec"), left?.video_codec ? formatCodecLabel(left.video_codec, "video") : "n/a", right?.video_codec ? formatCodecLabel(right.video_codec, "video") : "n/a", left?.video_codec, right?.video_codec),
-    row("resolution", t("fileTable.resolution"), left?.resolution_category_label ?? left?.resolution ?? "n/a", right?.resolution_category_label ?? right?.resolution ?? "n/a", left?.resolution, right?.resolution),
+    row("filename", t("fileCompare.rows.filename"), columns.map(({ key, detail }) => compareCell(key, detail?.filename ?? "n/a", detail?.filename, !detail))),
+    row("relativePath", t("fileDetail.relativePath"), columns.map(({ key, detail }) => compareCell(key, detail?.relative_path ?? "n/a", detail?.relative_path, !detail))),
+    row("library", t("fileCompare.rows.library"), columns.map(({ key, detail }) => compareCell(key, detail?.library_id ?? "n/a", detail?.library_id, !detail))),
+    row("container", t("fileDetail.containerLabel"), columns.map(({ key, detail }) => compareCell(key, formatContainerLabel(detail?.container ?? detail?.extension), detail?.container ?? detail?.extension, !detail))),
+    row("size", t("fileDetail.size"), columns.map(({ key, detail }) => compareCell(key, detail ? formatBytes(detail.size_bytes) : "n/a", detail?.size_bytes, !detail))),
+    row("duration", t("fileDetail.duration"), columns.map(({ key, detail }) => compareCell(key, formatDuration(detail?.duration ?? null), detail?.duration, !detail))),
+    row("quality", t("fileDetail.quality"), columns.map(({ key, detail }) => compareCell(key, detail ? `${detail.quality_score}/10` : "n/a", detail?.quality_score, !detail))),
+    row("videoCodec", t("fileTable.codec"), columns.map(({ key, detail }) => compareCell(key, detail?.video_codec ? formatCodecLabel(detail.video_codec, "video") : "n/a", detail?.video_codec, !detail))),
+    row("resolution", t("fileTable.resolution"), columns.map(({ key, detail }) => compareCell(key, detail?.resolution_category_label ?? detail?.resolution ?? "n/a", detail?.resolution, !detail))),
     row(
       "hdr",
       t("fileTable.hdr"),
-      left ? formatHdrType(left.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr") : "n/a",
-      right ? formatHdrType(right.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr") : "n/a",
-      formatHdrType(left?.hdr_type, { inDepthDolbyVisionProfiles }) ?? "sdr",
-      formatHdrType(right?.hdr_type, { inDepthDolbyVisionProfiles }) ?? "sdr",
+      columns.map(({ key, detail }) => compareCell(
+        key,
+        detail ? formatHdrType(detail.hdr_type, { inDepthDolbyVisionProfiles }) ?? t("fileTable.sdr") : "n/a",
+        detail ? formatHdrType(detail.hdr_type, { inDepthDolbyVisionProfiles }) ?? "sdr" : null,
+        !detail,
+      )),
     ),
   ];
 }
 
 function buildFormatRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
   return [
-    row("format", t("fileDetail.containerLabel"), formatContainerLabel(left?.container ?? left?.extension), formatContainerLabel(right?.container ?? right?.extension), left?.container ?? left?.extension, right?.container ?? right?.extension),
-    row("bitRate", t("fileDetail.bitRate"), formatBitRate(left?.media_format?.bit_rate), formatBitRate(right?.media_format?.bit_rate), left?.media_format?.bit_rate, right?.media_format?.bit_rate),
-    row("probeScore", t("fileDetail.probeScore"), left?.media_format?.probe_score ?? "n/a", right?.media_format?.probe_score ?? "n/a", left?.media_format?.probe_score, right?.media_format?.probe_score),
-    row("modified", t("fileTable.modified"), left ? formatDate(new Date(left.mtime * 1000).toISOString()) : "n/a", right ? formatDate(new Date(right.mtime * 1000).toISOString()) : "n/a", left?.mtime, right?.mtime),
-    row("lastAnalyzed", t("fileTable.lastAnalyzed"), formatDate(left?.last_analyzed_at ?? null), formatDate(right?.last_analyzed_at ?? null), left?.last_analyzed_at, right?.last_analyzed_at),
+    row("format", t("fileDetail.containerLabel"), columns.map(({ key, detail }) => compareCell(key, formatContainerLabel(detail?.container ?? detail?.extension), detail?.container ?? detail?.extension, !detail))),
+    row("bitRate", t("fileDetail.bitRate"), columns.map(({ key, detail }) => compareCell(key, formatBitRate(detail?.media_format?.bit_rate), detail?.media_format?.bit_rate, !detail))),
+    row("probeScore", t("fileDetail.probeScore"), columns.map(({ key, detail }) => compareCell(key, detail?.media_format?.probe_score ?? "n/a", detail?.media_format?.probe_score, !detail))),
+    row("modified", t("fileTable.modified"), columns.map(({ key, detail }) => compareCell(key, detail ? formatDate(new Date(detail.mtime * 1000).toISOString()) : "n/a", detail?.mtime, !detail))),
+    row("lastAnalyzed", t("fileTable.lastAnalyzed"), columns.map(({ key, detail }) => compareCell(key, formatDate(detail?.last_analyzed_at ?? null), detail?.last_analyzed_at, !detail))),
   ];
 }
 
 function buildQualityRows(
-  left: MediaFileQualityScoreDetail | null,
-  right: MediaFileQualityScoreDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
   const categoryKeys = [
     ...new Set([
-      ...(left?.breakdown.categories.map((category) => category.key) ?? []),
-      ...(right?.breakdown.categories.map((category) => category.key) ?? []),
+      ...columns.flatMap(({ quality }) => quality?.breakdown.categories.map((category) => category.key) ?? []),
     ]),
   ];
   return [
-    row("score", t("fileDetail.quality"), left ? `${left.score}/10` : "n/a", right ? `${right.score}/10` : "n/a", left?.score, right?.score),
-    row("raw", t("fileCompare.rows.rawQuality"), left ? left.score_raw.toFixed(2) : "n/a", right ? right.score_raw.toFixed(2) : "n/a", left?.score_raw, right?.score_raw),
+    row("score", t("fileDetail.quality"), columns.map(({ key, detail, quality }) => compareCell(key, quality ? `${quality.score}/10` : "n/a", quality?.score, !detail))),
+    row("raw", t("fileCompare.rows.rawQuality"), columns.map(({ key, detail, quality }) => compareCell(key, quality ? quality.score_raw.toFixed(2) : "n/a", quality?.score_raw, !detail))),
     ...categoryKeys.map((key) => {
-      const leftCategory = left?.breakdown.categories.find((category) => category.key === key);
-      const rightCategory = right?.breakdown.categories.find((category) => category.key === key);
       return row(
         `category-${key}`,
         t(`quality.category.${key}`),
-        leftCategory ? `${leftCategory.score}/100` : "n/a",
-        rightCategory ? `${rightCategory.score}/100` : "n/a",
-        leftCategory?.score,
-        rightCategory?.score,
+        columns.map(({ key: slotKey, detail, quality }) => {
+          const category = quality?.breakdown.categories.find((entry) => entry.key === key);
+          return compareCell(slotKey, category ? `${category.score}/100` : "n/a", category?.score, !detail);
+        }),
       );
     }),
   ];
@@ -220,146 +284,146 @@ function buildQualityRows(
 
 function buildStreamRows(
   kind: "video" | "audio" | "subtitle",
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
-  const leftStreams =
-    kind === "video" ? left?.video_streams ?? [] : kind === "audio" ? left?.audio_streams ?? [] : left?.subtitle_streams ?? [];
-  const rightStreams =
-    kind === "video" ? right?.video_streams ?? [] : kind === "audio" ? right?.audio_streams ?? [] : right?.subtitle_streams ?? [];
-  const length = Math.max(leftStreams.length, rightStreams.length);
+  const streamGroups = columns.map(({ key, detail }) => ({
+    key,
+    isEmptySlot: !detail,
+    streams: kind === "video" ? detail?.video_streams ?? [] : kind === "audio" ? detail?.audio_streams ?? [] : detail?.subtitle_streams ?? [],
+  }));
+  const length = Math.max(0, ...streamGroups.map(({ streams }) => streams.length));
   const rows: CompareRow[] = [
-    row("count", t("fileCompare.rows.streamCount"), leftStreams.length, rightStreams.length),
+    row("count", t("fileCompare.rows.streamCount"), streamGroups.map(({ key, streams, isEmptySlot }) => compareCell(key, streams.length, streams.length, isEmptySlot))),
   ];
   for (let index = 0; index < length; index += 1) {
-    const leftStream = leftStreams[index] as Record<string, unknown> | undefined;
-    const rightStream = rightStreams[index] as Record<string, unknown> | undefined;
     const label = t("fileCompare.rows.stream", { number: index + 1 });
     if (kind === "video") {
-      rows.push(row(`${kind}-${index}`, label, compactList([
-        valueOrFallback(leftStream?.codec as string | null | undefined, ""),
-        valueOrFallback(leftStream?.profile as string | null | undefined, ""),
-        leftStream?.width && leftStream?.height ? `${leftStream.width}x${leftStream.height}` : "",
-        valueOrFallback(leftStream?.hdr_type as string | null | undefined, ""),
-      ], "n/a"), compactList([
-        valueOrFallback(rightStream?.codec as string | null | undefined, ""),
-        valueOrFallback(rightStream?.profile as string | null | undefined, ""),
-        rightStream?.width && rightStream?.height ? `${rightStream.width}x${rightStream.height}` : "",
-        valueOrFallback(rightStream?.hdr_type as string | null | undefined, ""),
-      ], "n/a"), leftStream ?? null, rightStream ?? null));
+      rows.push(row(`${kind}-${index}`, label, streamGroups.map(({ key, streams, isEmptySlot }) => {
+        const stream = streams[index] as Record<string, unknown> | undefined;
+        return compareCell(key, compactList([
+          valueOrFallback(stream?.codec as string | null | undefined, ""),
+          valueOrFallback(stream?.profile as string | null | undefined, ""),
+          stream?.width && stream?.height ? `${stream.width}x${stream.height}` : "",
+          valueOrFallback(stream?.hdr_type as string | null | undefined, ""),
+        ], "n/a"), stream ?? null, isEmptySlot);
+      })));
     } else if (kind === "audio") {
-      rows.push(row(`${kind}-${index}`, label, compactList([
-        valueOrFallback(leftStream?.codec as string | null | undefined, ""),
-        valueOrFallback(leftStream?.profile as string | null | undefined, ""),
-        valueOrFallback(leftStream?.spatial_audio_profile as string | null | undefined, ""),
-        leftStream?.channels ? `${leftStream.channels} ch` : "",
-        leftStream?.language ? String(leftStream.language) : "",
-      ], "n/a"), compactList([
-        valueOrFallback(rightStream?.codec as string | null | undefined, ""),
-        valueOrFallback(rightStream?.profile as string | null | undefined, ""),
-        valueOrFallback(rightStream?.spatial_audio_profile as string | null | undefined, ""),
-        rightStream?.channels ? `${rightStream.channels} ch` : "",
-        rightStream?.language ? String(rightStream.language) : "",
-      ], "n/a"), leftStream ?? null, rightStream ?? null));
+      rows.push(row(`${kind}-${index}`, label, streamGroups.map(({ key, streams, isEmptySlot }) => {
+        const stream = streams[index] as Record<string, unknown> | undefined;
+        return compareCell(key, compactList([
+          valueOrFallback(stream?.codec as string | null | undefined, ""),
+          valueOrFallback(stream?.profile as string | null | undefined, ""),
+          valueOrFallback(stream?.spatial_audio_profile as string | null | undefined, ""),
+          stream?.channels ? `${stream.channels} ch` : "",
+          stream?.language ? String(stream.language) : "",
+        ], "n/a"), stream ?? null, isEmptySlot);
+      })));
     } else {
-      rows.push(row(`${kind}-${index}`, label, compactList([
-        valueOrFallback(leftStream?.codec as string | null | undefined, ""),
-        valueOrFallback(leftStream?.language as string | null | undefined, ""),
-        valueOrFallback(leftStream?.subtitle_type as string | null | undefined, ""),
-      ], "n/a"), compactList([
-        valueOrFallback(rightStream?.codec as string | null | undefined, ""),
-        valueOrFallback(rightStream?.language as string | null | undefined, ""),
-        valueOrFallback(rightStream?.subtitle_type as string | null | undefined, ""),
-      ], "n/a"), leftStream ?? null, rightStream ?? null));
+      rows.push(row(`${kind}-${index}`, label, streamGroups.map(({ key, streams, isEmptySlot }) => {
+        const stream = streams[index] as Record<string, unknown> | undefined;
+        return compareCell(key, compactList([
+          valueOrFallback(stream?.codec as string | null | undefined, ""),
+          valueOrFallback(stream?.language as string | null | undefined, ""),
+          valueOrFallback(stream?.subtitle_type as string | null | undefined, ""),
+        ], "n/a"), stream ?? null, isEmptySlot);
+      })));
     }
   }
   return rows;
 }
 
 function buildSubtitleRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
   return [
-    ...buildStreamRows("subtitle", left, right, t),
-    row("externalCount", t("fileCompare.rows.externalSubtitleCount"), left?.external_subtitles.length ?? 0, right?.external_subtitles.length ?? 0),
+    ...buildStreamRows("subtitle", columns, t),
+    row("externalCount", t("fileCompare.rows.externalSubtitleCount"), columns.map(({ key, detail }) => compareCell(key, detail?.external_subtitles.length ?? 0, detail?.external_subtitles.length ?? 0, !detail))),
     row(
       "externalPaths",
       t("fileCompare.rows.externalSubtitlePaths"),
-      compactList(left?.external_subtitles.map((subtitle) => subtitle.path) ?? [], "n/a"),
-      compactList(right?.external_subtitles.map((subtitle) => subtitle.path) ?? [], "n/a"),
-      left?.external_subtitles.map((subtitle) => subtitle.path),
-      right?.external_subtitles.map((subtitle) => subtitle.path),
+      columns.map(({ key, detail }) => compareCell(
+        key,
+        compactList(detail?.external_subtitles.map((subtitle) => subtitle.path) ?? [], "n/a"),
+        detail?.external_subtitles.map((subtitle) => subtitle.path),
+        !detail,
+      )),
     ),
   ];
 }
 
 function buildCoverRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
   return [
-    row("embedded", t("fileTable.embeddedCover"), left?.has_embedded_cover ? t("fileCompare.yes") : t("fileCompare.no"), right?.has_embedded_cover ? t("fileCompare.yes") : t("fileCompare.no"), left?.has_embedded_cover, right?.has_embedded_cover),
-    row("codec", t("fileDetail.coverCodec"), left?.embedded_cover_codec || "n/a", right?.embedded_cover_codec || "n/a", left?.embedded_cover_codec, right?.embedded_cover_codec),
-    row("dimensions", t("fileDetail.coverDimensions"), left?.embedded_cover_width && left?.embedded_cover_height ? `${left.embedded_cover_width}x${left.embedded_cover_height}` : "n/a", right?.embedded_cover_width && right?.embedded_cover_height ? `${right.embedded_cover_width}x${right.embedded_cover_height}` : "n/a", [left?.embedded_cover_width, left?.embedded_cover_height], [right?.embedded_cover_width, right?.embedded_cover_height]),
+    row("embedded", t("fileTable.embeddedCover"), columns.map(({ key, detail }) => compareCell(key, detail?.has_embedded_cover ? t("fileCompare.yes") : t("fileCompare.no"), detail?.has_embedded_cover, !detail))),
+    row("codec", t("fileDetail.coverCodec"), columns.map(({ key, detail }) => compareCell(key, detail?.embedded_cover_codec || "n/a", detail?.embedded_cover_codec, !detail))),
+    row("dimensions", t("fileDetail.coverDimensions"), columns.map(({ key, detail }) => compareCell(
+      key,
+      detail?.embedded_cover_width && detail?.embedded_cover_height ? `${detail.embedded_cover_width}x${detail.embedded_cover_height}` : "n/a",
+      [detail?.embedded_cover_width, detail?.embedded_cover_height],
+      !detail,
+    ))),
   ];
 }
 
 function buildChapterRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
-  const leftChapters = left?.chapters ?? [];
-  const rightChapters = right?.chapters ?? [];
-  const length = Math.max(leftChapters.length, rightChapters.length);
-  const rows = [row("count", t("fileTable.chapterCount"), leftChapters.length, rightChapters.length)];
+  const chapterGroups = columns.map(({ key, detail }) => ({ key, isEmptySlot: !detail, chapters: detail?.chapters ?? [] }));
+  const length = Math.max(0, ...chapterGroups.map(({ chapters }) => chapters.length));
+  const rows = [row("count", t("fileTable.chapterCount"), chapterGroups.map(({ key, chapters, isEmptySlot }) => compareCell(key, chapters.length, chapters.length, isEmptySlot)))];
   for (let index = 0; index < length; index += 1) {
-    const leftChapter = leftChapters[index];
-    const rightChapter = rightChapters[index];
     rows.push(row(
       `chapter-${index}`,
       t("fileCompare.rows.chapter", { number: index + 1 }),
-      compactList([leftChapter?.title ?? "", leftChapter?.duration !== null && leftChapter?.duration !== undefined ? formatDuration(leftChapter.duration) : ""], "n/a"),
-      compactList([rightChapter?.title ?? "", rightChapter?.duration !== null && rightChapter?.duration !== undefined ? formatDuration(rightChapter.duration) : ""], "n/a"),
-      leftChapter ?? null,
-      rightChapter ?? null,
+      chapterGroups.map(({ key, chapters, isEmptySlot }) => {
+        const chapter = chapters[index];
+        return compareCell(
+          key,
+          compactList([chapter?.title ?? "", chapter?.duration !== null && chapter?.duration !== undefined ? formatDuration(chapter.duration) : ""], "n/a"),
+          chapter ?? null,
+          isEmptySlot,
+        );
+      }),
     ));
   }
   return rows;
 }
 
 function buildRawRows(
-  left: MediaFileDetail | null,
-  right: MediaFileDetail | null,
+  columns: CompareFileColumn[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): CompareRow[] {
-  const leftKeys = Object.keys(left?.raw_ffprobe_json ?? {}).sort();
-  const rightKeys = Object.keys(right?.raw_ffprobe_json ?? {}).sort();
   return [
-    row("present", t("fileCompare.rows.rawJsonPresent"), left?.raw_ffprobe_json ? t("fileCompare.yes") : t("fileCompare.no"), right?.raw_ffprobe_json ? t("fileCompare.yes") : t("fileCompare.no"), Boolean(left?.raw_ffprobe_json), Boolean(right?.raw_ffprobe_json)),
-    row("keys", t("fileCompare.rows.rawJsonKeys"), compactList(leftKeys, "n/a"), compactList(rightKeys, "n/a"), leftKeys, rightKeys),
+    row("present", t("fileCompare.rows.rawJsonPresent"), columns.map(({ key, detail }) => compareCell(key, detail?.raw_ffprobe_json ? t("fileCompare.yes") : t("fileCompare.no"), Boolean(detail?.raw_ffprobe_json), !detail))),
+    row("keys", t("fileCompare.rows.rawJsonKeys"), columns.map(({ key, detail }) => {
+      const keys = Object.keys(detail?.raw_ffprobe_json ?? {}).sort();
+      return compareCell(key, compactList(keys, "n/a"), keys, !detail);
+    })),
   ];
 }
 
 function SearchSelect({
-  side,
+  slotKey,
   selected,
+  reserveLabelSpace = false,
   libraries,
   libraryId,
-  blockedFileId,
+  blockedFileIds,
   onChangeLibrary,
   onClear,
   onSelect,
 }: {
-  side: CompareSide;
+  slotKey: CompareSlotKey;
   selected: MediaFileDetail | null;
+  reserveLabelSpace?: boolean;
   libraries: LibrarySummary[];
   libraryId: number | null;
-  blockedFileId: number | null;
+  blockedFileIds: number[];
   onChangeLibrary: (libraryId: number | null) => void;
   onClear: () => void;
   onSelect: (fileId: number) => void;
@@ -412,8 +476,10 @@ function SearchSelect({
 
   return (
     <div ref={controlRef} className="file-compare-search-card">
-      {selected ? (
-        <div className="file-compare-search-label">
+      {selected || reserveLabelSpace ? (
+        <div className={`file-compare-search-label${selected ? "" : " is-empty"}`}>
+          {selected ? (
+            <>
           <strong title={selectedPathTitle}>{selected.filename}</strong>
           <button
             type="button"
@@ -425,6 +491,10 @@ function SearchSelect({
           >
             <DeleteIcon size={16} aria-hidden="true" />
           </button>
+            </>
+          ) : (
+            <span aria-hidden="true">&nbsp;</span>
+          )}
         </div>
       ) : null}
       <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
@@ -470,11 +540,11 @@ function SearchSelect({
             ))}
           </div>
         ) : null}
-        <label className="sr-only" htmlFor={`file-compare-${side}-search`}>
-          {t("fileCompare.search.label", { side: t(`fileCompare.${side}`) })}
+        <label className="sr-only" htmlFor={`file-compare-${slotKey}-search`}>
+          {t("fileCompare.search.label", { side: getSlotLabel(slotKey, t) })}
         </label>
         <input
-          id={`file-compare-${side}-search`}
+          id={`file-compare-${slotKey}-search`}
           type="search"
           value={query}
           placeholder={t("fileCompare.search.placeholder")}
@@ -506,7 +576,7 @@ function SearchSelect({
             <div className="file-compare-search-status">{t("fileCompare.search.empty")}</div>
           ) : null}
           {results.map((result) => {
-            const isBlocked = result.id === blockedFileId;
+            const isBlocked = blockedFileIds.includes(result.id);
             return (
               <button
                 key={result.id}
@@ -542,6 +612,63 @@ function SearchSelect({
   );
 }
 
+function ColumnCountPicker({
+  value,
+  onChange,
+}: {
+  value: CompareColumnCount;
+  onChange: (value: CompareColumnCount) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  return (
+    <div ref={pickerRef} className="search-filter-picker file-compare-column-count-picker">
+      <button
+        type="button"
+        className={`file-compare-column-count-button${open ? " is-open" : ""}`}
+        aria-label={t("fileCompare.columnCount.label")}
+        aria-expanded={open}
+        title={t("fileCompare.columnCount.label")}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Columns3Cog size={20} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="search-filter-picker-popover file-compare-column-count-popover" role="menu">
+          {COMPARE_COLUMN_OPTIONS.map(({ count, icon: Icon }) => (
+            <button
+              key={count}
+              type="button"
+              role="menuitemradio"
+              aria-checked={value === count}
+              className={`search-filter-picker-item${value === count ? " is-selected" : ""}`}
+              onClick={() => {
+                onChange(count);
+                setOpen(false);
+              }}
+            >
+              <Icon size={16} aria-hidden="true" />
+              <span>{t(`fileCompare.columnCount.${count}`)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CompareSectionView({
   section,
   showOnlyDifferences = false,
@@ -554,7 +681,7 @@ function CompareSectionView({
   const [open, setOpen] = useState(() => changedCount > 0);
   const [showAllChapters, setShowAllChapters] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
-  const [copiedRawSide, setCopiedRawSide] = useState<CompareSide | null>(null);
+  const [copiedRawSide, setCopiedRawSide] = useState<CompareSlotKey | null>(null);
   const rawCopyResetTimeoutRef = useRef<number | null>(null);
   const Icon = section.icon;
   const isChaptersSection = section.id === "chapters";
@@ -579,9 +706,9 @@ function CompareSectionView({
     }
   }, []);
 
-  const copyRawJson = useCallback(async (side: CompareSide) => {
+  const copyRawJson = useCallback(async (side: CompareSlotKey) => {
     const clipboard = navigator.clipboard;
-    const value = section.rawJson?.[side] ?? {};
+    const value = section.rawJson?.find((entry) => entry.key === side)?.value ?? {};
     if (!clipboard?.writeText) {
       return;
     }
@@ -624,11 +751,24 @@ function CompareSectionView({
         <div className="file-compare-row-list">
           {visibleRows.map((entry) => {
             const changed = compareRowHasDifference(entry);
+            const columnStyle = {
+              "--file-compare-value-columns": entry.cells.length,
+            } as CSSProperties;
             return (
-              <div key={entry.key} className={`file-compare-row${changed ? " has-difference" : " is-identical"}`}>
+              <div
+                key={entry.key}
+                className={`file-compare-row${changed ? " has-difference" : " is-identical"}`}
+                style={columnStyle}
+              >
                 <div className="file-compare-row-label">{entry.label}</div>
-                <div className="file-compare-cell file-compare-cell-left">{entry.left}</div>
-                <div className="file-compare-cell file-compare-cell-right">{entry.right}</div>
+                {entry.cells.map((cellEntry) => (
+                  <div
+                    key={cellEntry.key}
+                    className={`file-compare-cell${cellEntry.isEmptySlot ? " is-empty-slot" : ""}`}
+                  >
+                    {cellEntry.content}
+                  </div>
+                ))}
               </div>
             );
           })}
@@ -657,13 +797,16 @@ function CompareSectionView({
             </div>
           ) : null}
           {hasRawJson && showRawJson ? (
-            <div className="file-compare-raw-json-grid">
-              {(["left", "right"] as CompareSide[]).map((side) => {
-                const copyLabel = copiedRawSide === side ? t("fileDetail.rawJsonCopied") : t("fileDetail.copyRawJson");
+            <div
+              className="file-compare-raw-json-grid"
+              style={{ "--file-compare-value-columns": section.rawJson?.length ?? 2 } as CSSProperties}
+            >
+              {section.rawJson?.map(({ key, label, value }) => {
+                const copyLabel = copiedRawSide === key ? t("fileDetail.rawJsonCopied") : t("fileDetail.copyRawJson");
                 return (
-                  <div key={side} className="file-compare-raw-json-panel">
+                  <div key={key} className="file-compare-raw-json-panel">
                     <div className="file-compare-raw-json-toolbar">
-                      <strong>{side === "left" ? t("fileCompare.left") : t("fileCompare.right")}</strong>
+                      <strong>{label}</strong>
                       <button
                         type="button"
                         className="secondary icon-only-button async-panel-toggle-icon-button-flat file-detail-raw-json-copy-button"
@@ -671,12 +814,12 @@ function CompareSectionView({
                         data-tooltip={copyLabel}
                         title={copyLabel}
                         disabled={!canCopyRawJson}
-                        onClick={() => void copyRawJson(side)}
+                        onClick={() => void copyRawJson(key)}
                       >
                         <CopyIcon aria-hidden="true" className="nav-icon" size={20} />
                       </button>
                     </div>
-                    <JsonPreview value={section.rawJson?.[side] ?? {}} />
+                    <JsonPreview value={value ?? {}} />
                   </div>
                 );
               })}
@@ -693,13 +836,13 @@ export function FileComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { appSettings, libraries, librariesLoaded, loadLibraries } = useAppData();
   const inDepthDolbyVisionProfiles = appSettings.feature_flags.in_depth_dolby_vision_profiles;
-  const leftId = parseFileId(searchParams.get("left"));
-  const rightId = parseFileId(searchParams.get("right"));
-  const [leftState, setLeftState] = useState<CompareFileState>(DEFAULT_FILE_STATE);
-  const [rightState, setRightState] = useState<CompareFileState>(DEFAULT_FILE_STATE);
-  const [leftLibraryFilter, setLeftLibraryFilter] = useState<number | null>(null);
-  const [rightLibraryFilter, setRightLibraryFilter] = useState<number | null>(null);
+  const selectedIds = useMemo(() => Object.fromEntries(
+    COMPARE_SLOTS.map((slot) => [slot.key, parseFileId(searchParams.get(slot.param))]),
+  ) as Record<CompareSlotKey, number | null>, [searchParams]);
+  const [fileStates, setFileStates] = useState<Record<CompareSlotKey, CompareFileState>>(DEFAULT_FILE_STATES);
+  const [libraryFilters, setLibraryFilters] = useState<Record<CompareSlotKey, number | null>>(DEFAULT_LIBRARY_FILTERS);
   const [displayMode, setDisplayMode] = useState<CompareDisplayMode>("all");
+  const [columnCount, setColumnCount] = useState<CompareColumnCount>(() => readStoredCompareColumnCount(searchParams));
 
   useEffect(() => {
     if (!librariesLoaded) {
@@ -707,33 +850,56 @@ export function FileComparePage() {
     }
   }, [librariesLoaded, loadLibraries]);
 
-  const loadFile = useCallback((side: CompareSide, fileId: number | null) => {
-    const setState = side === "left" ? setLeftState : setRightState;
+  useEffect(() => {
+    window.localStorage.setItem(COMPARE_COLUMN_COUNT_STORAGE_KEY, String(columnCount));
+  }, [columnCount]);
+
+  useEffect(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      COMPARE_SLOTS.slice(columnCount).forEach((slot) => next.delete(slot.param));
+      return next.toString() === current.toString() ? current : next;
+    });
+    setFileStates((current) => {
+      const next = { ...current };
+      COMPARE_SLOTS.slice(columnCount).forEach((slot) => {
+        next[slot.key] = { ...DEFAULT_FILE_STATE };
+      });
+      return next;
+    });
+  }, [columnCount, setSearchParams]);
+
+  const loadFile = useCallback((slotKey: CompareSlotKey, fileId: number | null) => {
     if (!fileId) {
-      setState(DEFAULT_FILE_STATE);
+      setFileStates((current) => ({ ...current, [slotKey]: { ...DEFAULT_FILE_STATE } }));
       return;
     }
-    setState((current) => ({ ...current, loading: true, error: null }));
+    setFileStates((current) => ({ ...current, [slotKey]: { ...current[slotKey], loading: true, error: null } }));
     Promise.all([
       api.file(fileId),
       api.fileQualityScore(fileId).catch(() => null),
     ])
       .then(([detail, quality]) => {
-        setState({ detail, quality, loading: false, error: null });
+        setFileStates((current) => ({ ...current, [slotKey]: { detail, quality, loading: false, error: null } }));
       })
       .catch((error: Error) => {
-        setState({ detail: null, quality: null, loading: false, error: error.message });
+        setFileStates((current) => ({ ...current, [slotKey]: { detail: null, quality: null, loading: false, error: error.message } }));
       });
   }, []);
 
-  useEffect(() => loadFile("left", leftId), [leftId, loadFile]);
-  useEffect(() => loadFile("right", rightId), [rightId, loadFile]);
+  useEffect(() => loadFile("left", selectedIds.left), [selectedIds.left, loadFile]);
+  useEffect(() => loadFile("right", selectedIds.right), [selectedIds.right, loadFile]);
+  useEffect(() => loadFile("third", selectedIds.third), [selectedIds.third, loadFile]);
+  useEffect(() => loadFile("fourth", selectedIds.fourth), [selectedIds.fourth, loadFile]);
 
   const updateSelectedFile = useCallback(
-    (side: CompareSide, fileId: number) => {
+    (slotKey: CompareSlotKey, fileId: number) => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
-        next.set(side, String(fileId));
+        const slot = COMPARE_SLOTS.find((entry) => entry.key === slotKey);
+        if (slot) {
+          next.set(slot.param, String(fileId));
+        }
         return next;
       });
     },
@@ -741,10 +907,13 @@ export function FileComparePage() {
   );
 
   const clearSelectedFile = useCallback(
-    (side: CompareSide) => {
+    (slotKey: CompareSlotKey) => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
-        next.delete(side);
+        const slot = COMPARE_SLOTS.find((entry) => entry.key === slotKey);
+        if (slot) {
+          next.delete(slot.param);
+        }
         return next;
       });
     },
@@ -770,70 +939,80 @@ export function FileComparePage() {
     });
   }, [setSearchParams]);
 
+  const visibleSlots = useMemo(() => COMPARE_SLOTS.slice(0, columnCount), [columnCount]);
+  const columns = useMemo<CompareFileColumn[]>(() => visibleSlots.map((slot) => ({
+    ...slot,
+    detail: fileStates[slot.key].detail,
+    quality: fileStates[slot.key].quality,
+  })), [fileStates, visibleSlots]);
+  const selectedVisibleFiles = columns.filter((column) => column.detail);
+  const hasFileLabels = selectedVisibleFiles.length > 0;
+
   const sections = useMemo<CompareSection[]>(() => [
     {
       id: "overview",
       title: t("fileDetail.navigation.overview"),
       icon: Info,
-      rows: buildOverviewRows(leftState.detail, rightState.detail, t, inDepthDolbyVisionProfiles),
+      rows: buildOverviewRows(columns, t, inDepthDolbyVisionProfiles),
     },
     {
       id: "format",
       title: t("fileDetail.format"),
       icon: Film,
-      rows: buildFormatRows(leftState.detail, rightState.detail, t),
+      rows: buildFormatRows(columns, t),
     },
     {
       id: "quality",
       title: t("fileDetail.qualityBreakdown"),
       icon: Gauge,
-      rows: buildQualityRows(leftState.quality, rightState.quality, t),
+      rows: buildQualityRows(columns, t),
     },
     {
       id: "video",
       title: t("fileDetail.videoStreams"),
       icon: Film,
-      rows: buildStreamRows("video", leftState.detail, rightState.detail, t),
+      rows: buildStreamRows("video", columns, t),
     },
     {
       id: "audio",
       title: t("fileDetail.audioStreams"),
       icon: Gauge,
-      rows: buildStreamRows("audio", leftState.detail, rightState.detail, t),
+      rows: buildStreamRows("audio", columns, t),
     },
     {
       id: "subtitles",
       title: t("fileDetail.subtitles"),
       icon: Info,
-      rows: buildSubtitleRows(leftState.detail, rightState.detail, t),
+      rows: buildSubtitleRows(columns, t),
     },
     {
       id: "cover",
       title: t("fileDetail.cover"),
       icon: Info,
-      rows: buildCoverRows(leftState.detail, rightState.detail, t),
+      rows: buildCoverRows(columns, t),
     },
     {
       id: "chapters",
       title: t("fileDetail.chapters"),
       icon: Info,
-      rows: buildChapterRows(leftState.detail, rightState.detail, t),
+      rows: buildChapterRows(columns, t),
     },
     {
       id: "raw",
       title: t("fileDetail.rawJson"),
       icon: FileJson,
-      rows: buildRawRows(leftState.detail, rightState.detail, t),
-      rawJson: {
-        left: leftState.detail?.raw_ffprobe_json ?? {},
-        right: rightState.detail?.raw_ffprobe_json ?? {},
-      },
+      rows: buildRawRows(columns, t),
+      rawJson: columns.map((column) => ({
+        key: column.key,
+        label: column.detail?.filename ?? getSlotLabel(column.key, t),
+        value: column.detail?.raw_ffprobe_json ?? {},
+      })),
     },
-  ], [inDepthDolbyVisionProfiles, leftState.detail, leftState.quality, rightState.detail, rightState.quality, t]);
+  ], [columns, inDepthDolbyVisionProfiles, t]);
 
-  const loading = leftState.loading || rightState.loading;
-  const error = leftState.error ?? rightState.error;
-  const canCompare = Boolean(leftState.detail && rightState.detail);
+  const loading = visibleSlots.some((slot) => fileStates[slot.key].loading);
+  const error = visibleSlots.map((slot) => fileStates[slot.key].error).find(Boolean);
+  const canCompare = selectedVisibleFiles.length >= 2;
   const displayModeOptions = useMemo(
     () => [
       { key: "all" as const, label: t("fileCompare.displayMode.all"), icon: Layers },
@@ -853,67 +1032,79 @@ export function FileComparePage() {
             <h2>{t("fileCompare.title")}</h2>
             <p className="subtitle">{t("fileCompare.subtitle")}</p>
           </div>
+          <div className="file-compare-title-actions">
+            <ColumnCountPicker value={columnCount} onChange={setColumnCount} />
+          </div>
         </div>
         <div className="file-compare-body">
-          <div className={`file-compare-toolbar${leftState.detail || rightState.detail ? " has-file-labels" : ""}`}>
-            <div
-              className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
-              role="group"
-              aria-label={t("fileCompare.displayMode.label")}
-            >
-              <SlidingTogglePill
-                activeKey={displayMode}
-                className="nav-active-pill distribution-chart-mode-pill"
-              />
-              {displayModeOptions.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  data-toggle-key={key}
-                  className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
-                    displayMode === key ? " active" : ""
-                  }`}
-                  aria-label={label}
-                  title={label}
-                  onClick={() => setDisplayMode(key)}
-                >
-                  <span className="distribution-chart-mode-button-content">
-                    <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
-                  </span>
-                </button>
-              ))}
+          <div
+            className={`file-compare-toolbar file-compare-toolbar-${columnCount}-columns${
+              hasFileLabels ? " has-file-labels" : ""
+            }`}
+          >
+            <div className="file-compare-toolbar-controls">
+              <div
+                className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
+                role="group"
+                aria-label={t("fileCompare.displayMode.label")}
+              >
+                <SlidingTogglePill
+                  activeKey={displayMode}
+                  className="nav-active-pill distribution-chart-mode-pill"
+                />
+                {displayModeOptions.map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    data-toggle-key={key}
+                    className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
+                      displayMode === key ? " active" : ""
+                    }`}
+                    aria-label={label}
+                    title={label}
+                    onClick={() => setDisplayMode(key)}
+                  >
+                    <span className="distribution-chart-mode-button-content">
+                      <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <SearchSelect
-              side="left"
-              selected={leftState.detail}
-              libraries={libraries}
-              libraryId={leftLibraryFilter}
-              blockedFileId={rightState.detail?.id ?? null}
-              onChangeLibrary={setLeftLibraryFilter}
-              onClear={() => clearSelectedFile("left")}
-              onSelect={(fileId) => updateSelectedFile("left", fileId)}
-            />
-            <button
-              type="button"
-              className="file-compare-swap-button"
-              aria-label={t("fileCompare.swapFiles")}
-              data-tooltip={t("fileCompare.swapFiles")}
-              title={t("fileCompare.swapFiles")}
-              onClick={swapSelectedFiles}
-              disabled={!leftId && !rightId}
-            >
-              <ChevronsRightLeftIcon size={22} aria-hidden="true" />
-            </button>
-            <SearchSelect
-              side="right"
-              selected={rightState.detail}
-              libraries={libraries}
-              libraryId={rightLibraryFilter}
-              blockedFileId={leftState.detail?.id ?? null}
-              onChangeLibrary={setRightLibraryFilter}
-              onClear={() => clearSelectedFile("right")}
-              onSelect={(fileId) => updateSelectedFile("right", fileId)}
-            />
+            {visibleSlots.map((slot, index) => (
+              <Fragment key={slot.key}>
+                {columnCount === 2 && index === 1 ? (
+                  <button
+                    key="swap"
+                    type="button"
+                    className="file-compare-swap-button"
+                    aria-label={t("fileCompare.swapFiles")}
+                    data-tooltip={t("fileCompare.swapFiles")}
+                    title={t("fileCompare.swapFiles")}
+                    onClick={swapSelectedFiles}
+                    disabled={!selectedIds.left && !selectedIds.right}
+                  >
+                    <ChevronsRightLeftIcon size={22} aria-hidden="true" />
+                  </button>
+                ) : null}
+                <SearchSelect
+                  slotKey={slot.key}
+                  selected={fileStates[slot.key].detail}
+                  reserveLabelSpace={hasFileLabels}
+                  libraries={libraries}
+                  libraryId={libraryFilters[slot.key]}
+                  blockedFileIds={visibleSlots
+                    .filter((otherSlot) => otherSlot.key !== slot.key)
+                    .map((otherSlot) => fileStates[otherSlot.key].detail?.id)
+                    .filter((fileId): fileId is number => typeof fileId === "number")}
+                  onChangeLibrary={(libraryId) => {
+                    setLibraryFilters((current) => ({ ...current, [slot.key]: libraryId }));
+                  }}
+                  onClear={() => clearSelectedFile(slot.key)}
+                  onSelect={(fileId) => updateSelectedFile(slot.key, fileId)}
+                />
+              </Fragment>
+            ))}
           </div>
           <div className="file-compare-results-body">
             {loading ? (

@@ -206,6 +206,18 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
   });
 
+  it("renders changelog issue links as clickable release-note links", async () => {
+    appVersionMock.value = "dev";
+
+    renderShell();
+
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#153" })).toHaveAttribute(
+      "href",
+      "https://github.com/frederikemmer/MediaLyze/issues/153",
+    );
+  });
+
   it("gently highlights enabled telemetry only on the first automatic open after an update", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.2");
 

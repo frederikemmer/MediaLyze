@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Bug, ChevronDown, ChevronRight, Download, GitCompare, House, Settings, X } from "lucide-react";
@@ -34,11 +34,37 @@ const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/frederikemmer";
 const UI_ELEMENTS_CLICK_WINDOW_MS = 1500;
 const UI_ELEMENTS_CLICK_COUNT = 3;
+const RELEASE_NOTE_LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
 
 const CIRCLE_CHEVRON_TRANSITION: Transition = {
   times: [0, 0.4, 1],
   duration: 0.5,
 };
+
+function renderReleaseNoteItem(item: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of item.matchAll(RELEASE_NOTE_LINK_PATTERN)) {
+    const matchIndex = match.index ?? 0;
+    const [fullMatch, label, href] = match;
+    if (matchIndex > lastIndex) {
+      parts.push(item.slice(lastIndex, matchIndex));
+    }
+    parts.push(
+      <a key={`${href}-${matchIndex}`} href={href} target="_blank" rel="noreferrer">
+        {label}
+      </a>,
+    );
+    lastIndex = matchIndex + fullMatch.length;
+  }
+
+  if (lastIndex < item.length) {
+    parts.push(item.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts.map((part, index) => <Fragment key={index}>{part}</Fragment>) : item;
+}
 
 function ReleaseNotesMenuIcon({ open, size = 24 }: { open: boolean; size?: number }) {
   const controls = useAnimation();
@@ -625,7 +651,7 @@ export function AppShell() {
                             {section.title ? <h3>{section.title}</h3> : null}
                             <ul>
                               {section.items.map((item, itemIndex) => (
-                                <li key={`${itemIndex}-${item}`}>{item}</li>
+                                <li key={`${itemIndex}-${item}`}>{renderReleaseNoteItem(item)}</li>
                               ))}
                             </ul>
                           </section>

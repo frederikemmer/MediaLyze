@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 >2026-06-08
 
+Finally file comparison, compare 2 to 4 files in a new page and see the differences!
+Added a Quickscan Button at the library page, a back button to the File-Detail-Page and locked down the shipped quality profiles, so future updates can improve MediaLyze defaults without overwriting your own tuning.
+
 ### ✨ New
 
 - add duplication comparison
@@ -19,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - update Starlette to remediate Host header validation security alert
 - group TV-show bonus pattern folders such as `Season 0`, `Season 00`, and custom specials folders under their show hierarchy as `Specials` [#153](https://github.com/frederikemmer/MediaLyze/issues/153)
 - protect shipped quality profiles while keeping user profiles editable and selectable as defaults
+- keep changelog links clickable in the in-app release history panel
 
 ## v0.14.0
 

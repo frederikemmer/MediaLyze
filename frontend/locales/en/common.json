@@ -1092,6 +1092,8 @@
     "noDifferences": "No differences found.",
     "left": "Left file",
     "right": "Right file",
+    "third": "Third file",
+    "fourth": "Fourth file",
     "yes": "Yes",
     "no": "No",
     "changedCount": "{{count}} changed",
@@ -1105,6 +1107,12 @@
       "label": "Select comparison display",
       "all": "Show all categories, metadata, and metrics",
       "differences": "Show differences only"
+    },
+    "columnCount": {
+      "label": "Select comparison columns",
+      "2": "2 columns",
+      "3": "3 columns",
+      "4": "4 columns"
     },
     "search": {
       "label": "Search {{side}}",

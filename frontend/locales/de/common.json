@@ -1092,6 +1092,8 @@
     "noDifferences": "Keine Unterschiede gefunden.",
     "left": "Linke Datei",
     "right": "Rechte Datei",
+    "third": "Dritte Datei",
+    "fourth": "Vierte Datei",
     "yes": "Ja",
     "no": "Nein",
     "changedCount": "{{count}} geaendert",
@@ -1105,6 +1107,12 @@
       "label": "Vergleichsanzeige auswählen",
       "all": "Alle Kategorien, Metadaten und Metriken anzeigen",
       "differences": "Nur Unterschiede anzeigen"
+    },
+    "columnCount": {
+      "label": "Vergleichsspalten auswählen",
+      "2": "2 Spalten",
+      "3": "3 Spalten",
+      "4": "4 Spalten"
     },
     "search": {
       "label": "{{side}} suchen",

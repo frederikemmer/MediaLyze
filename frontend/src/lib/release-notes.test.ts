@@ -42,7 +42,7 @@ describe("release notes", () => {
     expect(notes).toEqual({
       version: "1.2.3",
       date: "2026-04-22",
-      sections: [{ title: "New", items: ["add one feature (#1)", "improve two"] }],
+      sections: [{ title: "New", items: ["add one feature ([#1](https://example.test/1))", "improve two"] }],
     });
   });
 

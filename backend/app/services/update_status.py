@@ -51,6 +51,12 @@ def _clean_markdown_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _clean_release_note_item_text(value: str) -> str:
+    value = re.sub(r"`([^`]+)`", r"\1", value)
+    value = re.sub(r"\*\*([^*]+)\*\*", r"\1", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def _parse_release_notes_block(version: str, block: str) -> dict | None:
     payload = {"version": version, "date": None, "sections": []}
     current_section: dict | None = None
@@ -71,7 +77,7 @@ def _parse_release_notes_block(version: str, block: str) -> dict | None:
             if current_section is None:
                 current_section = {"title": "", "items": []}
                 payload["sections"].append(current_section)
-            current_section["items"].append(_clean_markdown_text(item_match.group(1)))
+            current_section["items"].append(_clean_release_note_item_text(item_match.group(1)))
     return payload if any(section["items"] for section in payload["sections"]) else None
 
 

@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   Columns3,
+  Columns3Cog,
   Copy,
   Database,
   Diff,
@@ -975,7 +976,9 @@ function ReleaseDialogFixture() {
             <section className="release-notes-section">
               <h3>New</h3>
               <ul>
-                <li>Example release note body.</li>
+                <li>
+                  Example release note with <a href="https://github.com/frederikemmer/MediaLyze/issues/153" onClick={preventCatalogNavigation}>#153</a>.
+                </li>
               </ul>
             </section>
           </div>
@@ -1392,19 +1395,40 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard title="File comparison rows" source="FileComparePage" classes={["file-compare-search-card", "file-compare-row", "has-difference", "is-identical"]} wide>
                 <div className="file-compare-page">
-                  <div className="file-compare-toolbar has-file-labels">
-                    <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
-                      <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
-                      <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
-                        <span className="distribution-chart-mode-button-content">
-                          <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
-                        </span>
-                      </button>
-                      <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
-                        <span className="distribution-chart-mode-button-content">
-                          <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
-                        </span>
-                      </button>
+                  <div className="panel-title-row panel-title-row-with-actions">
+                    <div className="file-compare-title-block">
+                      <h2>Compare files</h2>
+                      <p className="subtitle">Place two analyzed media files side by side and highlight metadata differences.</p>
+                    </div>
+                    <div className="file-compare-title-actions">
+                      <div className="search-filter-picker file-compare-column-count-picker">
+                        <button type="button" className="file-compare-column-count-button is-open" aria-label="Select comparison columns" aria-expanded="true" title="Select comparison columns">
+                          <Columns3Cog size={20} aria-hidden="true" />
+                        </button>
+                        <div className="search-filter-picker-popover file-compare-column-count-popover" role="menu">
+                          <button type="button" className="search-filter-picker-item is-selected" role="menuitemradio" aria-checked="true">
+                            <Columns3 size={16} aria-hidden="true" />
+                            <span>3 columns</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="file-compare-toolbar file-compare-toolbar-3-columns has-file-labels">
+                    <div className="file-compare-toolbar-controls">
+                      <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
+                        <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
+                        <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
+                          <span className="distribution-chart-mode-button-content">
+                            <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
+                          </span>
+                        </button>
+                        <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
+                          <span className="distribution-chart-mode-button-content">
+                            <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
+                          </span>
+                        </button>
+                      </div>
                     </div>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
@@ -1444,6 +1468,18 @@ export function UiElementsPage() {
                         <input type="search" placeholder="Search filename or path" aria-label="Search right file" />
                       </div>
                     </div>
+                    <div className="file-compare-search-card">
+                      <div className="file-compare-search-label">
+                        <strong title="Movies / Sci-Fi/Arrival.2016.HD.mkv">Arrival.2016.HD.mkv</strong>
+                        <button type="button" className="file-compare-clear-file-button" aria-label="Remove Arrival.2016.HD.mkv from comparison" title="Remove Arrival.2016.HD.mkv from comparison">
+                          <DeleteIcon size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div className="metadata-search-control metadata-search-control-base search-filter-picker file-compare-search-control">
+                        <button type="button" className="search-filter-picker-button" aria-label="Filter library"><ListFilter size={18} /></button>
+                        <input type="search" placeholder="Search filename or path" aria-label="Search third file" />
+                      </div>
+                    </div>
                   </div>
                   <section className="panel file-compare-section">
                     <button type="button" className="file-compare-section-toggle" aria-expanded="true">
@@ -1458,15 +1494,17 @@ export function UiElementsPage() {
                       <ChevronDown size={18} />
                     </button>
                     <div className="file-compare-row-list">
-                      <div className="file-compare-row has-difference">
+                      <div className="file-compare-row has-difference" style={{ "--file-compare-value-columns": 3 } as React.CSSProperties}>
                         <div className="file-compare-row-label">Size</div>
-                        <div className="file-compare-cell file-compare-cell-left">18.4 GB</div>
-                        <div className="file-compare-cell file-compare-cell-right">21.1 GB</div>
+                        <div className="file-compare-cell">18.4 GB</div>
+                        <div className="file-compare-cell">21.1 GB</div>
+                        <div className="file-compare-cell">8.6 GB</div>
                       </div>
-                      <div className="file-compare-row is-identical">
+                      <div className="file-compare-row is-identical" style={{ "--file-compare-value-columns": 3 } as React.CSSProperties}>
                         <div className="file-compare-row-label">Resolution</div>
-                        <div className="file-compare-cell file-compare-cell-left">3840x2160</div>
-                        <div className="file-compare-cell file-compare-cell-right">3840x2160</div>
+                        <div className="file-compare-cell">3840x2160</div>
+                        <div className="file-compare-cell">3840x2160</div>
+                        <div className="file-compare-cell">3840x2160</div>
                       </div>
                     </div>
                   </section>

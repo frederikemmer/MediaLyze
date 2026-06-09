@@ -181,6 +181,7 @@ function renderPage(initialEntry = "/files/compare?left=1&right=2") {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -241,6 +242,55 @@ describe("FileComparePage", () => {
     });
     expect(screen.queryByText("Resolution")).not.toBeInTheDocument();
     expect(screen.getByText("Size")).toBeInTheDocument();
+  });
+
+  it("opens the comparison column count menu", async () => {
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrary(1, "Movies")]);
+    vi.spyOn(api, "file").mockImplementation(async (id) =>
+      Number(id) === 1 ? createFile(1) : createFile(2, { filename: "File-2.mkv" }),
+    );
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue({
+      id: 1,
+      score: 8,
+      score_raw: 82,
+      breakdown: { score: 8, score_raw: 82, categories: [] },
+    });
+
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Select comparison columns" }));
+    expect(screen.getByRole("menuitemradio", { name: "2 columns" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "3 columns" }));
+
+    expect(container.querySelector(".file-compare-toolbar-3-columns")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Swap compared files" })).not.toBeInTheDocument();
+  });
+
+  it("keeps empty comparison columns visually neutral", async () => {
+    window.localStorage.setItem("medialyze-file-compare-column-count", "3");
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrary(1, "Movies")]);
+    vi.spyOn(api, "file").mockImplementation(async (id) =>
+      Number(id) === 1 ? createFile(1) : createFile(2, { filename: "File-2.mkv", size_bytes: 12_000_000_000 }),
+    );
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue({
+      id: 1,
+      score: 8,
+      score_raw: 82,
+      breakdown: { score: 8, score_raw: 82, categories: [] },
+    });
+
+    const { container } = renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Compare files" })).toBeInTheDocument();
+    const sizeRow = Array.from(container.querySelectorAll(".file-compare-row")).find((row) =>
+      row.textContent?.includes("Size"),
+    );
+    expect(sizeRow).toHaveClass("has-difference");
+    const cells = Array.from(sizeRow?.querySelectorAll(".file-compare-cell") ?? []);
+    expect(cells).toHaveLength(3);
+    expect(cells[2]).toHaveClass("is-empty-slot");
   });
 
   it("swaps the compared file sides", async () => {

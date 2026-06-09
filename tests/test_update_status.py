@@ -44,7 +44,7 @@ def test_parse_remote_release_notes_reads_released_versions_only() -> None:
                 "## v0.12.0",
                 ">2026-05-15",
                 "### New",
-                "- add `download` button",
+                "- add `download` button [#12](https://github.com/frederikemmer/MediaLyze/issues/12)",
                 "## v0.11.0",
                 "### Fixed",
                 "- improve **history**",
@@ -56,7 +56,7 @@ def test_parse_remote_release_notes_reads_released_versions_only() -> None:
         {
             "version": "0.12.0",
             "date": "2026-05-15",
-            "sections": [{"title": "New", "items": ["add download button"]}],
+            "sections": [{"title": "New", "items": ["add download button [#12](https://github.com/frederikemmer/MediaLyze/issues/12)"]}],
         },
         {
             "version": "0.11.0",

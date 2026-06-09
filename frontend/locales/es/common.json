@@ -1092,6 +1092,8 @@
     "noDifferences": "No se encontraron diferencias.",
     "left": "Archivo izquierdo",
     "right": "Archivo derecho",
+    "third": "Tercer archivo",
+    "fourth": "Cuarto archivo",
     "yes": "Sí",
     "no": "No",
     "changedCount": "{{count}} cambiados",
@@ -1105,6 +1107,12 @@
       "label": "Seleccionar visualización de comparación",
       "all": "Mostrar todas las categorías, metadatos y métricas",
       "differences": "Mostrar solo diferencias"
+    },
+    "columnCount": {
+      "label": "Seleccionar columnas de comparación",
+      "2": "2 columnas",
+      "3": "3 columnas",
+      "4": "4 columnas"
     },
     "search": {
       "label": "Buscar {{side}}",
