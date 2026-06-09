@@ -111,7 +111,7 @@ def test_update_status_returns_persisted_latest_release() -> None:
                 key=UPDATE_STATUS_KEY,
                 value={
                     "latest_version": "9.9.9",
-                    "checked_at": "2026-05-15T00:00:00+00:00",
+                    "checked_at": datetime.now(UTC).isoformat(),
                     "release_notes": [
                         {
                             "version": "9.9.9",

@@ -11,6 +11,7 @@ from backend.app.models.entities import AppSetting
 from backend.app.services.update_status import (
     UPDATE_STATUS_KEY,
     check_for_updates,
+    get_or_check_update_status,
     get_update_status,
     is_newer_stable_version,
     parse_remote_release_notes,
@@ -112,6 +113,25 @@ def test_failed_update_check_keeps_last_successful_result(monkeypatch) -> None:
 
         assert check_for_updates(db, settings) is None
         status = get_update_status(db, settings)
+
+    assert status.latest_version == "0.12.0"
+    assert status.update_available is True
+
+
+def test_get_or_check_update_status_checks_when_no_result_is_cached(monkeypatch) -> None:
+    settings = Settings()
+    settings.app_version = "0.11.0"
+    session_factory = _session_factory()
+
+    def fake_get_text(url: str, _timeout: float) -> str:
+        if url.endswith("/latest"):
+            return json.dumps({"tag_name": "v0.12.0", "draft": False, "prerelease": False})
+        return "## v0.12.0\n\n### New\n\n- newer release"
+
+    monkeypatch.setattr("backend.app.services.update_status._get_text", fake_get_text)
+
+    with session_factory() as db:
+        status = get_or_check_update_status(db, settings)
 
     assert status.latest_version == "0.12.0"
     assert status.update_available is True

@@ -119,6 +119,7 @@ class ScanRuntimeManager:
         self._ensure_telemetry_job()
         self._ensure_update_check_jobs()
         self._recover_orphaned_jobs()
+        self.request_update_check()
         self.sync_all_libraries()
         self.run_history_retention()
         self.request_initial_telemetry_send()

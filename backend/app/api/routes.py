@@ -101,7 +101,7 @@ from backend.app.services.scan_jobs import (
 from backend.app.services.stat_comparisons import get_dashboard_comparison, get_library_comparison
 from backend.app.services.stats import build_dashboard
 from backend.app.services.telemetry import build_telemetry_payload, send_current_telemetry_snapshot
-from backend.app.services.update_status import get_update_status
+from backend.app.services.update_status import get_or_check_update_status
 
 router = APIRouter()
 
@@ -332,7 +332,7 @@ def update_status(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> UpdateStatusRead:
-    return get_update_status(db, settings)
+    return get_or_check_update_status(db, settings)
 
 
 @router.get("/telemetry/preview")

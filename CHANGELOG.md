@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## v0.15.0
 
->2026-06-08
+>2026-06-09
 
 Finally file comparison, compare 2 to 4 files in a new page and see the differences!
 Added a Quickscan Button at the library page, a back button to the File-Detail-Page and locked down the shipped quality profiles, so future updates can improve MediaLyze defaults without overwriting your own tuning.
