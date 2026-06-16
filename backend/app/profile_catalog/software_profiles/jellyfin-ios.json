@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "jellyfin-ios",
+  "name": "Jellyfin (iOS)",
+  "category": "mobile_app",
+  "developer": "Jellyfin",
+  "platforms": ["iOS", "iPadOS"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-15",
+  "last_modified": "2026-06-15",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct", "bit_depth": [8]},
+    "hevc": {"mode": "conditional", "bit_depth": [8, 10], "conditions": [{"kind": "os_version", "value": "iOS 14+"}, {"kind": "device_capability", "value": "Apple A8X or newer"}]},
+    "vp9": {"mode": "video_transcode"}, "av1": {"mode": "video_transcode"}, "mpeg4": {"mode": "video_transcode"}
+  },
+  "audio": {
+    "flac": {"mode": "direct"}, "mp3": {"mode": "direct"}, "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"}, "eac3": {"mode": "direct"}, "vorbis": {"mode": "direct_stream"},
+    "dts": {"mode": "direct_stream"}, "opus": {"mode": "direct"}, "alac": {"mode": "direct"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"}, "m4v": {"mode": "direct"}, "mov": {"mode": "direct"},
+    "mkv": {"mode": "direct_stream"}, "webm": {"mode": "direct_stream"}, "ts": {"mode": "direct_stream"}, "ogg": {"mode": "direct_stream"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"}, "subrip": {"mode": "direct"}, "mov_text": {"mode": "direct"},
+    "webvtt": {"mode": "direct_stream"}, "ass": {"mode": "video_transcode"}, "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"}, "hdmv_pgs_subtitle": {"mode": "video_transcode"}
+  },
+  "rules": [
+    {"id": "ios-hevc-container", "match": {"containers": ["mkv", "ts", "webm"], "video_codecs": ["hevc"]}, "mode": "direct_stream", "note": "HEVC direct playback is limited to MP4, M4V, and MOV containers."},
+    {"id": "ios-opus-mp4", "match": {"containers": ["mp4"], "audio_codecs": ["opus"], "max_audio_channels": 2}, "mode": "conditional", "conditions": [{"kind": "os_version", "value": "iOS 17+"}], "note": "Stereo Opus in MP4 requires iOS 17 or newer."},
+    {"id": "ios-opus-ogg", "match": {"containers": ["ogg"], "audio_codecs": ["opus"]}, "mode": "conditional", "conditions": [{"kind": "os_version", "value": "iOS 18.4+"}]}
+  ],
+  "notes": "HDR also requires an HDR-capable internal display. The official iOS app is distinct from Swiftfin.",
+  "sources": [{"label": "Jellyfin codec support", "url": "https://jellyfin.org/docs/general/clients/codec-support/"}]
+}

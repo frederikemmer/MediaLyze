@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.medialyze.app/schemas/software-profile.schema.json",
+  "title": "MediaLyze software/player profile",
+  "type": "object",
+  "required": [
+    "schema_version", "profile_version", "id", "name", "developer", "status",
+    "added", "last_modified", "video", "audio", "containers", "subtitles", "sources"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile_version": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1 },
+    "developer": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["official", "local"] },
+    "added": { "type": "string", "format": "date" },
+    "last_modified": { "type": "string", "format": "date" },
+    "video": { "type": "object", "additionalProperties": { "$ref": "#/$defs/capability" } },
+    "audio": { "type": "object", "additionalProperties": { "$ref": "#/$defs/capability" } },
+    "containers": { "type": "object", "additionalProperties": { "$ref": "#/$defs/capability" } },
+    "subtitles": { "type": "object", "additionalProperties": { "$ref": "#/$defs/capability" } },
+    "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+    "server_fallback": { "enum": ["unsupported", "transcode"] },
+    "sources": { "type": "array" }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["direct", "direct_stream", "transcode", "video_transcode", "conditional", "unsupported"] },
+        "max_resolution": { "type": ["string", "null"] },
+        "max_width": { "type": ["integer", "null"], "minimum": 1 },
+        "max_height": { "type": ["integer", "null"], "minimum": 1 },
+        "max_fps": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "bit_depth": { "type": "array", "items": { "type": "integer" } },
+        "hdr": { "type": "array", "items": { "type": "string" } },
+        "profiles": { "type": "array", "items": { "type": "string" } },
+        "max_channels": { "type": ["integer", "null"], "minimum": 1 },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "enum": ["client_version", "os_version", "setting", "extension", "hardware_decode", "hdr_display", "device_capability", "tested_only"] },
+        "value": { "type": "string", "minLength": 1 },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "match", "mode"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "match": {
+          "type": "object",
+          "properties": {
+            "containers": { "type": "array", "items": { "type": "string" } },
+            "video_codecs": { "type": "array", "items": { "type": "string" } },
+            "audio_codecs": { "type": "array", "items": { "type": "string" } },
+            "subtitle_formats": { "type": "array", "items": { "type": "string" } },
+            "video_profiles": { "type": "array", "items": { "type": "string" } },
+            "bit_depths": { "type": "array", "items": { "type": "integer" } },
+            "hdr": { "type": "array", "items": { "type": "string" } },
+            "min_audio_channels": { "type": ["integer", "null"], "minimum": 1 },
+            "max_audio_channels": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        },
+        "mode": { "enum": ["direct", "direct_stream", "transcode", "video_transcode", "conditional", "unsupported"] },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "note": { "type": ["string", "null"] },
+        "subtitle_action": { "enum": ["direct", "remux", "convert", "burn_in", null] }
+      }
+    }
+  }
+}

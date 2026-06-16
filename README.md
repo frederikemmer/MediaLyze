@@ -55,11 +55,11 @@ Bring your own auth (for now).
 <table>
   <tr>
     <td><img alt="Dashboard view" src="docs/images/Dashboard_historic.png"></td>
+    <td><img alt="Comparison Page" src="docs/images/Comparison_Page.png"></td>
     <td><img alt="Library edit" src="docs/images/Library_edit.png"></td>
   </tr>
   <tr>
     <td><img alt="Library Tableview" src="docs/images/Library_Tableview.png"></td>
-    <td><img alt="Settings historic data" src="docs/images/Settings_historic_data.png"></td>
   </tr>
 </table>
 

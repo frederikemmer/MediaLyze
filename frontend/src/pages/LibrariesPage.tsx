@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Cpu,
   Database,
   DatabaseSearch,
   FingerprintPattern,
@@ -24,6 +25,9 @@ import {
 } from "lucide-react";
 
 import { AsyncPanel } from "../components/AsyncPanel";
+import { CheckIcon } from "../components/CheckIcon";
+import { CompatibilityProfilesPanel } from "../components/CompatibilityProfilesPanel";
+import { CopyIcon } from "../components/CopyIcon";
 import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
 import { DeleteIcon } from "../components/DeleteIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
@@ -704,6 +708,7 @@ const SETTINGS_NAV_ITEMS: Array<{
 }> = [
   { id: "configuredLibraries", labelKey: "libraries.settingsNavigationLibraries", icon: Database },
   { id: "qualityProfiles", labelKey: "libraries.qualityProfiles.title", icon: SlidersHorizontal },
+  { id: "compatibilityProfiles", labelKey: "compatibilityProfiles.navigationTitle", icon: Cpu },
   { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
   { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Proportions },
   { id: "patternRecognition", labelKey: "libraries.settingsNavigationPatternRecognition", icon: FingerprintPattern },
@@ -4545,7 +4550,7 @@ export function LibrariesPage() {
         collapseActions={
           <button
             type="button"
-            className="quality-profile-create-button"
+            className="secondary small settings-panel-header-action"
             disabled={qualityProfileSaving}
             onClick={() => void createNewQualityProfile()}
           >
@@ -4671,7 +4676,7 @@ export function LibrariesPage() {
                     aria-label={t("libraries.qualityProfiles.setDefault")}
                     onClick={() => void setSelectedQualityProfileAsDefault()}
                   >
-                    <Check aria-hidden="true" className="nav-icon" />
+                    <CheckIcon aria-hidden="true" className="nav-icon" />
                   </button>
                   <button
                     type="button"
@@ -4681,7 +4686,7 @@ export function LibrariesPage() {
                     aria-label={t("libraries.qualityProfiles.duplicate")}
                     onClick={() => void duplicateSelectedQualityProfile()}
                   >
-                    <Copy aria-hidden="true" className="nav-icon" />
+                    <CopyIcon aria-hidden="true" className="nav-icon" />
                   </button>
                   <button
                     type="button"
@@ -4691,7 +4696,7 @@ export function LibrariesPage() {
                     aria-label={t("libraries.qualityProfiles.delete")}
                     onClick={() => void deleteSelectedQualityProfile()}
                   >
-                    <Trash2 aria-hidden="true" className="nav-icon" />
+                    <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
                   </button>
                 </div>
               </div>
@@ -5203,7 +5208,7 @@ export function LibrariesPage() {
                             data-tooltip={t("libraries.deleteTooltip")}
                             onClick={() => void removeLibrary(library.id)}
                           >
-                            <DeleteIcon aria-hidden="true" className="nav-icon" />
+                            <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
                           </button>
                           <button
                             type="button"
@@ -5401,6 +5406,7 @@ export function LibrariesPage() {
           ) : null}
 
           {activeSettingsPanelId === "qualityProfiles" ? renderQualityProfilesPanel() : null}
+          {activeSettingsPanelId === "compatibilityProfiles" ? <CompatibilityProfilesPanel /> : null}
 
           {activeSettingsPanelId === "resolutionCategories" ? (
           <AsyncPanel
@@ -5559,7 +5565,6 @@ export function LibrariesPage() {
           {activeSettingsPanelId === "patternRecognition" ? (
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
-            subtitle={t("libraries.patternRecognition.subtitle")}
             collapseActions={
               <TooltipTrigger
                 ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
@@ -5573,8 +5578,16 @@ export function LibrariesPage() {
           >
             <div className="settings-sidebar-stack">
               <div className="pattern-recognition-doc-row">
-                <p className="field-hint">{t("libraries.patternRecognition.docsHint")}</p>
-                <a href={PATTERN_DOCS_URL} target="_blank" rel="noreferrer" className="secondary small">
+                <div className="pattern-recognition-doc-copy">
+                  <p>{t("libraries.patternRecognition.subtitle")}</p>
+                  <p>{t("libraries.patternRecognition.docsHint")}</p>
+                </div>
+                <a
+                  href={PATTERN_DOCS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="secondary small settings-panel-header-action pattern-recognition-doc-button"
+                >
                   {t("libraries.patternRecognition.docsLink")}
                 </a>
               </div>
@@ -5592,7 +5605,7 @@ export function LibrariesPage() {
                   </div>
                   <button
                     type="button"
-                    className="secondary small"
+                    className="secondary small settings-panel-header-action pattern-recognition-action-button"
                     aria-label={t("libraries.patternRecognition.restoreShowSeasonDefaults")}
                     disabled={isSavingPatternRecognition}
                     onClick={() => void restoreDefaultShowSeasonPatterns()}
@@ -5600,7 +5613,7 @@ export function LibrariesPage() {
                     {t("libraries.patternRecognition.restoreDefaults")}
                   </button>
                 </div>
-                <div className="field" style={{ marginTop: "0.75rem" }}>
+                <div className="field pattern-recognition-mode-field">
                   <label>
                     <span>{t("libraries.patternRecognition.modeLabel")}</span>
                     <select
@@ -5680,7 +5693,7 @@ export function LibrariesPage() {
                   </div>
                   <button
                     type="button"
-                    className="secondary small"
+                    className="secondary small settings-panel-header-action pattern-recognition-action-button"
                     disabled={isSavingPatternRecognition}
                     onClick={() => void restoreDefaultBonusPatterns()}
                   >
@@ -5710,7 +5723,7 @@ export function LibrariesPage() {
                   </div>
                   <button
                     type="button"
-                    className="secondary small"
+                    className="secondary small settings-panel-header-action pattern-recognition-action-button"
                     disabled={isSavingIgnorePatterns}
                     onClick={() => void restoreDefaultIgnorePatterns()}
                   >
@@ -5742,7 +5755,7 @@ export function LibrariesPage() {
               <div className="history-retention-title-actions">
                 <button
                   type="button"
-                  className="small history-retention-primary-button"
+                  className="secondary small settings-panel-header-action history-retention-reconstruct-button"
                   onClick={() => void reconstructHistory()}
                   disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
                 >

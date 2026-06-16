@@ -34,6 +34,9 @@ dev = [
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-data]
+"backend.app" = ["profile_catalog/**/*.json"]
+
 [tool.setuptools.packages.find]
 include = ["backend*"]
 

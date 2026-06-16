@@ -276,6 +276,166 @@ export type QualityProfileDefinition = {
   library_count: number;
 };
 
+export type CatalogSource = "official" | "local";
+export type PlaybackMode =
+  | "direct"
+  | "direct_stream"
+  | "transcode"
+  | "video_transcode"
+  | "conditional"
+  | "unsupported";
+export type CompatibilityStatus =
+  | "direct_play"
+  | "direct_stream"
+  | "video_transcode"
+  | "conditional"
+  | "unsupported";
+
+export type ProfileSource = {
+  label: string;
+  url: string;
+};
+
+export type CompatibilityProfileMetadata = {
+  schema_version: 1;
+  profile_version: number;
+  id: string;
+  name: string;
+  status: "official" | "local";
+  verified_by?: string | null;
+  added: string;
+  last_modified: string;
+  notes?: string | null;
+  sources: ProfileSource[];
+  base_profile_id?: string | null;
+  base_profile_version?: number | null;
+  catalog_source?: CatalogSource | null;
+};
+
+export type HardwareVideoCapability = {
+  hardware_decode: boolean;
+  max_resolution?: string | null;
+  max_width?: number | null;
+  max_height?: number | null;
+  max_fps?: number | null;
+  bit_depth?: number[];
+  hdr?: string[];
+};
+
+export type HardwareProfile = CompatibilityProfileMetadata & {
+  category: string;
+  manufacturer: string;
+  year?: number | null;
+  video: Record<string, HardwareVideoCapability>;
+  audio: Record<string, boolean | "passthrough_only" | "limited">;
+  containers: string[];
+  subtitles: Record<string, boolean | "passthrough_only" | "limited">;
+};
+
+export type SoftwareCapability = {
+  mode: PlaybackMode;
+  max_resolution?: string | null;
+  max_width?: number | null;
+  max_height?: number | null;
+  max_fps?: number | null;
+  bit_depth?: number[];
+  hdr?: string[];
+  profiles?: string[];
+  max_channels?: number | null;
+  conditions?: CapabilityCondition[];
+};
+
+export type CapabilityCondition = {
+  kind:
+    | "client_version"
+    | "os_version"
+    | "setting"
+    | "extension"
+    | "hardware_decode"
+    | "hdr_display"
+    | "device_capability"
+    | "tested_only";
+  value: string;
+  note?: string | null;
+};
+
+export type SoftwareCompatibilityRule = {
+  id: string;
+  match: {
+    containers?: string[];
+    video_codecs?: string[];
+    audio_codecs?: string[];
+    subtitle_formats?: string[];
+    video_profiles?: string[];
+    bit_depths?: number[];
+    hdr?: string[];
+    min_audio_channels?: number | null;
+    max_audio_channels?: number | null;
+  };
+  mode: PlaybackMode;
+  conditions?: CapabilityCondition[];
+  note?: string | null;
+  subtitle_action?: "direct" | "remux" | "convert" | "burn_in" | null;
+};
+
+export type SoftwareProfile = CompatibilityProfileMetadata & {
+  category: string;
+  developer: string;
+  platforms: string[];
+  video: Record<string, SoftwareCapability>;
+  audio: Record<string, SoftwareCapability>;
+  containers: Record<string, SoftwareCapability>;
+  subtitles: Record<string, SoftwareCapability>;
+  rules?: SoftwareCompatibilityRule[];
+  server_fallback?: "unsupported" | "transcode";
+};
+
+export type CompatibilityProfile = CompatibilityProfileMetadata & {
+  hardware_profile_id: string;
+  software_profile_id: string;
+};
+
+export type CompatibilityFinding = {
+  code: string;
+  severity: "info" | "warning" | "error";
+  scope: "container" | "video" | "audio" | "subtitle" | "metadata" | "profile";
+  message: string;
+  blocking: boolean;
+  stream_index?: number | null;
+};
+
+export type CompatibilityEvaluation = {
+  compatibility_profile_id: string;
+  compatibility_profile_name: string;
+  hardware_profile_id: string;
+  hardware_profile_version: number;
+  software_profile_id: string;
+  software_profile_version: number;
+  file_id: number;
+  status: CompatibilityStatus;
+  container_status?: CompatibilityStatus;
+  video_status?: CompatibilityStatus;
+  audio_status?: CompatibilityStatus;
+  subtitle_status?: CompatibilityStatus;
+  selected_audio_stream_index?: number | null;
+  findings: CompatibilityFinding[];
+};
+
+export type ProfileEvaluation = {
+  profile_type: "hardware" | "software";
+  profile_id: string;
+  profile_name: string;
+  profile_version: number;
+  file_id: number;
+  status: CompatibilityStatus;
+  container_status: CompatibilityStatus;
+  video_status: CompatibilityStatus;
+  audio_status: CompatibilityStatus;
+  subtitle_status: CompatibilityStatus;
+  selected_audio_stream_index?: number | null;
+  findings: CompatibilityFinding[];
+};
+
 export type DashboardResponse = {
   totals: Record<string, number>;
   container_distribution: DistributionItem[];
@@ -1200,6 +1360,13 @@ function buildPanelQuery(panels?: readonly string[] | null): string {
   return query ? `?${query}` : "";
 }
 
+function buildRepeatedQuery(key: string, values: readonly string[]): string {
+  if (!values.length) return "";
+  const params = new URLSearchParams();
+  values.forEach((value) => params.append(key, value));
+  return `?${params.toString()}`;
+}
+
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   qualityProfiles: () => request<QualityProfileDefinition[]>("/quality-profiles"),
@@ -1229,6 +1396,57 @@ export const api = {
     request<void>(`/quality-profiles/${profileId}`, {
       method: "DELETE",
     }),
+  hardwareProfiles: () => request<HardwareProfile[]>("/compatibility/hardware-profiles"),
+  softwareProfiles: () => request<SoftwareProfile[]>("/compatibility/software-profiles"),
+  compatibilityProfiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),
+  createHardwareProfile: (payload: HardwareProfile) =>
+    request<HardwareProfile>("/compatibility/hardware-profiles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateHardwareProfile: (id: string, payload: Partial<HardwareProfile>) =>
+    request<HardwareProfile>(`/compatibility/hardware-profiles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteHardwareProfile: (id: string) =>
+    request<void>(`/compatibility/hardware-profiles/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createSoftwareProfile: (payload: SoftwareProfile) =>
+    request<SoftwareProfile>("/compatibility/software-profiles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateSoftwareProfile: (id: string, payload: Partial<SoftwareProfile>) =>
+    request<SoftwareProfile>(`/compatibility/software-profiles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteSoftwareProfile: (id: string) =>
+    request<void>(`/compatibility/software-profiles/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createCompatibilityProfile: (payload: CompatibilityProfile) =>
+    request<CompatibilityProfile>("/compatibility/profiles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateCompatibilityProfile: (id: string, payload: Partial<CompatibilityProfile>) =>
+    request<CompatibilityProfile>(`/compatibility/profiles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteCompatibilityProfile: (id: string) =>
+    request<void>(`/compatibility/profiles/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  fileCompatibility: (id: string | number, profileIds: string[] = []) =>
+    request<CompatibilityEvaluation[]>(
+      `/files/${id}/compatibility${buildRepeatedQuery("profile_ids", profileIds)}`,
+    ),
+  fileHardwareCompatibility: (id: string | number, profileIds: string[] = []) =>
+    request<ProfileEvaluation[]>(
+      `/files/${id}/hardware-compatibility${buildRepeatedQuery("profile_ids", profileIds)}`,
+    ),
+  fileSoftwareCompatibility: (id: string | number, profileIds: string[] = []) =>
+    request<ProfileEvaluation[]>(
+      `/files/${id}/software-compatibility${buildRepeatedQuery("profile_ids", profileIds)}`,
+    ),
   updateStatus: () => request<UpdateStatus>("/update-status"),
   dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
   dashboardHistory: (signal?: AbortSignal) =>

@@ -44,6 +44,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  SquareArrowOutUpRight,
   Trash2,
   X,
 } from "lucide-react";
@@ -55,6 +56,9 @@ import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
 import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
 import { ChevronsRightLeftIcon } from "../components/ChevronsRightLeftIcon";
+import { CheckIcon } from "../components/CheckIcon";
+import { CopyIcon } from "../components/CopyIcon";
+import { DashboardVisibilityIcon } from "../components/DashboardVisibilityIcon";
 import { DeleteIcon } from "../components/DeleteIcon";
 import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { GithubIcon } from "../components/GithubIcon";
@@ -63,7 +67,10 @@ import { PanelEmptyState } from "../components/PanelEmptyState";
 import { PathBrowser } from "../components/PathBrowser";
 import { PathSegmentTrail } from "../components/PathSegmentTrail";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
+import { ProfileFavoriteButton } from "../components/ProfileFavoriteButton";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
+import { SparklesIcon as AnimatedSparklesIcon } from "../components/SparklesIcon";
+import { SquarePenIcon } from "../components/SquarePenIcon";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPanelLayoutMigrationNotice";
@@ -558,7 +565,7 @@ function QualityProfileFixture() {
               <Save className="nav-icon" aria-hidden="true" />
             </button>
             <button type="button" className="quality-profile-action-button" title="Duplicate profile">
-              <Copy className="nav-icon" aria-hidden="true" />
+              <CopyIcon className="nav-icon" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -567,7 +574,7 @@ function QualityProfileFixture() {
         <div className="quality-profile-metric-item">
           <div className="quality-profile-metric-row">
             <button type="button" className="quality-profile-metric-toggle" aria-pressed="true">
-              <Check className="nav-icon" aria-hidden="true" />
+              <CheckIcon className="nav-icon" aria-hidden="true" />
             </button>
             <div className="quality-profile-metric-name">
               <strong>Resolution</strong>
@@ -1119,6 +1126,282 @@ export function UiElementsPage() {
               <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action"]} wide>
                 <SettingsNavigationFixture />
               </VariantCard>
+              <VariantCard title="Compatibility profile list" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-list", "compatibility-profile-list-row", "compatibility-profile-quick-actions"]} wide>
+                <div className="compatibility-profile-list">
+                  <div className="compatibility-profile-search">
+                    <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+                    <input type="search" placeholder="Search profiles" aria-label="Search hardware profiles" />
+                  </div>
+                  <article className="compatibility-profile-list-item">
+                    <div className="compatibility-profile-list-row">
+                      <button type="button" className="compatibility-profile-list-trigger">
+                        <span>Apple TV 4K 3rd Gen</span>
+                        <ChevronDown aria-hidden="true" />
+                      </button>
+                      <div className="compatibility-profile-quick-actions">
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action is-favorite" aria-label="Remove Apple TV profile from favorites" aria-pressed="true">
+                          <AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Edit Apple TV profile">
+                          <SquarePenIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Clone Apple TV profile">
+                          <CopyIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Delete Apple TV profile" disabled>
+                          <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                  <article className="compatibility-profile-list-item is-expanded">
+                    <div className="compatibility-profile-list-row">
+                      <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true">
+                        <span>VLC 3 Desktop</span>
+                        <ChevronDown aria-hidden="true" />
+                      </button>
+                      <div className="compatibility-profile-quick-actions">
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Add VLC profile to favorites" aria-pressed="false">
+                          <AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Edit VLC profile">
+                          <SquarePenIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Clone VLC profile">
+                          <CopyIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Delete VLC profile">
+                          <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="compatibility-profile-details">
+                      <div className="compatibility-profile-form-grid">
+                        <label>Name<input readOnly value="VLC 3 Desktop" /></label>
+                        <label>
+                          Category
+                          <select disabled defaultValue="player">
+                            <option value="player">Media player</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </label>
+                        <label>Developer<input readOnly value="VideoLAN" /></label>
+                        <label>Verified by<select disabled defaultValue="project-documentation"><option value="project-documentation">Project documentation</option></select></label>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </VariantCard>
+              <VariantCard title="Structured compatibility capability editor" source={`${settings} > Hard/Software Profiles > Profile details`} classes={["compatibility-capability-section", "compatibility-capability-row", "compatibility-capability-limits"]} wide>
+                <details className="compatibility-capability-section" open>
+                  <summary>Sources</summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-capability-editor">
+                      <div className="compatibility-capability-row compatibility-source-row">
+                        <label>Label<input defaultValue="Technical specifications" /></label>
+                        <label>
+                          URL
+                          <span className="compatibility-source-url-control is-readonly">
+                            <input type="url" readOnly value="https://example.com/specifications" />
+                            <button type="button" className="secondary icon-only-button compatibility-source-open-button" aria-label="Open source in a new tab">
+                              <SquareArrowOutUpRight size={17} aria-hidden="true" />
+                            </button>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+                <details className="compatibility-capability-section" open>
+                  <summary>Audio capabilities</summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-capability-editor">
+                      <div className="compatibility-capability-row">
+                        <label>
+                          Format
+                          <select defaultValue="truehd">
+                            <option value="aac">AAC (aac)</option>
+                            <option value="eac3">Dolby Digital Plus / E-AC-3 (eac3)</option>
+                            <option value="truehd">Dolby TrueHD (truehd)</option>
+                            <option value="dts_hd">DTS-HD (dts_hd)</option>
+                            <option value="flac">FLAC (flac)</option>
+                          </select>
+                        </label>
+                        <label>
+                          Support
+                          <select defaultValue="passthrough_only">
+                            <option value="true">Supported</option>
+                            <option value="limited">Limited</option>
+                            <option value="passthrough_only">Passthrough only</option>
+                            <option value="false">Unsupported</option>
+                          </select>
+                        </label>
+                        <button type="button" className="secondary icon-only-button compatibility-capability-remove" aria-label="Remove TrueHD">
+                          <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+                <div className="compatibility-video-capability">
+                  <div className="compatibility-capability-row">
+                    <label>
+                      Codec
+                      <select defaultValue="hevc">
+                        <option value="h264">H.264 / AVC (h264)</option>
+                        <option value="hevc">H.265 / HEVC (hevc)</option>
+                        <option value="vvc">H.266 / VVC (vvc)</option>
+                        <option value="av1">AV1 (av1)</option>
+                        <option value="prores">Apple ProRes (prores)</option>
+                      </select>
+                    </label>
+                    <label className="compatibility-hardware-decode-toggle">
+                      <span>Hardware decode</span>
+                      <span className="compatibility-checkbox-field">
+                        <input type="checkbox" defaultChecked />
+                      </span>
+                    </label>
+                  </div>
+                  <div className="compatibility-capability-limits">
+                    <label>Max. resolution<input placeholder="e.g. 4K" /></label>
+                    <label>Max. FPS<input placeholder="e.g. 60" /></label>
+                    <label>Bit depth<input placeholder="e.g. 8, 10" /></label>
+                    <label>HDR formats<input placeholder="e.g. HDR10, Dolby Vision" /></label>
+                  </div>
+                </div>
+                <div className="compatibility-capability-row compatibility-container-row">
+                  <label>
+                    Container
+                    <select defaultValue="mkv">
+                      <option value="mp4">MP4 / ISO Base Media (mp4)</option>
+                      <option value="mkv">Matroska Video (mkv)</option>
+                      <option value="webm">WebM (webm)</option>
+                      <option value="m2ts">Blu-ray MPEG-2 Transport Stream (m2ts)</option>
+                      <option value="mxf">Material Exchange Format (mxf)</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="compatibility-capability-row">
+                  <label>
+                    Subtitle format
+                    <select defaultValue="subrip">
+                      <option value="subrip">SubRip / SRT (subrip)</option>
+                      <option value="ass">Advanced SubStation Alpha (ass)</option>
+                      <option value="webvtt">WebVTT (webvtt)</option>
+                      <option value="hdmv_pgs_subtitle">Blu-ray PGS (hdmv_pgs_subtitle)</option>
+                      <option value="dvd_subtitle">DVD VobSub (dvd_subtitle)</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="compatibility-video-capability">
+                  <div className="compatibility-capability-row">
+                    <label>Codec<select defaultValue="hevc"><option value="hevc">H.265 / HEVC (hevc)</option></select></label>
+                    <label>
+                      Playback mode
+                      <select defaultValue="conditional">
+                        <option value="direct">Direct</option>
+                        <option value="direct_stream">Direct stream / remux</option>
+                        <option value="video_transcode">Video transcode</option>
+                        <option value="conditional">Conditional</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className="compatibility-profile-reason">
+                    Conditions (JSON)
+                    <textarea readOnly rows={3} value={'[{"kind":"device_capability","value":"HEVC decoder"}]'} />
+                  </label>
+                </div>
+                <details className="compatibility-capability-section" open>
+                  <summary>Combined compatibility rules</summary>
+                  <div className="compatibility-capability-section-body">
+                    <textarea className="compatibility-profile-json-editor" readOnly rows={4} value={'[{"id":"hevc-mkv-remux","match":{"containers":["mkv"],"video_codecs":["hevc"]},"mode":"direct_stream"}]'} />
+                  </div>
+                </details>
+              </VariantCard>
+              <VariantCard title="Combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["quality-profile-segments", "quality-profile-segment", "quality-profile-segment-pill"]} wide>
+                <div className="quality-profile-segments" role="tablist" aria-label="Hardware & software profiles">
+                  <SlidingTogglePill activeKey="hardware" className="nav-active-pill quality-profile-segment-pill" />
+                  {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
+                    <button
+                      key={profileTab}
+                      type="button"
+                      data-toggle-key={profileTab}
+                      className={`quality-profile-segment${profileTab === "hardware" ? " is-active" : ""}`}
+                      aria-pressed={profileTab === "hardware"}
+                    >
+                      <span>
+                        {profileTab === "hardware"
+                          ? "Hardware"
+                          : profileTab === "software"
+                            ? "Software / Player"
+                            : "Combination"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </VariantCard>
+              <VariantCard title="Compact profile header action" source={`${settings} > Libraries / Quality / Hard/Software Profiles`} classes={["panel-title-row", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
+                <div className="panel-title-row">
+                  <h2>Hardware &amp; software profiles</h2>
+                  <div className="async-panel-toggle-actions">
+                    <button type="button" className="secondary small settings-panel-header-action compatibility-profile-header-action">
+                      <Plus aria-hidden="true" size={16} />
+                      <span>Add local profile</span>
+                    </button>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Library title actions" source={`${settings} > Libraries`} classes={["library-title-actions", "library-action-tooltip-trigger"]}>
+                <div className="library-title-actions">
+                  <button type="button" className="secondary icon-only-button library-action-tooltip-trigger" aria-label="Show library on dashboard">
+                    <DashboardVisibilityIcon visible />
+                  </button>
+                  <button type="button" className="secondary icon-only-button library-action-tooltip-trigger" aria-label="Rename library">
+                    <SquarePenIcon aria-hidden="true" className="nav-icon" />
+                  </button>
+                  <button type="button" className="secondary icon-only-button library-action-tooltip-trigger" aria-label="Delete library">
+                    <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
+                  </button>
+                </div>
+              </VariantCard>
+              <VariantCard title="History reconstruction action" source={`${settings} > History retention`} classes={["settings-panel-header-action", "history-retention-reconstruct-button"]}>
+                <button type="button" className="secondary small settings-panel-header-action history-retention-reconstruct-button">
+                  Reconstruct history
+                </button>
+              </VariantCard>
+              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["pattern-recognition-doc-button", "pattern-recognition-action-button", "ignore-pattern-action-button"]} wide>
+                <div className="pattern-recognition-doc-row">
+                  <div className="pattern-recognition-doc-copy">
+                    <p>Configure scan-time series and bonus folder patterns plus ignored paths.</p>
+                    <p>Pattern examples and matching rules are documented separately.</p>
+                  </div>
+                  <a href="#pattern-docs" className="secondary small settings-panel-header-action pattern-recognition-doc-button">
+                    Open pattern docs
+                  </a>
+                </div>
+              </VariantCard>
+              <VariantCard title="Pattern recognition mode spacing" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-mode-field"]}>
+                <div>
+                  <div className="distribution-copy">
+                    <strong>Show &amp; Seasons</strong>
+                  </div>
+                  <div className="field pattern-recognition-mode-field">
+                    <label>Recognition mode<select defaultValue="folder-depth"><option value="folder-depth">Folder depth</option></select></label>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Compatibility profile actions" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-action-button"]}>
+                <div className="compatibility-profile-card-actions">
+                  <button type="button" className="secondary compatibility-profile-action-button">
+                    <Copy aria-hidden="true" size={16} />
+                    Edit local copy
+                  </button>
+                  <button type="button" className="compatibility-profile-action-button is-primary">
+                    <Save aria-hidden="true" size={16} />
+                    Save
+                  </button>
+                </div>
+              </VariantCard>
               <VariantCard title="Collapsed settings sidebar" source={`${settings} > Navigation`} classes={["is-settings-nav-collapsed", "settings-navigation-item-content"]}>
                 <SettingsNavigationFixture collapsed />
               </VariantCard>
@@ -1379,6 +1662,74 @@ export function UiElementsPage() {
                   <div className="quality-detail-item">
                     <strong>Audio codec</strong>
                     <ScoreMeter value={76} />
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Favorite compatibility groups" source={`${fileDetail} > Compatibility`} classes={["compatibility-favorite-sections", "compatibility-favorite-section", "compatibility-profile-report"]} wide>
+                <div className="stack">
+                  <div className="panel-title-row">
+                    <h2>Compatibility</h2>
+                    <TooltipTrigger
+                      ariaLabel="Show compatibility favorites help"
+                      content={(
+                        <div className="file-detail-compatibility-help-content">
+                          <span>Click a section&apos;s search field to show all profiles. Favorites stay at the top and are evaluated here.</span>
+                          <a href="/settings">Open Hard/Software Profiles</a>
+                        </div>
+                      )}
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </TooltipTrigger>
+                  </div>
+                  <div className="compatibility-favorite-sections">
+                  <details className="compatibility-favorite-section" open>
+                    <summary>
+                      <span>Hardware</span>
+                      <span className="compatibility-favorite-count">1</span>
+                    </summary>
+                    <div className="compatibility-favorite-section-body">
+                      <div className="compatibility-profile-search">
+                        <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+                        <input aria-label="Search Hardware profiles" placeholder="Search profiles" type="search" />
+                      </div>
+                      <details className="compatibility-favorite-profile" open>
+                        <summary className="compatibility-favorite-profile-summary">
+                          <span>Apple TV 4K 3rd Gen</span>
+                          <span className="compatibility-favorite-profile-actions">
+                            <span className="compatibility-status-badge status-direct_play">Direct play</span>
+                            <span className="compatibility-profile-quick-actions">
+                              <ProfileFavoriteButton
+                                favorite
+                                label="Remove Apple TV 4K 3rd Gen from favorites"
+                                onClick={() => undefined}
+                              />
+                            </span>
+                          </span>
+                        </summary>
+                        <div className="compatibility-favorite-profile-report">
+                          <div className="compatibility-profile-report status-direct_play">
+                            <div className="stream-tooltip-meta">
+                              <span className="stream-tooltip-pill compatibility-scope-pill status-direct_play">Container: Direct play</span>
+                              <span className="stream-tooltip-pill compatibility-scope-pill status-direct_play">Audio: Direct play</span>
+                            </div>
+                            <div className="notice">No compatibility issues detected.</div>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  </details>
+                  <details className="compatibility-favorite-section" open>
+                    <summary>
+                      <span>Software / Player</span>
+                      <span className="compatibility-favorite-count">1</span>
+                    </summary>
+                  </details>
+                  <details className="compatibility-favorite-section" open>
+                    <summary>
+                      <span>Combination</span>
+                      <span className="compatibility-favorite-count">1</span>
+                    </summary>
+                  </details>
                   </div>
                 </div>
               </VariantCard>

@@ -526,6 +526,7 @@ function resolvePythonInvocation() {
 }
 
 export function buildPyInstallerArgs(pythonInvocation, platform = process.platform) {
+  const addDataSeparator = platform === "win32" ? ";" : ":";
   const args = [
     ...pythonInvocation.args,
     "-m",
@@ -544,6 +545,8 @@ export function buildPyInstallerArgs(pythonInvocation, platform = process.platfo
     repoRoot,
     "--collect-data",
     "certifi",
+    "--add-data",
+    `${path.join(repoRoot, "backend", "app", "profile_catalog")}${addDataSeparator}backend/app/profile_catalog`,
   ];
 
   if (platform === "win32") {

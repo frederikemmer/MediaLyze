@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "apple-tv-hd",
+  "name": "Apple TV HD",
+  "category": "streaming_device",
+  "manufacturer": "Apple",
+  "year": 2015,
+  "status": "official",
+  "verified_by": "manufacturer documentation",
+  "added": "2026-06-15",
+  "last_modified": "2026-06-15",
+  "video": {
+    "h264": {
+      "hardware_decode": true,
+      "max_resolution": "1080p",
+      "max_fps": 60,
+      "bit_depth": [8]
+    },
+    "hevc": {
+      "hardware_decode": true,
+      "max_resolution": "1080p",
+      "max_fps": 30,
+      "bit_depth": [8, 10]
+    },
+    "mpeg4": {
+      "hardware_decode": true,
+      "max_width": 640,
+      "max_height": 480,
+      "max_fps": 30,
+      "bit_depth": [8]
+    }
+  },
+  "audio": {
+    "aac": true,
+    "mp3": true,
+    "alac": true,
+    "flac": true,
+    "aiff": true,
+    "wav": true,
+    "ac3": true,
+    "eac3": true
+  },
+  "containers": ["m4v", "mp4", "mov"],
+  "subtitles": {},
+  "notes": "H.264 is documented up to 1080p at 60 fps; HEVC SDR is documented up to 1080p at 30 fps.",
+  "sources": [
+    {
+      "label": "Apple TV HD - Technical Specifications",
+      "url": "https://support.apple.com/en-us/111928"
+    }
+  ]
+}
