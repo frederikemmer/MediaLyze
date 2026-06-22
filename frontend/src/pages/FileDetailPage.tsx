@@ -818,6 +818,36 @@ function FavoriteCompatibilityResults({
   const [activeSearchSections, setActiveSearchSections] = useState<Set<CompatibilityProfileType>>(
     () => new Set(),
   );
+  const closeProfileSearch = useCallback((type?: CompatibilityProfileType) => {
+    setActiveSearchSections((current) => {
+      if (!current.size) return current;
+      if (!type) return new Set();
+      if (!current.has(type)) return current;
+      const next = new Set(current);
+      next.delete(type);
+      return next;
+    });
+    setSearchQueries((current) => {
+      if (!type) {
+        return current.hardware || current.software || current.compatibility
+          ? { hardware: "", software: "", compatibility: "" }
+          : current;
+      }
+      return current[type] ? { ...current, [type]: "" } : current;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeSearchSections.size) return undefined;
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".compatibility-favorite-section-body")) return;
+      closeProfileSearch();
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [activeSearchSections, closeProfileSearch]);
+
   const relevantScopes = useMemo<CompatibilityScope[]>(() => {
     const scopes: CompatibilityScope[] = ["container"];
     if ((file?.video_streams.length ?? 0) > 0) scopes.push("video");
@@ -905,12 +935,7 @@ function FavoriteCompatibilityResults({
             className="compatibility-favorite-section-body"
             onBlurCapture={(event) => {
               if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-              setActiveSearchSections((current) => {
-                const next = new Set(current);
-                next.delete(section.type);
-                return next;
-              });
-              setSearchQueries((current) => ({ ...current, [section.type]: "" }));
+              closeProfileSearch(section.type);
             }}
           >
             <div className="compatibility-profile-search">

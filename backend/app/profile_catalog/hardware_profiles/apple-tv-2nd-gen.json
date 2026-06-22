@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "profile_version": 1,
+  "profile_version": 3,
   "id": "apple-tv-2nd-gen",
   "name": "Apple TV 2nd Gen",
   "category": "streaming_device",
@@ -9,26 +9,32 @@
   "status": "official",
   "verified_by": "manufacturer documentation",
   "added": "2026-06-15",
-  "last_modified": "2026-06-15",
+  "last_modified": "2026-06-22",
   "video": {
     "h264": {
       "hardware_decode": true,
       "max_resolution": "720p",
       "max_fps": 30,
-      "bit_depth": [8]
+      "bit_depth": [
+        8
+      ]
     },
     "mpeg4": {
       "hardware_decode": true,
       "max_width": 640,
       "max_height": 480,
       "max_fps": 30,
-      "bit_depth": [8]
+      "bit_depth": [
+        8
+      ]
     },
     "mjpeg": {
       "hardware_decode": true,
       "max_resolution": "720p",
       "max_fps": 30,
-      "bit_depth": [8]
+      "bit_depth": [
+        8
+      ]
     }
   },
   "audio": {
@@ -39,8 +45,31 @@
     "wav": true,
     "ac3": "passthrough_only"
   },
-  "containers": ["m4v", "mp4", "mov", "avi"],
-  "subtitles": {},
+  "containers": [
+    "m4v",
+    "mp4",
+    "mov",
+    "avi",
+    "mp3",
+    "m4a",
+    "m4b",
+    "aac",
+    "aif",
+    "aiff",
+    "wav"
+  ],
+  "subtitles": {
+    "srt": true,
+    "subrip": true,
+    "mov_text": true,
+    "webvtt": true,
+    "ass": "limited",
+    "ssa": "limited",
+    "dvd_subtitle": "limited",
+    "hdmv_pgs_subtitle": "limited",
+    "pgs": "limited",
+    "dvb_subtitle": "limited"
+  },
   "notes": "H.264 is documented up to 720p at 30 fps. Dolby Digital 5.1 is passthrough only.",
   "sources": [
     {

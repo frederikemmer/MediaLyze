@@ -620,7 +620,21 @@ describe("FileDetailPage", () => {
       String(file.id),
       [hardware.id, otherHardware.id],
     ));
+    fireEvent.pointerDown(document.body);
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).toBeInTheDocument();
     fireEvent.blur(hardwareSearch, { relatedTarget: null });
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).toBeInTheDocument();
+    fireEvent.focus(hardwareSearch);
+    expect(within(sections[0] as HTMLElement).getByText("Other Device")).toBeInTheDocument();
+    fireEvent.click(within(sections[0] as HTMLElement).getByRole("button", {
+      name: "Remove Other Device from favorites",
+    }));
+    await waitFor(() => expect(api.fileHardwareCompatibility).toHaveBeenLastCalledWith(
+      String(file.id),
+      [hardware.id],
+    ));
+    fireEvent.pointerDown(document.body);
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).not.toBeInTheDocument();
 
     const hardwareProfileRow = screen.getByText("Test Device").closest("details");
     expect(hardwareProfileRow).not.toBeNull();

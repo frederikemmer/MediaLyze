@@ -161,6 +161,54 @@ def test_official_profiles_explicitly_declare_current_schema_fields() -> None:
         assert payload["server_fallback"] in {"unsupported", "transcode"}
 
 
+def test_official_apple_tv_profiles_include_common_subtitle_formats() -> None:
+    catalog_root = Path("backend/app/profile_catalog/hardware_profiles")
+    expected_direct = {"srt", "subrip", "mov_text", "webvtt"}
+    expected_limited = {"ass", "ssa", "dvd_subtitle", "hdmv_pgs_subtitle", "pgs", "dvb_subtitle"}
+    for path in sorted(catalog_root.glob("apple-tv*.json")):
+        subtitles = json.loads(path.read_text(encoding="utf-8"))["subtitles"]
+        assert {key for key, value in subtitles.items() if value is True} >= expected_direct
+        assert {key for key, value in subtitles.items() if value == "limited"} >= expected_limited
+
+
+def test_official_apple_tv_profiles_include_safe_audio_containers() -> None:
+    catalog_root = Path("backend/app/profile_catalog/hardware_profiles")
+    expected_audio_containers = {"mp3", "m4a", "m4b", "aac", "aif", "aiff", "wav"}
+    for path in sorted(catalog_root.glob("apple-tv*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        containers = set(payload["containers"])
+        assert containers >= expected_audio_containers
+        if payload["audio"].get("flac") is True:
+            assert "flac" in containers
+
+
+def test_official_apple_tv_profiles_direct_play_common_audiobook_containers(tmp_path) -> None:
+    settings = Settings(config_path=tmp_path)
+    hardware_profiles = {
+        profile.id: profile
+        for profile in list_profiles(settings, "hardware")
+        if profile.id.startswith("apple-tv")
+    }
+    for hardware in hardware_profiles.values():
+        mp3_result = evaluate_hardware_profile(
+            _file(extension="mp3", video_streams=[], audio_streams=[
+                SimpleNamespace(stream_index=0, codec="mp3", default_flag=True),
+            ]),
+            hardware,
+        )
+        assert mp3_result.container_status == CompatibilityStatus.direct_play
+        assert mp3_result.audio_status == CompatibilityStatus.direct_play
+
+        m4b_result = evaluate_hardware_profile(
+            _file(extension="m4b", video_streams=[], audio_streams=[
+                SimpleNamespace(stream_index=0, codec="aac", default_flag=True),
+            ]),
+            hardware,
+        )
+        assert m4b_result.container_status == CompatibilityStatus.direct_play
+        assert m4b_result.audio_status == CompatibilityStatus.direct_play
+
+
 def test_local_profiles_are_atomic_and_cannot_shadow_official_profiles(tmp_path) -> None:
     settings = Settings(config_path=tmp_path)
     created = create_local_profile(settings, "hardware", _hardware().model_dump(mode="json"))

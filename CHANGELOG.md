@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-Adds a new Hardware & Software Profiles area with official and local device/player profiles, favorite profile evaluations on file details, and GitHub proposal links for community profile contributions.
+Adds the new Hardware & Software Profiles feature for official and local device/player profiles and a compatibility checks section on the file-detail-page. The profile catalog is still in a very early stage, so contributions with new profiles, additions, and corrections are especially welcome to help build it out and correct possible mistakes.
 
 ### ✨ New
 

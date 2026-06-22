@@ -998,6 +998,7 @@
   "compatibilityProfiles": {
     "title": "Hardware & software profiles",
     "navigationTitle": "Hard/Software Profiles",
+    "developmentNote": "This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections.",
     "tabs": {
       "hardware": "Hardware",
       "software": "Software / Player",

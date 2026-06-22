@@ -1599,6 +1599,9 @@ export function CompatibilityProfilesPanel() {
       collapseActions={createAction}
     >
       <div className="compatibility-profile-panel">
+        <p className="compatibility-profile-development-note">
+          {t("compatibilityProfiles.developmentNote")}
+        </p>
         <div
           className="quality-profile-segments"
           role="tablist"

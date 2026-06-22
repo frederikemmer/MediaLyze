@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "profile_version": 1,
+  "profile_version": 3,
   "id": "apple-tv-4k-2nd-gen",
   "name": "Apple TV 4K 2nd Gen",
   "category": "streaming_device",
@@ -9,27 +9,38 @@
   "status": "official",
   "verified_by": "manufacturer documentation",
   "added": "2026-06-15",
-  "last_modified": "2026-06-15",
+  "last_modified": "2026-06-22",
   "video": {
     "h264": {
       "hardware_decode": true,
       "max_resolution": "4K",
       "max_fps": 60,
-      "bit_depth": [8]
+      "bit_depth": [
+        8
+      ]
     },
     "hevc": {
       "hardware_decode": true,
       "max_resolution": "4K",
       "max_fps": 60,
-      "bit_depth": [8, 10],
-      "hdr": ["HDR10", "HLG", "Dolby Vision"]
+      "bit_depth": [
+        8,
+        10
+      ],
+      "hdr": [
+        "HDR10",
+        "HLG",
+        "Dolby Vision"
+      ]
     },
     "mpeg4": {
       "hardware_decode": true,
       "max_width": 640,
       "max_height": 480,
       "max_fps": 30,
-      "bit_depth": [8]
+      "bit_depth": [
+        8
+      ]
     }
   },
   "audio": {
@@ -42,8 +53,31 @@
     "ac3": true,
     "eac3": true
   },
-  "containers": ["m4v", "mp4", "mov"],
-  "subtitles": {},
+  "containers": [
+    "m4v",
+    "mp4",
+    "mov",
+    "mp3",
+    "m4a",
+    "m4b",
+    "aac",
+    "aif",
+    "aiff",
+    "wav",
+    "flac"
+  ],
+  "subtitles": {
+    "srt": true,
+    "subrip": true,
+    "mov_text": true,
+    "webvtt": true,
+    "ass": "limited",
+    "ssa": "limited",
+    "dvd_subtitle": "limited",
+    "hdmv_pgs_subtitle": "limited",
+    "pgs": "limited",
+    "dvb_subtitle": "limited"
+  },
   "notes": "Dolby Vision Profile 5, HDR10, and HLG are documented up to 2160p at 60 fps.",
   "sources": [
     {

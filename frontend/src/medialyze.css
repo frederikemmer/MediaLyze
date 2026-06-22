@@ -1270,7 +1270,7 @@
 .settings-layout {
   display: flex;
   gap: 0;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .settings-main-column,
@@ -1292,6 +1292,7 @@
 }
 
 .settings-main-column {
+  align-self: flex-start;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1329,9 +1330,10 @@
 }
 
 .settings-navigation-panel {
-  position: sticky;
+  position: static;
   top: 96px;
   z-index: 1;
+  align-self: flex-start;
   flex: 0 0 260px;
   width: 260px;
   display: grid;
@@ -1619,6 +1621,8 @@
 }
 
 .file-detail-navigation-panel {
+  position: sticky;
+  top: 96px;
   align-self: start;
 }
 
@@ -5228,6 +5232,14 @@ html[data-theme="dark"] .comparison-chart-renderer-option.active {
 
 .compatibility-profile-header-action {
   flex: 0 0 auto;
+}
+
+.compatibility-profile-development-note {
+  max-width: 46rem;
+  margin: -0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .compatibility-profile-card-actions,

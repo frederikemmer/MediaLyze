@@ -1322,25 +1322,30 @@ export function UiElementsPage() {
                 </details>
               </VariantCard>
               <VariantCard title="Combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["quality-profile-segments", "quality-profile-segment", "quality-profile-segment-pill"]} wide>
-                <div className="quality-profile-segments" role="tablist" aria-label="Hardware & software profiles">
-                  <SlidingTogglePill activeKey="hardware" className="nav-active-pill quality-profile-segment-pill" />
-                  {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
-                    <button
-                      key={profileTab}
-                      type="button"
-                      data-toggle-key={profileTab}
-                      className={`quality-profile-segment${profileTab === "hardware" ? " is-active" : ""}`}
-                      aria-pressed={profileTab === "hardware"}
-                    >
-                      <span>
-                        {profileTab === "hardware"
-                          ? "Hardware"
-                          : profileTab === "software"
-                            ? "Software / Player"
-                            : "Combination"}
-                      </span>
-                    </button>
-                  ))}
+                <div className="compatibility-profile-panel">
+                  <p className="compatibility-profile-development-note">
+                    This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections.
+                  </p>
+                  <div className="quality-profile-segments" role="tablist" aria-label="Hardware & software profiles">
+                    <SlidingTogglePill activeKey="hardware" className="nav-active-pill quality-profile-segment-pill" />
+                    {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
+                      <button
+                        key={profileTab}
+                        type="button"
+                        data-toggle-key={profileTab}
+                        className={`quality-profile-segment${profileTab === "hardware" ? " is-active" : ""}`}
+                        aria-pressed={profileTab === "hardware"}
+                      >
+                        <span>
+                          {profileTab === "hardware"
+                            ? "Hardware"
+                            : profileTab === "software"
+                              ? "Software / Player"
+                              : "Combination"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </VariantCard>
               <VariantCard title="Compact profile header action" source={`${settings} > Libraries / Quality / Hard/Software Profiles`} classes={["panel-title-row", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
