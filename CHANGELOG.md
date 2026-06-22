@@ -12,6 +12,10 @@ Adds the new Hardware & Software Profiles feature for official and local device/
 - link the MediaLyze header brand back to the dashboard for easier home navigation [#156](https://github.com/frederikemmer/MediaLyze/issues/156)
 - use animated copy, check, and delete icons for hardware/software and quality profile actions
 
+### 🔒 Security
+
+- update frontend, desktop, and backend dependency locks to resolve Dependabot alerts
+
 ## v0.15.0
 
 >2026-06-09
