@@ -1112,8 +1112,11 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Version and update labels" source={header} classes={["app-version", "app-version-update"]}>
+              <VariantCard title="Brand, version, and update labels" source={header} classes={["app-title-link", "app-version", "app-version-update"]}>
                 <div className="app-title-block">
+                  <a href="/" className="app-title-link" aria-label="Dashboard" onClick={preventCatalogNavigation}>
+                    <h1>MediaLyze</h1>
+                  </a>
                   <button type="button" className="app-version">dev</button>
                   <span className="app-version-update">Update available: v0.15.0</span>
                 </div>

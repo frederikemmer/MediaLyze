@@ -375,7 +375,9 @@ export function AppShell() {
       <header className="panel hero-panel">
         <div className="app-header media-header">
           <div className="app-title-block">
-            <h1>{t("app.title")}</h1>
+            <NavLink to="/" end className="app-title-link" aria-label={`${t("app.title")} ${t("nav.homeAria")}`}>
+              <h1>{t("app.title")}</h1>
+            </NavLink>
             <button
               type="button"
               className="app-version"

@@ -4,34 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-- Make every official software profile explicitly declare the current schema's combined-rule list and server fallback, and add catalog consistency coverage for required metadata, IDs, sources, and schema versions.
-- Document the complete compatibility-profile schema, evaluation semantics, contribution workflow, profile revision rules, schema-version policy, and schema change history.
-- Add seven official Jellyfin client software profiles and extend compatibility evaluation with separate Direct Stream, video-transcode, and conditional results, per-media-part statuses, capability conditions, combined codec/container rules, audio channel limits, codec profiles, and subtitle processing actions.
-- Replace raw hardware/software profile capability JSON fields with compact structured source, codec, container, audio, and subtitle editors that preserve the underlying profile schema, use the standard settings controls, and include an Other profile category.
-- Mark empty compatibility capability examples explicitly in localized placeholders.
-- Replace the video codec datalist with a visible dropdown of common ffprobe codec identifiers while preserving unknown identifiers from existing profiles.
-- Use a checkbox for the boolean hardware-decoding capability.
-- Replace container datalists with visible dropdowns of common media-container identifiers while preserving unknown identifiers from existing profiles.
-- Replace audio-codec datalists with visible dropdowns of common ffprobe audio codec identifiers while preserving unknown identifiers from existing profiles.
-- Replace subtitle-format datalists with visible dropdowns of common ffprobe subtitle identifiers while preserving unknown identifiers from existing profiles.
-- Add an external-link action to source URL fields when profiles are viewed read-only.
-- Style hardware-decoding checkboxes consistently with the application settings controls in light and dark themes.
-- Add six distinct official Apple TV hardware profiles, each backed by its matching Apple technical-specification source.
-- Rename the user-facing Compatibility profile type to Combination while retaining compatibility evaluation terminology.
-- Add locally persisted favorite toggles for hardware, software, and combination profiles.
-- Show favorite hardware, software, and combination compatibility results in grouped expandable sections on file details.
-- Evaluate hardware and software profiles independently on file details, expand all three favorite groups by default, and subtly color-code support results.
-- Present each favorite compatibility evaluation as a compact expandable row with its name and overall support status.
-- Add a file-detail Compatibility tooltip linking to the profile settings where visible favorites are configured.
-- Limit file-detail compatibility reports to media parts that actually exist, so audio-only files omit video and subtitle statuses.
-- Add profile search and favorite toggles to each file-detail compatibility section, and evaluate only the selected favorites.
-- Keep file-detail compatibility lists focused on favorites until search is activated, with favorites ordered first and matching Settings-style favorite actions.
-- Use the same shared animated favorite-button component for compatibility profiles in Settings and file details.
-- Flatten expanded file-detail compatibility reports so their content sits directly inside the profile row without an additional nested panel.
+Adds a new Hardware & Software Profiles area with official and local device/player profiles, favorite profile evaluations on file details, and GitHub proposal links for community profile contributions.
 
 ### ✨ New
 
 - add versioned hardware, software/player, and compatibility profiles with local JSON storage, compact list editing and cloning actions, on-demand file compatibility results, and GitHub issue proposals
+- link the MediaLyze header brand back to the dashboard for easier home navigation [#156](https://github.com/frederikemmer/MediaLyze/issues/156)
 - use animated copy, check, and delete icons for hardware/software and quality profile actions
 
 ## v0.15.0

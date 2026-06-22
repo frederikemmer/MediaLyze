@@ -59,9 +59,9 @@ function createAppSettings(overrides: AppSettingsOverrides = {}): AppSettings {
   };
 }
 
-function renderShell() {
+function renderShell(initialEntries = ["/"]) {
   return render(
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={initialEntries}>
       <AppDataProvider>
         <ScanJobsProvider>
           <Routes>
@@ -99,6 +99,20 @@ afterEach(() => {
 });
 
 describe("AppShell", () => {
+  it("links the MediaLyze brand back to the dashboard", async () => {
+    window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
+
+    renderShell(["/settings"]);
+
+    expect(await screen.findByText("Settings page")).toBeInTheDocument();
+    const brandLink = screen.getByRole("link", { name: "MediaLyze Home" });
+    expect(brandLink).toHaveAttribute("href", "/");
+
+    fireEvent.click(brandLink);
+
+    expect(await screen.findByText("Dashboard")).toBeInTheDocument();
+  });
+
   it("opens the hidden UI elements page after three quick settings icon clicks in dev builds", async () => {
     appVersionMock.value = "dev";
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "dev");
