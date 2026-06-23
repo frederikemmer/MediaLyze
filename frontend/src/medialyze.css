@@ -1621,8 +1621,6 @@
 }
 
 .file-detail-navigation-panel {
-  position: sticky;
-  top: 96px;
   align-self: start;
 }
 
