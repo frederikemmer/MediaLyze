@@ -52,6 +52,7 @@ selector. Add a `language.<language-code>` entry to all locale files:
 - `frontend/locales/en/common.json`
 - `frontend/locales/de/common.json`
 - `frontend/locales/es/common.json`
+- `frontend/locales/uk/common.json`
 - `frontend/locales/<language-code>/common.json`
 
 Example:
@@ -62,7 +63,8 @@ Example:
     "en": "English",
     "de": "German",
     "es": "Spanish",
-    "uk": "Ukrainian"
+    "uk": "Ukrainian",
+    "<language-code>": "<Language name>"
   }
 }
 ```

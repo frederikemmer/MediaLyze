@@ -1,10 +1,9 @@
-import "./i18n";
-
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "./App";
+import i18n from "./i18n";
 import { api, type AppSettings } from "./lib/api";
 
 const appVersionMock = vi.hoisted(() => ({ value: "dev" }));
@@ -89,6 +88,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
+  void i18n.changeLanguage("en");
 });
 
 describe("App routing", () => {
@@ -130,5 +131,17 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByText("Dashboard route")).toBeInTheDocument());
     expect(screen.queryByRole("heading", { name: "UI elements" })).not.toBeInTheDocument();
+  });
+
+  it("uses the persisted interface language when no local language is stored", async () => {
+    vi.mocked(api.appSettings).mockResolvedValue({
+      ...createAppSettings(),
+      ui_preferences: { interface_language: "uk", color_theme: "system" },
+    });
+
+    renderApp("/");
+
+    await waitFor(() => expect(i18n.language).toBe("uk"));
+    expect(window.localStorage.getItem("medialyze-language")).toBe("uk");
   });
 });

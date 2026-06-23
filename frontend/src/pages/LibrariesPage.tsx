@@ -36,6 +36,7 @@ import { RemoveIcon } from "../components/RemoveIcon";
 import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TooltipTrigger } from "../components/TooltipTrigger";
+import { SUPPORTED_INTERFACE_LANGUAGES, type SupportedInterfaceLanguage } from "../i18n";
 import { useAppData } from "../lib/app-data";
 import {
   api,
@@ -965,7 +966,7 @@ export function LibrariesPage() {
     setAppSettings(updated);
   }
 
-  async function updateInterfaceLanguage(nextLanguage: "en" | "de") {
+  async function updateInterfaceLanguage(nextLanguage: SupportedInterfaceLanguage) {
     await i18n.changeLanguage(nextLanguage);
     try {
       const updated = await api.updateAppSettings({
@@ -6126,12 +6127,13 @@ export function LibrariesPage() {
                   <select
                     id="app-language"
                     value={i18n.resolvedLanguage ?? "en"}
-                    onChange={(event) => void updateInterfaceLanguage(event.target.value as "en" | "de")}
+                    onChange={(event) => void updateInterfaceLanguage(event.target.value as SupportedInterfaceLanguage)}
                   >
-                    <option value="en">{t("language.en")}</option>
-                    <option value="de">{t("language.de")}</option>
-                    <option value="es">{t("language.es")}</option>
-
+                    {SUPPORTED_INTERFACE_LANGUAGES.map((language) => (
+                      <option key={language} value={language}>
+                        {t(`language.${language}`)}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="field">

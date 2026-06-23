@@ -10,11 +10,16 @@ Adds the new Hardware & Software Profiles feature for official and local device/
 
 - add versioned hardware, software/player, and compatibility profiles with local JSON storage, compact list editing and cloning actions, on-demand file compatibility results, and GitHub issue proposals
 - link the MediaLyze header brand back to the dashboard for easier home navigation [#156](https://github.com/frederikemmer/MediaLyze/issues/156)
+- add ukrainian interface language [#155](https://github.com/frederikemmer/MediaLyze/pull/155) by [@rodion981](https://github.com/rodion981)
 - use animated copy, check, and delete icons for hardware/software and quality profile actions
 
 ### 🔒 Security
 
 - update frontend, desktop, and backend dependency locks to resolve Dependabot alerts
+
+### New Contributors
+
+[@rodion981](https://github.com/rodion981) in [#155](https://github.com/frederikemmer/MediaLyze/pull/155)
 
 ## v0.15.0
 

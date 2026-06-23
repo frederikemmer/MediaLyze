@@ -962,7 +962,7 @@ export type AppSettings = {
     };
   };
   ui_preferences?: {
-    interface_language: "en" | "de";
+    interface_language: "en" | "de" | "es" | "uk";
     color_theme: "system" | "light" | "dark";
   };
   telemetry?: {
@@ -1679,7 +1679,7 @@ export const api = {
       };
     };
     ui_preferences?: {
-      interface_language?: "en" | "de";
+      interface_language?: "en" | "de" | "es" | "uk";
       color_theme?: "system" | "light" | "dark";
     };
     telemetry?: {
