@@ -216,7 +216,7 @@ def _deserialize_ui_preferences(payload: Any) -> UiPreferencesRead:
     language = candidate.get("interface_language")
     color_theme = candidate.get("color_theme")
     return UiPreferencesRead(
-        interface_language=language if language in ("en", "de") else "en",
+        interface_language=language if language in ("en", "de", "es", "uk") else "en",
         color_theme=color_theme if color_theme in ("system", "light", "dark") else "system",
     )
 

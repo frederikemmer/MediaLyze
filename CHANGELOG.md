@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ New
+
+- add Ukrainian as a selectable interface language and persist it through app settings
+
 ## v0.15.0
 
 >2026-06-09

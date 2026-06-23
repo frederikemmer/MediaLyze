@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import i18n, { getStoredInterfaceLanguage } from "../i18n";
 import { api, type AppSettings, type DashboardResponse, type LibrarySummary } from "./api";
 import { defaultPatternRecognitionSettings } from "./pattern-recognition";
 import { DEFAULT_RESOLUTION_CATEGORIES, normalizeResolutionCategories } from "./resolution-categories";
@@ -255,6 +256,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       .appSettings()
       .then((payload) => {
         const normalized = normalizeAppSettings(payload);
+        const persistedLanguage = normalized.ui_preferences?.interface_language;
+        if (!getStoredInterfaceLanguage() && persistedLanguage && i18n.language !== persistedLanguage) {
+          void i18n.changeLanguage(persistedLanguage);
+        }
         setAppSettingsState(normalized);
         setAppSettingsLoaded(true);
         return normalized;

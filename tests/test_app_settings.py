@@ -313,7 +313,7 @@ def test_update_app_settings_persists_ui_preferences(tmp_path) -> None:
             db,
             AppSettingsUpdate(
                 ui_preferences={
-                    "interface_language": "de",
+                    "interface_language": "uk",
                     "color_theme": "dark",
                 }
             ),
@@ -321,9 +321,9 @@ def test_update_app_settings_persists_ui_preferences(tmp_path) -> None:
         )
         loaded = get_app_settings(db, settings)
 
-    assert updated.ui_preferences.interface_language == "de"
+    assert updated.ui_preferences.interface_language == "uk"
     assert updated.ui_preferences.color_theme == "dark"
-    assert loaded.ui_preferences.interface_language == "de"
+    assert loaded.ui_preferences.interface_language == "uk"
     assert loaded.ui_preferences.color_theme == "dark"
 
 
