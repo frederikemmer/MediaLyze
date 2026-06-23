@@ -8,9 +8,14 @@ import { AppDataProvider } from "../lib/app-data";
 import {
   api,
   type AppSettings,
+  type CompatibilityEvaluation,
+  type CompatibilityProfile,
+  type HardwareProfile,
   type MediaFileDetail,
   type MediaFileHistory,
   type MediaFileQualityScoreDetail,
+  type ProfileEvaluation,
+  type SoftwareProfile,
 } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { FileDetailPage } from "./FileDetailPage";
@@ -407,6 +412,24 @@ function renderPage(fileId: number) {
       items: [],
     });
   }
+  if (!vi.isMockFunction(api.fileCompatibility)) {
+    vi.spyOn(api, "fileCompatibility").mockResolvedValue([]);
+  }
+  if (!vi.isMockFunction(api.fileHardwareCompatibility)) {
+    vi.spyOn(api, "fileHardwareCompatibility").mockResolvedValue([]);
+  }
+  if (!vi.isMockFunction(api.fileSoftwareCompatibility)) {
+    vi.spyOn(api, "fileSoftwareCompatibility").mockResolvedValue([]);
+  }
+  if (!vi.isMockFunction(api.hardwareProfiles)) {
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValue([]);
+  }
+  if (!vi.isMockFunction(api.softwareProfiles)) {
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([]);
+  }
+  if (!vi.isMockFunction(api.compatibilityProfiles)) {
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([]);
+  }
 
   return render(
     <MemoryRouter initialEntries={[`/files/${fileId}`]}>
@@ -432,6 +455,210 @@ afterEach(() => {
 });
 
 describe("FileDetailPage", () => {
+  it("groups favorite compatibility results into expandable hardware, software, and combination sections", async () => {
+    const file: MediaFileDetail = {
+      ...createFileDetail(),
+      video_codec: null,
+      resolution: null,
+      resolution_category_id: null,
+      resolution_category_label: null,
+      hdr_type: null,
+      video_streams: [],
+      subtitle_languages: [],
+      subtitle_codecs: [],
+      subtitle_sources: [],
+      subtitle_streams: [],
+      external_subtitles: [],
+    };
+    const hardware: HardwareProfile = {
+      schema_version: 1,
+      profile_version: 1,
+      id: "test-device",
+      name: "Test Device",
+      category: "streaming_device",
+      manufacturer: "Test",
+      status: "local",
+      added: "2026-06-10",
+      last_modified: "2026-06-10",
+      sources: [],
+      video: {},
+      audio: {},
+      containers: [],
+      subtitles: {},
+    };
+    const otherHardware: HardwareProfile = {
+      ...hardware,
+      id: "other-device",
+      name: "Other Device",
+    };
+    const software: SoftwareProfile = {
+      schema_version: 1,
+      profile_version: 1,
+      id: "test-player",
+      name: "Test Player",
+      category: "player",
+      developer: "Test",
+      platforms: [],
+      status: "local",
+      added: "2026-06-10",
+      last_modified: "2026-06-10",
+      sources: [],
+      video: {},
+      audio: {},
+      containers: {},
+      subtitles: {},
+    };
+    const combination: CompatibilityProfile = {
+      schema_version: 1,
+      profile_version: 1,
+      id: "test-combination",
+      name: "Living Room",
+      hardware_profile_id: hardware.id,
+      software_profile_id: software.id,
+      status: "local",
+      added: "2026-06-10",
+      last_modified: "2026-06-10",
+      sources: [],
+    };
+    const evaluation: CompatibilityEvaluation = {
+      compatibility_profile_id: combination.id,
+      compatibility_profile_name: combination.name,
+      hardware_profile_id: hardware.id,
+      hardware_profile_version: 1,
+      software_profile_id: software.id,
+      software_profile_version: 1,
+      file_id: file.id,
+      status: "direct_play",
+      container_status: "direct_play",
+      video_status: "direct_play",
+      audio_status: "direct_stream",
+      subtitle_status: "conditional",
+      selected_audio_stream_index: 1,
+      findings: [],
+    };
+    const hardwareEvaluation: ProfileEvaluation = {
+      profile_type: "hardware",
+      profile_id: hardware.id,
+      profile_name: hardware.name,
+      profile_version: 1,
+      file_id: file.id,
+      status: "direct_play",
+      container_status: "direct_play",
+      video_status: "direct_play",
+      audio_status: "direct_play",
+      subtitle_status: "direct_play",
+      selected_audio_stream_index: 1,
+      findings: [],
+    };
+    const softwareEvaluation: ProfileEvaluation = {
+      ...hardwareEvaluation,
+      profile_type: "software",
+      profile_id: software.id,
+      profile_name: software.name,
+      status: "direct_stream",
+      audio_status: "direct_stream",
+    };
+    window.localStorage.setItem(
+      "medialyze.compatibility-profile-favorites",
+      JSON.stringify([
+        `hardware:${hardware.id}`,
+        `software:${software.id}`,
+        `compatibility:${combination.id}`,
+      ]),
+    );
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    vi.spyOn(api, "fileCompatibility").mockResolvedValue([evaluation]);
+    vi.spyOn(api, "fileHardwareCompatibility").mockResolvedValue([hardwareEvaluation]);
+    vi.spyOn(api, "fileSoftwareCompatibility").mockResolvedValue([softwareEvaluation]);
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValue([hardware, otherHardware]);
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([software]);
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([combination]);
+
+    const { container } = renderPage(file.id);
+
+    await selectFileDetailPanel("Compatibility");
+    expect(await screen.findByRole("heading", { name: "Compatibility" })).toBeInTheDocument();
+    const favoritesHelp = screen.getByRole("button", { name: "Show compatibility favorites help" });
+    fireEvent.mouseEnter(favoritesHelp);
+    const favoritesTooltip = await screen.findByRole("tooltip");
+    expect(favoritesTooltip).toHaveTextContent("Click a section's search field to show all profiles");
+    expect(within(favoritesTooltip).getByRole("link", { name: "Open Hard/Software Profiles" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+    const sections = Array.from(container.querySelectorAll(".compatibility-favorite-section"));
+    expect(sections).toHaveLength(3);
+    sections.forEach((section) => expect(section).toHaveAttribute("open"));
+    const profileRows = Array.from(container.querySelectorAll(".compatibility-favorite-profile"));
+    expect(profileRows).toHaveLength(3);
+    profileRows.forEach((profile) => expect(profile).not.toHaveAttribute("open"));
+    expect(within(profileRows[0] as HTMLElement).getByText("Test Device")).toBeInTheDocument();
+    expect(within(profileRows[0] as HTMLElement).getByText("Direct play")).toBeInTheDocument();
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).not.toBeInTheDocument();
+    expect(api.fileHardwareCompatibility).toHaveBeenCalledWith(String(file.id), [hardware.id]);
+
+    const hardwareSearch = within(sections[0] as HTMLElement).getByRole("searchbox", {
+      name: "Search Hardware profiles",
+    });
+    fireEvent.focus(hardwareSearch);
+    expect(within(sections[0] as HTMLElement).getByText("Other Device")).toBeInTheDocument();
+    const visibleHardwareNames = Array.from(
+      (sections[0] as HTMLElement).querySelectorAll(
+        ".compatibility-favorite-profile-summary > span:first-child, .compatibility-favorite-profile-row > span:first-child",
+      ),
+    ).map((node) => node.textContent);
+    expect(visibleHardwareNames).toEqual(["Test Device", "Other Device"]);
+    fireEvent.change(hardwareSearch, { target: { value: "Other Device" } });
+    expect(within(sections[0] as HTMLElement).getByText("Other Device")).toBeInTheDocument();
+    expect(within(sections[0] as HTMLElement).queryByText("Test Device")).not.toBeInTheDocument();
+    fireEvent.click(within(sections[0] as HTMLElement).getByRole("button", {
+      name: "Add Other Device to favorites",
+    }));
+    await waitFor(() => expect(api.fileHardwareCompatibility).toHaveBeenLastCalledWith(
+      String(file.id),
+      [hardware.id, otherHardware.id],
+    ));
+    fireEvent.pointerDown(document.body);
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).toBeInTheDocument();
+    fireEvent.blur(hardwareSearch, { relatedTarget: null });
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).toBeInTheDocument();
+    fireEvent.focus(hardwareSearch);
+    expect(within(sections[0] as HTMLElement).getByText("Other Device")).toBeInTheDocument();
+    fireEvent.click(within(sections[0] as HTMLElement).getByRole("button", {
+      name: "Remove Other Device from favorites",
+    }));
+    await waitFor(() => expect(api.fileHardwareCompatibility).toHaveBeenLastCalledWith(
+      String(file.id),
+      [hardware.id],
+    ));
+    fireEvent.pointerDown(document.body);
+    expect(within(sections[0] as HTMLElement).queryByText("Other Device")).not.toBeInTheDocument();
+
+    const hardwareProfileRow = screen.getByText("Test Device").closest("details");
+    expect(hardwareProfileRow).not.toBeNull();
+    fireEvent.click(within(hardwareProfileRow as HTMLElement).getByText("Test Device"));
+    expect(hardwareProfileRow).toHaveAttribute("open");
+    expect(within(hardwareProfileRow as HTMLElement).getByText(/Container: Direct play/)).toBeInTheDocument();
+    expect(within(hardwareProfileRow as HTMLElement).getByText(/Audio: Direct play/)).toBeInTheDocument();
+    expect(within(hardwareProfileRow as HTMLElement).queryByText(/Video:/)).not.toBeInTheDocument();
+    expect(within(hardwareProfileRow as HTMLElement).queryByText(/Subtitles:/)).not.toBeInTheDocument();
+
+    const softwareProfileRow = screen.getByText("Test Player").closest("details");
+    expect(softwareProfileRow).not.toBeNull();
+    fireEvent.click(within(softwareProfileRow as HTMLElement).getByText("Test Player"));
+    expect(softwareProfileRow).toHaveAttribute("open");
+    expect(within(softwareProfileRow as HTMLElement).getByText(/Audio: Direct stream/)).toBeInTheDocument();
+
+    const combinationProfileRow = screen.getByText("Living Room").closest("details");
+    expect(combinationProfileRow).not.toBeNull();
+    fireEvent.click(within(combinationProfileRow as HTMLElement).getByText("Living Room"));
+    expect(combinationProfileRow).toHaveAttribute("open");
+    expect(within(combinationProfileRow as HTMLElement).queryByText(/Video:/)).not.toBeInTheDocument();
+    expect(within(combinationProfileRow as HTMLElement).queryByText(/Subtitles:/)).not.toBeInTheDocument();
+  });
+
   it("renders overview badges and swaps active panels from the navigation", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "profile_version": 5,
+  "id": "apple-tv-4k-3rd-gen",
+  "name": "Apple TV 4K 3rd Gen",
+  "category": "streaming_device",
+  "manufacturer": "Apple",
+  "year": 2022,
+  "status": "official",
+  "verified_by": "manufacturer documentation",
+  "added": "2026-06-10",
+  "last_modified": "2026-06-22",
+  "video": {
+    "h264": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8
+      ]
+    },
+    "hevc": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8,
+        10
+      ],
+      "hdr": [
+        "HDR10",
+        "HDR10+",
+        "HLG",
+        "Dolby Vision"
+      ]
+    },
+    "av1": {
+      "hardware_decode": false
+    }
+  },
+  "audio": {
+    "aac": true,
+    "mp3": true,
+    "alac": true,
+    "flac": true,
+    "aiff": true,
+    "wav": true,
+    "ac3": true,
+    "eac3": true
+  },
+  "containers": [
+    "m4v",
+    "mp4",
+    "mov",
+    "mp3",
+    "m4a",
+    "m4b",
+    "aac",
+    "aif",
+    "aiff",
+    "wav",
+    "flac"
+  ],
+  "subtitles": {
+    "srt": true,
+    "subrip": true,
+    "mov_text": true,
+    "webvtt": true,
+    "ass": "limited",
+    "ssa": "limited",
+    "dvd_subtitle": "limited",
+    "hdmv_pgs_subtitle": "limited",
+    "pgs": "limited",
+    "dvb_subtitle": "limited"
+  },
+  "notes": "Dolby Vision Profile 5, HDR10+, HDR10, and HLG are documented up to 2160p at 60 fps. Container support is limited to formats explicitly listed by Apple.",
+  "sources": [
+    {
+      "label": "Apple TV 4K (3rd generation) - Tech Specs",
+      "url": "https://support.apple.com/en-us/111839"
+    }
+  ]
+}

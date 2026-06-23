@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.medialyze.app/schemas/hardware-profile.schema.json",
+  "title": "MediaLyze hardware profile",
+  "type": "object",
+  "required": [
+    "schema_version", "profile_version", "id", "name", "category", "manufacturer",
+    "status", "added", "last_modified", "video", "audio", "containers", "subtitles", "sources"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile_version": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1 },
+    "category": { "type": "string", "minLength": 1 },
+    "manufacturer": { "type": "string", "minLength": 1 },
+    "year": { "type": ["integer", "null"], "minimum": 1970 },
+    "status": { "enum": ["official", "local"] },
+    "added": { "type": "string", "format": "date" },
+    "last_modified": { "type": "string", "format": "date" },
+    "video": { "type": "object", "additionalProperties": { "$ref": "#/$defs/videoCapability" } },
+    "audio": { "type": "object", "additionalProperties": { "$ref": "#/$defs/hardwareSupport" } },
+    "containers": { "type": "array", "items": { "type": "string" } },
+    "subtitles": { "type": "object", "additionalProperties": { "$ref": "#/$defs/hardwareSupport" } },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } }
+  },
+  "$defs": {
+    "hardwareSupport": { "oneOf": [{ "type": "boolean" }, { "enum": ["passthrough_only", "limited"] }] },
+    "videoCapability": {
+      "type": "object",
+      "required": ["hardware_decode"],
+      "properties": {
+        "hardware_decode": { "type": "boolean" },
+        "max_resolution": { "type": ["string", "null"] },
+        "max_width": { "type": ["integer", "null"], "minimum": 1 },
+        "max_height": { "type": ["integer", "null"], "minimum": 1 },
+        "max_fps": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "bit_depth": { "type": "array", "items": { "type": "integer" } },
+        "hdr": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["label", "url"],
+      "properties": { "label": { "type": "string" }, "url": { "type": "string", "format": "uri" } }
+    }
+  }
+}

@@ -209,6 +209,15 @@ test("desktop backend packaging explicitly collects certifi CA data", () => {
   assert.equal(args.at(-1), path.join(repoRoot, "backend", "app", "launcher.py"));
 });
 
+test("desktop backend packaging includes the compatibility profile catalog", () => {
+  const args = buildPyInstallerArgs({ command: "python", args: [] }, "linux");
+  const addDataIndex = args.findIndex((value) => value === "--add-data");
+
+  assert.notEqual(addDataIndex, -1);
+  assert.match(args[addDataIndex + 1], /backend[\\/]app[\\/]profile_catalog/);
+  assert.match(args[addDataIndex + 1], /:backend[\\/]app[\\/]profile_catalog$/);
+});
+
 test("parseOtoolDependencies extracts linked library paths", () => {
   const dependencies = parseOtoolDependencies(`/tmp/ffprobe:
 \t/opt/homebrew/Cellar/ffmpeg/8.1/lib/libavdevice.62.dylib (compatibility version 62.0.0, current version 62.3.100)

@@ -4,9 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.16.0
+
+>2026-06-23
+
+Adds the new Hardware & Software Profiles feature for official and local device/player profiles and a compatibility checks section on the file-detail-page. The profile catalog is still in a very early stage, so contributions with new profiles, additions, and corrections are especially welcome to help build it out and correct possible mistakes.
+
 ### ✨ New
 
-- add Ukrainian as a selectable interface language and persist it through app settings
+- add versioned hardware, software/player, and compatibility profiles with local JSON storage, compact list editing and cloning actions, on-demand file compatibility results, and GitHub issue proposals
+- link the MediaLyze header brand back to the dashboard for easier home navigation [#156](https://github.com/frederikemmer/MediaLyze/issues/156)
+- add Ukrainian interface language [#155](https://github.com/frederikemmer/MediaLyze/pull/155) by [@rodion981](https://github.com/rodion981)
+- use animated copy, check, and delete icons for hardware/software and quality profile actions
+
+### 🔒 Security
+
+- update frontend, desktop, and backend dependency locks to resolve Dependabot alerts
+
+### New Contributors
+
+[@rodion981](https://github.com/rodion981) in [#155](https://github.com/frederikemmer/MediaLyze/pull/155)
 
 ## v0.15.0
 

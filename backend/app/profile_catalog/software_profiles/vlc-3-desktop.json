@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "vlc-3-desktop",
+  "name": "VLC 3 Desktop",
+  "category": "player",
+  "developer": "VideoLAN",
+  "platforms": ["Windows", "macOS", "Linux"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-10",
+  "last_modified": "2026-06-10",
+  "video": {
+    "h264": {"mode": "direct"},
+    "hevc": {"mode": "direct"},
+    "av1": {"mode": "direct"}
+  },
+  "audio": {
+    "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"},
+    "eac3": {"mode": "direct"},
+    "truehd": {"mode": "direct"},
+    "dts": {"mode": "direct"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "mkv": {"mode": "direct"},
+    "mov": {"mode": "direct"},
+    "avi": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"},
+    "ass": {"mode": "direct"},
+    "ssa": {"mode": "direct"},
+    "pgs": {"mode": "direct"}
+  },
+  "rules": [],
+  "server_fallback": "unsupported",
+  "notes": "Actual hardware acceleration and output support depend on the host system.",
+  "sources": [
+    {
+      "label": "VLC features",
+      "url": "https://www.videolan.org/vlc/features.html"
+    }
+  ]
+}

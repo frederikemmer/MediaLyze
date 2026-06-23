@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.medialyze.app/schemas/compatibility-profile.schema.json",
+  "title": "MediaLyze compatibility profile",
+  "type": "object",
+  "required": [
+    "schema_version", "profile_version", "id", "name", "status", "added",
+    "last_modified", "hardware_profile_id", "software_profile_id"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile_version": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1 },
+    "status": { "const": "local" },
+    "added": { "type": "string", "format": "date" },
+    "last_modified": { "type": "string", "format": "date" },
+    "hardware_profile_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "software_profile_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+  }
+}

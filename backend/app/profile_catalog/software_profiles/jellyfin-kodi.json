@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "jellyfin-kodi",
+  "name": "Jellyfin (Kodi)",
+  "category": "player",
+  "developer": "Jellyfin",
+  "platforms": ["Kodi"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-15",
+  "last_modified": "2026-06-15",
+  "server_fallback": "transcode",
+  "video": {
+    "mpeg4": {"mode": "direct"}, "h264": {"mode": "direct", "bit_depth": [8, 10]},
+    "hevc": {"mode": "direct", "bit_depth": [8, 10]}, "vp9": {"mode": "direct"}, "av1": {"mode": "direct"}
+  },
+  "audio": {
+    "flac": {"mode": "direct"}, "mp3": {"mode": "direct"}, "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"}, "eac3": {"mode": "direct"}, "vorbis": {"mode": "direct"},
+    "dts": {"mode": "direct"}, "opus": {"mode": "direct"}, "alac": {"mode": "direct"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"}, "mkv": {"mode": "direct"}, "webm": {"mode": "direct"},
+    "ts": {"mode": "direct"}, "ogg": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"}, "subrip": {"mode": "direct"}, "webvtt": {"mode": "direct"},
+    "ass": {"mode": "direct"}, "ssa": {"mode": "direct"}, "dvd_subtitle": {"mode": "direct"},
+    "hdmv_pgs_subtitle": {"mode": "direct"}, "dvb_subtitle": {"mode": "direct"}
+  },
+  "rules": [],
+  "notes": "Actual decoding remains dependent on the Kodi host and is constrained by the paired hardware profile.",
+  "sources": [{"label": "Jellyfin codec support", "url": "https://jellyfin.org/docs/general/clients/codec-support/"}]
+}

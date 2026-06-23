@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "plex-smart-tv-generic",
+  "name": "Plex Smart TV (Generic)",
+  "category": "tv_app",
+  "developer": "Plex",
+  "platforms": ["Smart TV"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct", "max_width": 1920, "max_height": 1080, "max_fps": 30, "bit_depth": [8]},
+    "hevc": {
+      "mode": "conditional",
+      "max_width": 3840,
+      "max_height": 2160,
+      "max_fps": 30,
+      "bit_depth": [8],
+      "conditions": [
+        {"kind": "device_capability", "value": "4K/UHD-capable Plex Smart TV app/device"}
+      ]
+    }
+  },
+  "audio": {
+    "aac": {"mode": "direct", "max_channels": 2},
+    "ac3": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "device_capability", "value": "TV or connected receiver supports Dolby Digital"}
+      ]
+    },
+    "eac3": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "device_capability", "value": "TV or connected receiver supports Dolby Digital Plus"}
+      ]
+    },
+    "mp3": {"mode": "direct", "max_channels": 2},
+    "flac": {"mode": "transcode"},
+    "alac": {"mode": "transcode"},
+    "dts": {"mode": "transcode"},
+    "truehd": {"mode": "transcode"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "mov": {"mode": "direct_stream"},
+    "mpegts": {"mode": "direct_stream"},
+    "ts": {"mode": "direct_stream"},
+    "mp3": {"mode": "direct"},
+    "aac": {"mode": "direct"},
+    "flac": {"mode": "direct_stream"},
+    "alac": {"mode": "direct_stream"}
+  },
+  "subtitles": {
+    "srt": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "TV model subtitle support"}]},
+    "subrip": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "TV model subtitle support"}]},
+    "ass": {"mode": "video_transcode"},
+    "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"},
+    "hdmv_pgs_subtitle": {"mode": "video_transcode"},
+    "pgs": {"mode": "video_transcode"},
+    "vobsub": {"mode": "video_transcode"}
+  },
+  "rules": [],
+  "notes": "Generic Plex Smart TV support is intentionally conservative because Plex relies on manufacturer playback systems. Vendor-specific models can support more containers and codecs than this baseline.",
+  "sources": [
+    {
+      "label": "Plex Smart TV supported formats",
+      "url": "https://support.plex.tv/articles/203810286-what-media-formats-are-supported/"
+    },
+    {
+      "label": "Plex Smart TV model capabilities",
+      "url": "https://support.plex.tv/articles/204080173-which-smart-tv-models-are-supported/"
+    },
+    {
+      "label": "Plex Direct Play and Direct Stream",
+      "url": "https://support.plex.tv/articles/200250387-streaming-media-direct-play-and-direct-stream/"
+    }
+  ]
+}

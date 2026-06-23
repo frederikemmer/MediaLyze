@@ -12,6 +12,14 @@ from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonResponse
+from backend.app.schemas.compatibility import (
+    CompatibilityEvaluateRequest,
+    CompatibilityEvaluation,
+    CompatibilityProfile,
+    HardwareProfile,
+    ProfileEvaluation,
+    SoftwareProfile,
+)
 from backend.app.schemas.duplicates import (
     DuplicateGroupPageRead,
     DuplicateSuppressionCreate,
@@ -48,6 +56,19 @@ from backend.app.models.entities import DuplicateDetectionMode, Library, ScanJob
 from backend.app.services.app_settings import get_app_settings as load_app_settings
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.browse import browse_media_root
+from backend.app.services.compatibility import (
+    evaluate_compatibility,
+    evaluate_hardware_profile,
+    evaluate_software_profile,
+)
+from backend.app.services.compatibility_profiles import (
+    ProfileCatalogError,
+    create_local_profile,
+    delete_local_profile,
+    get_profile,
+    list_profiles,
+    update_local_profile,
+)
 from backend.app.services.duplicates import (
     list_library_duplicate_groups,
     suppress_duplicate_group,
@@ -104,6 +125,10 @@ from backend.app.services.telemetry import build_telemetry_payload, send_current
 from backend.app.services.update_status import get_or_check_update_status
 
 router = APIRouter()
+
+
+def _profile_error(exc: ProfileCatalogError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 def _normalize_panel_query(panels: list[str] | None) -> list[str] | None:
@@ -1345,6 +1370,251 @@ def file_detail(file_id: int, db: Session = Depends(get_db_session)) -> MediaFil
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
     return media_file
+
+
+@router.get("/compatibility/hardware-profiles", response_model=list[HardwareProfile])
+def compatibility_hardware_profiles(settings: Settings = Depends(get_app_settings)):
+    try:
+        return list_profiles(settings, "hardware")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.post("/compatibility/hardware-profiles", response_model=HardwareProfile, status_code=201)
+def create_compatibility_hardware_profile(
+    payload: HardwareProfile,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        return create_local_profile(settings, "hardware", payload.model_dump(mode="json"))
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.patch("/compatibility/hardware-profiles/{profile_id}", response_model=HardwareProfile)
+def update_compatibility_hardware_profile(
+    profile_id: str,
+    payload: dict,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        profile = update_local_profile(settings, "hardware", profile_id, payload)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Hardware profile not found")
+    return profile
+
+
+@router.delete("/compatibility/hardware-profiles/{profile_id}", status_code=204)
+def delete_compatibility_hardware_profile(
+    profile_id: str,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        deleted = delete_local_profile(settings, "hardware", profile_id)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Hardware profile not found")
+
+
+@router.get("/compatibility/software-profiles", response_model=list[SoftwareProfile])
+def compatibility_software_profiles(settings: Settings = Depends(get_app_settings)):
+    try:
+        return list_profiles(settings, "software")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.post("/compatibility/software-profiles", response_model=SoftwareProfile, status_code=201)
+def create_compatibility_software_profile(
+    payload: SoftwareProfile,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        return create_local_profile(settings, "software", payload.model_dump(mode="json"))
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.patch("/compatibility/software-profiles/{profile_id}", response_model=SoftwareProfile)
+def update_compatibility_software_profile(
+    profile_id: str,
+    payload: dict,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        profile = update_local_profile(settings, "software", profile_id, payload)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Software profile not found")
+    return profile
+
+
+@router.delete("/compatibility/software-profiles/{profile_id}", status_code=204)
+def delete_compatibility_software_profile(
+    profile_id: str,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        deleted = delete_local_profile(settings, "software", profile_id)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Software profile not found")
+
+
+@router.get("/compatibility/profiles", response_model=list[CompatibilityProfile])
+def compatibility_profiles(settings: Settings = Depends(get_app_settings)):
+    try:
+        return list_profiles(settings, "compatibility")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.post("/compatibility/profiles", response_model=CompatibilityProfile, status_code=201)
+def create_compatibility_profile(
+    payload: CompatibilityProfile,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        return create_local_profile(settings, "compatibility", payload.model_dump(mode="json"))
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+
+
+@router.patch("/compatibility/profiles/{profile_id}", response_model=CompatibilityProfile)
+def update_compatibility_profile(
+    profile_id: str,
+    payload: dict,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        profile = update_local_profile(settings, "compatibility", profile_id, payload)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Compatibility profile not found")
+    return profile
+
+
+@router.delete("/compatibility/profiles/{profile_id}", status_code=204)
+def delete_compatibility_profile(
+    profile_id: str,
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        deleted = delete_local_profile(settings, "compatibility", profile_id)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Compatibility profile not found")
+
+
+def _evaluate_saved_compatibility_profile(
+    profile_id: str,
+    file_id: int,
+    db: Session,
+    settings: Settings,
+) -> CompatibilityEvaluation:
+    try:
+        profile = get_profile(settings, "compatibility", profile_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="Compatibility profile not found")
+        hardware = get_profile(settings, "hardware", profile.hardware_profile_id)
+        software = get_profile(settings, "software", profile.software_profile_id)
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    media_file = get_media_file_detail(db, file_id)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    if hardware is None or software is None:
+        raise HTTPException(status_code=400, detail="Compatibility profile references missing profiles")
+    return evaluate_compatibility(media_file, profile, hardware, software)
+
+
+@router.post(
+    "/compatibility/profiles/{profile_id}/evaluate",
+    response_model=CompatibilityEvaluation,
+)
+def evaluate_saved_compatibility_profile(
+    profile_id: str,
+    payload: CompatibilityEvaluateRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+):
+    return _evaluate_saved_compatibility_profile(profile_id, payload.file_id, db, settings)
+
+
+@router.get("/files/{file_id}/compatibility", response_model=list[CompatibilityEvaluation])
+def file_compatibility(
+    file_id: int,
+    profile_ids: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+):
+    try:
+        profiles = list_profiles(settings, "compatibility")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    selected_ids = set(profile_ids or [])
+    return [
+        _evaluate_saved_compatibility_profile(profile.id, file_id, db, settings)
+        for profile in profiles
+        if not selected_ids or profile.id in selected_ids
+    ]
+
+
+@router.get(
+    "/files/{file_id}/hardware-compatibility",
+    response_model=list[ProfileEvaluation],
+)
+def file_hardware_compatibility(
+    file_id: int,
+    profile_ids: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+):
+    media_file = get_media_file_detail(db, file_id)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    try:
+        profiles = list_profiles(settings, "hardware")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    selected_ids = set(profile_ids or [])
+    return [
+        evaluate_hardware_profile(media_file, profile)
+        for profile in profiles
+        if not selected_ids or profile.id in selected_ids
+    ]
+
+
+@router.get(
+    "/files/{file_id}/software-compatibility",
+    response_model=list[ProfileEvaluation],
+)
+def file_software_compatibility(
+    file_id: int,
+    profile_ids: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+):
+    media_file = get_media_file_detail(db, file_id)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    try:
+        profiles = list_profiles(settings, "software")
+    except ProfileCatalogError as exc:
+        raise _profile_error(exc) from exc
+    selected_ids = set(profile_ids or [])
+    return [
+        evaluate_software_profile(media_file, profile)
+        for profile in profiles
+        if not selected_ids or profile.id in selected_ids
+    ]
 
 
 @router.get("/files/{file_id}/chapters/export.csv")

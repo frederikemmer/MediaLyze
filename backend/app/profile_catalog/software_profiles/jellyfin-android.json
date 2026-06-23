@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "jellyfin-android",
+  "name": "Jellyfin (Android)",
+  "category": "mobile_app",
+  "developer": "Jellyfin",
+  "platforms": ["Android"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-15",
+  "last_modified": "2026-06-15",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct", "bit_depth": [8, 10]},
+    "hevc": {"mode": "conditional", "bit_depth": [8, 10], "conditions": [{"kind": "device_capability", "value": "HEVC decoder", "note": "HEVC support depends on the Android device."}]},
+    "vp9": {"mode": "conditional", "conditions": [{"kind": "hardware_decode", "value": "VP9", "note": "VP9 support may depend on hardware decoding or sufficient CPU decoding performance."}]},
+    "av1": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "AV1 decoder"}]},
+    "mpeg4": {"mode": "video_transcode"}
+  },
+  "audio": {
+    "flac": {"mode": "direct"}, "mp3": {"mode": "direct"}, "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"}, "eac3": {"mode": "direct"}, "vorbis": {"mode": "direct"},
+    "dts": {"mode": "direct", "conditions": [{"kind": "tested_only", "value": "mono", "note": "The Jellyfin matrix notes that only DTS mono has been tested."}]},
+    "opus": {"mode": "direct"}, "alac": {"mode": "direct_stream"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"}, "mkv": {"mode": "direct"}, "webm": {"mode": "direct"},
+    "ts": {"mode": "direct"}, "ogg": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"}, "subrip": {"mode": "direct"}, "webvtt": {"mode": "direct_stream"},
+    "ass": {"mode": "video_transcode"}, "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"}, "hdmv_pgs_subtitle": {"mode": "video_transcode"}
+  },
+  "rules": [
+    {"id": "android-hevc-container", "match": {"containers": ["mkv", "ts"], "video_codecs": ["hevc"]}, "mode": "conditional", "conditions": [{"kind": "device_capability", "value": "HEVC direct-stream support"}], "note": "Android HEVC handling is device dependent."}
+  ],
+  "notes": "Device-specific decoder and HDR support must be supplied by the paired hardware profile.",
+  "sources": [{"label": "Jellyfin codec support", "url": "https://jellyfin.org/docs/general/clients/codec-support/"}]
+}

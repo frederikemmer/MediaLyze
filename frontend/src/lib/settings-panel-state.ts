@@ -1,6 +1,7 @@
 export type SettingsPanelId =
   | "configuredLibraries"
   | "qualityProfiles"
+  | "compatibilityProfiles"
   | "appSettings"
   | "resolutionCategories"
   | "patternRecognition"
@@ -14,6 +15,7 @@ const NAV_COLLAPSED_STORAGE_KEY = "medialyze-settings-sidebar-collapsed";
 export const SETTINGS_PANEL_IDS: SettingsPanelId[] = [
   "configuredLibraries",
   "qualityProfiles",
+  "compatibilityProfiles",
   "appSettings",
   "resolutionCategories",
   "patternRecognition",

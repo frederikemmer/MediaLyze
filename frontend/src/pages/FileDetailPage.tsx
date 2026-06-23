@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Captions,
   ChevronDown,
+  Cpu,
   FileClock,
   FileJson,
   Film,
@@ -11,6 +12,8 @@ import {
   Info,
   ListVideo,
   Play,
+  Search,
+  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -31,20 +34,34 @@ import { DownloadIcon, type DownloadIconHandle } from "../components/DownloadIco
 import { DuplicatePanelEmptyState } from "../components/DuplicatePanelEmptyState";
 import { LoaderCircleIcon } from "../components/LoaderCircleIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
+import { ProfileFavoriteButton } from "../components/ProfileFavoriteButton";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import {
   api,
+  type CompatibilityEvaluation,
+  type CompatibilityProfile,
+  type CompatibilityStatus,
+  type HardwareProfile,
   type MediaFileDetail,
   type MediaFileHistory,
   type MediaFileQualityScoreDetail,
+  type ProfileEvaluation,
   type QualityCategoryBreakdown,
+  type SoftwareProfile,
 } from "../lib/api";
 import { useAppData } from "../lib/app-data";
 import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
+import {
+  favoriteProfileKey,
+  readFavoriteProfileKeys,
+  writeFavoriteProfileKeys,
+  type CompatibilityProfileType,
+} from "../lib/profile-favorites";
 import { formatVisualDensityGbPerHour } from "../lib/quality-format";
+import { saveActiveSettingsPanel } from "../lib/settings-panel-state";
 
 function JsonPreview({ value }: { value: unknown }) {
   return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
@@ -54,6 +71,7 @@ type FileDetailPanelId =
   | "overview"
   | "preview"
   | "qualityBreakdown"
+  | "compatibility"
   | "videoStreams"
   | "audioStreams"
   | "subtitles"
@@ -79,6 +97,7 @@ const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
   { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
   { id: "preview", labelKey: "fileDetail.preview", icon: Play },
   { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
+  { id: "compatibility", labelKey: "fileDetail.compatibility.title", icon: Cpu },
   { id: "videoStreams", labelKey: "fileDetail.videoStreams", icon: Film },
   { id: "audioStreams", labelKey: "fileDetail.audioStreams", icon: AudioLines },
   { id: "subtitles", labelKey: "fileDetail.subtitles", icon: Captions },
@@ -644,6 +663,7 @@ function hasQualityMetadata(file: MediaFileDetail | null, qualityDetail: MediaFi
 function buildAvailableFileDetailPanelIds(
   file: MediaFileDetail | null,
   qualityDetail: MediaFileQualityScoreDetail | null,
+  compatibilityCount = 0,
 ): FileDetailPanelId[] {
   const ids: FileDetailPanelId[] = ["overview"];
   if (hasPreviewMetadata(file)) {
@@ -651,6 +671,9 @@ function buildAvailableFileDetailPanelIds(
   }
   if (hasQualityMetadata(file, qualityDetail)) {
     ids.push("qualityBreakdown");
+  }
+  if (compatibilityCount > 0) {
+    ids.push("compatibility");
   }
   if (hasVideoMetadata(file)) {
     ids.push("videoStreams");
@@ -669,6 +692,360 @@ function buildAvailableFileDetailPanelIds(
   }
   ids.push("fileHistory", "rawJson");
   return ids;
+}
+
+function bestCompatibilityStatus(results: Array<{ status: CompatibilityStatus }>): CompatibilityStatus | null {
+  if (results.some((result) => result.status === "direct_play")) return "direct_play";
+  if (results.some((result) => result.status === "direct_stream")) return "direct_stream";
+  if (results.some((result) => result.status === "conditional")) return "conditional";
+  if (results.some((result) => result.status === "video_transcode")) return "video_transcode";
+  if (results.some((result) => result.status === "unsupported")) return "unsupported";
+  return null;
+}
+
+type CompatibilityScope = "container" | "video" | "audio" | "subtitle";
+
+function CompatibilityScopePills({
+  result,
+  scopes,
+}: {
+  result: Pick<
+    CompatibilityEvaluation | ProfileEvaluation,
+    "status" | "container_status" | "video_status" | "audio_status" | "subtitle_status"
+  >;
+  scopes: CompatibilityScope[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="stream-tooltip-meta">
+      {scopes.map((scope) => {
+        const status = result[`${scope}_status`] ?? result.status;
+        return (
+          <span className={`stream-tooltip-pill compatibility-scope-pill status-${status}`} key={scope}>
+            {t(`fileDetail.compatibility.scopes.${scope}`)}:{" "}
+            {t(`fileDetail.compatibility.status.${status}`)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function CompatibilityFindings({
+  result,
+  scopes,
+}: {
+  result: Pick<CompatibilityEvaluation | ProfileEvaluation, "selected_audio_stream_index" | "findings">;
+  scopes: CompatibilityScope[];
+}) {
+  const { t } = useTranslation();
+  const visibleFindings = result.findings.filter((finding) => (
+    finding.scope === "metadata"
+    || finding.scope === "profile"
+    || scopes.includes(finding.scope as CompatibilityScope)
+  ));
+  return (
+    <>
+      {scopes.includes("audio")
+      && result.selected_audio_stream_index !== null
+      && result.selected_audio_stream_index !== undefined ? (
+        <p>{t("fileDetail.compatibility.selectedAudio", { index: result.selected_audio_stream_index })}</p>
+      ) : null}
+      {visibleFindings.length ? (
+        <ul className="compatibility-finding-list">
+          {visibleFindings.map((finding, index) => (
+            <li className={`compatibility-finding severity-${finding.severity}`} key={`${finding.code}-${finding.stream_index ?? "file"}-${index}`}>
+              <strong>{t(`fileDetail.compatibility.reasons.${finding.code}`, { defaultValue: finding.code })}</strong>
+              <span>{finding.message}</span>
+              {finding.stream_index !== null && finding.stream_index !== undefined ? (
+                <code>{t("fileDetail.compatibility.stream", { index: finding.stream_index })}</code>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="notice">{t("fileDetail.compatibility.noFindings")}</div>
+      )}
+    </>
+  );
+}
+
+function CompatibilityReport({
+  result,
+  context,
+  scopes,
+}: {
+  result: CompatibilityEvaluation | ProfileEvaluation;
+  context?: string;
+  scopes: CompatibilityScope[];
+}) {
+  return (
+    <div className={`compatibility-profile-report status-${result.status}`}>
+      {context ? <p className="compatibility-profile-report-context">{context}</p> : null}
+      <CompatibilityScopePills result={result} scopes={scopes} />
+      <CompatibilityFindings result={result} scopes={scopes} />
+    </div>
+  );
+}
+
+function FavoriteCompatibilityResults({
+  results,
+  hardwareResults,
+  softwareResults,
+  hardware,
+  software,
+  combinations,
+  favoriteKeys,
+  onToggleFavorite,
+  file,
+}: {
+  results: CompatibilityEvaluation[];
+  hardwareResults: ProfileEvaluation[];
+  softwareResults: ProfileEvaluation[];
+  hardware: HardwareProfile[];
+  software: SoftwareProfile[];
+  combinations: CompatibilityProfile[];
+  favoriteKeys: Set<string>;
+  onToggleFavorite: (type: CompatibilityProfileType, id: string) => void;
+  file: MediaFileDetail | null;
+}) {
+  const { t } = useTranslation();
+  const [searchQueries, setSearchQueries] = useState<Record<CompatibilityProfileType, string>>({
+    hardware: "",
+    software: "",
+    compatibility: "",
+  });
+  const [activeSearchSections, setActiveSearchSections] = useState<Set<CompatibilityProfileType>>(
+    () => new Set(),
+  );
+  const closeProfileSearch = useCallback((type?: CompatibilityProfileType) => {
+    setActiveSearchSections((current) => {
+      if (!current.size) return current;
+      if (!type) return new Set();
+      if (!current.has(type)) return current;
+      const next = new Set(current);
+      next.delete(type);
+      return next;
+    });
+    setSearchQueries((current) => {
+      if (!type) {
+        return current.hardware || current.software || current.compatibility
+          ? { hardware: "", software: "", compatibility: "" }
+          : current;
+      }
+      return current[type] ? { ...current, [type]: "" } : current;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeSearchSections.size) return undefined;
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".compatibility-favorite-section-body")) return;
+      closeProfileSearch();
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [activeSearchSections, closeProfileSearch]);
+
+  const relevantScopes = useMemo<CompatibilityScope[]>(() => {
+    const scopes: CompatibilityScope[] = ["container"];
+    if ((file?.video_streams.length ?? 0) > 0) scopes.push("video");
+    if ((file?.audio_streams.length ?? 0) > 0) scopes.push("audio");
+    if ((file?.subtitle_streams.length ?? 0) > 0 || (file?.external_subtitles.length ?? 0) > 0) {
+      scopes.push("subtitle");
+    }
+    return scopes;
+  }, [file]);
+  const hardwareNames = new Map(hardware.map((profile) => [profile.id, profile.name]));
+  const softwareNames = new Map(software.map((profile) => [profile.id, profile.name]));
+  const sections: Array<{
+    type: CompatibilityProfileType;
+    label: string;
+    profiles: Array<{
+      id: string;
+      name: string;
+      searchableText: string;
+      favorite: boolean;
+      evaluation?: ProfileEvaluation;
+      results: CompatibilityEvaluation[];
+    }>;
+  }> = [
+    {
+      type: "hardware",
+      label: t("compatibilityProfiles.tabs.hardware"),
+      profiles: hardware.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        searchableText: `${profile.name} ${profile.id} ${profile.manufacturer}`,
+        favorite: favoriteKeys.has(favoriteProfileKey("hardware", profile.id)),
+        evaluation: hardwareResults.find((result) => result.profile_id === profile.id),
+        results: [],
+      })),
+    },
+    {
+      type: "software",
+      label: t("compatibilityProfiles.tabs.software"),
+      profiles: software.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        searchableText: `${profile.name} ${profile.id} ${profile.developer}`,
+        favorite: favoriteKeys.has(favoriteProfileKey("software", profile.id)),
+        evaluation: softwareResults.find((result) => result.profile_id === profile.id),
+        results: [],
+      })),
+    },
+    {
+      type: "compatibility",
+      label: t("compatibilityProfiles.tabs.compatibility"),
+      profiles: combinations.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        searchableText: [
+          profile.name,
+          profile.id,
+          hardwareNames.get(profile.hardware_profile_id),
+          softwareNames.get(profile.software_profile_id),
+        ].filter(Boolean).join(" "),
+        favorite: favoriteKeys.has(favoriteProfileKey("compatibility", profile.id)),
+        results: results.filter((result) => result.compatibility_profile_id === profile.id),
+      })),
+    },
+  ];
+
+  return (
+    <div className="compatibility-favorite-sections">
+      {sections.map((section) => {
+        const normalizedQuery = searchQueries[section.type].trim().toLocaleLowerCase();
+        const searchActive = activeSearchSections.has(section.type);
+        const visibleProfiles = [...section.profiles]
+          .sort((left, right) => Number(right.favorite) - Number(left.favorite))
+          .filter((profile) => {
+            if (!profile.favorite && !searchActive) return false;
+            return !normalizedQuery || profile.searchableText.toLocaleLowerCase().includes(normalizedQuery);
+          });
+        const favoriteCount = section.profiles.filter((profile) => profile.favorite).length;
+        return (
+        <details className="compatibility-favorite-section" key={section.type} open>
+          <summary>
+            <span>{section.label}</span>
+            <span className="compatibility-favorite-count">{favoriteCount}</span>
+          </summary>
+          <div
+            className="compatibility-favorite-section-body"
+            onBlurCapture={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              closeProfileSearch(section.type);
+            }}
+          >
+            <div className="compatibility-profile-search">
+              <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+              <input
+                type="search"
+                value={searchQueries[section.type]}
+                aria-label={t("compatibilityProfiles.searchAria", { type: section.label })}
+                placeholder={t("compatibilityProfiles.searchPlaceholder")}
+                onFocus={() => setActiveSearchSections((current) => (
+                  current.has(section.type) ? current : new Set(current).add(section.type)
+                ))}
+                onChange={(event) => setSearchQueries((current) => ({
+                  ...current,
+                  [section.type]: event.target.value,
+                }))}
+              />
+              {searchQueries[section.type] ? (
+                <button
+                  type="button"
+                  className="compatibility-profile-search-clear"
+                  aria-label={t("compatibilityProfiles.clearSearch")}
+                  onClick={() => setSearchQueries((current) => ({ ...current, [section.type]: "" }))}
+                >
+                  <X size={15} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+            {visibleProfiles.length ? visibleProfiles.map((profile) => {
+              const status = profile.evaluation?.status ?? bestCompatibilityStatus(profile.results);
+              const favoriteLabel = t(
+                profile.favorite
+                  ? "compatibilityProfiles.favoriteRemoveAria"
+                  : "compatibilityProfiles.favoriteAddAria",
+                { name: profile.name },
+              );
+              if (!profile.favorite) {
+                return (
+                  <div className="compatibility-favorite-profile-row" key={profile.id}>
+                    <span>{profile.name}</span>
+                    <span className="compatibility-profile-quick-actions">
+                      <ProfileFavoriteButton
+                        favorite={false}
+                        label={favoriteLabel}
+                        onClick={() => onToggleFavorite(section.type, profile.id)}
+                      />
+                    </span>
+                  </div>
+                );
+              }
+              return (
+                <details className={`compatibility-favorite-profile${status ? ` status-${status}` : ""}`} key={profile.id}>
+                  <summary className="compatibility-favorite-profile-summary">
+                    <span>{profile.name}</span>
+                    <span className="compatibility-favorite-profile-actions">
+                      {status ? (
+                        <span className={`compatibility-status-badge status-${status}`}>
+                          {t(`fileDetail.compatibility.status.${status}`)}
+                        </span>
+                      ) : (
+                        <span className="compatibility-status-badge status-not-evaluated">
+                          {t("fileDetail.compatibility.notEvaluated")}
+                        </span>
+                      )}
+                      <span className="compatibility-profile-quick-actions">
+                        <ProfileFavoriteButton
+                          favorite
+                          label={favoriteLabel}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onToggleFavorite(section.type, profile.id);
+                          }}
+                        />
+                      </span>
+                    </span>
+                  </summary>
+                  <div className="compatibility-favorite-profile-report">
+                  {profile.evaluation ? (
+                    <CompatibilityReport result={profile.evaluation} scopes={relevantScopes} />
+                  ) : profile.results.length ? (
+                    <div className="compatibility-result-list">
+                      {profile.results.map((result) => (
+                        <CompatibilityReport
+                          key={result.compatibility_profile_id}
+                          result={result}
+                          context={`${hardwareNames.get(result.hardware_profile_id) ?? result.hardware_profile_id} + ${softwareNames.get(result.software_profile_id) ?? result.software_profile_id}`}
+                          scopes={relevantScopes}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="notice">{t("fileDetail.compatibility.noCombination")}</div>
+                  )}
+                  </div>
+                </details>
+              );
+            }) : (
+              <p className="compatibility-profile-search-empty">
+                {searchActive
+                  ? t("compatibilityProfiles.searchEmpty")
+                  : t("fileDetail.compatibility.noFavoritesForType", { type: section.label })}
+              </p>
+            )}
+          </div>
+        </details>
+        );
+      })}
+    </div>
+  );
 }
 
 function normalizeFileDetailPanelId(
@@ -1194,6 +1571,15 @@ export function FileDetailPage() {
   const [file, setFile] = useState<MediaFileDetail | null>(null);
   const [qualityDetail, setQualityDetail] = useState<MediaFileQualityScoreDetail | null>(null);
   const [qualityError, setQualityError] = useState(false);
+  const [compatibilityResults, setCompatibilityResults] = useState<CompatibilityEvaluation[]>([]);
+  const [hardwareCompatibilityResults, setHardwareCompatibilityResults] = useState<ProfileEvaluation[]>([]);
+  const [softwareCompatibilityResults, setSoftwareCompatibilityResults] = useState<ProfileEvaluation[]>([]);
+  const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([]);
+  const [softwareProfiles, setSoftwareProfiles] = useState<SoftwareProfile[]>([]);
+  const [combinationProfiles, setCombinationProfiles] = useState<CompatibilityProfile[]>([]);
+  const [favoriteProfileKeys, setFavoriteProfileKeys] = useState(readFavoriteProfileKeys);
+  const [compatibilityLoading, setCompatibilityLoading] = useState(true);
+  const [compatibilityError, setCompatibilityError] = useState<string | null>(null);
   const [fileHistory, setFileHistory] = useState<MediaFileHistory | null>(null);
   const [fileHistoryError, setFileHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1246,7 +1632,75 @@ export function FileDetailPage() {
         setFileHistoryError(null);
       })
       .catch((reason: Error) => setFileHistoryError(reason.message));
+    Promise.all([
+      api.hardwareProfiles(),
+      api.softwareProfiles(),
+      api.compatibilityProfiles(),
+    ])
+      .then(([nextHardware, nextSoftware, nextCombinations]) => {
+        setHardwareProfiles(nextHardware);
+        setSoftwareProfiles(nextSoftware);
+        setCombinationProfiles(nextCombinations);
+        setCompatibilityError(null);
+      })
+      .catch((reason: Error) => {
+        setHardwareProfiles([]);
+        setSoftwareProfiles([]);
+        setCombinationProfiles([]);
+        setCompatibilityError(reason.message);
+      })
+      .finally(() => setCompatibilityLoading(false));
   }, [fileId]);
+
+  useEffect(() => {
+    const hardwareIds = hardwareProfiles
+      .filter((profile) => favoriteProfileKeys.has(favoriteProfileKey("hardware", profile.id)))
+      .map((profile) => profile.id);
+    const softwareIds = softwareProfiles
+      .filter((profile) => favoriteProfileKeys.has(favoriteProfileKey("software", profile.id)))
+      .map((profile) => profile.id);
+    const combinationIds = combinationProfiles
+      .filter((profile) => favoriteProfileKeys.has(favoriteProfileKey("compatibility", profile.id)))
+      .map((profile) => profile.id);
+
+    Promise.all([
+      combinationIds.length ? api.fileCompatibility(fileId, combinationIds) : Promise.resolve([]),
+      hardwareIds.length ? api.fileHardwareCompatibility(fileId, hardwareIds) : Promise.resolve([]),
+      softwareIds.length ? api.fileSoftwareCompatibility(fileId, softwareIds) : Promise.resolve([]),
+    ])
+      .then(([evaluations, hardwareEvaluations, softwareEvaluations]) => {
+        setCompatibilityResults(evaluations);
+        setHardwareCompatibilityResults(hardwareEvaluations);
+        setSoftwareCompatibilityResults(softwareEvaluations);
+        setCompatibilityError(null);
+      })
+      .catch((reason: Error) => {
+        setCompatibilityResults([]);
+        setHardwareCompatibilityResults([]);
+        setSoftwareCompatibilityResults([]);
+        setCompatibilityError(reason.message);
+      });
+  }, [
+    combinationProfiles,
+    favoriteProfileKeys,
+    fileId,
+    hardwareProfiles,
+    softwareProfiles,
+  ]);
+
+  const toggleFavoriteProfile = useCallback((type: CompatibilityProfileType, id: string) => {
+    setFavoriteProfileKeys((current) => {
+      const next = new Set(current);
+      const key = favoriteProfileKey(type, id);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      writeFavoriteProfileKeys(next);
+      return next;
+    });
+  }, []);
 
   useEffect(
     () => () => {
@@ -1348,6 +1802,44 @@ export function FileDetailPage() {
         <div className="notice">{t("quality.unavailable")}</div>
       ),
     },
+    compatibility: {
+      title: t("fileDetail.compatibility.title"),
+      loading: compatibilityLoading,
+      error: compatibilityError,
+      titleAddon: (
+        <TooltipTrigger
+          ariaLabel={t("fileDetail.compatibility.favoritesHelpAria")}
+          className="file-detail-compatibility-help-tooltip"
+          content={(
+            <div className="file-detail-compatibility-help-content">
+              <span>{t("fileDetail.compatibility.favoritesHelp")}</span>
+              <a
+                href="/settings"
+                onClick={() => saveActiveSettingsPanel("compatibilityProfiles")}
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                {t("fileDetail.compatibility.openProfileSettings")}
+              </a>
+            </div>
+          )}
+        >
+          <Info size={14} aria-hidden="true" />
+        </TooltipTrigger>
+      ),
+      body: (
+        <FavoriteCompatibilityResults
+          results={compatibilityResults}
+          hardwareResults={hardwareCompatibilityResults}
+          softwareResults={softwareCompatibilityResults}
+          hardware={hardwareProfiles}
+          software={softwareProfiles}
+          combinations={combinationProfiles}
+          favoriteKeys={favoriteProfileKeys}
+          onToggleFavorite={toggleFavoriteProfile}
+          file={file}
+        />
+      ),
+    },
     cover: {
       title: t("fileDetail.cover"),
       loading: !file && !error,
@@ -1439,8 +1931,12 @@ export function FileDetailPage() {
   };
 
   const availablePanelIds = useMemo(
-    () => buildAvailableFileDetailPanelIds(file, qualityDetail),
-    [file, qualityDetail],
+    () => buildAvailableFileDetailPanelIds(
+      file,
+      qualityDetail,
+      hardwareProfiles.length + softwareProfiles.length + combinationProfiles.length,
+    ),
+    [combinationProfiles.length, file, hardwareProfiles.length, qualityDetail, softwareProfiles.length],
   );
   const navItems = FILE_DETAIL_NAV_ITEMS.filter((item) => availablePanelIds.includes(item.id));
   const normalizedActivePanelId = normalizeFileDetailPanelId(activePanelId, availablePanelIds);

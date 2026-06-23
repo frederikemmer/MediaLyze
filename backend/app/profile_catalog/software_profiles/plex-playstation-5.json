@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "plex-playstation-5",
+  "name": "Plex PlayStation 5",
+  "category": "console_app",
+  "developer": "Plex",
+  "platforms": ["PlayStation 5"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct", "max_width": 4096, "max_height": 2160},
+    "hevc": {"mode": "direct", "max_width": 4096, "max_height": 2160}
+  },
+  "audio": {
+    "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"},
+    "eac3": {"mode": "direct"},
+    "mp3": {"mode": "transcode"},
+    "flac": {"mode": "transcode"},
+    "alac": {"mode": "transcode"},
+    "opus": {"mode": "transcode"},
+    "vorbis": {"mode": "transcode"},
+    "dts": {"mode": "transcode"},
+    "truehd": {"mode": "transcode"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "m4a": {"mode": "direct"},
+    "mkv": {"mode": "direct_stream"}
+  },
+  "subtitles": {
+    "srt": {"mode": "video_transcode"},
+    "subrip": {"mode": "video_transcode"},
+    "webvtt": {"mode": "video_transcode"},
+    "ass": {"mode": "video_transcode"},
+    "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"},
+    "hdmv_pgs_subtitle": {"mode": "video_transcode"},
+    "pgs": {"mode": "video_transcode"},
+    "vobsub": {"mode": "video_transcode"}
+  },
+  "rules": [
+    {
+      "id": "plex-playstation-mkv-remux",
+      "match": {"containers": ["mkv"]},
+      "mode": "direct_stream",
+      "note": "Plex documents MKV on PlayStation as Direct Stream when the audio and video streams are otherwise compatible."
+    }
+  ],
+  "notes": "Plex documents PS5 Direct Play for MP4 up to 4096x2160 with HEVC or H.264 video and AAC, AC3, or EAC3 audio. Plex documents all subtitle types as burned in for PlayStation playback.",
+  "sources": [
+    {
+      "label": "Plex PlayStation supported formats",
+      "url": "https://support.plex.tv/articles/204377253-what-media-formats-are-supported/"
+    },
+    {
+      "label": "Plex Direct Play and Direct Stream",
+      "url": "https://support.plex.tv/articles/200250387-streaming-media-direct-play-and-direct-stream/"
+    }
+  ]
+}

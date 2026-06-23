@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "jellyfin-swiftfin-ios",
+  "name": "Jellyfin (Swiftfin iOS)",
+  "category": "mobile_app",
+  "developer": "Jellyfin",
+  "platforms": ["iOS", "iPadOS", "tvOS"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-15",
+  "last_modified": "2026-06-15",
+  "server_fallback": "transcode",
+  "video": {
+    "mpeg4": {"mode": "direct"}, "h264": {"mode": "direct", "bit_depth": [8, 10]},
+    "hevc": {"mode": "direct", "bit_depth": [8, 10]}, "vp9": {"mode": "direct"},
+    "av1": {"mode": "conditional", "conditions": [{"kind": "setting", "value": "VLCKit player or AV1 custom device profile"}, {"kind": "device_capability", "value": "A17/M3 recommended"}]}
+  },
+  "audio": {
+    "flac": {"mode": "direct"}, "mp3": {"mode": "direct"}, "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"}, "eac3": {"mode": "direct"}, "vorbis": {"mode": "direct"},
+    "dts": {"mode": "direct"}, "opus": {"mode": "direct"}, "alac": {"mode": "direct"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"}, "m4v": {"mode": "direct"}, "mov": {"mode": "direct"},
+    "mkv": {"mode": "direct"}, "webm": {"mode": "direct"}, "ts": {"mode": "direct"}, "ogg": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"}, "subrip": {"mode": "direct"}, "webvtt": {"mode": "direct"},
+    "ass": {"mode": "direct"}, "ssa": {"mode": "direct"}, "dvd_subtitle": {"mode": "direct"},
+    "hdmv_pgs_subtitle": {"mode": "direct"}
+  },
+  "rules": [],
+  "notes": "VP9 support refers to the Swiftfin VLCKit player. Native AVKit behavior can differ.",
+  "sources": [{"label": "Jellyfin codec support", "url": "https://jellyfin.org/docs/general/clients/codec-support/"}]
+}
