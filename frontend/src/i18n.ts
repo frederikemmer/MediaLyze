@@ -3,15 +3,29 @@ import { initReactI18next } from "react-i18next";
 import commonEn from "../locales/en/common.json";
 import commonDe from "../locales/de/common.json";
 import commonEs from "../locales/es/common.json";
+import commonUk from "../locales/uk/common.json";
 
-const LANGUAGE_STORAGE_KEY = "medialyze-language";
+export const LANGUAGE_STORAGE_KEY = "medialyze-language";
+export const SUPPORTED_INTERFACE_LANGUAGES = ["en", "de", "es", "uk"] as const;
+export type SupportedInterfaceLanguage = (typeof SUPPORTED_INTERFACE_LANGUAGES)[number];
 
-function getInitialLanguage(): "en" | "de" | "es" {
-  if (typeof window !== "undefined") {
-    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored === "en" || stored === "de" || stored === "es") {
-      return stored;
-    }
+export function isSupportedInterfaceLanguage(language: string): language is SupportedInterfaceLanguage {
+  return SUPPORTED_INTERFACE_LANGUAGES.includes(language as SupportedInterfaceLanguage);
+}
+
+export function getStoredInterfaceLanguage(): SupportedInterfaceLanguage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return stored && isSupportedInterfaceLanguage(stored) ? stored : null;
+}
+
+function getInitialLanguage(): SupportedInterfaceLanguage {
+  const stored = getStoredInterfaceLanguage();
+  if (stored) {
+    return stored;
   }
 
   return "en";
@@ -26,6 +40,9 @@ const resources = {
   },
   es: {
     common: commonEs,
+  },
+  uk: {
+    common: commonUk,
   },
 };
 
@@ -50,7 +67,7 @@ i18n.on("languageChanged", (language) => {
   }
 
   if (typeof window !== "undefined") {
-    if (language === "en" || language === "de" || language === "es") {
+    if (isSupportedInterfaceLanguage(language)) {
       window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     }
   }

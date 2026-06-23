@@ -1577,6 +1577,7 @@ describe("LibrariesPage settings panels", () => {
     renderPage({ activePanel: "appSettings" });
 
     expect(await screen.findByLabelText("Interface language")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Ukrainian" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add resolution category" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^resolution categories$/i }));
@@ -1627,16 +1628,16 @@ describe("LibrariesPage settings panels", () => {
 
   it("persists interface language changes to app settings", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
-      createAppSettings({ ui_preferences: { interface_language: "de" } }),
+      createAppSettings({ ui_preferences: { interface_language: "uk" } }),
     );
 
     renderPage({ activePanel: "appSettings" });
 
-    fireEvent.change(await screen.findByLabelText("Interface language"), { target: { value: "de" } });
+    fireEvent.change(await screen.findByLabelText("Interface language"), { target: { value: "uk" } });
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith({
-        ui_preferences: { interface_language: "de" },
+        ui_preferences: { interface_language: "uk" },
       }),
     );
   });

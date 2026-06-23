@@ -59,13 +59,16 @@ class ScanPerformanceUpdate(BaseModel):
     )
 
 
+InterfaceLanguage = Literal["en", "de", "es", "uk"]
+
+
 class UiPreferencesRead(BaseModel):
-    interface_language: Literal["en", "de"] = "en"
+    interface_language: InterfaceLanguage = "en"
     color_theme: Literal["system", "light", "dark"] = "system"
 
 
 class UiPreferencesUpdate(BaseModel):
-    interface_language: Literal["en", "de"] | None = None
+    interface_language: InterfaceLanguage | None = None
     color_theme: Literal["system", "light", "dark"] | None = None
 
 
