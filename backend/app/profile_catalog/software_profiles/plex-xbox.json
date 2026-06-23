@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "plex-xbox",
+  "name": "Plex Xbox",
+  "category": "console_app",
+  "developer": "Plex",
+  "platforms": ["Xbox One", "Xbox One S", "Xbox One X", "Xbox Series X", "Xbox Series S"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct"},
+    "hevc": {"mode": "direct", "max_width": 4096, "max_height": 2160},
+    "mpeg4": {"mode": "direct", "max_width": 4096, "max_height": 2160},
+    "mpeg2video": {"mode": "direct"},
+    "vc1": {"mode": "direct"},
+    "wmv2": {"mode": "direct"},
+    "wmv3": {"mode": "direct"},
+    "vp9": {"mode": "direct", "max_width": 4096, "max_height": 2160},
+    "msmpeg4": {"mode": "direct"},
+    "msmpeg4v2": {"mode": "direct"},
+    "msmpeg4v3": {"mode": "direct"}
+  },
+  "audio": {
+    "aac": {"mode": "direct"},
+    "ac3": {"mode": "direct"},
+    "eac3": {"mode": "direct"},
+    "mp2": {"mode": "direct"},
+    "mp3": {"mode": "direct"},
+    "alac": {"mode": "direct"},
+    "flac": {"mode": "direct"},
+    "wmav2": {"mode": "direct"},
+    "dts": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "setting", "value": "Xbox audio passthrough enabled"},
+        {"kind": "device_capability", "value": "Connected AVR/TV supports DTS"}
+      ]
+    },
+    "truehd": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "setting", "value": "Xbox audio passthrough enabled"},
+        {"kind": "device_capability", "value": "Connected AVR/TV supports TrueHD"}
+      ]
+    },
+    "opus": {"mode": "transcode"},
+    "vorbis": {"mode": "transcode"}
+  },
+  "containers": {
+    "asf": {"mode": "direct"},
+    "avi": {"mode": "direct"},
+    "mov": {"mode": "direct"},
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "mpeg": {"mode": "direct"},
+    "mpg": {"mode": "direct"},
+    "mpegts": {"mode": "direct"},
+    "ts": {"mode": "direct"},
+    "mkv": {"mode": "direct"},
+    "wmv": {"mode": "direct"},
+    "aac": {"mode": "direct"},
+    "alac": {"mode": "direct"},
+    "eac3": {"mode": "direct"},
+    "flac": {"mode": "direct"},
+    "mp3": {"mode": "direct"},
+    "m4a": {"mode": "direct"},
+    "wav": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Xbox subtitle support with selected stream and media combination"}]},
+    "subrip": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Xbox subtitle support with selected stream and media combination"}]},
+    "ass": {"mode": "video_transcode"},
+    "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"},
+    "hdmv_pgs_subtitle": {"mode": "video_transcode"},
+    "pgs": {"mode": "video_transcode"},
+    "vobsub": {"mode": "video_transcode"}
+  },
+  "rules": [],
+  "notes": "Plex documents broad Xbox Direct Play support across ASF, AVI, MOV, MP4, MPEG, MPEGTS/TS, MKV, and WMV, plus 4K support for compatible MP4/MKV HEVC, MPEG4, and VP9 files. DTS and TrueHD are passthrough-only conditions: Xbox system passthrough must be enabled, the connected AVR/TV must support the codec, and Plex must be fully Direct Playing rather than Direct Streaming or transcoding.",
+  "sources": [
+    {
+      "label": "Plex Xbox supported formats",
+      "url": "https://support.plex.tv/articles/203824396-what-media-formats-are-supported/"
+    },
+    {
+      "label": "Plex Direct Play and Direct Stream",
+      "url": "https://support.plex.tv/articles/200250387-streaming-media-direct-play-and-direct-stream/"
+    }
+  ]
+}

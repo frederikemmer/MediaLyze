@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "streamyfin-apple-tv",
+  "name": "Streamyfin (Apple TV)",
+  "category": "tv_app",
+  "developer": "Streamyfin",
+  "platforms": ["tvOS", "Apple TV"],
+  "status": "official",
+  "verified_by": "project source code",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct"},
+    "hevc": {"mode": "direct", "bit_depth": [8, 10], "hdr": ["HDR10", "HLG"]},
+    "h265": {"mode": "direct", "bit_depth": [8, 10], "hdr": ["HDR10", "HLG"]},
+    "mpeg4": {"mode": "direct"},
+    "mpeg2video": {"mode": "direct"},
+    "mpeg1video": {"mode": "direct"},
+    "divx": {"mode": "direct"},
+    "xvid": {"mode": "direct"},
+    "wmv": {"mode": "direct"},
+    "wmv3": {"mode": "direct"},
+    "vc1": {"mode": "direct"},
+    "vp8": {"mode": "direct"},
+    "vp9": {"mode": "direct"},
+    "av1": {
+      "mode": "conditional",
+      "conditions": [
+        {
+          "kind": "hardware_decode",
+          "value": "VideoToolbox when available, otherwise MPV software fallback",
+          "note": "Streamyfin enables MPV hardware decoding with software fallback; AV1 practicality depends on the Apple TV generation."
+        }
+      ]
+    }
+  },
+  "audio": {
+    "aac": {"mode": "direct", "max_channels": 6},
+    "mp3": {"mode": "direct", "max_channels": 6},
+    "flac": {"mode": "direct", "max_channels": 6},
+    "opus": {"mode": "direct", "max_channels": 6},
+    "vorbis": {"mode": "direct", "max_channels": 6},
+    "ac3": {"mode": "direct", "max_channels": 6},
+    "eac3": {"mode": "direct", "max_channels": 6},
+    "dts": {"mode": "direct", "max_channels": 6},
+    "truehd": {"mode": "direct", "max_channels": 6},
+    "alac": {"mode": "direct", "max_channels": 6},
+    "wma": {"mode": "direct", "max_channels": 6},
+    "wmav2": {"mode": "direct", "max_channels": 6},
+    "pcm": {"mode": "direct", "max_channels": 6},
+    "pcm_s16le": {"mode": "direct", "max_channels": 6},
+    "pcm_s24le": {"mode": "direct", "max_channels": 6},
+    "pcm_f32le": {"mode": "direct", "max_channels": 6}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "mov": {"mode": "direct"},
+    "mkv": {"mode": "direct"},
+    "avi": {"mode": "direct"},
+    "flv": {"mode": "direct"},
+    "ts": {"mode": "direct"},
+    "m2ts": {"mode": "direct"},
+    "webm": {"mode": "direct"},
+    "ogv": {"mode": "direct"},
+    "3gp": {"mode": "direct"},
+    "hls": {"mode": "direct"},
+    "mp3": {"mode": "direct"},
+    "m4a": {"mode": "direct"},
+    "aac": {"mode": "direct"},
+    "flac": {"mode": "direct"},
+    "alac": {"mode": "direct"},
+    "wav": {"mode": "direct"},
+    "aiff": {"mode": "direct"},
+    "caf": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"},
+    "subrip": {"mode": "direct"},
+    "webvtt": {"mode": "direct"},
+    "vtt": {"mode": "direct"},
+    "ttml": {"mode": "direct"},
+    "ass": {"mode": "direct"},
+    "ssa": {"mode": "direct"},
+    "microdvd": {"mode": "direct"},
+    "mov_text": {"mode": "direct"},
+    "mpl2": {"mode": "direct"},
+    "pjs": {"mode": "direct"},
+    "realtext": {"mode": "direct"},
+    "scc": {"mode": "direct"},
+    "smi": {"mode": "direct"},
+    "stl": {"mode": "direct"},
+    "sub": {"mode": "direct"},
+    "subviewer": {"mode": "direct"},
+    "text": {"mode": "direct"},
+    "vplayer": {"mode": "direct"},
+    "xsub": {"mode": "direct"},
+    "dvd_subtitle": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    },
+    "hdmv_pgs_subtitle": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    },
+    "pgs": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    },
+    "pgssub": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    },
+    "vobsub": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    },
+    "idx": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "tested_only", "value": "Embedded or Jellyfin burn-in"}
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "streamyfin-hevc-dolby-vision",
+      "match": {"video_codecs": ["hevc", "h265"], "hdr": ["Dolby Vision", "DOVI"]},
+      "mode": "video_transcode",
+      "note": "Streamyfin's Jellyfin device profile excludes Dolby Vision HEVC from direct playback."
+    },
+    {
+      "id": "streamyfin-audio-auto-six-channel",
+      "match": {"min_audio_channels": 7},
+      "mode": "direct_stream",
+      "note": "The default Streamyfin audio mode allows up to 5.1; 7.1 audio is handled through Jellyfin's audio fallback unless passthrough mode is selected."
+    }
+  ],
+  "notes": "Based on Streamyfin's MPV/MPVKit playback path and generated Jellyfin MPV device profile. The tvOS renderer enables VideoToolbox with software fallback and HDR colorspace hints; actual hardware decoding depends on the Apple TV generation.",
+  "sources": [
+    {
+      "label": "Streamyfin README",
+      "url": "https://github.com/streamyfin/streamyfin/blob/develop/README.md"
+    },
+    {
+      "label": "Streamyfin native Jellyfin device profile",
+      "url": "https://github.com/streamyfin/streamyfin/blob/develop/utils/profiles/native.ts"
+    },
+    {
+      "label": "Streamyfin subtitle profile",
+      "url": "https://github.com/streamyfin/streamyfin/blob/develop/utils/profiles/subtitles.js"
+    },
+    {
+      "label": "Streamyfin playback URL logic",
+      "url": "https://github.com/streamyfin/streamyfin/blob/develop/utils/jellyfin/media/getStreamUrl.ts"
+    },
+    {
+      "label": "Streamyfin MPV iOS/tvOS renderer",
+      "url": "https://github.com/streamyfin/streamyfin/blob/develop/modules/mpv-player/ios/MPVLayerRenderer.swift"
+    }
+  ]
+}

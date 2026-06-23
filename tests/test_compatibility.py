@@ -137,6 +137,14 @@ def test_shipped_profiles_load_with_matching_ids(tmp_path) -> None:
         "jellyfin-roku",
         "jellyfin-kodi",
         "jellyfin-media-player-desktop",
+        "plex-apple-tv",
+        "plex-playstation-4",
+        "plex-playstation-5",
+        "plex-smart-tv-generic",
+        "plex-web-browser",
+        "plex-xbox",
+        "streamyfin-apple-tv",
+        "streamyfin-ios",
         "vlc-3-desktop",
     }
 
@@ -159,6 +167,68 @@ def test_official_profiles_explicitly_declare_current_schema_fields() -> None:
         assert payload["sources"]
         assert "rules" in payload
         assert payload["server_fallback"] in {"unsupported", "transcode"}
+
+
+def test_official_streamyfin_profiles_reflect_mpv_device_profile() -> None:
+    catalog_root = Path("backend/app/profile_catalog/software_profiles")
+    for profile_id in ["streamyfin-ios", "streamyfin-apple-tv"]:
+        payload = json.loads((catalog_root / f"{profile_id}.json").read_text(encoding="utf-8"))
+        assert payload["server_fallback"] == "transcode"
+        assert payload["containers"]["mkv"]["mode"] == "direct"
+        assert payload["containers"]["mp4"]["mode"] == "direct"
+        assert payload["video"]["h264"]["mode"] == "direct"
+        assert payload["video"]["hevc"]["mode"] == "direct"
+        assert payload["video"]["av1"]["mode"] == "conditional"
+        assert payload["audio"]["truehd"]["mode"] == "direct"
+        assert payload["audio"]["dts"]["mode"] == "direct"
+        assert payload["subtitles"]["ass"]["mode"] == "direct"
+        assert payload["subtitles"]["hdmv_pgs_subtitle"]["mode"] == "conditional"
+        assert any(rule["id"] == "streamyfin-hevc-dolby-vision" for rule in payload["rules"])
+
+
+def test_official_plex_profiles_include_documented_transcoding_fallback() -> None:
+    catalog_root = Path("backend/app/profile_catalog/software_profiles")
+    expected_profiles = [
+        "plex-web-browser",
+        "plex-smart-tv-generic",
+        "plex-apple-tv",
+        "plex-playstation-5",
+        "plex-playstation-4",
+        "plex-xbox",
+    ]
+    for profile_id in expected_profiles:
+        payload = json.loads((catalog_root / f"{profile_id}.json").read_text(encoding="utf-8"))
+        assert payload["server_fallback"] == "transcode"
+        assert payload["developer"] == "Plex"
+
+    web = json.loads((catalog_root / "plex-web-browser.json").read_text(encoding="utf-8"))
+    assert web["containers"]["mp4"]["mode"] == "direct"
+    assert web["containers"]["mkv"]["mode"] == "direct_stream"
+    assert web["video"]["h264"]["mode"] == "direct"
+    assert web["audio"]["aac"]["mode"] == "direct"
+
+    ps5 = json.loads((catalog_root / "plex-playstation-5.json").read_text(encoding="utf-8"))
+    assert ps5["containers"]["mp4"]["mode"] == "direct"
+    assert ps5["containers"]["mkv"]["mode"] == "direct_stream"
+    assert ps5["video"]["hevc"]["mode"] == "direct"
+    assert ps5["audio"]["eac3"]["mode"] == "direct"
+    assert ps5["subtitles"]["srt"]["mode"] == "video_transcode"
+
+    apple_tv = json.loads((catalog_root / "plex-apple-tv.json").read_text(encoding="utf-8"))
+    assert apple_tv["containers"]["mp4"]["mode"] == "direct"
+    assert apple_tv["containers"]["mkv"]["mode"] == "direct_stream"
+    assert apple_tv["video"]["h264"]["mode"] == "direct"
+    assert apple_tv["video"]["hevc"]["mode"] == "conditional"
+    assert apple_tv["audio"]["dts"]["mode"] == "transcode"
+    assert apple_tv["audio"]["truehd"]["mode"] == "transcode"
+    assert apple_tv["subtitles"]["pgs"]["mode"] == "video_transcode"
+
+    xbox = json.loads((catalog_root / "plex-xbox.json").read_text(encoding="utf-8"))
+    assert xbox["containers"]["mkv"]["mode"] == "direct"
+    assert xbox["video"]["vp9"]["mode"] == "direct"
+    assert xbox["audio"]["flac"]["mode"] == "direct"
+    assert xbox["audio"]["dts"]["mode"] == "conditional"
+    assert xbox["audio"]["truehd"]["mode"] == "conditional"
 
 
 def test_official_apple_tv_profiles_include_common_subtitle_formats() -> None:

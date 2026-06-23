@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "plex-apple-tv",
+  "name": "Plex Apple TV",
+  "category": "tv_app",
+  "developer": "Plex",
+  "platforms": ["tvOS", "Apple TV"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct", "bit_depth": [8]},
+    "hevc": {
+      "mode": "conditional",
+      "bit_depth": [8, 10],
+      "hdr": ["HDR10", "HLG", "Dolby Vision"],
+      "conditions": [
+        {"kind": "device_capability", "value": "Apple TV generation supports the stream"}
+      ]
+    },
+    "mpeg4": {"mode": "video_transcode"},
+    "vp9": {"mode": "video_transcode"},
+    "av1": {"mode": "video_transcode"}
+  },
+  "audio": {
+    "aac": {"mode": "direct"},
+    "mp3": {"mode": "direct"},
+    "alac": {"mode": "direct"},
+    "flac": {"mode": "direct"},
+    "ac3": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "setting", "value": "Plex Apple TV audio format/output setting"},
+        {"kind": "device_capability", "value": "Connected TV/receiver supports Dolby Digital"}
+      ]
+    },
+    "eac3": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "setting", "value": "Plex Apple TV audio format/output setting"},
+        {"kind": "device_capability", "value": "Connected TV/receiver supports Dolby Digital Plus"}
+      ]
+    },
+    "dts": {"mode": "transcode"},
+    "truehd": {"mode": "transcode"},
+    "opus": {"mode": "transcode"},
+    "vorbis": {"mode": "transcode"},
+    "wma": {"mode": "transcode"}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "mov": {"mode": "direct"},
+    "mkv": {"mode": "direct_stream"},
+    "ts": {"mode": "direct_stream"},
+    "mpegts": {"mode": "direct_stream"},
+    "mp3": {"mode": "direct"},
+    "m4a": {"mode": "direct"},
+    "m4b": {"mode": "direct"},
+    "aac": {"mode": "direct"},
+    "alac": {"mode": "direct"},
+    "flac": {"mode": "direct"},
+    "wav": {"mode": "direct"},
+    "aiff": {"mode": "direct"}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"},
+    "subrip": {"mode": "direct"},
+    "webvtt": {"mode": "direct"},
+    "vtt": {"mode": "direct"},
+    "mov_text": {"mode": "direct"},
+    "ass": {"mode": "video_transcode"},
+    "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"},
+    "hdmv_pgs_subtitle": {"mode": "video_transcode"},
+    "pgs": {"mode": "video_transcode"},
+    "vobsub": {"mode": "video_transcode"},
+    "idx": {"mode": "video_transcode"}
+  },
+  "rules": [
+    {
+      "id": "plex-apple-tv-image-subtitles-burn-in",
+      "match": {"subtitle_formats": ["dvd_subtitle", "hdmv_pgs_subtitle", "pgs", "vobsub", "idx"]},
+      "mode": "video_transcode",
+      "subtitle_action": "burn_in",
+      "note": "Plex Apple TV can be configured to burn image-based subtitles into the video."
+    }
+  ],
+  "notes": "Plex does not publish a full Apple TV codec matrix comparable to the PlayStation and Xbox pages. This profile combines Plex's Apple TV Direct Play/subtitle settings with documented Apple TV media capabilities and remains conservative: MKV is modeled as Direct Stream/remux, DTS/TrueHD as audio transcode, and HEVC/HDR as device dependent.",
+  "sources": [
+    {
+      "label": "Plex Apple TV settings",
+      "url": "https://support.plex.tv/articles/settings-plex-for-apple-tv/"
+    },
+    {
+      "label": "Plex Direct Play and Direct Stream",
+      "url": "https://support.plex.tv/articles/200250387-streaming-media-direct-play-and-direct-stream/"
+    },
+    {
+      "label": "Apple TV technical specifications",
+      "url": "https://support.apple.com/en-us/111839"
+    }
+  ]
+}

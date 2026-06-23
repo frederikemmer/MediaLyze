@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "plex-web-browser",
+  "name": "Plex Web Browser",
+  "category": "web_app",
+  "developer": "Plex",
+  "platforms": ["Web", "Chrome", "Edge", "Firefox", "Safari"],
+  "status": "official",
+  "verified_by": "project documentation",
+  "added": "2026-06-23",
+  "last_modified": "2026-06-23",
+  "server_fallback": "transcode",
+  "video": {
+    "h264": {"mode": "direct"},
+    "hevc": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "device_capability", "value": "Browser and operating-system HEVC support"}
+      ]
+    },
+    "vp9": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "device_capability", "value": "Browser VP9 support"}
+      ]
+    },
+    "av1": {
+      "mode": "conditional",
+      "conditions": [
+        {"kind": "device_capability", "value": "Browser AV1 support"}
+      ]
+    }
+  },
+  "audio": {
+    "aac": {"mode": "direct"},
+    "mp3": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Browser MP3 support"}]},
+    "ac3": {"mode": "transcode"},
+    "eac3": {"mode": "transcode"},
+    "dts": {"mode": "transcode"},
+    "truehd": {"mode": "transcode"},
+    "flac": {"mode": "transcode"},
+    "opus": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Browser Opus support"}]},
+    "vorbis": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Browser Vorbis support"}]}
+  },
+  "containers": {
+    "mp4": {"mode": "direct"},
+    "m4v": {"mode": "direct"},
+    "mov": {"mode": "direct_stream"},
+    "mkv": {"mode": "direct_stream"},
+    "webm": {"mode": "conditional", "conditions": [{"kind": "device_capability", "value": "Browser WebM support"}]}
+  },
+  "subtitles": {
+    "srt": {"mode": "direct"},
+    "subrip": {"mode": "direct"},
+    "webvtt": {"mode": "direct"},
+    "vtt": {"mode": "direct"},
+    "ass": {"mode": "video_transcode"},
+    "ssa": {"mode": "video_transcode"},
+    "dvd_subtitle": {"mode": "video_transcode"},
+    "hdmv_pgs_subtitle": {"mode": "video_transcode"},
+    "pgs": {"mode": "video_transcode"},
+    "vobsub": {"mode": "video_transcode"}
+  },
+  "rules": [],
+  "notes": "Plex documents MP4 with H.264 video and AAC audio as the common Direct Play target for most browsers. Direct Stream is enabled by default and lets Plex retain compatible streams while changing the container.",
+  "sources": [
+    {
+      "label": "Plex Web App Settings",
+      "url": "https://support.plex.tv/articles/200289408-plex-web-app-settings/"
+    },
+    {
+      "label": "Plex Direct Play and Direct Stream",
+      "url": "https://support.plex.tv/articles/200250387-streaming-media-direct-play-and-direct-stream/"
+    }
+  ]
+}
