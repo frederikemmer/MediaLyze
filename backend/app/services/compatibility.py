@@ -446,7 +446,7 @@ def evaluate_hardware_profile(
         containers={file.extension: direct} if file.extension else {},
         subtitles={subtitle_format: direct for subtitle_format in _subtitle_formats(file)},
         rules=[],
-        server_fallback="unsupported",
+        server_fallback="transcode",
     )
     return _profile_evaluation(
         file,

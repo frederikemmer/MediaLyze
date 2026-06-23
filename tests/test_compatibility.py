@@ -209,6 +209,39 @@ def test_official_apple_tv_profiles_direct_play_common_audiobook_containers(tmp_
         assert m4b_result.audio_status == CompatibilityStatus.direct_play
 
 
+def test_official_apple_tv_profiles_remux_mkv_instead_of_marking_it_unsupported(tmp_path) -> None:
+    settings = Settings(config_path=tmp_path)
+    hardware_profiles = [
+        profile
+        for profile in list_profiles(settings, "hardware")
+        if profile.id.startswith("apple-tv")
+    ]
+    for hardware in hardware_profiles:
+        result = evaluate_hardware_profile(
+            _file(
+                extension="mkv",
+                video_streams=[
+                    SimpleNamespace(
+                        stream_index=0,
+                        codec="h264",
+                        width=640,
+                        height=360,
+                        frame_rate=24,
+                        bit_depth=8,
+                        hdr_type="SDR",
+                    )
+                ],
+                audio_streams=[
+                    SimpleNamespace(stream_index=1, codec="aac", default_flag=True),
+                ],
+            ),
+            hardware,
+        )
+        assert result.status == CompatibilityStatus.direct_stream
+        assert result.container_status == CompatibilityStatus.direct_stream
+        assert any(finding.code == "container_remux_required" for finding in result.findings)
+
+
 def test_local_profiles_are_atomic_and_cannot_shadow_official_profiles(tmp_path) -> None:
     settings = Settings(config_path=tmp_path)
     created = create_local_profile(settings, "hardware", _hardware().model_dump(mode="json"))
@@ -250,6 +283,13 @@ def test_hardware_profile_can_be_evaluated_without_a_combination() -> None:
     assert result.profile_id == "test-hardware"
     assert result.status == CompatibilityStatus.direct_play
     assert result.video_status == CompatibilityStatus.direct_play
+
+
+def test_hardware_profile_container_gap_is_remux_not_unsupported() -> None:
+    result = evaluate_hardware_profile(_file(extension="avi"), _hardware(containers=["mkv"]))
+    assert result.status == CompatibilityStatus.direct_stream
+    assert result.container_status == CompatibilityStatus.direct_stream
+    assert any(finding.code == "container_remux_required" for finding in result.findings)
 
 
 def test_software_profile_can_be_evaluated_without_a_combination() -> None:
