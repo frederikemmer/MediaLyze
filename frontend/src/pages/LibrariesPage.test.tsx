@@ -613,6 +613,8 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.queryByText("Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.")).not.toBeInTheDocument();
     const docsLink = await screen.findByRole("link", { name: "Open pattern docs" });
     expect(docsLink.querySelector("svg")).toBeInTheDocument();
+    expect(docsLink.closest(".async-panel-header-status")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Explain when a new scan is needed after changing patterns" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Explain maximum runtime difference" })).toBeInTheDocument();
     expect(screen.queryByText("10 seconds is the default. Set 0 for equal runtimes only. Changes to suffix regexes require a new scan.")).not.toBeInTheDocument();
 

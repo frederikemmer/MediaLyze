@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { RefreshCw, Save } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
+import { TooltipTrigger } from "./TooltipTrigger";
 import { api, type AppSettings, type TranscodeCapabilities, type TranscodeHardwareDevice, type TranscodingSettings } from "../lib/api";
 
 type TranscodingSettingsPanelProps = {
@@ -118,15 +119,23 @@ export function TranscodingSettingsPanel({
   return (
     <AsyncPanel
       title={t("transcoding.settingsTitle")}
-      subtitle={t("transcoding.settingsDescription")}
+      titleAddon={
+        <TooltipTrigger
+          ariaLabel={t("transcoding.settingsDescriptionAria")}
+          content={t("transcoding.settingsDescription")}
+          preserveLineBreaks
+        >
+          ?
+        </TooltipTrigger>
+      }
       headerAddon={
         <button
           type="button"
-          className="secondary small"
+          className="secondary small settings-panel-header-action"
           onClick={() => void refreshCapabilities(true)}
           disabled={loadingCapabilities}
         >
-          <RefreshCw className={loadingCapabilities ? "spin" : undefined} aria-hidden="true" />
+          <RefreshCw className={loadingCapabilities ? "spin" : undefined} aria-hidden="true" size={16} />
           {t("transcoding.refreshProbe")}
         </button>
       }
@@ -135,7 +144,16 @@ export function TranscodingSettingsPanel({
         {error ? <div className="notice error">{error}</div> : null}
         <div className="app-settings-performance-grid">
           <div className="field">
-            <label htmlFor="transcoding-execution-mode">{t("transcoding.executionMode")}</label>
+            <div className="field-label-row">
+              <label htmlFor="transcoding-execution-mode">{t("transcoding.executionMode")}</label>
+              <TooltipTrigger
+                ariaLabel={t("transcoding.hardwareRequiredHintAria")}
+                content={t("transcoding.hardwareRequiredHint")}
+                preserveLineBreaks
+              >
+                ?
+              </TooltipTrigger>
+            </div>
             <select
               id="transcoding-execution-mode"
               value={draft.execution_mode}
@@ -145,10 +163,18 @@ export function TranscodingSettingsPanel({
               <option value="hardware_required">{t("transcoding.hardwareRequired")}</option>
               <option value="cpu_only">{t("transcoding.cpuOnly")}</option>
             </select>
-            <span className="field-hint">{t("transcoding.hardwareRequiredHint")}</span>
           </div>
           <div className="field">
-            <label htmlFor="transcoding-output-mode">{t("transcoding.defaultOutputMode")}</label>
+            <div className="field-label-row">
+              <label htmlFor="transcoding-output-mode">{t("transcoding.defaultOutputMode")}</label>
+              <TooltipTrigger
+                ariaLabel={t("transcoding.outputModeHintAria")}
+                content={t("transcoding.outputModeHint")}
+                preserveLineBreaks
+              >
+                ?
+              </TooltipTrigger>
+            </div>
             <select
               id="transcoding-output-mode"
               value={draft.default_output_mode}
@@ -159,10 +185,18 @@ export function TranscodingSettingsPanel({
               <option value="same_directory">{t("transcoding.sameDirectory")}</option>
               <option value="replace_original">{t("transcoding.replaceOriginal")}</option>
             </select>
-            <span className="field-hint">{t("transcoding.outputModeHint")}</span>
           </div>
           <div className="field">
-            <label htmlFor="transcoding-cpu-budget">{t("transcoding.cpuBudget")}</label>
+            <div className="field-label-row">
+              <label htmlFor="transcoding-cpu-budget">{t("transcoding.cpuBudget")}</label>
+              <TooltipTrigger
+                ariaLabel={t("transcoding.cpuBudgetHintAria")}
+                content={t("transcoding.cpuBudgetHint")}
+                preserveLineBreaks
+              >
+                ?
+              </TooltipTrigger>
+            </div>
             <input
               id="transcoding-cpu-budget"
               type="number"
@@ -172,7 +206,6 @@ export function TranscodingSettingsPanel({
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => updateDraft("cpu_budget_percent", Math.max(1, Math.min(100, Number(event.target.value) || 1)))}
             />
-            <span className="field-hint">{t("transcoding.cpuBudgetHint")}</span>
           </div>
           <div className="field">
             <label htmlFor="transcoding-cpu-jobs">{t("transcoding.cpuParallelJobs")}</label>

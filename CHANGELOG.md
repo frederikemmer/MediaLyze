@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ Enhancements
 
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
+- move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern
 - streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid
 - refine Pattern recognition tooltips, external documentation links, borderless restore controls, and main-section separators
 - move Resolution categories reset into a borderless tooltip-backed header icon

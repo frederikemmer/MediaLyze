@@ -633,14 +633,29 @@ function QualityProfileFixture() {
             </div>
           </div>
           <div className="quality-profile-metric-settings-grid">
-            <label className="quality-profile-boundary-field">
+            <div className="quality-profile-boundary-field">
               <span>Minimum</span>
-              <QualityPickerFixture />
-            </label>
-            <label className="quality-profile-boundary-field">
+              <select className="settings-choice-input" defaultValue="1080p" aria-label="Minimum">
+                <option value="1080p">1080p</option>
+                <option value="4k">4k</option>
+                <option value="8k">8k</option>
+              </select>
+            </div>
+            <div className="quality-profile-boundary-field">
               <span>Ideal</span>
-              <QualityPickerFixture open />
-            </label>
+              <select className="settings-choice-input" defaultValue="4k" aria-label="Ideal">
+                <option value="1080p">1080p</option>
+                <option value="4k">4k</option>
+                <option value="8k">8k</option>
+              </select>
+            </div>
+            <div className="quality-profile-boundary-field">
+              <span>Maximum</span>
+              <select className="settings-choice-input" defaultValue="8k" aria-label="Maximum">
+                <option value="4k">4k</option>
+                <option value="8k">8k</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1488,22 +1503,26 @@ export function UiElementsPage() {
                   Reconstruct history
                 </button>
               </VariantCard>
-              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["panel-title-row", "pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
-                <div className="panel-title-row">
-                  <h2>Folder &amp; pattern recognition</h2>
-                  <TooltipTrigger
-                    ariaLabel="Explain folder and pattern recognition"
-                    content={"Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.\nPattern examples and matching rules are documented separately."}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                </div>
-                <div className="pattern-recognition-doc-row">
-                  <a href="#pattern-docs" target="_blank" rel="noreferrer" className="secondary small settings-panel-header-action pattern-recognition-doc-button">
-                    Open pattern docs
-                    <SquareArrowOutUpRight aria-hidden="true" size={16} />
-                  </a>
+              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
+                <div className="panel-header">
+                  <div>
+                    <div className="panel-title-row">
+                      <h2>Folder &amp; pattern recognition</h2>
+                      <TooltipTrigger
+                        ariaLabel="Explain folder and pattern recognition"
+                        content={"Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.\nPattern examples and matching rules are documented separately."}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
+                  </div>
+                  <div className="async-panel-header-status">
+                    <a href="#pattern-docs" target="_blank" rel="noreferrer" className="secondary small settings-panel-header-action pattern-recognition-doc-button">
+                      Open pattern docs
+                      <SquareArrowOutUpRight aria-hidden="true" size={16} />
+                    </a>
+                  </div>
                 </div>
               </VariantCard>
               <VariantCard title="Pattern recognition mode spacing" source={`${settings} > Pattern recognition`} classes={["pattern-recognition-settings-grid", "pattern-recognition-mode-field", "settings-choice-input"]}>
@@ -1807,7 +1826,7 @@ export function UiElementsPage() {
               <VariantCard title="Ignore pattern rows" source={`${settings} > Ignore patterns`} classes={["ignore-pattern-section", "ignore-pattern-row", "settings-choice-input", "ignore-pattern-action-button"]} wide>
                 <IgnorePatternFixture />
               </VariantCard>
-              <VariantCard title="Quality picker and profile editor" source={`${settings} > Quality profiles`} classes={["quality-picker-field", "quality-profile-picker-control", "quality-profile-metric-item", "quality-profile-weight-input"]} wide>
+              <VariantCard title="Quality picker and profile editor" source={`${settings} > Quality profiles`} classes={["quality-picker-field", "quality-profile-picker-control", "quality-profile-picker-trigger", "quality-profile-boundary-field", "quality-profile-metric-item", "quality-profile-weight-input"]} wide>
                 <QualityProfileFixture />
               </VariantCard>
             </VariantGroup>
@@ -2496,12 +2515,26 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["settings-sidebar-stack", "app-settings-performance-grid", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field-label-row", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
+                <div className="panel-header">
+                  <div className="panel-title-row">
+                    <h2>Transcoding runtime</h2>
+                    <TooltipTrigger ariaLabel="Explain transcoding runtime settings" content="Choose the required execution path, output safety policy, resource limits, and inspect the real FFmpeg hardware probes.">
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="async-panel-header-status">
+                    <button type="button" className="secondary small settings-panel-header-action">
+                      <RefreshCw aria-hidden="true" size={16} />
+                      Run hardware probe
+                    </button>
+                  </div>
+                </div>
                 <div className="settings-sidebar-stack">
                   <div className="app-settings-performance-grid">
-                    <div className="field"><label htmlFor="catalog-transcoding-execution">Execution mode</label><select id="catalog-transcoding-execution" defaultValue="hardware_required"><option value="hardware_required">Hardware required</option><option value="cpu_only">CPU only</option></select></div>
-                    <div className="field"><label htmlFor="catalog-transcoding-output">Default output mode</label><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select><span className="field-hint">Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.</span></div>
-                    <div className="field"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /><span className="field-hint">Soft budget shared across active CPU transcode jobs; short bursts can exceed it.</span></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-execution">Execution mode</label><TooltipTrigger ariaLabel="Explain hardware-required execution" content="Hardware-required jobs fail clearly when the selected encoder or device is unavailable; they never fall back silently to CPU.">?</TooltipTrigger></div><select id="catalog-transcoding-execution" defaultValue="hardware_required"><option value="hardware_required">Hardware required</option><option value="cpu_only">CPU only</option></select></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-output">Default output mode</label><TooltipTrigger ariaLabel="Explain default output mode" content="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.">?</TooltipTrigger></div><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><TooltipTrigger ariaLabel="Explain CPU budget" content="Soft budget shared across active CPU transcode jobs; short bursts can exceed it.">?</TooltipTrigger></div><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /></div>
                   </div>
                   <section className="transcode-capability-diagnostics"><div className="field-label-row"><h3>Hardware diagnostics</h3><span className="field-hint">Last tested now</span></div><div className="transcode-capability-item"><div><strong>NVIDIA GeForce RTX 3080</strong><span>cuda · cuda0 · Unavailable</span></div><p className="notice compact error">NVENC probe failed: driver API is older than the FFmpeg requirement.</p></div></section>
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>

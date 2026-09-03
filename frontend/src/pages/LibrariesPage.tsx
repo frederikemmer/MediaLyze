@@ -6553,29 +6553,21 @@ export function LibrariesPage() {
                 ?
               </TooltipTrigger>
             }
-            collapseActions={
-              <TooltipTrigger
-                ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
-                content={t("libraries.ignorePatternsHint")}
+            headerAddon={
+              <a
+                href={PATTERN_DOCS_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="secondary small settings-panel-header-action pattern-recognition-doc-button"
               >
-                ?
-              </TooltipTrigger>
+                {t("libraries.patternRecognition.docsLink")}
+                <SquareArrowOutUpRight aria-hidden="true" size={16} />
+              </a>
             }
             loading={isLoadingIgnorePatterns}
             error={ignorePatternsLoadError}
           >
             <div className="settings-sidebar-stack">
-              <div className="pattern-recognition-doc-row">
-                <a
-                  href={PATTERN_DOCS_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="secondary small settings-panel-header-action pattern-recognition-doc-button"
-                >
-                  {t("libraries.patternRecognition.docsLink")}
-                  <SquareArrowOutUpRight aria-hidden="true" size={16} />
-                </a>
-              </div>
               <div className="field">
                 <div className="distribution-copy">
                   <div className="field-label-row">
