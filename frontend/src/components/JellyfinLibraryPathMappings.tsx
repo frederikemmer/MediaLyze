@@ -243,7 +243,7 @@ export function JellyfinLibraryPathMappings({
           </TooltipTrigger>
         </div>
         <label
-          className="library-jellyfin-path-mapping-switch"
+          className="toggle-switch library-jellyfin-path-mapping-switch"
           title={t(isFullyEnabled
             ? "libraries.sections.jellyfin.disablePathMapping"
             : "libraries.sections.jellyfin.enablePathMapping")}
@@ -268,8 +268,8 @@ export function JellyfinLibraryPathMappings({
             aria-busy={togglePending}
             onChange={(event) => void togglePathMapping(event.target.checked)}
           />
-          <span className="library-jellyfin-path-mapping-switch-track" aria-hidden="true">
-            <span className="library-jellyfin-path-mapping-switch-thumb" />
+          <span className="toggle-switch-track library-jellyfin-path-mapping-switch-track" aria-hidden="true">
+            <span className="toggle-switch-thumb library-jellyfin-path-mapping-switch-thumb" />
           </span>
         </label>
       </div>

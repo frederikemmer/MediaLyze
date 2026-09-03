@@ -6115,7 +6115,7 @@ export function LibrariesPage() {
                               <div className="connector-library-status-row" key={`${link.connection_id}-${link.connector_library_id}`}>
                                 <div><strong>{link.connection_name}</strong><span>{link.provider} · {link.connector_library_name}</span></div>
                                 <span className="badge">{link.link_method}</span>
-                                <Link className="secondary small connector-action-button" to={`/settings?section=jellyfin#connector-${link.connection_id}`}>{t("connectors.libraryStatus.openConnector")}<SquareArrowOutUpRight aria-hidden="true" /></Link>
+                                <Link className="secondary small settings-panel-header-action connector-action-button" to={`/settings?section=jellyfin#connector-${link.connection_id}`}>{t("connectors.libraryStatus.openConnector")}<SquareArrowOutUpRight aria-hidden="true" size={16} /></Link>
                               </div>
                             ))}
                             {!(library.connector_links?.length) ? <div className="notice">{t("connectors.libraryStatus.unassigned")}</div> : null}
@@ -6134,7 +6134,7 @@ export function LibrariesPage() {
                               <span>{t("libraries.mediaPaths")}</span>
                               <button
                                 type="button"
-                                className="secondary small"
+                                className="secondary small settings-panel-header-action library-change-path-button"
                                 disabled={isDeletingLibrary || Boolean(activeLibraryScanJob)}
                                 title={activeLibraryScanJob ? t("libraries.changePathActiveScanTooltip") : t("libraries.changePathTooltip")}
                                 onClick={() => openLibraryPathDialog(library)}
@@ -6145,7 +6145,7 @@ export function LibrariesPage() {
                             <div className="library-source-paths">
                               {(library.roots?.length ? library.roots : [{ id: 0, path: library.path, display_name: "", path_key: library.path }]).map((root) => (
                                 <div className="library-root-row" key={`${library.id}-${root.path}`}>
-                                  {root.id ? <label><span>{t("connectors.rootAlias")}</span><input defaultValue={root.display_name} onBlur={(event) => void updateLibraryRootAlias(library, root.id, event.target.value)} /></label> : null}
+                                  {root.id ? <label><span>{t("connectors.rootAlias")}</span><input className="settings-choice-input" defaultValue={root.display_name} onBlur={(event) => void updateLibraryRootAlias(library, root.id, event.target.value)} /></label> : null}
                                   <code>{root.path}</code>
                                 </div>
                               ))}
@@ -6382,6 +6382,22 @@ export function LibrariesPage() {
                 ?
               </TooltipTrigger>
             }
+            collapseActions={
+              <TooltipTrigger
+                ariaLabel={t("libraries.resolutionCategories.restoreDefaults")}
+                content={t("libraries.resolutionCategories.restoreDefaults")}
+                className="secondary icon-only-button resolution-category-restore-button"
+                disabled={
+                  !appSettingsLoaded ||
+                  isSavingResolutionCategories ||
+                  resolutionCategoryDefaultsChangeKind === "none"
+                }
+                pinOnClick={false}
+                onClick={() => void restoreDefaultResolutionCategories()}
+              >
+                <History aria-hidden="true" className="nav-icon" size={16} />
+              </TooltipTrigger>
+            }
           >
             <div className="settings-sidebar-stack">
               <div className="resolution-category-table-shell">
@@ -6500,20 +6516,6 @@ export function LibrariesPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="resolution-category-actions">
-                <button
-                  type="button"
-                  className="secondary resolution-category-restore-button"
-                  onClick={() => void restoreDefaultResolutionCategories()}
-                  disabled={
-                    !appSettingsLoaded ||
-                    isSavingResolutionCategories ||
-                    resolutionCategoryDefaultsChangeKind === "none"
-                  }
-                >
-                  Restore defaults
-                </button>
-              </div>
               {isSavingResolutionCategories ? <p className="field-hint">Saving resolution categories…</p> : null}
               {resolutionCategoryChangeKind === "labels" ? (
                 <p className="field-hint">
@@ -6533,6 +6535,15 @@ export function LibrariesPage() {
           {activeSettingsPanelId === "patternRecognition" ? (
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
+            titleAddon={
+              <TooltipTrigger
+                ariaLabel={t("libraries.patternRecognition.docsTooltipAria")}
+                content={`${t("libraries.patternRecognition.subtitle")}\n${t("libraries.patternRecognition.docsHint")}`}
+                preserveLineBreaks
+              >
+                ?
+              </TooltipTrigger>
+            }
             collapseActions={
               <TooltipTrigger
                 ariaLabel={t("libraries.patternRecognition.rescanTooltipAria")}
@@ -6546,10 +6557,6 @@ export function LibrariesPage() {
           >
             <div className="settings-sidebar-stack">
               <div className="pattern-recognition-doc-row">
-                <div className="pattern-recognition-doc-copy">
-                  <p>{t("libraries.patternRecognition.subtitle")}</p>
-                  <p>{t("libraries.patternRecognition.docsHint")}</p>
-                </div>
                 <a
                   href={PATTERN_DOCS_URL}
                   target="_blank"
@@ -6557,6 +6564,7 @@ export function LibrariesPage() {
                   className="secondary small settings-panel-header-action pattern-recognition-doc-button"
                 >
                   {t("libraries.patternRecognition.docsLink")}
+                  <SquareArrowOutUpRight aria-hidden="true" size={16} />
                 </a>
               </div>
               <div className="field">
@@ -6573,9 +6581,21 @@ export function LibrariesPage() {
                   </div>
                 </div>
                 <div className="inline-form-grid">
-                  <label>
-                    <span>{t("libraries.patternRecognition.durationTolerance")}</span>
+                  <div className="field">
+                    <div className="field-label-row pattern-recognition-field-label-row">
+                      <label htmlFor="duplicate-duration-tolerance">
+                        {t("libraries.patternRecognition.durationTolerance")}
+                      </label>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.patternRecognition.durationToleranceTooltipAria")}
+                        content={t("libraries.patternRecognition.durationToleranceHint")}
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
+                    </div>
                     <input
+                      id="duplicate-duration-tolerance"
                       className="settings-choice-input"
                       type="number"
                       min={DUPLICATE_DURATION_TOLERANCE_MIN}
@@ -6589,9 +6609,8 @@ export function LibrariesPage() {
                       }}
                       onBlur={() => void saveDuplicateDurationTolerance()}
                     />
-                  </label>
+                  </div>
                 </div>
-                <p className="field-hint">{t("libraries.patternRecognition.durationToleranceHint")}</p>
                 <div className="ignore-pattern-sections">
                   {renderPatternRecognitionList(
                     "duplicate_filename_suffix_regexes",
@@ -6607,6 +6626,7 @@ export function LibrariesPage() {
                   )}
                 </div>
               </div>
+              <div className="app-settings-divider pattern-recognition-section-divider" aria-hidden="true" />
               <div className="field">
                 <div className="distribution-copy">
                   <div className="field-label-row">

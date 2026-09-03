@@ -609,6 +609,13 @@ describe("LibrariesPage ignore patterns", () => {
   it("places restore icon actions between pattern counts and chevrons", async () => {
     renderPage({ activePanel: "patternRecognition" });
 
+    expect(screen.getByRole("button", { name: "Explain folder and pattern recognition" })).toBeInTheDocument();
+    expect(screen.queryByText("Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.")).not.toBeInTheDocument();
+    const docsLink = await screen.findByRole("link", { name: "Open pattern docs" });
+    expect(docsLink.querySelector("svg")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Explain maximum runtime difference" })).toBeInTheDocument();
+    expect(screen.queryByText("10 seconds is the default. Set 0 for equal runtimes only. Changes to suffix regexes require a new scan.")).not.toBeInTheDocument();
+
     const assertRestoreActionPosition = async (toggleName: RegExp, restoreName: string) => {
       const toggle = await screen.findByRole("button", { name: toggleName });
       const row = toggle.closest<HTMLElement>(".ignore-pattern-section-toggle-row");
@@ -640,6 +647,15 @@ describe("LibrariesPage ignore patterns", () => {
     const settingsGrid = screen.getByText("Recognition mode").closest(".pattern-recognition-settings-grid");
     expect(settingsGrid).not.toBeNull();
     expect(settingsGrid?.querySelectorAll(":scope > .field")).toHaveLength(3);
+
+    const duplicateField = screen.getByText("Duplicate filename matching", { exact: true }).closest<HTMLElement>(".field");
+    const showField = screen.getByText("Show & Seasons", { exact: true }).closest<HTMLElement>(".field");
+    expect(duplicateField).not.toBeNull();
+    expect(showField).not.toBeNull();
+    const divider = duplicateField?.nextElementSibling;
+    expect(divider).toHaveClass("app-settings-divider", "pattern-recognition-section-divider");
+    expect(divider?.nextElementSibling).toBe(showField);
+    expect(document.querySelectorAll(".pattern-recognition-section-divider")).toHaveLength(1);
   });
 
   it("saves combined ignore patterns through the shared section", async () => {
@@ -1542,7 +1558,22 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage({ activePanel: "resolutionCategories" });
 
     await screen.findByDisplayValue("UHD");
-    fireEvent.click(screen.getByRole("button", { name: "Restore defaults" }));
+    const restoreButton = await screen.findByRole("button", { name: "Restore defaults" });
+    expect(restoreButton).toHaveClass(
+      "tooltip-trigger",
+      "icon-only-button",
+      "resolution-category-restore-button",
+    );
+    expect(restoreButton.querySelector("svg")).toBeInTheDocument();
+    expect(restoreButton.closest(".async-panel-toggle-actions")).not.toBeNull();
+
+    const heading = screen.getByRole("heading", { name: "Resolution categories" });
+    const titleRow = heading.closest(".panel-title-row");
+    expect(titleRow).not.toBeNull();
+    expect(titleRow?.querySelector(".async-panel-toggle-actions")).toContainElement(restoreButton);
+    expect(document.querySelector(".resolution-category-actions")).not.toBeInTheDocument();
+
+    fireEvent.click(restoreButton);
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1767,7 +1798,18 @@ describe("LibrariesPage media type selection", () => {
 
 describe("LibrariesPage Jellyfin library assignments", () => {
   it("shows connector assignments as status instead of a library-side editor", async () => {
-    const medialyzeLibrary = createLibrarySummary();
+    const medialyzeLibrary = createLibrarySummary({
+      connector_links: [
+        {
+          connection_id: 7,
+          connection_name: "Jellyfin",
+          provider: "jellyfin",
+          connector_library_id: 1,
+          connector_library_name: "Movies",
+          link_method: "path",
+        },
+      ],
+    });
     const jellyfinLibrary = createJellyfinLibrary();
     vi.spyOn(api, "libraries").mockResolvedValue([medialyzeLibrary]);
     vi.mocked(api.jellyfinLibraries).mockResolvedValue([jellyfinLibrary]);
@@ -1775,6 +1817,15 @@ describe("LibrariesPage Jellyfin library assignments", () => {
 
     await expandLibrarySettings();
     expect(await screen.findByRole("heading", { name: "Connector assignments" })).toBeInTheDocument();
+    const openConnectorLink = await screen.findByRole("link", { name: "Open connector" });
+    expect(openConnectorLink).toHaveClass(
+      "secondary",
+      "small",
+      "settings-panel-header-action",
+      "connector-action-button",
+    );
+    expect(openConnectorLink.querySelector("svg")).toHaveAttribute("width", "16");
+    expect(openConnectorLink.querySelector("svg")).toHaveAttribute("height", "16");
     expect(screen.queryByRole("combobox", { name: "Associated Jellyfin library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Path mapping (optional)" })).not.toBeInTheDocument();
   });
@@ -2259,7 +2310,11 @@ describe("LibrariesPage settings panels", () => {
   });
 
   it("shows editable library sources while keeping summary details in the title tooltip", async () => {
-    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary({
+        roots: [{ id: 1, path: "/media/movies", display_name: "Movies", path_key: "/media/movies" }],
+      }),
+    ]);
 
     renderPage();
 
@@ -2274,7 +2329,9 @@ describe("LibrariesPage settings panels", () => {
     await expandLibrarySettings();
     expect(screen.getByRole("button", { name: "Hide settings for Movies" })).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByText("/media/movies")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change path" })).toBeInTheDocument();
+    const changePathButton = screen.getByRole("button", { name: "Change path" });
+    expect(changePathButton).toHaveClass("secondary", "small", "settings-panel-header-action", "library-change-path-button");
+    expect(screen.getByRole("textbox", { name: "Root alias" })).toHaveClass("settings-choice-input");
     expect(screen.getByRole("heading", { name: "Connector assignments" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Associated Jellyfin library" })).not.toBeInTheDocument();
 

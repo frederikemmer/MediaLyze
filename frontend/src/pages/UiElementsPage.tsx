@@ -32,9 +32,11 @@ import {
   GitCompare,
   History,
   House,
+  KeyRound,
   Info,
   Layers,
   LayoutPanelTop,
+  Link2,
   ListFilter,
   Lock,
   Map,
@@ -43,6 +45,7 @@ import {
   PanelRightClose,
   PanelTopClose,
   Plus,
+  RefreshCw,
   Save,
   SaveOff,
   Search,
@@ -1454,7 +1457,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Library title actions" source={`${settings} > Libraries`} classes={["library-title-actions", "library-action-tooltip-trigger", "library-change-path-button"]}>
+              <VariantCard title="Library title actions" source={`${settings} > Libraries`} classes={["library-title-actions", "library-action-tooltip-trigger", "library-change-path-button", "settings-panel-header-action"]}>
                 <div className="library-title-actions">
                   <button type="button" className="secondary icon-only-button library-action-tooltip-trigger" aria-label="Show library on dashboard">
                     <DashboardVisibilityIcon visible />
@@ -1465,9 +1468,19 @@ export function UiElementsPage() {
                   <button type="button" className="secondary icon-only-button library-action-tooltip-trigger" aria-label="Delete library">
                     <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
                   </button>
-                  <button type="button" className="secondary small library-change-path-button">
+                  <button type="button" className="secondary small settings-panel-header-action library-change-path-button">
                     Change path
                   </button>
+                </div>
+              </VariantCard>
+              <VariantCard title="Library connector status action" source={`${settings} > Libraries`} classes={["connector-library-status-row", "settings-panel-header-action", "connector-action-button"]} wide>
+                <div className="connector-library-status-row">
+                  <div><strong>Jellyfin</strong><span>jellyfin · Movies</span></div>
+                  <span className="badge">derived</span>
+                  <a href="#connector" className="secondary small settings-panel-header-action connector-action-button" onClick={preventCatalogNavigation}>
+                    Open connector
+                    <SquareArrowOutUpRight aria-hidden="true" size={16} />
+                  </a>
                 </div>
               </VariantCard>
               <VariantCard title="History reconstruction action" source={`${settings} > History retention`} classes={["settings-panel-header-action", "history-retention-reconstruct-button"]}>
@@ -1475,14 +1488,21 @@ export function UiElementsPage() {
                   Reconstruct history
                 </button>
               </VariantCard>
-              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
+              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["panel-title-row", "pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
+                <div className="panel-title-row">
+                  <h2>Folder &amp; pattern recognition</h2>
+                  <TooltipTrigger
+                    ariaLabel="Explain folder and pattern recognition"
+                    content={"Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.\nPattern examples and matching rules are documented separately."}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                </div>
                 <div className="pattern-recognition-doc-row">
-                  <div className="pattern-recognition-doc-copy">
-                    <p>Configure scan-time series and bonus folder patterns plus ignored paths.</p>
-                    <p>Pattern examples and matching rules are documented separately.</p>
-                  </div>
-                  <a href="#pattern-docs" className="secondary small settings-panel-header-action pattern-recognition-doc-button">
+                  <a href="#pattern-docs" target="_blank" rel="noreferrer" className="secondary small settings-panel-header-action pattern-recognition-doc-button">
                     Open pattern docs
+                    <SquareArrowOutUpRight aria-hidden="true" size={16} />
                   </a>
                 </div>
               </VariantCard>
@@ -1499,18 +1519,34 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Duplicate filename matching settings" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-chevron"]} wide>
+              <VariantCard title="Duplicate filename matching settings" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-field-label-row", "pattern-recognition-restore-button", "app-settings-divider", "pattern-recognition-section-divider", "ignore-pattern-section-toggle-row", "ignore-pattern-section-chevron"]} wide>
                 <div className="field">
                   <div className="distribution-copy">
                     <div className="field-label-row">
                       <strong>Duplicate filename matching</strong>
+                      <TooltipTrigger
+                        ariaLabel="Explain duplicate filename matching"
+                        content="Filename duplicates use a cleaned title core. Trailing years and square-bracketed release metadata are ignored; every file in a group must have a known runtime within the configured tolerance."
+                        preserveLineBreaks
+                      >
+                        ?
+                      </TooltipTrigger>
                     </div>
                   </div>
                   <div className="inline-form-grid">
-                    <label>
-                      <span>Maximum runtime difference (seconds)</span>
-                      <input className="settings-choice-input" type="number" min={0} max={300} defaultValue={10} />
-                    </label>
+                    <div className="field">
+                      <div className="field-label-row pattern-recognition-field-label-row">
+                        <label htmlFor="ui-pattern-duration-tolerance">Maximum runtime difference (seconds)</label>
+                        <TooltipTrigger
+                          ariaLabel="Explain maximum runtime difference"
+                          content="10 seconds is the default. Set 0 for equal runtimes only. Changes to suffix regexes require a new scan."
+                          preserveLineBreaks
+                        >
+                          ?
+                        </TooltipTrigger>
+                      </div>
+                      <input id="ui-pattern-duration-tolerance" className="settings-choice-input" type="number" min={0} max={300} defaultValue={10} />
+                    </div>
                   </div>
                   <div className="ignore-pattern-section pattern-recognition-section">
                     <div className="ignore-pattern-section-toggle-row">
@@ -1535,6 +1571,12 @@ export function UiElementsPage() {
                         <ChevronDown aria-hidden="true" className="nav-icon" />
                       </button>
                     </div>
+                  </div>
+                </div>
+                <div className="app-settings-divider pattern-recognition-section-divider" aria-hidden="true" />
+                <div className="field">
+                  <div className="field-label-row">
+                    <strong>Show &amp; Seasons</strong>
                   </div>
                 </div>
               </VariantCard>
@@ -1574,16 +1616,16 @@ export function UiElementsPage() {
                   </AsyncPanel>
                 </div>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-url", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-users-section", "connector-users-toggle"]} wide>
+              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
                 <article className="media-card library-settings-card connector-connection-card is-expanded">
                   <header className="connector-connection-header">
-                    <button type="button" className="connector-connection-toggle" aria-expanded="true"><span className="connector-connection-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="jellyfin" title="Jellyfin"><ConnectorProviderIcon provider="jellyfin" aria-hidden="true" /><span className="sr-only">Jellyfin</span></span><strong>Living Room</strong><span className="connector-connection-url">https://living-room.example</span></span></span></button>
+                    <div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Disable"><input type="checkbox" role="switch" defaultChecked aria-label="Disable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="true"><span className="connector-connection-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="jellyfin" title="Jellyfin"><ConnectorProviderIcon provider="jellyfin" aria-hidden="true" /><span className="sr-only">Jellyfin</span></span><strong>Living Room</strong><span className="connector-connection-url">https://living-room.example</span></span></span></button></div>
                     <span className="connector-status status-running">Running</span>
                   </header>
                   <div className="library-settings-body connector-connection-body">
                     <section className="connector-detail-section">
-                      <div className="connector-form-grid"><label><span>Name</span><input className="settings-choice-input" defaultValue="Living Room" /></label><label><span>Server URL</span><input className="settings-choice-input" defaultValue="https://living-room.example" /></label><label><span>API key / secret</span><input className="settings-choice-input" type="password" placeholder="Secret configured" /></label><label><span>Sync interval (minutes)</span><input className="settings-choice-input" type="number" defaultValue="60" /></label></div>
-                      <div className="jellyfin-actions"><button type="button" className="connector-action-button"><Check aria-hidden="true" />Save</button><button type="button" className="secondary small connector-action-button">Disable</button><button type="button" className="secondary small connector-action-button">Test connection</button><button type="button" className="secondary small connector-action-button">Sync now</button><button type="button" className="secondary small connector-action-button"><CircleStop aria-hidden="true" />Cancel sync</button><button type="button" className="secondary small danger connector-action-button"><Trash2 aria-hidden="true" />Remove</button></div>
+                      <div className="connector-form-grid"><label><span>Name</span><input className="settings-choice-input" defaultValue="Living Room" /></label><label><span>Server URL</span><input className="settings-choice-input" defaultValue="https://living-room.example" /></label><label><span>Sync interval (minutes)</span><input className="settings-choice-input" type="number" defaultValue="60" /></label></div>
+                      <div className="jellyfin-actions"><button type="button" className="connector-action-button"><Check aria-hidden="true" />Save</button><button type="button" className="secondary small connector-action-button"><Link2 aria-hidden="true" />Test</button><button type="button" className="secondary small connector-action-button"><RefreshCw aria-hidden="true" />Sync now</button><button type="button" className="secondary small connector-action-button"><CircleStop aria-hidden="true" />Cancel sync</button><button type="button" className="secondary small connector-action-button connector-secret-action-button"><KeyRound aria-hidden="true" />Replace key</button><button type="button" className="secondary small danger connector-action-button"><Trash2 aria-hidden="true" />Remove</button></div>
                     </section>
                     <section className="connector-detail-section connector-mapping-section">
                       <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><div><h4>Library assignments</h4><p>Assign connector libraries automatically from verified paths or choose them manually.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Library assignments" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
@@ -1620,8 +1662,8 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · collapsed connection" source={`${settings} > Connectors`} classes={["connector-connection-card", "is-collapsed", "connector-connection-url", "connector-status"]}>
-                <article className="media-card library-settings-card connector-connection-card is-collapsed"><header className="connector-connection-header"><button type="button" className="connector-connection-toggle" aria-expanded="false"><span className="connector-connection-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="plex" title="Plex"><ConnectorProviderIcon provider="plex" aria-hidden="true" /><span className="sr-only">Plex</span></span><strong>Archive</strong><span className="connector-connection-url">https://archive.example</span></span></span></button><span className="connector-status status-success">Synchronized</span></header></article>
+              <VariantCard title="Shared connector accordion · collapsed connection" source={`${settings} > Connectors`} classes={["connector-connection-card", "is-collapsed", "connector-connection-header", "connector-connection-header-main", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "connector-status"]}>
+                <article className="media-card library-settings-card connector-connection-card is-collapsed"><header className="connector-connection-header"><div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Enable"><input type="checkbox" role="switch" aria-label="Enable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="false"><span className="connector-connection-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="plex" title="Plex"><ConnectorProviderIcon provider="plex" aria-hidden="true" /><span className="sr-only">Plex</span></span><strong>Archive</strong><span className="connector-connection-url">https://archive.example</span></span></span></button></div><span className="connector-status status-success">Synchronized</span></header></article>
               </VariantCard>
               <VariantCard title="Add connector dialog · provider dropdown with Plex Soon™" source={`${settings} > Connectors > Add connection`} classes={["connector-add-dialog", "connector-provider-field", "settings-choice-input"]} wide>
                 <section className="settings-create-library-dialog connector-add-dialog">
@@ -1657,8 +1699,8 @@ export function UiElementsPage() {
                     <div className="item-meta"><div className="library-title-row"><div className="library-title-meta"><div className="library-title-main"><div className="library-title-heading"><button type="button" className="library-settings-chevron" aria-label="Hide settings for Movies" aria-expanded="true"><ChevronDown aria-hidden="true" className="nav-icon" /></button><h3>Movies</h3></div><div className="meta-tags library-title-tags"><span className="badge">Movies</span><span className="badge">Manual</span></div></div></div><div className="library-title-actions"><button type="button" className="small library-scan-button">Manual scan</button></div></div></div>
                   </div>
                   <div className="library-settings-body">
-                    <section className="library-settings-section"><div className="library-settings-section-heading"><h4>Jellyfin association</h4><p>Choose the Jellyfin catalog that enriches this MediaLyze library.</p></div><div className="library-settings-section-grid is-single-column"><div className="field"><label htmlFor="catalog-medialyze-jellyfin-link">Associated Jellyfin library</label><select id="catalog-medialyze-jellyfin-link" className="settings-choice-input" defaultValue="movies"><option value="">No associated library</option><option value="movies">Movies</option><option value="archive">Archive (Archive library)</option></select></div><div id="path-mapping" className="library-jellyfin-path-mappings"><div className="library-jellyfin-path-mappings-heading"><div className="library-jellyfin-path-mappings-title"><h5>Path mapping (optional)</h5><TooltipTrigger ariaLabel="Explain path mapping" content="Use this when Jellyfin and MediaLyze see the same files under different mount points.">?</TooltipTrigger><span className="library-jellyfin-path-mapping-state is-partial">Partially enabled</span></div><label className="library-jellyfin-path-mapping-switch is-partial" title="Enable all path mappings"><input type="checkbox" role="switch" aria-label="Enable all path mappings" aria-checked="mixed" /><span className="library-jellyfin-path-mapping-switch-track" aria-hidden="true"><span className="library-jellyfin-path-mapping-switch-thumb" /></span></label></div><div className="library-jellyfin-path-mapping-row"><div className="field library-jellyfin-path-source"><span className="field-label">Jellyfin path</span><code>/jellyfin/movies</code></div><span className="library-jellyfin-path-arrow" aria-hidden="true">→</span><div className="field library-jellyfin-path-target"><label htmlFor="catalog-jellyfin-path-target">MediaLyze path</label><input id="catalog-jellyfin-path-target" className="settings-choice-input" defaultValue="/media/movies" /></div><div className="library-jellyfin-path-mapping-actions"><button type="button" className="secondary icon-only-button library-jellyfin-path-save-button is-dirty" aria-label="Save mapping" title="Save mapping"><Save aria-hidden="true" /></button></div></div></div></div></section>
-                    <section className="library-settings-section"><div className="library-settings-section-heading"><h4>Media source</h4><p>Review or change the local folders scanned by MediaLyze.</p></div><div className="library-settings-section-grid is-single-column"><div className="field library-source-field"><div className="field-label-row"><span>MediaLyze paths</span><button type="button" className="secondary small">Change path</button></div><div className="library-source-paths"><code>/media/movies</code></div></div></div></section>
+                    <section className="library-settings-section"><div className="library-settings-section-heading"><h4>Jellyfin association</h4><p>Choose the Jellyfin catalog that enriches this MediaLyze library.</p></div><div className="library-settings-section-grid is-single-column"><div className="field"><label htmlFor="catalog-medialyze-jellyfin-link">Associated Jellyfin library</label><select id="catalog-medialyze-jellyfin-link" className="settings-choice-input" defaultValue="movies"><option value="">No associated library</option><option value="movies">Movies</option><option value="archive">Archive (Archive library)</option></select></div><div id="path-mapping" className="library-jellyfin-path-mappings"><div className="library-jellyfin-path-mappings-heading"><div className="library-jellyfin-path-mappings-title"><h5>Path mapping (optional)</h5><TooltipTrigger ariaLabel="Explain path mapping" content="Use this when Jellyfin and MediaLyze see the same files under different mount points.">?</TooltipTrigger><span className="library-jellyfin-path-mapping-state is-partial">Partially enabled</span></div><label className="toggle-switch library-jellyfin-path-mapping-switch is-partial" title="Enable all path mappings"><input type="checkbox" role="switch" aria-label="Enable all path mappings" aria-checked="mixed" /><span className="toggle-switch-track library-jellyfin-path-mapping-switch-track" aria-hidden="true"><span className="toggle-switch-thumb library-jellyfin-path-mapping-switch-thumb" /></span></label></div><div className="library-jellyfin-path-mapping-row"><div className="field library-jellyfin-path-source"><span className="field-label">Jellyfin path</span><code>/jellyfin/movies</code></div><span className="library-jellyfin-path-arrow" aria-hidden="true">→</span><div className="field library-jellyfin-path-target"><label htmlFor="catalog-jellyfin-path-target">MediaLyze path</label><input id="catalog-jellyfin-path-target" className="settings-choice-input" defaultValue="/media/movies" /></div><div className="library-jellyfin-path-mapping-actions"><button type="button" className="secondary icon-only-button library-jellyfin-path-save-button is-dirty" aria-label="Save mapping" title="Save mapping"><Save aria-hidden="true" /></button></div></div></div></div></section>
+                    <section className="library-settings-section"><div className="library-settings-section-heading"><h4>Media source</h4><p>Review or change the local folders scanned by MediaLyze.</p></div><div className="library-settings-section-grid is-single-column"><div className="field library-source-field"><div className="field-label-row"><span>MediaLyze paths</span><button type="button" className="secondary small settings-panel-header-action library-change-path-button">Change path</button></div><div className="library-source-paths"><div className="library-root-row"><label><span>Root alias</span><input className="settings-choice-input" defaultValue="Movies" /></label><code>/media/movies</code></div></div></div></div></section>
                     <section className="library-settings-section"><div className="library-settings-section-heading"><h4>Scanning and analysis</h4><p>Configure when this library is scanned and how its files are evaluated.</p></div><div className="library-settings-form"><div className="field"><label htmlFor="catalog-library-scan-mode">Scan mode</label><select id="catalog-library-scan-mode" className="settings-choice-input" defaultValue="manual"><option value="manual">Manual</option></select></div><div className="field"><label htmlFor="catalog-library-duplicates">Duplicate detection</label><select id="catalog-library-duplicates" className="settings-choice-input" defaultValue="off"><option value="off">Off</option></select></div></div></section>
                   </div>
                 </article>
@@ -1864,6 +1906,42 @@ export function UiElementsPage() {
                   </div>
                 </div>
                 <AnalyzedFilesTable />
+              </VariantCard>
+              <VariantCard
+                title="Resolution category restore action"
+                source={`${settings} > Resolution categories`}
+                classes={["panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button"]}
+                wide
+              >
+                <div className="panel-title-row">
+                  <h2>Resolution categories</h2>
+                  <TooltipTrigger
+                    ariaLabel="Explain reduced default resolution thresholds"
+                    content={[
+                      "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
+                      "",
+                      "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
+                      "Reference dimensions:",
+                      "8k: 7680x4320",
+                      "4k / UHD: 3840x2160",
+                      "1080p / Full HD: 1920x1080",
+                      "720p / HD: 1280x720",
+                    ].join("\n")}
+                    preserveLineBreaks
+                  >
+                    ?
+                  </TooltipTrigger>
+                  <div className="async-panel-toggle-actions">
+                    <TooltipTrigger
+                      ariaLabel="Restore defaults"
+                      content="Restore defaults"
+                      className="secondary icon-only-button resolution-category-restore-button"
+                      pinOnClick={false}
+                    >
+                      <History aria-hidden="true" className="nav-icon" size={16} />
+                    </TooltipTrigger>
+                  </div>
+                </div>
               </VariantCard>
               <VariantCard title="Settings table" source={`${settings} > Resolution categories`} classes={["settings-table-shell", "settings-data-table"]}>
                 <div className="settings-table-shell">
@@ -2484,6 +2562,19 @@ export function UiElementsPage() {
                         </span>
                       </div>
                     </div>
+                  </section>
+                </div>
+              </VariantCard>
+              <VariantCard title="Set connector API key dialog" source={`${settings} > Connectors > Connection`} classes={["settings-create-library-backdrop", "settings-create-library-dialog", "connector-secret-dialog", "connector-secret-action-button"]} wide>
+                <div className="settings-create-library-backdrop ui-elements-static-backdrop">
+                  <section className="settings-create-library-dialog connector-secret-dialog" role="dialog" aria-modal="true" aria-labelledby="catalog-connector-secret-dialog-title">
+                    <div className="settings-create-library-dialog-header">
+                      <div><h2 id="catalog-connector-secret-dialog-title">Set API key</h2><p>An API key is already stored. Enter a new one to replace it.</p></div>
+                      <button type="button" className="secondary icon-only-button" aria-label="Close"><X aria-hidden="true" /></button>
+                    </div>
+                    <div className="notice">An API key is already configured and can be replaced.</div>
+                    <label><span>API key / secret</span><input className="settings-choice-input" type="password" autoFocus placeholder="Enter a new API key" /></label>
+                    <div className="jellyfin-actions"><button type="button"><KeyRound aria-hidden="true" />Save key</button><button type="button" className="secondary">Cancel</button></div>
                   </section>
                 </div>
               </VariantCard>

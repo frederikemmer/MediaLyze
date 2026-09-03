@@ -4,6 +4,7 @@ import {
   ChevronRight,
   CircleStop,
   FolderPlus,
+  KeyRound,
   Link2,
   Plus,
   RefreshCw,
@@ -30,7 +31,6 @@ import {
 type ConnectionDraft = {
   name: string;
   baseUrl: string;
-  secret: string;
   syncInterval: string;
 };
 
@@ -380,18 +380,17 @@ function ConnectionCard({
   const [draft, setDraft] = useState<ConnectionDraft>({
     name: connection.name,
     baseUrl: connection.base_url,
-    secret: "",
     syncInterval: String(connection.sync_interval_minutes),
   });
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [secretDialogOpen, setSecretDialogOpen] = useState(false);
 
   useEffect(() => {
     setDraft({
       name: connection.name,
       baseUrl: connection.base_url,
-      secret: "",
       syncInterval: String(connection.sync_interval_minutes),
     });
   }, [connection.base_url, connection.name, connection.sync_interval_minutes]);
@@ -400,7 +399,6 @@ function ConnectionCard({
   const validInterval = Number.isInteger(interval) && interval >= 5 && interval <= 10080;
   const dirty = draft.name.trim() !== connection.name
     || draft.baseUrl.trim() !== connection.base_url
-    || Boolean(draft.secret.trim())
     || (validInterval && interval !== connection.sync_interval_minutes);
   const syncRunning = job?.status === "queued" || job?.status === "running";
 
@@ -413,9 +411,7 @@ function ConnectionCard({
         ...(!legacyDefault ? { name: draft.name.trim() } : {}),
         base_url: draft.baseUrl.trim(),
         sync_interval_minutes: interval,
-        ...(draft.secret.trim() ? { secret: draft.secret.trim() } : {}),
       });
-      setDraft((current) => ({ ...current, secret: "" }));
       await onChanged();
       setNotice(t("connectors.saved"));
     } catch (reason) {
@@ -432,7 +428,6 @@ function ConnectionCard({
     try {
       const result = await api.testConnector(connection.id, {
         base_url: draft.baseUrl.trim(),
-        ...(draft.secret.trim() ? { secret: draft.secret.trim() } : {}),
       });
       if (!result.success) throw new Error(result.error || t("connectors.testFailed"));
       setNotice(t("connectors.testSucceeded", { name: result.server_name || connection.name }));
@@ -502,27 +497,47 @@ function ConnectionCard({
   return (
     <article id={`connector-${connection.id}`} className={`media-card library-settings-card connector-connection-card${expanded ? " is-expanded" : " is-collapsed"}`}>
       <header className="connector-connection-header">
-        <button
-          type="button"
-          className="connector-connection-toggle"
-          aria-expanded={expanded}
-          aria-controls={`connector-connection-${connection.id}`}
-          onClick={onToggle}
-        >
-          <span className="connector-connection-chevron" aria-hidden="true">
-            {expanded ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
-          </span>
-          <span className="connector-connection-identity">
-            <span className="connector-connection-title">
-              <span className="connector-provider-icon" data-provider={connection.provider.toLowerCase()} title={providerLabel(connection.provider)}>
-                <ConnectorProviderIcon provider={connection.provider} aria-hidden="true" />
-                <span className="sr-only">{providerLabel(connection.provider)}</span>
-              </span>
-              <strong>{connection.name}</strong>
-              <span className="connector-connection-url">{connection.base_url || t("connectors.notConfigured")}</span>
+        <div className="connector-connection-header-main">
+          <label
+            className="toggle-switch connector-enabled-switch"
+            title={t(connection.enabled ? "connectors.disable" : "connectors.enable")}
+          >
+            <input
+              type="checkbox"
+              role="switch"
+              checked={connection.enabled}
+              disabled={pending !== null || syncRunning || dirty || !connection.has_secret || !connection.base_url}
+              aria-checked={connection.enabled}
+              aria-busy={pending === "toggle"}
+              aria-label={t(connection.enabled ? "connectors.disable" : "connectors.enable")}
+              onChange={() => void toggleEnabled()}
+            />
+            <span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true">
+              <span className="toggle-switch-thumb connector-enabled-switch-thumb" />
             </span>
-          </span>
-        </button>
+          </label>
+          <button
+            type="button"
+            className="connector-connection-toggle"
+            aria-expanded={expanded}
+            aria-controls={`connector-connection-${connection.id}`}
+            onClick={onToggle}
+          >
+            <span className="connector-connection-chevron" aria-hidden="true">
+              {expanded ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
+            </span>
+            <span className="connector-connection-identity">
+              <span className="connector-connection-title">
+                <span className="connector-provider-icon" data-provider={connection.provider.toLowerCase()} title={providerLabel(connection.provider)}>
+                  <ConnectorProviderIcon provider={connection.provider} aria-hidden="true" />
+                  <span className="sr-only">{providerLabel(connection.provider)}</span>
+                </span>
+                <strong>{connection.name}</strong>
+                <span className="connector-connection-url">{connection.base_url || t("connectors.notConfigured")}</span>
+              </span>
+            </span>
+          </button>
+        </div>
         <span className={`connector-status status-${syncRunning ? "running" : connection.last_status}`}>
           {t(`connectors.connectionStatus.${syncRunning ? "running" : connection.last_status}`, {
             defaultValue: connection.last_status,
@@ -535,15 +550,14 @@ function ConnectionCard({
             <div className="connector-form-grid">
               <label><span>{t("connectors.name")}</span><input className="settings-choice-input" value={draft.name} disabled={legacyDefault} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
               <label><span>{t("connectors.serverUrl")}</span><input className="settings-choice-input" type="url" value={draft.baseUrl} onChange={(event) => setDraft((current) => ({ ...current, baseUrl: event.target.value }))} /></label>
-              <label><span>{t("connectors.secret")}</span><input className="settings-choice-input" type="password" autoComplete="new-password" value={draft.secret} placeholder={connection.has_secret ? t("connectors.secretConfigured") : ""} onChange={(event) => setDraft((current) => ({ ...current, secret: event.target.value }))} /></label>
               <label><span>{t("connectors.syncInterval")}</span><input className="settings-choice-input" type="number" min={5} max={10080} value={draft.syncInterval} onChange={(event) => setDraft((current) => ({ ...current, syncInterval: event.target.value }))} /></label>
             </div>
             <div className="jellyfin-actions">
               <button type="button" className="connector-action-button" disabled={!dirty || !draft.name.trim() || !draft.baseUrl.trim() || !validInterval || pending !== null || syncRunning} onClick={() => void save()}><Check aria-hidden="true" />{t("common.save")}</button>
-              <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning || dirty || !connection.has_secret || !connection.base_url} onClick={() => void toggleEnabled()}>{connection.enabled ? t("connectors.disable") : t("connectors.enable")}</button>
               <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning} onClick={() => void testConnection()}>{pending === "test" ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <Link2 aria-hidden="true" />}{t("connectors.test")}</button>
               <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning || dirty || !connection.enabled} onClick={() => void syncNow()}><RefreshCw aria-hidden="true" />{t("connectors.sync")}</button>
               {syncRunning ? <button type="button" className="secondary small connector-action-button" disabled={pending !== null} onClick={() => void cancelSync()}><CircleStop aria-hidden="true" />{t("connectors.cancel")}</button> : null}
+              <button type="button" className="secondary small connector-action-button connector-secret-action-button" disabled={pending !== null || syncRunning} onClick={() => setSecretDialogOpen(true)}><KeyRound aria-hidden="true" />{t(connection.has_secret ? "connectors.secretDialog.replaceButton" : "connectors.secretDialog.setButton")}</button>
               <button type="button" className="secondary small danger connector-action-button" disabled={pending !== null || syncRunning} onClick={() => void remove()}><Trash2 aria-hidden="true" />{t("connectors.delete")}</button>
             </div>
             {error ? <div className="alert" role="alert">{error}</div> : null}
@@ -553,7 +567,70 @@ function ConnectionCard({
           {connection.capabilities.users ? <ConnectionUsers connection={connection} /> : null}
         </div>
       ) : null}
+      {secretDialogOpen ? <SetConnectorSecretDialog connection={connection} onClose={() => setSecretDialogOpen(false)} onSaved={onChanged} /> : null}
     </article>
+  );
+}
+
+function SetConnectorSecretDialog({
+  connection,
+  onClose,
+  onSaved,
+}: {
+  connection: ConnectorConnection;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [secret, setSecret] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const titleId = `connector-${connection.id}-secret-dialog-title`;
+
+  async function saveSecret() {
+    const normalizedSecret = secret.trim();
+    if (!normalizedSecret) return;
+    setPending(true);
+    setError(null);
+    try {
+      await api.updateConnector(connection.id, { secret: normalizedSecret });
+      await onSaved();
+      onClose();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="settings-create-library-backdrop" role="presentation" onMouseDown={() => { if (!pending) onClose(); }}>
+      <section
+        className="settings-create-library-dialog connector-secret-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="settings-create-library-dialog-header">
+          <div>
+            <h2 id={titleId}>{t("connectors.secretDialog.title")}</h2>
+            <p>{t(connection.has_secret ? "connectors.secretDialog.replaceDescription" : "connectors.secretDialog.description")}</p>
+          </div>
+          <button type="button" className="secondary icon-only-button" aria-label={t("common.close")} disabled={pending} onClick={onClose}><X aria-hidden="true" /></button>
+        </div>
+        {connection.has_secret ? <div className="notice">{t("connectors.secretDialog.existing")}</div> : null}
+        <label>
+          <span>{t("connectors.secret")}</span>
+          <input className="settings-choice-input" type="password" autoComplete="new-password" autoFocus value={secret} onChange={(event) => setSecret(event.target.value)} />
+        </label>
+        {error ? <div className="alert" role="alert">{error}</div> : null}
+        <div className="jellyfin-actions">
+          <button type="button" disabled={!secret.trim() || pending} onClick={() => void saveSecret()}>{pending ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <KeyRound aria-hidden="true" />}{t("connectors.secretDialog.save")}</button>
+          <button type="button" className="secondary" disabled={pending} onClick={onClose}>{t("common.cancel")}</button>
+        </div>
+      </section>
+    </div>
   );
 }
 

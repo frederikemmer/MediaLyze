@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
 - streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid
+- refine Pattern recognition tooltips, external documentation links, borderless restore controls, and main-section separators
+- move Resolution categories reset into a borderless tooltip-backed header icon
+- align library connector and path actions with compact rectangular controls and smaller settings inputs
+- streamline connector controls with an enabled toggle, API-key dialog replacement flow, and compact Test action
 - constrain stream editing to safe Copy / Encode / Remove controls with encoder-aware quality and bitrate sliders, aspect-ratio-preserving downscale presets, localized BCP 47 language selection, and copy-by-default profiles
 - add encoder-specific video speed presets alongside quality controls, including Intel QSV, NVENC, AMF, x264/x265, and SVT-AV1 guidance
 - make Intel QSV/VAAPI HEVC, AV1, VP9, MPEG-2, and MJPEG encoders survive capability detection with backend-specific hardware probes and explicit DRM-device selection
