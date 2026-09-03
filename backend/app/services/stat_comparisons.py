@@ -335,9 +335,12 @@ def _comparison_source_rows(
     if playback is not None:
         query = query.outerjoin(playback, playback.c.media_file_id == MediaFile.id)
     if library_id is not None:
-        query = query.where(MediaFile.library_id == library_id)
+        query = query.where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
     else:
-        query = query.join(Library, Library.id == MediaFile.library_id).where(Library.show_on_dashboard.is_(True))
+        query = query.join(Library, Library.id == MediaFile.library_id).where(
+            Library.show_on_dashboard.is_(True),
+            MediaFile.is_transcode_variant.is_(False),
+        )
 
     rows = []
     for result in db.execute(query).all():

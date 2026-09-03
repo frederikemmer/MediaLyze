@@ -330,6 +330,7 @@ def _active_signature_statement(
             )
             .where(
                 MediaFile.library_id == library_id,
+                MediaFile.is_transcode_variant.is_(False),
                 MediaFile.content_hash_algorithm == FILE_HASH_ALGORITHM,
                 MediaFile.content_hash.is_not(None),
                 func.length(func.trim(MediaFile.content_hash)) > 0,
@@ -354,6 +355,7 @@ def _active_signature_statement(
         )
         .where(
             MediaFile.library_id == library_id,
+            MediaFile.is_transcode_variant.is_(False),
             _filename_signature_is_present(),
         )
         .group_by(signature_column)
@@ -386,6 +388,7 @@ def _duplicate_file_membership_statement(
             .join(grouped, MediaFile.content_hash == grouped.c.signature)
             .where(
                 MediaFile.library_id == library_id,
+                MediaFile.is_transcode_variant.is_(False),
                 MediaFile.content_hash_algorithm == FILE_HASH_ALGORITHM,
                 MediaFile.content_hash.is_not(None),
                 func.length(func.trim(MediaFile.content_hash)) > 0,
@@ -398,6 +401,7 @@ def _duplicate_file_membership_statement(
         .join(grouped, signature_column == grouped.c.signature)
         .where(
             MediaFile.library_id == library_id,
+            MediaFile.is_transcode_variant.is_(False),
             _filename_signature_is_present(),
         )
     )

@@ -4,7 +4,7 @@ import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock, Timer
+from threading import BoundedSemaphore, Lock, Timer
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -99,6 +99,7 @@ from backend.app.services.transcoding import (
     queue_transcode_job,
     reconcile_transcode_variants,
     recover_orphaned_transcode_jobs,
+    transcode_capacity,
 )
 from backend.app.services.update_status import check_for_updates
 from backend.app.utils.time import utc_now
@@ -152,6 +153,16 @@ class ScanRuntimeManager:
         self.connector_executor = self._build_connector_executor(
             self.connector_executor_max_workers
         )
+        # Transcoding is deliberately isolated from scan/maintenance workers.
+        # The executor is created lazily so installations that never transcode
+        # do not pay for another worker pool.
+        self.transcode_executor: ThreadPoolExecutor | None = None
+        self.transcode_executor_max_workers = 0
+        self.transcode_cpu_parallel_jobs = 1
+        self.transcode_gpu_parallel_jobs_per_device = 1
+        self.transcode_cpu_slots = BoundedSemaphore(1)
+        self.transcode_gpu_slots: dict[str, BoundedSemaphore] = {}
+        self.transcode_capacity_signature: tuple[object, ...] | None = None
         self.connector_futures: dict[int, Future] = {}
         self.maintenance_executor = self._build_maintenance_executor()
         self.lock = Lock()
@@ -224,33 +235,89 @@ class ScanRuntimeManager:
             self.scheduler.shutdown(wait=False)
         self._shutdown_executor(self.executor, cancel_futures=True)
         self._shutdown_executor(self.connector_executor, cancel_futures=True)
+        if self.transcode_executor is not None:
+            self._shutdown_executor(self.transcode_executor, cancel_futures=True)
+            self.transcode_executor = None
         self._shutdown_executor(self.maintenance_executor, cancel_futures=True)
 
     def refresh_worker_settings(self) -> bool:
         db = SessionLocal()
         try:
-            next_workers = max(1, get_app_settings(db, self.settings).scan_performance.parallel_scan_jobs)
+            persisted = get_app_settings(db, self.settings)
+            next_workers = max(1, persisted.scan_performance.parallel_scan_jobs)
+            capacity = transcode_capacity(self.settings, persisted)
+            next_transcode_workers = max(
+                1,
+                int(capacity["cpu_parallel_jobs"])
+                + (
+                    len(persisted.transcoding.selected_devices)
+                    if isinstance(persisted.transcoding.selected_devices, list)
+                    else 1
+                )
+                * persisted.transcoding.gpu_parallel_jobs_per_device
+                if persisted.transcoding.execution_mode != "cpu_only"
+                else int(capacity["cpu_parallel_jobs"]),
+            )
+            selected_devices = (
+                tuple(persisted.transcoding.selected_devices)
+                if isinstance(persisted.transcoding.selected_devices, list)
+                else ("auto",)
+            )
+            next_transcode_capacity_signature = (
+                int(capacity["cpu_threads"]),
+                int(capacity["cpu_threads_per_job"]),
+                int(capacity["cpu_parallel_jobs"]),
+                persisted.transcoding.gpu_parallel_jobs_per_device,
+                persisted.transcoding.execution_mode,
+                selected_devices,
+            )
         finally:
             db.close()
 
         previous_executor: ThreadPoolExecutor | None = None
+        previous_transcode_executor: ThreadPoolExecutor | None = None
         with self.lock:
-            if (
-                next_workers == self.executor_max_workers
-                and next_workers == self.connector_executor_max_workers
-            ):
+            scan_workers_changed = (
+                next_workers != self.executor_max_workers
+                or next_workers != self.connector_executor_max_workers
+            )
+            transcode_workers_changed = next_transcode_workers != self.transcode_executor_max_workers
+            transcode_capacity_changed = next_transcode_capacity_signature != self.transcode_capacity_signature
+            if not scan_workers_changed and not transcode_workers_changed and not transcode_capacity_changed:
                 return False
-            previous_executor = self.executor
-            self.executor = self._build_executor(next_workers)
-            self.executor_max_workers = next_workers
-            previous_connector_executor = self.connector_executor
-            self.connector_executor = self._build_connector_executor(next_workers)
-            self.connector_executor_max_workers = next_workers
+            if scan_workers_changed:
+                previous_executor = self.executor
+                self.executor = self._build_executor(next_workers)
+                self.executor_max_workers = next_workers
+                previous_connector_executor = self.connector_executor
+                self.connector_executor = self._build_connector_executor(next_workers)
+                self.connector_executor_max_workers = next_workers
+            else:
+                previous_connector_executor = None
+            self.transcode_executor_max_workers = next_transcode_workers
+            self.transcode_cpu_parallel_jobs = int(capacity["cpu_parallel_jobs"])
+            self.transcode_gpu_parallel_jobs_per_device = persisted.transcoding.gpu_parallel_jobs_per_device
+            self.transcode_capacity_signature = next_transcode_capacity_signature
+            self.transcode_cpu_slots = BoundedSemaphore(self.transcode_cpu_parallel_jobs)
+            selected_devices = (
+                list(persisted.transcoding.selected_devices)
+                if isinstance(persisted.transcoding.selected_devices, list)
+                else ["cuda0"]
+            )
+            self.transcode_gpu_slots = {
+                device_id: BoundedSemaphore(self.transcode_gpu_parallel_jobs_per_device)
+                for device_id in selected_devices
+            }
+            if self.transcode_executor is not None and transcode_workers_changed:
+                previous_transcode_executor = self.transcode_executor
+                self.transcode_executor = self._build_transcode_executor(next_transcode_workers)
 
         if previous_executor is not None:
             self._shutdown_executor(previous_executor, cancel_futures=False)
         if previous_connector_executor is not None:
             self._shutdown_executor(previous_connector_executor, cancel_futures=False)
+        if previous_transcode_executor is not None:
+            self._shutdown_executor(previous_transcode_executor, cancel_futures=False)
         return True
 
     def sync_all_libraries(self) -> None:
@@ -368,8 +435,13 @@ class ScanRuntimeManager:
             db.close()
         with self.lock:
             self.submitted_transcode_job_ids.add(job.id)
+            if self.transcode_executor is None:
+                self.transcode_executor = self._build_transcode_executor(
+                    max(1, self.transcode_executor_max_workers)
+                )
+            transcode_executor = self.transcode_executor
         try:
-            self.executor.submit(self._run_transcode_job, job.id)
+            transcode_executor.submit(self._run_transcode_job, job.id)
         except Exception:
             with self.lock:
                 self.submitted_transcode_job_ids.discard(job.id)
@@ -389,17 +461,66 @@ class ScanRuntimeManager:
     def _run_transcode_job(self, job_id: int) -> None:
         library_id = 0
         completed = False
+        slot = None
         try:
-            library_id = execute_transcode_job(
-                job_id,
-                is_cancel_requested=self.is_transcode_cancel_requested,
-            )
             db = SessionLocal()
             try:
-                job = db.get(TranscodeJob, job_id)
-                completed = job is not None and job.status == JobStatus.completed
+                queued_job = db.get(TranscodeJob, job_id)
+                if queued_job is None:
+                    return
+                library_id = queued_job.library_id
+                plan_payload = queued_job.plan if isinstance(queued_job.plan, dict) else {}
+                has_hardware_video = any(
+                    str(item.get("encoder") or item.get("codec") or "").lower().endswith(
+                        ("_nvenc", "_qsv", "_vaapi", "_amf", "_videotoolbox")
+                    )
+                    for item in plan_payload.get("video_streams", [])
+                    if isinstance(item, dict) and item.get("action") == "encode"
+                )
+                if has_hardware_video:
+                    device_id = queued_job.device_id or "cuda0"
+                    slot = self.transcode_gpu_slots.get(device_id)
+                    if slot is None and self.transcode_gpu_slots:
+                        slot = next(iter(self.transcode_gpu_slots.values()))
+                else:
+                    slot = self.transcode_cpu_slots
             finally:
                 db.close()
+            if slot is not None:
+                slot.acquire()
+            while True:
+                library_id = execute_transcode_job(
+                    job_id,
+                    is_cancel_requested=self.is_transcode_cancel_requested,
+                )
+                db = SessionLocal()
+                try:
+                    job = db.get(TranscodeJob, job_id)
+                    if job is None:
+                        break
+                    if job.status == JobStatus.failed and job.attempt <= job.retry_count:
+                        job.status = JobStatus.queued
+                        job.error = f"Retrying after failed attempt {job.attempt}"
+                        job.finished_at = None
+                        db.commit()
+                        continue
+                    completed = job.status == JobStatus.completed
+                    if job.status == JobStatus.failed and job.on_error == "stop_queue":
+                        db.query(TranscodeJob).filter(
+                            TranscodeJob.library_id == job.library_id,
+                            TranscodeJob.status == JobStatus.queued,
+                        ).update(
+                            {
+                                TranscodeJob.status: JobStatus.canceled,
+                                TranscodeJob.error: "Canceled because the transcode queue is configured to stop on error",
+                                TranscodeJob.finished_at: utc_now(),
+                            },
+                            synchronize_session=False,
+                        )
+                        db.commit()
+                    break
+                finally:
+                    db.close()
             if completed and library_id:
                 self.request_scan(
                     library_id,
@@ -408,6 +529,8 @@ class ScanRuntimeManager:
                     trigger_details={"reason": "transcode_completed", "transcode_job_id": job_id},
                 )
         finally:
+            if slot is not None:
+                slot.release()
             with self.lock:
                 self.submitted_transcode_job_ids.discard(job_id)
                 self.cancel_requested_transcode_job_ids.discard(job_id)
@@ -1706,4 +1829,11 @@ class ScanRuntimeManager:
         return ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-connector",
+        )
+
+    @staticmethod
+    def _build_transcode_executor(max_workers: int) -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=max(1, max_workers),
+            thread_name_prefix="medialyze-transcode",
         )

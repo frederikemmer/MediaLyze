@@ -19,6 +19,7 @@ from backend.app.schemas.app_settings import (
     PatternRecognitionSettings,
     ResolutionCategory,
     ScanPerformanceRead,
+    TranscodingSettingsRead,
     TelemetrySettingsRead,
     UiPreferencesRead,
 )
@@ -87,6 +88,10 @@ def _default_scan_performance(settings: Settings) -> ScanPerformanceRead:
         parallel_scan_jobs=settings.scan_runtime_worker_count,
         comparison_scatter_point_limit=ScanPerformanceRead.model_fields["comparison_scatter_point_limit"].default,
     )
+
+
+def _default_transcoding_settings() -> TranscodingSettingsRead:
+    return TranscodingSettingsRead()
 
 
 def _default_history_retention() -> HistoryRetentionRead:
@@ -230,6 +235,34 @@ def _deserialize_scan_performance(payload: Any, settings: Settings) -> ScanPerfo
     )
 
 
+def _deserialize_transcoding_settings(payload: Any) -> TranscodingSettingsRead:
+    candidate = payload if isinstance(payload, dict) else {}
+    defaults = _default_transcoding_settings()
+    raw_cpu_jobs = candidate.get("cpu_parallel_jobs", defaults.cpu_parallel_jobs)
+    if raw_cpu_jobs != "auto":
+        try:
+            raw_cpu_jobs = int(raw_cpu_jobs)
+        except (TypeError, ValueError):
+            raw_cpu_jobs = defaults.cpu_parallel_jobs
+    raw_devices = candidate.get("selected_devices", defaults.selected_devices)
+    if raw_devices != "auto":
+        raw_devices = [str(item).strip() for item in raw_devices] if isinstance(raw_devices, list) else []
+    return TranscodingSettingsRead(
+        execution_mode=candidate.get("execution_mode", defaults.execution_mode),
+        cpu_budget_percent=int(candidate.get("cpu_budget_percent", defaults.cpu_budget_percent)),
+        cpu_parallel_jobs=raw_cpu_jobs,
+        gpu_parallel_jobs_per_device=int(
+            candidate.get("gpu_parallel_jobs_per_device", defaults.gpu_parallel_jobs_per_device)
+        ),
+        selected_devices=raw_devices,
+        default_output_mode=candidate.get("default_output_mode", defaults.default_output_mode),
+        on_error=candidate.get("on_error", defaults.on_error),
+        retry_count=int(candidate.get("retry_count", defaults.retry_count)),
+        existing_output=candidate.get("existing_output", defaults.existing_output),
+        remove_partial_output=bool(candidate.get("remove_partial_output", defaults.remove_partial_output)),
+    )
+
+
 def _deserialize_history_retention_bucket(
     payload: Any,
     defaults: HistoryRetentionBucketRead,
@@ -325,6 +358,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         normalized_default = _seeded_default_ignore_patterns(settings)
     feature_flags = _deserialize_feature_flags(payload.get("feature_flags"), settings)
     scan_performance = _deserialize_scan_performance(payload.get("scan_performance"), settings)
+    transcoding = _deserialize_transcoding_settings(payload.get("transcoding"))
     ui_preferences = _deserialize_ui_preferences(payload.get("ui_preferences"))
     telemetry = _deserialize_telemetry(payload.get("telemetry"), settings)
     history_retention = _deserialize_history_retention(payload.get("history_retention"))
@@ -342,6 +376,7 @@ def _deserialize_app_settings(value: Any, settings: Settings) -> AppSettingsRead
         resolution_categories=normalized_resolution_categories,
         feature_flags=feature_flags,
         scan_performance=scan_performance,
+        transcoding=transcoding,
         ui_preferences=ui_preferences,
         telemetry=telemetry,
         history_retention=history_retention,
@@ -360,6 +395,7 @@ def get_app_settings(db: Session, settings: Settings | None = None) -> AppSettin
             resolution_categories=default_resolution_categories(),
             feature_flags=_default_feature_flags(resolved_settings),
             scan_performance=_default_scan_performance(resolved_settings),
+            transcoding=_default_transcoding_settings(),
             ui_preferences=_default_ui_preferences(),
             telemetry=_default_telemetry(resolved_settings),
             history_retention=_default_history_retention(),
@@ -466,6 +502,9 @@ def update_app_settings(
     next_scan_performance = current.scan_performance.model_copy(
         update=payload.scan_performance.model_dump(exclude_none=True) if payload.scan_performance is not None else {}
     )
+    next_transcoding = current.transcoding.model_copy(
+        update=payload.transcoding.model_dump(exclude_none=True) if payload.transcoding is not None else {}
+    )
     next_ui_preferences = current.ui_preferences.model_copy(
         update=payload.ui_preferences.model_dump(exclude_none=True) if payload.ui_preferences is not None else {}
     )
@@ -566,6 +605,7 @@ def update_app_settings(
         "resolution_categories": [item.model_dump(mode="json") for item in next_resolution_categories],
         "feature_flags": next_feature_flags.model_dump(mode="json"),
         "scan_performance": next_scan_performance.model_dump(mode="json"),
+        "transcoding": next_transcoding.model_dump(mode="json"),
         "ui_preferences": next_ui_preferences.model_dump(mode="json"),
         "telemetry": next_telemetry_value,
         "history_retention": next_history_retention.model_dump(mode="json"),

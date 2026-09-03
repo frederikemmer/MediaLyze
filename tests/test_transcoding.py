@@ -31,7 +31,9 @@ from backend.app.schemas.transcoding import (
     ExternalSubtitlePlan,
     TranscodeCapabilitiesRead,
     TranscodeEncoderCapability,
+    TranscodeHardwareDevice,
     TranscodePlan,
+    TranscodeStreamAction,
     TranscodeStreamPlan,
 )
 from backend.app.services import transcoding
@@ -60,6 +62,15 @@ def _capabilities() -> TranscodeCapabilitiesRead:
         ffmpeg_available=True,
         ffmpeg_path="ffmpeg-test",
         version="ffmpeg version test",
+        devices=[
+            TranscodeHardwareDevice(
+                id="cuda0",
+                name="Test NVIDIA GPU",
+                vendor="nvidia",
+                backend="cuda",
+                status="available",
+            )
+        ],
         encoders=[
             TranscodeEncoderCapability(name="libx264", codec="h264"),
             TranscodeEncoderCapability(name="libx265", codec="hevc"),
@@ -162,6 +173,8 @@ def _compatibility_plan() -> TranscodePlan:
     return TranscodePlan(
         profile="compatibility",
         container="mp4",
+        execution_mode="cpu_only",
+        output_mode="same_directory",
         video_streams=[
             TranscodeStreamPlan(
                 stream_index=0,
@@ -228,6 +241,43 @@ def test_validation_builds_explicit_maps_and_clean_filename(monkeypatch, tmp_pat
     assert "shell" not in validation.ffmpeg_command.lower()
 
 
+def test_validation_inherits_global_hardware_and_output_defaults(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        plan = _compatibility_plan()
+        plan.execution_mode = None
+        plan.output_mode = None
+        plan.video_streams[0].action = TranscodeStreamAction.copy
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.execution_mode == "hardware_required"
+    assert validation.output_mode == "transcode_output"
+    assert validation.normalized_plan.execution_mode == "hardware_required"
+    assert validation.normalized_plan.output_mode == "transcode_output"
+    assert str(tmp_path / "config" / "Transcode_Output") in validation.output_path
+
+
+def test_cpu_budget_is_shared_across_parallel_jobs(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(transcoding, "effective_cpu_count", lambda: 8.0)
+    app_settings = SimpleNamespace(
+        transcoding=SimpleNamespace(
+            cpu_budget_percent=90,
+            cpu_parallel_jobs=2,
+            gpu_parallel_jobs_per_device=1,
+            selected_devices="auto",
+        )
+    )
+
+    capacity = transcoding.transcode_capacity(_settings(tmp_path), app_settings)
+
+    assert capacity["cpu_threads"] == 7
+    assert capacity["cpu_parallel_jobs"] == 2
+    assert capacity["cpu_threads_per_job"] == 3
+
+
 def test_validation_forwards_video_speed_preset(monkeypatch, tmp_path) -> None:
     factory = _session_factory()
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
@@ -285,6 +335,7 @@ def test_validation_keeps_crf_and_hardware_cq_distinct(monkeypatch, tmp_path) ->
     with factory() as db:
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
         plan.video_streams[0].encoder = "h264_nvenc"
         plan.video_streams[0].crf = None
         plan.video_streams[0].cq = 21
@@ -449,6 +500,7 @@ def test_validation_refuses_existing_target_and_unavailable_hardware(monkeypatch
     with factory() as db:
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
         plan.video_streams[0].encoder = "h264_nvenc"
         output = Path(transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan).output_path)
         output.write_bytes(b"do-not-overwrite")
@@ -495,6 +547,63 @@ def test_capabilities_detect_and_smoke_test_dynamic_hardware_encoders(monkeypatc
     assert by_name["h264_v4l2m2m"].available is True
     assert by_name["h264_v4l2m2m"].options == ["cq", "preset"]
     assert capabilities.dolby_vision_passthrough is True
+
+
+def test_nvidia_device_detection_falls_back_to_cuda_driver_api(monkeypatch) -> None:
+    class FakeFunction:
+        def __init__(self, callback):
+            self.callback = callback
+
+        def __call__(self, *arguments):
+            return self.callback(*arguments)
+
+    class FakeCuda:
+        cuInit = FakeFunction(lambda _flags: 0)
+        cuDeviceGetCount = FakeFunction(lambda count: count._obj.__setattr__("value", 1) or 0)
+        cuDeviceGet = FakeFunction(lambda device, ordinal: device._obj.__setattr__("value", ordinal) or 0)
+        cuDeviceGetName = FakeFunction(
+            lambda buffer, _length, _device: buffer.__setattr__("value", b"NVIDIA GeForce RTX 3080") or 0
+        )
+        cuDeviceComputeCapability = FakeFunction(
+            lambda major, minor, _device: (
+                major._obj.__setattr__("value", 8)
+                or minor._obj.__setattr__("value", 6)
+                or 0
+            )
+        )
+        cuDeviceTotalMem_v2 = FakeFunction(
+            lambda total_memory, _device: total_memory._obj.__setattr__("value", 10240 * 1024 * 1024) or 0
+        )
+
+    monkeypatch.setattr(transcoding, "_nvidia_smi_path", lambda: None)
+    monkeypatch.setattr(transcoding.ctypes, "CDLL", lambda _path: FakeCuda())
+
+    devices, error = transcoding._detect_nvidia_devices()
+
+    assert error is None
+    assert len(devices) == 1
+    assert devices[0].id == "cuda0"
+    assert devices[0].name == "NVIDIA GeForce RTX 3080"
+    assert devices[0].compute_capability == "8.6"
+    assert devices[0].memory_total_bytes == 10240 * 1024 * 1024
+
+
+def test_cuda_smoke_test_does_not_require_a_linux_drm_render_node(monkeypatch) -> None:
+    captured: list[list[str]] = []
+
+    def fake_run(arguments, **_kwargs):
+        captured.append(arguments)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    available, error = transcoding._test_hardware_encoder("ffmpeg-test", "h264_nvenc", device_id="cuda0")
+
+    assert available is True
+    assert error is None
+    assert "cuda=cu:0" in captured[0]
+    assert "-filter_hw_device" in captured[0]
 
 
 def test_capabilities_expose_intel_hevc_and_av1_encoders(monkeypatch, tmp_path) -> None:
@@ -578,7 +687,7 @@ def test_intel_vaapi_probe_uses_drm_render_node_and_upload(monkeypatch, tmp_path
             "-f",
             "lavfi",
             "-i",
-            "color=c=black:s=128x128:d=0.1",
+            "color=c=black:s=256x256:d=0.1",
             "-vf",
             "format=nv12,hwupload",
             "-frames:v",
@@ -645,6 +754,7 @@ def test_intel_hardware_plan_initializes_device_and_uploads_frames(monkeypatch, 
     with factory() as db:
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
         plan.video_streams[0].encoder = "h264_vaapi"
         settings = _settings(tmp_path)
         settings.hardware_render_node = str(render_node)
@@ -693,6 +803,7 @@ def test_vaapi_codec_native_quality_option_is_used(monkeypatch, tmp_path) -> Non
     with factory() as db:
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
         plan.video_streams[0].codec = "av1"
         plan.video_streams[0].encoder = "av1_vaapi"
         plan.video_streams[0].crf = None

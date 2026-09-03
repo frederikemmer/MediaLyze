@@ -23,6 +23,7 @@ import {
   parseOtoolRpaths,
   resolveBundledFfmpegSource,
   resolveBundledFfprobeSource,
+  verifyBundledFfmpeg,
 } from "./build-backend.mjs";
 
 function withTempDir(fn) {
@@ -169,6 +170,39 @@ test("bundleFfmpeg creates the expected ffmpeg folder structure", () => {
     );
     assert.equal(existsSync(bundledExecutable), true);
     assert.equal(readFileSync(bundledExecutable, "utf8"), "ffmpeg-binary");
+  });
+});
+
+test("verifyBundledFfmpeg checks the pinned platform digest", () => {
+  withTempDir((tempDir) => {
+    const binaryPath = path.join(tempDir, "ffmpeg.exe");
+    const manifestPath = path.join(tempDir, "ffmpeg-manifest.json");
+    writeFileSync(binaryPath, "ffmpeg-binary");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        desktop: {
+          artifacts: {
+            "windows-amd64": {
+              sha256: "425a6072a5719db319f13b05db46f5df31d452421819b8ab5da77111677e74a4",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.equal(
+      verifyBundledFfmpeg(binaryPath, { platform: "win32", arch: "x64", manifestPath }).sha256,
+      "425a6072a5719db319f13b05db46f5df31d452421819b8ab5da77111677e74a4",
+    );
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({ desktop: { artifacts: { "windows-amd64": { sha256: "0".repeat(64) } } } }),
+    );
+    assert.throws(
+      () => verifyBundledFfmpeg(binaryPath, { platform: "win32", arch: "x64", manifestPath }),
+      /checksum mismatch/,
+    );
   });
 });
 

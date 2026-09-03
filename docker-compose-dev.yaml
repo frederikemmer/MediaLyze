@@ -14,10 +14,13 @@ services:
     environment:
       CONFIG_PATH: /config
       MEDIA_ROOT: /media
+      MEDIALYZE_TRANSCODE_OUTPUT_ROOT: /transcode-output
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
       TZ: ${TZ:-UTC}
     volumes:
       - medialyze_config:/config
       - ${MEDIA_ROOT:-./media}:/media:ro
+      - ${TRANSCODE_OUTPUT_HOST_DIR:-./Transcode_Output}:/transcode-output:rw
 
 volumes:
   medialyze_config:

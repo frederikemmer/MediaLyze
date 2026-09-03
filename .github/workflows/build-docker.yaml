@@ -191,6 +191,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: |
             APP_VERSION=${{ needs.prepare.outputs.version }}
+            FFMPEG_PACKAGE_VERSION=7:5.1.9-0+deb12u1
+            FFMPEG_PACKAGE_SHA256_AMD64=2ba8ead87657c123ce6de2de5ecdbc1fb4ead9a4b317b85b8ec41e16c890fe01
+            FFMPEG_PACKAGE_SHA256_ARM64=7890aeb19a94d73e5d9281afa5ca07005804c1fca4f10791f4f2ce0df741b610
           outputs: type=image,name=${{ needs.prepare.outputs.image_name }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=${{ needs.prepare.outputs.image_name }}:buildcache-${{ needs.prepare.outputs.channel }}-${{ matrix.architecture }}
           cache-to: type=registry,ref=${{ needs.prepare.outputs.image_name }}:buildcache-${{ needs.prepare.outputs.channel }}-${{ matrix.architecture }},mode=max

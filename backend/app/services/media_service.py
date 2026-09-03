@@ -1068,7 +1068,7 @@ def _build_library_file_id_query(
     base_query = (
         select(MediaFile.id)
         .select_from(MediaFile)
-        .where(MediaFile.library_id == library_id)
+        .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
     )
     use_fts = media_file_search_index_available(db)
     filtered_query = apply_legacy_search(
@@ -1638,6 +1638,7 @@ def search_media_files(
     statement = (
         select(MediaFile)
         .join(Library, Library.id == MediaFile.library_id)
+        .where(MediaFile.is_transcode_variant.is_(False))
         .options(
             selectinload(MediaFile.library),
             selectinload(MediaFile.library_root),
@@ -1705,7 +1706,7 @@ def search_media_files(
 def _series_summary_from_model(db: Session, series: MediaSeries, resolution_categories=None) -> MediaSeriesSummaryRead:
     files = db.scalars(
         select(MediaFile)
-        .where(MediaFile.series_id == series.id)
+        .where(MediaFile.series_id == series.id, MediaFile.is_transcode_variant.is_(False))
         .options(
             selectinload(MediaFile.media_format),
             selectinload(MediaFile.video_streams),
@@ -1974,7 +1975,7 @@ def get_library_series_detail(db: Session, library_id: int, series_id: int) -> M
     for season in seasons:
         files = db.scalars(
             select(MediaFile)
-            .where(MediaFile.season_id == season.id)
+            .where(MediaFile.season_id == season.id, MediaFile.is_transcode_variant.is_(False))
             .options(
                 selectinload(MediaFile.media_format),
                 selectinload(MediaFile.video_streams),

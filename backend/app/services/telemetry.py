@@ -154,7 +154,7 @@ def build_media_kind_counts_for_telemetry(db: Session) -> dict[str, int]:
     counts: Counter[str] = Counter({"audio": 0, "video": 0, "other": 0})
     rows = db.execute(
         select(MediaFile.extension, func.count(MediaFile.id))
-        .where(MediaFile.scan_status == ScanStatus.ready)
+        .where(MediaFile.scan_status == ScanStatus.ready, MediaFile.is_transcode_variant.is_(False))
         .group_by(func.lower(MediaFile.extension))
     ).all()
     for extension, count in rows:
@@ -164,10 +164,16 @@ def build_media_kind_counts_for_telemetry(db: Session) -> dict[str, int]:
 
 def _enabled_usage_payload(db: Session, app_settings: AppSettingsRead) -> dict:
     analyzed_file_count = db.scalar(
-        select(func.count(MediaFile.id)).where(MediaFile.scan_status == ScanStatus.ready)
+        select(func.count(MediaFile.id)).where(
+            MediaFile.scan_status == ScanStatus.ready,
+            MediaFile.is_transcode_variant.is_(False),
+        )
     ) or 0
     storage_size_bytes = db.scalar(
-        select(func.coalesce(func.sum(MediaFile.size_bytes), 0)).where(MediaFile.scan_status == ScanStatus.ready)
+        select(func.coalesce(func.sum(MediaFile.size_bytes), 0)).where(
+            MediaFile.scan_status == ScanStatus.ready,
+            MediaFile.is_transcode_variant.is_(False),
+        )
     ) or 0
     library_count = db.scalar(select(func.count(Library.id))) or 0
     enabled_feature_flags = [

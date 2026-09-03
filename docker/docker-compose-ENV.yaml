@@ -10,9 +10,14 @@ services:
     environment:
       # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
       TZ: ${TZ:-UTC}
+      CONFIG_PATH: /config
+      MEDIA_ROOT: /media
+      MEDIALYZE_TRANSCODE_OUTPUT_ROOT: /transcode-output
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
     volumes:
       - ${CONFIG_HOST_DIR:-./config}:/config
       - ${MEDIA_HOST_DIR:-./media}:/media:ro
+      - ${TRANSCODE_OUTPUT_HOST_DIR:-./Transcode_Output}:/transcode-output:rw
       
       # if you want to manage multiple mounts, use this instead and delete the above media mount:
       # /PATH/TO/MEDIA1:/media/MEDIA1:ro

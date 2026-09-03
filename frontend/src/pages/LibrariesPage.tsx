@@ -39,6 +39,7 @@ import { RemoveIcon } from "../components/RemoveIcon";
 import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TranscodeHistorySettingsPanel } from "../components/TranscodeHistorySettingsPanel";
+import { TranscodingSettingsPanel } from "../components/TranscodingSettingsPanel";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { SUPPORTED_INTERFACE_LANGUAGES, type SupportedInterfaceLanguage } from "../i18n";
 import { useAppData } from "../lib/app-data";
@@ -806,6 +807,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
     labelKey: "libraries.settingsGroups.application",
     items: [
       { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
+      { id: "transcoding", labelKey: "transcoding.settingsTitle", icon: Cpu },
     ],
   },
   {
@@ -6369,6 +6371,13 @@ export function LibrariesPage() {
 
           {activeSettingsPanelId === "qualityProfiles" ? renderQualityProfilesPanel() : null}
           {activeSettingsPanelId === "compatibilityProfiles" ? <CompatibilityProfilesPanel /> : null}
+          {activeSettingsPanelId === "transcoding" ? (
+            <TranscodingSettingsPanel
+              settings={appSettings}
+              appSettingsLoaded={appSettingsLoaded}
+              onUpdated={applyUpdatedAppSettingsState}
+            />
+          ) : null}
 
           {activeSettingsPanelId === "resolutionCategories" ? (
           <AsyncPanel

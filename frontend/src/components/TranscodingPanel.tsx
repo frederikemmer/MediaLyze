@@ -1015,7 +1015,43 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
             ] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}
           </select>
         </label>
+        <label>
+          <span>{t("transcoding.outputMode")}</span>
+          <select
+            className={transcodeControlClass}
+            value={plan.output_mode ?? "transcode_output"}
+            onChange={(event) => {
+              setPlan({
+                ...plan,
+                profile: "expert",
+                output_mode: event.target.value as NonNullable<TranscodePlan["output_mode"]>,
+                replacement_confirmed: false,
+              });
+              setValidation(null);
+            }}
+          >
+            <option value="transcode_output">{t("transcoding.transcodeOutput")}</option>
+            <option value="same_directory">{t("transcoding.sameDirectory")}</option>
+            <option value="replace_original">{t("transcoding.replaceOriginal")}</option>
+          </select>
+          <span className="field-hint">{t("transcoding.outputModeHint")}</span>
+        </label>
       </div>
+
+      {plan.output_mode === "replace_original" ? (
+        <div className="transcode-replacement-warning">
+          <div className="notice warning">{t("transcoding.replacementWarning")}</div>
+          <p className="field-hint">{t("common.replacementTestingNotice")}</p>
+          <label className="transcode-filename-option">
+            <input
+              type="checkbox"
+              checked={Boolean(plan.replacement_confirmed)}
+              onChange={(event) => setPlan({ ...plan, replacement_confirmed: event.target.checked })}
+            />
+            <span>{t("transcoding.replacementConfirm")}</span>
+          </label>
+        </div>
+      ) : null}
 
       <section className="transcode-streams">
         {(["video_streams", "audio_streams", "subtitle_streams"] as const).map((kind) => (
@@ -1278,7 +1314,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
         <button type="button" className="secondary transcode-action-button" onClick={() => void validate()} disabled={validating || Boolean(activeJob)}>
           {validating ? <LoaderCircle className="spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{t("transcoding.validate")}
         </button>
-        <button type="button" className="transcode-action-button transcode-start-button" onClick={() => void start()} disabled={starting || Boolean(activeJob) || !capabilities.ffmpeg_available}>
+        <button type="button" className="transcode-action-button transcode-start-button" onClick={() => void start()} disabled={starting || Boolean(activeJob) || !capabilities.ffmpeg_available || (plan.output_mode === "replace_original" && !plan.replacement_confirmed)}>
           {starting ? <LoaderCircle className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}{t("transcoding.start")}
         </button>
       </div>

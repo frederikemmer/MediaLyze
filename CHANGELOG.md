@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### ✨ New
 
 - add safe FFmpeg transcoding for regular video files with three editable profiles, structured expert plans, validated CPU/hardware encoders, stream-level mapping, external subtitle embedding, progress and cancellation, linked analyzed variants, Wipe comparison, searchable job history, and independent retention controls
+- add global transcoding runtime settings with hardware-required/CPU-only execution, a 90% CPU budget, dedicated CPU/GPU slots, explicit output policies, retries, partial-output cleanup, real NVIDIA capability probes, and automatic Docker GPU wiring
+- keep same-directory transcoded variants out of primary library counts, statistics, duplicate groups, exports, telemetry/storage aggregates, and future scans while retaining detail and job-history visibility
+- pin and checksum desktop FFmpeg artifacts and the multi-architecture Docker FFmpeg package, with build-time verification and a fixed Debian base line
 
 ### ✨ Enhancements
 
@@ -22,6 +25,9 @@ All notable changes to this project will be documented in this file.
 
 - keep custom select chevrons single and correctly positioned when applying light or dark theme background colors, and render compatibility capability sections with theme-aware nested surfaces instead of light gray dark-mode fallbacks [#180](https://github.com/frederikemmer/MediaLyze/pull/180) by [@MadsThy](https://github.com/MadsThy)
 - initialize Intel VAAPI/QSV hardware devices from a Linux DRM render node during capability checks and transcoding, and include the required Intel runtime drivers in AMD64 Docker images
+- require an explicit server-side confirmation for original replacement and report a clear failure when an advertised hardware encoder fails its runtime smoke test instead of falling back to CPU
+- make Debian Docker builds install the exact checked FFmpeg DEB, expose NVIDIA video capabilities, and normalize the copied entrypoint for Linux containers
+- keep CUDA/NVENC capability probes working in minimal Linux and Docker Desktop WSL2 containers without `nvidia-smi` or a Linux DRM render node by using the CUDA Driver API fallback
 
 ### New Contributors
 

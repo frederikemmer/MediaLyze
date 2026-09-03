@@ -688,6 +688,7 @@ def _library_aggregate_map(db: Session) -> dict[int, dict[str, int | float]]:
             func.sum(case((MediaFile.scan_status != ScanStatus.ready, 1), else_=0)),
         )
         .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id, isouter=True)
+        .where(MediaFile.is_transcode_variant.is_(False))
         .group_by(MediaFile.library_id)
     ).all()
 
@@ -714,7 +715,7 @@ def _library_aggregate(db: Session, library_id: int) -> dict[str, int | float]:
         )
         .select_from(MediaFile)
         .join(MediaFormat, MediaFormat.media_file_id == MediaFile.id, isouter=True)
-        .where(MediaFile.library_id == library_id)
+        .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
     ).one()
 
     count, size_bytes, duration, ready_files, pending_files = row
@@ -845,7 +846,7 @@ def get_library_statistics(
                     _normalized_text_expr(MediaFile.extension, "unknown"),
                     func.count(MediaFile.id),
                 )
-                .where(MediaFile.library_id == library_id)
+                .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
                 .group_by(_normalized_text_expr(MediaFile.extension, "unknown"))
                 .order_by(func.count(MediaFile.id).desc(), _normalized_text_expr(MediaFile.extension, "unknown").asc())
             ).all()
@@ -864,7 +865,7 @@ def get_library_statistics(
                 func.count(primary_video_streams.c.id),
             )
             .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(primary_video_streams.c.codec, primary_video_streams.c.bit_depth)
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
@@ -879,7 +880,7 @@ def get_library_statistics(
                 func.count(primary_video_streams.c.id),
             )
             .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(primary_video_streams.c.width, primary_video_streams.c.height)
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
@@ -893,7 +894,7 @@ def get_library_statistics(
                 func.count(primary_video_streams.c.id),
             )
             .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(func.coalesce(primary_video_streams.c.hdr_type, "SDR"))
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
@@ -907,7 +908,7 @@ def get_library_statistics(
                 func.count(primary_video_streams.c.id),
             )
             .join(MediaFile, MediaFile.id == primary_video_streams.c.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(primary_video_streams.c.bit_depth)
             .order_by(func.count(primary_video_streams.c.id).desc())
         ).all()
@@ -923,7 +924,7 @@ def get_library_statistics(
                 _normalized_language_expr(AudioStream.language).label("value"),
             )
             .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .distinct()
             .subquery("library_audio_language_values")
         )
@@ -942,7 +943,7 @@ def get_library_statistics(
                 _normalized_text_expr(AudioStream.codec, "unknown").label("value"),
             )
             .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .distinct()
             .subquery()
         )
@@ -963,7 +964,7 @@ def get_library_statistics(
                 func.max(AudioStream.bit_depth).label("value"),
             )
             .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .where(AudioStream.bit_depth.is_not(None))
             .group_by(AudioStream.media_file_id)
             .subquery("library_audio_bit_depth_values")
@@ -981,7 +982,10 @@ def get_library_statistics(
         if not enabled:
             return []
         expression = _normalized_text_expr(column, fallback or "")
-        query = select(expression.label("value"), func.count(MediaFile.id)).where(MediaFile.library_id == library_id)
+        query = select(expression.label("value"), func.count(MediaFile.id)).where(
+            MediaFile.library_id == library_id,
+            MediaFile.is_transcode_variant.is_(False),
+        )
         if fallback is None:
             query = query.where(func.length(func.trim(func.coalesce(column, ""))) > 0)
         return db.execute(query.group_by(expression).order_by(func.count(MediaFile.id).desc())).all()
@@ -1003,7 +1007,7 @@ def get_library_statistics(
     chapter_count_distribution = (
         db.execute(
             select(func.coalesce(MediaFile.chapter_count, 0), func.count(MediaFile.id))
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(func.coalesce(MediaFile.chapter_count, 0))
             .order_by(func.count(MediaFile.id).desc())
         ).all()
@@ -1013,7 +1017,11 @@ def get_library_statistics(
     audio_channel_distribution = (
         db.execute(
             select(MediaFile.audio_channels, func.count(MediaFile.id))
-            .where(MediaFile.library_id == library_id, MediaFile.audio_channels.is_not(None))
+            .where(
+                MediaFile.library_id == library_id,
+                MediaFile.is_transcode_variant.is_(False),
+                MediaFile.audio_channels.is_not(None),
+            )
             .group_by(MediaFile.audio_channels)
             .order_by(func.count(MediaFile.id).desc())
         ).all()
@@ -1023,7 +1031,11 @@ def get_library_statistics(
     sample_rate_distribution = (
         db.execute(
             select(MediaFile.sample_rate, func.count(MediaFile.id))
-            .where(MediaFile.library_id == library_id, MediaFile.sample_rate.is_not(None))
+            .where(
+                MediaFile.library_id == library_id,
+                MediaFile.is_transcode_variant.is_(False),
+                MediaFile.sample_rate.is_not(None),
+            )
             .group_by(MediaFile.sample_rate)
             .order_by(func.count(MediaFile.id).desc())
         ).all()
@@ -1033,7 +1045,7 @@ def get_library_statistics(
     embedded_cover_distribution = (
         db.execute(
             select(MediaFile.has_embedded_cover, func.count(MediaFile.id))
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .group_by(MediaFile.has_embedded_cover)
             .order_by(MediaFile.has_embedded_cover.desc())
         ).all()
@@ -1049,7 +1061,7 @@ def get_library_statistics(
                 _normalized_text_expr(AudioStream.spatial_audio_profile, "").label("value"),
             )
             .join(MediaFile, MediaFile.id == AudioStream.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .where(func.length(func.trim(func.coalesce(AudioStream.spatial_audio_profile, ""))) > 0)
             .distinct()
             .subquery()
@@ -1087,7 +1099,7 @@ def get_library_statistics(
                 db.execute(
                     select(subtitle_language_values.c.media_file_id, subtitle_language_values.c.value)
                     .join(MediaFile, MediaFile.id == subtitle_language_values.c.media_file_id)
-                    .where(MediaFile.library_id == library_id)
+                    .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
                 ).all(),
                 fallback="und",
             )
@@ -1112,7 +1124,7 @@ def get_library_statistics(
                     func.count(distinct(subtitle_codec_values.c.media_file_id)),
                 )
                 .join(MediaFile, MediaFile.id == subtitle_codec_values.c.media_file_id)
-                .where(MediaFile.library_id == library_id)
+                .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
                 .group_by(subtitle_codec_values.c.value)
                 .order_by(func.count(distinct(subtitle_codec_values.c.media_file_id)).desc())
             ).all()
@@ -1130,7 +1142,7 @@ def get_library_statistics(
                 subtitle_source_values.c.value,
             )
             .join(MediaFile, MediaFile.id == subtitle_source_values.c.media_file_id)
-            .where(MediaFile.library_id == library_id)
+            .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
             .distinct()
             .subquery("library_subtitle_source_distinct_values")
         )

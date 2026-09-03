@@ -41,7 +41,7 @@ Bring your own auth (for now).
 ## Features
 
 - Technical media analysis powered by `ffprobe`
-- Safe FFmpeg transcoding into linked video variants while leaving original files untouched
+- Safe FFmpeg transcoding into linked video variants with hardware-required execution by default; original files remain untouched unless explicit replacement is confirmed
 - Full and incremental scans using `path + size + mtime`
 - historical analysis
 - many different charts for all metrics
@@ -103,6 +103,14 @@ can be extended by .env using:
 [docker-compose-ENV.yaml](docker/docker-compose-ENV.yaml)
 and 
 [env.example](docker/env.example)
+
+For automatic local GPU wiring, use `docker/start-medialyze.sh` on Linux/macOS
+or `docker/start-medialyze.ps1` on Windows. The launcher starts the CPU-safe
+Compose file and creates a temporary override for NVIDIA (`gpus: all`) and
+Linux `/dev/dri` only when the corresponding host capability is present. It
+does not install drivers. The media mount remains read-only; transcoded output
+is written to `./Transcode_Output` by default and can be moved with
+`TRANSCODE_OUTPUT_HOST_DIR`.
 
 
 Open `http://localhost:8080`, or set `HOST_PORT` to expose the container on a different host port.
@@ -225,7 +233,9 @@ Relevant environment variables:
 - `MEDIALYZE_TELEMETRY_ENDPOINT`: optional; overrides the telemetry ingest endpoint, default `https://www.medialyze.app/api/telemetry/ingest`
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `FFMPEG_PATH`: optional override for the `ffmpeg` binary used for preview generation and transcoding
+- `MEDIALYZE_TRANSCODE_OUTPUT_ROOT`: optional writable path inside the runtime for separate transcoded output; Compose maps this to `/transcode-output`
 - `MEDIALYZE_HW_RENDER_NODE`: optional Linux DRM render node for Intel VAAPI/QSV, for example `/dev/dri/renderD128`; otherwise MediaLyze selects the first available render node
+- `TRANSCODE_OUTPUT_HOST_DIR`: Compose host directory for `/transcode-output`, default `./Transcode_Output`
 - `JELLYFIN_API_KEY_FILE`: optional path to a Jellyfin API-key secret file; see [Jellyfin integration](docs/jellyfin.md)
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
 
@@ -238,6 +248,15 @@ In the desktop app, mounted network shares and UNC paths can be selected directl
 
 Scan parallelism is configured in the UI under `Settings -> App settings -> Scan performance`.
 MediaLyze exposes separate limits for per-scan analysis workers and parallel library scans so you can tune throughput without editing compose or env files.
+
+Transcoding is configured under `Settings -> Transcoding`. Hardware-required is
+the default and never falls back silently to CPU. The page shows the real
+FFmpeg capability probe, including NVIDIA driver/API failures, and lets you
+choose the CPU budget, GPU slots, output policy, retry behavior, and partial
+output cleanup. Same-directory variants are excluded from primary counts and
+future scans; replacing an original is an explicit, no-backup operation.
+Desktop FFmpeg artifacts and Docker's architecture-specific FFmpeg package are
+pinned and checksummed in [docs/ffmpeg-manifest.json](docs/ffmpeg-manifest.json).
 
 Ignore rules use glob patterns matched against the normalized relative path inside each library. MediaLyze ships editable built-in defaults for common system and temporary paths such as `*/.DS_Store`, `*/@eaDir/*`, `*/.deletedByTMM/*`, and `*.part`. Set `DISABLE_DEFAULT_IGNORE_PATTERNS=true` if you do not want those defaults preloaded on first start.
 See [docs/patterns.md](docs/patterns.md) for folder discovery, series recognition, bonus-content rules, and ignore-pattern examples.

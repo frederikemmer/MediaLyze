@@ -2,10 +2,12 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +27,55 @@ export function bundledFfprobeName(platform = process.platform) {
 
 export function bundledFfmpegName(platform = process.platform) {
   return platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+}
+
+const DESKTOP_FFMPEG_MANIFEST_KEYS = {
+  "linux:x64": "linux-amd64",
+  "linux:arm64": "linux-arm64",
+  "darwin:x64": "macos-intel",
+  "darwin:arm64": "macos-apple-silicon",
+  "win32:x64": "windows-amd64",
+};
+
+export function desktopFfmpegManifestKey(
+  platform = process.platform,
+  arch = process.arch,
+) {
+  return DESKTOP_FFMPEG_MANIFEST_KEYS[`${platform}:${arch}`] ?? null;
+}
+
+export function verifyBundledFfmpeg(
+  binaryPath,
+  {
+    platform = process.platform,
+    arch = process.arch,
+    manifestPath = path.join(repoRoot, "docs", "ffmpeg-manifest.json"),
+    readFile = readFileSync,
+  } = {},
+) {
+  const manifestKey = desktopFfmpegManifestKey(platform, arch);
+  if (!manifestKey) {
+    throw new Error(
+      `No pinned FFmpeg manifest entry exists for desktop platform ${platform}/${arch}.`,
+    );
+  }
+
+  const manifest = JSON.parse(readFile(manifestPath, "utf8"));
+  const artifact = manifest?.desktop?.artifacts?.[manifestKey];
+  if (!artifact?.sha256) {
+    throw new Error(`Pinned FFmpeg manifest entry is incomplete: ${manifestKey}`);
+  }
+
+  const actualSha256 = createHash("sha256")
+    .update(readFile(binaryPath))
+    .digest("hex");
+  if (actualSha256 !== artifact.sha256.toLowerCase()) {
+    throw new Error(
+      `Bundled FFmpeg checksum mismatch for ${manifestKey}: expected ${artifact.sha256}, got ${actualSha256}`,
+    );
+  }
+
+  return artifact;
 }
 
 function runCommand(command, args, options = {}) {
@@ -580,7 +631,8 @@ export function main() {
   }
 
   bundleFfprobe(outputDir);
-  bundleFfmpeg(outputDir);
+  const bundledFfmpegPath = bundleFfmpeg(outputDir);
+  verifyBundledFfmpeg(bundledFfmpegPath);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

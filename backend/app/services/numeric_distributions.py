@@ -118,6 +118,7 @@ def audio_bitrate_value_expression(audio_bitrate_totals):
 
 
 def _apply_library_scope(query, *, library_id: int | None, dashboard_only: bool):
+    query = query.where(MediaFile.is_transcode_variant.is_(False))
     if library_id is not None:
         return query.where(MediaFile.library_id == library_id)
     if dashboard_only:

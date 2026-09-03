@@ -66,6 +66,32 @@ class ScanPerformanceUpdate(BaseModel):
     )
 
 
+class TranscodingSettingsRead(BaseModel):
+    execution_mode: Literal["hardware_required", "cpu_only"] = "hardware_required"
+    cpu_budget_percent: int = Field(default=90, ge=1, le=100)
+    cpu_parallel_jobs: Literal["auto"] | int = Field(default="auto")
+    gpu_parallel_jobs_per_device: int = Field(default=1, ge=1, le=8)
+    selected_devices: Literal["auto"] | list[str] = Field(default="auto")
+    default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
+    on_error: Literal["continue", "stop_queue"] = "continue"
+    retry_count: int = Field(default=0, ge=0, le=5)
+    existing_output: Literal["fail", "skip"] = "fail"
+    remove_partial_output: bool = True
+
+
+class TranscodingSettingsUpdate(BaseModel):
+    execution_mode: Literal["hardware_required", "cpu_only"] | None = None
+    cpu_budget_percent: int | None = Field(default=None, ge=1, le=100)
+    cpu_parallel_jobs: Literal["auto"] | int | None = Field(default=None, ge=1, le=64)
+    gpu_parallel_jobs_per_device: int | None = Field(default=None, ge=1, le=8)
+    selected_devices: Literal["auto"] | list[str] | None = None
+    default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
+    on_error: Literal["continue", "stop_queue"] | None = None
+    retry_count: int | None = Field(default=None, ge=0, le=5)
+    existing_output: Literal["fail", "skip"] | None = None
+    remove_partial_output: bool | None = None
+
+
 InterfaceLanguage = Literal["en", "de", "es", "uk"]
 
 
@@ -199,6 +225,7 @@ class AppSettingsRead(BaseModel):
     resolution_categories: list[ResolutionCategory] = Field(default_factory=list)
     feature_flags: FeatureFlagsRead = Field(default_factory=FeatureFlagsRead)
     scan_performance: ScanPerformanceRead = Field(default_factory=ScanPerformanceRead)
+    transcoding: TranscodingSettingsRead = Field(default_factory=TranscodingSettingsRead)
     ui_preferences: UiPreferencesRead = Field(default_factory=UiPreferencesRead)
     telemetry: TelemetrySettingsRead = Field(default_factory=TelemetrySettingsRead)
     history_retention: HistoryRetentionRead = Field(default_factory=HistoryRetentionRead)
@@ -212,6 +239,7 @@ class AppSettingsUpdate(BaseModel):
     resolution_categories: list[ResolutionCategory] | None = None
     feature_flags: FeatureFlagsUpdate | None = None
     scan_performance: ScanPerformanceUpdate | None = None
+    transcoding: TranscodingSettingsUpdate | None = None
     ui_preferences: UiPreferencesUpdate | None = None
     telemetry: TelemetrySettingsUpdate | None = None
     history_retention: HistoryRetentionUpdate | None = None

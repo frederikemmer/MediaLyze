@@ -351,7 +351,7 @@ def _build_library_storage_map(
             ),
         )
         .outerjoin(JellyfinItem, JellyfinItem.id == JellyfinMediaMatch.jellyfin_item_id)
-        .where(MediaFile.library_id == library_id)
+        .where(MediaFile.library_id == library_id, MediaFile.is_transcode_variant.is_(False))
         .order_by(MediaFile.relative_path.asc())
     )
     if current_parts:

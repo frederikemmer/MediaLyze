@@ -43,6 +43,19 @@ const DEFAULT_SCAN_PERFORMANCE = {
   comparison_scatter_point_limit: 5000,
 };
 
+const DEFAULT_TRANSCODING = {
+  execution_mode: "hardware_required" as const,
+  cpu_budget_percent: 90,
+  cpu_parallel_jobs: "auto" as const,
+  gpu_parallel_jobs_per_device: 1,
+  selected_devices: "auto" as const,
+  default_output_mode: "transcode_output" as const,
+  on_error: "continue" as const,
+  retry_count: 0,
+  existing_output: "fail" as const,
+  remove_partial_output: true,
+};
+
 const DEFAULT_HISTORY_RETENTION = {
   file_history: { days: 30, storage_limit_gb: 0 },
   library_history: { days: 365, storage_limit_gb: 0 },
@@ -71,6 +84,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   pattern_recognition: DEFAULT_PATTERN_RECOGNITION,
   resolution_categories: DEFAULT_RESOLUTION_CATEGORIES,
   scan_performance: DEFAULT_SCAN_PERFORMANCE,
+  transcoding: DEFAULT_TRANSCODING,
   history_retention: DEFAULT_HISTORY_RETENTION,
   ui_preferences: DEFAULT_UI_PREFERENCES,
   telemetry: DEFAULT_TELEMETRY,
@@ -155,6 +169,23 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       comparison_scatter_point_limit:
         payload?.scan_performance?.comparison_scatter_point_limit ??
         DEFAULT_SCAN_PERFORMANCE.comparison_scatter_point_limit,
+    },
+    transcoding: {
+      execution_mode: payload?.transcoding?.execution_mode ?? DEFAULT_TRANSCODING.execution_mode,
+      cpu_budget_percent:
+        payload?.transcoding?.cpu_budget_percent ?? DEFAULT_TRANSCODING.cpu_budget_percent,
+      cpu_parallel_jobs:
+        payload?.transcoding?.cpu_parallel_jobs ?? DEFAULT_TRANSCODING.cpu_parallel_jobs,
+      gpu_parallel_jobs_per_device:
+        payload?.transcoding?.gpu_parallel_jobs_per_device ?? DEFAULT_TRANSCODING.gpu_parallel_jobs_per_device,
+      selected_devices: payload?.transcoding?.selected_devices ?? DEFAULT_TRANSCODING.selected_devices,
+      default_output_mode:
+        payload?.transcoding?.default_output_mode ?? DEFAULT_TRANSCODING.default_output_mode,
+      on_error: payload?.transcoding?.on_error ?? DEFAULT_TRANSCODING.on_error,
+      retry_count: payload?.transcoding?.retry_count ?? DEFAULT_TRANSCODING.retry_count,
+      existing_output: payload?.transcoding?.existing_output ?? DEFAULT_TRANSCODING.existing_output,
+      remove_partial_output:
+        payload?.transcoding?.remove_partial_output ?? DEFAULT_TRANSCODING.remove_partial_output,
     },
     history_retention: {
       file_history: {
