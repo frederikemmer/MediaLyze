@@ -1006,6 +1006,7 @@ class MediaFile(Base):
         Index("ix_media_files_library_content_category", "library_id", "content_category"),
         Index("ix_media_files_series_id", "series_id"),
         Index("ix_media_files_season_id", "season_id"),
+        Index("ix_media_files_library_transcode_variant", "library_id", "is_transcode_variant"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1100,6 +1101,7 @@ class MediaFile(Base):
     episode_number_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     episode_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     recognition_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    is_transcode_variant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="media_files")
     library_root: Mapped[LibraryRoot | None] = relationship(back_populates="media_files")
@@ -1383,6 +1385,17 @@ class TranscodeJob(TimestampMixin, Base):
     source_mtime_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
     output_path_snapshot: Mapped[str] = mapped_column(String(4096), nullable=False)
     output_relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    output_mode: Mapped[str] = mapped_column(String(32), default="same_directory", nullable=False)
+    output_storage_root: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cpu_budget_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cpu_thread_budget: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    hardware_backend: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ffmpeg_version: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    remove_partial_output: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    on_error: Mapped[str] = mapped_column(String(16), default="continue", nullable=False)
     temporary_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     progress_percent: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     processed_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
@@ -1420,6 +1433,7 @@ class TranscodeVariant(TimestampMixin, Base):
     )
     output_relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
     output_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    output_mode: Mapped[str] = mapped_column(String(32), default="same_directory", nullable=False)
     source_path_snapshot: Mapped[str] = mapped_column(String(4096), nullable=False)
     output_path_snapshot: Mapped[str] = mapped_column(String(4096), nullable=False)
     analysis_status: Mapped[str] = mapped_column(

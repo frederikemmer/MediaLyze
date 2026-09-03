@@ -1359,6 +1359,9 @@ export type TranscodePlan = {
   filename_template: string;
   filename_template_override?: boolean | null;
   include_subtitle_languages?: boolean;
+  output_mode?: "transcode_output" | "same_directory" | "replace_original" | null;
+  execution_mode?: "hardware_required" | "cpu_only" | null;
+  replacement_confirmed?: boolean;
 };
 
 export type TranscodeEncoderCapability = {
@@ -1376,12 +1379,34 @@ export type TranscodeEncoderCapability = {
   quality_step?: number | null;
 };
 
+export type TranscodeHardwareDevice = {
+  id: string;
+  name: string;
+  vendor: string;
+  backend: string;
+  driver_version: string | null;
+  compute_capability: string | null;
+  memory_total_bytes: number | null;
+  decoder_codecs: string[];
+  encoder_codecs: string[];
+  supported_pixel_formats: string[];
+  supported_filters: string[];
+  status: "available" | "unavailable" | "not_detected";
+  failure_reason: string | null;
+  last_tested_at: string | null;
+};
+
 export type TranscodeCapabilities = {
   ffmpeg_available: boolean;
   ffmpeg_path: string;
   version: string | null;
+  ffmpeg_version?: string | null;
   containers: Array<"mkv" | "mp4" | "webm">;
   encoders: TranscodeEncoderCapability[];
+  devices?: TranscodeHardwareDevice[];
+  decoder_codecs?: string[];
+  platform?: string | null;
+  last_tested_at?: string | null;
   dolby_vision_passthrough: boolean;
   error: string | null;
 };
@@ -1400,6 +1425,13 @@ export type TranscodeValidation = {
   warnings: string[];
   errors: string[];
   detected_hardware_encoders: string[];
+  output_mode?: string;
+  execution_mode?: string | null;
+  device_id?: string | null;
+  hardware_backend?: string | null;
+  ffmpeg_version?: string | null;
+  cpu_thread_budget?: number | null;
+  cpu_budget_percent?: number | null;
 };
 
 export type TranscodeFileSummary = {
@@ -1432,6 +1464,17 @@ export type TranscodeJob = {
   source_path_snapshot: string;
   output_path_snapshot: string;
   output_relative_path: string;
+  output_mode?: string;
+  output_storage_root?: string | null;
+  retry_count?: number;
+  attempt?: number;
+  cpu_budget_percent?: number | null;
+  cpu_thread_budget?: number | null;
+  device_id?: string | null;
+  hardware_backend?: string | null;
+  ffmpeg_version?: string | null;
+  remove_partial_output?: boolean;
+  on_error?: string;
   progress_percent: number;
   processed_seconds: number;
   speed: string | null;
@@ -1452,6 +1495,7 @@ export type TranscodeVariant = {
   library_root_id: number | null;
   output_relative_path: string;
   output_filename: string;
+  output_mode?: string;
   source_path_snapshot: string;
   output_path_snapshot: string;
   analysis_status: string;
@@ -1641,6 +1685,7 @@ export type AppSettings = {
     parallel_scan_jobs: number;
     comparison_scatter_point_limit: number;
   };
+  transcoding?: TranscodingSettings;
   history_retention?: {
     file_history: {
       days: number;
@@ -1682,6 +1727,19 @@ export type AppSettings = {
     in_depth_dolby_vision_profiles: boolean;
     show_all_playbacks_when_unstacked: boolean;
   };
+};
+
+export type TranscodingSettings = {
+  execution_mode: "hardware_required" | "cpu_only";
+  cpu_budget_percent: number;
+  cpu_parallel_jobs: "auto" | number;
+  gpu_parallel_jobs_per_device: number;
+  selected_devices: "auto" | string[];
+  default_output_mode: "transcode_output" | "same_directory" | "replace_original";
+  on_error: "continue" | "stop_queue";
+  retry_count: number;
+  existing_output: "fail" | "skip";
+  remove_partial_output: boolean;
 };
 
 export type TelemetryPreviewMode = "none" | "minimal" | "enabled";
@@ -2643,6 +2701,7 @@ export const api = {
       parallel_scan_jobs?: number;
       comparison_scatter_point_limit?: number;
     };
+    transcoding?: Partial<TranscodingSettings>;
     history_retention?: {
       file_history?: {
         days?: number;

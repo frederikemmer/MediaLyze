@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "purpose": "Pinned FFmpeg inputs used by desktop packaging and Docker images.",
+  "desktop": {
+    "package": "ffmpeg-static",
+    "package_version": "5.3.0",
+    "embedded_ffmpeg_version": "6.1.1",
+    "release_tag": "b6.1.1",
+    "package_tarball": {
+      "source_url": "https://registry.npmjs.org/ffmpeg-static/-/ffmpeg-static-5.3.0.tgz",
+      "sha256": "0525c908c27618582a6fb5d4cc70452a2f2d4f50cb3d88b19b16a3c1cc8df25d",
+      "integrity": "sha512-H+K6sW6TiIX6VGend0KQwthe+kaceeH/luE8dIZyOP35ik7ahYojDuqlTV1bOrtEwl01sy2HFNGQfi5IDJvotg=="
+    },
+    "artifacts": {
+      "linux-amd64": {
+        "architecture": "x86_64",
+        "version": "6.1.1",
+        "source_url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz",
+        "sha256": "e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99",
+        "sha256_scope": "decompressed executable"
+      },
+      "linux-arm64": {
+        "architecture": "aarch64",
+        "version": "6.1.1",
+        "source_url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-arm64.gz",
+        "sha256": "6bb182d0d75d23028db82e9e4f723ca69b853d055698486e6984ddb2c06fb8ce",
+        "sha256_scope": "decompressed executable"
+      },
+      "windows-amd64": {
+        "architecture": "x86_64",
+        "version": "6.1.1",
+        "source_url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz",
+        "sha256": "04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00",
+        "sha256_scope": "decompressed executable"
+      },
+      "macos-intel": {
+        "architecture": "x86_64",
+        "version": "6.1.1",
+        "source_url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-x64.gz",
+        "sha256": "ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894",
+        "sha256_scope": "decompressed executable"
+      },
+      "macos-apple-silicon": {
+        "architecture": "arm64",
+        "version": "6.1.1",
+        "source_url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz",
+        "sha256": "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
+        "sha256_scope": "decompressed executable"
+      }
+    }
+  },
+  "docker": {
+    "base_image": "python:3.12-slim-bookworm",
+    "package_manager": "apt",
+    "repository": "Debian bookworm main",
+    "ffmpeg_version": "5.1.9",
+    "ffmpeg_package_version": "7:5.1.9-0+deb12u1",
+    "artifacts": {
+      "linux-amd64": {
+        "architecture": "amd64",
+        "source_url": "https://deb.debian.org/debian/pool/main/f/ffmpeg/ffmpeg_5.1.9-0+deb12u1_amd64.deb",
+        "sha256": "2ba8ead87657c123ce6de2de5ecdbc1fb4ead9a4b317b85b8ec41e16c890fe01",
+        "sha256_scope": "DEB package bytes"
+      },
+      "linux-arm64": {
+        "architecture": "arm64",
+        "source_url": "https://deb.debian.org/debian/pool/main/f/ffmpeg/ffmpeg_5.1.9-0+deb12u1_arm64.deb",
+        "sha256": "7890aeb19a94d73e5d9281afa5ca07005804c1fca4f10791f4f2ce0df741b610",
+        "sha256_scope": "DEB package bytes"
+      }
+    }
+  }
+}

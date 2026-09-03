@@ -72,6 +72,12 @@ class TranscodePlan(BaseModel):
     # changes its display string.
     filename_template_override: bool | None = None
     include_subtitle_languages: bool = False
+    # ``None`` inherits the persisted global runtime settings. This keeps the
+    # request contract backwards-compatible while preserving the global
+    # hardware-required default for older API clients.
+    output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
+    execution_mode: Literal["hardware_required", "cpu_only"] | None = None
+    replacement_confirmed: bool = False
 
 
 class TranscodeEncoderCapability(BaseModel):
@@ -89,12 +95,34 @@ class TranscodeEncoderCapability(BaseModel):
     quality_step: float | None = Field(default=None, gt=0, le=10)
 
 
+class TranscodeHardwareDevice(BaseModel):
+    id: str
+    name: str
+    vendor: str
+    backend: str
+    driver_version: str | None = None
+    compute_capability: str | None = None
+    memory_total_bytes: int | None = None
+    decoder_codecs: list[str] = Field(default_factory=list)
+    encoder_codecs: list[str] = Field(default_factory=list)
+    supported_pixel_formats: list[str] = Field(default_factory=list)
+    supported_filters: list[str] = Field(default_factory=list)
+    status: Literal["available", "unavailable", "not_detected"] = "not_detected"
+    failure_reason: str | None = None
+    last_tested_at: datetime | None = None
+
+
 class TranscodeCapabilitiesRead(BaseModel):
     ffmpeg_available: bool
     ffmpeg_path: str
     version: str | None = None
+    ffmpeg_version: str | None = None
     containers: list[str] = Field(default_factory=lambda: ["mkv", "mp4", "webm"])
     encoders: list[TranscodeEncoderCapability] = Field(default_factory=list)
+    devices: list[TranscodeHardwareDevice] = Field(default_factory=list)
+    decoder_codecs: list[str] = Field(default_factory=list)
+    platform: str | None = None
+    last_tested_at: datetime | None = None
     dolby_vision_passthrough: bool = False
     error: str | None = None
 
@@ -113,6 +141,13 @@ class TranscodeValidationRead(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     detected_hardware_encoders: list[str] = Field(default_factory=list)
+    output_mode: str = "same_directory"
+    execution_mode: str | None = None
+    device_id: str | None = None
+    hardware_backend: str | None = None
+    ffmpeg_version: str | None = None
+    cpu_thread_budget: int | None = None
+    cpu_budget_percent: int | None = None
 
 
 class TranscodeFileSummary(BaseModel):
@@ -148,6 +183,7 @@ class TranscodeVariantRead(BaseModel):
     library_root_id: int | None = None
     output_relative_path: str
     output_filename: str
+    output_mode: str = "same_directory"
     source_path_snapshot: str
     output_path_snapshot: str
     analysis_status: str
@@ -174,6 +210,17 @@ class TranscodeJobRead(BaseModel):
     source_path_snapshot: str
     output_path_snapshot: str
     output_relative_path: str
+    output_mode: str = "same_directory"
+    output_storage_root: str | None = None
+    retry_count: int = 0
+    attempt: int = 0
+    cpu_budget_percent: int | None = None
+    cpu_thread_budget: int | None = None
+    device_id: str | None = None
+    hardware_backend: str | None = None
+    ffmpeg_version: str | None = None
+    remove_partial_output: bool = True
+    on_error: str = "continue"
     progress_percent: float
     processed_seconds: float
     speed: str | None = None

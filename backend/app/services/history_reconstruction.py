@@ -489,7 +489,7 @@ def reconstruct_history_from_media_files(
         )
         media_files = db.scalars(
             select(MediaFile)
-            .where(MediaFile.library_id == library.id)
+            .where(MediaFile.library_id == library.id, MediaFile.is_transcode_variant.is_(False))
             .order_by(MediaFile.id.asc())
             .options(
                 selectinload(MediaFile.media_format),

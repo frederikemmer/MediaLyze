@@ -559,6 +559,18 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "parallel_scan_jobs": 3,
             "comparison_scatter_point_limit": 10000,
         },
+        "transcoding": {
+            "execution_mode": "hardware_required",
+            "cpu_budget_percent": 90,
+            "cpu_parallel_jobs": "auto",
+            "gpu_parallel_jobs_per_device": 1,
+            "selected_devices": "auto",
+            "default_output_mode": "transcode_output",
+            "on_error": "continue",
+            "retry_count": 0,
+            "existing_output": "fail",
+            "remove_partial_output": True,
+        },
         "history_retention": {
             "file_history": {"days": 120, "storage_limit_gb": 1.5},
             "library_history": {"days": 730, "storage_limit_gb": 0.0},

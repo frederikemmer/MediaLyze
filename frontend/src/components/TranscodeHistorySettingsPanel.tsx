@@ -52,6 +52,14 @@ export function TranscodeHistorySettingsPanel({ libraries }: { libraries: Librar
               <dl>
                 <div><dt>{t("transcoding.sourcePath")}</dt><dd><code>{job.source_path_snapshot}</code></dd></div>
                 <div><dt>{t("transcoding.outputPath")}</dt><dd><code>{job.output_path_snapshot}</code></dd></div>
+                <div><dt>{t("transcoding.device")}</dt><dd>{job.device_id ?? "—"}</dd></div>
+                <div><dt>{t("transcoding.hardwareBackend")}</dt><dd>{job.hardware_backend ?? "—"}</dd></div>
+                <div><dt>{t("transcoding.ffmpegVersion")}</dt><dd>{job.ffmpeg_version ?? "—"}</dd></div>
+                <div><dt>{t("transcoding.threads")}</dt><dd>{job.cpu_thread_budget ?? "—"}</dd></div>
+                <div><dt>{t("transcoding.progress")}</dt><dd>{Math.round(job.progress_percent)}%</dd></div>
+                <div><dt>{t("transcoding.speed")}</dt><dd>{job.speed ?? "—"}</dd></div>
+                <div><dt>{t("transcoding.etaLabel")}</dt><dd>{job.eta_seconds != null ? t("transcoding.eta", { seconds: Math.ceil(job.eta_seconds) }) : "—"}</dd></div>
+                <div><dt>{t("transcoding.retryAttempts")}</dt><dd>{job.attempt ?? 0} / {job.retry_count ?? 0}</dd></div>
               </dl>
               <code>{job.ffmpeg_command}</code>
               {job.warnings.length ? <ul>{job.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}

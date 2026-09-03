@@ -152,7 +152,7 @@ Output:
 ## Notes
 
 - `npm run build:backend` creates the packaged Python sidecar in `dist/desktop-backend/`.
-- `npm run build:backend` also bundles `ffmpeg` from `MEDIALYZE_FFMPEG_DIR` when set, otherwise from the platform-specific `ffmpeg-static` dependency. `FFMPEG_PATH` and `FFPROBE_PATH` remain explicit runtime overrides.
+- `npm run build:backend` also bundles `ffmpeg` from `MEDIALYZE_FFMPEG_DIR` when set, otherwise from the exact `ffmpeg-static` 5.3.0 dependency. The build verifies the platform-specific FFmpeg SHA-256 from `docs/ffmpeg-manifest.json`. `FFMPEG_PATH` and `FFPROBE_PATH` remain explicit runtime overrides.
 - Release jobs run `ffmpeg -version`, enumerate encoders, and perform a one-frame encode against the packaged binary on Windows, macOS, and Linux. Linux repeats the encode after extracting the AppImage.
 - `npm run dist:dir` creates an unpacked app.
 - `npm run dist` creates the platform installer format configured in `desktop/package.json`.

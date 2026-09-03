@@ -245,6 +245,7 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "episode_number_end": "ALTER TABLE media_files ADD COLUMN episode_number_end INTEGER",
         "episode_title": "ALTER TABLE media_files ADD COLUMN episode_title VARCHAR(512)",
         "recognition_details": "ALTER TABLE media_files ADD COLUMN recognition_details JSON",
+        "is_transcode_variant": "ALTER TABLE media_files ADD COLUMN is_transcode_variant BOOLEAN NOT NULL DEFAULT 0",
     },
     "media_formats": {
         "bit_rate": "ALTER TABLE media_formats ADD COLUMN bit_rate INTEGER",
@@ -312,6 +313,22 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "trigger_details": "ALTER TABLE scan_jobs ADD COLUMN trigger_details JSON NOT NULL DEFAULT '{}'",
         "scan_summary": "ALTER TABLE scan_jobs ADD COLUMN scan_summary JSON NOT NULL DEFAULT '{}'",
     },
+    "transcode_jobs": {
+        "output_mode": "ALTER TABLE transcode_jobs ADD COLUMN output_mode VARCHAR(32) NOT NULL DEFAULT 'same_directory'",
+        "output_storage_root": "ALTER TABLE transcode_jobs ADD COLUMN output_storage_root VARCHAR(4096)",
+        "retry_count": "ALTER TABLE transcode_jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+        "attempt": "ALTER TABLE transcode_jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0",
+        "cpu_budget_percent": "ALTER TABLE transcode_jobs ADD COLUMN cpu_budget_percent INTEGER",
+        "cpu_thread_budget": "ALTER TABLE transcode_jobs ADD COLUMN cpu_thread_budget INTEGER",
+        "device_id": "ALTER TABLE transcode_jobs ADD COLUMN device_id VARCHAR(128)",
+        "hardware_backend": "ALTER TABLE transcode_jobs ADD COLUMN hardware_backend VARCHAR(32)",
+        "ffmpeg_version": "ALTER TABLE transcode_jobs ADD COLUMN ffmpeg_version VARCHAR(512)",
+        "remove_partial_output": "ALTER TABLE transcode_jobs ADD COLUMN remove_partial_output BOOLEAN NOT NULL DEFAULT 1",
+        "on_error": "ALTER TABLE transcode_jobs ADD COLUMN on_error VARCHAR(16) NOT NULL DEFAULT 'continue'",
+    },
+    "transcode_variants": {
+        "output_mode": "ALTER TABLE transcode_variants ADD COLUMN output_mode VARCHAR(32) NOT NULL DEFAULT 'same_directory'",
+    },
 }
 
 SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
@@ -371,6 +388,7 @@ SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_content_category ON media_files (library_id, content_category)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_series_id ON media_files (series_id)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_season_id ON media_files (season_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_files_library_transcode_variant ON media_files (library_id, is_transcode_variant)",
     "CREATE INDEX IF NOT EXISTS ix_media_series_library_normalized_title ON media_series (library_id, normalized_title)",
     "CREATE INDEX IF NOT EXISTS ix_media_seasons_series_number ON media_seasons (series_id, season_number)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_filename_signature ON media_files (library_id, filename_signature)",

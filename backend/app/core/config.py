@@ -136,6 +136,10 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     config_path: Path | None = None
     media_root: Path | None = None
+    transcode_output_root: Path | None = Field(
+        default=None,
+        validation_alias="MEDIALYZE_TRANSCODE_OUTPUT_ROOT",
+    )
     frontend_dist_path: Path | None = None
     database_filename: str = "medialyze.db"
     ffprobe_path: str = "ffprobe"
@@ -172,6 +176,8 @@ class Settings(BaseSettings):
                 self.config_path = Path("/config")
         if self.media_root is None:
             self.media_root = Path("/media")
+        if self.transcode_output_root is None:
+            self.transcode_output_root = self.config_path / "Transcode_Output"
         if self.frontend_dist_path is None:
             self.frontend_dist_path = _repo_frontend_dist_path()
         return self

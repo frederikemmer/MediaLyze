@@ -12760,6 +12760,61 @@ html[data-theme="dark"] .transcoding-panel select.transcode-control {
   gap: 0.55rem 0.65rem;
 }
 
+.transcode-replacement-warning,
+.transcode-capability-diagnostics {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.settings-choice-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.transcode-capability-diagnostics {
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+}
+
+.transcode-capability-diagnostics h3 {
+  margin: 0;
+}
+
+.transcode-capability-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.transcode-capability-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--nested-surface);
+}
+
+.transcode-capability-item > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.transcode-capability-item > div > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.notice.warning {
+  border-color: color-mix(in srgb, #c9872f 48%, var(--border));
+  background: color-mix(in srgb, #c9872f 11%, var(--panel));
+  color: var(--ink);
+}
+
 .transcode-configuration-grid label,
 .global-transcode-history-filters label,
 .transcode-filename-template {

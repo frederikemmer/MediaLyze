@@ -2496,6 +2496,17 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
+              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["settings-sidebar-stack", "app-settings-performance-grid", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
+                <div className="settings-sidebar-stack">
+                  <div className="app-settings-performance-grid">
+                    <div className="field"><label htmlFor="catalog-transcoding-execution">Execution mode</label><select id="catalog-transcoding-execution" defaultValue="hardware_required"><option value="hardware_required">Hardware required</option><option value="cpu_only">CPU only</option></select></div>
+                    <div className="field"><label htmlFor="catalog-transcoding-output">Default output mode</label><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select><span className="field-hint">Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.</span></div>
+                    <div className="field"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /><span className="field-hint">Soft budget shared across active CPU transcode jobs; short bursts can exceed it.</span></div>
+                  </div>
+                  <section className="transcode-capability-diagnostics"><div className="field-label-row"><h3>Hardware diagnostics</h3><span className="field-hint">Last tested now</span></div><div className="transcode-capability-item"><div><strong>NVIDIA GeForce RTX 3080</strong><span>cuda · cuda0 · Unavailable</span></div><p className="notice compact error">NVENC probe failed: driver API is older than the FFmpeg requirement.</p></div></section>
+                   <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
+                </div>
+              </VariantCard>
               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare"]} wide>
                 <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
                   <h3>Synchronized preview comparison</h3>

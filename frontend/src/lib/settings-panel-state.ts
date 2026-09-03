@@ -4,6 +4,7 @@ export type SettingsPanelId =
   | "qualityProfiles"
   | "compatibilityProfiles"
   | "appSettings"
+  | "transcoding"
   | "resolutionCategories"
   | "patternRecognition"
   | "historyRetention"
@@ -19,6 +20,7 @@ export const SETTINGS_PANEL_IDS: SettingsPanelId[] = [
   "qualityProfiles",
   "compatibilityProfiles",
   "appSettings",
+  "transcoding",
   "resolutionCategories",
   "patternRecognition",
   "historyRetention",
@@ -32,6 +34,7 @@ export const SETTINGS_PANEL_SLUGS: Record<SettingsPanelId, string> = {
   qualityProfiles: "quality-profiles",
   compatibilityProfiles: "compatibility-profiles",
   appSettings: "application",
+  transcoding: "transcoding",
   resolutionCategories: "resolution-categories",
   patternRecognition: "pattern-recognition",
   historyRetention: "history-retention",
