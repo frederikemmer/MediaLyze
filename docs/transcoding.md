@@ -49,7 +49,7 @@ The Transcoding panel exposes a single synchronized-preview link for the newest 
 
 ## Runtime paths
 
-Docker installs the pinned Debian FFmpeg `5.1.9` package (`7:5.1.9-0+deb12u1`) in `python:3.12-slim-bookworm` and verifies the architecture-specific DEB SHA-256 before installation; this build includes the NVENC, QSV, and VAAPI encoder families and uses `FFMPEG_PATH=ffmpeg` by default. Desktop sidecars receive the pinned `ffmpeg-static` 5.3.0 / FFmpeg 6.1.1 binary from Electron packaging. `MEDIALYZE_FFMPEG_DIR` selects a packaging input; `FFMPEG_PATH` is the runtime override. Release packaging verifies the desktop binary and performs a one-frame encode on Windows, macOS, and Linux. The complete platform/source/checksum record is in [the FFmpeg manifest](ffmpeg-manifest.json). Docker image builds accept the manifest's explicit version and checksum build arguments; they never download a `latest` binary during container startup.
+Docker installs the pinned Debian FFmpeg `5.1.9` package (`7:5.1.9-0+deb12u1`) in `python:3.12-slim-bookworm` and verifies the architecture-specific DEB SHA-256 before installation; this build includes the NVENC, QSV, and VAAPI encoder families and uses `FFMPEG_PATH=ffmpeg` by default. Desktop sidecars receive the pinned `ffmpeg-static` 5.3.0 binary from Electron packaging. On macOS, the bundled FFmpeg exposes the VideoToolbox H.264/HEVC encoders and MediaLyze verifies them with a real one-frame smoke test before showing Apple VideoToolbox as available. In the current ARM64 bundle, the executable reports FFmpeg 6.0 although the manifest labels the corresponding pinned artifact 6.1.1. `MEDIALYZE_FFMPEG_DIR` selects a packaging input; `FFMPEG_PATH` is the runtime override. Release packaging verifies the desktop binary and performs a one-frame encode on Windows, macOS, and Linux. The complete platform/source/checksum record is in [the FFmpeg manifest](ffmpeg-manifest.json). Docker image builds accept the manifest's explicit version and checksum build arguments; they never download a `latest` binary during container startup.
 
 The global `transcoding` app setting controls `hardware_required` versus `cpu_only`, the 90% default CPU budget, CPU/GPU parallel slots, selected devices, output policy, retry/error handling, and partial-output cleanup. The settings page also shows the last real capability probe and the reason a device or encoder is unavailable.
 
@@ -90,3 +90,19 @@ VAAPI jobs initialize the render node and upload frames with `format=nv12` (or
 the selected DRM node as its `child_device`; plans that mix QSV and VAAPI derive
 the QSV device from the same named VAAPI device. No host driver installation or
 media-file modification is performed by MediaLyze.
+
+## Apple GPU on macOS
+
+The desktop version supports Apple Silicon and Intel Mac graphics through
+macOS VideoToolbox. It uses the bundled `h264_videotoolbox` and
+`hevc_videotoolbox` encoders, and only enables the device after a real runtime
+probe succeeds. The `Save storage` profile automatically prefers HEVC
+VideoToolbox when hardware-required mode is active.
+
+Docker Desktop for macOS runs the Linux image inside a virtual machine and
+does not expose the Mac's Apple GPU or macOS VideoToolbox framework to that
+Linux container. Consequently, the same Apple hardware acceleration cannot be
+enabled inside the container; the container correctly reports no Apple GPU
+and uses CPU encoding. Docker hardware acceleration remains available on
+supported Linux hosts (NVIDIA CUDA or Intel VAAPI/QSV) when the host runtime
+and device mounts are configured.

@@ -21,6 +21,26 @@ This document records reproducible runtime evidence. A device is listed as usabl
 
 With driver 616.56, both the current PATH FFmpeg 9.0.1 combination and the pinned desktop FFmpeg 6.1.1 combination successfully encode H.264 and HEVC on the RTX 3080. AV1 remains unavailable as expected for this GPU generation. MediaLyze keeps unsupported encoder combinations unavailable instead of silently falling back.
 
+## Local macOS desktop evidence — MacBook Pro M1 Max, 64 GB
+
+| Host | Device | Driver | FFmpeg | Decoder path | Encoder | Pixel format/filter | Result | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Local MacBook Pro M1 Max (`Darwin`, Apple Silicon `arm64`, 64 GB) | Apple GPU through VideoToolbox | macOS 26.3.1 (`Darwin 25.3.0`) | bundled `ffmpeg-static` 5.3.0 binary, observed `FFmpeg 6.0` | system-memory input; hardware decode not claimed | `h264_videotoolbox` | 256×256 test pattern, no Linux hardware-upload filter | **pass** | Bundled FFmpeg produced a non-empty MP4 (`10206` bytes); exit code 0. SHA-256: `a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584`. |
+| Local MacBook Pro M1 Max (`Darwin`, Apple Silicon `arm64`, 64 GB) | Apple GPU through VideoToolbox | macOS 26.3.1 (`Darwin 25.3.0`) | bundled `ffmpeg-static` 5.3.0 binary, observed `FFmpeg 6.0` | system-memory input; hardware decode not claimed | `hevc_videotoolbox` | 256×256 test pattern, no Linux hardware-upload filter | **pass** | Bundled FFmpeg produced a non-empty MP4 (`10709` bytes); exit code 0. SHA-256: `a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584`. |
+
+The ARM64 desktop sidecar was built successfully with `npm run build:backend` using PyInstaller 6.22.2. The complete unpacked Electron package also built successfully with Electron Builder 26.15.3 for Electron 41.10.3 (`darwin/arm64`); its app binary reported version `0.18.0`. The generated Mach-O `arm64` FFmpeg and FFprobe binaries ran successfully from both the sidecar output and the final `.app` resources. MediaLyze's capability endpoint was then run against this exact bundled FFmpeg executable. It reported `videotoolbox0` (`vendor=apple`, `backend=videotoolbox`, status `available`) and marked both H.264 and HEVC VideoToolbox encoders available after their one-frame probes. The `Save storage` profile selected `hevc_videotoolbox` in hardware-required mode. The manifest currently labels this SHA-256 as FFmpeg `6.1.1`, while the executable itself reports `6.0`; the observed executable version is recorded above and should be reconciled with the manifest separately.
+
+## Docker Desktop on this MacBook
+
+| Host | Device | Driver | FFmpeg | Decoder path | Encoder | Pixel format/filter | Result | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Docker Desktop on macOS (`linux/arm64` VM) | Apple GPU | not exposed to Linux VM | Debian package `5.1.9-0+deb12u1` in freshly built `medialyze-validation:macos-m1-max-20260903` | no VideoToolbox framework | `h264_videotoolbox` / `hevc_videotoolbox` | encoder family absent; no `/dev/dri` | **not available (platform limitation)** | Container `ffmpeg -encoders` listed no VideoToolbox encoder. The running MediaLyze image reported `devices=[]` and no VideoToolbox encoders. |
+| Docker Desktop on macOS (`linux/arm64` VM) | Apple GPU | not exposed to Linux VM | Debian package `5.1.9-0+deb12u1` in freshly built `medialyze-validation:macos-m1-max-20260903` | software input | `libx264` | CPU encode, 256×256 test pattern | **pass** | Container CPU encode exited 0; `/api/health` returned `status=ok`; `ffmpeg_available=true` in `/api/transcoding/capabilities`. |
+| Docker Desktop on macOS (`linux/arm64` VM) | no NVIDIA GPU passthrough | no `libcuda.so.1` / no `nvidia-smi` | Debian package `5.1.9-0+deb12u1` in freshly built `medialyze-validation:macos-m1-max-20260903` | CUDA device init | `h264_nvenc`, `hevc_nvenc` | CUDA init without device | **not available** | MediaLyze marked both encoders unavailable with `Cannot load libcuda.so.1`; the container had `nvidia_smi=absent`. |
+| Docker Desktop on macOS (`linux/arm64` VM) | no Linux DRM GPU passthrough | no `/dev/dri/renderD*` | Debian package `5.1.9-0+deb12u1` in freshly built `medialyze-validation:macos-m1-max-20260903` | VAAPI device init | `h264_vaapi`, `hevc_vaapi`, `mjpeg_vaapi`, `mpeg2_vaapi`, `vp8_vaapi`, `vp9_vaapi` | no DRM render node | **not available** | MediaLyze marked the listed VAAPI encoders unavailable with `No DRM render node is available`; the running container reported `dri=absent`. |
+
+The image build completed successfully for `linux/arm64` on Docker Desktop 29.7.2. The image starts and performs CPU transcoding correctly, but Docker Desktop's Linux VM has no access to the macOS VideoToolbox framework or the Apple GPU. The macOS desktop sidecar is therefore the supported path for Apple hardware encoding; Docker hardware acceleration remains available on supported Linux hosts with NVIDIA CUDA or Intel VAAPI/QSV device passthrough.
+
 ## Docker Desktop WSL2 evidence
 
 | Host | Device | Driver | FFmpeg | Decoder path | Encoder | Pixel format/filter | Result | Evidence |

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "id": "google-tv-streamer-4k",
+  "name": "Google TV Streamer (4K)",
+  "category": "streaming_device",
+  "manufacturer": "Google",
+  "year": 2024,
+  "status": "official",
+  "verified_by": "manufacturer documentation and independent reviews",
+  "added": "2026-08-03",
+  "last_modified": "2026-08-24",
+  "video": {
+    "h264": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8
+      ]
+    },
+    "hevc": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8,
+        10
+      ],
+      "hdr": [
+        "HDR10",
+        "HDR10+",
+        "HLG",
+        "Dolby Vision"
+      ]
+    },
+    "av1": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8,
+        10
+      ],
+      "hdr": [
+        "HDR10",
+        "HDR10+",
+        "HLG"
+      ]
+    },
+    "vp9": {
+      "hardware_decode": true,
+      "max_resolution": "4K",
+      "max_fps": 60,
+      "bit_depth": [
+        8,
+        10
+      ],
+      "hdr": [
+        "HDR10",
+        "HDR10+",
+        "HLG"
+      ]
+    }
+  },
+  "audio": {
+    "aac": true,
+    "ac3": "passthrough_only",
+    "eac3": "passthrough_only",
+    "flac": true,
+    "mp3": true,
+    "opus": true,
+    "vorbis": true
+  },
+  "containers": [
+    "mp4",
+    "mkv",
+    "webm",
+    "ts"
+  ],
+  "subtitles": {
+    "subrip": true,
+    "webvtt": true,
+    "ass": "limited"
+  },
+  "notes": "Google TV Streamer (4K) with the MediaTek MT8696 SoC adds hardware AV1 decoding over the Chromecast with Google TV (4K) and supports HDR10, HDR10+, HLG, and Dolby Vision profiles 5 and 8; UHD Blu-ray Dolby Vision profile 7 is not supported and falls back to HDR10. Lossless HD audio such as TrueHD or DTS is neither decoded nor passed through.",
+  "sources": [
+    {
+      "label": "Google Store",
+      "url": "https://store.google.com/product/google_tv_streamer"
+    },
+    {
+      "label": "FlatpanelsHD Google TV Streamer review",
+      "url": "https://www.flatpanelshd.com/review.php?id=1729233401&subaction=showfull"
+    }
+  ]
+}

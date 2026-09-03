@@ -606,6 +606,83 @@ def test_cuda_smoke_test_does_not_require_a_linux_drm_render_node(monkeypatch) -
     assert "-filter_hw_device" in captured[0]
 
 
+def test_videotoolbox_smoke_test_uses_macos_system_memory(monkeypatch) -> None:
+    captured: list[list[str]] = []
+
+    def fake_run(arguments, **_kwargs):
+        captured.append(arguments)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    available, error = transcoding._test_hardware_encoder("ffmpeg-test", "h264_videotoolbox")
+
+    assert available is True
+    assert error is None
+    assert "h264_videotoolbox" in captured[0]
+    assert "-init_hw_device" not in captured[0]
+    assert "-vf" not in captured[0]
+
+
+def test_storage_profile_prefers_videotoolbox_on_macos() -> None:
+    capabilities = TranscodeCapabilitiesRead(
+        ffmpeg_available=True,
+        ffmpeg_path="ffmpeg-test",
+        encoders=[
+            TranscodeEncoderCapability(
+                name="hevc_videotoolbox",
+                codec="hevc",
+                hardware=True,
+                tested=True,
+                available=True,
+            ),
+            TranscodeEncoderCapability(name="libx265", codec="hevc"),
+        ],
+    )
+
+    plan = transcoding._profile_plan(_media_file_for_profile(), "storage", capabilities, execution_mode="hardware_required")
+
+    assert plan.video_streams[0].encoder == "hevc_videotoolbox"
+
+
+def _media_file_for_profile() -> SimpleNamespace:
+    return SimpleNamespace(
+        video_streams=[SimpleNamespace(stream_index=0)],
+        audio_streams=[],
+        subtitle_streams=[],
+        primary_video_hdr_type=None,
+    )
+
+
+def test_macos_capabilities_expose_verified_videotoolbox_device(monkeypatch, tmp_path) -> None:
+    def fake_run(arguments, **_kwargs):
+        if "-version" in arguments:
+            return SimpleNamespace(returncode=0, stdout="ffmpeg version test\n", stderr="")
+        if "-encoders" in arguments:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=" V..... libx264 H.264\n V..... h264_videotoolbox VideoToolbox H.264\n"
+                " V..... hevc_videotoolbox VideoToolbox HEVC\n",
+                stderr="",
+            )
+        if "-muxers" in arguments:
+            return SimpleNamespace(returncode=0, stdout=" E  matroska Matroska\n E  mp4 MP4\n", stderr="")
+        if "-h" in arguments:
+            return SimpleNamespace(returncode=0, stdout="  -cq <float> constant quality\n", stderr="")
+        if "-c:v" in arguments:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(arguments)
+
+    monkeypatch.setattr(transcoding, "_is_macos", lambda: True)
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+    capabilities = transcoding.get_transcode_capabilities(_settings(tmp_path), refresh=True)
+
+    assert [device.id for device in capabilities.devices] == ["videotoolbox0"]
+    assert capabilities.devices[0].status == "available"
+    assert capabilities.devices[0].vendor == "apple"
+    assert capabilities.devices[0].encoder_codecs == ["h264", "hevc"]
+
+
 def test_capabilities_expose_intel_hevc_and_av1_encoders(monkeypatch, tmp_path) -> None:
     render_node = tmp_path / "renderD128"
     render_node.touch()

@@ -122,6 +122,7 @@ def _file(**overrides):
 def test_shipped_profiles_load_with_matching_ids(tmp_path) -> None:
     settings = Settings(config_path=tmp_path)
     assert [profile.id for profile in list_profiles(settings, "hardware")] == [
+        "amd-ryzen-7-7840hs",
         "apple-tv-2nd-gen",
         "apple-tv-3rd-gen",
         "apple-tv-4k-1st-gen",
@@ -129,6 +130,8 @@ def test_shipped_profiles_load_with_matching_ids(tmp_path) -> None:
         "apple-tv-4k-3rd-gen",
         "apple-tv-hd",
         "fire-tv-stick-4k-max-2nd-gen",
+        "google-pixel-9",
+        "google-tv-streamer-4k",
         "onn-4k-2023",
     ]
     assert {profile.id for profile in list_profiles(settings, "software")} == {

@@ -181,8 +181,10 @@ def _encoder_quality_spec(name: str) -> tuple[str, int, int, int, int] | None:
     if normalized.endswith("_qsv"):
         codec = _hardware_encoder_codec(normalized)
         return QSV_QUALITY_SPECS.get(codec) if codec else None
-    if any(normalized.endswith(suffix) for suffix in ("_nvenc", "_amf", "_videotoolbox")):
+    if any(normalized.endswith(suffix) for suffix in ("_nvenc", "_amf")):
         return ("cq", 0, 51, 23, 1)
+    # VideoToolbox does not expose FFmpeg's generic cq/crf/qp controls in the
+    # bundled macOS build. Its rate control is bitrate-driven instead.
     return None
 
 
@@ -268,6 +270,10 @@ def _is_linux() -> bool:
     return sys.platform.startswith("linux")
 
 
+def _is_macos() -> bool:
+    return sys.platform == "darwin"
+
+
 def _resolve_hardware_render_node(configured: str | Path | None) -> str | None:
     """Resolve the DRM render node used for Intel VAAPI/QSV operations.
 
@@ -351,6 +357,10 @@ def _hardware_upload_filter(
         return f"format={_hardware_upload_format(source, effective_pixel_format)},hwupload_cuda"
     if backend == "vaapi":
         upload = "hwupload"
+    elif backend == "videotoolbox":
+        # VideoToolbox accepts system-memory frames and is negotiated by the
+        # macOS framework; it does not use Linux-style upload filters.
+        return ""
     elif qsv_direct:
         # With a direct QSV device, filter_hw_device already points at the
         # target surface pool. Extra frames prevent short sources from
@@ -757,13 +767,44 @@ def _detect_capabilities_cached(
             device.status = "available" if nvidia_available else "unavailable"
             device.failure_reason = None if nvidia_available else nvidia_failure
             device.last_tested_at = tested_at
+    videotoolbox_devices: list[TranscodeHardwareDevice] = []
+    videotoolbox_encoder_names = sorted(
+        name for name in listed_names if name.lower().endswith("_videotoolbox")
+    )
+    if _is_macos() and videotoolbox_encoder_names:
+        videotoolbox_capabilities = [
+            item for item in capabilities if item.name in videotoolbox_encoder_names
+        ]
+        videotoolbox_available = any(item.available for item in videotoolbox_capabilities)
+        videotoolbox_failure = next(
+            (item.test_error for item in videotoolbox_capabilities if item.test_error),
+            "VideoToolbox did not pass its runtime smoke test",
+        )
+        videotoolbox_devices.append(
+            TranscodeHardwareDevice(
+                id="videotoolbox0",
+                name="Apple VideoToolbox",
+                vendor="apple",
+                backend="videotoolbox",
+                encoder_codecs=sorted(
+                    {
+                        VIDEO_ENCODER_CODECS[name]
+                        for name in videotoolbox_encoder_names
+                        if name in VIDEO_ENCODER_CODECS
+                    }
+                ),
+                status="available" if videotoolbox_available else "unavailable",
+                failure_reason=None if videotoolbox_available else videotoolbox_failure,
+                last_tested_at=tested_at,
+            )
+        )
     return TranscodeCapabilitiesRead(
         ffmpeg_available=True,
         ffmpeg_path=ffmpeg_path,
         version=version_line,
         ffmpeg_version=version_line,
         encoders=capabilities,
-        devices=nvidia_devices,
+        devices=[*nvidia_devices, *videotoolbox_devices],
         decoder_codecs=nvidia_decoder_codecs,
         platform=sys.platform,
         last_tested_at=tested_at,
@@ -851,12 +892,12 @@ def _profile_plan(
     elif profile == "storage":
         container = "mkv"
         video_encoder = (
-            _available_encoder(capabilities, "hevc_nvenc", "hevc_qsv", "hevc_vaapi")
+            _available_encoder(capabilities, "hevc_nvenc", "hevc_videotoolbox", "hevc_qsv", "hevc_vaapi")
             if execution_mode != "cpu_only"
             else None
         )
         video_encoder = video_encoder or (
-            _listed_encoder(capabilities, "hevc_nvenc", "hevc_qsv", "hevc_vaapi")
+            _listed_encoder(capabilities, "hevc_nvenc", "hevc_videotoolbox", "hevc_qsv", "hevc_vaapi")
             if execution_mode == "hardware_required"
             else None
         ) or _available_encoder(capabilities, "libx265") or "libx265"
@@ -1209,7 +1250,7 @@ def _append_stream_options(
             arguments.extend([f"-profile:{specifier}", decision.profile])
         if decision.level:
             arguments.extend([f"-level:{specifier}", decision.level])
-        if decision.preset and hardware_backend != "vaapi":
+        if decision.preset and hardware_backend not in {"vaapi", "videotoolbox"}:
             arguments.extend([f"-preset:{specifier}", decision.preset])
         if decision.gop_size:
             arguments.extend([f"-g:{specifier}", str(decision.gop_size)])
@@ -1239,14 +1280,18 @@ def _nearest_existing_parent(path: Path) -> Path:
     return candidate
 
 
-def _effective_device_id(capabilities: TranscodeCapabilitiesRead, app_settings) -> str | None:
+def _effective_device_id_for_backend(
+    capabilities: TranscodeCapabilitiesRead,
+    app_settings,
+    backend: str,
+) -> str | None:
     selected = app_settings.transcoding.selected_devices
     if isinstance(selected, list):
         for candidate in selected:
-            if any(device.id == candidate and device.backend == "cuda" for device in capabilities.devices):
+            if any(device.id == candidate and device.backend == backend for device in capabilities.devices):
                 return candidate
         return None
-    return next((device.id for device in capabilities.devices if device.backend == "cuda"), None)
+    return next((device.id for device in capabilities.devices if device.backend == backend), None)
 
 
 def effective_cpu_count() -> float:
@@ -1412,7 +1457,7 @@ def validate_transcode_plan(
         for backend in [_hardware_backend(decision.encoder or decision.codec)]
         if backend is not None
     }
-    accelerated_backends = selected_video_backends & {"vaapi", "qsv", "cuda"}
+    accelerated_backends = selected_video_backends & {"vaapi", "qsv", "cuda", "videotoolbox"}
     hardware_backend = (
         next(iter(selected_video_backends))
         if len(selected_video_backends) == 1
@@ -1422,14 +1467,24 @@ def validate_transcode_plan(
     )
     render_node = _resolve_hardware_render_node(getattr(settings, "hardware_render_node", None))
     hardware_device_name: str | None = None
-    device_id = _effective_device_id(capabilities, app_settings) if "cuda" in accelerated_backends else None
-    if "cuda" in accelerated_backends:
+    device_id = next(
+        (
+            _effective_device_id_for_backend(capabilities, app_settings, backend)
+            for backend in ("cuda", "videotoolbox")
+            if backend in accelerated_backends
+        ),
+        None,
+    )
+    if "cuda" in accelerated_backends or "videotoolbox" in accelerated_backends:
+        selected_backend = "cuda" if "cuda" in accelerated_backends else "videotoolbox"
         selected_device = next((device for device in capabilities.devices if device.id == device_id), None)
         if selected_device is None:
-            errors.append("NVIDIA encoding requires a detected CUDA device selected in Transcoding settings")
+            errors.append(
+                f"{selected_backend} encoding requires a detected {selected_backend} device selected in Transcoding settings"
+            )
         elif selected_device.status != "available":
             errors.append(
-                "Selected CUDA device is unavailable: "
+                f"Selected {selected_backend} device is unavailable: "
                 + (selected_device.failure_reason or selected_device.id)
             )
     if execution_mode == "hardware_required":
@@ -1456,14 +1511,15 @@ def validate_transcode_plan(
         str(transcode_capacity(settings, app_settings)["cpu_threads_per_job"]),
     ]
     if accelerated_backends:
-        if "cuda" in accelerated_backends and not device_id:
-            errors.append("NVIDIA encoding requires a selected CUDA device")
-        if accelerated_backends - {"cuda"} and _is_linux() and not render_node:
+        if ("cuda" in accelerated_backends or "videotoolbox" in accelerated_backends) and not device_id:
+            errors.append("Hardware encoding requires a selected detected device")
+        drm_backends = accelerated_backends - {"cuda", "videotoolbox"}
+        if drm_backends and _is_linux() and not render_node:
             errors.append(
                 "Intel VAAPI/QSV encoding requires an available DRM render node "
                 "(for example /dev/dri/renderD128)"
             )
-        elif render_node or accelerated_backends == {"cuda"}:
+        elif render_node or accelerated_backends <= {"cuda", "videotoolbox"}:
             qsv_direct = accelerated_backends == {"qsv"} and _is_linux()
             arguments.extend(
                 _hardware_device_arguments(
@@ -1479,7 +1535,7 @@ def validate_transcode_plan(
                 filter_device = "cu"
                 arguments.extend(["-filter_hw_device", filter_device])
                 hardware_device_name = filter_device
-            else:
+            elif accelerated_backends != {"videotoolbox"}:
                 filter_device = "va" if not qsv_direct else "qs"
                 arguments.extend(["-filter_hw_device", filter_device])
                 hardware_device_name = filter_device

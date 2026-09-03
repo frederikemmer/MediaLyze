@@ -631,8 +631,16 @@ export function main() {
   }
 
   bundleFfprobe(outputDir);
-  const bundledFfmpegPath = bundleFfmpeg(outputDir);
-  verifyBundledFfmpeg(bundledFfmpegPath);
+  const ffmpegSource = resolveBundledFfmpegSource();
+  const sourceExecutablePath = ffmpegSource.kind === "directory"
+    ? path.join(ffmpegSource.sourcePath, ffmpegSource.executableName)
+    : ffmpegSource.sourcePath;
+  // On macOS the dependency bundler re-signs Mach-O binaries, which
+  // necessarily changes their bytes. Verify the pinned source artifact before
+  // that packaging step, then let the desktop smoke test validate the final
+  // signed runtime binary.
+  verifyBundledFfmpeg(sourceExecutablePath);
+  bundleFfmpeg(outputDir, { resolveSource: () => ffmpegSource });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
