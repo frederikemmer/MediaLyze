@@ -356,7 +356,9 @@
     "ignorePatternsRemoveAria": "Видалити шаблон ігнорування {{index}}",
     "resolutionCategories": {
       "title": "Категорії роздільності",
-      "restoreDefaults": "Відновити стандартні"
+      "restoreDefaults": "Відновити стандартні",
+      "addCategory": "Додати категорію",
+      "newCategory": "Нова категорія"
     },
     "patternRecognition": {
       "title": "Розпізнавання папок і шаблонів",

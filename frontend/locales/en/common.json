@@ -356,7 +356,9 @@
     "ignorePatternsRemoveAria": "Remove ignore pattern {{index}}",
     "resolutionCategories": {
       "title": "Resolution categories",
-      "restoreDefaults": "Restore defaults"
+      "restoreDefaults": "Restore defaults",
+      "addCategory": "Add category",
+      "newCategory": "New category"
     },
     "patternRecognition": {
       "title": "Folder & pattern recognition",

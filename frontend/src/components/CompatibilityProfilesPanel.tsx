@@ -1643,15 +1643,15 @@ export function CompatibilityProfilesPanel() {
           {t("compatibilityProfiles.developmentNote")}
         </p>
         <div
-          className="quality-profile-segments"
+          className="library-history-range-toggle"
           role="tablist"
           aria-label={t("compatibilityProfiles.title")}
         >
-          <SlidingTogglePill activeKey={tab} className="nav-active-pill quality-profile-segment-pill" />
+          <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
           {(["hardware", "software", "compatibility"] as ProfileTab[]).map((key) => (
             <button
               type="button"
-              className={`quality-profile-segment${tab === key ? " is-active" : ""}`}
+              className={`library-history-range-button${tab === key ? " active" : ""}`}
               data-toggle-key={key}
               aria-pressed={tab === key}
               key={key}
@@ -1663,7 +1663,9 @@ export function CompatibilityProfilesPanel() {
                 setCompatibilityDraft(null);
               }}
             >
-              <span>{t(`compatibilityProfiles.tabs.${key}`)}</span>
+              <span className="library-history-range-button-content">
+                <span>{t(`compatibilityProfiles.tabs.${key}`)}</span>
+              </span>
             </button>
           ))}
         </div>

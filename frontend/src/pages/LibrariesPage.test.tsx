@@ -1621,14 +1621,25 @@ describe("LibrariesPage ignore patterns", () => {
 
     renderPage({ activePanel: "resolutionCategories" });
 
-    fireEvent.change(await screen.findByPlaceholderText("New category"), { target: { value: "480p" } });
-    fireEvent.change(screen.getByLabelText("Min width", { selector: "#resolution-category-new-width" }), {
+    const addButton = await screen.findByRole("button", { name: "Add category" });
+    await screen.findByDisplayValue("4k");
+    await waitFor(() => expect(addButton).toBeEnabled());
+    expect(addButton).toHaveClass("secondary", "small", "settings-panel-header-action", "resolution-category-add");
+    expect(addButton.closest(".resolution-category-table-shell")).toBeNull();
+    expect(screen.queryByPlaceholderText("New category")).not.toBeInTheDocument();
+
+    fireEvent.click(addButton);
+
+    const newLabelInput = await screen.findByPlaceholderText("New category");
+    const newRow = newLabelInput.closest("tr");
+    expect(newRow).toHaveClass("resolution-category-new-row");
+    fireEvent.change(newLabelInput, { target: { value: "480p" } });
+    fireEvent.change(within(newRow as HTMLElement).getByLabelText("Min width"), {
       target: { value: "854" },
     });
-    fireEvent.change(screen.getByLabelText("Min height", { selector: "#resolution-category-new-height" }), {
-      target: { value: "480" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add resolution category" }));
+    const heightInput = within(newRow as HTMLElement).getByLabelText("Min height");
+    fireEvent.change(heightInput, { target: { value: "480" } });
+    fireEvent.blur(heightInput);
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1660,6 +1671,11 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     fireEvent.click(await screen.findByRole("button", { name: "Quality profiles" }));
+    const mediaTypeTabs = await screen.findByRole("tablist", { name: "Media type" });
+    expect(mediaTypeTabs).toHaveClass("library-history-range-toggle");
+    expect(mediaTypeTabs.querySelector(".library-history-range-pill")).toBeInTheDocument();
+    expect(within(mediaTypeTabs).getAllByRole("button")).toHaveLength(3);
+    expect(within(mediaTypeTabs).getByRole("button", { name: "Video" })).toHaveClass("library-history-range-button", "active");
     expect(await screen.findByText("Visual density")).toBeInTheDocument();
     expect(screen.getByText("Video codec")).toBeInTheDocument();
   });
@@ -1946,11 +1962,11 @@ describe("LibrariesPage settings panels", () => {
 
     expect(await screen.findByLabelText("Interface language")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Ukrainian" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add resolution category" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^resolution categories$/i }));
 
-    expect(await screen.findByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add category" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
   });
@@ -1986,7 +2002,7 @@ describe("LibrariesPage settings panels", () => {
 
     fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));
 
-    expect(await screen.findByRole("button", { name: "Add resolution category" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add category" })).toBeInTheDocument();
     expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
     expect(menu).toHaveAttribute("aria-hidden", "true");
     expect(await screen.findByRole("button", { name: "Open settings menu" })).toHaveTextContent(

@@ -356,7 +356,9 @@
     "ignorePatternsRemoveAria": "Eliminar ignore pattern {{index}}",
     "resolutionCategories": {
       "title": "Categorías de resolución",
-      "restoreDefaults": "Restaurar valores predeterminados"
+      "restoreDefaults": "Restaurar valores predeterminados",
+      "addCategory": "Añadir categoría",
+      "newCategory": "Nueva categoría"
     },
     "patternRecognition": {
       "title": "Reconocimiento de carpetas y patrones",

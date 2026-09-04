@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid
 - refine Pattern recognition tooltips, external documentation links, borderless restore controls, and main-section separators
 - move Resolution categories reset into a borderless tooltip-backed header icon
+- align Resolution categories editing with profile settings using a bottom add action and animated delete icons
+- improve quality-profile metric weight contrast by using the theme ink color for weight values
+- align quality and compatibility profile type selectors with the rectangular segmented-toggle control
 - align library connector and path actions with compact rectangular controls and smaller settings inputs
 - streamline connector controls with an enabled toggle, API-key dialog replacement flow, and compact Test action
 - constrain stream editing to safe Copy / Encode / Remove controls with encoder-aware quality and bitrate sliders, aspect-ratio-preserving downscale presets, localized BCP 47 language selection, and copy-by-default profiles

@@ -1,6 +1,6 @@
 import i18n from "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildProfileIssue, CompatibilityProfilesPanel } from "./CompatibilityProfilesPanel";
@@ -116,6 +116,11 @@ describe("CompatibilityProfilesPanel", () => {
 
     render(<CompatibilityProfilesPanel />);
 
+    const tabs = await screen.findByRole("tablist", { name: "Hardware & software profiles" });
+    expect(tabs).toHaveClass("library-history-range-toggle");
+    expect(tabs.querySelector(".library-history-range-pill")).toBeInTheDocument();
+    expect(within(tabs).getAllByRole("button")).toHaveLength(3);
+    expect(within(tabs).getByRole("button", { name: "Hardware" })).toHaveClass("library-history-range-button", "active");
     expect(await screen.findByRole("button", { name: "Combination" })).toBeInTheDocument();
     const trigger = await screen.findByRole("button", { name: "Test Device" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
