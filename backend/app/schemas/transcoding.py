@@ -135,6 +135,35 @@ class TranscodeCapabilitiesRead(BaseModel):
     error: str | None = None
 
 
+class TranscodeMatrixCellRead(BaseModel):
+    decode_codec: str
+    encode_codec: str
+    status: Literal["hardware", "software", "unsupported", "not_tested"]
+    decoder: str | None = None
+    encoder: str | None = None
+    max_parallel_jobs: int | None = Field(default=None, ge=1)
+    max_parallel_jobs_is_lower_bound: bool = False
+    detail: str | None = None
+
+
+class TranscodeDeviceMatrixRead(BaseModel):
+    device_id: str
+    device_name: str
+    backend: str
+    tested_at: datetime
+    decode_codecs: list[str] = Field(default_factory=list)
+    encode_codecs: list[str] = Field(default_factory=list)
+    cells: list[TranscodeMatrixCellRead] = Field(default_factory=list)
+
+
+class TranscodeCapabilityMatrixRead(BaseModel):
+    status: Literal["not_run", "completed", "failed"] = "not_run"
+    tested_at: datetime | None = None
+    ffmpeg_version: str | None = None
+    matrices: list[TranscodeDeviceMatrixRead] = Field(default_factory=list)
+    error: str | None = None
+
+
 class TranscodeValidationRead(BaseModel):
     valid: bool
     output_path: str

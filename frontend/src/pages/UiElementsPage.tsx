@@ -29,6 +29,7 @@ import {
   FileVideo,
   Files,
   Folder,
+  FlaskConical,
   GitCompare,
   History,
   House,
@@ -2561,7 +2562,7 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Transcoding runtime settings and capability matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-matrix", "transcode-device-matrix", "transcode-matrix-table", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">
                   <div className="panel-title-row">
                     <h2>Transcoding runtime</h2>
@@ -2571,8 +2572,8 @@ export function UiElementsPage() {
                   </div>
                   <div className="async-panel-header-status">
                     <button type="button" className="secondary small settings-panel-header-action">
-                      <RefreshCw aria-hidden="true" size={16} />
-                      Run hardware probe
+                      <FlaskConical aria-hidden="true" size={16} />
+                      Test codec matrix
                     </button>
                   </div>
                 </div>
@@ -2592,7 +2593,19 @@ export function UiElementsPage() {
                       </select>
                     </div>
                   </section>
-                  <section className="transcode-capability-diagnostics"><div className="field-label-row"><h3>Hardware diagnostics</h3><span className="field-hint">Last tested now</span></div><div className="transcode-capability-item"><div><strong>NVIDIA GeForce RTX 3080</strong><span>cuda · cuda0 · Unavailable</span></div><p className="notice compact error">NVENC probe failed: driver API is older than the FFmpeg requirement.</p></div></section>
+                  <details className="transcode-capability-matrix" open>
+                    <summary><span><strong>Transcoding capability matrix</strong><small>Decode vertically · encode horizontally</small></span><span className="field-hint">Tested now</span></summary>
+                    <div className="transcode-capability-matrix-body">
+                      <div className="transcode-matrix-meta"><span>FFmpeg 8.0</span><span>4+ means the tested limit was not reached.</span></div>
+                      <details className="transcode-device-matrix" open>
+                        <summary><span><strong>NVIDIA GeForce RTX 3080</strong><small>cuda · cuda0</small></span></summary>
+                        <div className="transcode-matrix-scroll" tabIndex={0}>
+                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">CPU</td><td className="transcode-matrix-software">CPU</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
+                        </div>
+                        <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
+                      </details>
+                    </div>
+                  </details>
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
                 </div>
               </VariantCard>

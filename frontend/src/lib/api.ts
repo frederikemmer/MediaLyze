@@ -1415,6 +1415,35 @@ export type TranscodeCapabilities = {
   error: string | null;
 };
 
+export type TranscodeMatrixCell = {
+  decode_codec: string;
+  encode_codec: string;
+  status: "hardware" | "software" | "unsupported" | "not_tested";
+  decoder: string | null;
+  encoder: string | null;
+  max_parallel_jobs: number | null;
+  max_parallel_jobs_is_lower_bound: boolean;
+  detail: string | null;
+};
+
+export type TranscodeDeviceMatrix = {
+  device_id: string;
+  device_name: string;
+  backend: string;
+  tested_at: string;
+  decode_codecs: string[];
+  encode_codecs: string[];
+  cells: TranscodeMatrixCell[];
+};
+
+export type TranscodeCapabilityMatrix = {
+  status: "not_run" | "completed" | "failed";
+  tested_at: string | null;
+  ffmpeg_version: string | null;
+  matrices: TranscodeDeviceMatrix[];
+  error: string | null;
+};
+
 export type TranscodeValidation = {
   valid: boolean;
   output_path: string;
@@ -2439,6 +2468,10 @@ export const api = {
     request<MediaFileHistory>(`/files/${id}/history`, { signal }),
   transcodeCapabilities: (refresh = false) =>
     request<TranscodeCapabilities>(`/transcoding/capabilities${refresh ? "?refresh=true" : ""}`),
+  transcodeCapabilityMatrix: () =>
+    request<TranscodeCapabilityMatrix>("/transcoding/capability-matrix"),
+  testTranscodeCapabilityMatrix: () =>
+    request<TranscodeCapabilityMatrix>("/transcoding/capability-matrix/test", { method: "POST" }),
   fileTranscode: (id: string | number, signal?: AbortSignal) =>
     request<FileTranscode>(`/files/${id}/transcode`, { signal }),
   validateFileTranscode: (id: string | number, plan: TranscodePlan, signal?: AbortSignal) =>

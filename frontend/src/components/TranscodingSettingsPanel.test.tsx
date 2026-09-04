@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
   type AppSettings,
+  type TranscodeCapabilityMatrix,
   type TranscodeCapabilities,
   type TranscodeHardwareDevice,
   type TranscodingSettings,
@@ -80,9 +81,40 @@ const capabilities: TranscodeCapabilities = {
   error: null,
 };
 
+const notRunMatrix: TranscodeCapabilityMatrix = {
+  status: "not_run",
+  tested_at: null,
+  ffmpeg_version: null,
+  matrices: [],
+  error: null,
+};
+
+const completedMatrix: TranscodeCapabilityMatrix = {
+  status: "completed",
+  tested_at: "2026-09-04T12:00:00Z",
+  ffmpeg_version: "ffmpeg version test",
+  error: null,
+  matrices: [{
+    device_id: "cuda0",
+    device_name: "NVIDIA GeForce RTX 3080",
+    backend: "cuda",
+    tested_at: "2026-09-04T12:00:00Z",
+    decode_codecs: ["hevc", "av1"],
+    encode_codecs: ["hevc", "av1"],
+    cells: [
+      { decode_codec: "hevc", encode_codec: "hevc", status: "hardware", decoder: "cuda:hevc", encoder: "hevc_nvenc", max_parallel_jobs: 4, max_parallel_jobs_is_lower_bound: true, detail: null },
+      { decode_codec: "hevc", encode_codec: "av1", status: "hardware", decoder: "cuda:hevc", encoder: "av1_nvenc", max_parallel_jobs: 3, max_parallel_jobs_is_lower_bound: false, detail: null },
+      { decode_codec: "av1", encode_codec: "hevc", status: "software", decoder: "software:auto", encoder: "libx265", max_parallel_jobs: null, max_parallel_jobs_is_lower_bound: false, detail: null },
+      { decode_codec: "av1", encode_codec: "av1", status: "unsupported", decoder: null, encoder: null, max_parallel_jobs: null, max_parallel_jobs_is_lower_bound: false, detail: null },
+    ],
+  }],
+};
+
 describe("TranscodingSettingsPanel", () => {
   beforeEach(() => {
     vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
+    vi.spyOn(api, "transcodeCapabilityMatrix").mockResolvedValue(notRunMatrix);
+    vi.spyOn(api, "testTranscodeCapabilityMatrix").mockResolvedValue(completedMatrix);
     vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
   });
 
@@ -113,5 +145,18 @@ describe("TranscodingSettingsPanel", () => {
         selected_devices: ["qsv-renderD128", "vaapi-renderD128"],
       }),
     })));
+  });
+
+  it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Test codec matrix" }));
+
+    await waitFor(() => expect(api.testTranscodeCapabilityMatrix).toHaveBeenCalledTimes(1));
+    const matrix = await screen.findByRole("table");
+    expect(within(matrix).getByLabelText(/H\.265 \/ HEVC → AV1: HW · 3×/)).toBeInTheDocument();
+    expect(within(matrix).getByLabelText(/AV1 → H\.265 \/ HEVC: CPU/)).toBeInTheDocument();
+    expect(within(matrix).getByLabelText(/AV1 → AV1: —/)).toBeInTheDocument();
+    expect(screen.getByText("Hardware · simultaneous sessions")).toBeInTheDocument();
   });
 });

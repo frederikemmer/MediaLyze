@@ -12690,8 +12690,7 @@ html[data-theme="dark"] .transcoding-panel select.transcode-control {
   gap: 0.55rem 0.65rem;
 }
 
-.transcode-replacement-warning,
-.transcode-capability-diagnostics {
+.transcode-replacement-warning {
   display: grid;
   gap: 0.65rem;
 }
@@ -12701,42 +12700,174 @@ html[data-theme="dark"] .transcoding-panel select.transcode-control {
   gap: 0.35rem;
 }
 
-.transcode-capability-diagnostics {
-  padding: 0.8rem;
+.transcode-capability-matrix {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 86%, transparent);
+  overflow: hidden;
 }
 
-.transcode-capability-diagnostics h3 {
-  margin: 0;
-}
-
-.transcode-capability-list {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.transcode-capability-item {
+.transcode-capability-matrix > summary,
+.transcode-device-matrix > summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
-  flex-wrap: wrap;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--nested-surface);
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  cursor: pointer;
+  list-style: none;
 }
 
-.transcode-capability-item > div {
+.transcode-capability-matrix > summary::-webkit-details-marker,
+.transcode-device-matrix > summary::-webkit-details-marker {
+  display: none;
+}
+
+.transcode-capability-matrix > summary:hover,
+.transcode-capability-matrix > summary:focus-visible,
+.transcode-device-matrix > summary:hover,
+.transcode-device-matrix > summary:focus-visible {
+  background: color-mix(in srgb, var(--accent-2) 7%, transparent);
+  outline: none;
+}
+
+.transcode-capability-matrix > summary > span:first-child,
+.transcode-device-matrix > summary > span {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
-.transcode-capability-item > div > span {
+.transcode-capability-matrix summary small {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.transcode-capability-matrix-body {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0 0.8rem 0.8rem;
+}
+
+.transcode-matrix-meta,
+.transcode-matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.transcode-device-matrix {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--nested-surface);
+  overflow: hidden;
+}
+
+.transcode-device-matrix > summary {
+  padding: 0.55rem 0.65rem;
+}
+
+.transcode-matrix-scroll {
+  overflow-x: auto;
+  padding: 0 0.55rem 0.55rem;
+  scrollbar-width: thin;
+}
+
+.transcode-matrix-scroll:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-2) 65%, transparent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.transcode-matrix-table {
+  width: 100%;
+  min-width: 560px;
+  border-spacing: 3px;
+  table-layout: fixed;
+  font-size: 0.72rem;
+}
+
+.transcode-matrix-table th,
+.transcode-matrix-table td {
+  height: 34px;
+  padding: 0.3rem 0.35rem;
+  border-radius: 6px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.transcode-matrix-table th {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.transcode-matrix-table tbody th {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transcode-matrix-table .transcode-matrix-corner {
+  width: 108px;
+  text-align: left;
+  font-size: 0.65rem;
+}
+
+.transcode-matrix-table td {
+  border: 1px solid transparent;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.transcode-matrix-hardware {
+  color: color-mix(in srgb, var(--accent-2) 78%, var(--ink));
+  background: color-mix(in srgb, var(--accent-2) 17%, transparent);
+  border-color: color-mix(in srgb, var(--accent-2) 36%, var(--border)) !important;
+}
+
+.transcode-matrix-software {
+  color: color-mix(in srgb, var(--accent-3) 78%, var(--ink));
+  background: color-mix(in srgb, var(--accent-3) 13%, transparent);
+  border-color: color-mix(in srgb, var(--accent-3) 30%, var(--border)) !important;
+}
+
+.transcode-matrix-unsupported {
+  color: color-mix(in srgb, #b13b32 78%, var(--ink));
+  background: color-mix(in srgb, #b13b32 10%, transparent);
+  border-color: color-mix(in srgb, #b13b32 25%, var(--border)) !important;
+}
+
+.transcode-matrix-not_tested {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  border-color: var(--border) !important;
+}
+
+.transcode-matrix-legend {
+  padding: 0 0.65rem 0.6rem;
+}
+
+.transcode-matrix-legend span {
+  padding: 0.18rem 0.38rem;
+  border: 1px solid;
+  border-radius: 999px;
+}
+
+@media (max-width: 640px) {
+  .transcode-capability-matrix > summary {
+    align-items: flex-start;
+  }
+
+  .transcode-capability-matrix > summary > .field-hint {
+    max-width: 8rem;
+    text-align: right;
+  }
+
+  .transcode-capability-matrix-body {
+    padding-inline: 0.55rem;
+  }
 }
 
 .notice.warning {

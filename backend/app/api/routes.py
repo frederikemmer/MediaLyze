@@ -107,6 +107,7 @@ from backend.app.schemas.scan import (
 from backend.app.schemas.storage_map import LibraryStorageMapRead
 from backend.app.schemas.transcoding import (
     FileTranscodeRead,
+    TranscodeCapabilityMatrixRead,
     TranscodeCapabilitiesRead,
     TranscodeJobPageRead,
     TranscodeJobRead,
@@ -242,6 +243,11 @@ from backend.app.services.transcoding import (
     list_transcode_jobs,
     serialize_transcode_job,
     validate_transcode_plan,
+)
+from backend.app.services.transcode_matrix import (
+    TranscodeMatrixBusyError,
+    load_transcode_matrix,
+    run_transcode_matrix_test,
 )
 from backend.app.services.path_access import inspect_desktop_path
 from backend.app.services.quality_profiles import (
@@ -2826,6 +2832,23 @@ def transcoding_capabilities(
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeCapabilitiesRead:
     return get_transcode_capabilities(settings, refresh=refresh)
+
+
+@router.get("/transcoding/capability-matrix", response_model=TranscodeCapabilityMatrixRead)
+def transcoding_capability_matrix(
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeCapabilityMatrixRead:
+    return load_transcode_matrix(settings)
+
+
+@router.post("/transcoding/capability-matrix/test", response_model=TranscodeCapabilityMatrixRead)
+def transcoding_capability_matrix_test(
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeCapabilityMatrixRead:
+    try:
+        return run_transcode_matrix_test(settings)
+    except TranscodeMatrixBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/files/{file_id}/transcode", response_model=FileTranscodeRead)

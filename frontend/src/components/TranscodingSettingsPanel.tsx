@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Save } from "lucide-react";
+import { FlaskConical, Save } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
-import { api, type AppSettings, type TranscodeCapabilities, type TranscodeHardwareDevice, type TranscodingSettings } from "../lib/api";
+import {
+  api,
+  type AppSettings,
+  type TranscodeCapabilities,
+  type TranscodeCapabilityMatrix,
+  type TranscodeHardwareDevice,
+  type TranscodeMatrixCell,
+  type TranscodingSettings,
+} from "../lib/api";
+import { formatCodecLabel } from "../lib/format";
 
 type TranscodingSettingsPanelProps = {
   settings: AppSettings;
@@ -34,15 +43,6 @@ function cloneTranscodingSettings(settings: TranscodingSettings): TranscodingSet
   };
 }
 
-function deviceStatusLabel(
-  device: TranscodeHardwareDevice,
-  t: (key: string) => string,
-): string {
-  if (device.status === "available") return t("transcoding.deviceAvailable");
-  if (device.status === "unavailable") return t("transcoding.deviceUnavailable");
-  return t("transcoding.deviceNotDetected");
-}
-
 type DeviceSelectionOption = {
   key: string;
   label: string;
@@ -52,6 +52,24 @@ type DeviceSelectionOption = {
 
 function deviceSelectionKey(device: TranscodeHardwareDevice): string {
   return device.render_node ? `render:${device.render_node}` : `device:${device.id}`;
+}
+
+function matrixCellLabel(cell: TranscodeMatrixCell, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (cell.status === "hardware") {
+    const suffix = cell.max_parallel_jobs_is_lower_bound ? "+" : "";
+    return t("transcoding.matrixHardwareCell", { count: `${cell.max_parallel_jobs ?? 1}${suffix}` });
+  }
+  if (cell.status === "software") return t("transcoding.matrixSoftwareCell");
+  if (cell.status === "not_tested") return t("transcoding.matrixNotTestedCell");
+  return t("transcoding.matrixUnsupportedCell");
+}
+
+function cellFor(
+  cells: TranscodeMatrixCell[],
+  decodeCodec: string,
+  encodeCodec: string,
+): TranscodeMatrixCell | undefined {
+  return cells.find((cell) => cell.decode_codec === decodeCodec && cell.encode_codec === encodeCodec);
 }
 
 function deviceSelectionLabel(devices: TranscodeHardwareDevice[]): string {
@@ -91,7 +109,10 @@ export function TranscodingSettingsPanel({
   const currentSettings = settings.transcoding ?? DEFAULT_TRANSCODING_SETTINGS;
   const [draft, setDraft] = useState<TranscodingSettings>(() => cloneTranscodingSettings(currentSettings));
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
+  const [matrix, setMatrix] = useState<TranscodeCapabilityMatrix | null>(null);
   const [loadingCapabilities, setLoadingCapabilities] = useState(true);
+  const [testingMatrix, setTestingMatrix] = useState(false);
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -114,7 +135,29 @@ export function TranscodingSettingsPanel({
 
   useEffect(() => {
     void refreshCapabilities();
+    void api.transcodeCapabilityMatrix()
+      .then((result) => {
+        setMatrix(result);
+        setMatrixOpen(result.status === "completed" && result.matrices.length > 0);
+      })
+      .catch((reason) => setError((reason as Error).message));
   }, [refreshCapabilities]);
+
+  async function runMatrixTest() {
+    setTestingMatrix(true);
+    setMatrixOpen(true);
+    setError(null);
+    try {
+      const result = await api.testTranscodeCapabilityMatrix();
+      setMatrix(result);
+      setMatrixOpen(true);
+      await refreshCapabilities();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setTestingMatrix(false);
+    }
+  }
 
   function updateDraft<K extends keyof TranscodingSettings>(key: K, value: TranscodingSettings[K]) {
     setSaved(false);
@@ -144,7 +187,6 @@ export function TranscodingSettingsPanel({
   }
 
   const deviceSelectionOptions = buildDeviceSelectionOptions(capabilities?.devices ?? []);
-  const hardwareEncoders = capabilities?.encoders.filter((encoder) => encoder.hardware) ?? [];
   const selectedDevices = Array.isArray(draft.selected_devices) ? draft.selected_devices : [];
   const selectedDeviceOption =
     draft.selected_devices === "auto" || selectedDevices.length === 0
@@ -170,11 +212,11 @@ export function TranscodingSettingsPanel({
         <button
           type="button"
           className="secondary small settings-panel-header-action"
-          onClick={() => void refreshCapabilities(true)}
-          disabled={loadingCapabilities}
+          onClick={() => void runMatrixTest()}
+          disabled={loadingCapabilities || testingMatrix}
         >
-          <RefreshCw className={loadingCapabilities ? "spin" : undefined} aria-hidden="true" size={16} />
-          {t("transcoding.refreshProbe")}
+          <FlaskConical className={testingMatrix ? "spin" : undefined} aria-hidden="true" size={16} />
+          {testingMatrix ? t("transcoding.matrixTesting") : t("transcoding.matrixStartTest")}
         </button>
       }
     >
@@ -354,46 +396,66 @@ export function TranscodingSettingsPanel({
           ) : null}
         </section>
 
-        <section className="transcode-capability-diagnostics">
-          <div className="field-label-row">
-            <h3>{t("transcoding.hardwareDiagnostics")}</h3>
-            {capabilities?.last_tested_at ? <span className="field-hint">{capabilities.last_tested_at}</span> : null}
-          </div>
-          {loadingCapabilities ? <p className="field-hint">{t("panel.loading")}</p> : null}
-          {capabilities && !loadingCapabilities ? (
-            <>
-              <p className="field-hint">
-                {t("transcoding.ffmpeg")}: {capabilities.version ?? capabilities.ffmpeg_path}
-              </p>
-              {!capabilities.ffmpeg_available ? <div className="notice error">{capabilities.error ?? t("transcoding.ffmpegUnavailable")}</div> : null}
-              {!capabilities.devices?.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
-              <div className="transcode-capability-list">
-                {(capabilities.devices ?? []).map((device) => (
-                  <div className="transcode-capability-item" key={device.id}>
-                    <div>
-                      <strong>{device.name}</strong>
-                      <span>{device.backend} · {device.id} · {deviceStatusLabel(device, t)}</span>
-                    </div>
-                    {device.failure_reason ? <p className="notice compact error">{device.failure_reason}</p> : null}
-                  </div>
-                ))}
-              </div>
-              {hardwareEncoders.length ? (
-                <div className="transcode-capability-list">
-                  {hardwareEncoders.map((encoder) => (
-                    <div className="transcode-capability-item" key={encoder.name}>
-                      <span>{encoder.name}</span>
-                      <span className={`badge ${encoder.available ? "transcode-status-completed" : "transcode-status-failed"}`}>
-                        {encoder.available ? t("transcoding.deviceAvailable") : t("transcoding.deviceUnavailable")}
-                      </span>
-                      {!encoder.available && encoder.test_error ? <p className="notice compact error">{encoder.test_error}</p> : null}
-                    </div>
-                  ))}
+        <details
+          className="transcode-capability-matrix"
+          open={matrixOpen}
+          onToggle={(event) => setMatrixOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <span>
+              <strong>{t("transcoding.matrixTitle")}</strong>
+              <small>{t("transcoding.matrixAxisSummary")}</small>
+            </span>
+            {matrix?.tested_at ? <span className="field-hint">{new Date(matrix.tested_at).toLocaleString()}</span> : null}
+          </summary>
+          <div className="transcode-capability-matrix-body">
+            <div className="transcode-matrix-meta">
+              <span>{t("transcoding.ffmpeg")}: {matrix?.ffmpeg_version ?? capabilities?.version ?? capabilities?.ffmpeg_path}</span>
+              <span>{t("transcoding.matrixConcurrencyPerDirectionHint")}</span>
+            </div>
+            {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
+            {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
+            {!testingMatrix && matrix?.status === "not_run" ? <div className="notice">{t("transcoding.matrixNotRun")}</div> : null}
+            {!testingMatrix && matrix?.status === "completed" && !matrix.matrices.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
+            {matrix?.matrices.map((deviceMatrix, index) => (
+              <details className="transcode-device-matrix" key={deviceMatrix.device_id} open={index === 0}>
+                <summary>
+                  <span><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {deviceMatrix.device_id}</small></span>
+                </summary>
+                <div className="transcode-matrix-scroll" tabIndex={0}>
+                  <table className="transcode-matrix-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="transcode-matrix-corner">{t("transcoding.matrixDecodeAxis")} ↓<br />{t("transcoding.matrixEncodeAxis")} →</th>
+                        {deviceMatrix.encode_codecs.map((codec) => <th scope="col" key={codec}>{formatCodecLabel(codec, "video")}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deviceMatrix.decode_codecs.map((decodeCodec) => (
+                        <tr key={decodeCodec}>
+                          <th scope="row">{formatCodecLabel(decodeCodec, "video")}</th>
+                          {deviceMatrix.encode_codecs.map((encodeCodec) => {
+                            const cell = cellFor(deviceMatrix.cells, decodeCodec, encodeCodec);
+                            if (!cell) return <td key={encodeCodec}>—</td>;
+                            const label = matrixCellLabel(cell, t);
+                            const title = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}: ${label}${cell.detail ? ` · ${cell.detail}` : ""}`;
+                            return <td className={`transcode-matrix-${cell.status}`} key={encodeCodec} title={title} aria-label={title}>{label}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ) : null}
-            </>
-          ) : null}
-        </section>
+                <div className="transcode-matrix-legend" aria-label={t("transcoding.matrixLegend")}>
+                  <span className="transcode-matrix-hardware">{t("transcoding.matrixHardwareLegend")}</span>
+                  <span className="transcode-matrix-software">{t("transcoding.matrixSoftwareLegend")}</span>
+                  <span className="transcode-matrix-unsupported">{t("transcoding.matrixUnsupportedLegend")}</span>
+                  <span className="transcode-matrix-not_tested">{t("transcoding.matrixNotTestedLegend")}</span>
+                </div>
+              </details>
+            ))}
+          </div>
+        </details>
 
         {draft.default_output_mode === "replace_original" ? (
           <div className="notice warning">
