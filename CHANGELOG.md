@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
 - document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
 - move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern

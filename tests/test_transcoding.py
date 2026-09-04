@@ -775,6 +775,67 @@ def test_linux_capabilities_probe_each_render_node_and_bind_success(monkeypatch,
     assert devices["vaapi-renderD129"].encoder_names == ["h264_vaapi"]
 
 
+def test_linux_amd_apu_media_engine_uses_vaapi_render_node(monkeypatch, tmp_path) -> None:
+    render_node = tmp_path / "renderD128"
+    render_node.touch()
+
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        transcoding,
+        "_linux_render_device_metadata",
+        lambda _node: {
+            "vendor": "amd",
+            "name": "AMD integrated adapter",
+            "driver": "amdgpu",
+            "device_class": "integrated",
+            "render_node": str(render_node),
+        },
+    )
+
+    devices = transcoding._build_hardware_device_inventory(
+        {"h264_qsv", "h264_vaapi"},
+        (str(render_node),),
+        [],
+    )
+
+    assert [(device.backend, device.vendor, device.device_class) for device in devices] == [
+        ("vaapi", "amd", "integrated"),
+    ]
+    assert devices[0].render_node == str(render_node)
+
+
+def test_linux_intel_cpu_igpu_media_engine_exposes_qsv_and_vaapi(monkeypatch, tmp_path) -> None:
+    render_node = tmp_path / "renderD129"
+    render_node.touch()
+
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        transcoding,
+        "_linux_render_device_metadata",
+        lambda _node: {
+            "vendor": "intel",
+            "name": "Intel integrated adapter",
+            "driver": "i915",
+            "device_class": "integrated",
+            "render_node": str(render_node),
+        },
+    )
+
+    devices = transcoding._build_hardware_device_inventory(
+        {"h264_qsv", "h264_vaapi"},
+        (str(render_node),),
+        [],
+    )
+
+    assert {(device.backend, device.vendor, device.device_class) for device in devices} == {
+        ("qsv", "intel", "integrated"),
+        ("vaapi", "intel", "integrated"),
+    }
+    assert {device.render_node for device in devices} == {str(render_node)}
+
+
 def test_storage_profile_prefers_amf_on_windows(monkeypatch) -> None:
     capabilities = TranscodeCapabilitiesRead(
         ffmpeg_available=True,

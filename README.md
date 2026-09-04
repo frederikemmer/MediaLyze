@@ -114,6 +114,10 @@ requiring a vendor-specific setting. The media mount remains read-only;
 transcoded output is written to `./Transcode_Output` by default and can be
 moved with `TRANSCODE_OUTPUT_HOST_DIR`.
 
+This includes integrated media engines: Intel CPU/iGPU Quick Sync and AMD APU/iGPU VCN
+on Linux through `/dev/dri`, plus native Windows QSV/AMF and macOS VideoToolbox in the
+desktop app. A CPU software encoder is used only in the explicit `cpu_only` mode.
+
 
 Open `http://localhost:8080`, or set `HOST_PORT` to expose the container on a different host port.
 The container serves plain HTTP on its internal port `8080` by default - if you want HTTPS, terminate it in a reverse proxy.

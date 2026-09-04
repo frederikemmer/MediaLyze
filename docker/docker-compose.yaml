@@ -4,7 +4,8 @@ services:
     # - Recommended: start with ./start-medialyze.sh on Linux/macOS or
     #   .\start-medialyze.ps1 on Windows. The launcher detects NVIDIA and
     #   Linux /dev/dri access and creates a temporary GPU override.
-    # - Linux AMD/Intel: the host must have its kernel GPU driver loaded and
+    # - Linux AMD/Intel: this also covers Intel CPU/iGPU Quick Sync and AMD
+    #   APU/iGPU VCN. The host must have its kernel GPU driver loaded and
     #   expose /dev/dri. The launcher forwards the numeric render/video group
     #   IDs automatically, including for non-root PUID/PGID containers.
     # - NVIDIA: the host needs a working NVIDIA driver, nvidia-smi, and a

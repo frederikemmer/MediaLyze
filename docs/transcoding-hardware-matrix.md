@@ -2,6 +2,24 @@
 
 This document records reproducible runtime evidence. A device is listed as usable only after the exact FFmpeg build, driver, device, codec, and encoder combination passes a one-frame smoke test. Do not infer support from `nvidia-smi`, `-hwaccels`, or an encoder listing alone.
 
+## Automatic CPU/APU media-engine coverage
+
+The following is implementation coverage, not a live hardware claim. The
+evidence sections below remain authoritative for real devices; an integrated
+Intel or AMD adapter is listed as usable only after its own runtime probe.
+
+| Host path | Integrated media engine | Automatic FFmpeg backends | Current evidence status |
+| --- | --- | --- | --- |
+| Linux Intel CPU/iGPU | Quick Sync | `*_qsv` and `*_vaapi` on each visible `/dev/dri/renderD*` | Implemented and regression-tested; no separate integrated-Intel host has been live-tested in this environment |
+| Linux AMD APU/iGPU | VCN | `*_vaapi` on each visible `/dev/dri/renderD*` | Implemented and regression-tested; no AMD APU host has been live-tested in this environment |
+| Native Windows Intel CPU/iGPU | Quick Sync | `*_qsv` through the native Intel driver/API | Implemented and probe-gated; no Intel iGPU host has been live-tested in this environment |
+| Native Windows AMD APU/iGPU | VCN | `*_amf` through the native AMD driver/API | Implemented and probe-gated; no AMD APU host has been live-tested in this environment |
+| Native macOS Apple Silicon | Apple media engine | `*_videotoolbox` | Live H.264/HEVC evidence is recorded in the MacBook Pro M1 Max section below |
+
+These paths are hardware-media encoding. `libx264`, `libx265`, SVT-AV1, and
+other software encoders remain available only in the explicit `cpu_only`
+execution mode.
+
 ## Test template
 
 | Host | Device | Driver | FFmpeg | Decoder path | Encoder | Pixel format/filter | Result | Evidence |

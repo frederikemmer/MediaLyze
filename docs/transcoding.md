@@ -22,6 +22,34 @@ Validation resolves all files below their library root and returns the target, s
 
 Video encode controls use encoder-specific constant-quality ranges (CRF, CQ, QP, or ICQ as required by the selected backend), an encoder-specific speed preset, and only even-pixel 360p–2160p presets that are no larger than the source. Speed presets map to FFmpeg's `preset` option and are shown only for encoders whose capability probe reports that option; the UI keeps the values curated per encoder family (including Intel QSV, NVENC, AMF, x264/x265, and SVT-AV1). Audio encode controls use fixed, codec-appropriate bitrate presets. Stream languages are normalized to BCP 47 while retaining regional subtags and the original code in the localized label; `und` and unknown codes remain explicit.
 
+## CPU- and APU-integrated media engines
+
+In this documentation, "CPU hardware acceleration" means the dedicated media
+engine integrated into the CPU package or SoC. It is not the same as a CPU
+software encoder such as `libx264` or `libx265`. MediaLyze discovers and probes
+these engines automatically:
+
+| Host and hardware | Integrated media engine | FFmpeg path used by MediaLyze |
+| --- | --- | --- |
+| Linux Intel CPU with enabled iGPU | Intel Quick Sync | `*_qsv`; `*_vaapi` is also probed on the same DRM render node as a compatible fallback |
+| Linux AMD APU/iGPU | AMD VCN | `*_vaapi` through the `amdgpu` DRM render node |
+| Native Windows Intel CPU with enabled iGPU | Intel Quick Sync | `*_qsv` through the installed Intel driver/API |
+| Native Windows AMD APU/iGPU | AMD VCN | `*_amf` through the installed AMD driver/API |
+| Native macOS Apple Silicon | Apple media engine | `*_videotoolbox` through macOS VideoToolbox |
+
+The automatic path does not require a CPU/GPU vendor setting. On Linux every
+visible `/dev/dri/renderD*` node is considered, so an integrated CPU/APU engine
+and a discrete adapter can coexist. On native Windows, QSV and AMF are
+logical native-API targets; the installed driver chooses the adapter and the
+one-frame probe decides whether that target is usable. The capability response
+keeps only encoders that passed on the actual target. Codec support still
+depends on the exact processor, enabled iGPU, driver, FFmpeg build, and input
+format.
+
+If no integrated media engine passes, `hardware_required` reports the concrete
+failure and does not fall back to CPU software encoding. Software encoding is
+available only after explicitly selecting `cpu_only`.
+
 ## Execution safety
 
 Transcoding uses a dedicated runtime executor. Scan discovery and analysis keep their own workers, while transcode capacity is calculated from the CPU budget, CPU job limit, selected GPU devices, and GPU slots per device. A transcode job consumes one CPU or one selected-GPU slot; it cannot starve scan workers. The default CPU budget is 90%. Retry count defaults to zero, and `continue` or `stop_queue` controls what happens after a failed job.
@@ -59,7 +87,7 @@ The NVIDIA path requires a working host driver, an FFmpeg build with NVENC suppo
 
 The production Compose file is CPU-safe by default and keeps `/media` read-only. Run `docker/start-medialyze.sh` on Linux/macOS or `docker/start-medialyze.ps1` on Windows to generate a temporary Compose override. The launcher adds `gpus: all` only when the host has both `nvidia-smi` and a reachable Docker daemon, and adds `/dev/dri` plus the numeric group IDs of its render/video devices when they exist. It never installs host drivers. `TRANSCODE_OUTPUT_HOST_DIR` controls the writable host directory mounted at `/transcode-output`.
 
-## Intel GPU on Linux containers
+## Intel and AMD media engines on Linux containers
 
 The Debian runtime image includes FFmpeg's VAAPI/QSV encoder support, the Mesa
 VAAPI driver, the full Intel media/i965 VAAPI drivers, and the Intel oneVPL GPU
@@ -67,7 +95,9 @@ runtime on amd64. Intel and AMD containers must still expose `/dev/dri` and have
 compatible host kernel driver; the NVIDIA path is enabled by the Compose
 `NVIDIA_DRIVER_CAPABILITIES` setting when the generated GPU override is active.
 MediaLyze discovers every `/dev/dri/renderD*` node on Linux by default and
-selects the first node that passes the requested encoder probe. Set
+selects the first node that passes the requested encoder probe. This covers
+Intel CPU/iGPU Quick Sync and AMD APU/iGPU VCN as well as discrete adapters;
+there is no separate container setting for an integrated media engine. Set
 `MEDIALYZE_HW_RENDER_NODE` only as an optional override when a host needs a
 specific node. The exact node that passed is used for both capability testing
 and the actual job, so an encoder is shown in the UI only when that driver and
@@ -101,9 +131,10 @@ On native Windows, FFmpeg's AMF and QSV encoders select the adapter through
 their installed driver/API. MediaLyze creates a logical automatic target for
 each backend exposed by the installed FFmpeg build, probes the actual encoder,
 and records the successful target for future plan validation. This is the
-automatic path for integrated and discrete AMD or Intel adapters; the device
-is not shown as available when the local driver or packaged FFmpeg build cannot
-complete the smoke test. This section describes the selection logic, not a
+automatic path for Intel CPU/iGPU Quick Sync, AMD APU/iGPU VCN, and discrete
+AMD or Intel adapters; the device is not shown as available when the local
+driver or packaged FFmpeg build cannot complete the smoke test. This section
+describes the selection logic, not a
 claim that every Windows driver/encoder combination is supported; the local
 probe remains authoritative.
 

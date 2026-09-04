@@ -512,6 +512,13 @@ def _build_hardware_device_inventory(
     inventory.  The inventory therefore combines native CUDA identity,
     Linux DRM nodes, and platform-native logical backends.  Every target is
     still marked unavailable until its own FFmpeg smoke test succeeds.
+
+    An Intel CPU with an enabled integrated GPU exposes its Quick Sync media
+    engine through the same Linux DRM render node as the Intel graphics
+    adapter. AMD APUs expose their VCN media engine through VAAPI. These are
+    hardware-media paths, not CPU software encoding, so they must be included
+    in the same per-device probe and automatic-selection flow as discrete
+    adapters.
     """
 
     devices = list(nvidia_devices)
@@ -1032,9 +1039,9 @@ def _preferred_hardware_encoders(codec: str) -> tuple[str, ...]:
     """Return a platform-aware preference order for automatic profiles.
 
     The order is only a preference.  Availability still comes from the
-    device-specific smoke probes, so an integrated Intel adapter, discrete
-    AMD card, NVIDIA GPU, or Apple GPU can win without a vendor setting in the
-    user's configuration.
+    device-specific smoke probes, so an Intel CPU/iGPU Quick Sync engine, an
+    AMD APU VCN engine, a discrete AMD/NVIDIA/Intel adapter, or an Apple media
+    engine can win without a vendor setting in the user's configuration.
     """
 
     if _is_macos():
