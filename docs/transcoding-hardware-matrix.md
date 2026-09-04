@@ -49,3 +49,29 @@ The image build completed successfully for `linux/arm64` on Docker Desktop 29.7.
 | Docker Desktop WSL2 (`linux/amd64`) | NVIDIA GeForce RTX 3080, compute capability 8.6, 10240 MiB | 616.56 | Debian package `5.1.9-0+deb12u1` in the locally built `medialyze-validation:20260903` image | CUDA device init / `hwupload_cuda` | `hevc_nvenc` | 256×256 one-frame CUDA smoke test | **pass** | `docker run --gpus all -e NVIDIA_DRIVER_CAPABILITIES=compute,video,utility ...`; exit code 0 and `libnvidia-encode.so.1` visible in the container. |
 
 The Docker image build also verifies the architecture-specific FFmpeg DEB checksum before installation. The production image starts successfully without a GPU, reports healthy API/settings responses, and exposes zero GPU devices in that CPU-only run; GPU transcoding is enabled when the generated Compose override supplies the NVIDIA runtime and video capability.
+
+## Private Linux NAS Docker evidence — Intel Arc
+
+The following rows were recorded after the automatic update to MediaLyze
+`0.18.0-dev023`. The capability endpoint ran the exact device-, codec-, and
+encoder-specific one-frame probes inside the amd64 container; no media file or
+transcode job was used. Hardware decoding is not claimed by these encode-only
+probes.
+
+| Host | Device | Driver | FFmpeg | Decoder path | Encoder | Pixel format/filter | Result | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | QSV device init; hardware decode not claimed | `h264_qsv` | `format=nv12,hwupload=extra_hw_frames=16` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `qsv-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | VAAPI device init; hardware decode not claimed | `h264_vaapi` | `format=nv12,hwupload` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `vaapi-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | VAAPI device init; hardware decode not claimed | `hevc_vaapi` | `format=nv12,hwupload` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `vaapi-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | QSV device init; hardware decode not claimed | `mjpeg_qsv` | `format=nv12,hwupload=extra_hw_frames=16` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `qsv-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | VAAPI device init; hardware decode not claimed | `mjpeg_vaapi` | `format=nv12,hwupload` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `vaapi-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | VAAPI device init; hardware decode not claimed | `vp9_vaapi` | `format=nv12,hwupload` | **pass** | `/api/transcoding/capabilities?refresh=true`; device `vaapi-renderD128` reported `available`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | QSV device init; hardware decode not claimed | `hevc_qsv` | `format=nv12,hwupload=extra_hw_frames=16` | **fail** | The Arc runtime rejected the selected QSV rate-control/low-power parameters; MediaLyze therefore does not advertise this encoder. HEVC uses the verified `hevc_vaapi` path. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | QSV device init; hardware decode not claimed | `vp9_qsv` | `format=nv12,hwupload=extra_hw_frames=16` | **fail** | FFmpeg reported `Error initializing the encoder: device failed (-17)`. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | QSV device init; hardware decode not claimed | `mpeg2_qsv` | `format=nv12,hwupload=extra_hw_frames=16` | **fail** | The Arc runtime rejected the selected profile/rate-control parameters. |
+| Private Linux NAS Docker (`linux/amd64`) | Intel Arc GPU, PCI `8086:56A6`, `/dev/dri/renderD128` | `i915` | Debian `5.1.9-0+deb12u1` in MediaLyze `0.18.0-dev023` | VAAPI device init; hardware decode not claimed | `mpeg2_vaapi` / `vp8_vaapi` | `format=nv12,hwupload` | **fail** | FFmpeg reported no usable encoding entrypoint/profile for these codecs. |
+
+For this concrete Arc installation, automatic selection can therefore use
+H.264 QSV, H.264/HEVC VAAPI, MJPEG QSV/VAAPI, and VP9 VAAPI. The failed
+encoder/backend combinations remain visible as unavailable and never trigger
+a silent CPU fallback.
