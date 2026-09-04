@@ -51,7 +51,7 @@ RUN set -eux; \
     printf '%s  %s\n' "${expected_ffmpeg_sha256}" "${ffmpeg_package}" | sha256sum -c -; \
     vaapi_packages="mesa-va-drivers"; \
     if [ "${debian_arch}" = "amd64" ]; then \
-        vaapi_packages="${vaapi_packages} intel-media-va-driver i965-va-driver"; \
+        vaapi_packages="${vaapi_packages} intel-media-va-driver i965-va-driver libmfx-gen1.2"; \
     fi; \
     apt-get install -y --no-install-recommends "${ffmpeg_package}" ca-certificates gosu tzdata ${vaapi_packages}; \
     rm -f "${ffmpeg_package}"; \
