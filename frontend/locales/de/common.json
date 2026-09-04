@@ -1918,8 +1918,9 @@
     "fail": "Fehlschlagen",
     "skip": "Überspringen",
     "removePartial": "Unvollständige Ausgabe nach Abbruch oder Fehler löschen",
-    "selectedDevices": "Ausgewählte Hardwaregeräte",
+    "selectedDevice": "Hardwaregerät",
     "allDetected": "Alle erkannten Geräte verwenden",
+    "configuredDeviceUnavailable": "Konfiguriertes Gerät ist nicht verfügbar",
     "hardwareDiagnostics": "Hardwarediagnose",
     "ffmpeg": "FFmpeg",
     "deviceAvailable": "Verfügbar",
@@ -2040,7 +2041,6 @@
     "delete": "Löschen",
     "yes": "Ja",
     "no": "Nein",
-    "selectSpecificDevices": "Bestimmte Geräte auswählen",
     "replacementTestingNotice": "Dieses Feature wird noch getestet; Fehler sind möglich und es wird für die normale Nutzung nicht empfohlen."
   }
 }

@@ -2561,7 +2561,7 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field-label-row", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Transcoding runtime settings" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-diagnostics", "transcode-capability-item", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">
                   <div className="panel-title-row">
                     <h2>Transcoding runtime</h2>
@@ -2582,6 +2582,16 @@ export function UiElementsPage() {
                     <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-output">Default output mode</label><TooltipTrigger ariaLabel="Explain default output mode" content="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.">?</TooltipTrigger></div><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></div>
                     <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><TooltipTrigger ariaLabel="Explain CPU budget" content="Soft budget shared across active CPU transcode jobs; short bursts can exceed it.">?</TooltipTrigger></div><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /></div>
                   </div>
+                  <section className="app-settings-section">
+                    <p className="app-settings-section-title">Hardware device</p>
+                    <div className="field">
+                      <label htmlFor="catalog-transcoding-device">Hardware device</label>
+                      <select id="catalog-transcoding-device" defaultValue="auto">
+                        <option value="auto">Use all detected devices</option>
+                        <option value="render:/dev/dri/renderD128">Intel GPU (renderD128) · 8086:56A6</option>
+                      </select>
+                    </div>
+                  </section>
                   <section className="transcode-capability-diagnostics"><div className="field-label-row"><h3>Hardware diagnostics</h3><span className="field-hint">Last tested now</span></div><div className="transcode-capability-item"><div><strong>NVIDIA GeForce RTX 3080</strong><span>cuda · cuda0 · Unavailable</span></div><p className="notice compact error">NVENC probe failed: driver API is older than the FFmpeg requirement.</p></div></section>
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
                 </div>

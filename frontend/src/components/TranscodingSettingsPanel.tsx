@@ -43,6 +43,45 @@ function deviceStatusLabel(
   return t("transcoding.deviceNotDetected");
 }
 
+type DeviceSelectionOption = {
+  key: string;
+  label: string;
+  allDeviceIds: string[];
+  availableDeviceIds: string[];
+};
+
+function deviceSelectionKey(device: TranscodeHardwareDevice): string {
+  return device.render_node ? `render:${device.render_node}` : `device:${device.id}`;
+}
+
+function deviceSelectionLabel(devices: TranscodeHardwareDevice[]): string {
+  const first = devices[0];
+  if (!first) return "";
+  if (!first.render_node) return first.name.replace(/\s+\(automatic\)$/i, "");
+
+  const nameParts = first.name.split(" · ");
+  return nameParts.length > 1 ? nameParts.slice(0, -1).join(" · ") : first.name;
+}
+
+function buildDeviceSelectionOptions(devices: TranscodeHardwareDevice[]): DeviceSelectionOption[] {
+  const groups = new Map<string, TranscodeHardwareDevice[]>();
+  for (const device of devices) {
+    const key = deviceSelectionKey(device);
+    const group = groups.get(key) ?? [];
+    group.push(device);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups, ([key, group]) => ({
+    key,
+    label: deviceSelectionLabel(group),
+    allDeviceIds: group.map((device) => device.id),
+    availableDeviceIds: group
+      .filter((device) => device.status === "available")
+      .map((device) => device.id),
+  }));
+}
+
 export function TranscodingSettingsPanel({
   settings,
   appSettingsLoaded,
@@ -82,14 +121,6 @@ export function TranscodingSettingsPanel({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function toggleDevice(deviceId: string, checked: boolean) {
-    const current = Array.isArray(draft.selected_devices) ? draft.selected_devices : [];
-    const next = checked
-      ? [...new Set([...current, deviceId])]
-      : current.filter((candidate) => candidate !== deviceId);
-    updateDraft("selected_devices", next);
-  }
-
   async function saveSettings() {
     setSaving(true);
     setSaved(false);
@@ -112,9 +143,16 @@ export function TranscodingSettingsPanel({
     }
   }
 
-  const selectableDevices = (capabilities?.devices ?? []).filter((device) => device.status === "available");
+  const deviceSelectionOptions = buildDeviceSelectionOptions(capabilities?.devices ?? []);
   const hardwareEncoders = capabilities?.encoders.filter((encoder) => encoder.hardware) ?? [];
   const selectedDevices = Array.isArray(draft.selected_devices) ? draft.selected_devices : [];
+  const selectedDeviceOption =
+    draft.selected_devices === "auto" || selectedDevices.length === 0
+      ? "auto"
+      : deviceSelectionOptions.find((option) =>
+          option.allDeviceIds.some((deviceId) => selectedDevices.includes(deviceId)),
+        )?.key ?? "configured-unavailable";
+  const hasConfiguredUnavailableDevice = selectedDeviceOption === "configured-unavailable";
 
   return (
     <AsyncPanel
@@ -283,47 +321,37 @@ export function TranscodingSettingsPanel({
         </label>
 
         <section className="app-settings-section">
-          <p className="app-settings-section-title">{t("transcoding.selectedDevices")}</p>
-          <label className="transcode-filename-option">
-            <input
-              type="radio"
-              name="transcoding-device-selection"
-              checked={draft.selected_devices === "auto"}
+          <p className="app-settings-section-title">{t("transcoding.selectedDevice")}</p>
+          <div className="field">
+            <label htmlFor="transcoding-selected-device">{t("transcoding.selectedDevice")}</label>
+            <select
+              id="transcoding-selected-device"
+              value={selectedDeviceOption}
               disabled={!appSettingsLoaded || saving}
-              onChange={() => updateDraft("selected_devices", "auto")}
-            />
-            <span>{t("transcoding.allDetected")}</span>
-          </label>
-          <label className="transcode-filename-option">
-            <input
-              type="radio"
-              name="transcoding-device-selection"
-              checked={Array.isArray(draft.selected_devices)}
-              disabled={!appSettingsLoaded || saving}
-              onChange={() => updateDraft(
-                "selected_devices",
-                selectedDevices.length ? selectedDevices : selectableDevices.map((device) => device.id),
-              )}
-            />
-            <span>{t("common.selectSpecificDevices")}</span>
-          </label>
-          {selectableDevices.length ? (
-            <div className="settings-choice-list">
-              {selectableDevices.map((device) => (
-                <label className="transcode-filename-option" key={device.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedDevices.includes(device.id)}
-                    disabled={!appSettingsLoaded || saving || draft.selected_devices === "auto"}
-                    onChange={(event) => toggleDevice(device.id, event.target.checked)}
-                  />
-                  <span>{device.name} ({device.id})</span>
-                </label>
+              onChange={(event) => {
+                const option = deviceSelectionOptions.find((candidate) => candidate.key === event.target.value);
+                updateDraft(
+                  "selected_devices",
+                  event.target.value === "auto" ? "auto" : option?.availableDeviceIds ?? [],
+                );
+              }}
+            >
+              <option value="auto">{t("transcoding.allDetected")}</option>
+              {hasConfiguredUnavailableDevice ? (
+                <option value="configured-unavailable" disabled>
+                  {t("transcoding.configuredDeviceUnavailable")}
+                </option>
+              ) : null}
+              {deviceSelectionOptions.map((option) => (
+                <option disabled={!option.availableDeviceIds.length} key={option.key} value={option.key}>
+                  {option.label}{!option.availableDeviceIds.length ? ` — ${t("transcoding.deviceUnavailable")}` : ""}
+                </option>
               ))}
-            </div>
-          ) : (
+            </select>
+          </div>
+          {!deviceSelectionOptions.some((option) => option.availableDeviceIds.length) ? (
             <p className="field-hint">{t("transcoding.noHardware")}</p>
-          )}
+          ) : null}
         </section>
 
         <section className="transcode-capability-diagnostics">

@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
 - document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
+- replace transcoding hardware radio and checkbox selection with one physical-device dropdown while keeping backend-specific paths grouped internally
 - move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern
 - streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid
 - refine Pattern recognition tooltips, external documentation links, borderless restore controls, and main-section separators
@@ -112,6 +113,7 @@ This release adds a read-only Jellyfin integration with catalog synchronization,
 
 ### 🔒 Security
 
+- update transitive desktop `fast-uri` and `@xmldom/xmldom` dependencies to patched releases to remediate the current host-confusion, SSRF, and XML-fragment-injection advisories
 - pin all transitive desktop `brace-expansion` branches to their patched releases to prevent exponential-time brace-pattern expansion during Electron packaging
 - update the transitive desktop `tar` package to 7.5.22 to prevent crafted PAX metadata from crashing Electron packaging
 - override the desktop icon pipeline to `sharp` 0.35.3 so packaged libvips binaries include the latest upstream security fixes

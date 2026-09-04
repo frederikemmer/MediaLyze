@@ -1918,8 +1918,9 @@
     "fail": "Fail",
     "skip": "Skip",
     "removePartial": "Remove partial output after cancellation or failure",
-    "selectedDevices": "Selected hardware devices",
+    "selectedDevice": "Hardware device",
     "allDetected": "Use all detected devices",
+    "configuredDeviceUnavailable": "Configured device is unavailable",
     "hardwareDiagnostics": "Hardware diagnostics",
     "ffmpeg": "FFmpeg",
     "deviceAvailable": "Available",
@@ -2040,7 +2041,6 @@
     "delete": "Delete",
     "yes": "Yes",
     "no": "No",
-    "selectSpecificDevices": "Select specific devices",
     "replacementTestingNotice": "This feature is still being tested; errors are possible and it is not recommended for normal use."
   }
 }
