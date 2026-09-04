@@ -585,14 +585,21 @@ function QualityPickerFixture({ open = false }: { open?: boolean }) {
 function QualityProfileFixture() {
   return (
     <div className="quality-profile-panel-stack">
-      <div className="quality-profile-segments">
-        <button type="button" className="quality-profile-segment is-active">
-          <span className="quality-profile-segment-pill" />
-          <span>Video</span>
-        </button>
-        <button type="button" className="quality-profile-segment">
-          <span>Music</span>
-        </button>
+      <div className="library-history-range-toggle" role="tablist" aria-label="Media type">
+        <SlidingTogglePill activeKey="video" className="nav-active-pill library-history-range-pill" />
+        {(["video", "music", "audiobook"] as const).map((mediaType) => (
+          <button
+            key={mediaType}
+            type="button"
+            data-toggle-key={mediaType}
+            className={`library-history-range-button${mediaType === "video" ? " active" : ""}`}
+            aria-pressed={mediaType === "video"}
+          >
+            <span className="library-history-range-button-content">
+              <span>{mediaType === "video" ? "Video" : mediaType === "music" ? "Music" : "Audiobook"}</span>
+            </span>
+          </button>
+        ))}
       </div>
       <div className="quality-profile-picker is-protected">
         <div className="quality-profile-picker-control">
@@ -629,7 +636,13 @@ function QualityProfileFixture() {
               <span className="subtitle">Weight and boundary controls</span>
             </div>
             <div className="quality-profile-weight-control">
-              <input className="quality-profile-weight-input" type="number" defaultValue={8} aria-label="Weight" />
+              <input
+                className="quality-profile-weight-input"
+                type="number"
+                defaultValue={8}
+                aria-label="Explain metric weight"
+                title="Metric weight from 1 to 10. Higher values make this metric count more in the final quality score."
+              />
             </div>
           </div>
           <div className="quality-profile-metric-settings-grid">
@@ -1434,27 +1447,29 @@ export function UiElementsPage() {
                   </div>
                 </details>
               </VariantCard>
-              <VariantCard title="Combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["quality-profile-segments", "quality-profile-segment", "quality-profile-segment-pill"]} wide>
+              <VariantCard title="Combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["library-history-range-toggle", "library-history-range-button", "library-history-range-pill"]} wide>
                 <div className="compatibility-profile-panel">
                   <p className="compatibility-profile-development-note">
                     This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections.
                   </p>
-                  <div className="quality-profile-segments" role="tablist" aria-label="Hardware & software profiles">
-                    <SlidingTogglePill activeKey="hardware" className="nav-active-pill quality-profile-segment-pill" />
+                  <div className="library-history-range-toggle" role="tablist" aria-label="Hardware & software profiles">
+                    <SlidingTogglePill activeKey="hardware" className="nav-active-pill library-history-range-pill" />
                     {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
                       <button
                         key={profileTab}
                         type="button"
                         data-toggle-key={profileTab}
-                        className={`quality-profile-segment${profileTab === "hardware" ? " is-active" : ""}`}
+                        className={`library-history-range-button${profileTab === "hardware" ? " active" : ""}`}
                         aria-pressed={profileTab === "hardware"}
                       >
-                        <span>
-                          {profileTab === "hardware"
-                            ? "Hardware"
-                            : profileTab === "software"
-                              ? "Software / Player"
-                              : "Combination"}
+                        <span className="library-history-range-button-content">
+                          <span>
+                            {profileTab === "hardware"
+                              ? "Hardware"
+                              : profileTab === "software"
+                                ? "Software / Player"
+                                : "Combination"}
+                          </span>
                         </span>
                       </button>
                     ))}
@@ -1826,7 +1841,7 @@ export function UiElementsPage() {
               <VariantCard title="Ignore pattern rows" source={`${settings} > Ignore patterns`} classes={["ignore-pattern-section", "ignore-pattern-row", "settings-choice-input", "ignore-pattern-action-button"]} wide>
                 <IgnorePatternFixture />
               </VariantCard>
-              <VariantCard title="Quality picker and profile editor" source={`${settings} > Quality profiles`} classes={["quality-picker-field", "quality-profile-picker-control", "quality-profile-picker-trigger", "quality-profile-boundary-field", "quality-profile-metric-item", "quality-profile-weight-input"]} wide>
+              <VariantCard title="Quality picker and profile editor" source={`${settings} > Quality profiles`} classes={["library-history-range-toggle", "library-history-range-button", "library-history-range-pill", "quality-picker-field", "quality-profile-picker-control", "quality-profile-picker-trigger", "quality-profile-boundary-field", "quality-profile-metric-item", "quality-profile-weight-input"]} wide>
                 <QualityProfileFixture />
               </VariantCard>
             </VariantGroup>
@@ -1960,6 +1975,37 @@ export function UiElementsPage() {
                       <History aria-hidden="true" className="nav-icon" size={16} />
                     </TooltipTrigger>
                   </div>
+                </div>
+              </VariantCard>
+              <VariantCard
+                title="Resolution categories add and delete actions"
+                source={`${settings} > Resolution categories`}
+                classes={["resolution-category-table-shell", "resolution-category-table", "resolution-category-add", "resolution-category-action-button"]}
+                wide
+              >
+                <div className="settings-sidebar-stack">
+                  <div className="resolution-category-table-shell">
+                    <table className="resolution-category-table">
+                      <thead>
+                        <tr><th>Label</th><th>Min width</th><th>Min height</th><th><span className="sr-only">Actions</span></th></tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><input className="settings-choice-input" value="4k" readOnly aria-label="Label" /></td>
+                          <td><input className="settings-choice-input" value="3648" readOnly aria-label="Min width" /></td>
+                          <td><input className="settings-choice-input" value="1520" readOnly aria-label="Min height" /></td>
+                          <td>
+                            <button type="button" className="secondary icon-only-button resolution-category-action-button" aria-label="Remove resolution category 4k">
+                              <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <button type="button" className="secondary small settings-panel-header-action resolution-category-add">
+                    <Plus size={15} aria-hidden="true" /> Add category
+                  </button>
                 </div>
               </VariantCard>
               <VariantCard title="Settings table" source={`${settings} > Resolution categories`} classes={["settings-table-shell", "settings-data-table"]}>

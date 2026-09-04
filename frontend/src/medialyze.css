@@ -4984,70 +4984,6 @@ html[data-theme="dark"] .toggle-switch-track {
   gap: 12px;
 }
 
-.quality-profile-segments {
-  position: relative;
-  align-self: flex-start;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 6px;
-  border: 1px solid rgba(31, 28, 22, 0.09);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.64);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 1px 2px rgba(31, 28, 22, 0.03);
-}
-
-.quality-profile-segment {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  overflow: visible;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  min-height: 38px;
-  padding: 8px 16px;
-  font: inherit;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: none;
-  transition: color 0.16s ease, background 0.16s ease;
-}
-
-.quality-profile-segment:hover,
-.quality-profile-segment:focus-visible {
-  transform: none;
-  color: var(--ink);
-  background: rgba(31, 28, 22, 0.04);
-  box-shadow: none;
-}
-
-.quality-profile-segment.is-active {
-  color: var(--ink);
-  background: transparent;
-}
-
-.quality-profile-segment > span {
-  position: relative;
-  z-index: 1;
-}
-
-.quality-profile-segment-pill {
-  inset: auto;
-  top: 0;
-  left: 0;
-  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease;
-}
-
 .quality-profile-picker {
   position: relative;
   width: 100%;
@@ -5385,7 +5321,7 @@ html[data-theme="dark"] .toggle-switch-track {
   border: 1px solid rgba(39, 148, 107, 0.58);
   border-radius: 10px;
   background: rgba(39, 148, 107, 0.48);
-  color: #f7fbf9;
+  color: var(--ink);
   font: inherit;
   font-weight: 800;
   line-height: 1;
@@ -5556,6 +5492,10 @@ html[data-theme="dark"] .toggle-switch-track {
   min-width: 620px;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.resolution-category-add {
+  justify-self: start;
 }
 
 .resolution-category-table th,
@@ -12001,36 +11941,6 @@ html[data-theme="dark"] {
   .quality-picker-field.is-open .quality-picker-empty {
     background: rgba(240, 236, 228, 0.08);
     color: rgba(240, 236, 228, 0.76);
-  }
-
-  .quality-profile-segments {
-    background: rgba(38, 35, 31, 0.64);
-    border-color: rgba(240, 236, 228, 0.09);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 1px 2px rgba(0, 0, 0, 0.20);
-  }
-
-  .quality-profile-segment {
-    color: rgba(240, 236, 228, 0.68);
-  }
-
-  .quality-profile-segment:hover,
-  .quality-profile-segment:focus-visible {
-    color: rgba(255, 250, 243, 0.98);
-    background: rgba(240, 236, 228, 0.08);
-  }
-
-  .quality-profile-segment.is-active {
-    color: rgba(255, 250, 243, 0.98);
-  }
-
-  .quality-profile-segment-pill {
-    border-color: rgba(240, 236, 228, 0.08);
-    background: rgba(240, 236, 228, 0.08);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 10px 22px rgba(0, 0, 0, 0.24);
   }
 
   .quality-profile-picker-control {

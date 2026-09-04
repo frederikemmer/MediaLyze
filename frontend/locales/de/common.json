@@ -356,7 +356,9 @@
     "ignorePatternsRemoveAria": "Ignoriermuster {{index}} entfernen",
     "resolutionCategories": {
       "title": "Auflösungskategorien",
-      "restoreDefaults": "Standards wiederherstellen"
+      "restoreDefaults": "Standards wiederherstellen",
+      "addCategory": "Kategorie hinzufügen",
+      "newCategory": "Neue Kategorie"
     },
     "patternRecognition": {
       "title": "Ordner- & Muster-Erkennung",

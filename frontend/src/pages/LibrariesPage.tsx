@@ -375,18 +375,6 @@ const RESOLUTION_CATEGORY_TOOLTIP = [
   "720p / HD: 1280x720",
 ].join("\n");
 
-type NewResolutionCategoryDraft = {
-  label: string;
-  min_width: string;
-  min_height: string;
-};
-
-const EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT: NewResolutionCategoryDraft = {
-  label: "",
-  min_width: "",
-  min_height: "",
-};
-
 const SCAN_WORKER_COUNT_MIN = 1;
 const SCAN_WORKER_COUNT_MAX = 16;
 const PARALLEL_SCAN_JOB_COUNT_MIN = 1;
@@ -427,10 +415,12 @@ function cloneResolutionCategoryDrafts(categories: ResolutionCategory[]): Resolu
 
 function resolutionCategoriesFromDrafts(drafts: ResolutionCategoryDraft[]): ResolutionCategory[] {
   return normalizeResolutionCategories(
-    drafts.map(({ persisted, ...category }) => ({
-      ...category,
-      id: persisted ? category.id : "",
-    })),
+    drafts
+      .filter(({ persisted, label }) => persisted || label.trim())
+      .map(({ persisted, ...category }) => ({
+        ...category,
+        id: persisted ? category.id : "",
+      })),
   );
 }
 
@@ -978,9 +968,6 @@ export function LibrariesPage() {
   const [historyStorageError, setHistoryStorageError] = useState<string | null>(null);
   const [isLoadingHistoryStorage, setIsLoadingHistoryStorage] = useState(true);
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
-  const [newResolutionCategoryDraft, setNewResolutionCategoryDraft] = useState<NewResolutionCategoryDraft>(
-    EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT,
-  );
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
   const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
   const [historyRetentionStatus, setHistoryRetentionStatus] = useState<string | null>(null);
@@ -2963,11 +2950,6 @@ export function LibrariesPage() {
     setResolutionCategoriesStatus(null);
   }
 
-  function updateNewResolutionCategoryDraft(patch: Partial<NewResolutionCategoryDraft>) {
-    setNewResolutionCategoryDraft((current) => ({ ...current, ...patch }));
-    setResolutionCategoriesStatus(null);
-  }
-
   async function saveResolutionCategories(drafts: ResolutionCategoryDraft[] = resolutionCategoryDrafts) {
     const nextCategories = resolutionCategoriesFromDrafts(drafts);
     const changeKind = resolutionCategoryChangeSummary(persistedResolutionCategories.current, nextCategories);
@@ -3067,24 +3049,18 @@ export function LibrariesPage() {
     }
   }
 
-  async function addResolutionCategoryDraft() {
-    const label = newResolutionCategoryDraft.label.trim();
-    if (!label) {
-      return;
-    }
-
-    const nextDrafts = [...resolutionCategoryDrafts];
-    nextDrafts.splice(Math.max(0, nextDrafts.length - 1), 0, {
-      id: createResolutionCategoryId(label, resolutionCategoryDrafts),
-      label,
-      min_width: Math.max(0, Number(newResolutionCategoryDraft.min_width) || 0),
-      min_height: Math.max(0, Number(newResolutionCategoryDraft.min_height) || 0),
-      persisted: false,
-    });
-    setResolutionCategoryDrafts(nextDrafts);
-    setNewResolutionCategoryDraft(EMPTY_NEW_RESOLUTION_CATEGORY_DRAFT);
+  function addResolutionCategoryDraft() {
+    setResolutionCategoryDrafts((current) => [
+      ...current,
+      {
+        id: createResolutionCategoryId("resolution", current),
+        label: "",
+        min_width: 0,
+        min_height: 0,
+        persisted: false,
+      },
+    ]);
     setResolutionCategoriesStatus(null);
-    await saveResolutionCategories(nextDrafts);
   }
 
   async function removeResolutionCategoryDraft(index: number) {
@@ -5333,17 +5309,17 @@ export function LibrariesPage() {
         }
       >
         <div className="quality-profile-panel-stack">
-          <div className="quality-profile-segments" role="tablist" aria-label={t("libraries.qualityProfiles.mediaType")}>
+          <div className="library-history-range-toggle" role="tablist" aria-label={t("libraries.qualityProfiles.mediaType")}>
             <SlidingTogglePill
               activeKey={activeQualityProfileMediaType}
-              className="nav-active-pill quality-profile-segment-pill"
+              className="nav-active-pill library-history-range-pill"
             />
             {(["video", "music", "audiobook"] as QualityProfileMediaType[]).map((mediaType) => (
               <button
                 key={mediaType}
                 type="button"
                 data-toggle-key={mediaType}
-                className={`quality-profile-segment${activeQualityProfileMediaType === mediaType ? " is-active" : ""}`}
+                className={`library-history-range-button${activeQualityProfileMediaType === mediaType ? " active" : ""}`}
                 aria-pressed={activeQualityProfileMediaType === mediaType}
                 onClick={() => {
                   setIsRenamingQualityProfile(false);
@@ -5357,7 +5333,9 @@ export function LibrariesPage() {
                   }
                 }}
               >
-                <span>{t(`libraries.qualityProfiles.mediaTypes.${mediaType}`)}</span>
+                <span className="library-history-range-button-content">
+                  <span>{t(`libraries.qualityProfiles.mediaTypes.${mediaType}`)}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -6420,62 +6398,15 @@ export function LibrariesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="resolution-category-add-row">
-                      <td>
-                        <label className="sr-only" htmlFor="resolution-category-new-label">Label</label>
-                        <input
-                          id="resolution-category-new-label"
-                          className="settings-choice-input"
-                          type="text"
-                          placeholder="New category"
-                          value={newResolutionCategoryDraft.label}
-                          onChange={(event) => updateNewResolutionCategoryDraft({ label: event.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <label className="sr-only" htmlFor="resolution-category-new-width">Min width</label>
-                        <input
-                          id="resolution-category-new-width"
-                          className="settings-choice-input"
-                          type="number"
-                          min={0}
-                          placeholder="0"
-                          value={newResolutionCategoryDraft.min_width}
-                          onChange={(event) => updateNewResolutionCategoryDraft({ min_width: event.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <label className="sr-only" htmlFor="resolution-category-new-height">Min height</label>
-                        <input
-                          id="resolution-category-new-height"
-                          className="settings-choice-input"
-                          type="number"
-                          min={0}
-                          placeholder="0"
-                          value={newResolutionCategoryDraft.min_height}
-                          onChange={(event) => updateNewResolutionCategoryDraft({ min_height: event.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="secondary icon-only-button resolution-category-action-button"
-                          aria-label="Add resolution category"
-                          onClick={() => void addResolutionCategoryDraft()}
-                          disabled={!newResolutionCategoryDraft.label.trim() || isSavingResolutionCategories}
-                        >
-                          <Plus aria-hidden="true" className="nav-icon" />
-                        </button>
-                      </td>
-                    </tr>
                     {resolutionCategoryDrafts.map((category, index) => (
-                      <tr key={category.id}>
+                      <tr className={category.persisted ? undefined : "resolution-category-new-row"} key={category.id}>
                         <td>
                           <label className="sr-only" htmlFor={`resolution-category-label-${category.id}`}>Label</label>
                           <input
                             id={`resolution-category-label-${category.id}`}
                             className="settings-choice-input"
                             type="text"
+                            placeholder={category.persisted ? undefined : t("libraries.resolutionCategories.newCategory")}
                             value={category.label}
                             onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
                             onBlur={() => void saveResolutionCategories()}
@@ -6488,6 +6419,7 @@ export function LibrariesPage() {
                             className="settings-choice-input"
                             type="number"
                             min={0}
+                            placeholder={category.persisted ? undefined : "0"}
                             value={category.min_width}
                             onChange={(event) =>
                               updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
@@ -6502,6 +6434,7 @@ export function LibrariesPage() {
                             className="settings-choice-input"
                             type="number"
                             min={0}
+                            placeholder={category.persisted ? undefined : "0"}
                             value={category.min_height}
                             onChange={(event) =>
                               updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
@@ -6517,7 +6450,7 @@ export function LibrariesPage() {
                             onClick={() => void removeResolutionCategoryDraft(index)}
                             disabled={resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories}
                           >
-                            <RemoveIcon aria-hidden="true" className="nav-icon" size={18} />
+                            <DeleteIcon aria-hidden="true" className="nav-icon" size={18} />
                           </button>
                         </td>
                       </tr>
@@ -6525,6 +6458,15 @@ export function LibrariesPage() {
                   </tbody>
                 </table>
               </div>
+              <button
+                type="button"
+                className="secondary small settings-panel-header-action resolution-category-add"
+                onClick={addResolutionCategoryDraft}
+                disabled={!appSettingsLoaded || isSavingResolutionCategories}
+              >
+                <Plus aria-hidden="true" className="nav-icon" size={15} />
+                {t("libraries.resolutionCategories.addCategory")}
+              </button>
               {isSavingResolutionCategories ? <p className="field-hint">Saving resolution categories…</p> : null}
               {resolutionCategoryChangeKind === "labels" ? (
                 <p className="field-hint">
