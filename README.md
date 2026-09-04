@@ -107,10 +107,12 @@ and
 For automatic local GPU wiring, use `docker/start-medialyze.sh` on Linux/macOS
 or `docker/start-medialyze.ps1` on Windows. The launcher starts the CPU-safe
 Compose file and creates a temporary override for NVIDIA (`gpus: all`) and
-Linux `/dev/dri` only when the corresponding host capability is present. It
-does not install drivers. The media mount remains read-only; transcoded output
-is written to `./Transcode_Output` by default and can be moved with
-`TRANSCODE_OUTPUT_HOST_DIR`.
+Linux `/dev/dri` plus the host device-group IDs only when the corresponding
+host capability is present. It does not install drivers. MediaLyze then probes
+the visible encoders and selects a passing AMD, Intel, or NVIDIA path without
+requiring a vendor-specific setting. The media mount remains read-only;
+transcoded output is written to `./Transcode_Output` by default and can be
+moved with `TRANSCODE_OUTPUT_HOST_DIR`.
 
 
 Open `http://localhost:8080`, or set `HOST_PORT` to expose the container on a different host port.
@@ -234,7 +236,7 @@ Relevant environment variables:
 - `FFPROBE_PATH`: optional override for the `ffprobe` binary path
 - `FFMPEG_PATH`: optional override for the `ffmpeg` binary used for preview generation and transcoding
 - `MEDIALYZE_TRANSCODE_OUTPUT_ROOT`: optional writable path inside the runtime for separate transcoded output; Compose maps this to `/transcode-output`
-- `MEDIALYZE_HW_RENDER_NODE`: optional Linux DRM render node for Intel VAAPI/QSV, for example `/dev/dri/renderD128`; otherwise MediaLyze selects the first available render node
+- `MEDIALYZE_HW_RENDER_NODE`: optional Linux DRM render node override for Intel/AMD VAAPI/QSV, for example `/dev/dri/renderD128`; when omitted MediaLyze probes every visible render node and selects a passing device automatically
 - `TRANSCODE_OUTPUT_HOST_DIR`: Compose host directory for `/transcode-output`, default `./Transcode_Output`
 - `JELLYFIN_API_KEY_FILE`: optional path to a Jellyfin API-key secret file; see [Jellyfin integration](docs/jellyfin.md)
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user

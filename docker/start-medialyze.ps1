@@ -38,6 +38,30 @@ try {
         if (Test-Path -LiteralPath "/dev/dri") {
             $overrideLines += "    devices:"
             $overrideLines += "      - /dev/dri:/dev/dri"
+            $groupIds = [System.Collections.Generic.List[string]]::new()
+            $driDevices = Get-ChildItem -LiteralPath "/dev/dri" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like "renderD*" -or $_.Name -like "card*" }
+            foreach ($driDevice in $driDevices) {
+                $gid = $null
+                try {
+                    $gid = (& stat -c "%g" -- $driDevice.FullName 2>$null).Trim()
+                } catch {
+                    try {
+                        $gid = (& stat -f "%g" -- $driDevice.FullName 2>$null).Trim()
+                    } catch {
+                        $gid = $null
+                    }
+                }
+                if ($gid -and $gid -match "^\d+$" -and -not $groupIds.Contains($gid)) {
+                    $groupIds.Add($gid)
+                }
+            }
+            if ($groupIds.Count -gt 0) {
+                $overrideLines += "    group_add:"
+                foreach ($gid in $groupIds) {
+                    $overrideLines += "      - `"$gid`""
+                }
+            }
         }
         Set-Content -LiteralPath $overrideFile -Value $overrideLines -Encoding utf8
         & docker compose -f $composeFile -f $overrideFile up -d @composeArgs

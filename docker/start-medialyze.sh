@@ -29,6 +29,29 @@ if [ -d /dev/dri ]; then
         has_override=1
     fi
     printf '%s\n' '    devices:' '      - /dev/dri:/dev/dri' >> "$OVERRIDE_FILE"
+    group_ids=""
+    for device in /dev/dri/renderD* /dev/dri/card*; do
+        [ -e "$device" ] || continue
+        gid=$(stat -c '%g' "$device" 2>/dev/null || stat -f '%g' "$device" 2>/dev/null || true)
+        case "$gid" in
+            ''|*[!0-9]*)
+                continue
+                ;;
+        esac
+        case " $group_ids " in
+            *" $gid "*)
+                ;;
+            *)
+                group_ids="$group_ids $gid"
+                ;;
+        esac
+    done
+    if [ -n "$group_ids" ]; then
+        printf '%s\n' '    group_add:' >> "$OVERRIDE_FILE"
+        for gid in $group_ids; do
+            printf '      - "%s"\n' "$gid" >> "$OVERRIDE_FILE"
+        done
+    fi
 fi
 
 if [ "$has_override" -eq 1 ]; then

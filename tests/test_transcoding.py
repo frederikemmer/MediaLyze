@@ -575,12 +575,20 @@ def test_nvidia_device_detection_falls_back_to_cuda_driver_api(monkeypatch) -> N
             lambda total_memory, _device: total_memory._obj.__setattr__("value", 10240 * 1024 * 1024) or 0
         )
 
+    loaded_libraries = []
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
     monkeypatch.setattr(transcoding, "_nvidia_smi_path", lambda: None)
-    monkeypatch.setattr(transcoding.ctypes, "CDLL", lambda _path: FakeCuda())
+    monkeypatch.setattr(
+        transcoding.ctypes,
+        "CDLL",
+        lambda path: loaded_libraries.append(path) or FakeCuda(),
+    )
 
     devices, error = transcoding._detect_nvidia_devices()
 
     assert error is None
+    assert loaded_libraries == ["nvcuda.dll"]
     assert len(devices) == 1
     assert devices[0].id == "cuda0"
     assert devices[0].name == "NVIDIA GeForce RTX 3080"
@@ -681,6 +689,174 @@ def test_macos_capabilities_expose_verified_videotoolbox_device(monkeypatch, tmp
     assert capabilities.devices[0].status == "available"
     assert capabilities.devices[0].vendor == "apple"
     assert capabilities.devices[0].encoder_codecs == ["h264", "hevc"]
+
+
+def test_windows_capabilities_expose_automatic_amf_device(monkeypatch, tmp_path) -> None:
+    def fake_run(arguments, **_kwargs):
+        if "-version" in arguments:
+            return SimpleNamespace(returncode=0, stdout="ffmpeg version test\n", stderr="")
+        if "-encoders" in arguments:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=" V..... libx264 H.264\n"
+                " V..... h264_amf AMD AMF H.264\n"
+                " V..... hevc_amf AMD AMF HEVC\n"
+                " V..... h264_qsv Intel Quick Sync H.264\n",
+                stderr="",
+            )
+        if "-muxers" in arguments:
+            return SimpleNamespace(returncode=0, stdout=" E  matroska Matroska\n E  mp4 MP4\n", stderr="")
+        if "-h" in arguments:
+            return SimpleNamespace(returncode=0, stdout="  -preset <string> encoder preset\n", stderr="")
+        if "-c:v" in arguments:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(arguments)
+
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    capabilities = transcoding.get_transcode_capabilities(_settings(tmp_path), refresh=True)
+    by_name = {encoder.name: encoder for encoder in capabilities.encoders}
+    devices = {device.id: device for device in capabilities.devices}
+
+    assert set(devices) == {"amf0", "qsv0"}
+    assert devices["amf0"].vendor == "amd"
+    assert devices["amf0"].status == "available"
+    assert devices["amf0"].encoder_names == ["h264_amf", "hevc_amf"]
+    assert devices["amf0"].device_class == "unknown"
+    assert by_name["h264_amf"].device_ids == ["amf0"]
+    assert by_name["hevc_amf"].device_ids == ["amf0"]
+    assert devices["qsv0"].vendor == "intel"
+    assert devices["qsv0"].status == "available"
+    assert devices["qsv0"].encoder_names == ["h264_qsv"]
+    assert by_name["h264_qsv"].device_ids == ["qsv0"]
+
+
+def test_linux_capabilities_probe_each_render_node_and_bind_success(monkeypatch, tmp_path) -> None:
+    first = tmp_path / "renderD128"
+    second = tmp_path / "renderD129"
+    first.touch()
+    second.touch()
+
+    def fake_run(arguments, **_kwargs):
+        if "-version" in arguments:
+            return SimpleNamespace(returncode=0, stdout="ffmpeg version test\n", stderr="")
+        if "-encoders" in arguments:
+            return SimpleNamespace(returncode=0, stdout=" V..... h264_vaapi VAAPI H.264\n", stderr="")
+        if "-muxers" in arguments:
+            return SimpleNamespace(returncode=0, stdout=" E  matroska Matroska\n E  mp4 MP4\n", stderr="")
+        if "-h" in arguments:
+            return SimpleNamespace(returncode=0, stdout="  -qp <int> quantizer\n", stderr="")
+        if "-c:v" in arguments:
+            if str(second) in " ".join(arguments):
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            return SimpleNamespace(returncode=1, stdout="", stderr="first render node failed")
+        raise AssertionError(arguments)
+
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        transcoding,
+        "_resolve_hardware_render_nodes",
+        lambda _configured: (str(first), str(second)),
+    )
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    capabilities = transcoding.get_transcode_capabilities(_settings(tmp_path), refresh=True)
+    encoder = next(item for item in capabilities.encoders if item.name == "h264_vaapi")
+    devices = {device.id: device for device in capabilities.devices}
+
+    assert encoder.available is True
+    assert encoder.device_ids == ["vaapi-renderD129"]
+    assert devices["vaapi-renderD128"].status == "unavailable"
+    assert devices["vaapi-renderD129"].status == "available"
+    assert devices["vaapi-renderD129"].render_node == str(second)
+    assert devices["vaapi-renderD129"].encoder_names == ["h264_vaapi"]
+
+
+def test_storage_profile_prefers_amf_on_windows(monkeypatch) -> None:
+    capabilities = TranscodeCapabilitiesRead(
+        ffmpeg_available=True,
+        ffmpeg_path="ffmpeg-test",
+        devices=[
+            TranscodeHardwareDevice(
+                id="amf0",
+                name="AMD AMF (automatic)",
+                vendor="amd",
+                backend="amf",
+                status="available",
+                encoder_names=["hevc_amf"],
+            )
+        ],
+        encoders=[
+            TranscodeEncoderCapability(
+                name="hevc_amf",
+                codec="hevc",
+                hardware=True,
+                tested=True,
+                available=True,
+                device_ids=["amf0"],
+            ),
+            TranscodeEncoderCapability(name="libx265", codec="hevc"),
+        ],
+    )
+
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_macos", lambda: False)
+    plan = transcoding._profile_plan(
+        _media_file_for_profile(),
+        "storage",
+        capabilities,
+        execution_mode="hardware_required",
+    )
+
+    assert plan.video_streams[0].encoder == "hevc_amf"
+
+
+def test_windows_validation_persists_automatic_amf_device(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    capabilities = TranscodeCapabilitiesRead(
+        ffmpeg_available=True,
+        ffmpeg_path="ffmpeg-test",
+        devices=[
+            TranscodeHardwareDevice(
+                id="amf0",
+                name="AMD AMF (automatic)",
+                vendor="amd",
+                backend="amf",
+                status="available",
+                encoder_names=["h264_amf"],
+            )
+        ],
+        encoders=[
+            TranscodeEncoderCapability(
+                name="h264_amf",
+                codec="h264",
+                hardware=True,
+                tested=True,
+                available=True,
+                device_ids=["amf0"],
+            ),
+            TranscodeEncoderCapability(name="aac", codec="aac"),
+            TranscodeEncoderCapability(name="mov_text", codec="mov_text"),
+        ],
+    )
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: capabilities)
+
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
+        plan.video_streams[0].encoder = "h264_amf"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.device_id == "amf0"
+    assert validation.hardware_backend == "amf"
+    assert "-filter_hw_device" not in validation.ffmpeg_arguments
 
 
 def test_capabilities_expose_intel_hevc_and_av1_encoders(monkeypatch, tmp_path) -> None:
@@ -854,6 +1030,48 @@ def test_intel_hardware_plan_initializes_device_and_uploads_frames(monkeypatch, 
     assert "-crf:v:0" not in validation_qsv.ffmpeg_arguments
     qsv_filter_index = validation_qsv.ffmpeg_arguments.index("-filter:v:0")
     assert validation_qsv.ffmpeg_arguments[qsv_filter_index + 1].endswith("format=nv12,hwupload=extra_hw_frames=16")
+
+
+def test_validation_uses_the_probed_render_node_for_automatic_selection(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    render_node = tmp_path / "renderD129"
+    render_node.touch()
+    capabilities = _capabilities()
+    capabilities.devices = [
+        TranscodeHardwareDevice(
+            id="vaapi-renderD129",
+            name="AMD GPU (renderD129)",
+            vendor="amd",
+            backend="vaapi",
+            render_node=str(render_node),
+            status="available",
+            encoder_names=["h264_vaapi"],
+        )
+    ]
+    capabilities.encoders.append(
+        TranscodeEncoderCapability(
+            name="h264_vaapi",
+            codec="h264",
+            hardware=True,
+            tested=True,
+            available=True,
+            device_ids=["vaapi-renderD129"],
+        )
+    )
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: capabilities)
+
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        plan = _compatibility_plan()
+        plan.execution_mode = "hardware_required"
+        plan.video_streams[0].encoder = "h264_vaapi"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.device_id == "vaapi-renderD129"
+    assert f"vaapi=va:{render_node}" in validation.ffmpeg_arguments
+    assert any("format=nv12,hwupload" in argument for argument in validation.ffmpeg_arguments)
 
 
 def test_vaapi_codec_native_quality_option_is_used(monkeypatch, tmp_path) -> None:

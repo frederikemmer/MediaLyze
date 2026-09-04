@@ -1,5 +1,19 @@
 services:
   medialyze:
+    # Hardware acceleration setup:
+    # - Recommended: start with ./start-medialyze.sh on Linux/macOS or
+    #   .\start-medialyze.ps1 on Windows. The launcher detects NVIDIA and
+    #   Linux /dev/dri access and creates a temporary GPU override.
+    # - Linux AMD/Intel: the host must have its kernel GPU driver loaded and
+    #   expose /dev/dri. The launcher forwards the numeric render/video group
+    #   IDs automatically, including for non-root PUID/PGID containers.
+    # - NVIDIA: the host needs a working NVIDIA driver, nvidia-smi, and a
+    #   Docker GPU runtime. The launcher adds gpus: all when reachable.
+    # - Native Windows AMD/Intel and native macOS Apple VideoToolbox use the
+    #   desktop build. Docker Desktop's Linux VM cannot expose those native
+    #   APIs; Docker acceleration there is limited to what the VM passes through.
+    # - If you invoke `docker compose up` directly, provide the host GPU
+    #   devices/groups yourself. MediaLyze cannot install host drivers.
     image: ghcr.io/frederikemmer/medialyze:latest
     container_name: medialyze
     hostname: medialyze

@@ -49,7 +49,11 @@ RUN set -eux; \
     test "$(dpkg-deb -f "${ffmpeg_package}" Architecture)" = "${debian_arch}"; \
     test "$(dpkg-deb -f "${ffmpeg_package}" Version)" = "${FFMPEG_PACKAGE_VERSION}"; \
     printf '%s  %s\n' "${expected_ffmpeg_sha256}" "${ffmpeg_package}" | sha256sum -c -; \
-    apt-get install -y --no-install-recommends "${ffmpeg_package}" ca-certificates gosu tzdata; \
+    vaapi_packages="mesa-va-drivers"; \
+    if [ "${debian_arch}" = "amd64" ]; then \
+        vaapi_packages="${vaapi_packages} intel-media-va-driver i965-va-driver"; \
+    fi; \
+    apt-get install -y --no-install-recommends "${ffmpeg_package}" ca-certificates gosu tzdata ${vaapi_packages}; \
     rm -f "${ffmpeg_package}"; \
     rm -rf /var/lib/apt/lists/*
 

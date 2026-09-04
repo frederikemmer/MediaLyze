@@ -16,7 +16,7 @@ Filename tokens are `{resolution}`, `{dynRange}`, `{codec}`, `{audioLanguages}`,
 
 ## Validation and capabilities
 
-`GET /api/transcoding/capabilities` reads the local FFmpeg version, muxers, encoders, decoder codecs, and each video encoder's locally reported option names. NVIDIA devices are enumerated with `nvidia-smi` when available; minimal Linux containers without that executable use the injected `libcuda.so.1` Driver API instead, which also works for Docker Desktop WSL2 where `/dev/dri/renderD*` is absent. CUDA/NVENC probes bind the selected CUDA device and execute a real one-frame encode. Intel QSV and VAAPI probes initialize the selected DRM render node, upload a 256×256 test frame (small enough to be cheap but above minimum NVENC frame-size limits), and pass the encoder's native quality option (ICQ/global quality for QSV, QP for H.264/HEVC VAAPI, and global quality for AV1/VP8/VP9/MPEG-2/MJPEG VAAPI). Hardware encoders are only marked available after a real one-frame test succeeds. Selecting an unavailable encoder is a validation error; hardware-required mode never silently falls back to CPU.
+`GET /api/transcoding/capabilities` reads the local FFmpeg version, muxers, encoders, decoder codecs, and each video encoder's locally reported option names. NVIDIA devices are enumerated with `nvidia-smi` when available; minimal Linux containers without that executable use the injected `libcuda.so.1` Driver API instead, while native Windows uses `nvcuda.dll`. The Linux Driver API path also works for Docker Desktop WSL2 where `/dev/dri/renderD*` is absent. Linux inventories every visible DRM render node and probes VAAPI/QSV against the individual node. Windows exposes native AMF and QSV targets when the FFmpeg build provides them, while macOS exposes the native VideoToolbox target. CUDA/NVENC probes bind the selected CUDA device and execute a real one-frame encode. VAAPI/QSV probes initialize each candidate DRM render node, upload a 256×256 test frame (small enough to be cheap but above minimum NVENC frame-size limits), and pass the encoder's native quality option (ICQ/global quality for QSV, QP for H.264/HEVC VAAPI, and global quality for AV1/VP8/VP9/MPEG-2/MJPEG VAAPI). Hardware encoders are only marked available after a real one-frame test succeeds, and each encoder records the device IDs on which it passed. Automatic selection chooses a passing device at request time; selecting an unavailable encoder is a validation error, and hardware-required mode never silently falls back to CPU.
 
 Validation resolves all files below their library root and returns the target, stream diff, warnings, normalized plan, detected capabilities, and complete readable command. It blocks existing targets, duplicate active targets, incompatible container/codec pairs, bitmap-to-text subtitle conversions, missing sidecars, invalid BCP 47 language tags, video upscaling or aspect-ratio changes, and unsupported dynamic-range choices. Dolby Vision is never synthesized: V1 only permits verified source passthrough in a supported container with video stream copy.
 
@@ -57,22 +57,26 @@ The global `transcoding` app setting controls `hardware_required` versus `cpu_on
 
 The NVIDIA path requires a working host driver, an FFmpeg build with NVENC support, and a successful device-, codec-, and encoder-specific one-frame smoke test. The presence of `nvidia-smi`, a listed `*_nvenc` encoder, or a listed CUDA hardware accelerator alone is not sufficient. MediaLyze marks the device/encoder unavailable when the real probe fails and keeps hardware-required jobs from using CPU.
 
-The production Compose file is CPU-safe by default and keeps `/media` read-only. Run `docker/start-medialyze.sh` on Linux/macOS or `docker/start-medialyze.ps1` on Windows to generate a temporary Compose override. The launcher adds `gpus: all` only when the host has both `nvidia-smi` and a reachable Docker daemon, and adds `/dev/dri` only when it exists. It never installs host drivers. `TRANSCODE_OUTPUT_HOST_DIR` controls the writable host directory mounted at `/transcode-output`.
+The production Compose file is CPU-safe by default and keeps `/media` read-only. Run `docker/start-medialyze.sh` on Linux/macOS or `docker/start-medialyze.ps1` on Windows to generate a temporary Compose override. The launcher adds `gpus: all` only when the host has both `nvidia-smi` and a reachable Docker daemon, and adds `/dev/dri` plus the numeric group IDs of its render/video devices when they exist. It never installs host drivers. `TRANSCODE_OUTPUT_HOST_DIR` controls the writable host directory mounted at `/transcode-output`.
 
 ## Intel GPU on Linux containers
 
-The Debian runtime image includes FFmpeg's VAAPI/QSV encoder support. Intel
-containers must expose `/dev/dri` and provide a compatible host VAAPI/oneVPL
-driver; the NVIDIA path is enabled by the Compose `NVIDIA_DRIVER_CAPABILITIES`
-setting when the generated GPU override is active.
-MediaLyze discovers the first `/dev/dri/renderD*` node on Linux by default; set
-`MEDIALYZE_HW_RENDER_NODE` when a host exposes more than one GPU. The selected
-node is used for both the capability smoke test and actual jobs, so an encoder
-is shown in the UI only when the driver and device really work.
+The Debian runtime image includes FFmpeg's VAAPI/QSV encoder support and the
+Mesa VAAPI driver plus Intel media/i965 VAAPI drivers on amd64. Intel and AMD
+containers must still expose `/dev/dri` and have a compatible host kernel
+driver; the NVIDIA path is enabled by the Compose
+`NVIDIA_DRIVER_CAPABILITIES` setting when the generated GPU override is active.
+MediaLyze discovers every `/dev/dri/renderD*` node on Linux by default and
+selects the first node that passes the requested encoder probe. Set
+`MEDIALYZE_HW_RENDER_NODE` only as an optional override when a host needs a
+specific node. The exact node that passed is used for both capability testing
+and the actual job, so an encoder is shown in the UI only when that driver and
+device really work.
 
-The container must expose the DRM devices and the host's `video` and `render`
-groups. A minimal Compose service looks like this (use the numeric `render` GID
-reported by the host):
+The provided launcher exposes the DRM devices and forwards their numeric host
+groups automatically, including when `PUID/PGID` runs the application as
+non-root. A manual Compose deployment (without the launcher) must provide the
+same device and group access explicitly:
 
 ```yaml
 devices:
@@ -81,7 +85,7 @@ group_add:
   - "44"   # video (example)
   - "105"  # render (example)
 environment:
-  LIBVA_DRIVER_NAME: iHD
+  # Optional override only; automatic probing covers all visible nodes.
   MEDIALYZE_HW_RENDER_NODE: /dev/dri/renderD128
 ```
 
@@ -90,6 +94,25 @@ VAAPI jobs initialize the render node and upload frames with `format=nv12` (or
 the selected DRM node as its `child_device`; plans that mix QSV and VAAPI derive
 the QSV device from the same named VAAPI device. No host driver installation or
 media-file modification is performed by MediaLyze.
+
+## AMD and Intel on Windows and hybrid systems
+
+On native Windows, FFmpeg's AMF and QSV encoders select the adapter through
+their installed driver/API. MediaLyze creates a logical automatic target for
+each backend exposed by the installed FFmpeg build, probes the actual encoder,
+and records the successful target for future plan validation. This is the
+automatic path for integrated and discrete AMD or Intel adapters; the device
+is not shown as available when the local driver or packaged FFmpeg build cannot
+complete the smoke test. This section describes the selection logic, not a
+claim that every Windows driver/encoder combination is supported; the local
+probe remains authoritative.
+
+On Linux, integrated and discrete adapters are represented by their separate
+`/dev/dri/renderD*` nodes. The first passing node is selected automatically;
+when a host exposes multiple adapters, the capability response retains the
+node-specific mapping so a failed integrated path cannot cause a job to run on
+an untested discrete path (or vice versa). Exact adapter names are best-effort
+sysfs metadata; the runtime probe is authoritative.
 
 ## Apple GPU on macOS
 
@@ -102,7 +125,8 @@ VideoToolbox when hardware-required mode is active.
 Docker Desktop for macOS runs the Linux image inside a virtual machine and
 does not expose the Mac's Apple GPU or macOS VideoToolbox framework to that
 Linux container. Consequently, the same Apple hardware acceleration cannot be
-enabled inside the container; the container correctly reports no Apple GPU
-and uses CPU encoding. Docker hardware acceleration remains available on
+enabled inside the container; the container correctly reports no Apple GPU and
+keeps Apple hardware encoders unavailable. CPU encoding requires the explicit
+`cpu_only` execution mode. Docker hardware acceleration remains available on
 supported Linux hosts (NVIDIA CUDA or Intel VAAPI/QSV) when the host runtime
 and device mounts are configured.

@@ -302,7 +302,7 @@ class ScanRuntimeManager:
             selected_devices = (
                 list(persisted.transcoding.selected_devices)
                 if isinstance(persisted.transcoding.selected_devices, list)
-                else ["cuda0"]
+                else []
             )
             self.transcode_gpu_slots = {
                 device_id: BoundedSemaphore(self.transcode_gpu_parallel_jobs_per_device)
@@ -478,10 +478,16 @@ class ScanRuntimeManager:
                     if isinstance(item, dict) and item.get("action") == "encode"
                 )
                 if has_hardware_video:
-                    device_id = queued_job.device_id or "cuda0"
-                    slot = self.transcode_gpu_slots.get(device_id)
-                    if slot is None and self.transcode_gpu_slots:
-                        slot = next(iter(self.transcode_gpu_slots.values()))
+                    # Automatic device selection is resolved and persisted by
+                    # validation.  Create a slot lazily for the selected
+                    # backend/device so AMD, Intel, NVIDIA, and Apple jobs do
+                    # not accidentally share a hard-coded CUDA slot.
+                    device_id = queued_job.device_id or f"backend:{queued_job.hardware_backend or 'automatic'}"
+                    with self.lock:
+                        slot = self.transcode_gpu_slots.get(device_id)
+                        if slot is None:
+                            slot = BoundedSemaphore(self.transcode_gpu_parallel_jobs_per_device)
+                            self.transcode_gpu_slots[device_id] = slot
                 else:
                     slot = self.transcode_cpu_slots
             finally:

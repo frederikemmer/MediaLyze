@@ -87,6 +87,11 @@ class TranscodeEncoderCapability(BaseModel):
     available: bool = True
     tested: bool = False
     test_error: str | None = None
+    # Hardware encoders can be available on only a subset of the visible
+    # adapters (for example a mixed integrated/discrete Linux host).  Keeping
+    # the successful device ids next to the encoder lets automatic selection
+    # bind the actual job to a device that passed the probe.
+    device_ids: list[str] = Field(default_factory=list)
     options: list[str] = Field(default_factory=list)
     quality_mode: Literal["crf", "cq", "qp", "global_quality"] | None = None
     quality_min: float | None = Field(default=None, ge=0, le=255)
@@ -103,7 +108,10 @@ class TranscodeHardwareDevice(BaseModel):
     driver_version: str | None = None
     compute_capability: str | None = None
     memory_total_bytes: int | None = None
+    render_node: str | None = None
+    device_class: Literal["integrated", "dedicated", "unknown"] = "unknown"
     decoder_codecs: list[str] = Field(default_factory=list)
+    encoder_names: list[str] = Field(default_factory=list)
     encoder_codecs: list[str] = Field(default_factory=list)
     supported_pixel_formats: list[str] = Field(default_factory=list)
     supported_filters: list[str] = Field(default_factory=list)

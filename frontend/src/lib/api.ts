@@ -1371,6 +1371,7 @@ export type TranscodeEncoderCapability = {
   available: boolean;
   tested: boolean;
   test_error: string | null;
+  device_ids?: string[];
   options: string[];
   quality_mode?: "crf" | "cq" | "qp" | "global_quality" | null;
   quality_min?: number | null;
@@ -1387,7 +1388,10 @@ export type TranscodeHardwareDevice = {
   driver_version: string | null;
   compute_capability: string | null;
   memory_total_bytes: number | null;
+  render_node?: string | null;
+  device_class?: "integrated" | "dedicated" | "unknown";
   decoder_codecs: string[];
+  encoder_names?: string[];
   encoder_codecs: string[];
   supported_pixel_formats: string[];
   supported_filters: string[];

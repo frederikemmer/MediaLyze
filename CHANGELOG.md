@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - add safe FFmpeg transcoding for regular video files with three editable profiles, structured expert plans, validated CPU/hardware encoders, stream-level mapping, external subtitle embedding, progress and cancellation, linked analyzed variants, Wipe comparison, searchable job history, and independent retention controls
 - add global transcoding runtime settings with hardware-required/CPU-only execution, a 90% CPU budget, dedicated CPU/GPU slots, explicit output policies, retries, partial-output cleanup, real NVIDIA capability probes, and automatic Docker GPU wiring
 - add verified macOS VideoToolbox hardware encoding for the desktop sidecar, including Apple-device detection, H.264/HEVC profile selection, and runtime smoke tests
+- automatically inventory and probe all visible Linux DRM render nodes plus native Windows AMD AMF and Intel QSV targets, binding each job to a device that actually passed its encoder test
+- make the Docker auto-launchers pass Linux render/video group IDs together with `/dev/dri` and preserve them for non-root `PUID/PGID` processes, so AMD and Intel VAAPI/QSV containers need no hand-written GPU override
+- include the Debian Mesa and Intel VAAPI user-space drivers in the Linux image where the target architecture provides them, so the automatic `/dev/dri` path does not depend on a manually extended container image
 - keep same-directory transcoded variants out of primary library counts, statistics, duplicate groups, exports, telemetry/storage aggregates, and future scans while retaining detail and job-history visibility
 - pin and checksum desktop FFmpeg artifacts and the multi-architecture Docker FFmpeg package, with build-time verification and a fixed Debian base line
 
