@@ -62,8 +62,8 @@ The production Compose file is CPU-safe by default and keeps `/media` read-only.
 ## Intel GPU on Linux containers
 
 The Debian runtime image includes FFmpeg's VAAPI/QSV encoder support, the Mesa
-VAAPI driver, Intel media/i965 VAAPI drivers, and the Intel oneVPL GPU runtime
-on amd64. Intel and AMD containers must still expose `/dev/dri` and have a
+VAAPI driver, the full Intel media/i965 VAAPI drivers, and the Intel oneVPL GPU
+runtime on amd64. Intel and AMD containers must still expose `/dev/dri` and have a
 compatible host kernel driver; the NVIDIA path is enabled by the Compose
 `NVIDIA_DRIVER_CAPABILITIES` setting when the generated GPU override is active.
 MediaLyze discovers every `/dev/dri/renderD*` node on Linux by default and

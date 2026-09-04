@@ -41,6 +41,9 @@ RUN set -eux; \
         arm64) debian_arch="arm64"; expected_ffmpeg_sha256="${FFMPEG_PACKAGE_SHA256_ARM64}" ;; \
         *) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
+    if [ "${debian_arch}" = "amd64" ]; then \
+        sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources; \
+    fi; \
     apt-get update; \
     cd /tmp; \
     apt-get download "ffmpeg=${FFMPEG_PACKAGE_VERSION}"; \
@@ -51,7 +54,7 @@ RUN set -eux; \
     printf '%s  %s\n' "${expected_ffmpeg_sha256}" "${ffmpeg_package}" | sha256sum -c -; \
     vaapi_packages="mesa-va-drivers"; \
     if [ "${debian_arch}" = "amd64" ]; then \
-        vaapi_packages="${vaapi_packages} intel-media-va-driver i965-va-driver libmfx-gen1.2"; \
+        vaapi_packages="${vaapi_packages} intel-media-va-driver-non-free i965-va-driver libmfx-gen1.2"; \
     fi; \
     apt-get install -y --no-install-recommends "${ffmpeg_package}" ca-certificates gosu tzdata ${vaapi_packages}; \
     rm -f "${ffmpeg_package}"; \
