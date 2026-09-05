@@ -68,6 +68,8 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
 
     def fake_run(arguments: list[str], *, timeout: int = 25) -> tuple[bool, str | None]:
         if "-hwaccel" in arguments:
+            if "hwdownload,format=nv12" in arguments:
+                return "source-h264.mkv" in " ".join(arguments), None
             return (
                 "source-h264.mkv" in " ".join(arguments) and "hevc_nvenc" in arguments,
                 None,
@@ -93,6 +95,62 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
     assert hardware.max_parallel_jobs_is_lower_bound is True
     assert fallback.status == "software"
     assert transcode_matrix.load_transcode_matrix(settings) == result
+
+
+def test_matrix_does_not_accept_zero_exit_hardware_pair_without_hardware_decode(
+    tmp_path, monkeypatch
+) -> None:
+    capabilities = _capabilities()
+    monkeypatch.setattr(
+        transcode_matrix,
+        "_create_fixture",
+        lambda _ffmpeg, codec, directory: (directory / f"source-{codec}.mkv", f"fixture-{codec}"),
+    )
+
+    def fake_run(arguments: list[str], *, timeout: int = 25) -> tuple[bool, str | None]:
+        if "hwdownload,format=nv12" in arguments:
+            return False, "No decoder device for codec found"
+        return True, None
+
+    monkeypatch.setattr(transcode_matrix, "_run_command", fake_run)
+
+    result = transcode_matrix._build_matrices(_settings(tmp_path), capabilities)
+
+    cell = next(
+        cell
+        for cell in result.matrices[0].cells
+        if cell.decode_codec == "h264" and cell.encode_codec == "hevc"
+    )
+    assert cell.status == "software"
+    assert cell.decoder == "software:auto"
+
+
+def test_matrix_uses_available_software_mpeg2_and_mjpeg_encoders(tmp_path, monkeypatch) -> None:
+    capabilities = _capabilities()
+    capabilities.encoders.extend(
+        [
+            TranscodeEncoderCapability(name="mpeg2video", codec="mpeg2video"),
+            TranscodeEncoderCapability(name="mjpeg", codec="mjpeg"),
+        ]
+    )
+    monkeypatch.setattr(
+        transcode_matrix,
+        "_create_fixture",
+        lambda _ffmpeg, codec, directory: (directory / f"source-{codec}.mkv", f"fixture-{codec}"),
+    )
+    monkeypatch.setattr(
+        transcode_matrix,
+        "_run_command",
+        lambda arguments, **_kwargs: (False, "hardware failed") if "-hwaccel" in arguments else (True, None),
+    )
+
+    result = transcode_matrix._build_matrices(_settings(tmp_path), capabilities)
+    cells = {cell.encode_codec: cell for cell in result.matrices[0].cells if cell.decode_codec == "h264"}
+
+    assert cells["mpeg2video"].status == "software"
+    assert cells["mpeg2video"].encoder == "mpeg2video"
+    assert cells["mjpeg"].status == "software"
+    assert cells["mjpeg"].encoder == "mjpeg"
 
 
 def test_matrix_marks_missing_synthetic_source_as_not_tested(tmp_path, monkeypatch) -> None:

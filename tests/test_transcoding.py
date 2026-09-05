@@ -519,7 +519,12 @@ def test_capabilities_detect_and_smoke_test_dynamic_hardware_encoders(monkeypatc
         if "-encoders" in arguments:
             return SimpleNamespace(
                 returncode=0,
-                stdout=" V..... libx264 H.264\n V..... h264_v4l2m2m V4L2 mem2mem H.264 encoder\n",
+                stdout=(
+                    " V..... libx264 H.264\n"
+                    " V..... mpeg2video MPEG-2 video\n"
+                    " V..... mjpeg MJPEG\n"
+                    " V..... h264_v4l2m2m V4L2 mem2mem H.264 encoder\n"
+                ),
                 stderr="",
             )
         if "-muxers" in arguments:
@@ -546,6 +551,10 @@ def test_capabilities_detect_and_smoke_test_dynamic_hardware_encoders(monkeypatc
     assert by_name["h264_v4l2m2m"].tested is True
     assert by_name["h264_v4l2m2m"].available is True
     assert by_name["h264_v4l2m2m"].options == ["cq", "preset"]
+    assert by_name["mpeg2video"].hardware is False
+    assert by_name["mpeg2video"].available is True
+    assert by_name["mjpeg"].hardware is False
+    assert by_name["mjpeg"].available is True
     assert capabilities.dolby_vision_passthrough is True
 
 

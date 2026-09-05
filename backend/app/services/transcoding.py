@@ -68,6 +68,8 @@ HARDWARE_ENCODER_MARKERS = (
 )
 VIDEO_ENCODER_CODECS = {
     "libx264": "h264",
+    "mpeg2video": "mpeg2video",
+    "mjpeg": "mjpeg",
     "h264_nvenc": "h264",
     "h264_qsv": "h264",
     "h264_amf": "h264",

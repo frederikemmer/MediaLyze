@@ -163,19 +163,9 @@ def _device_hardware_encoder(
     return None
 
 
-def _hardware_pair_command(
-    ffmpeg_path: str,
-    fixture: Path,
-    device: TranscodeHardwareDevice,
-    encoder: str,
-    *,
-    frames: int = 30,
-    stream_loops: int = 0,
-) -> list[str] | None:
-    backend = _hardware_backend(encoder)
-    if backend != device.backend:
-        return None
-    command = [ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y"]
+def _hardware_decode_setup(device: TranscodeHardwareDevice) -> list[str] | None:
+    backend = device.backend
+    command: list[str] = []
     if backend == "cuda":
         command.extend(_hardware_device_arguments({"cuda"}, None, cuda_device_id=device.id))
         command.extend(["-hwaccel", "cuda", "-hwaccel_device", "cu", "-hwaccel_output_format", "cuda"])
@@ -222,6 +212,58 @@ def _hardware_pair_command(
         command.extend(["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"])
     else:
         return None
+    return command
+
+
+def _hardware_decode_probe_command(
+    ffmpeg_path: str,
+    fixture: Path,
+    device: TranscodeHardwareDevice,
+    *,
+    frames: int = 1,
+) -> list[str] | None:
+    setup = _hardware_decode_setup(device)
+    if setup is None:
+        return None
+    command = [ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y", *setup]
+    command.extend(
+        [
+            "-i",
+            str(fixture),
+            "-map",
+            "0:v:0",
+            "-an",
+            # A hardware-only frame download makes an unsupported decoder
+            # fail instead of allowing FFmpeg to continue with software
+            # frames after a zero-exit hardware initialisation warning.
+            "-vf",
+            "hwdownload,format=nv12",
+            "-frames:v",
+            str(frames),
+            "-f",
+            "null",
+            "-",
+        ]
+    )
+    return command
+
+
+def _hardware_pair_command(
+    ffmpeg_path: str,
+    fixture: Path,
+    device: TranscodeHardwareDevice,
+    encoder: str,
+    *,
+    frames: int = 30,
+    stream_loops: int = 0,
+) -> list[str] | None:
+    backend = _hardware_backend(encoder)
+    if backend != device.backend:
+        return None
+    setup = _hardware_decode_setup(device)
+    if setup is None:
+        return None
+    command = [ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y", *setup]
     if stream_loops:
         command.extend(["-stream_loop", str(stream_loops)])
     command.extend(["-i", str(fixture), "-map", "0:v:0", "-an", "-c:v", encoder])
@@ -298,6 +340,7 @@ def _build_matrices(
             for codec in decode_codecs
         }
         software_results: dict[tuple[str, str], tuple[bool, str | None]] = {}
+        hardware_decode_results: dict[tuple[str, str], tuple[bool, str | None]] = {}
         matrices: list[TranscodeDeviceMatrixRead] = []
         device_groups: dict[str, list[TranscodeHardwareDevice]] = {}
         for device in capabilities.devices:
@@ -323,6 +366,21 @@ def _build_matrices(
                     for device in devices:
                         hardware_encoder = _device_hardware_encoder(capabilities, device, encode_codec)
                         if hardware_encoder is None:
+                            continue
+                        decode_key = (device.id, decode_codec)
+                        if decode_key not in hardware_decode_results:
+                            decode_command = _hardware_decode_probe_command(
+                                settings.ffmpeg_path,
+                                fixture,
+                                device,
+                            )
+                            hardware_decode_results[decode_key] = (
+                                _run_command(decode_command, timeout=40)
+                                if decode_command is not None
+                                else (False, "No hardware decode probe is available for this backend")
+                            )
+                        decode_succeeded, _decode_error = hardware_decode_results[decode_key]
+                        if not decode_succeeded:
                             continue
                         command = _hardware_pair_command(
                             settings.ffmpeg_path,
