@@ -43,6 +43,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - make the Windows test suite independent of optional symlink privileges and explicit about the platform when checking FFprobe path normalization
+- run the cross-platform Electron version-stamping step through Bash so Windows does not interpret the POSIX environment variable syntax as an unset PowerShell variable
 - keep custom select chevrons single and correctly positioned when applying light or dark theme background colors, and render compatibility capability sections with theme-aware nested surfaces instead of light gray dark-mode fallbacks [#180](https://github.com/frederikemmer/MediaLyze/pull/180) by [@MadsThy](https://github.com/MadsThy)
 - initialize Intel VAAPI/QSV hardware devices from a Linux DRM render node during capability checks and transcoding, and include the required Intel runtime drivers in AMD64 Docker images
 - require an explicit server-side confirmation for original replacement and report a clear failure when an advertised hardware encoder fails its runtime smoke test instead of falling back to CPU

@@ -112,6 +112,7 @@ jobs:
         working-directory: desktop
 
       - name: Stamp Electron package version
+        shell: bash
         run: npm version "${BUILD_VERSION}" --no-git-tag-version --allow-same-version
         working-directory: desktop
 
