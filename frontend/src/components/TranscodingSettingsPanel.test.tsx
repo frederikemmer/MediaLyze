@@ -107,6 +107,16 @@ const completedMatrix: TranscodeCapabilityMatrix = {
       { decode_codec: "av1", encode_codec: "hevc", status: "software", decoder: "software:auto", encoder: "libx265", max_parallel_jobs: null, max_parallel_jobs_is_lower_bound: false, detail: null },
       { decode_codec: "av1", encode_codec: "av1", status: "unsupported", decoder: null, encoder: null, max_parallel_jobs: null, max_parallel_jobs_is_lower_bound: false, detail: null },
     ],
+  }, {
+    device_id: "render:/dev/dri/renderD128",
+    device_name: "Intel CPU iGPU · Quick Sync",
+    backend: "qsv + vaapi",
+    tested_at: "2026-09-04T12:00:00Z",
+    decode_codecs: ["hevc"],
+    encode_codecs: ["av1"],
+    cells: [
+      { decode_codec: "hevc", encode_codec: "av1", status: "software", decoder: "software:auto", encoder: "libsvtav1", max_parallel_jobs: null, max_parallel_jobs_is_lower_bound: false, detail: null },
+    ],
   }],
 };
 
@@ -153,10 +163,14 @@ describe("TranscodingSettingsPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Test codec matrix" }));
 
     await waitFor(() => expect(api.testTranscodeCapabilityMatrix).toHaveBeenCalledTimes(1));
-    const matrix = await screen.findByRole("table");
+    const matrices = await screen.findAllByRole("table");
+    const matrix = matrices[0];
     expect(within(matrix).getByLabelText(/H\.265 \/ HEVC → AV1: HW · 3×/)).toBeInTheDocument();
-    expect(within(matrix).getByLabelText(/AV1 → H\.265 \/ HEVC: CPU/)).toBeInTheDocument();
+    expect(within(matrix).getByLabelText(/AV1 → H\.265 \/ HEVC: Software/)).toBeInTheDocument();
     expect(within(matrix).getByLabelText(/AV1 → AV1: —/)).toBeInTheDocument();
-    expect(screen.getByText("Hardware · simultaneous sessions")).toBeInTheDocument();
+    expect(screen.getAllByText("Hardware · simultaneous sessions")).toHaveLength(2);
+    expect(screen.getByText("Intel CPU iGPU · Quick Sync")).toBeInTheDocument();
+    expect(screen.getByText("qsv + vaapi · renderD128")).toBeInTheDocument();
+    expect(matrices).toHaveLength(2);
   });
 });

@@ -9,6 +9,7 @@ import {
   type AppSettings,
   type TranscodeCapabilities,
   type TranscodeCapabilityMatrix,
+  type TranscodeDeviceMatrix,
   type TranscodeHardwareDevice,
   type TranscodeMatrixCell,
   type TranscodingSettings,
@@ -70,6 +71,16 @@ function cellFor(
   encodeCodec: string,
 ): TranscodeMatrixCell | undefined {
   return cells.find((cell) => cell.decode_codec === decodeCodec && cell.encode_codec === encodeCodec);
+}
+
+function matrixDeviceIdLabel(matrix: TranscodeDeviceMatrix): string {
+  const raw = matrix.device_id.trim();
+  if (raw.startsWith("device:")) return raw.slice("device:".length);
+  if (raw.startsWith("render:")) {
+    const node = raw.slice("render:".length).split(/[\\/]/).filter(Boolean).pop();
+    return node || raw;
+  }
+  return raw;
 }
 
 function deviceSelectionLabel(devices: TranscodeHardwareDevice[]): string {
@@ -420,7 +431,7 @@ export function TranscodingSettingsPanel({
             {matrix?.matrices.map((deviceMatrix, index) => (
               <details className="transcode-device-matrix" key={deviceMatrix.device_id} open={index === 0}>
                 <summary>
-                  <span><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {deviceMatrix.device_id}</small></span>
+                  <span><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small></span>
                 </summary>
                 <div className="transcode-matrix-scroll" tabIndex={0}>
                   <table className="transcode-matrix-table">

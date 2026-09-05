@@ -99,9 +99,13 @@ runtime on amd64. Intel and AMD containers must still expose `/dev/dri` and have
 compatible host kernel driver; the NVIDIA path is enabled by the Compose
 `NVIDIA_DRIVER_CAPABILITIES` setting when the generated GPU override is active.
 MediaLyze discovers every `/dev/dri/renderD*` node on Linux by default and
-selects the first node that passes the requested encoder probe. This covers
-Intel CPU/iGPU Quick Sync and AMD APU/iGPU VCN as well as discrete adapters;
-there is no separate container setting for an integrated media engine. Set
+selects the first node that passes the requested encoder probe. Vendor metadata
+from the DRM node also keeps an Intel CPU/iGPU or AMD APU/iGPU target visible
+when the local FFmpeg build exposes only a subset of the expected backend
+families; an encoder is still marked usable only after its exact runtime probe
+passes. This covers Intel CPU/iGPU Quick Sync and AMD APU/iGPU VCN as well as
+discrete adapters; there is no separate container setting for an integrated
+media engine. Set
 `MEDIALYZE_HW_RENDER_NODE` only as an optional override when a host needs a
 specific node. The exact node that passed is used for both capability testing
 and the actual job, so an encoder is shown in the UI only when that driver and

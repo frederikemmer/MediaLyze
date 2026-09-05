@@ -398,6 +398,15 @@ DRM_VENDOR_NAMES = {
     "0x1002": "amd",
     "0x10de": "nvidia",
 }
+DRM_DRIVER_VENDORS = {
+    "i915": "intel",
+    "xe": "intel",
+    "amdgpu": "amd",
+    "radeon": "amd",
+    "nouveau": "nvidia",
+    "nvidia": "nvidia",
+    "nvidia-drm": "nvidia",
+}
 BACKEND_DISPLAY_NAMES = {
     "vaapi": "VAAPI",
     "qsv": "Quick Sync",
@@ -441,6 +450,8 @@ def _linux_render_device_metadata(render_node: str) -> dict[str, str]:
     node_name = Path(render_node).name
     device_path = Path("/sys/class/drm") / node_name / "device"
     vendor_id = (_read_optional_text(device_path / "vendor") or "").lower()
+    if vendor_id and not vendor_id.startswith("0x"):
+        vendor_id = f"0x{vendor_id}"
     vendor = DRM_VENDOR_NAMES.get(vendor_id, "unknown")
     driver_path = device_path / "driver"
     try:
@@ -454,6 +465,19 @@ def _linux_render_device_metadata(render_node: str) -> dict[str, str]:
             key, separator, value = line.partition("=")
             if separator:
                 uevent[key.strip().upper()] = value.strip()
+    # Some NAS/container combinations expose the DRM driver and render node
+    # but hide the PCI vendor file.  Prefer a vendor from the uevent PCI_ID,
+    # then use the Intel i915/xe and AMD amdgpu/radeon driver names.  The
+    # subsequent encoder probe remains authoritative for actual usability.
+    if vendor == "unknown":
+        uevent_vendor_id = uevent.get("PCI_ID", "").partition(":")[0].lower()
+        if uevent_vendor_id and not uevent_vendor_id.startswith("0x"):
+            uevent_vendor_id = f"0x{uevent_vendor_id}"
+        vendor = DRM_VENDOR_NAMES.get(uevent_vendor_id, "unknown")
+    if not driver:
+        driver = uevent.get("DRIVER", "")
+    if vendor == "unknown":
+        vendor = DRM_DRIVER_VENDORS.get(driver.lower(), "unknown")
     vendor_label = vendor.capitalize() if vendor != "unknown" else "GPU"
     name = f"{vendor_label} GPU ({node_name})"
     if uevent.get("PCI_ID"):
@@ -523,13 +547,26 @@ def _build_hardware_device_inventory(
 
     devices = list(nvidia_devices)
     render_metadata = [_linux_render_device_metadata(node) for node in render_nodes]
-    render_backends = {
+    listed_render_backends = {
         backend
         for backend in ("vaapi", "qsv")
         if any(name.lower().endswith(f"_{backend}") for name in listed_names)
     }
-    for backend in sorted(render_backends):
-        for metadata in render_metadata:
+    for metadata in render_metadata:
+        # A vendor-identified DRM node is itself evidence that a hardware
+        # media engine is present, including integrated CPU/APU engines, even
+        # when this FFmpeg build does not list every backend family. Add the
+        # native Intel/AMD targets so the device remains visible in diagnostics
+        # and can become available as soon as one of its hardware encoders
+        # passes the real probe. Do not infer anything for unknown render
+        # nodes; NVIDIA and virtualized paths continue to be gated by their
+        # explicit backend listings.
+        render_backends = set(listed_render_backends)
+        if metadata["vendor"] == "intel":
+            render_backends.update({"qsv", "vaapi"})
+        elif metadata["vendor"] == "amd":
+            render_backends.add("vaapi")
+        for backend in sorted(render_backends):
             # QSV is an Intel path.  Unknown metadata is retained because
             # tests and some virtualized/container environments expose a
             # render node without the PCI sysfs tree.

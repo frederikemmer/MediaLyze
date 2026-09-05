@@ -836,6 +836,51 @@ def test_linux_intel_cpu_igpu_media_engine_exposes_qsv_and_vaapi(monkeypatch, tm
     assert {device.render_node for device in devices} == {str(render_node)}
 
 
+def test_linux_vendor_render_node_keeps_cpu_media_engine_visible_without_encoder_listing(monkeypatch, tmp_path) -> None:
+    render_node = tmp_path / "renderD128"
+    render_node.touch()
+
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        transcoding,
+        "_linux_render_device_metadata",
+        lambda _node: {
+            "vendor": "intel",
+            "name": "Intel integrated adapter",
+            "driver": "i915",
+            "device_class": "integrated",
+            "render_node": str(render_node),
+        },
+    )
+
+    devices = transcoding._build_hardware_device_inventory(
+        {"libx264"},
+        (str(render_node),),
+        [],
+    )
+
+    assert [(device.backend, device.vendor, device.status) for device in devices] == [
+        ("qsv", "intel", "not_detected"),
+        ("vaapi", "intel", "not_detected"),
+    ]
+
+
+def test_linux_render_metadata_uses_uevent_when_sysfs_vendor_is_hidden(monkeypatch) -> None:
+    def fake_read(path):
+        if path.name == "uevent":
+            return "PCI_ID=8086:46A6\nDRIVER=i915\n"
+        return None
+
+    monkeypatch.setattr(transcoding, "_read_optional_text", fake_read)
+
+    metadata = transcoding._linux_render_device_metadata("/dev/dri/renderD128")
+
+    assert metadata["vendor"] == "intel"
+    assert metadata["driver"] == "i915"
+    assert metadata["name"] == "Intel GPU (renderD128) · 8086:46A6"
+
+
 def test_storage_profile_prefers_amf_on_windows(monkeypatch) -> None:
     capabilities = TranscodeCapabilitiesRead(
         ffmpeg_available=True,

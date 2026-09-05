@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- recognize vendor-identified Intel CPU/iGPU and AMD APU/iGPU DRM media engines even when an FFmpeg build exposes only a subset of their backend families, keep each physical render node usable through its passing QSV/VAAPI encoders, and label matrix software fallbacks as Software
 - clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
 - document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan

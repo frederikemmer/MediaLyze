@@ -1934,7 +1934,7 @@
     "matrixEncodeAxis": "Encoding",
     "matrixLegend": "Legende der Fähigkeitsmatrix",
     "matrixHardwareCell": "HW · {{count}}×",
-    "matrixSoftwareCell": "CPU",
+    "matrixSoftwareCell": "Software",
     "matrixUnsupportedCell": "—",
     "matrixNotTestedCell": "?",
     "matrixHardwareLegend": "Hardware · gleichzeitige Sitzungen",

@@ -115,6 +115,37 @@ def test_matrix_marks_missing_synthetic_source_as_not_tested(tmp_path, monkeypat
     )
 
 
+def test_matrix_keeps_distinct_hardware_devices_separate(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    capabilities = _capabilities()
+    capabilities.devices.append(
+        TranscodeHardwareDevice(
+            id="cuda1",
+            name="Second GPU",
+            vendor="nvidia",
+            backend="cuda",
+            encoder_names=["h264_nvenc", "hevc_nvenc"],
+            encoder_codecs=["h264", "hevc"],
+            status="available",
+        )
+    )
+    for encoder in capabilities.encoders:
+        if encoder.hardware:
+            encoder.device_ids = ["cuda0", "cuda1"]
+
+    monkeypatch.setattr(transcode_matrix, "_create_fixture", lambda _ffmpeg, codec, directory: (
+        directory / f"source-{codec}.mkv",
+        f"fixture-{codec}",
+    ))
+    monkeypatch.setattr(transcode_matrix, "_run_command", lambda *_args, **_kwargs: (True, None))
+
+    result = transcode_matrix._build_matrices(settings, capabilities)
+
+    assert result.status == "completed"
+    assert {matrix.device_name for matrix in result.matrices} == {"Test GPU", "Second GPU"}
+    assert len(result.matrices) == 2
+
+
 def test_linux_backend_paths_with_same_render_node_share_one_physical_device() -> None:
     qsv = TranscodeHardwareDevice(
         id="qsv-renderD128",
