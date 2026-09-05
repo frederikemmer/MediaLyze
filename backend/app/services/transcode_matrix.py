@@ -3,9 +3,11 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
+from statistics import median
 import subprocess
 import tempfile
 from threading import Lock
+from time import perf_counter
 
 from backend.app.core.config import Settings
 from backend.app.schemas.transcoding import (
@@ -14,6 +16,9 @@ from backend.app.schemas.transcoding import (
     TranscodeDeviceMatrixRead,
     TranscodeEncoderCapability,
     TranscodeHardwareDevice,
+    TranscodeMatrixBenchmarkLevelRead,
+    TranscodeMatrixBenchmarkRead,
+    TranscodeMatrixBenchmarkRunRead,
     TranscodeMatrixCellRead,
 )
 from backend.app.services.transcoding import (
@@ -23,6 +28,7 @@ from backend.app.services.transcoding import (
     _quality_option,
     get_transcode_capabilities,
 )
+from backend.app.utils.processes import get_hidden_subprocess_kwargs
 from backend.app.utils.time import utc_now
 
 
@@ -39,7 +45,17 @@ SOFTWARE_ENCODERS = {
     "mpeg2video": ("mpeg2video",),
     "mjpeg": ("mjpeg",),
 }
-MAX_PARALLEL_PROBE_JOBS = 4
+# The matrix searches for the first measurable performance boundary instead of
+# treating an arbitrary probe count as the device capacity.  Twenty is high
+# enough to cover common desktop use while keeping a runaway local test bounded.
+MAX_PARALLEL_PROBE_JOBS = 20
+PARALLEL_PROBE_REPETITIONS = 3
+PARALLEL_PERFORMANCE_TOLERANCE = 0.20
+PARALLEL_PROBE_WIDTH = 256
+PARALLEL_PROBE_HEIGHT = 256
+PARALLEL_PROBE_FRAME_RATE = 30
+PARALLEL_PROBE_FRAMES = 240
+PARALLEL_PROBE_STREAM_LOOPS = 7
 
 
 class TranscodeMatrixBusyError(RuntimeError):
@@ -84,6 +100,7 @@ def _run_command(arguments: list[str], *, timeout: int = 25) -> tuple[bool, str 
             text=True,
             timeout=timeout,
             check=False,
+            **get_hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return False, str(exc)
@@ -91,6 +108,12 @@ def _run_command(arguments: list[str], *, timeout: int = 25) -> tuple[bool, str 
     if len(output) > 800:
         output = output[-800:]
     return completed.returncode == 0, output or None
+
+
+def _timed_run_command(arguments: list[str], *, timeout: int = 25) -> tuple[bool, float, str | None]:
+    started = perf_counter()
+    succeeded, error = _run_command(arguments, timeout=timeout)
+    return succeeded, max(perf_counter() - started, 0.000001), error
 
 
 def _fixture_options(encoder: str) -> list[str]:
@@ -118,7 +141,7 @@ def _create_fixture(ffmpeg_path: str, codec: str, directory: Path) -> tuple[Path
             "-f",
             "lavfi",
             "-i",
-            "testsrc2=size=256x256:rate=30:duration=1",
+            f"testsrc2=size={PARALLEL_PROBE_WIDTH}x{PARALLEL_PROBE_HEIGHT}:rate={PARALLEL_PROBE_FRAME_RATE}:duration=1",
             "-an",
             "-c:v",
             encoder,
@@ -297,15 +320,133 @@ def _software_pair_command(ffmpeg_path: str, fixture: Path, encoder: str) -> lis
     ]
 
 
-def _parallel_capacity(command: list[str]) -> tuple[int, bool]:
+def _parallel_capacity(command: list[str]) -> tuple[int, bool, TranscodeMatrixBenchmarkRead]:
+    benchmark = TranscodeMatrixBenchmarkRead(
+        tolerance_percent=PARALLEL_PERFORMANCE_TOLERANCE * 100,
+        test_ceiling=MAX_PARALLEL_PROBE_JOBS,
+        repetitions=PARALLEL_PROBE_REPETITIONS,
+        width=PARALLEL_PROBE_WIDTH,
+        height=PARALLEL_PROBE_HEIGHT,
+        frame_rate=PARALLEL_PROBE_FRAME_RATE,
+        frames=PARALLEL_PROBE_FRAMES,
+        stream_loops=PARALLEL_PROBE_STREAM_LOOPS,
+    )
+
+    def run_record(run: int, outcome: tuple[bool, float, str | None]) -> TranscodeMatrixBenchmarkRunRead:
+        succeeded, duration, error = outcome
+        return TranscodeMatrixBenchmarkRunRead(
+            run=run,
+            duration_seconds=duration if succeeded else None,
+            success=succeeded,
+            error=error if not succeeded else None,
+        )
+
+    baseline_runs = [
+        run_record(run, _timed_run_command(command, timeout=45))
+        for run in range(1, PARALLEL_PROBE_REPETITIONS + 1)
+    ]
+    baseline_durations = [
+        run.duration_seconds
+        for run in baseline_runs
+        if run.success and run.duration_seconds is not None
+    ]
+    baseline = (
+        float(median(baseline_durations))
+        if len(baseline_durations) == PARALLEL_PROBE_REPETITIONS
+        else None
+    )
+    slowdown_limit = baseline * (1 + PARALLEL_PERFORMANCE_TOLERANCE) if baseline is not None else None
+    benchmark.baseline_median_seconds = baseline
+    benchmark.slowdown_limit_seconds = slowdown_limit
+    benchmark.levels.append(
+        TranscodeMatrixBenchmarkLevelRead(
+            concurrency=1,
+            runs=baseline_runs,
+            median_seconds=baseline,
+            slowdown_percent=0.0 if baseline is not None else None,
+            passed=baseline is not None,
+            error=next((run.error for run in baseline_runs if run.error), None),
+        )
+    )
+    if baseline is None:
+        return 1, False, benchmark
+
+    def sample_level(count: int) -> TranscodeMatrixBenchmarkLevelRead:
+        runs: list[TranscodeMatrixBenchmarkRunRead] = []
+        for run in range(1, PARALLEL_PROBE_REPETITIONS + 1):
+            with ThreadPoolExecutor(max_workers=count, thread_name_prefix="transcode-matrix") as executor:
+                outcomes = list(
+                    executor.map(
+                        lambda _index: _timed_run_command(command, timeout=45),
+                        range(count),
+                    )
+                )
+            successful_durations = [outcome[1] for outcome in outcomes if outcome[0]]
+            runs.append(
+                TranscodeMatrixBenchmarkRunRead(
+                    run=run,
+                    duration_seconds=(
+                        float(median(successful_durations))
+                        if successful_durations
+                        else None
+                    ),
+                    success=all(outcome[0] for outcome in outcomes),
+                    error=next((outcome[2] for outcome in outcomes if not outcome[0] and outcome[2]), None),
+                )
+            )
+        durations = [
+            run.duration_seconds
+            for run in runs
+            if run.success and run.duration_seconds is not None
+        ]
+        level_median = float(median(durations)) if len(durations) == PARALLEL_PROBE_REPETITIONS else None
+        slowdown_percent = (
+            ((level_median / baseline) - 1) * 100
+            if level_median is not None
+            else None
+        )
+        return TranscodeMatrixBenchmarkLevelRead(
+            concurrency=count,
+            runs=runs,
+            median_seconds=level_median,
+            slowdown_percent=slowdown_percent,
+            passed=level_median is not None and level_median <= slowdown_limit,
+            error=next((run.error for run in runs if run.error), None),
+        )
+
+    def passes_performance_test(count: int) -> bool:
+        level_result = sample_level(count)
+        benchmark.levels.append(level_result)
+        return level_result.passed
+
+    # Probe exponentially first, then scan the small interval before the first
+    # failing level. This resolves an exact boundary such as 4 pass / 5 fail,
+    # without launching every level up to twenty when the device can handle
+    # them all.
     maximum = 1
-    for count in range(2, MAX_PARALLEL_PROBE_JOBS + 1):
-        with ThreadPoolExecutor(max_workers=count, thread_name_prefix="transcode-matrix") as executor:
-            outcomes = list(executor.map(lambda _index: _run_command(command, timeout=45)[0], range(count)))
-        if not all(outcomes):
-            return maximum, False
-        maximum = count
-    return maximum, True
+    first_failure: int | None = None
+    level = 2
+    while level <= MAX_PARALLEL_PROBE_JOBS:
+        if not passes_performance_test(level):
+            first_failure = level
+            break
+        maximum = level
+        if level == MAX_PARALLEL_PROBE_JOBS:
+            break
+        level = min(level * 2, MAX_PARALLEL_PROBE_JOBS)
+
+    if first_failure is None:
+        benchmark.levels.sort(key=lambda level_result: level_result.concurrency)
+        return maximum, True, benchmark
+
+    for candidate in range(maximum + 1, first_failure):
+        if passes_performance_test(candidate):
+            maximum = candidate
+        else:
+            benchmark.levels.sort(key=lambda level_result: level_result.concurrency)
+            return maximum, False, benchmark
+    benchmark.levels.sort(key=lambda level_result: level_result.concurrency)
+    return maximum, False, benchmark
 
 
 def _codec_axes(capabilities: TranscodeCapabilitiesRead) -> tuple[list[str], list[str]]:
@@ -429,10 +570,10 @@ def _build_matrices(
             for (decode_codec, encode_codec), base_command in hardware_commands.items():
                 representative = list(base_command)
                 frames_index = representative.index("-frames:v") + 1
-                representative[frames_index] = "120"
+                representative[frames_index] = str(PARALLEL_PROBE_FRAMES)
                 input_index = representative.index("-i")
-                representative[input_index:input_index] = ["-stream_loop", "3"]
-                maximum, lower_bound = _parallel_capacity(representative)
+                representative[input_index:input_index] = ["-stream_loop", str(PARALLEL_PROBE_STREAM_LOOPS)]
+                maximum, lower_bound, benchmark = _parallel_capacity(representative)
                 for cell in cells:
                     if (
                         cell.status == "hardware"
@@ -441,6 +582,7 @@ def _build_matrices(
                     ):
                         cell.max_parallel_jobs = maximum
                         cell.max_parallel_jobs_is_lower_bound = lower_bound
+                        cell.parallel_benchmark = benchmark
             matrices.append(
                 TranscodeDeviceMatrixRead(
                     device_id=device_key,

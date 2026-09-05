@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.services.languages import normalize_language_code
+from backend.app.utils.processes import get_hidden_subprocess_kwargs
 
 
 @dataclass(slots=True)
@@ -491,11 +492,7 @@ def run_ffprobe(file_path: Path, ffprobe_path: str) -> dict[str, Any]:
         "text": True,
         "check": True,
     }
-    if os.name == "nt":
-        run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        run_kwargs["startupinfo"] = startupinfo
+    run_kwargs.update(get_hidden_subprocess_kwargs())
     try:
         completed = subprocess.run(command, **run_kwargs)
     except subprocess.CalledProcessError as exc:

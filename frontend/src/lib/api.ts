@@ -1416,6 +1416,36 @@ export type TranscodeCapabilities = {
   error: string | null;
 };
 
+export type TranscodeMatrixBenchmarkRun = {
+  run: number;
+  duration_seconds: number | null;
+  success: boolean;
+  error: string | null;
+};
+
+export type TranscodeMatrixBenchmarkLevel = {
+  concurrency: number;
+  runs: TranscodeMatrixBenchmarkRun[];
+  median_seconds: number | null;
+  slowdown_percent: number | null;
+  passed: boolean;
+  error: string | null;
+};
+
+export type TranscodeMatrixBenchmark = {
+  tolerance_percent: number;
+  test_ceiling: number;
+  repetitions: number;
+  width: number;
+  height: number;
+  frame_rate: number;
+  frames: number;
+  stream_loops: number;
+  baseline_median_seconds: number | null;
+  slowdown_limit_seconds: number | null;
+  levels: TranscodeMatrixBenchmarkLevel[];
+};
+
 export type TranscodeMatrixCell = {
   decode_codec: string;
   encode_codec: string;
@@ -1424,6 +1454,7 @@ export type TranscodeMatrixCell = {
   encoder: string | null;
   max_parallel_jobs: number | null;
   max_parallel_jobs_is_lower_bound: boolean;
+  parallel_benchmark?: TranscodeMatrixBenchmark | null;
   detail: string | null;
 };
 

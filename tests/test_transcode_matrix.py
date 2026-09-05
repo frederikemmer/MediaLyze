@@ -77,6 +77,12 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
         return True, None
 
     monkeypatch.setattr(transcode_matrix, "_run_command", fake_run)
+    monkeypatch.setattr(transcode_matrix, "MAX_PARALLEL_PROBE_JOBS", 4)
+    monkeypatch.setattr(
+        transcode_matrix,
+        "_timed_run_command",
+        lambda *_args, **_kwargs: (True, 1.0, None),
+    )
 
     result = transcode_matrix.run_transcode_matrix_test(settings)
 
@@ -93,8 +99,34 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
     assert hardware.status == "hardware"
     assert hardware.max_parallel_jobs == 4
     assert hardware.max_parallel_jobs_is_lower_bound is True
+    assert hardware.parallel_benchmark is not None
+    assert hardware.parallel_benchmark.baseline_median_seconds == 1.0
+    assert [level.concurrency for level in hardware.parallel_benchmark.levels] == [1, 2, 4]
     assert fallback.status == "software"
     assert transcode_matrix.load_transcode_matrix(settings) == result
+
+
+def test_parallel_capacity_reports_highest_level_before_repeatable_slowdown(monkeypatch) -> None:
+    monkeypatch.setattr(transcode_matrix, "MAX_PARALLEL_PROBE_JOBS", 8)
+    calls = 0
+
+    def fake_timed_run(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        # Baseline (3), level 2 (6), and level 4 (12) retain full speed.
+        # The exponential level 8 and the intervening boundary checks are slower.
+        return True, 1.0 if calls <= 21 else 1.3, None
+
+    monkeypatch.setattr(transcode_matrix, "_timed_run_command", fake_timed_run)
+
+    maximum, lower_bound, benchmark = transcode_matrix._parallel_capacity(["ffmpeg-test"])
+
+    assert (maximum, lower_bound) == (4, False)
+    assert benchmark.baseline_median_seconds == 1.0
+    assert benchmark.slowdown_limit_seconds == 1.2
+    assert [level.concurrency for level in benchmark.levels] == [1, 2, 4, 5, 8]
+    assert all(len(level.runs) == 3 for level in benchmark.levels)
+    assert benchmark.levels[-1].passed is False
 
 
 def test_matrix_does_not_accept_zero_exit_hardware_pair_without_hardware_decode(

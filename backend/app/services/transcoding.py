@@ -51,6 +51,7 @@ from backend.app.schemas.transcoding import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.languages import normalize_language_tag
+from backend.app.utils.processes import get_hidden_subprocess_kwargs
 from backend.app.utils.time import utc_now
 
 
@@ -514,6 +515,7 @@ def _windows_d3d11_adapters(ffmpeg_path: str) -> tuple[dict[str, object], ...]:
                 text=True,
                 timeout=10,
                 check=False,
+                **get_hidden_subprocess_kwargs(),
             )
         except Exception:
             # Adapter enumeration must never make the normal encoder probe
@@ -825,7 +827,14 @@ def _test_hardware_encoder(
         command.extend([f"-{_quality_option(quality_spec[0])}", f"{quality_spec[3]:g}"])
     command.extend(["-f", "null", "-"])
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=15, check=False)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            **get_hidden_subprocess_kwargs(),
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         return False, str(exc)
     error = (completed.stderr or completed.stdout or "").strip()
@@ -966,6 +975,7 @@ def _detect_nvidia_devices() -> tuple[list[TranscodeHardwareDevice], str | None]
             text=True,
             timeout=10,
             check=False,
+            **get_hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return [], str(exc)
@@ -1004,6 +1014,7 @@ def _list_decoder_codecs(ffmpeg_path: str) -> list[str]:
             text=True,
             timeout=15,
             check=False,
+            **get_hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return []
@@ -1027,6 +1038,7 @@ def _encoder_options(ffmpeg_path: str, encoder: str) -> list[str]:
             text=True,
             timeout=10,
             check=False,
+            **get_hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return []
@@ -1056,6 +1068,7 @@ def _detect_capabilities_cached(
             text=True,
             timeout=10,
             check=False,
+            **get_hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return TranscodeCapabilitiesRead(
@@ -1076,6 +1089,7 @@ def _detect_capabilities_cached(
         text=True,
         timeout=15,
         check=False,
+        **get_hidden_subprocess_kwargs(),
     )
     if encoder_result.returncode != 0:
         return TranscodeCapabilitiesRead(
@@ -1091,6 +1105,7 @@ def _detect_capabilities_cached(
         text=True,
         timeout=15,
         check=False,
+        **get_hidden_subprocess_kwargs(),
     )
     muxers: set[str] = set()
     if muxer_result.returncode == 0:
@@ -2508,6 +2523,7 @@ def execute_transcode_job(
             encoding="utf-8",
             errors="replace",
             shell=False,
+            **get_hidden_subprocess_kwargs(),
         )
         last_commit = utc_now()
         if process.stdout is not None:

@@ -11,6 +11,8 @@ import {
   type TranscodeCapabilityMatrix,
   type TranscodeDeviceMatrix,
   type TranscodeHardwareDevice,
+  type TranscodeMatrixBenchmark,
+  type TranscodeMatrixBenchmarkLevel,
   type TranscodeMatrixCell,
   type TranscodingSettings,
 } from "../lib/api";
@@ -65,6 +67,159 @@ function matrixCellLabel(cell: TranscodeMatrixCell, t: (key: string, options?: R
   return t("transcoding.matrixUnsupportedCell");
 }
 
+function formatBenchmarkSeconds(value: number | null, locale: string): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return `${new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  }).format(value)} s`;
+}
+
+function formatBenchmarkPercent(value: number | null, locale: string): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value)} %`;
+}
+
+function matrixTooltipStatusKey(cell: TranscodeMatrixCell): string {
+  if (cell.status === "hardware") return "transcoding.matrixTooltipStatusHardware";
+  if (cell.status === "software") return "transcoding.matrixTooltipStatusSoftware";
+  if (cell.status === "not_tested") return "transcoding.matrixTooltipStatusNotTested";
+  return "transcoding.matrixTooltipStatusUnsupported";
+}
+
+function matrixTooltipSessionLabel(
+  concurrency: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return concurrency === 1
+    ? t("transcoding.matrixTooltipSession", { number: concurrency })
+    : t("transcoding.matrixTooltipSessions", { number: concurrency });
+}
+
+function MatrixBenchmarkTooltip({
+  benchmark,
+  t,
+  locale,
+}: {
+  benchmark: TranscodeMatrixBenchmark;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  locale: string;
+}) {
+  return (
+    <section className="transcode-matrix-tooltip-benchmark">
+      <div className="transcode-matrix-tooltip-head">
+        <span>{t("transcoding.matrixTooltipBenchmark")}</span>
+        <strong>{t("transcoding.matrixTooltipRuns", { number: benchmark.repetitions })}</strong>
+      </div>
+      <div className="transcode-matrix-tooltip-note">
+        {t("transcoding.matrixTooltipRule", { percent: benchmark.tolerance_percent })}
+      </div>
+      <div className="transcode-matrix-tooltip-workload">
+        {t("transcoding.matrixTooltipWorkload", {
+          width: benchmark.width,
+          height: benchmark.height,
+          fps: benchmark.frame_rate,
+          frames: benchmark.frames,
+        })}
+      </div>
+      <div className="transcode-matrix-tooltip-workload">
+        {t("transcoding.matrixTooltipCeiling", { number: benchmark.test_ceiling })}
+      </div>
+      <div className="transcode-matrix-tooltip-summary">
+        <div>
+          <span>{t("transcoding.matrixTooltipBaseline")}</span>
+          <strong>{formatBenchmarkSeconds(benchmark.baseline_median_seconds, locale)}</strong>
+        </div>
+        <div>
+          <span>{t("transcoding.matrixTooltipLimit")}</span>
+          <strong>{formatBenchmarkSeconds(benchmark.slowdown_limit_seconds, locale)}</strong>
+        </div>
+      </div>
+      <div className="transcode-matrix-tooltip-levels">
+        {benchmark.levels.map((level: TranscodeMatrixBenchmarkLevel) => (
+          <div
+            className={`transcode-matrix-tooltip-level ${level.passed ? "is-passed" : "is-failed"}`}
+            key={level.concurrency}
+          >
+            <div className="transcode-matrix-tooltip-level-head">
+              <strong>{matrixTooltipSessionLabel(level.concurrency, t)}</strong>
+              <span>{level.concurrency === 1 ? t("transcoding.matrixTooltipBaselineTag") : level.passed ? t("transcoding.matrixTooltipPassed") : t("transcoding.matrixTooltipFailed")}</span>
+            </div>
+            <div className="transcode-matrix-tooltip-runs">
+              {level.runs.map((run) => (
+                <span key={run.run}>
+                  {run.success
+                    ? t("transcoding.matrixTooltipRunDuration", {
+                        number: run.run,
+                        duration: formatBenchmarkSeconds(run.duration_seconds, locale),
+                      })
+                    : t("transcoding.matrixTooltipRunFailed", { number: run.run })}
+                </span>
+              ))}
+            </div>
+            <div className="transcode-matrix-tooltip-level-result">
+              <span>{t("transcoding.matrixTooltipMedian", { value: formatBenchmarkSeconds(level.median_seconds, locale) })}</span>
+              <span>{formatBenchmarkPercent(level.slowdown_percent, locale)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="transcode-matrix-tooltip-note">
+        {t("transcoding.matrixTooltipPerSessionNote")}
+      </div>
+    </section>
+  );
+}
+
+function MatrixCellTooltip({
+  cell,
+  decodeCodec,
+  encodeCodec,
+  t,
+  locale,
+}: {
+  cell: TranscodeMatrixCell;
+  decodeCodec: string;
+  encodeCodec: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  locale: string;
+}) {
+  const direction = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}`;
+  const label = matrixCellLabel(cell, t);
+
+  return (
+    <div className="transcode-matrix-tooltip-content">
+      <div className="transcode-matrix-tooltip-heading">
+        <strong>{direction}</strong>
+        <span className={`transcode-matrix-tooltip-status is-${cell.status}`}>
+          {t(matrixTooltipStatusKey(cell))}
+        </span>
+      </div>
+      <div className="transcode-matrix-tooltip-row">
+        <div className="transcode-matrix-tooltip-head">
+          <span>{t("transcoding.matrixTooltipResult")}</span>
+          <strong>{label}</strong>
+        </div>
+        <div className="transcode-matrix-tooltip-path">
+          <span>{t("transcoding.matrixTooltipDecoder")}: {cell.decoder ?? "—"}</span>
+          <span>{t("transcoding.matrixTooltipEncoder")}: {cell.encoder ?? "—"}</span>
+        </div>
+      </div>
+      {cell.parallel_benchmark ? <MatrixBenchmarkTooltip benchmark={cell.parallel_benchmark} t={t} locale={locale} /> : null}
+      {cell.detail ? (
+        <div className="transcode-matrix-tooltip-row transcode-matrix-tooltip-detail">
+          <span>{t("transcoding.matrixTooltipDetails")}</span>
+          <span>{cell.detail}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function cellFor(
   cells: TranscodeMatrixCell[],
   decodeCodec: string,
@@ -116,7 +271,7 @@ export function TranscodingSettingsPanel({
   appSettingsLoaded,
   onUpdated,
 }: TranscodingSettingsPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const currentSettings = settings.transcoding ?? DEFAULT_TRANSCODING_SETTINGS;
   const [draft, setDraft] = useState<TranscodingSettings>(() => cloneTranscodingSettings(currentSettings));
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
@@ -449,8 +604,29 @@ export function TranscodingSettingsPanel({
                             const cell = cellFor(deviceMatrix.cells, decodeCodec, encodeCodec);
                             if (!cell) return <td key={encodeCodec}>—</td>;
                             const label = matrixCellLabel(cell, t);
-                            const title = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}: ${label}${cell.detail ? ` · ${cell.detail}` : ""}`;
-                            return <td className={`transcode-matrix-${cell.status}`} key={encodeCodec} title={title} aria-label={title}>{label}</td>;
+                            const title = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}: ${label}`;
+                            return (
+                              <td className={`transcode-matrix-${cell.status}`} key={encodeCodec}>
+                                <TooltipTrigger
+                                  ariaLabel={title}
+                                  className="transcode-matrix-cell-trigger"
+                                  tooltipClassName="transcode-matrix-tooltip-portal"
+                                  content={(
+                                    <MatrixCellTooltip
+                                      cell={cell}
+                                      decodeCodec={decodeCodec}
+                                      encodeCodec={encodeCodec}
+                                      t={t}
+                                      locale={i18n.language}
+                                    />
+                                  )}
+                                  maxWidth={420}
+                                  placement="auto"
+                                >
+                                  {label}
+                                </TooltipTrigger>
+                              </td>
+                            );
                           })}
                         </tr>
                       ))}

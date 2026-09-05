@@ -80,6 +80,7 @@ from backend.app.services.resolution_categories import classify_resolution_categ
 from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.services.stats_cache import stats_cache
 from backend.app.services.video_queries import primary_video_streams_subquery
+from backend.app.utils.processes import get_hidden_subprocess_kwargs
 
 FileSortKey = Literal[
     "file",
@@ -1498,6 +1499,7 @@ def generate_media_cover_png(
             check=True,
             capture_output=True,
             timeout=timeout_seconds,
+            **get_hidden_subprocess_kwargs(),
         )
     except FileNotFoundError as exc:
         raise RuntimeError("ffmpeg is not available") from exc

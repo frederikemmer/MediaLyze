@@ -2562,7 +2562,7 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding runtime settings and capability matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-matrix", "transcode-device-matrix", "transcode-matrix-table", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Transcoding runtime settings and capability matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-matrix", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">
                   <div className="panel-title-row">
                     <h2>Transcoding runtime</h2>
@@ -2596,18 +2596,37 @@ export function UiElementsPage() {
                   <details className="transcode-capability-matrix" open>
                     <summary><span><strong>Transcoding capability matrix</strong><small>Decode vertically · encode horizontally</small></span><span className="field-hint">Tested now</span></summary>
                     <div className="transcode-capability-matrix-body">
-                      <div className="transcode-matrix-meta"><span>FFmpeg 8.0</span><span>4+ means the tested limit was not reached.</span></div>
+                      <div className="transcode-matrix-meta"><span>FFmpeg 8.0</span><span>Each hardware cell opens the same repeated-run benchmark details; the highest level within the slowdown limit is the practical recommendation.</span></div>
                       <details className="transcode-device-matrix" open>
                         <summary><span><strong>NVIDIA GeForce RTX 3080</strong><small>cuda · cuda0</small></span></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
-                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
-                        </div>
-                        <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
+                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
+                         </div>
+                         <div className="transcode-matrix-tooltip-preview">
+                           <span className="field-hint">Hover or focus a matrix cell:</span>
+                           <TooltipTrigger
+                             ariaLabel="Show repeated-run benchmark details"
+                             className="transcode-matrix-cell-trigger"
+                             tooltipClassName="transcode-matrix-tooltip-portal"
+                             maxWidth={420}
+                             placement="auto"
+                             content={(
+                               <div className="transcode-matrix-tooltip-content">
+                                 <div className="transcode-matrix-tooltip-heading"><strong>H.264 / AVC → H.265 / HEVC</strong><span className="transcode-matrix-tooltip-status is-hardware">Hardware path</span></div>
+                                 <div className="transcode-matrix-tooltip-row"><div className="transcode-matrix-tooltip-head"><span>Result</span><strong>HW · 4×</strong></div><div className="transcode-matrix-tooltip-path"><span>Decoder: cuda:h264</span><span>Encoder: hevc_nvenc</span></div></div>
+                                 <div className="transcode-matrix-tooltip-benchmark"><div className="transcode-matrix-tooltip-head"><span>Parallel benchmark</span><strong>Runs per level: 3</strong></div><div className="transcode-matrix-tooltip-workload">Workload: 256×256 · 30 fps · 240 frames</div><div className="transcode-matrix-tooltip-level"><div className="transcode-matrix-tooltip-level-head"><strong>4 sessions</strong><span>within limit</span></div><div className="transcode-matrix-tooltip-runs"><span>Run 1: 0.502 s</span><span>Run 2: 0.498 s</span><span>Run 3: 0.515 s</span></div><div className="transcode-matrix-tooltip-level-result"><span>Median: 0.502 s</span><span>+8.4 %</span></div></div></div>
+                               </div>
+                             )}
+                           >
+                             HW · 4×
+                           </TooltipTrigger>
+                         </div>
+                         <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
                       </details>
                       <details className="transcode-device-matrix">
                         <summary><span><strong>Intel CPU iGPU · Quick Sync</strong><small>qsv + vaapi · renderD128</small></span></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
-                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>AV1</th><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-hardware">HW · 4+×</td><td className="transcode-matrix-software">Software</td></tr></tbody></table>
+                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>AV1</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr></tbody></table>
                         </div>
                         <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
                       </details>

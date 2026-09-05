@@ -12821,6 +12821,188 @@ html[data-theme="dark"] .transcoding-panel select.transcode-control {
   white-space: nowrap;
 }
 
+.transcode-matrix-table .transcode-matrix-cell-trigger,
+.transcode-matrix-table .transcode-matrix-cell-trigger.tooltip-trigger {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 28px;
+  padding: 0.3rem 0.35rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+  cursor: help;
+  box-shadow: none;
+  appearance: none;
+}
+
+.transcode-matrix-table .transcode-matrix-cell-trigger:hover,
+.transcode-matrix-table .transcode-matrix-cell-trigger:focus-visible {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.transcode-matrix-tooltip-portal {
+  padding: 12px 14px;
+}
+
+.transcode-matrix-tooltip-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0 0.55rem 0.55rem;
+}
+
+.transcode-matrix-tooltip-preview .transcode-matrix-cell-trigger {
+  width: auto;
+  height: 34px;
+}
+
+.transcode-matrix-tooltip-content {
+  display: grid;
+  gap: 10px;
+}
+
+.transcode-matrix-tooltip-heading,
+.transcode-matrix-tooltip-head,
+.transcode-matrix-tooltip-level-head,
+.transcode-matrix-tooltip-level-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transcode-matrix-tooltip-heading {
+  align-items: flex-start;
+}
+
+.transcode-matrix-tooltip-heading > strong {
+  min-width: 0;
+}
+
+.transcode-matrix-tooltip-status {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.42rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.transcode-matrix-tooltip-status.is-hardware {
+  color: #8be4c5;
+  background: rgba(71, 190, 157, 0.14);
+}
+
+.transcode-matrix-tooltip-status.is-software {
+  color: #b3bdff;
+  background: rgba(108, 125, 232, 0.14);
+}
+
+.transcode-matrix-tooltip-status.is-unsupported {
+  color: #ff9d91;
+  background: rgba(201, 88, 54, 0.14);
+}
+
+.transcode-matrix-tooltip-status.is-not_tested {
+  color: #d0cbc2;
+  background: rgba(243, 239, 232, 0.1);
+}
+
+.transcode-matrix-tooltip-row,
+.transcode-matrix-tooltip-benchmark {
+  display: grid;
+  gap: 6px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(243, 239, 232, 0.14);
+}
+
+.transcode-matrix-tooltip-head > span,
+.transcode-matrix-tooltip-level-head > span,
+.transcode-matrix-tooltip-summary span,
+.transcode-matrix-tooltip-level-result span,
+.transcode-matrix-tooltip-note,
+.transcode-matrix-tooltip-workload,
+.transcode-matrix-tooltip-path,
+.transcode-matrix-tooltip-detail > span:first-child {
+  color: rgba(243, 239, 232, 0.72);
+  font-size: 0.74rem;
+}
+
+.transcode-matrix-tooltip-path,
+.transcode-matrix-tooltip-runs {
+  display: grid;
+  gap: 3px;
+  color: rgba(243, 239, 232, 0.86);
+  font-size: 0.75rem;
+}
+
+.transcode-matrix-tooltip-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.transcode-matrix-tooltip-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transcode-matrix-tooltip-levels {
+  display: grid;
+  gap: 6px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.transcode-matrix-tooltip-level {
+  display: grid;
+  gap: 5px;
+  padding: 7px 8px;
+  border: 1px solid rgba(243, 239, 232, 0.14);
+  border-radius: 8px;
+  background: rgba(243, 239, 232, 0.06);
+}
+
+.transcode-matrix-tooltip-level.is-passed {
+  border-color: rgba(139, 228, 197, 0.36);
+}
+
+.transcode-matrix-tooltip-level.is-failed {
+  border-color: rgba(255, 157, 145, 0.36);
+}
+
+.transcode-matrix-tooltip-level-head > span {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  color: rgba(243, 239, 232, 0.72);
+}
+
+.transcode-matrix-tooltip-level-result {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.transcode-matrix-tooltip-level-result span:last-child {
+  margin-left: auto;
+}
+
+.transcode-matrix-tooltip-detail > span:last-child {
+  color: rgba(243, 239, 232, 0.86);
+  font-size: 0.75rem;
+}
+
 .transcode-matrix-hardware {
   color: color-mix(in srgb, var(--accent-2) 78%, var(--ink));
   background: color-mix(in srgb, var(--accent-2) 17%, transparent);

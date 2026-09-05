@@ -140,6 +140,36 @@ class TranscodeCapabilitiesRead(BaseModel):
     error: str | None = None
 
 
+class TranscodeMatrixBenchmarkRunRead(BaseModel):
+    run: int = Field(ge=1)
+    duration_seconds: float | None = Field(default=None, ge=0)
+    success: bool
+    error: str | None = None
+
+
+class TranscodeMatrixBenchmarkLevelRead(BaseModel):
+    concurrency: int = Field(ge=1)
+    runs: list[TranscodeMatrixBenchmarkRunRead] = Field(default_factory=list)
+    median_seconds: float | None = Field(default=None, ge=0)
+    slowdown_percent: float | None = None
+    passed: bool = False
+    error: str | None = None
+
+
+class TranscodeMatrixBenchmarkRead(BaseModel):
+    tolerance_percent: float = Field(default=20, ge=0)
+    test_ceiling: int = Field(default=20, ge=1)
+    repetitions: int = Field(default=3, ge=1)
+    width: int = Field(default=256, ge=1)
+    height: int = Field(default=256, ge=1)
+    frame_rate: int = Field(default=30, ge=1)
+    frames: int = Field(default=240, ge=1)
+    stream_loops: int = Field(default=7, ge=0)
+    baseline_median_seconds: float | None = Field(default=None, ge=0)
+    slowdown_limit_seconds: float | None = Field(default=None, ge=0)
+    levels: list[TranscodeMatrixBenchmarkLevelRead] = Field(default_factory=list)
+
+
 class TranscodeMatrixCellRead(BaseModel):
     decode_codec: str
     encode_codec: str
@@ -148,6 +178,7 @@ class TranscodeMatrixCellRead(BaseModel):
     encoder: str | None = None
     max_parallel_jobs: int | None = Field(default=None, ge=1)
     max_parallel_jobs_is_lower_bound: bool = False
+    parallel_benchmark: TranscodeMatrixBenchmarkRead | None = None
     detail: str | None = None
 
 

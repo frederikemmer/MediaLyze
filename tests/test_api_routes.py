@@ -408,7 +408,7 @@ def test_file_cover_returns_png_from_embedded_cover(tmp_path, monkeypatch) -> No
     captured: dict[str, object] = {}
     run_count = 0
 
-    def fake_run(command, *, check, capture_output, timeout):
+    def fake_run(command, *, check, capture_output, timeout, **_kwargs):
         nonlocal run_count
         run_count += 1
         captured["command"] = command
