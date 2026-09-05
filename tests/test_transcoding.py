@@ -733,6 +733,109 @@ def test_windows_capabilities_expose_automatic_amf_device(monkeypatch, tmp_path)
     assert by_name["h264_qsv"].device_ids == ["qsv0"]
 
 
+def test_windows_d3d11_adapters_are_enumerated_with_physical_identity(monkeypatch) -> None:
+    def fake_run(arguments, **_kwargs):
+        init_argument = arguments[arguments.index("-init_hw_device") + 1]
+        index = int(init_argument.rsplit(":", 1)[1])
+        output = {
+            0: "[AVHWDeviceContext] Using device 10de:2206 (NVIDIA GeForce RTX 3080).",
+            1: "[AVHWDeviceContext] Using device 1002:164e (AMD Radeon(TM) Graphics).",
+            # FFmpeg repeats the default adapter for an out-of-range ordinal.
+            2: "[AVHWDeviceContext] Using device 10de:2206 (NVIDIA GeForce RTX 3080).",
+        }.get(index, "")
+        return SimpleNamespace(returncode=0, stdout="", stderr=output)
+
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    adapters = transcoding._windows_d3d11_adapters("ffmpeg-test")
+
+    assert adapters == (
+        {
+            "index": 0,
+            "pci_id": "10de:2206",
+            "name": "NVIDIA GeForce RTX 3080",
+            "vendor": "nvidia",
+            "device_class": "dedicated",
+        },
+        {
+            "index": 1,
+            "pci_id": "1002:164e",
+            "name": "AMD Radeon(TM) Graphics",
+            "vendor": "amd",
+            "device_class": "integrated",
+        },
+    )
+
+
+def test_windows_native_adapters_create_separate_amf_and_qsv_targets(monkeypatch) -> None:
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
+
+    devices = transcoding._build_hardware_device_inventory(
+        {"h264_amf", "h264_qsv"},
+        (),
+        [],
+        native_adapters=(
+            {
+                "index": 0,
+                "pci_id": "10de:2206",
+                "name": "NVIDIA GeForce RTX 3080",
+                "vendor": "nvidia",
+                "device_class": "dedicated",
+            },
+            {
+                "index": 1,
+                "pci_id": "1002:164e",
+                "name": "AMD Radeon(TM) Graphics",
+                "vendor": "amd",
+                "device_class": "integrated",
+            },
+            {
+                "index": 2,
+                "pci_id": "8086:56a6",
+                "name": "Intel(R) Arc(TM) A310 Graphics",
+                "vendor": "intel",
+                "device_class": "dedicated",
+            },
+        ),
+    )
+
+    by_id = {device.id: device for device in devices}
+    assert by_id["amf0"].native_device_index == 1
+    assert by_id["amf0"].name == "AMD Radeon(TM) Graphics · AMF"
+    assert by_id["amf0"].device_class == "integrated"
+    assert "qsv0" in by_id
+    assert by_id["qsv0"].native_device_index == 2
+    assert by_id["qsv0"].vendor == "intel"
+
+
+def test_windows_amf_probe_binds_native_adapter(monkeypatch) -> None:
+    captured: list[str] = []
+
+    def fake_run(arguments, **_kwargs):
+        captured.extend(arguments)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(transcoding, "_is_windows", lambda: True)
+    monkeypatch.setattr(transcoding, "_is_linux", lambda: False)
+    monkeypatch.setattr(transcoding.subprocess, "run", fake_run)
+
+    available, error = transcoding._test_hardware_encoder(
+        "ffmpeg-test",
+        "h264_amf",
+        native_device_index=1,
+    )
+
+    assert available is True
+    assert error is None
+    init_index = captured.index("-init_hw_device")
+    filter_index = captured.index("-filter_hw_device")
+    assert ["-init_hw_device", "d3d11va=amf:1"] == captured[init_index : init_index + 2]
+    assert ["-filter_hw_device", "amf"] == captured[filter_index : filter_index + 2]
+
+
 def test_linux_capabilities_probe_each_render_node_and_bind_success(monkeypatch, tmp_path) -> None:
     first = tmp_path / "renderD128"
     second = tmp_path / "renderD129"

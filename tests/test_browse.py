@@ -42,11 +42,24 @@ def test_browse_media_root_keeps_explicit_mounts_visible(tmp_path: Path, monkeyp
     assert [entry.name for entry in response.entries] == ["disk1", "movies"]
 
 
-def test_browse_media_root_skips_symlinks_outside_media_root(tmp_path: Path) -> None:
+def test_browse_media_root_skips_symlinks_outside_media_root(tmp_path: Path, monkeypatch) -> None:
     outside = tmp_path.parent / "external-library"
     outside.mkdir(exist_ok=True)
     (tmp_path / "movies").mkdir()
-    (tmp_path / "external").symlink_to(outside, target_is_directory=True)
+    external = tmp_path / "external"
+    external.mkdir()
+
+    # Simulate the resolved target of an outside symlink without requiring
+    # SeCreateSymbolicLinkPrivilege, which is unavailable in a standard
+    # Windows test process unless Developer Mode or elevation is enabled.
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs) -> Path:
+        if self == external:
+            return original_resolve(outside, *args, **kwargs)
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
 
     response = browse_media_root(Settings(config_path=tmp_path / "config", media_root=tmp_path))
 

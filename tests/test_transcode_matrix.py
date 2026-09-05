@@ -165,3 +165,29 @@ def test_linux_backend_paths_with_same_render_node_share_one_physical_device() -
 
     assert transcode_matrix._device_group_key(qsv) == transcode_matrix._device_group_key(vaapi)
     assert transcode_matrix._device_group_name([qsv, vaapi]) == "Intel GPU (renderD128) · 8086:56A6"
+
+
+def test_windows_amf_matrix_command_binds_native_d3d11_adapter() -> None:
+    device = TranscodeHardwareDevice(
+        id="amf0",
+        name="AMD Radeon(TM) Graphics · AMF",
+        vendor="amd",
+        backend="amf",
+        native_device_index=1,
+        status="available",
+    )
+
+    command = transcode_matrix._hardware_pair_command(
+        "ffmpeg-test",
+        Path("source-h264.mkv"),
+        device,
+        "h264_amf",
+    )
+
+    assert command is not None
+    init_index = command.index("-init_hw_device")
+    filter_index = command.index("-filter_hw_device")
+    hwaccel_index = command.index("-hwaccel")
+    assert ["-init_hw_device", "d3d11va=amf:1"] == command[init_index : init_index + 2]
+    assert ["-filter_hw_device", "amf"] == command[filter_index : filter_index + 2]
+    assert ["-hwaccel", "d3d11va", "-hwaccel_device", "amf"] == command[hwaccel_index : hwaccel_index + 4]

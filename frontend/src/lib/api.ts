@@ -1389,6 +1389,7 @@ export type TranscodeHardwareDevice = {
   compute_capability: string | null;
   memory_total_bytes: number | null;
   render_node?: string | null;
+  native_device_index?: number | null;
   device_class?: "integrated" | "dedicated" | "unknown";
   decoder_codecs: string[];
   encoder_names?: string[];

@@ -109,6 +109,11 @@ class TranscodeHardwareDevice(BaseModel):
     compute_capability: str | None = None
     memory_total_bytes: int | None = None
     render_node: str | None = None
+    # Native adapter ordinal used by APIs such as Windows D3D11/AMF/QSV.
+    # Keeping it separate from ``id`` lets hybrid systems bind a probe and a
+    # later transcode job to the same physical adapter even when the driver
+    # exposes a discrete GPU first.
+    native_device_index: int | None = Field(default=None, ge=0)
     device_class: Literal["integrated", "dedicated", "unknown"] = "unknown"
     decoder_codecs: list[str] = Field(default_factory=list)
     encoder_names: list[str] = Field(default_factory=list)

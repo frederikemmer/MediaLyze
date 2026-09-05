@@ -184,10 +184,40 @@ def _hardware_pair_command(
         command.extend(_hardware_device_arguments({backend}, device.render_node, qsv_direct=qsv_direct))
         hardware_name = "qs" if qsv_direct else "va"
         command.extend(["-hwaccel", backend, "-hwaccel_device", hardware_name, "-hwaccel_output_format", backend])
+    elif backend == "qsv" and device.native_device_index is not None:
+        command.extend(
+            _hardware_device_arguments(
+                {backend},
+                None,
+                native_device_index=device.native_device_index,
+            )
+        )
+        command.extend(["-hwaccel", "qsv", "-hwaccel_output_format", "qsv"])
     elif backend == "qsv":
         command.extend(["-hwaccel", "qsv", "-hwaccel_output_format", "qsv"])
     elif backend == "amf":
-        command.extend(["-hwaccel", "d3d11va", "-hwaccel_output_format", "d3d11"])
+        if device.native_device_index is not None:
+            command.extend(
+                _hardware_device_arguments(
+                    {backend},
+                    None,
+                    native_device_index=device.native_device_index,
+                )
+            )
+            command.extend(
+                [
+                    "-filter_hw_device",
+                    "amf",
+                    "-hwaccel",
+                    "d3d11va",
+                    "-hwaccel_device",
+                    "amf",
+                    "-hwaccel_output_format",
+                    "d3d11",
+                ]
+            )
+        else:
+            command.extend(["-hwaccel", "d3d11va", "-hwaccel_output_format", "d3d11"])
     elif backend == "videotoolbox":
         command.extend(["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"])
     else:

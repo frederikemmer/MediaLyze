@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
 
 - recognize vendor-identified Intel CPU/iGPU and AMD APU/iGPU DRM media engines even when an FFmpeg build exposes only a subset of their backend families, keep each physical render node usable through its passing QSV/VAAPI encoders, and label matrix software fallbacks as Software
 - clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
+- bind native Windows AMF/QSV probes, transcode jobs, and codec matrices to the physical D3D11 adapter that passed, so hybrid NVIDIA plus AMD/Intel systems expose and test each media engine independently
+- clarify that one CPU-safe Docker Compose definition plus the standard GPU-wiring launchers covers NVIDIA, Intel, and AMD host configurations, while desktop installers use the bundled platform FFmpeg for every native adapter
 - document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
 - replace transcoding hardware radio and checkbox selection with one physical-device dropdown while keeping backend-specific paths grouped internally
@@ -40,6 +42,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- make the Windows test suite independent of optional symlink privileges and explicit about the platform when checking FFprobe path normalization
 - keep custom select chevrons single and correctly positioned when applying light or dark theme background colors, and render compatibility capability sections with theme-aware nested surfaces instead of light gray dark-mode fallbacks [#180](https://github.com/frederikemmer/MediaLyze/pull/180) by [@MadsThy](https://github.com/MadsThy)
 - initialize Intel VAAPI/QSV hardware devices from a Linux DRM render node during capability checks and transcoding, and include the required Intel runtime drivers in AMD64 Docker images
 - require an explicit server-side confirmation for original replacement and report a clear failure when an advertised hardware encoder fails its runtime smoke test instead of falling back to CPU

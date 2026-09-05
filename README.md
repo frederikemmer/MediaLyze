@@ -116,7 +116,10 @@ moved with `TRANSCODE_OUTPUT_HOST_DIR`.
 
 This includes integrated media engines: Intel CPU/iGPU Quick Sync and AMD APU/iGPU VCN
 on Linux through `/dev/dri`, plus native Windows QSV/AMF and macOS VideoToolbox in the
-desktop app. A CPU software encoder is used only in the explicit `cpu_only` mode.
+desktop app. On native Windows hybrid systems, the desktop sidecar enumerates the
+physical D3D11 adapters so an AMD/Intel integrated engine and a discrete NVIDIA GPU
+are probed and selected independently. A CPU software encoder is used only in the
+explicit `cpu_only` mode.
 
 
 Open `http://localhost:8080`, or set `HOST_PORT` to expose the container on a different host port.

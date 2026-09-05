@@ -604,8 +604,9 @@ def test_ffprobe_error_message_prefers_stderr() -> None:
     assert _ffprobe_error_message(exc) == "Invalid data found when processing input"
 
 
-def test_ffprobe_input_path_preserves_non_windows_paths(tmp_path: Path) -> None:
+def test_ffprobe_input_path_preserves_non_windows_paths(tmp_path: Path, monkeypatch) -> None:
     file_path = tmp_path / "movie.mkv"
+    monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="posix"))
 
     assert _ffprobe_input_path(file_path) == str(file_path)
 

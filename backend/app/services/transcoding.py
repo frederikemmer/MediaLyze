@@ -322,6 +322,7 @@ def _hardware_device_arguments(
     *,
     qsv_direct: bool = False,
     cuda_device_id: str = "cuda0",
+    native_device_index: int | None = None,
 ) -> list[str]:
     """Build FFmpeg's named hardware-device initialization arguments.
 
@@ -333,6 +334,16 @@ def _hardware_device_arguments(
     """
 
     arguments: list[str] = []
+    # Windows exposes the native D3D11 adapter ordinal as the stable selector
+    # for AMF and QSV.  Without this explicit binding FFmpeg uses adapter 0,
+    # which is commonly an NVIDIA GPU on hybrid systems and makes an AMD/iGPU
+    # encoder fail with an opaque ``AMF failed to initialise`` error.
+    if native_device_index is not None and backends == {"amf"}:
+        arguments.extend(["-init_hw_device", f"d3d11va=amf:{native_device_index}"])
+        return arguments
+    if native_device_index is not None and backends == {"qsv"} and _is_windows():
+        arguments.extend(["-qsv_device", str(native_device_index)])
+        return arguments
     if "cuda" in backends:
         # Keep the selected NVIDIA adapter explicit. ``cuda=<name>:<index>``
         # assigns a stable per-process name and, unlike ``cuda=cuda0``, does
@@ -428,7 +439,17 @@ def _device_class_from_name(name: str) -> str:
     normalized = name.lower()
     if any(
         marker in normalized
-        for marker in ("integrated", "uhd graphics", "iris", "radeon 7", "radeon vega", "vega 6", "vega 7")
+        for marker in (
+            "integrated",
+            "uhd graphics",
+            "iris",
+            "radeon(tm) graphics",
+            "radeon graphics",
+            "radeon 7",
+            "radeon vega",
+            "vega 6",
+            "vega 7",
+        )
     ):
         return "integrated"
     if any(
@@ -437,6 +458,99 @@ def _device_class_from_name(name: str) -> str:
     ):
         return "dedicated"
     return "unknown"
+
+
+def _windows_d3d11_adapters(ffmpeg_path: str) -> tuple[dict[str, object], ...]:
+    """Enumerate the native D3D11 adapters visible to a Windows FFmpeg.
+
+    FFmpeg's AMF and Windows-QSV encoders otherwise default to adapter 0. On
+    hybrid systems that is often the discrete NVIDIA adapter, even though an
+    AMD or Intel media engine is also present. Initialising a tiny D3D11
+    device per ordinal gives us the driver-provided PCI identity and lets
+    later probes/jobs bind the exact adapter. The helper is deliberately
+    best-effort: older builds or test doubles may not support
+    ``d3d11va=...``, in which case the caller keeps the legacy logical target.
+    """
+
+    if not _is_windows() or _is_linux():
+        return ()
+    pattern = re.compile(
+        r"Using device\s+([0-9A-Fa-f]{4}:[0-9A-Fa-f]{4})\s+\((.*)\)\."
+    )
+    vendor_by_pci = {
+        "1002": "amd",
+        "10de": "nvidia",
+        "8086": "intel",
+    }
+    adapters: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    # D3D11 adapter ordinals are small in practice. Sixteen is enough to
+    # cover multi-GPU workstations while still keeping capability refreshes
+    # bounded when a driver reports no adapters.
+    for index in range(16):
+        command = [
+            ffmpeg_path,
+            "-hide_banner",
+            "-loglevel",
+            "verbose",
+            "-init_hw_device",
+            f"d3d11va=probe:{index}",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=16x16:d=0.01",
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except Exception:
+            # Adapter enumeration must never make the normal encoder probe
+            # fail. This also keeps compatibility with older FFmpeg builds
+            # and mocked subprocess implementations.
+            break
+        output = "\n".join(
+            value for value in (completed.stdout or "", completed.stderr or "") if value
+        )
+        match = pattern.search(output)
+        if match is None:
+            break
+        pci_id = match.group(1).lower()
+        name = match.group(2).strip()
+        identity = (pci_id, name.lower())
+        # FFmpeg falls back to the default adapter for an out-of-range index;
+        # the repeated identity is therefore the end of the enumeration.
+        if identity in seen:
+            break
+        seen.add(identity)
+        vendor = vendor_by_pci.get(pci_id.split(":", 1)[0], "unknown")
+        if vendor == "unknown":
+            lowered_name = name.lower()
+            if "radeon" in lowered_name or "amd" in lowered_name:
+                vendor = "amd"
+            elif "intel" in lowered_name or "arc " in lowered_name or "iris" in lowered_name:
+                vendor = "intel"
+            elif "nvidia" in lowered_name or "geforce" in lowered_name or "quadro" in lowered_name:
+                vendor = "nvidia"
+        adapters.append(
+            {
+                "index": index,
+                "pci_id": pci_id,
+                "name": name or f"D3D11 adapter {index}",
+                "vendor": vendor,
+                "device_class": _device_class_from_name(name),
+            }
+        )
+    return tuple(adapters)
 
 
 def _linux_render_device_metadata(render_node: str) -> dict[str, str]:
@@ -500,6 +614,7 @@ def _device_for_backend(
     vendor: str | None = None,
     name: str | None = None,
     driver_version: str | None = None,
+    native_device_index: int | None = None,
     device_class: str = "unknown",
 ) -> TranscodeHardwareDevice:
     normalized_vendor = vendor or {
@@ -521,6 +636,7 @@ def _device_for_backend(
         backend=backend,
         driver_version=driver_version,
         render_node=render_node,
+        native_device_index=native_device_index,
         device_class=device_class if device_class in {"integrated", "dedicated", "unknown"} else "unknown",
     )
 
@@ -529,6 +645,8 @@ def _build_hardware_device_inventory(
     listed_names: set[str],
     render_nodes: tuple[str, ...],
     nvidia_devices: list[TranscodeHardwareDevice],
+    *,
+    native_adapters: tuple[dict[str, object], ...] = (),
 ) -> list[TranscodeHardwareDevice]:
     """Build logical adapter targets before probing individual encoders.
 
@@ -585,12 +703,52 @@ def _build_hardware_device_inventory(
             )
 
     # AMF and Windows QSV select the adapter through the native driver/API.
-    # A logical target is enough for automatic selection and does not require
-    # an unsupported vendor-specific command-line switch.  The smoke probe
-    # proves that the installed driver can actually encode.
+    # Prefer one target per physical D3D11 adapter so hybrid systems expose
+    # their AMD/Intel integrated media engine alongside a discrete GPU. Keep
+    # the old logical fallback for FFmpeg builds that cannot enumerate
+    # adapters; the subsequent smoke probe remains authoritative.
     if _is_windows() and not _is_linux():
+        backend_ordinals = {"amf": 0, "qsv": 0}
+        for adapter in native_adapters:
+            vendor = str(adapter.get("vendor") or "unknown")
+            adapter_name = str(adapter.get("name") or "D3D11 adapter")
+            adapter_index = adapter.get("index")
+            if not isinstance(adapter_index, int) or adapter_index < 0:
+                continue
+            if vendor == "amd" and any(name.lower().endswith("_amf") for name in listed_names):
+                ordinal = backend_ordinals["amf"]
+                backend_ordinals["amf"] += 1
+                devices.append(
+                    _device_for_backend(
+                        "amf",
+                        ordinal,
+                        vendor="amd",
+                        name=f"{adapter_name} · {BACKEND_DISPLAY_NAMES['amf']}",
+                        native_device_index=adapter_index,
+                        device_class=str(
+                            adapter.get("device_class") or _device_class_from_name(adapter_name)
+                        ),
+                    )
+                )
+            if vendor == "intel" and any(name.lower().endswith("_qsv") for name in listed_names):
+                ordinal = backend_ordinals["qsv"]
+                backend_ordinals["qsv"] += 1
+                devices.append(
+                    _device_for_backend(
+                        "qsv",
+                        ordinal,
+                        vendor="intel",
+                        name=f"{adapter_name} · {BACKEND_DISPLAY_NAMES['qsv']}",
+                        native_device_index=adapter_index,
+                        device_class=str(
+                            adapter.get("device_class") or _device_class_from_name(adapter_name)
+                        ),
+                    )
+                )
         for backend in ("amf", "qsv"):
-            if any(name.lower().endswith(f"_{backend}") for name in listed_names):
+            if any(name.lower().endswith(f"_{backend}") for name in listed_names) and not any(
+                device.backend == backend for device in devices
+            ):
                 devices.append(_device_for_backend(backend, 0))
 
     return devices
@@ -601,6 +759,7 @@ def _test_hardware_encoder(
     encoder: str,
     render_node: str | None = None,
     device_id: str | None = None,
+    native_device_index: int | None = None,
 ) -> tuple[bool, str | None]:
     backend = _hardware_backend(encoder)
     # CUDA/NVENC uses the NVIDIA device exposed by the container/runtime and
@@ -619,6 +778,23 @@ def _test_hardware_encoder(
     if backend == "cuda":
         command.extend(_hardware_device_arguments({backend}, None, cuda_device_id=device_id or "cuda0"))
         command.extend(["-filter_hw_device", "cu"])
+    elif backend == "amf" and native_device_index is not None:
+        command.extend(
+            _hardware_device_arguments(
+                {backend},
+                None,
+                native_device_index=native_device_index,
+            )
+        )
+        command.extend(["-filter_hw_device", "amf"])
+    elif backend == "qsv" and native_device_index is not None and _is_windows():
+        command.extend(
+            _hardware_device_arguments(
+                {backend},
+                None,
+                native_device_index=native_device_index,
+            )
+        )
     elif backend and render_node:
         qsv_direct = backend == "qsv" and _is_linux()
         command.extend(_hardware_device_arguments({backend}, render_node, qsv_direct=qsv_direct))
@@ -767,6 +943,7 @@ def _detect_nvidia_devices_via_cuda() -> tuple[list[TranscodeHardwareDevice], st
                 backend="cuda",
                 compute_capability=f"{major.value}.{minor.value}",
                 memory_total_bytes=memory_total_bytes,
+                device_class=_device_class_from_name(name),
             )
         )
     return devices, None
@@ -811,6 +988,7 @@ def _detect_nvidia_devices() -> tuple[list[TranscodeHardwareDevice], str | None]
                 driver_version=driver_version or None,
                 compute_capability=compute_capability or None,
                 memory_total_bytes=memory_total_bytes,
+                device_class=_device_class_from_name(name),
             )
         )
     return devices, None if devices else "nvidia-smi did not report a GPU"
@@ -937,11 +1115,32 @@ def _detect_capabilities_cached(
             device.decoder_codecs = list(nvidia_decoder_codecs)
             device.encoder_names = []
             device.encoder_codecs = []
-    devices = _build_hardware_device_inventory(
-        listed_names,
-        render_nodes,
-        nvidia_devices,
+    native_adapters = (
+        _windows_d3d11_adapters(ffmpeg_path)
+        if _is_windows()
+        and not _is_linux()
+        and any(
+            name.lower().endswith(suffix)
+            for suffix in ("_amf", "_qsv")
+            for name in listed_names
+        )
+        else ()
     )
+    if native_adapters:
+        devices = _build_hardware_device_inventory(
+            listed_names,
+            render_nodes,
+            nvidia_devices,
+            native_adapters=native_adapters,
+        )
+    else:
+        # Keep the original three-argument call path intact for older
+        # integrations that replace the inventory helper in-process.
+        devices = _build_hardware_device_inventory(
+            listed_names,
+            render_nodes,
+            nvidia_devices,
+        )
     videotoolbox_encoder_names = sorted(
         name for name in listed_names if name.lower().endswith("_videotoolbox")
     )
@@ -989,11 +1188,16 @@ def _detect_capabilities_cached(
             successful = False
             errors: list[str] = []
             for device, render_node in probe_targets(name):
+                probe_kwargs: dict[str, object] = {
+                    "device_id": device.id if device is not None else None,
+                }
+                if device is not None and device.native_device_index is not None:
+                    probe_kwargs["native_device_index"] = device.native_device_index
                 available_for_target, target_error = _test_hardware_encoder(
                     ffmpeg_path,
                     name,
                     render_node,
-                    device_id=device.id if device is not None else None,
+                    **probe_kwargs,
                 )
                 if available_for_target:
                     successful = True
@@ -1853,7 +2057,16 @@ def validate_transcode_plan(
         qsv_direct = accelerated_backends == {"qsv"} and _is_linux()
         if (
             len(accelerated_backends) == 1
-            and (render_node or accelerated_backends <= {"cuda", "amf", "videotoolbox"})
+            and (
+                render_node
+                or accelerated_backends <= {"cuda", "amf", "videotoolbox"}
+                or (
+                    accelerated_backends == {"qsv"}
+                    and _is_windows()
+                    and selected_device is not None
+                    and selected_device.native_device_index is not None
+                )
+            )
         ):
             arguments.extend(
                 _hardware_device_arguments(
@@ -1861,6 +2074,11 @@ def validate_transcode_plan(
                     render_node,
                     qsv_direct=qsv_direct,
                     cuda_device_id=device_id or "cuda0",
+                    native_device_index=(
+                        selected_device.native_device_index
+                        if selected_device is not None
+                        else None
+                    ),
                 )
             )
             # VAAPI is the base DRM device when QSV/VAAPI is selected;
@@ -1869,10 +2087,26 @@ def validate_transcode_plan(
                 filter_device = "cu"
                 arguments.extend(["-filter_hw_device", filter_device])
                 hardware_device_name = filter_device
-            elif accelerated_backends in ({"vaapi"}, {"qsv"}):
-                filter_device = "va" if not qsv_direct else "qs"
-                arguments.extend(["-filter_hw_device", filter_device])
+            elif accelerated_backends == {"amf"}:
+                filter_device = "amf"
+                if selected_device is not None and selected_device.native_device_index is not None:
+                    arguments.extend(["-filter_hw_device", filter_device])
                 hardware_device_name = filter_device
+            elif accelerated_backends in ({"vaapi"}, {"qsv"}):
+                if (
+                    accelerated_backends == {"qsv"}
+                    and _is_windows()
+                    and selected_device is not None
+                    and selected_device.native_device_index is not None
+                ):
+                    # Windows QSV's ``-qsv_device`` selects the native
+                    # adapter directly; unlike Linux's named DRM/QSV graph
+                    # it does not create a filter device to attach here.
+                    hardware_device_name = None
+                else:
+                    filter_device = "va" if not qsv_direct else "qs"
+                    arguments.extend(["-filter_hw_device", filter_device])
+                    hardware_device_name = filter_device
     arguments.extend(["-i", str(paths.source)])
     external_rows = {item.id: item for item in media_file.external_subtitles}
     selected_external: list[tuple[ExternalSubtitlePlan, ExternalSubtitle, Path]] = []

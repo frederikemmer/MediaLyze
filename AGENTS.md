@@ -957,6 +957,22 @@ Current repository layout includes:
 * `docker/env.example`
 * `docker/entrypoint.sh`
 
+Hardware portability invariant:
+
+* `docker/docker-compose.yaml` is the one CPU-safe Compose definition for all
+  Docker hosts. The standard `start-medialyze.sh`/`start-medialyze.ps1`
+  launchers add NVIDIA (`gpus: all`) and Linux DRM (`/dev/dri` plus the
+  required numeric groups) access automatically when the host exposes it;
+  vendor-specific Compose forks or hand-edited GPU overrides are not part of
+  the supported installation path.
+* Desktop installers bundle the platform FFmpeg build with the native
+  encoder families available for that target OS and probe every exposed
+  adapter at runtime. Host drivers and permissions remain prerequisites, but
+  users do not select a vendor-specific build or installer. Native Windows or
+  macOS APIs are desktop-only unless a container runtime explicitly exposes a
+  compatible Linux device; Linux Docker uses the same Compose/launcher path
+  for NVIDIA, Intel, and AMD DRM media engines.
+
 ## 12.2 Runtime Paths
 
 Expected container paths:
