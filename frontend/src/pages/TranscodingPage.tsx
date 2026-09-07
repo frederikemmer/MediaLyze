@@ -171,6 +171,29 @@ function targetForJob(job: TranscodeJob, t: (key: string, options?: Record<strin
   return { label, detail };
 }
 
+function workerForJob(job: TranscodeJob, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (job.assignment_mode === "local" || !job.assignment_mode) {
+    return t("transcoding.federation.targetLocal");
+  }
+  if (job.target_member_name) return job.target_member_name;
+  return job.target_member_id ?? t("transcoding.federation.targetAutomatic");
+}
+
+function phaseForJob(job: TranscodeJob, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const phase = job.processing_phase || (job.status === "running" ? "transcoding" : job.status);
+  return t(`transcoding.federation.phases.${phase}`, { defaultValue: job.phase_detail || phase });
+}
+
+function transferForJob(job: TranscodeJob): string | null {
+  if (job.source_transfer_total_bytes) {
+    return `${formatBytes(job.source_transfer_bytes ?? 0)} / ${formatBytes(job.source_transfer_total_bytes)}`;
+  }
+  if (job.result_transfer_total_bytes) {
+    return `${formatBytes(job.result_transfer_bytes ?? 0)} / ${formatBytes(job.result_transfer_total_bytes)}`;
+  }
+  return null;
+}
+
 function statusLabel(status: JobStatus, t: (key: string, options?: Record<string, unknown>) => string): string {
   return t(`transcoding.status.${status}`);
 }
@@ -282,6 +305,8 @@ function JobProgressCell({
 }) {
   const progress = progressValue(job);
   const statusText = statusLabel(job.status, t);
+  const phaseText = phaseForJob(job, t);
+  const transferText = transferForJob(job);
 
   if (job.status === "running") {
     return (
@@ -306,6 +331,8 @@ function JobProgressCell({
         <span className="transcoding-progress-track" aria-label={t("transcoding.center.progressAria", { value: Math.round(progress) })}>
           <span style={{ width: `${progress}%` }} />
         </span>
+        <span className="transcoding-progress-phase" title={job.phase_detail ?? phaseText}>{phaseText}</span>
+        {transferText ? <span className="transcoding-progress-transfer">{transferText}</span> : null}
       </div>
     );
   }
@@ -313,7 +340,8 @@ function JobProgressCell({
   return (
     <div className={`transcoding-progress-static status-${job.status}`}>
       {job.status === "completed" ? <strong>{Math.round(progress)}%</strong> : null}
-      <span>{job.status === "queued" ? t("transcoding.center.waitingForSlot") : statusText}</span>
+      <span>{job.status === "queued" ? phaseText || t("transcoding.center.waitingForSlot") : phaseText || statusText}</span>
+      {transferText ? <small className="transcoding-progress-transfer">{transferText}</small> : null}
     </div>
   );
 }
@@ -369,6 +397,7 @@ function JobRow({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const target = targetForJob(job, t);
+  const worker = workerForJob(job, t);
   const hardware = hardwareLabelForJob(job, capabilities, t);
   const videoTransform = videoTransformForJob(job, t);
   const canCancel = job.status === "queued" || job.status === "running";
@@ -405,6 +434,7 @@ function JobRow({
         <td className="transcoding-target-cell">
           <strong>{target.label}</strong>
           <span>{target.detail}</span>
+          <small className="transcoding-target-worker" title={worker}>{worker}</small>
         </td>
         <td className="transcoding-hardware-cell">
           <span className="transcoding-hardware-main">
@@ -487,6 +517,9 @@ function JobRow({
                   <div><dt>{t("transcoding.center.startTime")}</dt><dd>{job.started_at ? formatDate(job.started_at) : "—"}</dd></div>
                   <div><dt>{t("transcoding.center.durationSoFar")}</dt><dd>{elapsed === null ? "—" : formatDuration(elapsed)}</dd></div>
                   <div><dt>{t("transcoding.center.eta")}</dt><dd>{eta}</dd></div>
+                  <div><dt>{t("transcoding.federation.phase")}</dt><dd>{phaseForJob(job, t)}</dd></div>
+                  <div><dt>{t("transcoding.federation.target")}</dt><dd>{worker}</dd></div>
+                  {transferForJob(job) ? <div><dt>{job.result_transfer_total_bytes ? t("transcoding.federation.resultTransfer") : t("transcoding.federation.sourceTransfer")}</dt><dd>{transferForJob(job)}</dd></div> : null}
                 </dl>
               </div>
               <div className="transcoding-job-detail-side">

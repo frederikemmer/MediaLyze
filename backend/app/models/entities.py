@@ -1418,6 +1418,28 @@ class TranscodeJob(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
+    # Federation fields are additive so existing local jobs remain valid and
+    # old clients can continue to use the local execution path.
+    global_job_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    origin_installation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    target_installation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    target_member_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    assignment_mode: Mapped[str] = mapped_column(String(16), default="local", nullable=False)
+    processing_phase: Mapped[str] = mapped_column(String(48), default="queued", nullable=False)
+    phase_detail: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    execution_attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    remote_attempt_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_transfer_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    result_transfer_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    source_transfer_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_transfer_total_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    result_transfer_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    result_transfer_total_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    transfer_speed_bytes_per_second: Mapped[float | None] = mapped_column(Float, nullable=True)
+    transfer_eta_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+
 
 class TranscodeVariant(TimestampMixin, Base):
     __tablename__ = "transcode_variants"
@@ -1574,6 +1596,169 @@ class TranscodeAutomationRecord(TimestampMixin, Base):
     result_source_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result_source_mtime: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(String(32000), nullable=True)
+
+
+class TranscodeFederationMember(TimestampMixin, Base):
+    __tablename__ = "transcode_federation_members"
+    __table_args__ = (
+        UniqueConstraint("installation_id", name="uq_transcode_federation_members_installation"),
+        Index("ix_transcode_federation_members_status", "status"),
+        Index("ix_transcode_federation_members_federation", "federation_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    installation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    federation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    endpoint_urls: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    protocol_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False)
+    connection_status: Mapped[str] = mapped_column(String(24), default="offline", nullable=False)
+    reachable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    accept_jobs: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    resources: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    capabilities: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    capability_matrix: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    active_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    network_mbps: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)
+    shared_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+
+class TranscodeRemoteAttempt(TimestampMixin, Base):
+    __tablename__ = "transcode_remote_attempts"
+    __table_args__ = (
+        UniqueConstraint("global_job_id", "attempt_number", name="uq_transcode_remote_attempt_job_attempt"),
+        Index("ix_transcode_remote_attempts_job", "job_id"),
+        Index("ix_transcode_remote_attempts_status", "status"),
+        Index("ix_transcode_remote_attempts_lease", "lease_expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    # The origin stores the local job id; a target installation only stores
+    # the protocol attempt and therefore has no local TranscodeJob row.
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_jobs.id", ondelete="CASCADE"), nullable=True
+    )
+    global_job_id: Mapped[str] = mapped_column(String(96), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin_installation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_installation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    assignment_mode: Mapped[str] = mapped_column(String(16), default="automatic", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="accepted", nullable=False)
+    processing_phase: Mapped[str] = mapped_column(String(48), default="preparing_transfer", nullable=False)
+    phase_detail: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    plan: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    source_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    source_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    source_size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    workspace_path: Mapped[str] = mapped_column(String(4096), nullable=False)
+    result_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    result_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    result_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_transfer_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    source_bytes_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_bytes_transferred: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    result_bytes_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    result_bytes_transferred: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    progress_percent: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    processed_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    speed: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    eta_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lease_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    lease_expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    last_origin_contact_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(32000), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class TranscodeTransfer(TimestampMixin, Base):
+    __tablename__ = "transcode_transfers"
+    __table_args__ = (
+        Index("ix_transcode_transfers_attempt", "attempt_id"),
+        Index("ix_transcode_transfers_status", "status"),
+        UniqueConstraint("attempt_id", "direction", "role", name="uq_transcode_transfer_attempt_direction_role"),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("transcode_remote_attempts.id", ondelete="CASCADE"), nullable=False
+    )
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    relative_name: Mapped[str] = mapped_column(String(2048), nullable=False)
+    total_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    transferred_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    chunk_size: Mapped[int] = mapped_column(Integer, default=1024 * 1024, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    local_path: Mapped[str] = mapped_column(String(4096), nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+
+class TranscodeTransferChunk(Base):
+    __tablename__ = "transcode_transfer_chunks"
+    __table_args__ = (
+        UniqueConstraint("transfer_id", "chunk_index", name="uq_transcode_transfer_chunk_index"),
+        Index("ix_transcode_transfer_chunks_transfer", "transfer_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    transfer_id: Mapped[str] = mapped_column(
+        ForeignKey("transcode_transfers.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+class TranscodeResourceReservation(Base):
+    __tablename__ = "transcode_resource_reservations"
+    __table_args__ = (
+        Index("ix_transcode_resource_reservations_active", "status", "expires_at"),
+        Index("ix_transcode_resource_reservations_device", "resource_type", "device_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_jobs.id", ondelete="CASCADE"), nullable=True
+    )
+    attempt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("transcode_remote_attempts.id", ondelete="CASCADE"), nullable=True
+    )
+    owner_installation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    slots: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    lease_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class TranscodeNetworkMetric(Base):
+    __tablename__ = "transcode_network_metrics"
+    __table_args__ = (
+        Index("ix_transcode_network_metrics_member", "member_id", "measured_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(
+        ForeignKey("transcode_federation_members.id", ondelete="CASCADE"), nullable=False
+    )
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    bytes_transferred: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    measured_mbps: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    measured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
 
 class MediaFileHistory(Base):

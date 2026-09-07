@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
+- add opt-in direct transcode federation between trusted MediaLyze installations with stable identities, pairing-code trust, authenticated/encrypted protocol messages, LAN discovery, capability/resource exchange, automatic or explicit worker selection, leased CPU/GPU reservations, resumable SHA-256 chunk transfers, isolated target workspaces, origin-side result validation/publication, visible remote phases, and Docker protocol/discovery port configuration
 - add a dedicated Transcoding job center with multi-file profile-based queueing, live active-job monitoring, sampled speed charts, hardware visibility, cancellation/retry actions, and a separate history view built on the existing CPU/GPU slot scheduler
 - add a compact, collapsible per-device transcoding capability matrix that locally tests every exposed decode-to-encode codec direction, distinguishes complete hardware paths from software-only and unavailable paths, and measures the highest repeatable full-speed concurrency level up to twenty simultaneous hardware sessions without touching media libraries or normal job history
 - show consistent hover/focus details for every tested matrix cell, including repeated runs, medians, slowdown limits, and the practical parallel-session recommendation

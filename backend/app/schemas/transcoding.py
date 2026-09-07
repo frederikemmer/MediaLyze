@@ -78,6 +78,11 @@ class TranscodePlan(BaseModel):
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     execution_mode: Literal["hardware_required", "cpu_only"] | None = None
     replacement_confirmed: bool = False
+    # ``local`` is the compatibility default for existing API clients.  The
+    # new editor sends ``automatic`` when federation is enabled.
+    target_mode: Literal["local", "automatic", "member"] = "local"
+    target_member_id: str | None = Field(default=None, max_length=128)
+    target_device_id: str | None = Field(default=None, max_length=128)
 
 
 class TranscodeProfileStreamRule(BaseModel):
@@ -648,6 +653,24 @@ class TranscodeJobRead(BaseModel):
     updated_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    global_job_id: str | None = None
+    origin_installation_id: str | None = None
+    target_installation_id: str | None = None
+    target_member_id: str | None = None
+    target_member_name: str | None = None
+    assignment_mode: Literal["local", "automatic", "member"] = "local"
+    processing_phase: str = "queued"
+    phase_detail: str | None = None
+    execution_attempt: int = 0
+    remote_attempt_id: str | None = None
+    source_transfer_id: str | None = None
+    result_transfer_id: str | None = None
+    source_transfer_bytes: int = 0
+    source_transfer_total_bytes: int = 0
+    result_transfer_bytes: int = 0
+    result_transfer_total_bytes: int = 0
+    transfer_speed_bytes_per_second: float | None = None
+    transfer_eta_seconds: float | None = None
 
 
 class FileTranscodeRead(BaseModel):
@@ -662,3 +685,101 @@ class FileTranscodeRead(BaseModel):
 class TranscodeJobPageRead(BaseModel):
     items: list[TranscodeJobRead] = Field(default_factory=list)
     total: int = 0
+
+
+class TranscodeFederationSettingsRead(BaseModel):
+    enabled: bool = False
+    federation_id: str
+    installation_id: str
+    federation_name: str
+    display_name: str
+    pairing_code: str
+    pairing_code_from_environment: bool = False
+    discovery_enabled: bool = True
+    accept_jobs: bool = True
+    endpoint_urls: list[str] = Field(default_factory=list)
+    resource_policy: dict[str, Any] = Field(default_factory=dict)
+    protocol_version: int = 1
+    temp_budget_bytes: int = 0
+    result_retention_hours: int = 24
+
+
+class TranscodeFederationSettingsUpdate(BaseModel):
+    enabled: bool | None = None
+    federation_name: str | None = Field(default=None, min_length=1, max_length=255)
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    discovery_enabled: bool | None = None
+    accept_jobs: bool | None = None
+    endpoint_urls: list[str] | None = Field(default=None, max_length=16)
+    resource_policy: dict[str, Any] | None = None
+
+
+class TranscodeFederationMemberRead(BaseModel):
+    id: int
+    installation_id: str
+    federation_id: str
+    display_name: str
+    endpoint_urls: list[str] = Field(default_factory=list)
+    protocol_version: int = 1
+    status: str
+    connection_status: str
+    reachable: bool = False
+    accept_jobs: bool = False
+    resources: dict[str, Any] = Field(default_factory=dict)
+    capabilities: TranscodeCapabilitiesRead | None = None
+    capability_matrix: TranscodeCapabilityMatrixRead | None = None
+    active_jobs: int = 0
+    network_mbps: float = 0.0
+    last_seen_at: datetime | None = None
+    last_sync_at: datetime | None = None
+    last_error: str | None = None
+
+
+class TranscodeFederationPeerRead(BaseModel):
+    installation_id: str
+    federation_id: str | None = None
+    display_name: str
+    endpoint_urls: list[str] = Field(default_factory=list)
+    protocol_version: int = 1
+    reachable: bool = False
+    last_seen_at: datetime | None = None
+
+
+class TranscodeFederationRead(BaseModel):
+    settings: TranscodeFederationSettingsRead
+    members: list[TranscodeFederationMemberRead] = Field(default_factory=list)
+    discovered: list[TranscodeFederationPeerRead] = Field(default_factory=list)
+
+
+class TranscodeFederationPairRequest(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=2048)
+    pairing_code: str = Field(min_length=4, max_length=256)
+
+
+class TranscodeFederationPasscodeResetRead(BaseModel):
+    pairing_code: str
+    pairing_code_from_environment: bool = False
+
+
+class TranscodeFederationProtocolPairRequest(BaseModel):
+    protocol_version: int = 1
+    federation_id: str = Field(min_length=1, max_length=128)
+    installation_id: str = Field(min_length=1, max_length=128)
+    display_name: str = Field(min_length=1, max_length=255)
+    endpoint_urls: list[str] = Field(default_factory=list, max_length=16)
+    pairing_code: str = Field(min_length=4, max_length=256)
+    client_nonce: str = Field(min_length=16, max_length=128)
+    accept_jobs: bool = True
+    resources: dict[str, Any] = Field(default_factory=dict)
+    capabilities: dict[str, Any] = Field(default_factory=dict)
+    capability_matrix: dict[str, Any] = Field(default_factory=dict)
+    network_mbps: float = Field(default=100.0, ge=0, le=100000)
+    resource_policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class TranscodeFederationProtocolSecureEnvelope(BaseModel):
+    version: int = 1
+    timestamp: int
+    nonce: str
+    ciphertext: str
+    tag: str

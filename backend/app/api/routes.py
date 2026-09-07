@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_app_settings, get_db_session, get_scan_runtime
+from backend.app.api.federation_routes import federation_protocol_router, federation_router
 from backend.app.core.config import Settings
 from backend.app.schemas.app_settings import AppSettingsRead, AppSettingsUpdate
 from backend.app.schemas.browse import BrowseResponse
@@ -257,6 +258,11 @@ from backend.app.services.transcoding import (
     serialize_transcode_job,
     validate_transcode_plan,
 )
+from backend.app.services.transcode_federation import (
+    FederationError,
+    choose_worker_for_media_file,
+    federation_enabled,
+)
 from backend.app.services.transcode_automation import (
     TranscodeAutomationError,
     approve_transcode_rule_replacement,
@@ -312,6 +318,8 @@ from backend.app.services.update_status import (
 )
 
 router = APIRouter()
+router.include_router(federation_router)
+router.include_router(federation_protocol_router)
 
 
 def _profile_error(exc: ProfileCatalogError) -> HTTPException:
@@ -3138,7 +3146,24 @@ def file_transcode_validate(
     media_file = db.get(MediaFile, file_id)
     if media_file is None:
         raise HTTPException(status_code=404, detail="Media file not found")
-    return validate_transcode_plan(db, settings, media_file, payload)
+    try:
+        if payload.target_mode != "local":
+            if not federation_enabled(db, settings):
+                raise FederationError("Federation is not enabled on this installation", status_code=409)
+            selection = choose_worker_for_media_file(db, settings, media_file, payload)
+            if not selection.candidate.is_local:
+                remote_capabilities = TranscodeCapabilitiesRead.model_validate(selection.candidate.capabilities)
+                return validate_transcode_plan(
+                    db,
+                    settings,
+                    media_file,
+                    payload,
+                    capabilities_override=remote_capabilities,
+                    device_id_override=payload.target_device_id,
+                )
+        return validate_transcode_plan(db, settings, media_file, payload)
+    except FederationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.post("/files/{file_id}/transcode", response_model=TranscodeJobRead, status_code=202)
@@ -3156,6 +3181,8 @@ def file_transcode_start(
         message = str(exc)
         status_code = 404 if message == "Media file not found" else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
+    except FederationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return serialize_transcode_job(job, db.get(MediaFile, file_id))
 
 

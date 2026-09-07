@@ -161,6 +161,61 @@ class Settings(BaseSettings):
         validation_alias="MEDIALYZE_TELEMETRY_ENDPOINT",
     )
     telemetry_timeout_seconds: float = 2.0
+    # The federation is deliberately opt-in at the persisted application
+    # level.  These process settings describe the optional protocol listener
+    # and its discovery transport once a user enables it in the UI.
+    federation_enabled: bool = Field(
+        default=True,
+        validation_alias="MEDIALYZE_FEDERATION_ENABLED",
+    )
+    federation_host: str = Field(
+        default="0.0.0.0",
+        validation_alias="MEDIALYZE_FEDERATION_HOST",
+    )
+    federation_port: int = Field(
+        default=8091,
+        ge=1,
+        le=65535,
+        validation_alias="MEDIALYZE_FEDERATION_PORT",
+    )
+    federation_discovery_port: int = Field(
+        default=43211,
+        ge=1024,
+        le=65535,
+        validation_alias="MEDIALYZE_FEDERATION_DISCOVERY_PORT",
+    )
+    federation_passcode: str | None = Field(
+        default=None,
+        max_length=256,
+        validation_alias="MEDIALYZE_FEDERATION_PASSCODE",
+    )
+    federation_advertise_urls: str = Field(
+        default="",
+        validation_alias="MEDIALYZE_FEDERATION_ADVERTISE_URLS",
+    )
+    federation_chunk_size_bytes: int = Field(
+        default=1024 * 1024,
+        ge=64 * 1024,
+        le=16 * 1024 * 1024,
+        validation_alias="MEDIALYZE_FEDERATION_CHUNK_SIZE_BYTES",
+    )
+    federation_temp_budget_bytes: int = Field(
+        default=0,
+        ge=0,
+        validation_alias="MEDIALYZE_FEDERATION_TEMP_BUDGET_BYTES",
+    )
+    federation_result_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        validation_alias="MEDIALYZE_FEDERATION_RESULT_RETENTION_HOURS",
+    )
+    federation_request_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0.5,
+        le=120.0,
+        validation_alias="MEDIALYZE_FEDERATION_REQUEST_TIMEOUT_SECONDS",
+    )
     allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx")
 

@@ -1,5 +1,5 @@
 import { Check, CircleAlert, Film, LoaderCircle, Play, Square } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -8,6 +8,7 @@ import {
   type FileTranscode,
   type MediaFileDetail,
   type TranscodeCapabilities,
+  type TranscodeFederation,
   type TranscodeEncoderCapability,
   type TranscodeJob,
   type TranscodePlan,
@@ -738,6 +739,13 @@ function clonePlan(plan: TranscodePlan): TranscodePlan {
   return clone;
 }
 
+function targetLabel(plan: TranscodePlan, federation: TranscodeFederation | null): string {
+  if (plan.target_mode === "member") {
+    return federation?.members.find((member) => member.installation_id === plan.target_member_id)?.display_name ?? plan.target_member_id ?? "member";
+  }
+  return plan.target_mode === "automatic" ? "automatic" : "local";
+}
+
 function jobIsActive(job: TranscodeJob | null): boolean {
   return job?.status === "queued" || job?.status === "running";
 }
@@ -773,6 +781,8 @@ function TranscodeJobHistory({ jobs }: { jobs: TranscodeJob[] }) {
             <dl>
               <div><dt>{t("transcoding.sourcePath")}</dt><dd><code>{job.source_path_snapshot}</code></dd></div>
               <div><dt>{t("transcoding.outputPath")}</dt><dd><code>{job.output_path_snapshot}</code></dd></div>
+              {job.target_member_name || job.target_member_id ? <div><dt>{t("transcoding.federation.target")}</dt><dd>{job.target_member_name ?? job.target_member_id}</dd></div> : null}
+              {job.processing_phase ? <div><dt>{t("transcoding.federation.phase")}</dt><dd>{t(`transcoding.federation.phases.${job.processing_phase}`, { defaultValue: job.phase_detail ?? job.processing_phase })}</dd></div> : null}
             </dl>
             <code>{job.ffmpeg_command}</code>
             {job.warnings.length ? <ul>{job.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
@@ -821,8 +831,10 @@ export function FileTranscodeHistory({ fileId }: { fileId: string | number }) {
 
 export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   const { t, i18n } = useTranslation();
+  const federationAutoAppliedRef = useRef(false);
   const [data, setData] = useState<FileTranscode | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
+  const [federation, setFederation] = useState<TranscodeFederation | null>(null);
   const [plan, setPlan] = useState<TranscodePlan | null>(null);
   const [selectedSavedProfileId, setSelectedSavedProfileId] = useState<number | null>(null);
   const [validation, setValidation] = useState<TranscodeValidation | null>(null);
@@ -841,7 +853,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
 
   const refresh = useCallback(async () => {
     const [nextData, nextCapabilities] = await Promise.all([
-      api.fileTranscode(file.id),
+    api.fileTranscode(file.id),
       api.transcodeCapabilities(),
     ]);
     setData(nextData);
@@ -852,9 +864,18 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   }, [file.id]);
 
   useEffect(() => {
+    let disposed = false;
+    api.transcodeFederation()
+      .then((payload) => { if (!disposed) setFederation(payload); })
+      .catch(() => { if (!disposed) setFederation(null); });
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
     setData(null);
     setCapabilities(null);
     setPlan(null);
+    federationAutoAppliedRef.current = false;
     setSelectedSavedProfileId(null);
     setValidation(null);
     setJob(null);
@@ -866,6 +887,12 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   }, [refresh]);
 
   useEffect(() => setRawProbe(file.raw_ffprobe_json), [file.id, file.raw_ffprobe_json]);
+
+  useEffect(() => {
+    if (!federation?.settings.enabled || !plan || federationAutoAppliedRef.current || plan.target_mode !== "local") return;
+    federationAutoAppliedRef.current = true;
+    setPlan({ ...plan, target_mode: "automatic" });
+  }, [federation?.settings.enabled, plan]);
 
   useEffect(() => {
     if (!job || !jobIsActive(job)) return;
@@ -907,12 +934,21 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     [file.audio_streams, file.subtitle_streams, file.external_subtitles, i18n.language],
   );
 
+  const setPlanKeepingTarget = useCallback((nextPlan: TranscodePlan) => {
+    setPlan((current) => ({
+      ...nextPlan,
+      target_mode: current?.target_mode ?? nextPlan.target_mode ?? "local",
+      target_member_id: current?.target_member_id ?? nextPlan.target_member_id ?? null,
+      target_device_id: current?.target_device_id ?? nextPlan.target_device_id ?? null,
+    }));
+  }, []);
+
   const selectProfile = useCallback((profile: typeof PROFILE_KEYS[number]) => {
     if (!data) return;
     setSelectedSavedProfileId(null);
-    setPlan(clonePlan(data.profiles[profile]));
+    setPlanKeepingTarget(clonePlan(data.profiles[profile]));
     setValidation(null);
-  }, [data]);
+  }, [data, setPlanKeepingTarget]);
 
   const setExpertPlan = useCallback((next: TranscodePlan) => {
     setSelectedSavedProfileId(null);
@@ -991,7 +1027,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               const savedProfile = data.saved_profiles?.find((entry) => `saved:${entry.profile.id}` === profile);
               if (savedProfile) {
                 setSelectedSavedProfileId(savedProfile.profile.id);
-                setPlan(clonePlan(savedProfile.plan));
+                setPlanKeepingTarget(clonePlan(savedProfile.plan));
                 setValidation(null);
               }
             } else if (profile !== "expert") {
@@ -1061,6 +1097,45 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
           </select>
           <span className="field-hint">{t("transcoding.outputModeHint")}</span>
         </label>
+        <label>
+          <span>{t("transcoding.federation.target")}</span>
+          <select
+            className={transcodeControlClass}
+            value={plan.target_mode === "member" ? `member:${plan.target_member_id ?? ""}` : (plan.target_mode ?? "local")}
+            onChange={(event) => {
+              const rawValue = event.target.value;
+              const isMember = rawValue.startsWith("member:");
+              const next = (isMember ? "member" : rawValue) as NonNullable<TranscodePlan["target_mode"]>;
+              setExpertPlan({
+                ...plan,
+                profile: "expert",
+                target_mode: next,
+                target_member_id: isMember ? rawValue.slice("member:".length) : null,
+                target_device_id: null,
+              });
+              setValidation(null);
+            }}
+          >
+            <option value="local">{t("transcoding.federation.targetLocal")}</option>
+            <option value="automatic" disabled={!federation?.settings.enabled}>{t("transcoding.federation.targetAutomatic")}</option>
+            {federation?.members.map((member) => <option key={member.installation_id} value={`member:${member.installation_id}`} disabled={!member.reachable}>{member.display_name}</option>)}
+          </select>
+          <span className="field-hint">{t("transcoding.federation.targetHint", { target: targetLabel(plan, federation) })}</span>
+        </label>
+        {plan.target_mode === "member" && plan.target_member_id ? (() => {
+          const member = federation?.members.find((candidate) => candidate.installation_id === plan.target_member_id);
+          const devices = member?.capabilities?.devices?.filter((device) => device.status === "available") ?? [];
+          return devices.length ? (
+            <label>
+              <span>{t("transcoding.federation.targetDevice")}</span>
+              <select className={transcodeControlClass} value={plan.target_device_id ?? ""} onChange={(event) => setExpertPlan({ ...plan, profile: "expert", target_device_id: event.target.value || null })}>
+                <option value="">{t("transcoding.federation.anyDevice")}</option>
+                <option value="cpu">{t("transcoding.federation.cpuDevice")}</option>
+                {devices.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.backend}</option>)}
+              </select>
+            </label>
+          ) : null;
+        })() : null}
       </div>
 
       {plan.output_mode === "replace_original" ? (
@@ -1364,6 +1439,9 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
         <section className="transcode-progress" aria-live="polite">
           <div><strong>{t(`transcoding.status.${activeJob.status}`)}</strong><span>{Math.round(activeJob.progress_percent)}%</span></div>
           <progress max={100} value={activeJob.progress_percent} />
+          <p className="transcode-progress-phase">{t(`transcoding.federation.phases.${activeJob.processing_phase ?? "queued"}`, { defaultValue: activeJob.phase_detail ?? activeJob.processing_phase ?? "queued" })}</p>
+          {activeJob.source_transfer_total_bytes ? <p className="transcode-progress-transfer">{t("transcoding.federation.sourceTransfer")}: {formatBytes(activeJob.source_transfer_bytes ?? 0)} / {formatBytes(activeJob.source_transfer_total_bytes)}</p> : null}
+          {activeJob.result_transfer_total_bytes ? <p className="transcode-progress-transfer">{t("transcoding.federation.resultTransfer")}: {formatBytes(activeJob.result_transfer_bytes ?? 0)} / {formatBytes(activeJob.result_transfer_total_bytes)}</p> : null}
           <p>{activeJob.speed ?? "—"} · {activeJob.eta_seconds != null ? t("transcoding.eta", { seconds: Math.ceil(activeJob.eta_seconds) }) : "—"}</p>
           <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then(setJob)}><Square aria-hidden="true" />{t("common.cancel")}</button>
         </section>

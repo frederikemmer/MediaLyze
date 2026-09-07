@@ -28,6 +28,7 @@ from backend.app.models.entities import (
     LibraryRoot,
     MediaFile,
     SubtitleStream,
+    TranscodeFederationMember,
     TranscodeJob,
     TranscodeProfile,
     TranscodeVariant,
@@ -1901,10 +1902,13 @@ def validate_transcode_plan(
     plan: TranscodePlan,
     *,
     output_path_override: Path | None = None,
+    output_root_override: Path | None = None,
     output_subfolder: str | None = None,
+    capabilities_override: TranscodeCapabilitiesRead | None = None,
+    device_id_override: str | None = None,
 ) -> TranscodeValidationRead:
     paths = _source_paths(media_file)
-    capabilities = get_transcode_capabilities(settings)
+    capabilities = capabilities_override or get_transcode_capabilities(settings)
     app_settings = get_app_settings(db, settings)
     plan, language_errors = _normalize_plan_languages(plan)
     output_mode = _effective_output_mode(plan, app_settings)
@@ -1963,8 +1967,9 @@ def validate_transcode_plan(
             errors.append("Same-directory rules cannot use an output subfolder")
         output_root = paths.root
         output_path = output_path_override or (paths.source.parent / output_filename)
+    validation_output_root = output_root_override or output_root
     try:
-        output_path.resolve().relative_to(output_root.resolve())
+        output_path.resolve().relative_to(validation_output_root.resolve())
     except ValueError:
         errors.append("The output path escapes the configured output root")
     if output_mode != "replace_original" and output_path.resolve() == paths.source.resolve():
@@ -2028,7 +2033,20 @@ def validate_transcode_plan(
         backend = _hardware_backend(encoder)
         if not backend:
             continue
-        selected_device = _select_hardware_device_for_encoder(capabilities, encoder or "")
+        selected_device = (
+            next(
+                (
+                    device
+                    for device in capabilities.devices
+                    if device.id == device_id_override
+                    and device.backend == backend
+                    and device.status == "available"
+                ),
+                None,
+            )
+            if device_id_override
+            else _select_hardware_device_for_encoder(capabilities, encoder or "")
+        )
         if selected_device is not None:
             selected_hardware_devices.append(selected_device)
     selected_device_ids = {device.id for device in selected_hardware_devices}
@@ -2036,7 +2054,7 @@ def validate_transcode_plan(
         errors.append("All encoded video streams must use the same automatically selected hardware device")
     hardware_device_name: str | None = None
     selected_device = selected_hardware_devices[0] if selected_hardware_devices else None
-    device_id = selected_device.id if selected_device is not None else None
+    device_id = device_id_override or (selected_device.id if selected_device is not None else None)
     render_node = _hardware_render_node_for_encoder(settings, selected_device)
     for backend in accelerated_backends:
         backend_devices = [device for device in capabilities.devices if device.backend == backend]
@@ -2395,6 +2413,17 @@ def queue_transcode_job(
         raise TranscodeValidationError(actual_validation)
     actual_arguments = list(actual_validation.ffmpeg_arguments)
     app_settings = get_app_settings(db, settings)
+    # Every job gets a stable federation correlation id, even when it stays
+    # local.  This makes local and remote history rows comparable and gives a
+    # future retry/remote reassignment a collision-free identity.
+    try:
+        from backend.app.services.transcode_federation import get_federation_state
+
+        origin_installation_id = get_federation_state(db, settings)["installation_id"]
+    except Exception:
+        # A capability-only or legacy migration context may not have the
+        # federation setting yet.  The local job remains fully usable.
+        origin_installation_id = None
     if validation.output_mode == "transcode_output":
         output_storage_root = Path(
             getattr(settings, "transcode_output_root", None)
@@ -2438,6 +2467,11 @@ def queue_transcode_job(
         remove_partial_output=app_settings.transcoding.remove_partial_output,
         on_error=app_settings.transcoding.on_error,
         temporary_path=str(temporary_path),
+        global_job_id=uuid4().hex,
+        origin_installation_id=origin_installation_id,
+        assignment_mode="local",
+        processing_phase="queued",
+        execution_attempt=0,
     )
     db.add(job)
     db.commit()
@@ -2531,6 +2565,9 @@ def execute_transcode_job(
         job.status = JobStatus.running
         job.started_at = utc_now()
         job.attempt = (job.attempt or 0) + 1
+        job.execution_attempt = (job.execution_attempt or 0) + 1
+        job.processing_phase = "preparing_transcode"
+        job.phase_detail = "Preparing the local FFmpeg workspace"
         job.error = None
         db.commit()
         source_path = Path(job.source_path_snapshot)
@@ -2559,6 +2596,9 @@ def execute_transcode_job(
             shell=False,
             **get_hidden_subprocess_kwargs(),
         )
+        job.processing_phase = "transcoding"
+        job.phase_detail = "FFmpeg is processing the source file"
+        db.commit()
         last_commit = utc_now()
         if process.stdout is not None:
             for raw_line in process.stdout:
@@ -2585,9 +2625,16 @@ def execute_transcode_job(
             raise ValueError("The source file changed while transcoding; the temporary result was discarded")
         if not temporary_path.exists() or temporary_path.stat().st_size <= 0:
             raise RuntimeError("FFmpeg completed without producing a valid output file")
+        job.processing_phase = "validating_result"
+        job.phase_detail = "Validating the temporary result"
+        db.commit()
         if job.output_mode == "replace_original":
+            job.processing_phase = "publishing"
+            job.phase_detail = "Publishing the replacement result"
             os.replace(temporary_path, output_path)
         else:
+            job.processing_phase = "publishing"
+            job.phase_detail = "Publishing the transcoded variant"
             _publish_without_overwrite(temporary_path, output_path)
         variant = TranscodeVariant(
             group_id=job.group_id,
@@ -2607,6 +2654,8 @@ def execute_transcode_job(
             job.result_file_id = source.id
         db.add(variant)
         job.status = JobStatus.completed
+        job.processing_phase = "completed"
+        job.phase_detail = None
         job.progress_percent = 100.0
         job.processed_seconds = duration or job.processed_seconds
         job.eta_seconds = 0.0
@@ -2623,6 +2672,8 @@ def execute_transcode_job(
         job = db.get(TranscodeJob, job_id)
         if job is not None:
             job.status = JobStatus.canceled
+            job.processing_phase = "canceled"
+            job.phase_detail = None
             job.error = str(exc)
             job.finished_at = utc_now()
             db.commit()
@@ -2633,6 +2684,8 @@ def execute_transcode_job(
         job = db.get(TranscodeJob, job_id)
         if job is not None:
             job.status = JobStatus.failed
+            job.processing_phase = "failed"
+            job.phase_detail = None
             job.error = (str(exc) or exc.__class__.__name__)[-32000:]
             job.finished_at = utc_now()
             db.commit()
@@ -2655,6 +2708,7 @@ def cancel_transcode_job(db: Session, job_id: int) -> TranscodeJob:
         raise ValueError("Transcoding job not found")
     if job.status == JobStatus.queued:
         job.status = JobStatus.canceled
+        job.processing_phase = "canceled"
         job.finished_at = utc_now()
         if job.temporary_path and job.remove_partial_output:
             _remove_temporary_output(Path(job.temporary_path), Path(job.output_path_snapshot))
@@ -2670,6 +2724,7 @@ def recover_orphaned_transcode_jobs(db: Session) -> int:
     finished = utc_now()
     for job in jobs:
         job.status = JobStatus.canceled
+        job.processing_phase = "canceled"
         job.error = "Canceled during startup recovery"
         job.finished_at = finished
         if job.temporary_path and job.remove_partial_output:
@@ -2799,7 +2854,22 @@ def _source_files_for_jobs(db: Session, jobs: list[TranscodeJob]) -> dict[int, M
 
 def _serialize_transcode_jobs(db: Session, jobs: list[TranscodeJob]) -> list[TranscodeJobRead]:
     source_files = _source_files_for_jobs(db, jobs)
-    return [serialize_transcode_job(job, source_files.get(job.source_file_id)) for job in jobs]
+    member_ids = {job.target_member_id for job in jobs if job.target_member_id}
+    member_names = {
+        member.installation_id: member.display_name
+        for member in db.scalars(
+            select(TranscodeFederationMember).where(
+                TranscodeFederationMember.installation_id.in_(member_ids or {""})
+            )
+        ).all()
+    }
+    payloads: list[TranscodeJobRead] = []
+    for job in jobs:
+        payload = serialize_transcode_job(job, source_files.get(job.source_file_id))
+        if job.target_member_id:
+            payload.target_member_name = member_names.get(job.target_member_id)
+        payloads.append(payload)
+    return payloads
 
 
 def _serialize_variant(db: Session, variant: TranscodeVariant) -> TranscodeVariantRead:

@@ -52,7 +52,9 @@ import {
   PanelTopClose,
   Play,
   Plus,
+  PlugZap,
   RefreshCw,
+  RotateCcw,
   Save,
   SaveOff,
   Search,
@@ -63,6 +65,7 @@ import {
   Sparkles,
   SquareArrowOutUpRight,
   Trash2,
+  Unplug,
   UserRoundCheck,
   X,
 } from "lucide-react";
@@ -2611,6 +2614,19 @@ export function UiElementsPage() {
                   <div className="transcode-preview-link-card"><a className="secondary transcode-preview-link" href="#">Open synchronized preview</a></div>
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
+              </VariantCard>
+              <VariantCard title="Direct transcode federation pairing" source="TranscodeFederationPanel" classes={["transcode-federation-panel", "transcode-federation-heading", "transcode-federation-subheading", "transcode-federation-code-row", "transcode-federation-fields", "transcode-federation-pairing", "transcode-federation-pair-form", "transcode-federation-peer", "transcode-federation-members", "transcode-federation-member", "transcode-federation-member-main", "transcode-federation-member-details", "transcode-federation-member-actions", "transcode-federation-matrix", "transcode-federation-matrix-list", "transcode-federation-resources", "transcode-federation-identity", "status-dot", "app-settings-flag-toggle", "badge"]} wide>
+                <section className="transcode-federation-panel">
+                  <div className="transcode-federation-heading">
+                    <div><h3><Server aria-hidden="true" />Transcode federation</h3><p className="field-hint">Pair trusted installations directly and exchange only structured plans and resumable chunks.</p></div>
+                    <span className="badge is-success">Enabled</span>
+                  </div>
+                  <label className="app-settings-flag-toggle transcode-federation-toggle"><input type="checkbox" defaultChecked /><span>Enable direct federation for this installation</span></label>
+                  <div className="app-settings-performance-grid transcode-federation-fields"><label className="field"><span>Federation name</span><input className="settings-choice-input" defaultValue="Home media workers" /></label><label className="field"><span>Installation name</span><input className="settings-choice-input" defaultValue="Living room server" /></label></div>
+                  <div className="transcode-federation-code-row"><label className="field"><span>Pairing code</span><input className="settings-choice-input" readOnly value="mLz-7Wq2-8Nf4" onChange={() => undefined} /></label><button type="button" className="secondary small"><Copy aria-hidden="true" />Copy code</button><button type="button" className="secondary small"><RotateCcw aria-hidden="true" />Reset code</button></div>
+                  <div className="transcode-federation-pairing"><div className="transcode-federation-subheading"><strong>Add trusted installation</strong><span className="field-hint">Direct pairing; no relay nodes</span></div><div className="transcode-federation-pair-form"><input className="settings-choice-input" value="http://worker-02:8091" readOnly onChange={() => undefined} /><input className="settings-choice-input" value="Peer pairing code" readOnly onChange={() => undefined} /><button type="button" className="secondary small"><PlugZap aria-hidden="true" />Pair</button><button type="button" className="secondary small"><RefreshCw aria-hidden="true" />Discover</button></div></div>
+                  <div className="transcode-federation-members"><div className="transcode-federation-subheading"><strong>Federation members</strong><span className="field-hint">2</span></div><details className="transcode-federation-member" open><summary><span className="transcode-federation-member-main"><span className="status-dot is-online" aria-hidden="true" /><strong>Worker 02 · RTX 3080</strong><small>connected · 16 CPU · 0 active jobs · 420 GB free</small></span><ChevronDown aria-hidden="true" /></summary><div className="transcode-federation-member-details"><div className="transcode-federation-member-actions"><span className="field-hint">http://worker-02:8091</span><button type="button" className="secondary small"><RefreshCw aria-hidden="true" />Sync</button><button type="button" className="secondary small danger"><Unplug aria-hidden="true" />Exclude</button></div><label className="app-settings-flag-toggle"><input type="checkbox" defaultChecked /><span>Accept remote transcode jobs</span></label><details className="transcode-federation-matrix"><summary>Hardware capability matrix (1)</summary><div className="transcode-federation-matrix-list"><strong>NVIDIA GeForce RTX 3080</strong><small>cuda · h264, hevc, av1</small></div></details><div className="transcode-federation-resources"><div className="transcode-federation-subheading"><strong>Foreign-job resources</strong><span className="field-hint">CPU and each tested GPU can be enabled independently.</span></div><label className="app-settings-flag-toggle"><input type="checkbox" defaultChecked /><span>Allow foreign CPU jobs</span></label><label className="app-settings-flag-toggle"><input type="checkbox" defaultChecked /><span>Allow foreign jobs on NVIDIA GeForce RTX 3080</span></label></div></div></details></div>
+                </section>
               </VariantCard>
               <VariantCard title="Transcoding settings and accelerator matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field", "field-label-row", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "transcode-capability-search", "compatibility-profile-panel", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "compatibility-profile-search-empty", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "transcode-automation-list-copy", "transcode-capability-device-copy", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-path", "transcode-matrix-tooltip-path-arrow", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-workload", "transcode-matrix-tooltip-summary", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-matrix-axis-label", "transcode-matrix-axis-label-horizontal", "transcode-matrix-axis-label-vertical", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">

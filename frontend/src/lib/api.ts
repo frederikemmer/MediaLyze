@@ -1362,6 +1362,9 @@ export type TranscodePlan = {
   output_mode?: "transcode_output" | "same_directory" | "replace_original" | null;
   execution_mode?: "hardware_required" | "cpu_only" | null;
   replacement_confirmed?: boolean;
+  target_mode?: "local" | "automatic" | "member";
+  target_member_id?: string | null;
+  target_device_id?: string | null;
 };
 
 export type TranscodeProfileStreamRule = {
@@ -1634,6 +1637,60 @@ export type TranscodeCapabilityMatrix = {
   error: string | null;
 };
 
+export type TranscodeFederationSettings = {
+  enabled: boolean;
+  federation_id: string;
+  installation_id: string;
+  federation_name: string;
+  display_name: string;
+  pairing_code: string;
+  pairing_code_from_environment: boolean;
+  discovery_enabled: boolean;
+  accept_jobs: boolean;
+  endpoint_urls: string[];
+  resource_policy: Record<string, unknown>;
+  protocol_version: number;
+  temp_budget_bytes: number;
+  result_retention_hours: number;
+};
+
+export type TranscodeFederationMember = {
+  id: number;
+  installation_id: string;
+  federation_id: string;
+  display_name: string;
+  endpoint_urls: string[];
+  protocol_version: number;
+  status: string;
+  connection_status: string;
+  reachable: boolean;
+  accept_jobs: boolean;
+  resources: Record<string, unknown>;
+  capabilities: TranscodeCapabilities | null;
+  capability_matrix: TranscodeCapabilityMatrix | null;
+  active_jobs: number;
+  network_mbps: number;
+  last_seen_at: string | null;
+  last_sync_at: string | null;
+  last_error: string | null;
+};
+
+export type TranscodeFederationPeer = {
+  installation_id: string;
+  federation_id: string | null;
+  display_name: string;
+  endpoint_urls: string[];
+  protocol_version: number;
+  reachable: boolean;
+  last_seen_at: string | null;
+};
+
+export type TranscodeFederation = {
+  settings: TranscodeFederationSettings;
+  members: TranscodeFederationMember[];
+  discovered: TranscodeFederationPeer[];
+};
+
 export type TranscodeValidation = {
   valid: boolean;
   output_path: string;
@@ -1716,6 +1773,24 @@ export type TranscodeJob = {
   updated_at: string;
   started_at: string | null;
   finished_at: string | null;
+  global_job_id?: string | null;
+  origin_installation_id?: string | null;
+  target_installation_id?: string | null;
+  target_member_id?: string | null;
+  target_member_name?: string | null;
+  assignment_mode?: "local" | "automatic" | "member";
+  processing_phase?: string;
+  phase_detail?: string | null;
+  execution_attempt?: number;
+  remote_attempt_id?: string | null;
+  source_transfer_id?: string | null;
+  result_transfer_id?: string | null;
+  source_transfer_bytes?: number;
+  source_transfer_total_bytes?: number;
+  result_transfer_bytes?: number;
+  result_transfer_total_bytes?: number;
+  transfer_speed_bytes_per_second?: number | null;
+  transfer_eta_seconds?: number | null;
 };
 
 export type TranscodeVariant = {
@@ -2671,6 +2746,25 @@ export const api = {
     request<TranscodeCapabilityMatrix>("/transcoding/capability-matrix"),
   testTranscodeCapabilityMatrix: () =>
     request<TranscodeCapabilityMatrix>("/transcoding/capability-matrix/test", { method: "POST" }),
+  transcodeFederation: () => request<TranscodeFederation>("/transcoding/federation"),
+  updateTranscodeFederation: (payload: Partial<Pick<TranscodeFederationSettings, "enabled" | "federation_name" | "display_name" | "discovery_enabled" | "accept_jobs" | "resource_policy">> & { endpoint_urls?: string[] }) =>
+    request<TranscodeFederationSettings>("/transcoding/federation", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  resetTranscodeFederationPasscode: () =>
+    request<{ pairing_code: string; pairing_code_from_environment: boolean }>("/transcoding/federation/passcode/reset", { method: "POST" }),
+  discoverTranscodeFederation: () =>
+    request<TranscodeFederation>("/transcoding/federation/discover", { method: "POST" }),
+  pairTranscodeFederation: (payload: { endpoint: string; pairing_code: string }) =>
+    request<TranscodeFederation>("/transcoding/federation/members/pair", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  syncTranscodeFederationMember: (installationId: string) =>
+    request<TranscodeFederation>(`/transcoding/federation/members/${encodeURIComponent(installationId)}/sync`, { method: "POST" }),
+  excludeTranscodeFederationMember: (installationId: string) =>
+    request<void>(`/transcoding/federation/members/${encodeURIComponent(installationId)}`, { method: "DELETE" }),
   transcodeProfiles: () => request<TranscodeProfile[]>("/transcoding/profiles"),
   createTranscodeProfile: (payload: {
     name: string;

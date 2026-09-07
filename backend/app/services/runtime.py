@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import BoundedSemaphore, Lock, Timer
@@ -28,6 +30,7 @@ from backend.app.models.entities import (
     ScanMode,
     ScanTriggerSource,
     TranscodeAutomationRun,
+    TranscodeFederationMember,
     TranscodeJob,
 )
 from backend.app.schemas.transcoding import TranscodePlan, TranscodeValidationRead
@@ -103,6 +106,21 @@ from backend.app.services.transcoding import (
     recover_orphaned_transcode_jobs,
     transcode_capacity,
 )
+from backend.app.services.transcode_federation import (
+    DiscoveryResponder,
+    FederationError,
+    choose_worker_for_media_file,
+    cleanup_federation_attempts,
+    execute_remote_transcode_job,
+    federation_enabled,
+    queue_remote_transcode_job,
+    release_resource_reservation,
+    renew_resource_reservation,
+    reserve_resource,
+    run_remote_attempt,
+    get_federation_state,
+    sync_peer,
+)
 from backend.app.services.transcode_automation import (
     create_transcode_automation_run,
     finalize_transcode_automation_record,
@@ -173,6 +191,12 @@ class ScanRuntimeManager:
         self.transcode_cpu_slots = BoundedSemaphore(1)
         self.transcode_gpu_slots: dict[str, BoundedSemaphore] = {}
         self.transcode_capacity_signature: tuple[object, ...] | None = None
+        self.discovery_responder: DiscoveryResponder | None = None
+        self.federation_protocol_server = None
+        self.federation_protocol_thread: threading.Thread | None = None
+        self.submitted_remote_attempt_ids: set[str] = set()
+        self.cancel_requested_remote_attempt_ids: set[str] = set()
+        self.federation_maintenance_submitted = False
         self.connector_futures: dict[int, Future] = {}
         self.maintenance_executor = self._build_maintenance_executor()
         # Inventory automation is isolated from scans/transcodes, but its
@@ -216,6 +240,8 @@ class ScanRuntimeManager:
         self.refresh_connector_schedules()
         self._recover_orphaned_jobs()
         self._recover_orphaned_transcode_jobs()
+        self._refresh_federation_transport()
+        self._ensure_federation_maintenance_job()
         self._recover_orphaned_transcode_automation_runs()
         self.request_update_check()
         self.sync_all_libraries()
@@ -254,6 +280,17 @@ class ScanRuntimeManager:
         if self.transcode_executor is not None:
             self._shutdown_executor(self.transcode_executor, cancel_futures=True)
             self.transcode_executor = None
+        with self.lock:
+            self.federation_maintenance_submitted = False
+        if self.discovery_responder is not None:
+            self.discovery_responder.stop()
+            self.discovery_responder = None
+        if self.federation_protocol_server is not None:
+            self.federation_protocol_server.should_exit = True
+        if self.federation_protocol_thread is not None:
+            self.federation_protocol_thread.join(timeout=3)
+            self.federation_protocol_thread = None
+            self.federation_protocol_server = None
         self._shutdown_executor(self.maintenance_executor, cancel_futures=True)
         if self.automation_executor is not None:
             self._shutdown_executor(self.automation_executor, cancel_futures=True)
@@ -430,7 +467,31 @@ class ScanRuntimeManager:
             media_file = db.get(MediaFile, file_id)
             if media_file is None:
                 raise ValueError("Media file not found")
-            job, validation = queue_transcode_job(db, self.settings, media_file, plan)
+            selected = None
+            if plan.target_mode != "local":
+                if not federation_enabled(db, self.settings):
+                    raise FederationError(
+                        "Federation is not enabled on this installation",
+                        status_code=409,
+                    )
+                selected = choose_worker_for_media_file(db, self.settings, media_file, plan)
+            if selected is not None and not selected.candidate.is_local:
+                job, validation = queue_remote_transcode_job(
+                    db,
+                    self.settings,
+                    media_file,
+                    plan,
+                    selected,
+                )
+            else:
+                local_plan = plan.model_copy(
+                    update={
+                        "target_mode": "local",
+                        "target_member_id": None,
+                        "target_device_id": None,
+                    }
+                )
+                job, validation = queue_transcode_job(db, self.settings, media_file, local_plan)
         finally:
             db.close()
         try:
@@ -450,6 +511,175 @@ class ScanRuntimeManager:
                 failed_db.close()
             raise
         return job, validation
+
+    def _refresh_federation_transport(self) -> None:
+        db = SessionLocal()
+        try:
+            enabled = federation_enabled(db, self.settings)
+            state = get_federation_state(db, self.settings)
+            discovery_enabled = bool(state.get("discovery_enabled", True))
+        finally:
+            db.close()
+        if enabled:
+            if discovery_enabled:
+                if self.discovery_responder is None:
+                    self.discovery_responder = DiscoveryResponder(self.settings)
+                    self.discovery_responder.start()
+            elif self.discovery_responder is not None:
+                self.discovery_responder.stop()
+                self.discovery_responder = None
+            # Discovery can be disabled independently; the authenticated
+            # direct protocol remains available for explicitly configured
+            # endpoints and already paired members.
+            self._ensure_federation_protocol_server()
+        else:
+            if self.discovery_responder is not None:
+                self.discovery_responder.stop()
+                self.discovery_responder = None
+            self._stop_federation_protocol_server()
+
+    def _ensure_federation_maintenance_job(self) -> None:
+        self.scheduler.add_job(
+            self.request_federation_maintenance,
+            trigger="interval",
+            seconds=10,
+            id="transcode-federation-maintenance",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
+    def request_federation_maintenance(self) -> None:
+        with self.lock:
+            if not self.started or self.federation_maintenance_submitted:
+                return
+            self.federation_maintenance_submitted = True
+        try:
+            self.maintenance_executor.submit(self._run_federation_maintenance)
+        except Exception:
+            with self.lock:
+                self.federation_maintenance_submitted = False
+            raise
+
+    def _run_federation_maintenance(self) -> None:
+        try:
+            db = SessionLocal()
+            try:
+                if federation_enabled(db, self.settings):
+                    member_ids = [
+                        member.installation_id
+                        for member in db.scalars(
+                            select(TranscodeFederationMember).where(
+                                TranscodeFederationMember.status == "active"
+                            )
+                        ).all()
+                    ]
+                    for installation_id in member_ids:
+                        try:
+                            sync_peer(db, self.settings, installation_id)
+                        except FederationError:
+                            logger.info(
+                                "Federation heartbeat failed for %s",
+                                installation_id,
+                                exc_info=True,
+                            )
+                    now = utc_now()
+                    for member in db.scalars(
+                        select(TranscodeFederationMember).where(
+                            TranscodeFederationMember.status == "active"
+                        )
+                    ).all():
+                        if member.last_seen_at and (now - member.last_seen_at).total_seconds() >= 30:
+                            member.reachable = False
+                            member.connection_status = "offline"
+                    cleanup_federation_attempts(db, self.settings, now=now)
+                    db.commit()
+            finally:
+                db.close()
+        finally:
+            with self.lock:
+                self.federation_maintenance_submitted = False
+
+    def _ensure_federation_protocol_server(self) -> None:
+        if self.federation_protocol_server is not None:
+            return
+        # The regular API already exposes the protocol routes.  A second
+        # listener is only needed when the configured federation port is
+        # distinct, which is the normal desktop/split-network arrangement.
+        if int(self.settings.federation_port) == int(self.settings.app_port):
+            return
+        try:
+            import uvicorn
+
+            from backend.app.api.federation_app import create_federation_app
+
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    create_federation_app(self.settings, runtime=self),
+                    host=self.settings.federation_host,
+                    port=int(self.settings.federation_port),
+                    log_level="warning",
+                    access_log=False,
+                )
+            )
+            thread = threading.Thread(
+                target=server.run,
+                name="medialyze-federation-protocol",
+                daemon=True,
+            )
+            self.federation_protocol_server = server
+            self.federation_protocol_thread = thread
+            thread.start()
+        except Exception:
+            self.federation_protocol_server = None
+            self.federation_protocol_thread = None
+            logger.exception("Unable to start the optional federation protocol listener")
+
+    def _stop_federation_protocol_server(self) -> None:
+        if self.federation_protocol_server is not None:
+            self.federation_protocol_server.should_exit = True
+        if self.federation_protocol_thread is not None:
+            self.federation_protocol_thread.join(timeout=3)
+        self.federation_protocol_server = None
+        self.federation_protocol_thread = None
+
+    def submit_remote_attempt(self, attempt_id: str) -> None:
+        attempt_key = str(getattr(attempt_id, "id", attempt_id))
+        with self.lock:
+            if attempt_key in self.submitted_remote_attempt_ids:
+                return
+            self.submitted_remote_attempt_ids.add(attempt_key)
+            if self.transcode_executor is None:
+                self.transcode_executor = self._build_transcode_executor(
+                    max(1, self.transcode_executor_max_workers or self.executor_max_workers)
+                )
+            executor = self.transcode_executor
+        try:
+            executor.submit(self._run_remote_attempt, attempt_key)
+        except Exception:
+            with self.lock:
+                self.submitted_remote_attempt_ids.discard(attempt_key)
+            raise
+
+    def _run_remote_attempt(self, attempt_id: str) -> None:
+        try:
+            run_remote_attempt(
+                attempt_id,
+                self.settings,
+                is_cancel_requested=self.is_remote_attempt_cancel_requested,
+            )
+        finally:
+            with self.lock:
+                self.submitted_remote_attempt_ids.discard(attempt_id)
+                self.cancel_requested_remote_attempt_ids.discard(attempt_id)
+
+    def is_remote_attempt_cancel_requested(self, attempt_id: str) -> bool:
+        with self.lock:
+            return attempt_id in self.cancel_requested_remote_attempt_ids
+
+    def cancel_remote_attempt(self, attempt_id: str) -> None:
+        with self.lock:
+            self.cancel_requested_remote_attempt_ids.add(str(attempt_id))
 
     def _submit_transcode_job(self, job_id: int) -> None:
         with self.lock:
@@ -545,6 +775,11 @@ class ScanRuntimeManager:
         library_id = 0
         completed = False
         slot = None
+        local_reservation = None
+        local_resource_type = None
+        local_resource_device_id = None
+        local_resource_capacity = None
+        remote = False
         try:
             db = SessionLocal()
             try:
@@ -552,6 +787,10 @@ class ScanRuntimeManager:
                 if queued_job is None:
                     return
                 library_id = queued_job.library_id
+                remote = bool(
+                    queued_job.target_installation_id
+                    and queued_job.assignment_mode in {"automatic", "member"}
+                )
                 plan_payload = queued_job.plan if isinstance(queued_job.plan, dict) else {}
                 has_hardware_video = any(
                     str(item.get("encoder") or item.get("codec") or "").lower().endswith(
@@ -560,7 +799,9 @@ class ScanRuntimeManager:
                     for item in plan_payload.get("video_streams", [])
                     if isinstance(item, dict) and item.get("action") == "encode"
                 )
-                if has_hardware_video:
+                if remote:
+                    slot = None
+                elif has_hardware_video:
                     # Automatic device selection is resolved and persisted by
                     # validation.  Create a slot lazily for the selected
                     # backend/device so AMD, Intel, NVIDIA, and Apple jobs do
@@ -571,17 +812,62 @@ class ScanRuntimeManager:
                         if slot is None:
                             slot = BoundedSemaphore(self.transcode_gpu_parallel_jobs_per_device)
                             self.transcode_gpu_slots[device_id] = slot
+                    local_resource_type = "gpu"
+                    local_resource_device_id = device_id
+                    local_resource_capacity = self.transcode_gpu_parallel_jobs_per_device
                 else:
                     slot = self.transcode_cpu_slots
+                    local_resource_type = "cpu"
+                    local_resource_device_id = "cpu"
+                    local_resource_capacity = self.transcode_cpu_parallel_jobs
             finally:
                 db.close()
             if slot is not None:
                 slot.acquire()
+            if not remote:
+                while local_reservation is None:
+                    reservation_db = SessionLocal()
+                    try:
+                        owner_id = get_federation_state(reservation_db, self.settings)["installation_id"]
+                        local_reservation = reserve_resource(
+                            reservation_db,
+                            owner_installation_id=owner_id,
+                            resource_type=str(local_resource_type),
+                            device_id=str(local_resource_device_id),
+                            capacity=max(1, int(local_resource_capacity or 1)),
+                            job_id=job_id,
+                            lease_seconds=3600,
+                        )
+                        reservation_db.commit()
+                    except FederationError as exc:
+                        reservation_db.rollback()
+                        if exc.status_code != 409:
+                            raise
+                    finally:
+                        reservation_db.close()
+                    if local_reservation is not None:
+                        break
+                    if self.is_transcode_cancel_requested(job_id):
+                        cancel_db = SessionLocal()
+                        try:
+                            canceled = cancel_transcode_job(cancel_db, job_id)
+                            finalize_transcode_automation_record(cancel_db, canceled)
+                        finally:
+                            cancel_db.close()
+                        return
+                    time.sleep(0.25)
             while True:
-                library_id = execute_transcode_job(
-                    job_id,
-                    is_cancel_requested=self.is_transcode_cancel_requested,
-                )
+                if remote:
+                    library_id = execute_remote_transcode_job(
+                        job_id,
+                        self.settings,
+                        is_cancel_requested=self.is_transcode_cancel_requested,
+                    )
+                else:
+                    library_id = execute_transcode_job(
+                        job_id,
+                        is_cancel_requested=self.is_transcode_cancel_requested,
+                    )
                 db = SessionLocal()
                 try:
                     job = db.get(TranscodeJob, job_id)
@@ -592,6 +878,14 @@ class ScanRuntimeManager:
                         job.error = f"Retrying after failed attempt {job.attempt}"
                         job.finished_at = None
                         db.commit()
+                        continue
+                    if job.status == JobStatus.queued and remote:
+                        # A temporarily unreachable peer remains queued and is
+                        # retried by this same origin-owned worker loop.  The
+                        # target's deterministic chunk rows make the retry
+                        # resumable after a restart.
+                        db.commit()
+                        time.sleep(2.0)
                         continue
                     completed = job.status == JobStatus.completed
                     if job.status == JobStatus.failed and job.on_error == "stop_queue":
@@ -619,6 +913,19 @@ class ScanRuntimeManager:
                     trigger_details={"reason": "transcode_completed", "transcode_job_id": job_id},
                 )
         finally:
+            if local_reservation is not None:
+                reservation_db = SessionLocal()
+                try:
+                    release_resource_reservation(
+                        reservation_db,
+                        local_reservation.id,
+                        lease_token=local_reservation.lease_token,
+                    )
+                    reservation_db.commit()
+                except Exception:
+                    reservation_db.rollback()
+                finally:
+                    reservation_db.close()
             if slot is not None:
                 slot.release()
             with self.lock:

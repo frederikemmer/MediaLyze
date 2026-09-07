@@ -72,6 +72,58 @@ The output is first written as a hidden temporary file in the target directory. 
 
 After same-directory publication, an incremental scan with trigger `transcode` analyzes the output. The scan attaches the analyzed file to a persistent variant group containing immutable source and output path snapshots. Same-directory variants are flagged as non-primary and are excluded from library lists, dashboard/library statistics, duplicate groups, CSV exports, storage/telemetry aggregates, and later scan discovery; the detail view and transcode history still expose them. Separate `Transcode_Output` variants remain external to the source library and are represented in the job/variant history without being counted as primary files. Replacement keeps the source file as the primary record.
 
+## Direct transcode federation
+
+MediaLyze can optionally form a direct network of trusted installations for
+transcoding. Federation is opt-in and has no cloud coordinator, UPnP
+dependency, or multihop routing: a member connects directly to the advertised
+HTTP(S) protocol endpoint of another member. The normal local admin API remains
+available on its existing port; Docker and split-network deployments can expose
+the separate federation listener on port `8091` plus UDP discovery on `43211`.
+
+Each installation keeps a stable installation ID and a copyable pairing code.
+Pairing is accepted only when the human-supplied code matches, and the two
+installations derive a peer-specific authenticated/encrypted application
+envelope from that exchange. Resetting the code prevents future pairings but
+does not silently remove already trusted members; an excluded member must be
+paired again explicitly. LAN discovery only returns direct candidates and
+never grants trust by itself. The member list exposes reachability, acceptance
+of remote jobs, resources, tested capabilities, and the locally persisted
+codec matrix. The matrix is evidence of a path that passed the real FFmpeg
+probe; it is not a speed ranking and federation does not run an automatic
+benchmark on a peer.
+
+The transcode target is persisted in the structured plan as `local`,
+`automatic`, or a specific member, with an optional target device ID. Automatic
+selection filters for the requested codec, execution mode, hardware/device
+support, acceptance state, and reachability, then estimates queue time,
+source/result transfer time, and transcode time. Local execution wins a true
+tie. A job never changes from an explicit target to another target silently;
+the UI keeps the selected worker and every wait reason visible.
+
+Remote execution has the same origin-side output and source-snapshot safety
+rules as local execution. The origin sends only the structured plan, a source
+metadata snapshot, the source file, and the selected external subtitle
+sidecars. It never sends a library path or a shell command. The target validates
+the plan again against its own real capabilities, creates a private workspace
+under `CONFIG_PATH/transcode-federation`, reserves a CPU/GPU resource with a
+lease, and runs FFmpeg with `shell=False`. It does not create a library entry
+or `MediaFile`. The origin verifies the result hash and source size/mtime again
+before publishing a variant, replacing the original, and/or scheduling the
+normal follow-up analysis.
+
+Source and result files use deterministic resumable chunks with per-chunk and
+full-file SHA-256 verification. Chunk state is persisted on both sides so a
+retry resumes missing chunks. Heartbeats are sent while the attempt is active;
+the target expires a stale lease. Automatic selection happens before assignment;
+if the selected peer temporarily disappears, the origin keeps the deterministic
+attempt queued and resumes it when that peer returns. The current worker runtime
+keeps reservations separate from scan workers and records the origin, global job,
+attempt, device, lease, transfer, and processing phase. The visible
+phases are queued, worker selection, reservation, source transfer, target
+preparation, transcoding, result transfer, validation, publishing, analysis,
+completion, cancellation, and failure.
+
 ## API
 
 - `GET /api/transcoding/capabilities`
@@ -84,6 +136,13 @@ After same-directory publication, an incremental scan with trigger `transcode` a
 - `GET /api/transcode-jobs?library_id=&status=&started_after=&started_before=&limit=&offset=`
 - `GET /api/transcode-jobs/{job_id}`
 - `POST /api/transcode-jobs/{job_id}/cancel`
+- `GET /api/transcoding/federation`
+- `PATCH /api/transcoding/federation`
+- `POST /api/transcoding/federation/passcode/reset`
+- `POST /api/transcoding/federation/discover`
+- `POST /api/transcoding/federation/members/pair`
+- `POST /api/transcoding/federation/members/{installation_id}/sync`
+- `DELETE /api/transcoding/federation/members/{installation_id}`
 
 The file endpoint returns the original summary, FFprobe attachment breakdown, curated plans, jobs, and linked variants. The global history supports library, status, and time filters. Active and queued jobs are never pruned. The independent `transcode_history` retention bucket defaults to 90 days; `0` days or `0 GB` means unlimited. Pruning removes job records only, never output media or variant groups.
 

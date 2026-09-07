@@ -34,6 +34,18 @@
 
 The complete contract, safety invariants, profiles, and API are documented in [Transcoding](transcoding.md).
 
+Transcoding federation extends that flow without changing ownership of local
+media. The origin installation owns the user-facing `TranscodeJob`, source
+snapshot, output publication, variant relationship, and follow-up analysis.
+It selects a directly paired worker from the worker's persisted capabilities,
+resource state, and measured network estimate, then sends a versioned,
+authenticated/encrypted assignment and resumable chunks. The worker stores
+only a connection-scoped remote attempt and isolated temporary files, leases a
+local CPU/GPU slot, validates the structured plan against its own FFmpeg
+probe, and returns a hash-verified result. Heartbeat expiry and persisted
+attempt/transfer/chunk state make interruption resumable while keeping scans,
+normal library rows, and local transcode slots independent.
+
 ## Connector data flow
 
 External catalogs use the architecture documented in [connectors.md](connectors.md):

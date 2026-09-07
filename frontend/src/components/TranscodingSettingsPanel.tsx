@@ -4,6 +4,7 @@ import { ChevronDown, FlaskConical, Search, X } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
 import { TranscodeProfilesRulesPanel } from "./TranscodeProfilesRulesPanel";
+import { TranscodeFederationPanel } from "./TranscodeFederationPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
 import {
   api,
@@ -586,6 +587,7 @@ export function TranscodingSettingsPanel({
           </div>
         ) : null}
 
+        <TranscodeFederationPanel />
         <TranscodeProfilesRulesPanel capabilityMatrix={capabilityMatrix} acceleratorsTooltip={acceleratorsTooltip} />
       </div>
     </AsyncPanel>
