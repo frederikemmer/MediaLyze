@@ -124,6 +124,15 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
                 """
             )
         )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE transcode_jobs (
+                    id INTEGER PRIMARY KEY
+                )
+                """
+            )
+        )
 
     init_db(engine)
 
@@ -139,6 +148,7 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     jellyfin_sync_job_columns = {
         column["name"] for column in inspector.get_columns("jellyfin_sync_jobs")
     }
+    transcode_job_columns = {column["name"] for column in inspector.get_columns("transcode_jobs")}
 
     assert "app_settings" in inspector.get_table_names()
     assert "media_file_history" in inspector.get_table_names()
@@ -183,6 +193,21 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
         "progress_current",
         "progress_total",
     }.issubset(jellyfin_sync_job_columns)
+    assert {
+        "profile_id",
+        "output_mode",
+        "global_job_id",
+        "origin_installation_id",
+        "target_installation_id",
+        "target_member_id",
+        "assignment_mode",
+        "processing_phase",
+        "remote_attempt_id",
+        "source_transfer_id",
+        "result_transfer_id",
+        "transfer_speed_bytes_per_second",
+        "transfer_eta_seconds",
+    }.issubset(transcode_job_columns)
     assert {
         "jellyfin_sync_stage_libraries",
         "jellyfin_sync_stage_users",
