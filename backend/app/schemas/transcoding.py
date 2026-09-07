@@ -272,6 +272,8 @@ class TranscodeJobRead(BaseModel):
     group_id: int
     library_id: int
     source_file_id: int | None = None
+    source_video_codec: str | None = None
+    source_dynamic_range: str | None = None
     result_file_id: int | None = None
     status: str
     profile: str

@@ -104,7 +104,7 @@ afterEach(() => {
 });
 
 describe("AppShell", () => {
-  it("shows the storage map as the fourth primary navigation item", async () => {
+  it("shows the storage map and transcoding center in the primary navigation", async () => {
     window.localStorage.setItem("medialyze-release-notes-seen-app-version", "0.8.3");
 
     renderShell();
@@ -116,6 +116,7 @@ describe("AppShell", () => {
       "/files/compare",
       "/settings",
       "/storage-map",
+      "/transcoding",
     ]);
 
     fireEvent.click(screen.getByRole("link", { name: "Storage map" }));

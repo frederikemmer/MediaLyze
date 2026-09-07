@@ -1518,6 +1518,8 @@ export type TranscodeJob = {
   group_id: number;
   library_id: number;
   source_file_id: number | null;
+  source_video_codec?: string | null;
+  source_dynamic_range?: string | null;
   result_file_id: number | null;
   status: "queued" | "running" | "completed" | "canceled" | "failed";
   profile: string;

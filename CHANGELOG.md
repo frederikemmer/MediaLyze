@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New
 
+- add a dedicated Transcoding job center with multi-file profile-based queueing, live active-job monitoring, sampled speed charts, hardware visibility, cancellation/retry actions, and a separate history view built on the existing CPU/GPU slot scheduler
 - add a compact, collapsible per-device transcoding capability matrix that locally tests every exposed decode-to-encode codec direction, distinguishes complete hardware paths from software-only and unavailable paths, and measures the highest repeatable full-speed concurrency level up to twenty simultaneous hardware sessions without touching media libraries or normal job history
 - show consistent hover/focus details for every tested matrix cell, including repeated runs, medians, slowdown limits, and the practical parallel-session recommendation
 - add safe FFmpeg transcoding for regular video files with three editable profiles, structured expert plans, validated CPU/hardware encoders, stream-level mapping, external subtitle embedding, progress and cancellation, linked analyzed variants, Wipe comparison, searchable job history, and independent retention controls
@@ -19,6 +20,18 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
+- remove the redundant active-job count row and transient refresh indicator from the Transcoding table while keeping the live polling and header counters
+- refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart
+- keep the FFmpeg log collapsed by default and let the expanded speed chart fill its complete detail column
+- remove redundant Transcoding detail headings and show source-to-target video codec and dynamic-range conversions from persisted source metadata and the selected plan
+- make Transcoding table columns resizable with the same drag handles and persisted browser widths as the Library Detail table
+- streamline the Transcoding header by removing redundant helper copy, showing job counts as shared status metrics, and moving hardware load into compact tooltip-backed slot indicators beside the page title
+- refine the Transcoding table defaults with a compact actions column, responsive speed charts, and transparent overflow scrollbars
+- make Transcoding filenames plain text, keep asset navigation on the trailing icon action, and allow the resizable content columns to shrink closer to their truncated minimums
+- keep the expanded Transcoding speed-chart tooltip compact and confined to the chart bounds so it cannot be hidden behind the table edge
+- combine Transcoding progress, time left, and speed into one resizable status column with an inline speed chart and full-width progress track
+- compact the combined Transcoding status cell so its metrics, speed graph, and progress track follow the surrounding table density
 - recognize vendor-identified Intel CPU/iGPU and AMD APU/iGPU DRM media engines even when an FFmpeg build exposes only a subset of their backend families, keep each physical render node usable through its passing QSV/VAAPI encoders, and label matrix software fallbacks as Software
 - clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
 - bind native Windows AMF/QSV probes, transcode jobs, and codec matrices to the physical D3D11 adapter that passed, so hybrid NVIDIA plus AMD/Intel systems expose and test each media engine independently

@@ -34,7 +34,12 @@ vi.mock("echarts-for-react", () => ({
   }: {
     option?: {
       series?: Array<{ data?: unknown[]; type?: string; areaStyle?: unknown; name?: string }>;
-      tooltip?: { trigger?: string; formatter?: (params: unknown) => unknown };
+      tooltip?: {
+        trigger?: string;
+        formatter?: (params: unknown) => unknown;
+        confine?: boolean;
+        renderMode?: string;
+      };
       yAxis?: unknown;
     };
     onEvents?: { click?: (params: { dataIndex: number }) => void };
@@ -72,6 +77,8 @@ vi.mock("echarts-for-react", () => ({
         "data-series-has-area": JSON.stringify(option?.series?.map((series) => Boolean(series.areaStyle)) ?? []),
         "data-series-names": JSON.stringify(option?.series?.map((series) => series.name ?? "") ?? []),
         "data-tooltip": formattedTooltip,
+        "data-tooltip-confine": String(Boolean(option?.tooltip?.confine)),
+        "data-tooltip-render-mode": option?.tooltip?.renderMode ?? "",
         "data-y-axis": JSON.stringify(option?.yAxis ?? null),
         "data-clickable": String(Boolean(onEvents?.click)),
         "data-cursor": style?.cursor ?? "",

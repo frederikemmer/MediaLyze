@@ -15,6 +15,7 @@ const LibrariesPage = lazy(() => import("./pages/LibrariesPage").then((module) =
 const LibraryDetailPage = lazy(() => import("./pages/LibraryDetailPage").then((module) => ({ default: module.LibraryDetailPage })));
 const SeriesDetailPage = lazy(() => import("./pages/SeriesDetailPage").then((module) => ({ default: module.SeriesDetailPage })));
 const StorageMapPage = lazy(() => import("./pages/StorageMapPage").then((module) => ({ default: module.StorageMapPage })));
+const TranscodingPage = lazy(() => import("./pages/TranscodingPage").then((module) => ({ default: module.TranscodingPage })));
 const UiElementsPage = lazy(() => import("./pages/UiElementsPage").then((module) => ({ default: module.UiElementsPage })));
 
 function DevOnlyRoute({ children }: { children: ReactNode }) {
@@ -45,6 +46,7 @@ export function App() {
                 <Route path="/files/:fileId/preview" element={<FileDetailPage />} />
                 <Route path="/files/:fileId" element={<FileDetailPage />} />
                 <Route path="/storage-map" element={<StorageMapPage />} />
+                <Route path="/transcoding" element={<TranscodingPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>

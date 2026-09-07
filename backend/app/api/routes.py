@@ -2883,6 +2883,7 @@ def file_transcode_start(
     file_id: int,
     payload: TranscodePlan,
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+    db: Session = Depends(get_db_session),
 ) -> TranscodeJobRead:
     try:
         job, _validation = runtime.request_transcode(file_id, payload)
@@ -2892,7 +2893,7 @@ def file_transcode_start(
         message = str(exc)
         status_code = 404 if message == "Media file not found" else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
-    return serialize_transcode_job(job)
+    return serialize_transcode_job(job, db.get(MediaFile, file_id))
 
 
 @router.get("/transcode-jobs/active", response_model=TranscodeJobPageRead)
@@ -2929,16 +2930,18 @@ def transcode_job_detail(
     job = db.get(TranscodeJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Transcoding job not found")
-    return serialize_transcode_job(job)
+    return serialize_transcode_job(job, db.get(MediaFile, job.source_file_id) if job.source_file_id else None)
 
 
 @router.post("/transcode-jobs/{job_id}/cancel", response_model=TranscodeJobRead)
 def transcode_job_cancel(
     job_id: int,
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+    db: Session = Depends(get_db_session),
 ) -> TranscodeJobRead:
     try:
-        return serialize_transcode_job(runtime.cancel_transcode(job_id))
+        job = runtime.cancel_transcode(job_id)
+        return serialize_transcode_job(job, db.get(MediaFile, job.source_file_id) if job.source_file_id else None)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

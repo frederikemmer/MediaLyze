@@ -1546,3 +1546,17 @@ def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(mon
         assert retained_variant.source_path_snapshot == job.source_path_snapshot
         assert retained_variant.output_path_snapshot.endswith("Movie variant.mp4")
         assert db.get(MediaFile, media_file_id) is not None
+
+
+def test_transcode_job_listing_includes_source_video_metadata(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        transcoding.queue_transcode_job(db, _settings(tmp_path), media_file, _compatibility_plan())
+
+        page = transcoding.list_transcode_jobs(db, active_only=True)
+
+    assert len(page.items) == 1
+    assert page.items[0].source_video_codec == "hevc"
+    assert page.items[0].source_dynamic_range == "HDR10"

@@ -2744,10 +2744,28 @@ def _attachment_summaries(media_file: MediaFile) -> list[TranscodeAttachmentSumm
     return attachments
 
 
-def serialize_transcode_job(job: TranscodeJob) -> TranscodeJobRead:
+def serialize_transcode_job(job: TranscodeJob, source_file: MediaFile | None = None) -> TranscodeJobRead:
     payload = TranscodeJobRead.model_validate(job)
     payload.status = job.status.value if hasattr(job.status, "value") else str(job.status)
+    if source_file is not None:
+        payload.source_video_codec = source_file.primary_video_codec
+        payload.source_dynamic_range = source_file.primary_video_hdr_type
     return payload
+
+
+def _source_files_for_jobs(db: Session, jobs: list[TranscodeJob]) -> dict[int, MediaFile]:
+    source_ids = {job.source_file_id for job in jobs if job.source_file_id is not None}
+    if not source_ids:
+        return {}
+    return {
+        media_file.id: media_file
+        for media_file in db.scalars(select(MediaFile).where(MediaFile.id.in_(source_ids))).all()
+    }
+
+
+def _serialize_transcode_jobs(db: Session, jobs: list[TranscodeJob]) -> list[TranscodeJobRead]:
+    source_files = _source_files_for_jobs(db, jobs)
+    return [serialize_transcode_job(job, source_files.get(job.source_file_id)) for job in jobs]
 
 
 def _serialize_variant(db: Session, variant: TranscodeVariant) -> TranscodeVariantRead:
@@ -2802,7 +2820,7 @@ def get_file_transcode(db: Session, settings: Settings, media_file: MediaFile) -
         ),
         attachments=_attachment_summaries(media_file),
         variants=[_serialize_variant(db, item) for item in variants],
-        jobs=[serialize_transcode_job(item) for item in jobs],
+        jobs=_serialize_transcode_jobs(db, jobs),
     )
 
 
@@ -2837,4 +2855,4 @@ def list_transcode_jobs(
         .offset(offset)
         .limit(limit)
     ).all()
-    return TranscodeJobPageRead(items=[serialize_transcode_job(item) for item in jobs], total=total)
+    return TranscodeJobPageRead(items=_serialize_transcode_jobs(db, jobs), total=total)

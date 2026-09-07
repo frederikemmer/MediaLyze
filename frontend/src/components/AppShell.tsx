@@ -758,6 +758,27 @@ export function AppShell() {
                   </>
                 )}
               </NavLink>
+              <NavLink
+                to="/transcoding"
+                end
+                aria-label={t("nav.transcodingAria")}
+                className={({ isActive }) => `icon-nav-button ${isActive ? "active" : ""}`.trim()}
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive ? (
+                      <motion.span
+                        layoutId="primary-nav-pill"
+                        className="nav-active-pill"
+                        transition={{ type: "spring", stiffness: 500, damping: 38, mass: 0.7 }}
+                      />
+                    ) : null}
+                    <span className="nav-link-content">
+                      <Activity aria-hidden="true" className="nav-icon" />
+                    </span>
+                  </>
+                )}
+              </NavLink>
             </div>
             <div className="media-nav-libraries">
               {libraries.map((library) => (

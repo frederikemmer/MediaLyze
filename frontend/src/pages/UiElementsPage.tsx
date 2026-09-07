@@ -9,12 +9,15 @@ import {
   AudioLines,
   CalendarDays,
   Check,
+  Clock3,
   CircleStop,
+  CircleX,
   ChevronDown,
   ChevronRight,
   Columns3,
   Columns3Cog,
   Copy,
+  Cpu,
   Database,
   Diff,
   Download,
@@ -31,7 +34,9 @@ import {
   Folder,
   FlaskConical,
   GitCompare,
+  Gauge,
   History,
+  HardDrive,
   House,
   KeyRound,
   Info,
@@ -45,12 +50,14 @@ import {
   PanelLeftClose,
   PanelRightClose,
   PanelTopClose,
+  Play,
   Plus,
   RefreshCw,
   Save,
   SaveOff,
   Search,
   Settings,
+  Square,
   Server,
   SlidersHorizontal,
   Sparkles,
@@ -2087,6 +2094,52 @@ export function UiElementsPage() {
                       </div>
                       <div className="scan-job-card-actions"><button type="button" className="secondary icon-only-button scan-banner-stop" aria-label="Stop this synchronization"><CircleStop size={16} aria-hidden="true" /></button></div>
                     </div>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-statuses", "transcoding-job-table", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot"]} wide>
+                <div className="transcoding-center-panel">
+                  <div className="transcoding-center-header">
+                    <div className="transcoding-center-heading">
+                      <div className="transcoding-center-title-block">
+                        <div className="transcoding-center-title-row"><Activity aria-hidden="true" className="transcoding-center-title-icon" /><h2>Transcoding</h2></div>
+                      </div>
+                      <section className="transcoding-hardware-load is-compact" aria-label="Hardware load">
+                        <div className="transcoding-hardware-load-title"><Gauge aria-hidden="true" /><strong>Hardware load</strong></div>
+                        <div className="transcoding-hardware-load-items">
+                          <TooltipTrigger ariaLabel="Show hardware load details for RTX 3080" tooltipClassName="transcode-matrix-tooltip-portal" content={<div className="transcode-matrix-tooltip-content"><div className="transcode-matrix-tooltip-heading"><strong>RTX 3080</strong><span className="transcode-matrix-tooltip-status is-hardware">Hardware path</span></div><div className="transcode-matrix-tooltip-summary"><div><span>Slots</span><strong>1/2</strong></div><div><span>Backend</span><strong>CUDA</strong></div></div></div>} className="transcoding-hardware-load-trigger status-available"><span className="transcoding-hardware-load-icon status-available" aria-hidden="true"><HardDrive /></span><span className="transcoding-hardware-load-short-label">CUDA</span><span className="transcoding-hardware-load-slots" aria-hidden="true"><span className="transcoding-hardware-load-slot is-busy" /><span className="transcoding-hardware-load-slot is-free" /></span></TooltipTrigger>
+                          <TooltipTrigger ariaLabel="Show hardware load details for CPU" tooltipClassName="transcode-matrix-tooltip-portal" content={<div className="transcode-matrix-tooltip-content"><div className="transcode-matrix-tooltip-heading"><strong>CPU</strong><span className="transcode-matrix-tooltip-status is-software">Software only</span></div><div className="transcode-matrix-tooltip-summary"><div><span>Slots</span><strong>Automatic</strong></div><div><span>Backend</span><strong>Software path</strong></div></div></div>} className="transcoding-hardware-load-trigger status-cpu"><span className="transcoding-hardware-load-icon status-cpu" aria-hidden="true"><Cpu /></span><span className="transcoding-hardware-load-short-label">CPU</span><span className="transcoding-hardware-load-slots" aria-hidden="true"><span className="transcoding-hardware-load-slot is-automatic" /></span></TooltipTrigger>
+                        </div>
+                      </section>
+                    </div>
+                    <div className="transcoding-center-statuses" aria-live="polite">
+                      <span className="scan-job-metric-item"><span className="scan-job-metric-icon-wrap status-running"><Play aria-hidden="true" /><span className="scan-job-metric-value">3 running</span></span></span>
+                      <span className="scan-job-metric-item"><span className="scan-job-metric-sep" aria-hidden="true" /><span className="scan-job-metric-icon-wrap status-queued"><Clock3 aria-hidden="true" /><span className="scan-job-metric-value">5 queued</span></span></span>
+                      <span className="scan-job-metric-item"><span className="scan-job-metric-sep" aria-hidden="true" /><span className="scan-job-metric-icon-wrap status-completed"><Check aria-hidden="true" /><span className="scan-job-metric-value">18 completed</span></span></span>
+                      <span className="scan-job-metric-item"><span className="scan-job-metric-sep" aria-hidden="true" /><span className="scan-job-metric-icon-wrap status-failed"><CircleX aria-hidden="true" /><span className="scan-job-metric-value">1 failed</span></span></span>
+                    </div>
+                  </div>
+                  <div className="transcoding-center-tabs"><button type="button" className="is-active">Active <span>8</span></button><button type="button">History <span>19</span></button></div>
+                  <div className="transcoding-center-toolbar">
+                    <label className="transcoding-search-field"><Search aria-hidden="true" /><input type="search" placeholder="Search files…" /></label>
+                    <label className="transcoding-filter-field"><span>Status</span><select defaultValue="all"><option value="all">All statuses</option></select><ChevronDown aria-hidden="true" /></label>
+                    <label className="transcoding-filter-field"><span>Hardware</span><select defaultValue="all"><option value="all">All hardware</option></select><ChevronDown aria-hidden="true" /></label>
+                  </div>
+                  <div className="transcoding-table-scroll">
+                    <table className="transcoding-job-table">
+                      <colgroup><col style={{ width: "26%" }} /><col style={{ width: "17%" }} /><col style={{ width: "18%" }} /><col style={{ width: "33%" }} /><col style={{ width: "6%" }} /></colgroup>
+                      <thead><tr><th style={{ width: "26%" }}>File<button type="button" className="column-resize-handle" aria-label="Resize column File" /></th><th style={{ width: "17%" }}>Target<button type="button" className="column-resize-handle" aria-label="Resize column Target" /></th><th style={{ width: "18%" }}>Hardware<button type="button" className="column-resize-handle" aria-label="Resize column Hardware" /></th><th style={{ width: "33%" }}>Progress<button type="button" className="column-resize-handle" aria-label="Resize column Progress" /></th><th style={{ width: "6%" }}>Actions<button type="button" className="column-resize-handle" aria-label="Resize column Actions" /></th></tr></thead>
+                      <tbody>
+                        <tr className="transcoding-job-row status-running is-expanded" tabIndex={0} aria-expanded="true">
+                          <td className="transcoding-file-cell"><span className="transcoding-status-icon status-running"><Play aria-hidden="true" /></span><span className="transcoding-file-copy"><strong className="transcoding-file-name" title="/media/Naturefilm_4K.mkv">Naturefilm_4K.mkv</strong><span className="transcoding-file-meta">Movies · Storage profile</span></span></td>
+                          <td className="transcoding-target-cell"><strong>H.265 / HEVC</strong><span>3840×2160 · MKV · HDR10</span></td>
+                          <td className="transcoding-hardware-cell"><span className="transcoding-hardware-main"><span className="transcoding-hardware-dot status-available" /><strong>NVIDIA RTX 3080</strong></span><span>NVENC · hardware encoder</span></td>
+                          <td className="transcoding-progress-cell"><div className="transcoding-progress-summary is-running"><div className="transcoding-progress-metrics"><div className="transcoding-progress-metric"><strong>64%</strong><span>Progress</span></div><div className="transcoding-progress-metric"><strong>12 min</strong><span>Time left</span></div><div className="transcoding-progress-metric is-accent"><strong>3.2×</strong><span>Speed</span></div></div><div className="transcoding-progress-chart"><Gauge aria-hidden="true" /></div><span className="transcoding-progress-track"><span style={{ width: "64%" }} /></span></div></td>
+                          <td className="transcoding-actions-cell"><button type="button" className="secondary icon-only-button transcoding-job-action" aria-label="Stop"><Square aria-hidden="true" /></button><a href="#" className="secondary icon-only-button transcoding-job-action" aria-label="Open source file" title="Open source file"><SquareArrowOutUpRight aria-hidden="true" /></a></td>
+                        </tr>
+                        <tr className="transcoding-job-detail-row status-running"><td colSpan={5}><div className="transcoding-job-detail-grid"><div className="transcoding-job-detail-path"><div className="transcoding-job-paths"><span title="/media/Naturefilm_4K.mkv">Naturefilm_4K.mkv</span><span aria-hidden="true">↓</span><span title="/Transcode_Output/Naturefilm_4K.hevc.mkv">Naturefilm_4K.hevc.mkv</span></div><dl className="transcoding-job-transform-list"><div><dt>Codec</dt><dd><span>H.264 / AVC</span><span className="transcoding-transform-arrow" aria-hidden="true">→</span><span>H.265 / HEVC</span></dd></div><div><dt>Dynamic range</dt><dd><span>SDR</span><span className="transcoding-transform-arrow" aria-hidden="true">→</span><span>HDR10</span></dd></div></dl></div><div className="transcoding-job-detail-time"><dl className="transcoding-job-detail-list"><div><dt>Start time</dt><dd>Sep 7, 2026, 12:00 PM</dd></div><div><dt>Duration so far</dt><dd>28 min</dd></div><div><dt>ETA</dt><dd>12 min</dd></div></dl></div><div className="transcoding-job-detail-side"><span className="transcoding-hardware-availability status-available"><span className="transcoding-hardware-dot" />Available</span><span className="transcoding-detail-muted">Required: NVENC (HEVC)</span></div></div><div className="transcoding-job-detail-footer"><details className="transcoding-job-command"><summary>FFmpeg log</summary><code>ffmpeg -i Naturefilm_4K.mkv -c:v hevc_nvenc Naturefilm_4K.hevc.mkv</code></details><div className="transcoding-detail-links"><a href="#"><SquareArrowOutUpRight aria-hidden="true" />Open result</a></div></div></td></tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </VariantCard>
