@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - add a compact, collapsible per-device transcoding capability matrix that locally tests every exposed decode-to-encode codec direction, distinguishes complete hardware paths from software-only and unavailable paths, and measures the highest repeatable full-speed concurrency level up to twenty simultaneous hardware sessions without touching media libraries or normal job history
 - show consistent hover/focus details for every tested matrix cell, including repeated runs, medians, slowdown limits, and the practical parallel-session recommendation
 - add safe FFmpeg transcoding for regular video files with three editable profiles, structured expert plans, validated CPU/hardware encoders, stream-level mapping, external subtitle embedding, progress and cancellation, linked analyzed variants, Wipe comparison, searchable job history, and independent retention controls
+- add versioned saved transcoding profiles with abstract ordered stream rules, disabled-by-default library automation rules, nested file conditions, pagewise previews/inventory, immutable job provenance, durable deduplication, safe output subfolders, and explicit per-version replacement approval
 - add global transcoding runtime settings with hardware-required/CPU-only execution, a 90% CPU budget, dedicated CPU/GPU slots, explicit output policies, retries, partial-output cleanup, real NVIDIA capability probes, and automatic Docker GPU wiring
 - add verified macOS VideoToolbox hardware encoding for the desktop sidecar, including Apple-device detection, H.264/HEVC profile selection, and runtime smoke tests
 - automatically inventory and probe all visible Linux DRM render nodes plus native Windows AMD AMF and Intel QSV targets, binding each job to a device that actually passed its encoder test
@@ -38,6 +39,24 @@ All notable changes to this project will be documented in this file.
 - clarify that one CPU-safe Docker Compose definition plus the standard GPU-wiring launchers covers NVIDIA, Intel, and AMD host configurations, while desktop installers use the bundled platform FFmpeg for every native adapter
 - document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
 - compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
+- use the current rectangular settings actions for transcoding automation controls, with editable copies for built-in profiles and guarded custom-profile deletion
+- autosave transcoding runtime changes and present saved profiles and automatic rules in the same searchable, expandable workspace as hardware/software profiles
+- remove manual reload, preview, and inventory actions from the profile/rule settings workspace until their dedicated workflow is introduced
+- align profile creation actions with the compact profile-tab toggles instead of placing them in panel headers
+- streamline transcoding matrix tooltips by removing duplicate result and benchmark guidance while retaining decoder, encoder, workload, and measured run details
+- show decoder and encoder paths inline with a directional arrow in transcoding matrix tooltips
+- place the transcoding matrix axis labels at the table edges instead of stacking them in the corner
+- remove the redundant transcoding capability matrix legend because each cell already identifies its result
+- make the transcoding guidance tooltip follow the active tab and consolidate FFmpeg/concurrency details beside the Accelerators tab
+- simplify transcoding settings labels to Transcoding and Test Hardware
+- package the capability matrix in the same compact searchable device-list treatment as the compatibility profile panels without changing matrix cells
+- align Pattern recognition accordions with the compact left-chevron settings disclosure pattern and add breathing room to matrix device headers while keeping backend identifiers inline
+- remove redundant version metadata from saved transcoding profile rows and use compact profile/action labels in the profile settings
+- align compatibility profile editor actions with the current rectangular settings controls, including filled orange save actions and dark-mode hover states
+- keep transcoding profile and rule editors in tandem with the Hard/Software profile form grid, read-only fields, and expandable capability sections
+- integrate the transcoding profiles-and-rules labels into the compact tab toggles and place their formatted guidance tooltip beside the controls
+- place the capability matrix in a third Accelerators tab beside transcoding profiles and rules without changing the matrix cells
+- remove the redundant global hardware-device selector so all probed devices remain available for automatic profile/rule selection
 - replace transcoding hardware radio and checkbox selection with one physical-device dropdown while keeping backend-specific paths grouped internally
 - move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern
 - streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid

@@ -122,6 +122,8 @@ describe("CompatibilityProfilesPanel", () => {
     expect(within(tabs).getAllByRole("button")).toHaveLength(3);
     expect(within(tabs).getByRole("button", { name: "Hardware" })).toHaveClass("library-history-range-button", "active");
     expect(await screen.findByRole("button", { name: "Combination" })).toBeInTheDocument();
+    expect((await screen.findByRole("button", { name: "Profile" })).closest(".settings-profile-toggle-row")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Add local profile" })).not.toBeInTheDocument();
     const trigger = await screen.findByRole("button", { name: "Test Device" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("Manufacturer")).not.toBeInTheDocument();
@@ -283,6 +285,9 @@ describe("CompatibilityProfilesPanel", () => {
     expect(await screen.findByLabelText("Manufacturer")).not.toHaveAttribute("readonly");
     expect(screen.queryByLabelText("ID")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Propose on GitHub" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Propose on GitHub" })).toHaveClass("settings-panel-header-action", "small");
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass("settings-panel-header-action", "small");
+    expect(screen.getByRole("button", { name: "Save local copy" })).toHaveClass("transcode-action-button");
     fireEvent.click(screen.getByRole("button", { name: "Save local copy" }));
 
     await waitFor(() => expect(createProfile).toHaveBeenCalledWith(expect.objectContaining({
@@ -300,7 +305,7 @@ describe("CompatibilityProfilesPanel", () => {
     const createProfile = vi.spyOn(api, "createHardwareProfile").mockResolvedValue(profile());
 
     render(<CompatibilityProfilesPanel />);
-    fireEvent.click(await screen.findByRole("button", { name: "Add local profile" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Living Room Device" } });
     expect(screen.queryByLabelText("ID")).not.toBeInTheDocument();

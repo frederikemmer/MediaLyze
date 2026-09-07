@@ -3813,6 +3813,15 @@ export function LibrariesPage() {
 
     return (
       <div className="ignore-pattern-section-toggle-row">
+        <button
+          type="button"
+          className="secondary icon-only-button ignore-pattern-section-chevron"
+          aria-label={toggleAriaLabel}
+          aria-expanded={expanded}
+          onClick={onToggle}
+        >
+          <ToggleIcon aria-hidden="true" className="nav-icon" />
+        </button>
         <div className="ignore-pattern-section-toggle-lead">
           <button
             type="button"
@@ -3831,15 +3840,6 @@ export function LibrariesPage() {
         {options.headerAction ? (
           <div className="ignore-pattern-section-header-action">{options.headerAction}</div>
         ) : null}
-        <button
-          type="button"
-          className="secondary icon-only-button ignore-pattern-section-chevron"
-          aria-label={toggleAriaLabel}
-          aria-expanded={expanded}
-          onClick={onToggle}
-        >
-          <ToggleIcon aria-hidden="true" className="nav-icon" />
-        </button>
       </div>
     );
   }

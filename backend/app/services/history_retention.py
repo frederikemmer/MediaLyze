@@ -12,6 +12,7 @@ from backend.app.models.entities import (
     LibraryHistory,
     MediaFileHistory,
     ScanJob,
+    TranscodeAutomationRun,
     TranscodeJob,
     TranscodeVariant,
 )
@@ -37,6 +38,12 @@ def has_active_scan_jobs(db: Session) -> bool:
         or db.scalar(
             select(TranscodeJob.id)
             .where(TranscodeJob.status.in_([JobStatus.queued, JobStatus.running]))
+            .limit(1)
+        )
+        is not None
+        or db.scalar(
+            select(TranscodeAutomationRun.id)
+            .where(TranscodeAutomationRun.status.in_(["queued", "running"]))
             .limit(1)
         )
         is not None
@@ -184,6 +191,19 @@ def _transcode_job_estimated_bytes(job: TranscodeJob) -> int:
         + _text_length(job.source_path_snapshot)
         + _text_length(job.output_path_snapshot)
         + _text_length(job.error)
+        + _json_length(job.rule_snapshot)
+        + _text_length(job.automation_trigger)
+    )
+
+
+def _transcode_automation_run_estimated_bytes(run: TranscodeAutomationRun) -> int:
+    return (
+        _text_length(run.trigger_source)
+        + _json_length(run.rule_ids)
+        + _json_length(run.library_ids)
+        + _json_length(run.source_file_ids)
+        + _json_length(run.summary)
+        + _text_length(run.error)
     )
 
 
@@ -237,6 +257,41 @@ def _prune_transcode_history(db: Session, *, days: int, storage_limit_bytes: int
     return deleted_entries
 
 
+def _prune_transcode_automation_runs(db: Session, *, days: int, storage_limit_bytes: int) -> int:
+    deleted_entries = 0
+    terminal_statuses = ("completed", "failed", "canceled")
+    if days > 0:
+        cutoff = utc_now() - timedelta(days=days)
+        deleted_entries += db.execute(
+            delete(TranscodeAutomationRun).where(
+                TranscodeAutomationRun.status.in_(terminal_statuses),
+                TranscodeAutomationRun.finished_at.is_not(None),
+                TranscodeAutomationRun.finished_at < cutoff,
+            )
+        ).rowcount or 0
+        db.commit()
+    if storage_limit_bytes <= 0:
+        return deleted_entries
+    runs = db.scalars(
+        select(TranscodeAutomationRun)
+        .where(TranscodeAutomationRun.status.in_(terminal_statuses))
+        .order_by(TranscodeAutomationRun.finished_at.asc(), TranscodeAutomationRun.id.asc())
+    ).all()
+    total_bytes = sum(_transcode_automation_run_estimated_bytes(run) for run in runs)
+    ids_to_delete: list[int] = []
+    for run in runs:
+        if total_bytes <= storage_limit_bytes:
+            break
+        total_bytes -= _transcode_automation_run_estimated_bytes(run)
+        ids_to_delete.append(run.id)
+    if ids_to_delete:
+        deleted_entries += db.execute(
+            delete(TranscodeAutomationRun).where(TranscodeAutomationRun.id.in_(ids_to_delete))
+        ).rowcount or 0
+        db.commit()
+    return deleted_entries
+
+
 def _compact_database(db: Session, *, allow_vacuum: bool) -> bool:
     bind = db.get_bind()
     with bind.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
@@ -268,6 +323,13 @@ def apply_history_retention(db: Session, settings: Settings | None = None) -> Hi
         storage_limit_bytes=_storage_limit_bytes(app_settings.history_retention.scan_history.storage_limit_gb),
     )
     deleted_entries += _prune_transcode_history(
+        db,
+        days=app_settings.history_retention.transcode_history.days,
+        storage_limit_bytes=_storage_limit_bytes(
+            app_settings.history_retention.transcode_history.storage_limit_gb
+        ),
+    )
+    deleted_entries += _prune_transcode_automation_runs(
         db,
         days=app_settings.history_retention.transcode_history.days,
         storage_limit_bytes=_storage_limit_bytes(

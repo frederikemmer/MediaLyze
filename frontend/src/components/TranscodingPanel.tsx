@@ -824,6 +824,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   const [data, setData] = useState<FileTranscode | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
   const [plan, setPlan] = useState<TranscodePlan | null>(null);
+  const [selectedSavedProfileId, setSelectedSavedProfileId] = useState<number | null>(null);
   const [validation, setValidation] = useState<TranscodeValidation | null>(null);
   const [job, setJob] = useState<TranscodeJob | null>(null);
   const [openStreamGroups, setOpenStreamGroups] = useState<Record<StreamKind, boolean>>({
@@ -854,6 +855,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     setData(null);
     setCapabilities(null);
     setPlan(null);
+    setSelectedSavedProfileId(null);
     setValidation(null);
     setJob(null);
     setOpenStreamGroups({ video_streams: true, audio_streams: false, subtitle_streams: false });
@@ -907,9 +909,15 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
 
   const selectProfile = useCallback((profile: typeof PROFILE_KEYS[number]) => {
     if (!data) return;
+    setSelectedSavedProfileId(null);
     setPlan(clonePlan(data.profiles[profile]));
     setValidation(null);
   }, [data]);
+
+  const setExpertPlan = useCallback((next: TranscodePlan) => {
+    setSelectedSavedProfileId(null);
+    setPlan(next);
+  }, []);
 
   const validate = useCallback(async (): Promise<TranscodeValidation | null> => {
     if (!plan) return null;
@@ -977,18 +985,35 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
       <div className="transcode-configuration-grid">
         <label>
           <span>{t("transcoding.profile")}</span>
-          <select className={transcodeControlClass} value={PROFILE_KEYS.includes(plan.profile as typeof PROFILE_KEYS[number]) ? plan.profile : "expert"} onChange={(event) => {
+          <select className={transcodeControlClass} value={selectedSavedProfileId !== null && data.saved_profiles?.some((entry) => entry.profile.id === selectedSavedProfileId) ? `saved:${selectedSavedProfileId}` : PROFILE_KEYS.includes(plan.profile as typeof PROFILE_KEYS[number]) ? plan.profile : "expert"} onChange={(event) => {
             const profile = event.target.value;
-            if (profile !== "expert") selectProfile(profile as typeof PROFILE_KEYS[number]);
+            if (profile.startsWith("saved:")) {
+              const savedProfile = data.saved_profiles?.find((entry) => `saved:${entry.profile.id}` === profile);
+              if (savedProfile) {
+                setSelectedSavedProfileId(savedProfile.profile.id);
+                setPlan(clonePlan(savedProfile.plan));
+                setValidation(null);
+              }
+            } else if (profile !== "expert") {
+              selectProfile(profile as typeof PROFILE_KEYS[number]);
+            } else {
+              setExpertPlan({ ...plan, profile: "expert" });
+              setValidation(null);
+            }
           }}>
             {PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}
+            {data.saved_profiles?.map((entry) => (
+              <option key={`saved:${entry.profile.id}`} value={`saved:${entry.profile.id}`}>
+                {entry.profile.name} · v{entry.profile.version}
+              </option>
+            ))}
             <option value="expert">{t("transcoding.profiles.expert")}</option>
           </select>
         </label>
         <label>
           <span>{t("transcoding.container")}</span>
           <select className={transcodeControlClass} value={plan.container} onChange={(event) => {
-            setPlan({ ...plan, profile: "expert", container: event.target.value as TranscodePlan["container"] });
+            setExpertPlan({ ...plan, profile: "expert", container: event.target.value as TranscodePlan["container"] });
             setValidation(null);
           }}>
             {capabilities.containers.map((container) => <option key={container} value={container}>{container.toUpperCase()}</option>)}
@@ -997,7 +1022,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
         <label>
           <span>{t("transcoding.dynamicRange")}</span>
           <select className={transcodeControlClass} value={plan.dynamic_range} onChange={(event) => {
-            setPlan({ ...plan, profile: "expert", dynamic_range: event.target.value as TranscodePlan["dynamic_range"] });
+            setExpertPlan({ ...plan, profile: "expert", dynamic_range: event.target.value as TranscodePlan["dynamic_range"] });
             setValidation(null);
           }}>
             {([
@@ -1021,7 +1046,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
             className={transcodeControlClass}
             value={plan.output_mode ?? "transcode_output"}
             onChange={(event) => {
-              setPlan({
+              setExpertPlan({
                 ...plan,
                 profile: "expert",
                 output_mode: event.target.value as NonNullable<TranscodePlan["output_mode"]>,
@@ -1046,7 +1071,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
             <input
               type="checkbox"
               checked={Boolean(plan.replacement_confirmed)}
-              onChange={(event) => setPlan({ ...plan, replacement_confirmed: event.target.checked })}
+              onChange={(event) => setExpertPlan({ ...plan, replacement_confirmed: event.target.checked })}
             />
             <span>{t("transcoding.replacementConfirm")}</span>
           </label>
@@ -1076,7 +1101,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               const streamEncoders = kind === "video_streams" ? availableVideoEncoders : kind === "audio_streams" ? availableAudioEncoders : availableSubtitleEncoders;
               const selectedEncoder = streamEncoders.find((encoder) => encoder.name === stream.encoder) ?? pickEncoder(kind, source?.codec, plan.container, streamEncoders);
               const resetToCopy = () => {
-                setPlan(updateStreamPlan(plan, kind, stream.stream_index, {
+                setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, {
                   action: "copy",
                   codec: null,
                   encoder: null,
@@ -1102,14 +1127,14 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                   return;
                 }
                 if (action === "drop") {
-                  setPlan(updateStreamPlan(plan, kind, stream.stream_index, { action }));
+                  setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, { action }));
                   setValidation(null);
                   return;
                 }
                 const encoder = selectedEncoder ?? pickEncoder(kind, source?.codec, plan.container, streamEncoders);
                 const quality = encoderQualitySpec(encoder);
                 const sourceLanguage = source && "language" in source ? normalizeLanguageTag(source.language) : "und";
-                setPlan(updateStreamPlan(plan, kind, stream.stream_index, {
+                setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, {
                   action: "encode",
                   encoder: encoder?.name ?? null,
                   codec: encoder?.codec ?? stream.codec,
@@ -1149,7 +1174,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                       controlClass={transcodeControlClass}
                       t={t}
                       onPatch={(patch) => {
-                        setPlan(updateStreamPlan(plan, kind, stream.stream_index, patch));
+                        setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, patch));
                         setValidation(null);
                       }}
                     />
@@ -1193,7 +1218,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               return (
                 <label key={subtitle.id} className="transcode-external-subtitle">
                   <input type="checkbox" checked={Boolean(selected && selected.action !== "drop")} onChange={(event) => {
-                    setPlan({
+                    setExpertPlan({
                       ...plan,
                       profile: "expert",
                       external_subtitles: event.target.checked
@@ -1226,7 +1251,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
       <div className="transcode-global-options">
         {(["chapters", "metadata", "cover", "attachments"] as const).map((option) => (
           <label key={option}>
-            <input type="checkbox" checked={plan[option] === "keep"} onChange={(event) => setPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" })} />
+            <input type="checkbox" checked={plan[option] === "keep"} onChange={(event) => setExpertPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" })} />
             <span>{t(`transcoding.options.${option}`)}</span>
           </label>
         ))}
@@ -1253,7 +1278,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                 checked={templateOverride}
                 onChange={(event) => {
                   const nextOverride = event.target.checked;
-                  setPlan({
+                  setExpertPlan({
                     ...plan,
                     profile: "expert",
                     filename_template_override: nextOverride,
@@ -1270,7 +1295,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                 checked={includeSubtitleLanguages}
                 onChange={(event) => {
                   const nextInclude = event.target.checked;
-                  setPlan({
+                  setExpertPlan({
                     ...plan,
                     profile: "expert",
                     include_subtitle_languages: nextInclude,
@@ -1290,7 +1315,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               aria-label={t("transcoding.filenameTemplate")}
               onChange={(event) => {
                 const nextTemplate = event.target.value;
-                setPlan({
+                setExpertPlan({
                   ...plan,
                   profile: "expert",
                   filename_template: nextTemplate,

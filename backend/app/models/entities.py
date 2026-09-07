@@ -1375,6 +1375,19 @@ class TranscodeJob(TimestampMixin, Base):
         SqlEnum(JobStatus, native_enum=False), default=JobStatus.queued, nullable=False
     )
     profile: Mapped[str] = mapped_column(String(64), nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_rules.id", ondelete="SET NULL"), nullable=True
+    )
+    rule_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rule_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    automation_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_automation_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    automation_trigger: Mapped[str | None] = mapped_column(String(32), nullable=True)
     plan_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     plan: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     ffmpeg_arguments: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
@@ -1439,6 +1452,128 @@ class TranscodeVariant(TimestampMixin, Base):
     analysis_status: Mapped[str] = mapped_column(
         String(32), default="awaiting_analysis", nullable=False
     )
+
+
+class TranscodeProfile(TimestampMixin, Base):
+    __tablename__ = "transcode_profiles"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_transcode_profiles_name"),
+        Index("ix_transcode_profiles_builtin_key", "builtin_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(2000), default="", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    builtin_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    definition: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class TranscodeRule(TimestampMixin, Base):
+    __tablename__ = "transcode_rules"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_transcode_rules_name"),
+        Index("ix_transcode_rules_enabled_priority", "enabled", "priority", "id"),
+        Index("ix_transcode_rules_profile_id", "profile_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    library_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("transcode_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
+    output_mode: Mapped[str] = mapped_column(String(32), default="transcode_output", nullable=False)
+    output_subfolder: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    replacement_approved_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TranscodeAutomationRun(TimestampMixin, Base):
+    __tablename__ = "transcode_automation_runs"
+    __table_args__ = (
+        Index("ix_transcode_automation_runs_status", "status"),
+        Index("ix_transcode_automation_runs_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued", nullable=False)
+    trigger_source: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
+    rule_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    library_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    source_file_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    retry_failed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    page_size: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    files_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    queued: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blocked: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unmatched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    canceled: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    current_page: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    error: Mapped[str | None] = mapped_column(String(32000), nullable=True)
+    cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class TranscodeAutomationRecord(TimestampMixin, Base):
+    __tablename__ = "transcode_automation_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "identity_key",
+            "source_size_snapshot",
+            "source_mtime_snapshot",
+            "rule_id",
+            "rule_version",
+            "profile_id",
+            "profile_version",
+            name="uq_transcode_automation_record_source_rule_version",
+        ),
+        Index("ix_transcode_automation_records_identity", "identity_key"),
+        Index("ix_transcode_automation_records_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    identity_key: Mapped[str] = mapped_column(String(2400), nullable=False)
+    library_id: Mapped[int] = mapped_column(ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False)
+    source_file_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_files.id", ondelete="SET NULL"), nullable=True
+    )
+    library_root_id: Mapped[int | None] = mapped_column(
+        ForeignKey("library_roots.id", ondelete="SET NULL"), nullable=True
+    )
+    relative_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    source_path_snapshot: Mapped[str] = mapped_column(String(4096), nullable=False)
+    source_size_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_mtime_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
+    rule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_rules.id", ondelete="SET NULL"), nullable=True
+    )
+    rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="queued", nullable=False)
+    transcode_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    automation_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transcode_automation_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    result_source_path: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    result_source_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_source_mtime: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(32000), nullable=True)
 
 
 class MediaFileHistory(Base):

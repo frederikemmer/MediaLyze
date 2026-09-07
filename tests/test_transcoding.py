@@ -267,7 +267,6 @@ def test_cpu_budget_is_shared_across_parallel_jobs(monkeypatch, tmp_path) -> Non
             cpu_budget_percent=90,
             cpu_parallel_jobs=2,
             gpu_parallel_jobs_per_device=1,
-            selected_devices="auto",
         )
     )
 

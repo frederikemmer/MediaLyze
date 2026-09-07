@@ -107,11 +107,23 @@ from backend.app.schemas.scan import (
 from backend.app.schemas.storage_map import LibraryStorageMapRead
 from backend.app.schemas.transcoding import (
     FileTranscodeRead,
+    TranscodeAutomationPreviewRead,
+    TranscodeAutomationRunRead,
+    TranscodeAutomationScope,
     TranscodeCapabilityMatrixRead,
     TranscodeCapabilitiesRead,
     TranscodeJobPageRead,
     TranscodeJobRead,
     TranscodePlan,
+    TranscodeProfileCreate,
+    TranscodeProfileDuplicate,
+    TranscodeProfileRead,
+    TranscodeProfileUpdate,
+    TranscodeReplacementApproval,
+    TranscodeRuleCreate,
+    TranscodeRuleRead,
+    TranscodeRuleReorder,
+    TranscodeRuleUpdate,
     TranscodeValidationRead,
 )
 from backend.app.schemas.update_status import (
@@ -148,6 +160,7 @@ from backend.app.models.entities import (
     ScanJob,
     ScanTriggerSource,
     TranscodeJob,
+    TranscodeAutomationRun,
 )
 from backend.app.services.connector_credentials import read_connector_secret
 from backend.app.services.connector_registry import connector_registry
@@ -244,6 +257,28 @@ from backend.app.services.transcoding import (
     serialize_transcode_job,
     validate_transcode_plan,
 )
+from backend.app.services.transcode_automation import (
+    TranscodeAutomationError,
+    approve_transcode_rule_replacement,
+    create_transcode_profile,
+    create_transcode_rule,
+    delete_transcode_profile,
+    delete_transcode_rule,
+    duplicate_transcode_profile,
+    get_transcode_automation_run,
+    get_transcode_profile,
+    get_transcode_rule,
+    list_transcode_automation_runs,
+    list_transcode_profiles,
+    list_transcode_rules,
+    preview_transcode_automation,
+    reorder_transcode_rules,
+    serialize_transcode_automation_run,
+    serialize_transcode_profile,
+    serialize_transcode_rule,
+    update_transcode_profile,
+    update_transcode_rule,
+)
 from backend.app.services.transcode_matrix import (
     TranscodeMatrixBusyError,
     load_transcode_matrix,
@@ -281,6 +316,18 @@ router = APIRouter()
 
 def _profile_error(exc: ProfileCatalogError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
+
+
+def _transcode_automation_error(exc: TranscodeAutomationError) -> HTTPException:
+    message = str(exc)
+    lowered = message.lower()
+    if "not found" in lowered:
+        status_code = 404
+    elif any(token in lowered for token in ("already exists", "still used", "immutable", "cannot be deleted")):
+        status_code = 409
+    else:
+        status_code = 400
+    return HTTPException(status_code=status_code, detail=message)
 
 
 def _normalize_panel_query(panels: list[str] | None) -> list[str] | None:
@@ -2849,6 +2896,222 @@ def transcoding_capability_matrix_test(
         return run_transcode_matrix_test(settings)
     except TranscodeMatrixBusyError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/transcoding/profiles", response_model=list[TranscodeProfileRead])
+def transcoding_profiles_list(
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeProfileRead]:
+    return list_transcode_profiles(db)
+
+
+@router.post("/transcoding/profiles", response_model=TranscodeProfileRead, status_code=201)
+def transcoding_profile_create(
+    payload: TranscodeProfileCreate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeProfileRead:
+    try:
+        return create_transcode_profile(db, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.get("/transcoding/profiles/{profile_id}", response_model=TranscodeProfileRead)
+def transcoding_profile_detail(
+    profile_id: int,
+    db: Session = Depends(get_db_session),
+) -> TranscodeProfileRead:
+    try:
+        return serialize_transcode_profile(db, get_transcode_profile(db, profile_id))
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.patch("/transcoding/profiles/{profile_id}", response_model=TranscodeProfileRead)
+def transcoding_profile_update(
+    profile_id: int,
+    payload: TranscodeProfileUpdate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeProfileRead:
+    try:
+        return update_transcode_profile(db, profile_id, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/profiles/{profile_id}/duplicate", response_model=TranscodeProfileRead, status_code=201)
+def transcoding_profile_duplicate(
+    profile_id: int,
+    payload: TranscodeProfileDuplicate | None = None,
+    db: Session = Depends(get_db_session),
+) -> TranscodeProfileRead:
+    try:
+        return duplicate_transcode_profile(db, profile_id, payload.name if payload else None)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.delete("/transcoding/profiles/{profile_id}", status_code=204)
+def transcoding_profile_delete(
+    profile_id: int,
+    db: Session = Depends(get_db_session),
+) -> Response:
+    try:
+        delete_transcode_profile(db, profile_id)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+    return Response(status_code=204)
+
+
+@router.get("/transcoding/rules", response_model=list[TranscodeRuleRead])
+def transcoding_rules_list(
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeRuleRead]:
+    try:
+        return list_transcode_rules(db)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/rules", response_model=TranscodeRuleRead, status_code=201)
+def transcoding_rule_create(
+    payload: TranscodeRuleCreate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeRuleRead:
+    try:
+        return create_transcode_rule(db, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/rules/reorder", response_model=list[TranscodeRuleRead])
+def transcoding_rules_reorder(
+    payload: TranscodeRuleReorder,
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeRuleRead]:
+    try:
+        return reorder_transcode_rules(db, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.get("/transcoding/rules/{rule_id}", response_model=TranscodeRuleRead)
+def transcoding_rule_detail(
+    rule_id: int,
+    db: Session = Depends(get_db_session),
+) -> TranscodeRuleRead:
+    try:
+        return serialize_transcode_rule(db, get_transcode_rule(db, rule_id))
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.patch("/transcoding/rules/{rule_id}", response_model=TranscodeRuleRead)
+def transcoding_rule_update(
+    rule_id: int,
+    payload: TranscodeRuleUpdate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeRuleRead:
+    try:
+        return update_transcode_rule(db, rule_id, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/rules/{rule_id}/replacement-approval", response_model=TranscodeRuleRead)
+def transcoding_rule_replacement_approval(
+    rule_id: int,
+    payload: TranscodeReplacementApproval,
+    db: Session = Depends(get_db_session),
+) -> TranscodeRuleRead:
+    try:
+        return approve_transcode_rule_replacement(db, rule_id, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.delete("/transcoding/rules/{rule_id}", status_code=204)
+def transcoding_rule_delete(
+    rule_id: int,
+    db: Session = Depends(get_db_session),
+) -> Response:
+    try:
+        delete_transcode_rule(db, rule_id)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+    return Response(status_code=204)
+
+
+@router.post("/transcoding/automation/preview", response_model=TranscodeAutomationPreviewRead)
+def transcoding_automation_preview(
+    payload: TranscodeAutomationScope,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeAutomationPreviewRead:
+    try:
+        return preview_transcode_automation(db, settings, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/automation/start", response_model=TranscodeAutomationRunRead, status_code=202)
+def transcoding_automation_start(
+    payload: TranscodeAutomationScope,
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> TranscodeAutomationRunRead:
+    try:
+        return runtime.request_transcode_automation(payload, trigger="manual")
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/transcoding/automation/status", response_model=TranscodeAutomationRunRead | None)
+def transcoding_automation_status(
+    db: Session = Depends(get_db_session),
+) -> TranscodeAutomationRunRead | None:
+    run = db.scalar(
+        select(TranscodeAutomationRun)
+        .where(TranscodeAutomationRun.status.in_(["queued", "running"]))
+        .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())
+    )
+    if run is None:
+        run = db.scalar(
+            select(TranscodeAutomationRun)
+            .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())
+        )
+    return serialize_transcode_automation_run(run) if run else None
+
+
+@router.get("/transcoding/automation/runs", response_model=list[TranscodeAutomationRunRead])
+def transcoding_automation_runs(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeAutomationRunRead]:
+    return list_transcode_automation_runs(db, limit=limit)
+
+
+@router.get("/transcoding/automation/{run_id}", response_model=TranscodeAutomationRunRead)
+def transcoding_automation_detail(
+    run_id: int,
+    db: Session = Depends(get_db_session),
+) -> TranscodeAutomationRunRead:
+    try:
+        return serialize_transcode_automation_run(get_transcode_automation_run(db, run_id))
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/automation/{run_id}/cancel", response_model=TranscodeAutomationRunRead)
+def transcoding_automation_cancel(
+    run_id: int,
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+) -> TranscodeAutomationRunRead:
+    try:
+        return runtime.cancel_transcode_automation(run_id)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
 
 
 @router.get("/files/{file_id}/transcode", response_model=FileTranscodeRead)

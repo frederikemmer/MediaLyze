@@ -27,9 +27,11 @@ from backend.app.models.entities import (
     ScanJob,
     ScanMode,
     ScanTriggerSource,
+    TranscodeAutomationRun,
     TranscodeJob,
 )
 from backend.app.schemas.transcoding import TranscodePlan, TranscodeValidationRead
+from backend.app.schemas.transcoding import TranscodeAutomationScope, TranscodeAutomationRunRead
 from backend.app.schemas.history import (
     HistoryReconstructionJobStatus,
     HistoryReconstructionPhase,
@@ -101,6 +103,14 @@ from backend.app.services.transcoding import (
     recover_orphaned_transcode_jobs,
     transcode_capacity,
 )
+from backend.app.services.transcode_automation import (
+    create_transcode_automation_run,
+    finalize_transcode_automation_record,
+    process_transcode_automation_run,
+    recover_orphaned_transcode_automation_runs,
+    request_transcode_automation_cancellation,
+    serialize_transcode_automation_run,
+)
 from backend.app.services.update_status import check_for_updates
 from backend.app.utils.time import utc_now
 
@@ -165,6 +175,9 @@ class ScanRuntimeManager:
         self.transcode_capacity_signature: tuple[object, ...] | None = None
         self.connector_futures: dict[int, Future] = {}
         self.maintenance_executor = self._build_maintenance_executor()
+        # Inventory automation is isolated from scans/transcodes, but its
+        # single worker is created only when the first run is requested.
+        self.automation_executor: ThreadPoolExecutor | None = None
         self.lock = Lock()
         self.watch_observers: dict[int, tuple[tuple[str, ...], Observer]] = {}
         self.debounce_timers: dict[int, Timer] = {}
@@ -174,6 +187,8 @@ class ScanRuntimeManager:
         self.cancel_requested_job_ids: set[int] = set()
         self.submitted_transcode_job_ids: set[int] = set()
         self.cancel_requested_transcode_job_ids: set[int] = set()
+        self.submitted_automation_run_ids: set[int] = set()
+        self.cancel_requested_automation_run_ids: set[int] = set()
         self.history_compaction_pending = False
         self.history_storage_refresh_submitted = False
         self.stats_warmup_timer: Timer | None = None
@@ -201,6 +216,7 @@ class ScanRuntimeManager:
         self.refresh_connector_schedules()
         self._recover_orphaned_jobs()
         self._recover_orphaned_transcode_jobs()
+        self._recover_orphaned_transcode_automation_runs()
         self.request_update_check()
         self.sync_all_libraries()
         self.run_history_retention()
@@ -239,6 +255,9 @@ class ScanRuntimeManager:
             self._shutdown_executor(self.transcode_executor, cancel_futures=True)
             self.transcode_executor = None
         self._shutdown_executor(self.maintenance_executor, cancel_futures=True)
+        if self.automation_executor is not None:
+            self._shutdown_executor(self.automation_executor, cancel_futures=True)
+            self.automation_executor = None
 
     def refresh_worker_settings(self) -> bool:
         db = SessionLocal()
@@ -249,19 +268,9 @@ class ScanRuntimeManager:
             next_transcode_workers = max(
                 1,
                 int(capacity["cpu_parallel_jobs"])
-                + (
-                    len(persisted.transcoding.selected_devices)
-                    if isinstance(persisted.transcoding.selected_devices, list)
-                    else 1
-                )
-                * persisted.transcoding.gpu_parallel_jobs_per_device
+                + persisted.transcoding.gpu_parallel_jobs_per_device
                 if persisted.transcoding.execution_mode != "cpu_only"
                 else int(capacity["cpu_parallel_jobs"]),
-            )
-            selected_devices = (
-                tuple(persisted.transcoding.selected_devices)
-                if isinstance(persisted.transcoding.selected_devices, list)
-                else ("auto",)
             )
             next_transcode_capacity_signature = (
                 int(capacity["cpu_threads"]),
@@ -269,7 +278,6 @@ class ScanRuntimeManager:
                 int(capacity["cpu_parallel_jobs"]),
                 persisted.transcoding.gpu_parallel_jobs_per_device,
                 persisted.transcoding.execution_mode,
-                selected_devices,
             )
         finally:
             db.close()
@@ -299,15 +307,7 @@ class ScanRuntimeManager:
             self.transcode_gpu_parallel_jobs_per_device = persisted.transcoding.gpu_parallel_jobs_per_device
             self.transcode_capacity_signature = next_transcode_capacity_signature
             self.transcode_cpu_slots = BoundedSemaphore(self.transcode_cpu_parallel_jobs)
-            selected_devices = (
-                list(persisted.transcoding.selected_devices)
-                if isinstance(persisted.transcoding.selected_devices, list)
-                else []
-            )
-            self.transcode_gpu_slots = {
-                device_id: BoundedSemaphore(self.transcode_gpu_parallel_jobs_per_device)
-                for device_id in selected_devices
-            }
+            self.transcode_gpu_slots = {}
             if self.transcode_executor is not None and transcode_workers_changed:
                 previous_transcode_executor = self.transcode_executor
                 self.transcode_executor = self._build_transcode_executor(next_transcode_workers)
@@ -433,15 +433,8 @@ class ScanRuntimeManager:
             job, validation = queue_transcode_job(db, self.settings, media_file, plan)
         finally:
             db.close()
-        with self.lock:
-            self.submitted_transcode_job_ids.add(job.id)
-            if self.transcode_executor is None:
-                self.transcode_executor = self._build_transcode_executor(
-                    max(1, self.transcode_executor_max_workers)
-                )
-            transcode_executor = self.transcode_executor
         try:
-            transcode_executor.submit(self._run_transcode_job, job.id)
+            self._submit_transcode_job(job.id)
         except Exception:
             with self.lock:
                 self.submitted_transcode_job_ids.discard(job.id)
@@ -457,6 +450,96 @@ class ScanRuntimeManager:
                 failed_db.close()
             raise
         return job, validation
+
+    def _submit_transcode_job(self, job_id: int) -> None:
+        with self.lock:
+            if job_id in self.submitted_transcode_job_ids:
+                return
+            self.submitted_transcode_job_ids.add(job_id)
+            if self.transcode_executor is None:
+                self.transcode_executor = self._build_transcode_executor(
+                    max(1, self.transcode_executor_max_workers)
+                )
+            transcode_executor = self.transcode_executor
+        try:
+            transcode_executor.submit(self._run_transcode_job, job_id)
+        except Exception:
+            with self.lock:
+                self.submitted_transcode_job_ids.discard(job_id)
+            failed_db = SessionLocal()
+            try:
+                failed_job = failed_db.get(TranscodeJob, job_id)
+                if failed_job is not None:
+                    failed_job.status = JobStatus.failed
+                    failed_job.error = "Unable to submit transcoding job to the runtime executor"
+                    failed_job.finished_at = utc_now()
+                    finalize_transcode_automation_record(failed_db, failed_job)
+                    if failed_db.in_transaction():
+                        failed_db.commit()
+            finally:
+                failed_db.close()
+            raise
+
+    def request_transcode_automation(
+        self,
+        scope: TranscodeAutomationScope,
+        *,
+        trigger: str = "manual",
+    ) -> TranscodeAutomationRunRead:
+        db = SessionLocal()
+        try:
+            run = create_transcode_automation_run(db, scope, trigger=trigger)
+        finally:
+            db.close()
+        with self.lock:
+            self.submitted_automation_run_ids.add(run.id)
+            if self.automation_executor is None:
+                self.automation_executor = self._build_automation_executor()
+            automation_executor = self.automation_executor
+        try:
+            automation_executor.submit(self._run_transcode_automation, run.id)
+        except Exception:
+            with self.lock:
+                self.submitted_automation_run_ids.discard(run.id)
+            failed_db = SessionLocal()
+            try:
+                failed_run = failed_db.get(TranscodeAutomationRun, run.id)
+                if failed_run is not None:
+                    failed_run.status = "failed"
+                    failed_run.error = "Unable to submit the automation inventory to the runtime executor"
+                    failed_run.finished_at = utc_now()
+                    failed_db.commit()
+            finally:
+                failed_db.close()
+            raise
+        return run
+
+    def _run_transcode_automation(self, run_id: int) -> None:
+        try:
+            process_transcode_automation_run(
+                self.settings,
+                run_id,
+                submit_job=self._submit_transcode_job,
+                is_cancel_requested=self.is_transcode_automation_cancel_requested,
+            )
+        finally:
+            with self.lock:
+                self.submitted_automation_run_ids.discard(run_id)
+                self.cancel_requested_automation_run_ids.discard(run_id)
+            self.request_history_storage_refresh()
+
+    def is_transcode_automation_cancel_requested(self, run_id: int) -> bool:
+        with self.lock:
+            return run_id in self.cancel_requested_automation_run_ids
+
+    def cancel_transcode_automation(self, run_id: int) -> TranscodeAutomationRunRead:
+        db = SessionLocal()
+        try:
+            with self.lock:
+                self.cancel_requested_automation_run_ids.add(run_id)
+            return request_transcode_automation_cancellation(db, run_id)
+        finally:
+            db.close()
 
     def _run_transcode_job(self, job_id: int) -> None:
         library_id = 0
@@ -524,6 +607,7 @@ class ScanRuntimeManager:
                             synchronize_session=False,
                         )
                         db.commit()
+                    finalize_transcode_automation_record(db, job)
                     break
                 finally:
                     db.close()
@@ -556,7 +640,9 @@ class ScanRuntimeManager:
                 with self.lock:
                     self.cancel_requested_transcode_job_ids.add(job_id)
                 return job
-            return cancel_transcode_job(db, job_id)
+            canceled = cancel_transcode_job(db, job_id)
+            finalize_transcode_automation_record(db, canceled)
+            return canceled
         finally:
             db.close()
 
@@ -1125,9 +1211,21 @@ class ScanRuntimeManager:
             execute_scan_job(job_id, self.settings, is_cancel_requested=self.is_job_cancel_requested)
         finally:
             connector_recompute_ids: list[int] = []
+            automation_source_ids: list[int] = []
+            scan_completed = False
             match_db = SessionLocal()
             try:
                 job = match_db.get(ScanJob, job_id)
+                # A scan with file-level analysis errors is terminally
+                # completed by the scanner, but it is not a successful scan
+                # for automatic transcoding.  Requiring zero errors prevents
+                # a partial inventory from silently starting destructive or
+                # expensive follow-up work.
+                scan_completed = bool(
+                    job is not None
+                    and job.status == JobStatus.completed
+                    and not job.errors
+                )
                 after_files = {
                     file_id: (root_id, relative_path)
                     for file_id, root_id, relative_path in match_db.execute(
@@ -1139,15 +1237,24 @@ class ScanRuntimeManager:
                     )
                     if root_id is not None
                 }
-                changed_ids = set(
+                analyzed_video_ids = set(
                     match_db.scalars(
                         select(MediaFile.id).where(
                             MediaFile.library_id == library_id,
+                            MediaFile.video_streams.any(),
                             MediaFile.last_analyzed_at.is_not(None),
                             MediaFile.last_analyzed_at >= job.started_at,
                         )
+                        )
+                    ) if job and job.started_at else set()
+                changed_ids = set(
+                    match_db.scalars(
+                        select(MediaFile.id).where(
+                            MediaFile.id.in_(analyzed_video_ids),
+                            MediaFile.is_transcode_variant.is_(False),
+                        )
                     )
-                ) if job and job.started_at else set()
+                ) if analyzed_video_ids else set()
                 changed_locators = {
                     locator
                     for file_id in set(before_files) | set(after_files)
@@ -1168,13 +1275,41 @@ class ScanRuntimeManager:
                                 ConnectorConnection.enabled.is_(True)
                             )
                         )
-                    )
+                )
                 reconcile_transcode_variants(match_db, library_id)
+                if scan_completed:
+                    # Variant reconciliation must happen before automatic
+                    # processing is selected.  A same-directory output can
+                    # be discovered by the follow-up scan while it still has
+                    # the default primary-file flag; selecting it earlier
+                    # would allow a transcode loop.
+                    automation_source_ids = sorted(
+                        match_db.scalars(
+                            select(MediaFile.id).where(
+                                MediaFile.id.in_(analyzed_video_ids),
+                                MediaFile.library_id == library_id,
+                                MediaFile.is_transcode_variant.is_(False),
+                                MediaFile.video_streams.any(),
+                            )
+                        )
+                    )
             except Exception:
                 match_db.rollback()
                 logger.exception("Failed to refresh Jellyfin matches after scan %s", job_id)
             finally:
                 match_db.close()
+            if scan_completed and automation_source_ids:
+                try:
+                    self.request_transcode_automation(
+                        TranscodeAutomationScope(
+                            library_ids=[library_id],
+                            source_file_ids=automation_source_ids,
+                            limit=max(len(automation_source_ids), 1),
+                        ),
+                        trigger="scan",
+                    )
+                except Exception:
+                    logger.exception("Failed to queue transcoding automation after scan %s", job_id)
             for connection_id in connector_recompute_ids:
                 try:
                     self.request_connector_recompute(connection_id, trigger_source="scan")
@@ -1561,6 +1696,15 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
+    def _recover_orphaned_transcode_automation_runs(self) -> None:
+        db = SessionLocal()
+        try:
+            recovered = recover_orphaned_transcode_automation_runs(db)
+            if recovered:
+                logger.info("Canceled %s orphaned transcoding automation run(s)", recovered)
+        finally:
+            db.close()
+
     def _run_telemetry_send(self, force: bool = False) -> None:
         db = SessionLocal()
         try:
@@ -1828,6 +1972,13 @@ class ScanRuntimeManager:
         return ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="medialyze-maintenance",
+        )
+
+    @staticmethod
+    def _build_automation_executor() -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="medialyze-transcode-automation",
         )
 
     @staticmethod

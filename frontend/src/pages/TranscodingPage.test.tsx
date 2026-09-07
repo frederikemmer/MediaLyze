@@ -11,6 +11,9 @@ import { TranscodingPage } from "./TranscodingPage";
 const appDataMock = vi.hoisted(() => ({
   value: {
     appSettings: {
+      ignore_patterns: [],
+      user_ignore_patterns: [],
+      default_ignore_patterns: [],
       transcoding: {
         execution_mode: "hardware_required",
         cpu_budget_percent: 90,
@@ -22,6 +25,15 @@ const appDataMock = vi.hoisted(() => ({
         retry_count: 0,
         existing_output: "fail",
         remove_partial_output: true,
+      },
+      feature_flags: {
+        show_analyzed_files_csv_export: false,
+        show_full_width_app_shell: false,
+        hide_quality_score_meter: false,
+        show_music_quality_score: false,
+        unlimited_panel_size: false,
+        in_depth_dolby_vision_profiles: false,
+        show_all_playbacks_when_unstacked: false,
       },
     } as AppSettings,
     libraries: [

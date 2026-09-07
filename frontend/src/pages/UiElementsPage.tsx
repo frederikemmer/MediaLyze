@@ -705,6 +705,9 @@ function IgnorePatternFixture() {
   return (
     <div className="ignore-pattern-section">
       <div className="ignore-pattern-section-toggle-row">
+        <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse User ignore patterns" aria-expanded="true">
+          <ChevronDown aria-hidden="true" className="nav-icon" />
+        </button>
         <div className="ignore-pattern-section-toggle-lead">
           <button type="button" className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain" aria-expanded="true">
             <span className="ignore-pattern-section-title">User ignore patterns</span>
@@ -714,9 +717,6 @@ function IgnorePatternFixture() {
         <span className="ignore-pattern-section-meta">
           <span className="badge">2</span>
         </span>
-        <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse User ignore patterns" aria-expanded="true">
-          <ChevronDown aria-hidden="true" className="nav-icon" />
-        </button>
       </div>
       <div className="ignore-pattern-section-body">
         <div className="ignore-pattern-row ignore-pattern-row-draft">
@@ -1455,43 +1455,40 @@ export function UiElementsPage() {
                   </div>
                 </details>
               </VariantCard>
-              <VariantCard title="Combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["library-history-range-toggle", "library-history-range-button", "library-history-range-pill"]} wide>
+              <VariantCard title="Compact combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["settings-profile-toggle-row", "settings-profile-toggle-actions", "library-history-range-toggle", "library-history-range-button", "library-history-range-pill", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
                 <div className="compatibility-profile-panel">
                   <p className="compatibility-profile-development-note">
                     This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections.
                   </p>
-                  <div className="library-history-range-toggle" role="tablist" aria-label="Hardware & software profiles">
-                    <SlidingTogglePill activeKey="hardware" className="nav-active-pill library-history-range-pill" />
-                    {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
-                      <button
-                        key={profileTab}
-                        type="button"
-                        data-toggle-key={profileTab}
-                        className={`library-history-range-button${profileTab === "hardware" ? " active" : ""}`}
-                        aria-pressed={profileTab === "hardware"}
-                      >
-                        <span className="library-history-range-button-content">
-                          <span>
-                            {profileTab === "hardware"
-                              ? "Hardware"
-                              : profileTab === "software"
-                                ? "Software / Player"
-                                : "Combination"}
+                  <div className="settings-profile-toggle-row">
+                    <div className="library-history-range-toggle" role="tablist" aria-label="Hardware & software profiles">
+                      <SlidingTogglePill activeKey="hardware" className="nav-active-pill library-history-range-pill" />
+                      {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
+                        <button
+                          key={profileTab}
+                          type="button"
+                          data-toggle-key={profileTab}
+                          className={`library-history-range-button${profileTab === "hardware" ? " active" : ""}`}
+                          aria-pressed={profileTab === "hardware"}
+                        >
+                          <span className="library-history-range-button-content">
+                            <span>
+                              {profileTab === "hardware"
+                                ? "Hardware"
+                                : profileTab === "software"
+                                  ? "Software / Player"
+                                  : "Combination"}
+                            </span>
                           </span>
-                        </span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="settings-profile-toggle-actions">
+                      <button type="button" className="secondary small settings-panel-header-action compatibility-profile-header-action">
+                        <Plus aria-hidden="true" size={16} />
+                        <span>Profile</span>
                       </button>
-                    ))}
-                  </div>
-                </div>
-              </VariantCard>
-              <VariantCard title="Compact profile header action" source={`${settings} > Libraries / Quality / Hard/Software Profiles`} classes={["panel-title-row", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
-                <div className="panel-title-row">
-                  <h2>Hardware &amp; software profiles</h2>
-                  <div className="async-panel-toggle-actions">
-                    <button type="button" className="secondary small settings-panel-header-action compatibility-profile-header-action">
-                      <Plus aria-hidden="true" size={16} />
-                      <span>Add local profile</span>
-                    </button>
+                    </div>
                   </div>
                 </div>
               </VariantCard>
@@ -1561,7 +1558,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Duplicate filename matching settings" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-field-label-row", "pattern-recognition-restore-button", "app-settings-divider", "pattern-recognition-section-divider", "ignore-pattern-section-toggle-row", "ignore-pattern-section-chevron"]} wide>
+              <VariantCard title="Duplicate filename matching settings" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-field-label-row", "pattern-recognition-restore-button", "app-settings-divider", "pattern-recognition-section-divider", "ignore-pattern-section", "pattern-recognition-section", "ignore-pattern-section-toggle-row", "ignore-pattern-section-toggle-lead", "ignore-pattern-section-toggle", "ignore-pattern-section-meta", "ignore-pattern-section-title", "ignore-pattern-section-chevron"]} wide>
                 <div className="field">
                   <div className="distribution-copy">
                     <div className="field-label-row">
@@ -1592,6 +1589,9 @@ export function UiElementsPage() {
                   </div>
                   <div className="ignore-pattern-section pattern-recognition-section">
                     <div className="ignore-pattern-section-toggle-row">
+                      <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse Filename suffix regexes" aria-expanded="true">
+                        <ChevronDown aria-hidden="true" className="nav-icon" />
+                      </button>
                       <div className="ignore-pattern-section-toggle-lead">
                         <button type="button" className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain" aria-expanded="true">
                           <span className="ignore-pattern-section-title">Filename suffix regexes</span>
@@ -1609,9 +1609,6 @@ export function UiElementsPage() {
                           <History aria-hidden="true" className="nav-icon" size={16} />
                         </TooltipTrigger>
                       </div>
-                      <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse Filename suffix regexes" aria-expanded="true">
-                        <ChevronDown aria-hidden="true" className="nav-icon" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1622,13 +1619,13 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Compatibility profile actions" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-action-button"]}>
+              <VariantCard title="Compatibility profile actions" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-action-button", "settings-panel-header-action", "transcode-action-button"]}>
                 <div className="compatibility-profile-card-actions">
-                  <button type="button" className="secondary compatibility-profile-action-button">
+                  <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button">
                     <Copy aria-hidden="true" size={16} />
                     Edit local copy
                   </button>
-                  <button type="button" className="compatibility-profile-action-button is-primary">
+                  <button type="button" className="transcode-action-button compatibility-profile-action-button">
                     <Save aria-hidden="true" size={16} />
                     Save
                   </button>
@@ -2615,10 +2612,10 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding runtime settings and capability matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "app-settings-section", "app-settings-section-title", "field", "field-label-row", "transcode-capability-matrix", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Transcoding settings and accelerator matrix" source={`${settings} > Transcoding`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field", "field-label-row", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "transcode-capability-search", "compatibility-profile-panel", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "compatibility-profile-search-empty", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "transcode-automation-list-copy", "transcode-capability-device-copy", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-path", "transcode-matrix-tooltip-path-arrow", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-workload", "transcode-matrix-tooltip-summary", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-matrix-axis-label", "transcode-matrix-axis-label-horizontal", "transcode-matrix-axis-label-vertical", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">
                   <div className="panel-title-row">
-                    <h2>Transcoding runtime</h2>
+                    <h2>Transcoding</h2>
                     <TooltipTrigger ariaLabel="Explain transcoding runtime settings" content="Choose the required execution path, output safety policy, resource limits, and inspect the real FFmpeg hardware probes.">
                       ?
                     </TooltipTrigger>
@@ -2626,7 +2623,7 @@ export function UiElementsPage() {
                   <div className="async-panel-header-status">
                     <button type="button" className="secondary small settings-panel-header-action">
                       <FlaskConical aria-hidden="true" size={16} />
-                      Test codec matrix
+                      Test Hardware
                     </button>
                   </div>
                 </div>
@@ -2636,24 +2633,17 @@ export function UiElementsPage() {
                     <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-output">Default output mode</label><TooltipTrigger ariaLabel="Explain default output mode" content="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.">?</TooltipTrigger></div><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></div>
                     <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><TooltipTrigger ariaLabel="Explain CPU budget" content="Soft budget shared across active CPU transcode jobs; short bursts can exceed it.">?</TooltipTrigger></div><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /></div>
                   </div>
-                  <section className="app-settings-section">
-                    <p className="app-settings-section-title">Hardware device</p>
-                    <div className="field">
-                      <label htmlFor="catalog-transcoding-device">Hardware device</label>
-                      <select id="catalog-transcoding-device" defaultValue="auto">
-                        <option value="auto">Use all detected devices</option>
-                        <option value="render:/dev/dri/renderD128">Intel GPU (renderD128) · 8086:56A6</option>
-                      </select>
-                    </div>
-                  </section>
-                  <details className="transcode-capability-matrix" open>
-                    <summary><span><strong>Transcoding capability matrix</strong><small>Decode vertically · encode horizontally</small></span><span className="field-hint">Tested now</span></summary>
-                    <div className="transcode-capability-matrix-body">
-                      <div className="transcode-matrix-meta"><span>FFmpeg 8.0</span><span>Each hardware cell opens the same repeated-run benchmark details; the highest level within the slowdown limit is the practical recommendation.</span></div>
-                      <details className="transcode-device-matrix" open>
-                        <summary><span><strong>NVIDIA GeForce RTX 3080</strong><small>cuda · cuda0</small></span></summary>
+                  <section className="app-settings-section transcode-capability-section">
+                    <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
+                      <div className="compatibility-profile-list transcode-capability-list">
+                        <div className="compatibility-profile-search transcode-capability-search">
+                          <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+                          <input type="search" aria-label="Search hardware devices" placeholder="Search devices" />
+                        </div>
+                      <details className="compatibility-profile-list-item transcode-device-matrix" open>
+                        <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><strong>NVIDIA GeForce RTX 3080</strong><small>cuda · cuda0</small></span><ChevronDown aria-hidden="true" /></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
-                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
+                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner"><span className="transcode-matrix-axis-label transcode-matrix-axis-label-horizontal">Encode</span><span className="transcode-matrix-axis-label transcode-matrix-axis-label-vertical">Decode</span></th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
                          </div>
                          <div className="transcode-matrix-tooltip-preview">
                            <span className="field-hint">Hover or focus a matrix cell:</span>
@@ -2666,27 +2656,64 @@ export function UiElementsPage() {
                              content={(
                                <div className="transcode-matrix-tooltip-content">
                                  <div className="transcode-matrix-tooltip-heading"><strong>H.264 / AVC → H.265 / HEVC</strong><span className="transcode-matrix-tooltip-status is-hardware">Hardware path</span></div>
-                                 <div className="transcode-matrix-tooltip-row"><div className="transcode-matrix-tooltip-head"><span>Result</span><strong>HW · 4×</strong></div><div className="transcode-matrix-tooltip-path"><span>Decoder: cuda:h264</span><span>Encoder: hevc_nvenc</span></div></div>
-                                 <div className="transcode-matrix-tooltip-benchmark"><div className="transcode-matrix-tooltip-head"><span>Parallel benchmark</span><strong>Runs per level: 3</strong></div><div className="transcode-matrix-tooltip-workload">Workload: 256×256 · 30 fps · 240 frames</div><div className="transcode-matrix-tooltip-level"><div className="transcode-matrix-tooltip-level-head"><strong>4 sessions</strong><span>within limit</span></div><div className="transcode-matrix-tooltip-runs"><span>Run 1: 0.502 s</span><span>Run 2: 0.498 s</span><span>Run 3: 0.515 s</span></div><div className="transcode-matrix-tooltip-level-result"><span>Median: 0.502 s</span><span>+8.4 %</span></div></div></div>
+                                 <div className="transcode-matrix-tooltip-row transcode-matrix-tooltip-path"><span>Decoder: cuda:h264</span><span className="transcode-matrix-tooltip-path-arrow" aria-hidden="true">→</span><span>Encoder: hevc_nvenc</span></div>
+                                 <div className="transcode-matrix-tooltip-benchmark"><div className="transcode-matrix-tooltip-workload">Workload: 256×256 · 30 fps · 240 frames</div><div className="transcode-matrix-tooltip-level"><div className="transcode-matrix-tooltip-level-head"><strong>4 sessions</strong><span>within limit</span></div><div className="transcode-matrix-tooltip-runs"><span>Run 1: 0.502 s</span><span>Run 2: 0.498 s</span><span>Run 3: 0.515 s</span></div><div className="transcode-matrix-tooltip-level-result"><span>Median: 0.502 s</span><span>+8.4 %</span></div></div></div>
                                </div>
                              )}
                            >
                              HW · 4×
                            </TooltipTrigger>
                          </div>
-                         <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
                       </details>
-                      <details className="transcode-device-matrix">
-                        <summary><span><strong>Intel CPU iGPU · Quick Sync</strong><small>qsv + vaapi · renderD128</small></span></summary>
+                       <details className="compatibility-profile-list-item transcode-device-matrix">
+                         <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><strong>Intel CPU iGPU · Quick Sync</strong><small>qsv + vaapi · renderD128</small></span><ChevronDown aria-hidden="true" /></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
-                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner">Decode ↓<br />Encode →</th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>AV1</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr></tbody></table>
-                        </div>
-                        <div className="transcode-matrix-legend"><span className="transcode-matrix-hardware">Hardware · simultaneous sessions</span><span className="transcode-matrix-software">Software only</span><span className="transcode-matrix-unsupported">Unavailable</span><span className="transcode-matrix-not_tested">Not tested</span></div>
-                      </details>
-                    </div>
-                  </details>
+                          <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner"><span className="transcode-matrix-axis-label transcode-matrix-axis-label-horizontal">Encode</span><span className="transcode-matrix-axis-label transcode-matrix-axis-label-vertical">Decode</span></th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>AV1</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr></tbody></table>
+                         </div>
+                       </details>
+                       </div>
+                     </div>
+                   </section>
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
                 </div>
+              </VariantCard>
+              <VariantCard title="Compact transcoding automation tabs" source={`${settings} > Transcoding > TranscodeProfilesRulesPanel`} classes={["transcode-automation-section", "settings-profile-toggle-row", "transcode-automation-tab-controls", "settings-profile-toggle-actions", "transcode-automation-content", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "transcode-capability-search", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "compatibility-profile-card-actions", "compatibility-profile-form-grid", "compatibility-profile-field-wide", "compatibility-capability-sections", "compatibility-capability-section", "compatibility-capability-section-body", "transcode-automation-list-copy", "transcode-capability-device-copy", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-scroll", "transcode-automation-summary-form-grid", "transcode-automation-rule-sections", "transcode-automation-section-summary", "transcode-profile-section-count", "transcode-profile-rule", "transcode-profile-rule-summary", "transcode-profile-rule-summary-grid", "transcode-profile-rule-field", "transcode-profile-rule-section", "transcode-automation-description-tooltip", "transcode-automation-description-tooltip-portal", "transcode-automation-details", "transcode-automation-editor", "transcode-automation-editor-actions", "transcode-condition-group", "transcode-condition-list", "transcode-condition-row", "transcode-actions", "settings-panel-header-action", "transcode-action-button", "badge"]} wide>
+                <section className="app-settings-section transcode-automation-section">
+                  <div className="compatibility-profile-panel transcode-automation-content">
+                    <div className="settings-profile-toggle-row">
+                      <div className="transcode-automation-tab-controls">
+                        <div className="library-history-range-toggle" role="tablist" aria-label="Transcoding profiles and rules">
+                          <SlidingTogglePill activeKey="profiles" className="nav-active-pill library-history-range-pill" />
+                          <button type="button" data-toggle-key="profiles" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Transcoding profiles</span></span></button>
+                          <button type="button" data-toggle-key="rules" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Transcoding rules</span></span></button>
+                          <button type="button" data-toggle-key="accelerators" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Accelerators</span></span></button>
+                        </div>
+                        <TooltipTrigger ariaLabel="Explain transcoding profiles" tooltipClassName="transcode-automation-description-tooltip-portal" maxWidth={380} content={<div className="transcode-automation-description-tooltip"><p>Reusable versioned stream plans; built-in profiles are immutable templates.</p><p>Automation uses the existing path, collision, capability, queue, and retry safeguards.</p></div>}>?</TooltipTrigger>
+                      </div>
+                      <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus size={14} aria-hidden="true" />New profile</button></div>
+                    </div>
+                    <div className="compatibility-profile-list">
+                      <div className="compatibility-profile-search">
+                        <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+                        <input type="search" aria-label="Search profiles" placeholder="Search profiles and rules" />
+                      </div>
+                      <article className="compatibility-profile-list-item is-expanded">
+                        <div className="compatibility-profile-list-row">
+                          <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true"><span className="transcode-automation-list-copy"><strong>Save storage</strong></span><ChevronDown aria-hidden="true" /></button>
+                          <div className="compatibility-profile-quick-actions">
+                            <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Customize Save storage" title="Create an editable copy"><SquarePenIcon size={18} aria-hidden="true" className="nav-icon" /></button>
+                            <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Delete Save storage" title="Built-in templates cannot be deleted" disabled><Trash2 size={18} aria-hidden="true" className="nav-icon" /></button>
+                          </div>
+                        </div>
+                          <div className="compatibility-profile-details transcode-automation-details">
+                           <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid"><label><span>Container</span><select disabled value="mkv" onChange={() => undefined}><option value="mkv">MKV</option></select></label><label><span>Execution mode</span><select disabled value="inherit" onChange={() => undefined}><option value="inherit">Use global setting</option></select></label><label><span>Dynamic range</span><select disabled value="preserve" onChange={() => undefined}><option value="preserve">Preserve</option></select></label><label><span>Used by automatic rules</span><input readOnly value="2" /></label></div>
+                           <div className="compatibility-capability-sections transcode-automation-rule-sections"><details className="compatibility-capability-section"><summary className="transcode-automation-section-summary"><span>Video stream rules</span><strong className="transcode-profile-section-count">1</strong></summary><div className="compatibility-capability-section-body"><div className="transcode-profile-rule transcode-profile-rule-summary"><strong>Encode</strong><div className="transcode-profile-rule-summary-grid"><div><span>Codec match</span><strong>h264</strong></div><div><span>Stream action</span><strong>Encode</strong></div></div></div></div></details><details className="compatibility-capability-section"><summary className="transcode-automation-section-summary"><span>Audio stream rules</span><strong className="transcode-profile-section-count">0</strong></summary><div className="compatibility-capability-section-body"><p className="field-hint">—</p></div></details></div>
+                          <p className="field-hint">MKV / HEVC, copy compatible streams, encode unmatched video.</p>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </section>
               </VariantCard>
               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare"]} wide>
                 <div className="file-detail-preview-panel file-detail-preview-comparison-panel">

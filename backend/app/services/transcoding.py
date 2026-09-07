@@ -29,6 +29,7 @@ from backend.app.models.entities import (
     MediaFile,
     SubtitleStream,
     TranscodeJob,
+    TranscodeProfile,
     TranscodeVariant,
     TranscodeVariantGroup,
     VideoStream,
@@ -224,6 +225,29 @@ def _safe_path_below(root: Path, relative_path: str) -> Path:
     except ValueError as exc:
         raise ValueError("Media path escapes its library root") from exc
     return candidate
+
+
+def normalize_transcode_output_subfolder(value: str | None) -> str:
+    """Normalize and validate a rule-relative output subfolder.
+
+    The value is intentionally a relative POSIX-style path even on Windows.
+    Rejecting drive prefixes, traversal segments, and control characters here
+    keeps both preview and queue paths on the same security boundary.
+    """
+
+    candidate = str(value or "").strip().replace("\\", "/")
+    if not candidate:
+        return ""
+    if "\x00" in candidate or any(ord(char) < 32 for char in candidate):
+        raise ValueError("Output subfolder contains an invalid control character")
+    if candidate.startswith("/") or re.match(r"^[A-Za-z]:", candidate) or candidate.startswith("//"):
+        raise ValueError("Output subfolder must be relative")
+    parts = [part for part in candidate.split("/") if part]
+    if not parts or any(part in {".", ".."} for part in parts):
+        raise ValueError("Output subfolder may not contain traversal segments")
+    if any(":" in part for part in parts):
+        raise ValueError("Output subfolder may not contain a drive prefix")
+    return "/".join(parts)
 
 
 def _source_paths(media_file: MediaFile) -> SourcePaths:
@@ -1769,32 +1793,15 @@ def _nearest_existing_parent(path: Path) -> Path:
     return candidate
 
 
-def _effective_device_id_for_backend(
-    capabilities: TranscodeCapabilitiesRead,
-    app_settings,
-    backend: str,
-) -> str | None:
-    selected = app_settings.transcoding.selected_devices
-    if isinstance(selected, list):
-        for candidate in selected:
-            if any(device.id == candidate and device.backend == backend for device in capabilities.devices):
-                return candidate
-        return None
-    return next((device.id for device in capabilities.devices if device.backend == backend), None)
-
-
 def _select_hardware_device_for_encoder(
     capabilities: TranscodeCapabilitiesRead,
-    app_settings,
     encoder: str,
 ) -> TranscodeHardwareDevice | None:
     """Select the first probed adapter that can run ``encoder``.
 
-    ``selected_devices=auto`` is intentionally resolved at request time, not
-    during installation.  This makes hot-plugged GPUs, Docker passthrough,
-    hybrid laptops, and driver updates behave consistently after a capability
-    refresh.  Explicit selections remain respected and fail validation when
-    they cannot run the requested encoder.
+    Device selection is intentionally resolved at request time, not during
+    installation. This makes hot-plugged GPUs, Docker passthrough, hybrid
+    laptops, and driver updates behave consistently after a capability refresh.
     """
 
     backend = _hardware_backend(encoder)
@@ -1808,10 +1815,6 @@ def _select_hardware_device_for_encoder(
         for device in capabilities.devices
         if device.backend == backend and device.status == "available"
     ]
-    selected = app_settings.transcoding.selected_devices
-    if isinstance(selected, list):
-        selected_ids = set(selected)
-        candidates = [device for device in candidates if device.id in selected_ids]
     if capability.device_ids:
         probed_ids = set(capability.device_ids)
         candidates = [device for device in candidates if device.id in probed_ids]
@@ -1883,14 +1886,11 @@ def transcode_capacity(settings: Settings, app_settings=None) -> dict[str, objec
         if configured_cpu_jobs != "auto"
         else max(1, min(4, total_cpu_threads))
     )
-    selected_devices = resolved.transcoding.selected_devices
-    devices = list(selected_devices) if isinstance(selected_devices, list) else "auto"
     return {
         "cpu_threads": total_cpu_threads,
         "cpu_threads_per_job": max(1, total_cpu_threads // cpu_jobs),
         "cpu_parallel_jobs": cpu_jobs,
         "gpu_parallel_jobs_per_device": resolved.transcoding.gpu_parallel_jobs_per_device,
-        "selected_devices": devices or "auto",
     }
 
 
@@ -1901,6 +1901,7 @@ def validate_transcode_plan(
     plan: TranscodePlan,
     *,
     output_path_override: Path | None = None,
+    output_subfolder: str | None = None,
 ) -> TranscodeValidationRead:
     paths = _source_paths(media_file)
     capabilities = get_transcode_capabilities(settings)
@@ -1918,6 +1919,11 @@ def validate_transcode_plan(
     changed: list[str] = []
     removed: list[str] = []
     added: list[str] = []
+    try:
+        normalized_output_subfolder = normalize_transcode_output_subfolder(output_subfolder)
+    except ValueError as exc:
+        normalized_output_subfolder = ""
+        errors.append(str(exc))
     if not paths.source.exists() or not paths.source.is_file():
         errors.append("The source file no longer exists")
     if not media_file.video_streams:
@@ -1931,6 +1937,8 @@ def validate_transcode_plan(
         output_filename = f"{Path(media_file.filename).stem}.transcoded.{plan.container}"
         errors.append(str(exc))
     if output_mode == "replace_original":
+        if normalized_output_subfolder:
+            errors.append("Replace-original rules cannot use an output subfolder")
         output_filename = paths.source.name
         output_root = paths.root
         output_path = output_path_override or paths.source
@@ -1946,9 +1954,13 @@ def validate_transcode_plan(
         ).resolve()
         relative_parent = Path(media_file.relative_path).parent
         output_relative = Path(f"library-{media_file.library_id}") / f"root-{media_file.library_root_id or 0}"
+        if normalized_output_subfolder:
+            output_relative = Path(normalized_output_subfolder) / output_relative
         output_relative = output_relative / relative_parent / output_filename
         output_path = output_path_override or _safe_path_below(output_root, output_relative.as_posix())
     else:
+        if normalized_output_subfolder:
+            errors.append("Same-directory rules cannot use an output subfolder")
         output_root = paths.root
         output_path = output_path_override or (paths.source.parent / output_filename)
     try:
@@ -2016,7 +2028,7 @@ def validate_transcode_plan(
         backend = _hardware_backend(encoder)
         if not backend:
             continue
-        selected_device = _select_hardware_device_for_encoder(capabilities, app_settings, encoder or "")
+        selected_device = _select_hardware_device_for_encoder(capabilities, encoder or "")
         if selected_device is not None:
             selected_hardware_devices.append(selected_device)
     selected_device_ids = {device.id for device in selected_hardware_devices}
@@ -2038,10 +2050,9 @@ def validate_transcode_plan(
         if selected_device is None and (
             backend in {"cuda", "videotoolbox"}
             or backend_devices
-            or isinstance(app_settings.transcoding.selected_devices, list)
         ):
             errors.append(
-                f"{backend} encoding requires a detected, available device selected in Transcoding settings"
+                f"{backend} encoding requires a detected, available device that passed its capability probe"
             )
         if backend in {"vaapi", "qsv"} and _is_linux() and not render_node:
             errors.append(
@@ -2333,8 +2344,23 @@ def queue_transcode_job(
     settings: Settings,
     media_file: MediaFile,
     plan: TranscodePlan,
+    *,
+    profile_id: int | None = None,
+    profile_version: int | None = None,
+    rule_id: int | None = None,
+    rule_version: int | None = None,
+    rule_snapshot: dict | None = None,
+    automation_run_id: int | None = None,
+    automation_trigger: str | None = None,
+    output_subfolder: str | None = None,
 ) -> tuple[TranscodeJob, TranscodeValidationRead]:
-    validation = validate_transcode_plan(db, settings, media_file, plan)
+    validation = validate_transcode_plan(
+        db,
+        settings,
+        media_file,
+        plan,
+        output_subfolder=output_subfolder,
+    )
     if not validation.valid:
         raise TranscodeValidationError(validation)
     plan = validation.normalized_plan
@@ -2363,6 +2389,7 @@ def queue_transcode_job(
         media_file,
         plan,
         output_path_override=temporary_path,
+        output_subfolder=output_subfolder,
     )
     if not actual_validation.valid:
         raise TranscodeValidationError(actual_validation)
@@ -2383,6 +2410,13 @@ def queue_transcode_job(
         source_file_id=media_file.id,
         status=JobStatus.queued,
         profile=plan.profile,
+        profile_id=profile_id,
+        profile_version=profile_version,
+        rule_id=rule_id,
+        rule_version=rule_version,
+        rule_snapshot=rule_snapshot,
+        automation_run_id=automation_run_id,
+        automation_trigger=automation_trigger,
         plan_version=plan.version,
         plan=plan.model_dump(mode="json"),
         ffmpeg_arguments=actual_arguments,
@@ -2780,6 +2814,23 @@ def _serialize_variant(db: Session, variant: TranscodeVariant) -> TranscodeVaria
 def get_file_transcode(db: Session, settings: Settings, media_file: MediaFile) -> FileTranscodeRead:
     capabilities = get_transcode_capabilities(settings)
     app_settings = get_app_settings(db, settings)
+    from backend.app.services.transcode_automation import materialize_saved_profile_plan
+
+    saved_profiles = []
+    for profile in db.scalars(
+        select(TranscodeProfile).order_by(
+            TranscodeProfile.is_builtin.desc(), TranscodeProfile.name.collate("NOCASE"), TranscodeProfile.id
+        )
+    ).all():
+        try:
+            saved_profiles.append(
+                materialize_saved_profile_plan(profile, media_file, capabilities, app_settings)
+            )
+        except ValueError:
+            # A malformed legacy custom profile should not make the file
+            # detail page unusable.  The management endpoint reports it for
+            # correction; the transient plans remain available here.
+            continue
     groups = list(
         db.scalars(
             select(TranscodeVariantGroup).where(
@@ -2818,6 +2869,7 @@ def get_file_transcode(db: Session, settings: Settings, media_file: MediaFile) -
             output_mode=app_settings.transcoding.default_output_mode,
             execution_mode=app_settings.transcoding.execution_mode,
         ),
+        saved_profiles=saved_profiles,
         attachments=_attachment_summaries(media_file),
         variants=[_serialize_variant(db, item) for item in variants],
         jobs=_serialize_transcode_jobs(db, jobs),

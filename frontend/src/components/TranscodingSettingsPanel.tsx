@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlaskConical, Save } from "lucide-react";
+import { ChevronDown, FlaskConical, Search, X } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
+import { TranscodeProfilesRulesPanel } from "./TranscodeProfilesRulesPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
 import {
   api,
@@ -10,7 +11,6 @@ import {
   type TranscodeCapabilities,
   type TranscodeCapabilityMatrix,
   type TranscodeDeviceMatrix,
-  type TranscodeHardwareDevice,
   type TranscodeMatrixBenchmark,
   type TranscodeMatrixBenchmarkLevel,
   type TranscodeMatrixCell,
@@ -29,7 +29,6 @@ const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
   cpu_budget_percent: 90,
   cpu_parallel_jobs: "auto",
   gpu_parallel_jobs_per_device: 1,
-  selected_devices: "auto",
   default_output_mode: "transcode_output",
   on_error: "continue",
   retry_count: 0,
@@ -38,23 +37,7 @@ const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
 };
 
 function cloneTranscodingSettings(settings: TranscodingSettings): TranscodingSettings {
-  return {
-    ...settings,
-    selected_devices: Array.isArray(settings.selected_devices)
-      ? [...settings.selected_devices]
-      : settings.selected_devices,
-  };
-}
-
-type DeviceSelectionOption = {
-  key: string;
-  label: string;
-  allDeviceIds: string[];
-  availableDeviceIds: string[];
-};
-
-function deviceSelectionKey(device: TranscodeHardwareDevice): string {
-  return device.render_node ? `render:${device.render_node}` : `device:${device.id}`;
+  return { ...settings };
 }
 
 function matrixCellLabel(cell: TranscodeMatrixCell, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -110,14 +93,7 @@ function MatrixBenchmarkTooltip({
   locale: string;
 }) {
   return (
-    <section className="transcode-matrix-tooltip-benchmark">
-      <div className="transcode-matrix-tooltip-head">
-        <span>{t("transcoding.matrixTooltipBenchmark")}</span>
-        <strong>{t("transcoding.matrixTooltipRuns", { number: benchmark.repetitions })}</strong>
-      </div>
-      <div className="transcode-matrix-tooltip-note">
-        {t("transcoding.matrixTooltipRule", { percent: benchmark.tolerance_percent })}
-      </div>
+    <div className="transcode-matrix-tooltip-benchmark">
       <div className="transcode-matrix-tooltip-workload">
         {t("transcoding.matrixTooltipWorkload", {
           width: benchmark.width,
@@ -168,10 +144,7 @@ function MatrixBenchmarkTooltip({
           </div>
         ))}
       </div>
-      <div className="transcode-matrix-tooltip-note">
-        {t("transcoding.matrixTooltipPerSessionNote")}
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -199,15 +172,10 @@ function MatrixCellTooltip({
           {t(matrixTooltipStatusKey(cell))}
         </span>
       </div>
-      <div className="transcode-matrix-tooltip-row">
-        <div className="transcode-matrix-tooltip-head">
-          <span>{t("transcoding.matrixTooltipResult")}</span>
-          <strong>{label}</strong>
-        </div>
-        <div className="transcode-matrix-tooltip-path">
-          <span>{t("transcoding.matrixTooltipDecoder")}: {cell.decoder ?? "—"}</span>
-          <span>{t("transcoding.matrixTooltipEncoder")}: {cell.encoder ?? "—"}</span>
-        </div>
+      <div className="transcode-matrix-tooltip-row transcode-matrix-tooltip-path">
+        <span>{t("transcoding.matrixTooltipDecoder")}: {cell.decoder ?? "—"}</span>
+        <span className="transcode-matrix-tooltip-path-arrow" aria-hidden="true">→</span>
+        <span>{t("transcoding.matrixTooltipEncoder")}: {cell.encoder ?? "—"}</span>
       </div>
       {cell.parallel_benchmark ? <MatrixBenchmarkTooltip benchmark={cell.parallel_benchmark} t={t} locale={locale} /> : null}
       {cell.detail ? (
@@ -238,34 +206,6 @@ function matrixDeviceIdLabel(matrix: TranscodeDeviceMatrix): string {
   return raw;
 }
 
-function deviceSelectionLabel(devices: TranscodeHardwareDevice[]): string {
-  const first = devices[0];
-  if (!first) return "";
-  if (!first.render_node) return first.name.replace(/\s+\(automatic\)$/i, "");
-
-  const nameParts = first.name.split(" · ");
-  return nameParts.length > 1 ? nameParts.slice(0, -1).join(" · ") : first.name;
-}
-
-function buildDeviceSelectionOptions(devices: TranscodeHardwareDevice[]): DeviceSelectionOption[] {
-  const groups = new Map<string, TranscodeHardwareDevice[]>();
-  for (const device of devices) {
-    const key = deviceSelectionKey(device);
-    const group = groups.get(key) ?? [];
-    group.push(device);
-    groups.set(key, group);
-  }
-
-  return Array.from(groups, ([key, group]) => ({
-    key,
-    label: deviceSelectionLabel(group),
-    allDeviceIds: group.map((device) => device.id),
-    availableDeviceIds: group
-      .filter((device) => device.status === "available")
-      .map((device) => device.id),
-  }));
-}
-
 export function TranscodingSettingsPanel({
   settings,
   appSettingsLoaded,
@@ -278,13 +218,15 @@ export function TranscodingSettingsPanel({
   const [matrix, setMatrix] = useState<TranscodeCapabilityMatrix | null>(null);
   const [loadingCapabilities, setLoadingCapabilities] = useState(true);
   const [testingMatrix, setTestingMatrix] = useState(false);
-  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [matrixSearch, setMatrixSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingSave, setPendingSave] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setDraft(cloneTranscodingSettings(currentSettings));
+    setPendingSave(false);
   }, [currentSettings]);
 
   const refreshCapabilities = useCallback(async (force = false) => {
@@ -304,19 +246,16 @@ export function TranscodingSettingsPanel({
     void api.transcodeCapabilityMatrix()
       .then((result) => {
         setMatrix(result);
-        setMatrixOpen(result.status === "completed" && result.matrices.length > 0);
       })
       .catch((reason) => setError((reason as Error).message));
   }, [refreshCapabilities]);
 
   async function runMatrixTest() {
     setTestingMatrix(true);
-    setMatrixOpen(true);
     setError(null);
     try {
       const result = await api.testTranscodeCapabilityMatrix();
       setMatrix(result);
-      setMatrixOpen(true);
       await refreshCapabilities();
     } catch (reason) {
       setError((reason as Error).message);
@@ -327,40 +266,146 @@ export function TranscodingSettingsPanel({
 
   function updateDraft<K extends keyof TranscodingSettings>(key: K, value: TranscodingSettings[K]) {
     setSaved(false);
+    setPendingSave(true);
+    setError(null);
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  async function saveSettings() {
+  const saveSettings = useCallback(async (settingsToSave: TranscodingSettings) => {
     setSaving(true);
     setSaved(false);
     setError(null);
     try {
       const updated = await api.updateAppSettings({
-        transcoding: {
-          ...draft,
-          selected_devices: Array.isArray(draft.selected_devices)
-            ? [...draft.selected_devices]
-            : draft.selected_devices,
-        },
+        transcoding: { ...settingsToSave },
       });
       onUpdated(updated);
+      setPendingSave(false);
       setSaved(true);
     } catch (reason) {
+      setPendingSave(false);
       setError((reason as Error).message);
     } finally {
       setSaving(false);
     }
-  }
+  }, [onUpdated]);
 
-  const deviceSelectionOptions = buildDeviceSelectionOptions(capabilities?.devices ?? []);
-  const selectedDevices = Array.isArray(draft.selected_devices) ? draft.selected_devices : [];
-  const selectedDeviceOption =
-    draft.selected_devices === "auto" || selectedDevices.length === 0
-      ? "auto"
-      : deviceSelectionOptions.find((option) =>
-          option.allDeviceIds.some((deviceId) => selectedDevices.includes(deviceId)),
-        )?.key ?? "configured-unavailable";
-  const hasConfiguredUnavailableDevice = selectedDeviceOption === "configured-unavailable";
+  useEffect(() => {
+    if (!appSettingsLoaded || !pendingSave) return;
+    const timer = window.setTimeout(() => {
+      void saveSettings(draft);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [appSettingsLoaded, draft, pendingSave, saveSettings]);
+
+  const matrixFfmpegVersion = matrix?.ffmpeg_version ?? capabilities?.version ?? capabilities?.ffmpeg_path ?? "—";
+  const matrixDevices = matrix?.matrices ?? [];
+  const normalizedMatrixSearch = matrixSearch.trim().toLocaleLowerCase();
+  const visibleMatrixDevices = normalizedMatrixSearch
+    ? matrixDevices.filter((deviceMatrix) => (
+        `${deviceMatrix.device_name} ${deviceMatrix.backend} ${deviceMatrix.device_id}`
+          .toLocaleLowerCase()
+          .includes(normalizedMatrixSearch)
+      ))
+    : matrixDevices;
+
+  const acceleratorsTooltip = (
+    <div className="transcode-matrix-meta">
+      <strong>{t("transcoding.ffmpeg")}: {matrixFfmpegVersion}</strong>
+      <p>{t("transcoding.matrixConcurrencyPerDirectionHint")}</p>
+    </div>
+  );
+
+  const capabilityMatrix = (
+    <section className="app-settings-section transcode-capability-section">
+      <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
+        {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
+        {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
+        {!testingMatrix && matrix?.status === "not_run" ? <div className="notice">{t("transcoding.matrixNotRun")}</div> : null}
+        {!testingMatrix && matrix?.status === "completed" && !matrixDevices.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
+        {matrixDevices.length ? (
+          <div className="compatibility-profile-list transcode-capability-list">
+            <div className="compatibility-profile-search transcode-capability-search">
+              <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+              <input
+                type="search"
+                value={matrixSearch}
+                aria-label={t("transcoding.matrixSearchLabel")}
+                placeholder={t("transcoding.matrixSearchPlaceholder")}
+                onChange={(event) => setMatrixSearch(event.target.value)}
+              />
+              {matrixSearch ? (
+                <button
+                  type="button"
+                  className="compatibility-profile-search-clear"
+                  aria-label={t("transcoding.matrixSearchClear")}
+                  onClick={() => setMatrixSearch("")}
+                >
+                  <X size={15} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+            {visibleMatrixDevices.length ? visibleMatrixDevices.map((deviceMatrix, index) => (
+              <details className="compatibility-profile-list-item transcode-device-matrix" key={deviceMatrix.device_id} open={index === 0}>
+                <summary className="compatibility-profile-list-trigger">
+                  <span className="transcode-automation-list-copy transcode-capability-device-copy"><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small></span>
+                  <ChevronDown aria-hidden="true" />
+                </summary>
+                <div className="transcode-matrix-scroll" tabIndex={0}>
+                  <table className="transcode-matrix-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="transcode-matrix-corner">
+                          <span className="transcode-matrix-axis-label transcode-matrix-axis-label-horizontal">{t("transcoding.matrixEncodeAxis")}</span>
+                          <span className="transcode-matrix-axis-label transcode-matrix-axis-label-vertical">{t("transcoding.matrixDecodeAxis")}</span>
+                        </th>
+                        {deviceMatrix.encode_codecs.map((codec) => <th scope="col" key={codec}>{formatCodecLabel(codec, "video")}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deviceMatrix.decode_codecs.map((decodeCodec) => (
+                        <tr key={decodeCodec}>
+                          <th scope="row">{formatCodecLabel(decodeCodec, "video")}</th>
+                          {deviceMatrix.encode_codecs.map((encodeCodec) => {
+                            const cell = cellFor(deviceMatrix.cells, decodeCodec, encodeCodec);
+                            if (!cell) return <td key={encodeCodec}>—</td>;
+                            const label = matrixCellLabel(cell, t);
+                            const title = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}: ${label}`;
+                            return (
+                              <td className={`transcode-matrix-${cell.status}`} key={encodeCodec}>
+                                <TooltipTrigger
+                                  ariaLabel={title}
+                                  className="transcode-matrix-cell-trigger"
+                                  tooltipClassName="transcode-matrix-tooltip-portal"
+                                  content={(
+                                    <MatrixCellTooltip
+                                      cell={cell}
+                                      decodeCodec={decodeCodec}
+                                      encodeCodec={encodeCodec}
+                                      t={t}
+                                      locale={i18n.language}
+                                    />
+                                  )}
+                                  maxWidth={420}
+                                  placement="auto"
+                                >
+                                  {label}
+                                </TooltipTrigger>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )) : <p className="compatibility-profile-search-empty">{t("transcoding.matrixSearchEmpty")}</p>}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
 
   return (
     <AsyncPanel
@@ -528,122 +573,6 @@ export function TranscodingSettingsPanel({
           <span>{t("transcoding.removePartial")}</span>
         </label>
 
-        <section className="app-settings-section">
-          <p className="app-settings-section-title">{t("transcoding.selectedDevice")}</p>
-          <div className="field">
-            <label htmlFor="transcoding-selected-device">{t("transcoding.selectedDevice")}</label>
-            <select
-              id="transcoding-selected-device"
-              value={selectedDeviceOption}
-              disabled={!appSettingsLoaded || saving}
-              onChange={(event) => {
-                const option = deviceSelectionOptions.find((candidate) => candidate.key === event.target.value);
-                updateDraft(
-                  "selected_devices",
-                  event.target.value === "auto" ? "auto" : option?.availableDeviceIds ?? [],
-                );
-              }}
-            >
-              <option value="auto">{t("transcoding.allDetected")}</option>
-              {hasConfiguredUnavailableDevice ? (
-                <option value="configured-unavailable" disabled>
-                  {t("transcoding.configuredDeviceUnavailable")}
-                </option>
-              ) : null}
-              {deviceSelectionOptions.map((option) => (
-                <option disabled={!option.availableDeviceIds.length} key={option.key} value={option.key}>
-                  {option.label}{!option.availableDeviceIds.length ? ` — ${t("transcoding.deviceUnavailable")}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          {!deviceSelectionOptions.some((option) => option.availableDeviceIds.length) ? (
-            <p className="field-hint">{t("transcoding.noHardware")}</p>
-          ) : null}
-        </section>
-
-        <details
-          className="transcode-capability-matrix"
-          open={matrixOpen}
-          onToggle={(event) => setMatrixOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <span>
-              <strong>{t("transcoding.matrixTitle")}</strong>
-              <small>{t("transcoding.matrixAxisSummary")}</small>
-            </span>
-            {matrix?.tested_at ? <span className="field-hint">{new Date(matrix.tested_at).toLocaleString()}</span> : null}
-          </summary>
-          <div className="transcode-capability-matrix-body">
-            <div className="transcode-matrix-meta">
-              <span>{t("transcoding.ffmpeg")}: {matrix?.ffmpeg_version ?? capabilities?.version ?? capabilities?.ffmpeg_path}</span>
-              <span>{t("transcoding.matrixConcurrencyPerDirectionHint")}</span>
-            </div>
-            {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
-            {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
-            {!testingMatrix && matrix?.status === "not_run" ? <div className="notice">{t("transcoding.matrixNotRun")}</div> : null}
-            {!testingMatrix && matrix?.status === "completed" && !matrix.matrices.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
-            {matrix?.matrices.map((deviceMatrix, index) => (
-              <details className="transcode-device-matrix" key={deviceMatrix.device_id} open={index === 0}>
-                <summary>
-                  <span><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small></span>
-                </summary>
-                <div className="transcode-matrix-scroll" tabIndex={0}>
-                  <table className="transcode-matrix-table">
-                    <thead>
-                      <tr>
-                        <th scope="col" className="transcode-matrix-corner">{t("transcoding.matrixDecodeAxis")} ↓<br />{t("transcoding.matrixEncodeAxis")} →</th>
-                        {deviceMatrix.encode_codecs.map((codec) => <th scope="col" key={codec}>{formatCodecLabel(codec, "video")}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deviceMatrix.decode_codecs.map((decodeCodec) => (
-                        <tr key={decodeCodec}>
-                          <th scope="row">{formatCodecLabel(decodeCodec, "video")}</th>
-                          {deviceMatrix.encode_codecs.map((encodeCodec) => {
-                            const cell = cellFor(deviceMatrix.cells, decodeCodec, encodeCodec);
-                            if (!cell) return <td key={encodeCodec}>—</td>;
-                            const label = matrixCellLabel(cell, t);
-                            const title = `${formatCodecLabel(decodeCodec, "video")} → ${formatCodecLabel(encodeCodec, "video")}: ${label}`;
-                            return (
-                              <td className={`transcode-matrix-${cell.status}`} key={encodeCodec}>
-                                <TooltipTrigger
-                                  ariaLabel={title}
-                                  className="transcode-matrix-cell-trigger"
-                                  tooltipClassName="transcode-matrix-tooltip-portal"
-                                  content={(
-                                    <MatrixCellTooltip
-                                      cell={cell}
-                                      decodeCodec={decodeCodec}
-                                      encodeCodec={encodeCodec}
-                                      t={t}
-                                      locale={i18n.language}
-                                    />
-                                  )}
-                                  maxWidth={420}
-                                  placement="auto"
-                                >
-                                  {label}
-                                </TooltipTrigger>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="transcode-matrix-legend" aria-label={t("transcoding.matrixLegend")}>
-                  <span className="transcode-matrix-hardware">{t("transcoding.matrixHardwareLegend")}</span>
-                  <span className="transcode-matrix-software">{t("transcoding.matrixSoftwareLegend")}</span>
-                  <span className="transcode-matrix-unsupported">{t("transcoding.matrixUnsupportedLegend")}</span>
-                  <span className="transcode-matrix-not_tested">{t("transcoding.matrixNotTestedLegend")}</span>
-                </div>
-              </details>
-            ))}
-          </div>
-        </details>
-
         {draft.default_output_mode === "replace_original" ? (
           <div className="notice warning">
             <div>{t("transcoding.replacementWarning")}</div>
@@ -651,13 +580,13 @@ export function TranscodingSettingsPanel({
           </div>
         ) : null}
 
-        <div className="transcode-actions">
-          <button type="button" className="transcode-action-button" onClick={() => void saveSettings()} disabled={!appSettingsLoaded || saving}>
-            <Save aria-hidden="true" />
-            {saving ? t("transcoding.saving") : t("transcoding.save")}
-          </button>
-          {saved ? <span className="field-hint" role="status">{t("transcoding.saved")}</span> : null}
-        </div>
+        {saving || saved ? (
+          <div className="transcode-autosave-status" role="status" aria-live="polite">
+            {saving ? t("transcoding.autoSaving") : t("transcoding.autoSaved")}
+          </div>
+        ) : null}
+
+        <TranscodeProfilesRulesPanel capabilityMatrix={capabilityMatrix} acceleratorsTooltip={acceleratorsTooltip} />
       </div>
     </AsyncPanel>
   );

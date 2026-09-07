@@ -48,7 +48,6 @@ const DEFAULT_TRANSCODING = {
   cpu_budget_percent: 90,
   cpu_parallel_jobs: "auto" as const,
   gpu_parallel_jobs_per_device: 1,
-  selected_devices: "auto" as const,
   default_output_mode: "transcode_output" as const,
   on_error: "continue" as const,
   retry_count: 0,
@@ -178,7 +177,6 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
         payload?.transcoding?.cpu_parallel_jobs ?? DEFAULT_TRANSCODING.cpu_parallel_jobs,
       gpu_parallel_jobs_per_device:
         payload?.transcoding?.gpu_parallel_jobs_per_device ?? DEFAULT_TRANSCODING.gpu_parallel_jobs_per_device,
-      selected_devices: payload?.transcoding?.selected_devices ?? DEFAULT_TRANSCODING.selected_devices,
       default_output_mode:
         payload?.transcoding?.default_output_mode ?? DEFAULT_TRANSCODING.default_output_mode,
       on_error: payload?.transcoding?.on_error ?? DEFAULT_TRANSCODING.on_error,
