@@ -636,8 +636,8 @@ describe("LibrariesPage ignore patterns", () => {
       if (!count || !chevron) {
         throw new Error("Pattern section header controls are missing");
       }
+      expect(chevron.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(count.compareDocumentPosition(restoreButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(restoreButton.compareDocumentPosition(chevron) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     };
 
     await assertRestoreActionPosition(/^filename suffix regexes\d+$/i, "Restore duplicate matching defaults");

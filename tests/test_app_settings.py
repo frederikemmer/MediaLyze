@@ -160,6 +160,34 @@ def test_get_app_settings_seeds_built_in_default_ignore_patterns_for_new_install
     assert loaded.pattern_recognition.show_season_patterns.episode_file_regexes == []
 
 
+def test_transcoding_settings_ignore_legacy_global_device_selection(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+
+    with session_factory() as db:
+        db.add(
+            AppSetting(
+                key="global",
+                value={"transcoding": {"selected_devices": ["cuda0"], "gpu_parallel_jobs_per_device": 2}},
+            )
+        )
+        db.commit()
+
+        loaded = get_app_settings(db, settings)
+        assert not hasattr(loaded.transcoding, "selected_devices")
+
+        updated = update_app_settings(
+            db,
+            AppSettingsUpdate(transcoding={"cpu_budget_percent": 80}),
+            settings,
+        )
+        stored = db.get(AppSetting, "global")
+
+    assert updated.transcoding.cpu_budget_percent == 80
+    assert stored is not None
+    assert "selected_devices" not in stored.value["transcoding"]
+
+
 def test_get_app_settings_preserves_season_zero_bonus_patterns(tmp_path) -> None:
     session_factory = build_session_factory()
     settings = build_settings(tmp_path)
@@ -564,7 +592,6 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "cpu_budget_percent": 90,
             "cpu_parallel_jobs": "auto",
             "gpu_parallel_jobs_per_device": 1,
-            "selected_devices": "auto",
             "default_output_mode": "transcode_output",
             "on_error": "continue",
             "retry_count": 0,

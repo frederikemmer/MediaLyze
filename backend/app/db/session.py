@@ -314,6 +314,13 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "scan_summary": "ALTER TABLE scan_jobs ADD COLUMN scan_summary JSON NOT NULL DEFAULT '{}'",
     },
     "transcode_jobs": {
+        "profile_id": "ALTER TABLE transcode_jobs ADD COLUMN profile_id INTEGER REFERENCES transcode_profiles(id) ON DELETE SET NULL",
+        "profile_version": "ALTER TABLE transcode_jobs ADD COLUMN profile_version INTEGER",
+        "rule_id": "ALTER TABLE transcode_jobs ADD COLUMN rule_id INTEGER REFERENCES transcode_rules(id) ON DELETE SET NULL",
+        "rule_version": "ALTER TABLE transcode_jobs ADD COLUMN rule_version INTEGER",
+        "rule_snapshot": "ALTER TABLE transcode_jobs ADD COLUMN rule_snapshot JSON",
+        "automation_run_id": "ALTER TABLE transcode_jobs ADD COLUMN automation_run_id INTEGER REFERENCES transcode_automation_runs(id) ON DELETE SET NULL",
+        "automation_trigger": "ALTER TABLE transcode_jobs ADD COLUMN automation_trigger VARCHAR(32)",
         "output_mode": "ALTER TABLE transcode_jobs ADD COLUMN output_mode VARCHAR(32) NOT NULL DEFAULT 'same_directory'",
         "output_storage_root": "ALTER TABLE transcode_jobs ADD COLUMN output_storage_root VARCHAR(4096)",
         "retry_count": "ALTER TABLE transcode_jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
@@ -1594,6 +1601,7 @@ def init_db(engine: Engine | None = None) -> None:
     from backend.app.services.duplicates import backfill_filename_pattern_signatures
     from backend.app.services.app_settings import get_app_settings
     from backend.app.services.quality_profiles import migrate_legacy_library_quality_profiles
+    from backend.app.services.transcode_automation import ensure_builtin_transcode_profiles
 
     active_engine = engine or ENGINE
     Base.metadata.create_all(active_engine)
@@ -1603,6 +1611,7 @@ def init_db(engine: Engine | None = None) -> None:
         app_settings = get_app_settings(db)
         backfill_filename_pattern_signatures(db, app_settings.pattern_recognition.duplicate_matching)
         migrate_legacy_library_quality_profiles(db, app_settings.resolution_categories)
+        ensure_builtin_transcode_profiles(db)
         db.commit()
     with active_engine.begin() as connection:
         connection.execute(text("PRAGMA optimize;"))

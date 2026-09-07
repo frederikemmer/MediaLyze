@@ -11,7 +11,15 @@ from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
-from backend.app.models.entities import JobStatus, LibraryHistory, MediaFileHistory, ScanJob, TranscodeJob
+from backend.app.models.entities import (
+    JobStatus,
+    LibraryHistory,
+    MediaFileHistory,
+    ScanJob,
+    TranscodeAutomationRecord,
+    TranscodeAutomationRun,
+    TranscodeJob,
+)
 from backend.app.schemas.history import (
     HistoryStorageCategoriesRead,
     HistoryStorageCategoryRead,
@@ -197,17 +205,55 @@ def _transcode_history_records(db: Session) -> list[HistoryStorageRecord]:
         + _stored_length_expression(TranscodeJob.source_path_snapshot)
         + _stored_length_expression(TranscodeJob.output_path_snapshot)
         + _stored_length_expression(TranscodeJob.error)
+        + _stored_length_expression(TranscodeJob.rule_snapshot)
+        + _stored_length_expression(TranscodeJob.automation_trigger)
     )
     rows = db.execute(
         select(TranscodeJob.finished_at, estimated_bytes.label("estimated_bytes")).where(
             TranscodeJob.status.in_(TERMINAL_SCAN_JOB_STATUSES)
         )
     ).all()
-    return [
+    records = [
         HistoryStorageRecord(recorded_at=finished_at, estimated_bytes=int(estimated_bytes or 0))
         for finished_at, estimated_bytes in rows
         if finished_at is not None
     ]
+    run_rows = db.execute(
+        select(
+            TranscodeAutomationRun.finished_at,
+            (
+                _stored_length_expression(TranscodeAutomationRun.trigger_source)
+                + _stored_length_expression(TranscodeAutomationRun.rule_ids)
+                + _stored_length_expression(TranscodeAutomationRun.library_ids)
+                + _stored_length_expression(TranscodeAutomationRun.summary)
+                + _stored_length_expression(TranscodeAutomationRun.error)
+            ).label("estimated_bytes"),
+        ).where(TranscodeAutomationRun.status.in_(("completed", "failed", "canceled")))
+    ).all()
+    records.extend(
+        HistoryStorageRecord(recorded_at=finished_at, estimated_bytes=int(estimated_bytes or 0))
+        for finished_at, estimated_bytes in run_rows
+        if finished_at is not None
+    )
+    # Processing evidence is intentionally durable and is not pruned together
+    # with job history.  It therefore remains part of the logical estimate.
+    record_rows = db.execute(
+        select(
+            TranscodeAutomationRecord.updated_at,
+            (
+                _stored_length_expression(TranscodeAutomationRecord.identity_key)
+                + _stored_length_expression(TranscodeAutomationRecord.relative_path)
+                + _stored_length_expression(TranscodeAutomationRecord.source_path_snapshot)
+                + _stored_length_expression(TranscodeAutomationRecord.error)
+            ).label("estimated_bytes"),
+        )
+    ).all()
+    records.extend(
+        HistoryStorageRecord(recorded_at=recorded_at, estimated_bytes=int(estimated_bytes or 0))
+        for recorded_at, estimated_bytes in record_rows
+        if recorded_at is not None
+    )
+    return records
 
 
 def _database_file_bytes(database_path: Path) -> int:

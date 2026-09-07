@@ -1555,12 +1555,12 @@ export function CompatibilityProfilesPanel() {
               <textarea value={reason} rows={3} onChange={(event) => setReason(event.target.value)} />
             </label>
             <div className="compatibility-profile-card-actions">
-              <button type="button" className="compatibility-profile-action-button is-primary" onClick={() => void saveProfile()}>
+              <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveProfile()}>
                 <Save size={16} />
                 {profile.catalog_source === "official" ? t("compatibilityProfiles.saveCopy") : t("common.save")}
               </button>
-              <button type="button" className="secondary compatibility-profile-action-button" onClick={() => void proposeProfile()}><Github size={16} />{t("compatibilityProfiles.propose")}</button>
-              <button type="button" className="secondary compatibility-profile-action-button" onClick={() => {
+              <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => void proposeProfile()}><Github size={16} />{t("compatibilityProfiles.propose")}</button>
+              <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => {
                 setDraft(null);
                 setDraftOriginId(null);
               }}>{t("common.cancel")}</button>
@@ -1636,38 +1636,40 @@ export function CompatibilityProfilesPanel() {
       loading={loading}
       error={error}
       className="compatibility-profiles-async-panel"
-      collapseActions={createAction}
     >
       <div className="compatibility-profile-panel">
         <p className="compatibility-profile-development-note">
           {t("compatibilityProfiles.developmentNote")}
         </p>
-        <div
-          className="library-history-range-toggle"
-          role="tablist"
-          aria-label={t("compatibilityProfiles.title")}
-        >
-          <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
-          {(["hardware", "software", "compatibility"] as ProfileTab[]).map((key) => (
-            <button
-              type="button"
-              className={`library-history-range-button${tab === key ? " active" : ""}`}
-              data-toggle-key={key}
-              aria-pressed={tab === key}
-              key={key}
-              onClick={() => {
-                setTab(key);
-                setDraft(null);
-                setDraftOriginId(null);
-                setExpandedProfileId(null);
-                setCompatibilityDraft(null);
-              }}
-            >
-              <span className="library-history-range-button-content">
-                <span>{t(`compatibilityProfiles.tabs.${key}`)}</span>
-              </span>
-            </button>
-          ))}
+        <div className="settings-profile-toggle-row">
+          <div
+            className="library-history-range-toggle"
+            role="tablist"
+            aria-label={t("compatibilityProfiles.title")}
+          >
+            <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
+            {(["hardware", "software", "compatibility"] as ProfileTab[]).map((key) => (
+              <button
+                type="button"
+                className={`library-history-range-button${tab === key ? " active" : ""}`}
+                data-toggle-key={key}
+                aria-pressed={tab === key}
+                key={key}
+                onClick={() => {
+                  setTab(key);
+                  setDraft(null);
+                  setDraftOriginId(null);
+                  setExpandedProfileId(null);
+                  setCompatibilityDraft(null);
+                }}
+              >
+                <span className="library-history-range-button-content">
+                  <span>{t(`compatibilityProfiles.tabs.${key}`)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="settings-profile-toggle-actions">{createAction}</div>
         </div>
 
         {message ? <div className="alert">{message}</div> : null}
@@ -1761,9 +1763,9 @@ export function CompatibilityProfilesPanel() {
                       </div>
                       <p>{profileNames.get(compatibilityDraft.hardware_profile_id)} + {profileNames.get(compatibilityDraft.software_profile_id)}</p>
                       <div className="compatibility-profile-card-actions">
-                        <button type="button" className="compatibility-profile-action-button is-primary" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
-                        <button type="button" className="secondary compatibility-profile-action-button" onClick={() => void removeCompatibility(profile)}><Trash2 size={16} />{t("common.delete")}</button>
-                        <button type="button" className="secondary compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
+                        <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
+                        <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => void removeCompatibility(profile)}><Trash2 size={16} />{t("common.delete")}</button>
+                        <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
                       </div>
                     </div>
                   ) : null}
@@ -1782,8 +1784,8 @@ export function CompatibilityProfilesPanel() {
                 <label>{t("compatibilityProfiles.tabs.software")}<select value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>{software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                     </div>
                 <div className="compatibility-profile-card-actions">
-                  <button type="button" className="compatibility-profile-action-button is-primary" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
-                  <button type="button" className="secondary compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
+                  <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
+                  <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
                 </div>
                   </div>
                 </article>

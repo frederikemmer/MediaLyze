@@ -71,7 +71,6 @@ class TranscodingSettingsRead(BaseModel):
     cpu_budget_percent: int = Field(default=90, ge=1, le=100)
     cpu_parallel_jobs: Literal["auto"] | int = Field(default="auto")
     gpu_parallel_jobs_per_device: int = Field(default=1, ge=1, le=8)
-    selected_devices: Literal["auto"] | list[str] = Field(default="auto")
     default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
     on_error: Literal["continue", "stop_queue"] = "continue"
     retry_count: int = Field(default=0, ge=0, le=5)
@@ -84,7 +83,6 @@ class TranscodingSettingsUpdate(BaseModel):
     cpu_budget_percent: int | None = Field(default=None, ge=1, le=100)
     cpu_parallel_jobs: Literal["auto"] | int | None = Field(default=None, ge=1, le=64)
     gpu_parallel_jobs_per_device: int | None = Field(default=None, ge=1, le=8)
-    selected_devices: Literal["auto"] | list[str] | None = None
     default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     on_error: Literal["continue", "stop_queue"] | None = None
     retry_count: int | None = Field(default=None, ge=0, le=5)

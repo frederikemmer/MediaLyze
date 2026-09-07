@@ -11,6 +11,7 @@ import {
   type TranscodeCapabilities,
   type TranscodeJob,
   type TranscodePlan,
+  type TranscodeProfilePlan,
   type TranscodeValidation,
 } from "../lib/api";
 import { TranscodingPanel } from "./TranscodingPanel";
@@ -142,6 +143,42 @@ const validation: TranscodeValidation = {
   detected_hardware_encoders: ["h264_nvenc"],
 };
 
+const savedProfile: TranscodeProfilePlan = {
+  profile: {
+    id: 9,
+    name: "Archive profile",
+    description: "A saved profile for archive files.",
+    version: 2,
+    is_builtin: false,
+    builtin_key: null,
+    definition: {
+      version: 1,
+      container: "mkv",
+      video_rules: [],
+      audio_rules: [],
+      subtitle_rules: [],
+      external_subtitle_rules: [],
+      default_video_action: "copy",
+      default_audio_action: "copy",
+      default_subtitle_action: "copy",
+      default_external_subtitle_action: "remove",
+      dynamic_range: "preserve",
+      chapters: "keep",
+      metadata: "keep",
+      cover: "keep",
+      attachments: "keep",
+      filename_template: "[{resolution}]",
+      filename_template_override: true,
+      include_subtitle_languages: false,
+      execution_mode: "inherit",
+    },
+    used_by_rule_count: 0,
+    created_at: "2026-09-01T09:00:00Z",
+    updated_at: "2026-09-01T09:00:00Z",
+  },
+  plan: { ...compatibilityPlan, profile: "expert", container: "mkv", filename_template: "[{resolution}]", filename_template_override: true },
+};
+
 describe("TranscodingPanel", () => {
   beforeEach(() => {
     vi.spyOn(api, "fileTranscode").mockResolvedValue(payload);
@@ -222,5 +259,19 @@ describe("TranscodingPanel", () => {
     expect(templateInput).not.toBeDisabled();
     fireEvent.change(templateInput, { target: { value: "[{codec}] [{subtitleLanguages}]" } });
     expect(screen.getByText("Movie [H264] [de].mp4")).toBeInTheDocument();
+  });
+
+  it("applies a saved profile and switches back to expert editing", async () => {
+    vi.mocked(api.fileTranscode).mockResolvedValue({ ...payload, saved_profiles: [savedProfile] });
+    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
+    await screen.findAllByText("Movie.mkv");
+
+    const profileSelect = screen.getByRole("combobox", { name: "Profile" });
+    fireEvent.change(profileSelect, { target: { value: "saved:9" } });
+    expect(profileSelect).toHaveValue("saved:9");
+    expect(screen.getByRole("combobox", { name: "Target container" })).toHaveValue("mkv");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Target container" }), { target: { value: "mp4" } });
+    expect(profileSelect).toHaveValue("expert");
   });
 });

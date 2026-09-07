@@ -244,9 +244,6 @@ def _deserialize_transcoding_settings(payload: Any) -> TranscodingSettingsRead:
             raw_cpu_jobs = int(raw_cpu_jobs)
         except (TypeError, ValueError):
             raw_cpu_jobs = defaults.cpu_parallel_jobs
-    raw_devices = candidate.get("selected_devices", defaults.selected_devices)
-    if raw_devices != "auto":
-        raw_devices = [str(item).strip() for item in raw_devices] if isinstance(raw_devices, list) else []
     return TranscodingSettingsRead(
         execution_mode=candidate.get("execution_mode", defaults.execution_mode),
         cpu_budget_percent=int(candidate.get("cpu_budget_percent", defaults.cpu_budget_percent)),
@@ -254,7 +251,6 @@ def _deserialize_transcoding_settings(payload: Any) -> TranscodingSettingsRead:
         gpu_parallel_jobs_per_device=int(
             candidate.get("gpu_parallel_jobs_per_device", defaults.gpu_parallel_jobs_per_device)
         ),
-        selected_devices=raw_devices,
         default_output_mode=candidate.get("default_output_mode", defaults.default_output_mode),
         on_error=candidate.get("on_error", defaults.on_error),
         retry_count=int(candidate.get("retry_count", defaults.retry_count)),

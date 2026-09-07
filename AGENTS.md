@@ -585,6 +585,15 @@ Frontend design decision history:
 * Migration: when a variant is rejected, audit all usages, propose the migration scope, then remove obsolete selectors and related CSS after approval.
 * Status: active.
 
+### 2026-09-07 — Keep transcoding guidance on the active tab
+
+* Decision: the Transcoding runtime workspace uses one context-sensitive tooltip beside the compact tabs; the Accelerators tab owns the capability-matrix metadata, while the matrix itself has no redundant inner heading.
+* Rationale: keep related guidance discoverable without repeating labels or adding a second visual header inside the shared profile workspace.
+* Canonical references: `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, `frontend/src/components/TranscodingSettingsPanel.tsx`, and the `Compact transcoding automation tabs` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors: `transcode-capability-section-header`, `transcode-capability-section-heading`, `transcode-capability-tested-at`, `transcode-matrix-meta-trigger`, and `transcode-matrix-meta-tooltip`.
+* Migration: remove those selectors and update the affected matrix catalog fixture; retain `.transcode-matrix-meta` only for the Accelerator tooltip content.
+* Status: active.
+
 ## 8.3 Internationalization
 
 Current translation state:

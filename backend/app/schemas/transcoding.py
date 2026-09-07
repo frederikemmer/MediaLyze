@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TranscodeStreamAction(str, Enum):
@@ -78,6 +78,342 @@ class TranscodePlan(BaseModel):
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     execution_mode: Literal["hardware_required", "cpu_only"] | None = None
     replacement_confirmed: bool = False
+
+
+class TranscodeProfileStreamRule(BaseModel):
+    """An ordered, source-independent stream rule stored in a profile.
+
+    A profile deliberately never stores a concrete stream index.  The index is
+    resolved only when a profile is materialized for one particular file.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    match_codecs: list[str] = Field(default_factory=list, max_length=32)
+    match_languages: list[str] = Field(default_factory=list, max_length=32)
+    match_default: bool | None = None
+    action: Literal["copy", "convert", "remove"] = "copy"
+    codec: str | None = Field(default=None, max_length=64)
+    encoder: str | None = Field(default=None, max_length=128)
+    bitrate: int | None = Field(default=None, ge=1)
+    crf: float | None = Field(default=None, ge=0, le=255)
+    cq: float | None = Field(default=None, ge=0, le=255)
+    width: int | None = Field(default=None, ge=16, le=16384)
+    height: int | None = Field(default=None, ge=16, le=16384)
+    frame_rate: float | None = Field(default=None, gt=0, le=480)
+    pixel_format: str | None = Field(default=None, max_length=64)
+    profile: str | None = Field(default=None, max_length=128)
+    level: str | None = Field(default=None, max_length=64)
+    preset: str | None = Field(default=None, max_length=64)
+    gop_size: int | None = Field(default=None, ge=1, le=10000)
+    language: str | None = Field(default=None, max_length=32)
+    title: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_rule_shape(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        match = payload.pop("match", None)
+        if isinstance(match, dict):
+            aliases = {
+                "codecs": "match_codecs",
+                "codec": "match_codecs",
+                "languages": "match_languages",
+                "language": "match_languages",
+                "default": "match_default",
+                "default_flag": "match_default",
+            }
+            for source, target in aliases.items():
+                if target not in payload and source in match:
+                    candidate = match[source]
+                    if target in {"match_codecs", "match_languages"} and isinstance(candidate, str):
+                        candidate = [candidate]
+                    payload[target] = candidate
+        if "target_codec" in payload and "codec" not in payload:
+            payload["codec"] = payload.pop("target_codec")
+        action = str(payload.get("action", "copy")).lower()
+        payload["action"] = {"encode": "convert", "drop": "remove", "keep": "copy"}.get(action, action)
+        return payload
+
+
+class TranscodeProfileDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    container: Literal["source", "mkv", "mp4", "webm"] = "source"
+    video_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
+    audio_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
+    subtitle_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
+    external_subtitle_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
+    default_video_action: Literal["copy", "convert", "remove"] = "copy"
+    default_audio_action: Literal["copy", "convert", "remove"] = "copy"
+    default_subtitle_action: Literal["copy", "convert", "remove"] = "copy"
+    default_external_subtitle_action: Literal["copy", "convert", "remove"] = "remove"
+    dynamic_range: Literal["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] = "preserve"
+    chapters: Literal["keep", "drop"] = "keep"
+    metadata: Literal["keep", "drop"] = "keep"
+    cover: Literal["keep", "drop"] = "keep"
+    attachments: Literal["keep", "drop"] = "keep"
+    filename_template: str = Field(
+        default="[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
+        min_length=1,
+        max_length=512,
+    )
+    filename_template_override: bool = False
+    include_subtitle_languages: bool = False
+    execution_mode: Literal["inherit", "hardware_required", "cpu_only"] = "inherit"
+
+
+class TranscodeProfileCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=2000)
+    definition: TranscodeProfileDefinition | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_flat_definition_fields(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or "definition" in value:
+            return value
+        payload = dict(value)
+        definition_keys = set(TranscodeProfileDefinition.model_fields)
+        definition = {key: payload.pop(key) for key in list(payload) if key in definition_keys}
+        if definition:
+            payload["definition"] = definition
+        return payload
+
+
+class TranscodeProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+    definition: TranscodeProfileDefinition | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_flat_definition_fields(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or "definition" in value:
+            return value
+        payload = dict(value)
+        definition_keys = set(TranscodeProfileDefinition.model_fields)
+        definition = {key: payload.pop(key) for key in list(payload) if key in definition_keys}
+        if definition:
+            payload["definition"] = definition
+        return payload
+
+
+class TranscodeProfileDuplicate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class TranscodeProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str
+    version: int
+    is_builtin: bool
+    builtin_key: str | None = None
+    definition: TranscodeProfileDefinition
+    used_by_rule_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class TranscodeProfilePlanRead(BaseModel):
+    profile: TranscodeProfileRead
+    plan: TranscodePlan
+
+
+class TranscodeCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["condition"] = "condition"
+    field: str = Field(min_length=1, max_length=128)
+    operator: str = Field(min_length=1, max_length=32)
+    value: Any = None
+
+
+class TranscodeConditionGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["group"] = "group"
+    operator: Literal["and", "or"] = "and"
+    children: list[Annotated[Union[TranscodeCondition, "TranscodeConditionGroup"], Field(discriminator="type")]] = Field(
+        min_length=1,
+        max_length=128,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_group_shape(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if "operator" not in payload and "logic" in payload:
+            payload["operator"] = payload.pop("logic")
+        if "children" not in payload and "conditions" in payload:
+            payload["children"] = payload.pop("conditions")
+        return payload
+
+
+TranscodeConditionGroup.model_rebuild()
+TranscodeConditionNode = Annotated[
+    Union[TranscodeCondition, TranscodeConditionGroup],
+    Field(discriminator="type"),
+]
+
+
+class TranscodeRuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    enabled: bool = False
+    priority: int = Field(default=0, ge=0)
+    library_ids: list[int] = Field(min_length=1, max_length=256)
+    conditions: TranscodeConditionGroup | None = None
+    profile_id: int = Field(ge=1)
+    output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
+    output_subfolder: str = Field(default="", max_length=512)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_condition_aliases(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if "conditions" not in payload and "condition" in payload:
+            payload["conditions"] = payload.pop("condition")
+        return payload
+
+
+class TranscodeRuleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    enabled: bool | None = None
+    priority: int | None = Field(default=None, ge=0)
+    library_ids: list[int] | None = Field(default=None, min_length=1, max_length=256)
+    conditions: TranscodeConditionGroup | None = None
+    profile_id: int | None = Field(default=None, ge=1)
+    output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
+    output_subfolder: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_condition_aliases(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if "conditions" not in payload and "condition" in payload:
+            payload["conditions"] = payload.pop("condition")
+        return payload
+
+
+class TranscodeRuleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    enabled: bool
+    priority: int
+    version: int
+    library_ids: list[int]
+    conditions: TranscodeConditionGroup | None = None
+    profile_id: int
+    profile_name: str
+    profile_version: int
+    output_mode: str
+    output_subfolder: str
+    replacement_approved: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class TranscodeRuleReorder(BaseModel):
+    rule_ids: list[int] = Field(min_length=1, max_length=4096)
+
+
+class TranscodeReplacementApproval(BaseModel):
+    confirm: bool = True
+
+
+class TranscodeAutomationScope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_ids: list[int] = Field(default_factory=list, max_length=4096)
+    library_ids: list[int] = Field(default_factory=list, max_length=256)
+    source_file_ids: list[int] = Field(default_factory=list, max_length=100000)
+    retry_failed: bool = False
+    limit: int = Field(default=5000, ge=1, le=100000)
+
+
+class TranscodeAutomationDecisionRead(BaseModel):
+    file_id: int
+    library_id: int
+    relative_path: str
+    filename: str
+    status: Literal["matched", "queued", "blocked", "skipped", "unmatched"]
+    reason: str | None = None
+    rule_id: int | None = None
+    rule_name: str | None = None
+    rule_version: int | None = None
+    profile_id: int | None = None
+    profile_name: str | None = None
+    profile_version: int | None = None
+    output_path: str | None = None
+    output_relative_path: str | None = None
+    plan: TranscodePlan | None = None
+
+
+class TranscodeAutomationPreviewRead(BaseModel):
+    generated_at: datetime
+    total_files: int = 0
+    matched: int = 0
+    queued: int = 0
+    blocked: int = 0
+    skipped: int = 0
+    unmatched: int = 0
+    items: list[TranscodeAutomationDecisionRead] = Field(default_factory=list)
+
+
+class TranscodeAutomationRunRead(BaseModel):
+    id: int
+    status: Literal["queued", "running", "completed", "failed", "canceled"]
+    trigger: str
+    rule_ids: list[int] = Field(default_factory=list)
+    library_ids: list[int] = Field(default_factory=list)
+    source_file_ids: list[int] = Field(default_factory=list)
+    retry_failed: bool = False
+    page_size: int = 50
+    files_total: int = 0
+    matched: int = 0
+    queued: int = 0
+    blocked: int = 0
+    skipped: int = 0
+    unmatched: int = 0
+    completed: int = 0
+    failed: int = 0
+    canceled: int = 0
+    current_page: int = 0
+    summary: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    cancellation_requested: bool = False
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class TranscodeAutomationCancelRead(BaseModel):
+    run_id: int
+    status: str
+    cancellation_requested: bool = True
 
 
 class TranscodeEncoderCapability(BaseModel):
@@ -275,6 +611,13 @@ class TranscodeJobRead(BaseModel):
     result_file_id: int | None = None
     status: str
     profile: str
+    profile_id: int | None = None
+    profile_version: int | None = None
+    rule_id: int | None = None
+    rule_version: int | None = None
+    rule_snapshot: dict[str, Any] | None = None
+    automation_run_id: int | None = None
+    automation_trigger: str | None = None
     plan_version: int
     plan: TranscodePlan
     ffmpeg_arguments: list[str]
@@ -308,6 +651,7 @@ class TranscodeJobRead(BaseModel):
 class FileTranscodeRead(BaseModel):
     original: TranscodeFileSummary
     profiles: dict[str, TranscodePlan]
+    saved_profiles: list[TranscodeProfilePlanRead] = Field(default_factory=list)
     attachments: list[TranscodeAttachmentSummary] = Field(default_factory=list)
     variants: list[TranscodeVariantRead] = Field(default_factory=list)
     jobs: list[TranscodeJobRead] = Field(default_factory=list)

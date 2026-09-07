@@ -18,7 +18,6 @@ const transcodingSettings: TranscodingSettings = {
   cpu_budget_percent: 90,
   cpu_parallel_jobs: "auto",
   gpu_parallel_jobs_per_device: 1,
-  selected_devices: "auto",
   default_output_mode: "transcode_output",
   on_error: "continue",
   retry_count: 0,
@@ -172,6 +171,9 @@ describe("TranscodingSettingsPanel", () => {
     vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
     vi.spyOn(api, "transcodeCapabilityMatrix").mockResolvedValue(notRunMatrix);
     vi.spyOn(api, "testTranscodeCapabilityMatrix").mockResolvedValue(completedMatrix);
+    vi.spyOn(api, "transcodeProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
     vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
   });
 
@@ -180,49 +182,68 @@ describe("TranscodingSettingsPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("selects one physical device while grouping its backend paths", async () => {
+  it("does not expose a global hardware-device selector", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    const select = await screen.findByRole("combobox", { name: "Hardware device" });
-    expect(select).toHaveValue("auto");
+    expect(await screen.findByRole("heading", { name: "Transcoding" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Test Hardware" });
+    expect(screen.queryByRole("combobox", { name: "Hardware device" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Hardware device")).not.toBeInTheDocument();
 
-    const section = select.closest("section") as HTMLElement;
-    expect(within(section).queryByRole("radio")).not.toBeInTheDocument();
-    expect(within(section).queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Intel GPU (renderD128) · 8086:56A6" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Quick Sync/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /VAAPI/ })).not.toBeInTheDocument();
-
-    fireEvent.change(select, { target: { value: "render:/dev/dri/renderD128" } });
-    expect(select).toHaveValue("render:/dev/dri/renderD128");
-    fireEvent.click(screen.getByRole("button", { name: "Save transcoding settings" }));
-
-    await waitFor(() => expect(api.updateAppSettings).toHaveBeenCalledWith(expect.objectContaining({
-      transcoding: expect.objectContaining({
-        selected_devices: ["qsv-renderD128", "vaapi-renderD128"],
-      }),
-    })));
+    const executionMode = screen.getByRole("combobox", { name: "Execution mode" });
+    fireEvent.change(executionMode, { target: { value: "cpu_only" } });
+    await waitFor(() => expect(api.updateAppSettings).toHaveBeenCalled());
+    const payload = vi.mocked(api.updateAppSettings).mock.calls[0]?.[0];
+    expect(payload?.transcoding).not.toHaveProperty("selected_devices");
   });
 
   it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Test codec matrix" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Test Hardware" }));
 
     await waitFor(() => expect(api.testTranscodeCapabilityMatrix).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole("button", { name: "Accelerators" }));
     const matrices = await screen.findAllByRole("table");
     const matrix = matrices[0];
     expect(within(matrix).getByLabelText(/H\.265 \/ HEVC → AV1: HW · 3×/)).toBeInTheDocument();
     expect(within(matrix).getByLabelText(/AV1 → H\.265 \/ HEVC: Software/)).toBeInTheDocument();
     expect(within(matrix).getByLabelText(/AV1 → AV1: —/)).toBeInTheDocument();
-    expect(screen.getAllByText("Hardware · simultaneous sessions")).toHaveLength(2);
+    const corner = matrix.querySelector(".transcode-matrix-corner") as HTMLElement;
+    expect(corner).not.toBeNull();
+    expect(corner.querySelector(".transcode-matrix-axis-label-horizontal")).toHaveTextContent("Encode");
+    expect(corner.querySelector(".transcode-matrix-axis-label-vertical")).toHaveTextContent("Decode");
+    expect(corner).not.toHaveTextContent("↓");
+    expect(corner).not.toHaveTextContent("→");
+    expect(document.querySelectorAll(".transcode-matrix-legend")).toHaveLength(0);
+    expect(within(matrix).queryByText("Decode vertically · encode horizontally")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Transcoding capability matrix" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Transcoding capability matrix" })).not.toBeInTheDocument();
+    const metadataTrigger = screen.getByRole("button", { name: "Explain accelerators" });
+    fireEvent.click(metadataTrigger);
+    const metadataTooltip = await screen.findByRole("tooltip");
+    expect(metadataTooltip).toHaveTextContent("FFmpeg: ffmpeg version test");
+    expect(metadataTooltip).toHaveTextContent("Hardware counts use a representative codec pair");
     expect(screen.getByText("Intel CPU iGPU · Quick Sync")).toBeInTheDocument();
     expect(screen.getByText("qsv + vaapi · renderD128")).toBeInTheDocument();
+    expect(screen.getByText("NVIDIA GeForce RTX 3080").closest(".transcode-capability-device-copy")).not.toBeNull();
     expect(matrices).toHaveLength(2);
+    const matrixSection = document.querySelector("section.transcode-capability-section");
+    expect(matrixSection).not.toBeNull();
+    expect(matrixSection?.closest(".transcode-automation-content")).not.toBeNull();
+    expect(matrixSection?.querySelector("details.transcode-capability-matrix")).toBeNull();
+    expect(screen.getByRole("searchbox", { name: "Search hardware devices" })).toBeInTheDocument();
 
     fireEvent.click(within(matrix).getByLabelText(/H\.265 \/ HEVC → H\.265 \/ HEVC: HW · 4\+×/));
     const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent("Parallel benchmark");
+    expect(tooltip).not.toHaveTextContent("Parallel benchmark");
+    expect(tooltip).not.toHaveTextContent("Runs per level: 3");
+    expect(tooltip).not.toHaveTextContent("Pass: median per-session runtime");
+    expect(tooltip).not.toHaveTextContent("Each run reports the median elapsed time");
+    expect(tooltip).not.toHaveTextContent("Result");
+    expect(tooltip).toHaveTextContent("Decoder: cuda:hevc");
+    expect(tooltip).toHaveTextContent("Encoder: hevc_nvenc");
+    expect(tooltip.querySelector(".transcode-matrix-tooltip-path-arrow")).toHaveTextContent("→");
     expect(tooltip).toHaveTextContent("Run 1: 0.250 s");
     expect(tooltip).toHaveTextContent("4 sessions");
     expect(tooltip).toHaveTextContent("+12.0 %");
