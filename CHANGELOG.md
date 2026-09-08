@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- expose the direct transcode federation protocol and LAN discovery ports in the local development Compose file and document the required Docker mappings
 - refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
 - remove the redundant active-job count row and transient refresh indicator from the Transcoding table while keeping the live polling and header counters
 - refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart
