@@ -547,8 +547,19 @@ def federation_settings_read(db: Session, settings: Settings) -> TranscodeFedera
 
 
 def _member_read(member: TranscodeFederationMember) -> TranscodeFederationMemberRead:
-    capabilities = member.capabilities if isinstance(member.capabilities, dict) else None
-    matrix = member.capability_matrix if isinstance(member.capability_matrix, dict) else None
+    # Discovery can persist a peer before its first authenticated heartbeat.
+    # Such a row has empty JSON objects, which are not complete capability
+    # payloads and must remain optional in the response schema.
+    capabilities = (
+        member.capabilities
+        if isinstance(member.capabilities, dict) and member.capabilities
+        else None
+    )
+    matrix = (
+        member.capability_matrix
+        if isinstance(member.capability_matrix, dict) and member.capability_matrix
+        else None
+    )
     return TranscodeFederationMemberRead.model_validate(
         {
             "id": member.id,

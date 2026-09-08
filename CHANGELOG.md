@@ -77,6 +77,7 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- prevent federation detail requests from failing when a discovered peer has not provided capabilities yet
 - fix startup migration handling for existing transcode databases when federation fields are introduced
 - require a hardware-only decode probe before labeling a matrix direction as a complete hardware path, and expose MPEG-2/MJPEG software fallback encoders instead of reporting them as unavailable
 - suppress the short-lived Windows console windows created by FFmpeg, FFprobe, and hardware capability probes in the desktop app

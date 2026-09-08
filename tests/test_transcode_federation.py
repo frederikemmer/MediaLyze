@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import (
+    TranscodeFederationMember,
     TranscodeRemoteAttempt,
     TranscodeTransfer,
 )
@@ -98,6 +99,31 @@ def _attempt(tmp_path: Path) -> TranscodeRemoteAttempt:
         lease_expires_at=now + timedelta(minutes=2),
         last_origin_contact_at=now,
     )
+
+
+def test_member_read_handles_discovered_peer_without_capabilities() -> None:
+    member = TranscodeFederationMember(
+        id=1,
+        installation_id="discovered-peer",
+        federation_id="federation-1",
+        display_name="Discovered peer",
+        endpoint_urls=[],
+        protocol_version=1,
+        status="discovered",
+        connection_status="discovered",
+        reachable=False,
+        accept_jobs=False,
+        resources={},
+        capabilities={},
+        capability_matrix={},
+        active_jobs=0,
+        network_mbps=100.0,
+    )
+
+    result = federation._member_read(member)
+
+    assert result.capabilities is None
+    assert result.capability_matrix is None
 
 
 def test_secure_envelope_rejects_tampering_stale_messages_and_replays() -> None:
