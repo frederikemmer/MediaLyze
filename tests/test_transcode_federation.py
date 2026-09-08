@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import (
+    AppSetting,
     TranscodeFederationMember,
     TranscodeRemoteAttempt,
     TranscodeTransfer,
@@ -124,6 +125,83 @@ def test_member_read_handles_discovered_peer_without_capabilities() -> None:
 
     assert result.capabilities is None
     assert result.capability_matrix is None
+
+
+def test_pairing_re_admits_a_previously_excluded_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path).model_copy(update={"federation_enabled": True})
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        target_id = "target-peer"
+        state["enabled"] = True
+        state["excluded_installation_ids"] = [target_id]
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.commit()
+
+        def fake_local_descriptor(_db: Session, _settings: Settings) -> dict:
+            return {
+                "protocol_version": federation.PROTOCOL_VERSION,
+                "installation_id": state["installation_id"],
+                "federation_id": state["federation_id"],
+                "display_name": "Local",
+                "endpoint_urls": [],
+                "accept_jobs": True,
+                "resources": {},
+                "capabilities": {},
+                "capability_matrix": {},
+                "active_jobs": 0,
+                "network_mbps": 100.0,
+            }
+
+        def fake_http_json(
+            _settings: Settings,
+            _endpoint: str,
+            route: str,
+            _payload: dict,
+        ) -> dict:
+            if route == "hello":
+                return {
+                    "protocol_version": federation.PROTOCOL_VERSION,
+                    "installation_id": target_id,
+                    "federation_id": state["federation_id"],
+                    "display_name": "Target",
+                    "endpoint_urls": ["http://target-peer:8091"],
+                }
+            assert route == "pair"
+            return {
+                "server_nonce": "server-nonce",
+                "target": {
+                    "protocol_version": federation.PROTOCOL_VERSION,
+                    "installation_id": target_id,
+                    "federation_id": state["federation_id"],
+                    "display_name": "Target",
+                    "endpoint_urls": ["http://target-peer:8091"],
+                    "accept_jobs": True,
+                    "resources": {},
+                    "capabilities": {},
+                    "capability_matrix": {},
+                    "active_jobs": 0,
+                    "network_mbps": 100.0,
+                },
+                "known_members": [],
+            }
+
+        monkeypatch.setattr(federation, "local_descriptor", fake_local_descriptor)
+        monkeypatch.setattr(federation, "_http_json", fake_http_json)
+
+        member = federation.pair_with_peer(
+            db,
+            settings,
+            "http://target-peer:8091",
+            "pairing-code",
+        )
+
+        refreshed_state = federation.get_federation_state(db, settings)
+        assert target_id not in refreshed_state["excluded_installation_ids"]
+        assert member.status == "active"
 
 
 def test_secure_envelope_rejects_tampering_stale_messages_and_replays() -> None:

@@ -804,6 +804,15 @@ def pair_with_peer(
         state["installation_id"],
         target_id,
     )
+    # Pairing is also the explicit re-admission path for a member that was
+    # previously excluded.  Clear the local exclusion before persisting the
+    # freshly authenticated member so the next heartbeat is allowed again.
+    if target_id in set(state.get("excluded_installation_ids", [])):
+        state["excluded_installation_ids"] = [
+            item
+            for item in state.get("excluded_installation_ids", [])
+            if item != target_id
+        ]
     setting = db.get(AppSetting, FEDERATION_STATE_KEY)
     if setting is not None:
         setting.value = state
