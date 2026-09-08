@@ -22,7 +22,13 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- resolve file-detail transcodes from a target codec to a compatible encoder on the selected local or federation worker, so worker-specific encoder names are no longer required in the UI while hardware-required mode remains fail-closed
 - expose the direct transcode federation protocol and LAN discovery ports in the local development Compose file and document the required Docker mappings
+- move transcode federation guidance into a heading tooltip to keep the settings panel compact
+- replace federation pairing-code text actions with borderless icon buttons and a restore-defaults history icon
+- show detected hostname and IP addresses for direct transcode federation pairing, including explicitly advertised endpoints
+- list tested federation-member hardware matrices in Accelerators with a member pill, instead of duplicating them inside each member accordion
+- show an explicit empty state for the untested transcoding capability matrix and ask users to run the hardware test before displaying capability values
 - refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
 - remove the redundant active-job count row and transient refresh indicator from the Transcoding table while keeping the live polling and header counters
 - refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart

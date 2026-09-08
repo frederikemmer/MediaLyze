@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, FlaskConical, Search, X } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
+import { PanelEmptyState } from "./PanelEmptyState";
 import { TranscodeProfilesRulesPanel } from "./TranscodeProfilesRulesPanel";
 import { TranscodeFederationPanel } from "./TranscodeFederationPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -12,6 +13,7 @@ import {
   type TranscodeCapabilities,
   type TranscodeCapabilityMatrix,
   type TranscodeDeviceMatrix,
+  type TranscodeFederation,
   type TranscodeMatrixBenchmark,
   type TranscodeMatrixBenchmarkLevel,
   type TranscodeMatrixCell,
@@ -217,6 +219,7 @@ export function TranscodingSettingsPanel({
   const [draft, setDraft] = useState<TranscodingSettings>(() => cloneTranscodingSettings(currentSettings));
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
   const [matrix, setMatrix] = useState<TranscodeCapabilityMatrix | null>(null);
+  const [federation, setFederation] = useState<TranscodeFederation | null>(null);
   const [loadingCapabilities, setLoadingCapabilities] = useState(true);
   const [testingMatrix, setTestingMatrix] = useState(false);
   const [matrixSearch, setMatrixSearch] = useState("");
@@ -301,14 +304,26 @@ export function TranscodingSettingsPanel({
 
   const matrixFfmpegVersion = matrix?.ffmpeg_version ?? capabilities?.version ?? capabilities?.ffmpeg_path ?? "—";
   const matrixDevices = matrix?.matrices ?? [];
+  const matrixEntries = [
+    ...matrixDevices.map((deviceMatrix) => ({ deviceMatrix, memberName: null as string | null, memberInstallationId: null as string | null })),
+    ...(federation?.members ?? []).flatMap((member) => (
+      member.capability_matrix?.status === "completed"
+        ? member.capability_matrix.matrices.map((deviceMatrix) => ({
+            deviceMatrix,
+            memberName: member.display_name,
+            memberInstallationId: member.installation_id,
+          }))
+        : []
+    )),
+  ];
   const normalizedMatrixSearch = matrixSearch.trim().toLocaleLowerCase();
-  const visibleMatrixDevices = normalizedMatrixSearch
-    ? matrixDevices.filter((deviceMatrix) => (
-        `${deviceMatrix.device_name} ${deviceMatrix.backend} ${deviceMatrix.device_id}`
+  const visibleMatrixEntries = normalizedMatrixSearch
+    ? matrixEntries.filter(({ deviceMatrix, memberName }) => (
+        `${deviceMatrix.device_name} ${deviceMatrix.backend} ${deviceMatrix.device_id} ${memberName ?? ""}`
           .toLocaleLowerCase()
           .includes(normalizedMatrixSearch)
       ))
-    : matrixDevices;
+    : matrixEntries;
 
   const acceleratorsTooltip = (
     <div className="transcode-matrix-meta">
@@ -322,9 +337,9 @@ export function TranscodingSettingsPanel({
       <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
         {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
         {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
-        {!testingMatrix && matrix?.status === "not_run" ? <div className="notice">{t("transcoding.matrixNotRun")}</div> : null}
-        {!testingMatrix && matrix?.status === "completed" && !matrixDevices.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
-        {matrixDevices.length ? (
+        {!testingMatrix && matrix?.status === "not_run" && !matrixEntries.length ? <PanelEmptyState message={t("transcoding.matrixNotRun")} /> : null}
+        {!testingMatrix && matrix?.status === "completed" && !matrixEntries.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
+        {matrixEntries.length ? (
           <div className="compatibility-profile-list transcode-capability-list">
             <div className="compatibility-profile-search transcode-capability-search">
               <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
@@ -346,10 +361,16 @@ export function TranscodingSettingsPanel({
                 </button>
               ) : null}
             </div>
-            {visibleMatrixDevices.length ? visibleMatrixDevices.map((deviceMatrix, index) => (
-              <details className="compatibility-profile-list-item transcode-device-matrix" key={deviceMatrix.device_id} open={index === 0}>
+            {visibleMatrixEntries.length ? visibleMatrixEntries.map(({ deviceMatrix, memberName, memberInstallationId }, index) => (
+              <details className="compatibility-profile-list-item transcode-device-matrix" key={`${memberInstallationId ?? "local"}:${deviceMatrix.device_id}`} open={index === 0}>
                 <summary className="compatibility-profile-list-trigger">
-                  <span className="transcode-automation-list-copy transcode-capability-device-copy"><strong>{deviceMatrix.device_name}</strong><small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small></span>
+                  <span className="transcode-automation-list-copy transcode-capability-device-copy">
+                    <span className="transcode-capability-device-name">
+                      <strong>{deviceMatrix.device_name}</strong>
+                      {memberName ? <span className="badge transcode-federation-member-pill">{memberName}</span> : null}
+                    </span>
+                    <small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small>
+                  </span>
                   <ChevronDown aria-hidden="true" />
                 </summary>
                 <div className="transcode-matrix-scroll" tabIndex={0}>
@@ -587,7 +608,7 @@ export function TranscodingSettingsPanel({
           </div>
         ) : null}
 
-        <TranscodeFederationPanel />
+        <TranscodeFederationPanel onData={setFederation} />
         <TranscodeProfilesRulesPanel capabilityMatrix={capabilityMatrix} acceleratorsTooltip={acceleratorsTooltip} />
       </div>
     </AsyncPanel>

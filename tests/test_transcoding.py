@@ -345,6 +345,29 @@ def test_validation_keeps_crf_and_hardware_cq_distinct(monkeypatch, tmp_path) ->
     assert "-crf:v:0" not in validation.ffmpeg_arguments
 
 
+def test_validation_resolves_codec_only_plan_to_available_hardware_encoder(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    capabilities = _capabilities()
+    hardware = next(item for item in capabilities.encoders if item.name == "h264_nvenc")
+    hardware.available = True
+    hardware.test_error = None
+    hardware.device_ids = ["cuda0"]
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: capabilities)
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        plan = _compatibility_plan()
+        plan.target_mode = "automatic"
+        plan.execution_mode = "hardware_required"
+        plan.video_streams[0].encoder = None
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.normalized_plan.video_streams[0].codec == "h264"
+    assert validation.normalized_plan.video_streams[0].encoder == "h264_nvenc"
+    assert "-c:v:0" in validation.ffmpeg_arguments
+    assert validation.ffmpeg_arguments[validation.ffmpeg_arguments.index("-c:v:0") + 1] == "h264_nvenc"
+
+
 def test_validation_normalizes_bcp47_language_tags(monkeypatch, tmp_path) -> None:
     factory = _session_factory()
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())

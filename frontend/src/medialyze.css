@@ -6731,14 +6731,49 @@ html[data-theme="dark"] .toggle-switch-track {
 }
 
 .transcode-federation-heading h3 svg { width: 17px; height: 17px; color: var(--accent-2); }
-.transcode-federation-heading p { margin: 4px 0 0; }
 .transcode-federation-panel .badge.is-success { color: #1b7f56; background: color-mix(in srgb, #1b998b 14%, transparent); }
 .transcode-federation-panel .badge.is-muted { color: var(--muted); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.transcode-federation-code-action.tooltip-trigger.secondary.icon-only-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: none;
+  line-height: 0;
+}
+.transcode-federation-code-action.tooltip-trigger.secondary.icon-only-button:hover:not(:disabled),
+.transcode-federation-code-action.tooltip-trigger.secondary.icon-only-button:focus-visible:not(:disabled) {
+  transform: none;
+  background: rgba(31, 28, 22, 0.06);
+  color: var(--ink);
+  box-shadow: none;
+}
+.transcode-federation-code-action.tooltip-trigger.secondary.icon-only-button:focus-visible {
+  outline: 2px solid rgba(31, 28, 22, 0.22);
+  outline-offset: 2px;
+}
+.transcode-federation-code-action .nav-icon { width: 16px; height: 16px; }
 .transcode-federation-toggle { min-height: 34px; }
 .transcode-federation-fields { gap: 10px; }
 .transcode-federation-code-row { align-items: end; flex-wrap: wrap; }
 .transcode-federation-code-row .field { flex: 1 1 260px; margin: 0; }
 .transcode-federation-code-row button { flex: 0 0 auto; }
+.transcode-federation-addresses { display: grid; gap: 8px; }
+.transcode-federation-addresses .transcode-federation-subheading { align-items: baseline; flex-wrap: wrap; }
+.transcode-federation-addresses .transcode-federation-subheading .field-hint { flex: 1 1 260px; min-width: 0; }
+.transcode-federation-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.transcode-federation-address-group { display: grid; gap: 4px; min-width: 0; }
+.transcode-federation-address-group > .field-label { font-size: 0.82rem; font-weight: 600; }
+.transcode-federation-address-list { display: grid; gap: 4px; min-width: 0; }
+.transcode-federation-address-list code { display: block; padding: 7px 9px; overflow-wrap: anywhere; border-radius: 4px; background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink); font-size: 0.8rem; }
 .transcode-federation-pairing,
 .transcode-federation-members { display: grid; gap: 9px; }
 .transcode-federation-subheading { color: var(--ink); font-size: 0.86rem; }
@@ -6746,11 +6781,9 @@ html[data-theme="dark"] .toggle-switch-track {
 .transcode-federation-pair-form { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1fr) auto auto; gap: 8px; }
 .transcode-federation-peer { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--panel) 84%, var(--ink) 2%); }
 .transcode-federation-peer > span,
-.transcode-federation-member-main,
-.transcode-federation-matrix-list { display: grid; gap: 2px; min-width: 0; }
+.transcode-federation-member-main { display: grid; gap: 2px; min-width: 0; }
 .transcode-federation-peer small,
-.transcode-federation-member-main small,
-.transcode-federation-matrix-list small { color: var(--muted); font-size: 0.76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transcode-federation-member-main small { color: var(--muted); font-size: 0.76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transcode-federation-member { border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 9px; overflow: hidden; }
 .transcode-federation-member > summary { justify-content: space-between; padding: 9px 10px; cursor: pointer; list-style: none; }
 .transcode-federation-member > summary::-webkit-details-marker { display: none; }
@@ -6763,9 +6796,6 @@ html[data-theme="dark"] .toggle-switch-track {
 .transcode-federation-member-details { display: grid; gap: 9px; padding: 0 10px 10px; }
 .transcode-federation-member-actions { align-items: center; flex-wrap: wrap; }
 .transcode-federation-member-actions .field-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.transcode-federation-matrix { border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); padding-top: 8px; }
-.transcode-federation-matrix > summary { cursor: pointer; color: var(--muted); font-size: 0.82rem; }
-.transcode-federation-matrix-list { gap: 6px; padding: 8px 0 0 15px; }
 .transcode-federation-resources { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
 .transcode-federation-identity { display: flex; align-items: center; gap: 6px; margin: 0; }
 .transcode-federation-identity svg { width: 15px; color: var(--accent-2); }
@@ -6773,6 +6803,7 @@ html[data-theme="dark"] .toggle-switch-track {
 @media (max-width: 760px) {
   .transcode-federation-pair-form { grid-template-columns: 1fr; }
   .transcode-federation-code-row { align-items: stretch; }
+  .transcode-federation-address-grid { grid-template-columns: 1fr; }
 }
 
 .app-settings-flag-toggle {
@@ -12824,6 +12855,31 @@ html[data-theme="dark"] .transcoding-panel select.transcode-control {
 
 .transcode-capability-device-copy > small {
   flex: 0 1 auto;
+}
+
+.transcode-capability-device-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.transcode-capability-device-name > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transcode-federation-member-pill {
+  flex: 0 1 auto;
+  max-width: min(240px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+  color: var(--accent-2);
 }
 
 .transcode-automation-details {

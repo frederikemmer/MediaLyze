@@ -20,6 +20,8 @@ class TranscodeStreamPlan(BaseModel):
     stream_index: int = Field(ge=0)
     action: TranscodeStreamAction = TranscodeStreamAction.copy
     codec: str | None = Field(default=None, max_length=64)
+    # Optional for requests: the target worker resolves the concrete encoder
+    # from the requested codec and its own capability probe.
     encoder: str | None = Field(default=None, max_length=128)
     bitrate: int | None = Field(default=None, ge=1)
     crf: float | None = Field(default=None, ge=0, le=255)
@@ -698,6 +700,8 @@ class TranscodeFederationSettingsRead(BaseModel):
     discovery_enabled: bool = True
     accept_jobs: bool = True
     endpoint_urls: list[str] = Field(default_factory=list)
+    hostname_urls: list[str] = Field(default_factory=list)
+    ip_urls: list[str] = Field(default_factory=list)
     resource_policy: dict[str, Any] = Field(default_factory=dict)
     protocol_version: int = 1
     temp_budget_bytes: int = 0

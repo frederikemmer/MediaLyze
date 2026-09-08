@@ -3151,16 +3151,18 @@ def file_transcode_validate(
             if not federation_enabled(db, settings):
                 raise FederationError("Federation is not enabled on this installation", status_code=409)
             selection = choose_worker_for_media_file(db, settings, media_file, payload)
+            selected_plan = selection.resolved_plan or payload
             if not selection.candidate.is_local:
                 remote_capabilities = TranscodeCapabilitiesRead.model_validate(selection.candidate.capabilities)
                 return validate_transcode_plan(
                     db,
                     settings,
                     media_file,
-                    payload,
+                    selected_plan,
                     capabilities_override=remote_capabilities,
-                    device_id_override=payload.target_device_id,
+                    device_id_override=selected_plan.target_device_id,
                 )
+            return validate_transcode_plan(db, settings, media_file, selected_plan)
         return validate_transcode_plan(db, settings, media_file, payload)
     except FederationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

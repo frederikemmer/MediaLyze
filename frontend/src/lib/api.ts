@@ -1648,6 +1648,8 @@ export type TranscodeFederationSettings = {
   discovery_enabled: boolean;
   accept_jobs: boolean;
   endpoint_urls: string[];
+  hostname_urls: string[];
+  ip_urls: string[];
   resource_policy: Record<string, unknown>;
   protocol_version: number;
   temp_budget_bytes: number;

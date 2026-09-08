@@ -203,9 +203,10 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("slider", { name: "video 0 quality" })).toHaveClass("settings-choice-input", "transcode-control");
     expect(screen.getByRole("combobox", { name: "video 0 speed preset" })).toHaveValue("medium");
     expect(screen.getByRole("combobox", { name: "video 0 resolution" })).toHaveClass("settings-choice-input", "transcode-control");
-    expect(screen.queryByRole("textbox", { name: "video 0 codec" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "video 0 codec" })).toHaveValue("h264");
+    expect(screen.queryByRole("combobox", { name: "video 0 encoder" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Locally reported encoder options/)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "video 0 encoder" }), { target: { value: "av1_qsv" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "video 0 codec" }), { target: { value: "av1" } });
     expect(screen.getByRole("combobox", { name: "video 0 speed preset" })).toHaveValue("medium");
     fireEvent.change(screen.getByRole("combobox", { name: "video 0 speed preset" }), { target: { value: "slow" } });
     fireEvent.change(screen.getByRole("combobox", { name: "video 0 resolution" }), { target: { value: "1280x720" } });
@@ -224,6 +225,9 @@ describe("TranscodingPanel", () => {
 
     const sentPlan = vi.mocked(api.validateFileTranscode).mock.calls[0][1];
     expect(sentPlan.video_streams[0].width).toBe(1280);
+    expect(sentPlan.video_streams[0].codec).toBe("av1");
+    expect(sentPlan.video_streams[0].encoder).toBeNull();
+    expect(sentPlan.audio_streams[0].encoder).toBeNull();
     expect(sentPlan.video_streams[0].preset).toBe("slow");
     expect(sentPlan.subtitle_streams[0].action).toBe("drop");
     expect(sentPlan.external_subtitles[0]).toMatchObject({ subtitle_id: 8, action: "encode" });

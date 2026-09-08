@@ -8,6 +8,7 @@ import {
   type AppSettings,
   type TranscodeCapabilityMatrix,
   type TranscodeCapabilities,
+  type TranscodeFederation,
   type TranscodeHardwareDevice,
   type TranscodingSettings,
 } from "../lib/api";
@@ -26,6 +27,29 @@ const transcodingSettings: TranscodingSettings = {
 };
 
 const appSettings = { transcoding: transcodingSettings } as AppSettings;
+
+const federation: TranscodeFederation = {
+  settings: {
+    enabled: false,
+    federation_id: "federation-test",
+    installation_id: "installation-test",
+    federation_name: "Test federation",
+    display_name: "Test installation",
+    pairing_code: "test-code",
+    pairing_code_from_environment: false,
+    discovery_enabled: false,
+    accept_jobs: false,
+    endpoint_urls: [],
+    hostname_urls: ["http://medialyze-nas.local:8091"],
+    ip_urls: ["http://192.168.1.20:8091"],
+    resource_policy: {},
+    protocol_version: 1,
+    temp_budget_bytes: 0,
+    result_retention_hours: 24,
+  },
+  members: [],
+  discovered: [],
+};
 
 function device(overrides: Partial<TranscodeHardwareDevice>): TranscodeHardwareDevice {
   return {
@@ -166,11 +190,59 @@ const completedMatrix: TranscodeCapabilityMatrix = {
   }],
 };
 
+const federationWithMember: TranscodeFederation = {
+  ...federation,
+  members: [{
+    id: 1,
+    installation_id: "member-installation",
+    federation_id: "federation-test",
+    display_name: "Federick-PC",
+    endpoint_urls: ["http://federick-pc:8091"],
+    protocol_version: 1,
+    status: "active",
+    connection_status: "connected",
+    reachable: true,
+    accept_jobs: true,
+    resources: { cpu_threads: 16 },
+    capabilities: null,
+    capability_matrix: {
+      status: "completed",
+      tested_at: "2026-09-04T12:00:00Z",
+      ffmpeg_version: "ffmpeg version member",
+      error: null,
+      matrices: [{
+        device_id: "cuda0",
+        device_name: "NVIDIA GeForce RTX 3080",
+        backend: "cuda",
+        tested_at: "2026-09-04T12:00:00Z",
+        decode_codecs: ["hevc"],
+        encode_codecs: ["hevc"],
+        cells: [{
+          decode_codec: "hevc",
+          encode_codec: "hevc",
+          status: "hardware",
+          decoder: "cuda:hevc",
+          encoder: "hevc_nvenc",
+          max_parallel_jobs: 2,
+          max_parallel_jobs_is_lower_bound: false,
+          detail: null,
+        }],
+      }],
+    },
+    active_jobs: 0,
+    network_mbps: 1000,
+    last_seen_at: "2026-09-04T12:00:00Z",
+    last_sync_at: "2026-09-04T12:00:00Z",
+    last_error: null,
+  }],
+};
+
 describe("TranscodingSettingsPanel", () => {
   beforeEach(() => {
     vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
     vi.spyOn(api, "transcodeCapabilityMatrix").mockResolvedValue(notRunMatrix);
     vi.spyOn(api, "testTranscodeCapabilityMatrix").mockResolvedValue(completedMatrix);
+    vi.spyOn(api, "transcodeFederation").mockResolvedValue(federation);
     vi.spyOn(api, "transcodeProfiles").mockResolvedValue([]);
     vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
     vi.spyOn(api, "libraries").mockResolvedValue([]);
@@ -195,6 +267,37 @@ describe("TranscodingSettingsPanel", () => {
     await waitFor(() => expect(api.updateAppSettings).toHaveBeenCalled());
     const payload = vi.mocked(api.updateAppSettings).mock.calls[0]?.[0];
     expect(payload?.transcoding).not.toHaveProperty("selected_devices");
+  });
+
+  it("shows a neutral empty state until the first capability matrix test", async () => {
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accelerators" }));
+
+    const emptyState = await screen.findByText("No capability matrix data yet. Run the hardware test to populate this matrix.");
+    expect(emptyState.closest(".panel-empty-state")).not.toBeNull();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("keeps federation guidance in a tooltip beside the heading", async () => {
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    expect(await screen.findByRole("heading", { name: "Transcode federation" })).toBeInTheDocument();
+    expect(screen.queryByText("Pair trusted MediaLyze installations directly and let compatible workers execute structured transcode plans without exposing library paths.")).not.toBeInTheDocument();
+
+    const copyButton = screen.getByRole("button", { name: "Copy code" });
+    const resetButton = screen.getByRole("button", { name: "Reset code" });
+    expect(copyButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-code-action");
+    expect(copyButton.querySelector("svg")).toBeInTheDocument();
+    expect(resetButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-code-action");
+    expect(resetButton.querySelector("svg")).toBeInTheDocument();
+    expect(screen.getByText("Reachable network addresses")).toBeInTheDocument();
+    expect(screen.getByText("http://medialyze-nas.local:8091")).toBeInTheDocument();
+    expect(screen.getByText("http://192.168.1.20:8091")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain transcode federation" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Pair trusted MediaLyze installations directly and let compatible workers execute structured transcode plans without exposing library paths.");
   });
 
   it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
@@ -247,5 +350,21 @@ describe("TranscodingSettingsPanel", () => {
     expect(tooltip).toHaveTextContent("Run 1: 0.250 s");
     expect(tooltip).toHaveTextContent("4 sessions");
     expect(tooltip).toHaveTextContent("+12.0 %");
+  });
+
+  it("lists tested federation hardware in Accelerators with a member pill", async () => {
+    vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMember);
+    vi.mocked(api.transcodeCapabilityMatrix).mockResolvedValueOnce(completedMatrix);
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accelerators" }));
+
+    const matrices = await screen.findAllByRole("table");
+    expect(matrices).toHaveLength(3);
+    const memberPill = document.querySelector(".transcode-federation-member-pill");
+    expect(memberPill).not.toBeNull();
+    expect(memberPill).toHaveTextContent("Federick-PC");
+    expect(memberPill?.closest("details.transcode-device-matrix")).not.toBeNull();
+    expect(screen.queryByText(/Hardware capability matrix/)).not.toBeInTheDocument();
   });
 });

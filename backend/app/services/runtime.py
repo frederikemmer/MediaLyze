@@ -475,16 +475,17 @@ class ScanRuntimeManager:
                         status_code=409,
                     )
                 selected = choose_worker_for_media_file(db, self.settings, media_file, plan)
+            selected_plan = selected.resolved_plan if selected is not None and selected.resolved_plan is not None else plan
             if selected is not None and not selected.candidate.is_local:
                 job, validation = queue_remote_transcode_job(
                     db,
                     self.settings,
                     media_file,
-                    plan,
+                    selected_plan,
                     selected,
                 )
             else:
-                local_plan = plan.model_copy(
+                local_plan = selected_plan.model_copy(
                     update={
                         "target_mode": "local",
                         "target_member_id": None,

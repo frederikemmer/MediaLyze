@@ -57,6 +57,16 @@ def _capabilities() -> TranscodeCapabilitiesRead:
     )
 
 
+def test_missing_matrix_result_stays_unmeasured_until_a_test_runs(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    result = transcode_matrix.load_transcode_matrix(settings)
+
+    assert result.status == "not_run"
+    assert result.tested_at is None
+    assert result.matrices == []
+    assert not (settings.config_path / "transcoding-tests" / "capability-matrix.json").exists()
+
+
 def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_path, monkeypatch) -> None:
     settings = _settings(tmp_path)
     monkeypatch.setattr(transcode_matrix, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())

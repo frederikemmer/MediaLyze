@@ -24,6 +24,9 @@ import { TooltipTrigger } from "./TooltipTrigger";
 
 const PROFILE_KEYS = ["compatibility", "storage", "modern"] as const;
 const STREAM_ACTIONS: TranscodeStreamAction[] = ["copy", "encode", "drop"];
+const TARGET_VIDEO_CODECS = ["h264", "hevc", "av1", "vp8", "vp9", "mpeg2video", "mjpeg"] as const;
+const TARGET_AUDIO_CODECS = ["aac", "opus", "vorbis", "ac3", "eac3", "flac", "mp3"] as const;
+const TARGET_SUBTITLE_CODECS = ["subrip", "ass", "webvtt", "mov_text"] as const;
 
 type StreamKind = "video_streams" | "audio_streams" | "subtitle_streams";
 type QualityMode = "crf" | "cq" | "qp" | "global_quality";
@@ -375,6 +378,43 @@ function defaultAudioBitrate(source: AudioStream | undefined, encoderName: strin
   return values.reduce((closest, value) => Math.abs(value - sourceBitrate) < Math.abs(closest - sourceBitrate) ? value : closest, values[0]);
 }
 
+function targetCodecOptions(
+  kind: StreamKind,
+  container: TranscodePlan["container"],
+): string[] {
+  const values = kind === "video_streams"
+    ? [...TARGET_VIDEO_CODECS]
+    : kind === "audio_streams"
+      ? [...TARGET_AUDIO_CODECS]
+      : [...TARGET_SUBTITLE_CODECS];
+  const allowedByContainer: Record<TranscodePlan["container"], Partial<Record<StreamKind, string[]>>> = {
+    mkv: {},
+    mp4: {
+      video_streams: ["h264", "hevc", "av1", "mjpeg"],
+      audio_streams: ["aac", "ac3", "eac3", "mp3"],
+      subtitle_streams: ["mov_text"],
+    },
+    webm: {
+      video_streams: ["vp8", "vp9", "av1"],
+      audio_streams: ["opus", "vorbis"],
+      subtitle_streams: ["webvtt"],
+    },
+  };
+  const allowed = allowedByContainer[container][kind];
+  const filtered = allowed ? values.filter((codec) => allowed.includes(codec)) : values;
+  return filtered;
+}
+
+function targetCodecInfo(
+  codec: string,
+  kind: "video" | "audio" | "subtitle",
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return t("transcoding.targetCodecInfo", {
+    codec: formatCodecLabel(codec, kind),
+  });
+}
+
 function pickEncoder(
   kind: StreamKind,
   sourceCodec: string | null | undefined,
@@ -390,24 +430,6 @@ function pickEncoder(
   });
   const matching = candidates.find((encoder) => encoder.codec === (sourceCodec ?? "").toLowerCase());
   return matching ?? candidates[0];
-}
-
-function encoderInfo(
-  encoder: TranscodeEncoderCapability | undefined,
-  kind: "video" | "audio" | "subtitle",
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (!encoder) return t("transcoding.noEncoderAvailable");
-  const spec = encoderQualitySpec(encoder);
-  const quality = kind === "video"
-    ? t("transcoding.encoderQualitySummary", { mode: qualityModeLabel(spec.mode), min: spec.min, max: spec.max, default: spec.default })
-    : t("transcoding.encoderStreamSummary", { kind: t(`transcoding.streamKinds.${kind}`), codec: formatCodecLabel(encoder.codec, kind), mode: encoder.hardware ? t("transcoding.hardware") : t("transcoding.cpu") });
-  return t("transcoding.encoderInfo", {
-    encoder: encoder.name,
-    codec: formatCodecLabel(encoder.codec, kind),
-    mode: encoder.hardware ? t("transcoding.hardware") : t("transcoding.cpu"),
-    quality,
-  });
 }
 
 function qualityGuidance(
@@ -530,10 +552,12 @@ function StreamControlFields({
   onPatch,
 }: StreamControlFieldsProps) {
   const sourceCodec = source?.codec;
-  const selected = encoders.find((encoder) => encoder.name === stream.encoder)
-    ?? pickEncoder(kind, sourceCodec, plan.container, encoders);
-  const selectedName = selected?.name ?? "";
-  const codecKind = streamKindLabel(kind);
+  const targetCodecs = targetCodecOptions(kind, plan.container);
+  const selectedCodec = stream.codec ?? targetCodecs[0] ?? sourceCodec ?? "";
+  // Local capabilities only provide sensible quality-control defaults. The
+  // worker-specific encoder is resolved by the backend for the final target.
+  const selected = encoders.find((encoder) => encoder.codec === selectedCodec)
+    ?? pickEncoder(kind, selectedCodec, plan.container, encoders);
   if (kind === "video_streams") {
     const spec = encoderQualitySpec(selected);
     const quality = selectedQuality(stream, spec);
@@ -544,30 +568,31 @@ function StreamControlFields({
     const resolutionValue = stream.width && stream.height ? `${stream.width}x${stream.height}` : "original";
     return (
       <div className="transcode-stream-encode-fields transcode-video-encode-fields">
-        <label className="transcode-control-field transcode-encoder-field">
+        <label className="transcode-control-field transcode-codec-field">
           <span className="transcode-field-label">
-            <span>{t("transcoding.encoder")}</span>
-            <TooltipTrigger ariaLabel={t("transcoding.encoderInfoAria", { encoder: selectedName || t("transcoding.encoder") })} content={encoderInfo(selected, "video", t)} />
+            <span>{t("transcoding.targetCodec")}</span>
+            <TooltipTrigger ariaLabel={t("transcoding.targetCodecInfoAria")} content={targetCodecInfo(selectedCodec, "video", t)} />
           </span>
           <select
             className={controlClass}
-            aria-label={`video ${stream.stream_index} encoder`}
-            value={selectedName}
+            aria-label={`video ${stream.stream_index} codec`}
+            value={targetCodecs.includes(selectedCodec) ? selectedCodec : targetCodecs[0] ?? ""}
             onChange={(event) => {
-              const next = encoders.find((encoder) => encoder.name === event.target.value);
+              const nextCodec = event.target.value;
+              const next = encoders.find((encoder) => encoder.codec === nextCodec)
+                ?? pickEncoder(kind, nextCodec, plan.container, encoders);
               const nextSpec = encoderQualitySpec(next);
               const nextQuality = clampQuality(quality, nextSpec);
               onPatch({
-                encoder: event.target.value,
-                codec: next?.codec ?? stream.codec,
+                encoder: null,
+                codec: nextCodec,
                 crf: nextSpec.mode === "crf" ? nextQuality : null,
                 cq: nextSpec.mode === "crf" ? null : nextQuality,
-                preset: defaultPresetForEncoder(next),
+                preset: null,
               });
             }}
           >
-            {!selectedName ? <option value="">{t("transcoding.noEncoderAvailable")}</option> : null}
-            {encoders.map((encoder) => <option key={encoder.name} value={encoder.name} title={encoderInfo(encoder, "video", t)}>{encoder.name} · {formatCodecLabel(encoder.codec, "video")} · {encoder.hardware ? t("transcoding.hardware") : t("transcoding.cpu")}</option>)}
+            {targetCodecs.map((codec) => <option key={codec} value={codec}>{formatCodecLabel(codec, "video")}</option>)}
           </select>
         </label>
         <label className="transcode-control-field transcode-range-field">
@@ -639,27 +664,26 @@ function StreamControlFields({
   }
 
   if (kind === "audio_streams") {
-    const values = AUDIO_BITRATES[selectedName] ?? DEFAULT_AUDIO_BITRATES;
-    const currentBitrate = stream.bitrate && values.includes(stream.bitrate) ? stream.bitrate : defaultAudioBitrate(source as AudioStream | undefined, selectedName);
+    const values = AUDIO_BITRATES[selectedCodec] ?? DEFAULT_AUDIO_BITRATES;
+    const currentBitrate = stream.bitrate && values.includes(stream.bitrate) ? stream.bitrate : defaultAudioBitrate(source as AudioStream | undefined, selectedCodec);
     const sliderIndex = Math.max(0, values.indexOf(currentBitrate));
     return (
       <div className="transcode-stream-encode-fields">
-        <label className="transcode-control-field transcode-encoder-field">
+        <label className="transcode-control-field transcode-codec-field">
           <span className="transcode-field-label">
-            <span>{t("transcoding.encoder")}</span>
-            <TooltipTrigger ariaLabel={t("transcoding.encoderInfoAria", { encoder: selectedName || t("transcoding.encoder") })} content={encoderInfo(selected, "audio", t)} />
+            <span>{t("transcoding.targetCodec")}</span>
+            <TooltipTrigger ariaLabel={t("transcoding.targetCodecInfoAria")} content={targetCodecInfo(selectedCodec, "audio", t)} />
           </span>
           <select
             className={controlClass}
-            aria-label={`audio ${stream.stream_index} encoder`}
-            value={selectedName}
+            aria-label={`audio ${stream.stream_index} codec`}
+            value={targetCodecs.includes(selectedCodec) ? selectedCodec : targetCodecs[0] ?? ""}
             onChange={(event) => {
-              const next = encoders.find((encoder) => encoder.name === event.target.value);
-              onPatch({ encoder: event.target.value, codec: next?.codec ?? stream.codec, bitrate: defaultAudioBitrate(source as AudioStream | undefined, event.target.value) || null });
+              const nextCodec = event.target.value;
+              onPatch({ encoder: null, codec: nextCodec, bitrate: defaultAudioBitrate(source as AudioStream | undefined, nextCodec) || null });
             }}
           >
-            {!selectedName ? <option value="">{t("transcoding.noEncoderAvailable")}</option> : null}
-            {encoders.map((encoder) => <option key={encoder.name} value={encoder.name} title={encoderInfo(encoder, "audio", t)}>{encoder.name} · {formatCodecLabel(encoder.codec, "audio")} · {encoder.hardware ? t("transcoding.hardware") : t("transcoding.cpu")}</option>)}
+            {targetCodecs.map((codec) => <option key={codec} value={codec}>{formatCodecLabel(codec, "audio")}</option>)}
           </select>
         </label>
         <label className="transcode-control-field transcode-range-field">
@@ -699,22 +723,20 @@ function StreamControlFields({
 
   return (
     <div className="transcode-stream-encode-fields">
-      <label className="transcode-control-field transcode-encoder-field">
+      <label className="transcode-control-field transcode-codec-field">
         <span className="transcode-field-label">
-          <span>{t("transcoding.subtitleFormat")}</span>
-          <TooltipTrigger ariaLabel={t("transcoding.encoderInfoAria", { encoder: selectedName || t("transcoding.subtitleFormat") })} content={encoderInfo(selected, "subtitle", t)} />
+          <span>{t("transcoding.targetCodec")}</span>
+          <TooltipTrigger ariaLabel={t("transcoding.targetCodecInfoAria")} content={targetCodecInfo(selectedCodec, "subtitle", t)} />
         </span>
         <select
           className={controlClass}
-          aria-label={`subtitle ${stream.stream_index} format`}
-          value={selectedName}
+          aria-label={`subtitle ${stream.stream_index} codec`}
+          value={targetCodecs.includes(selectedCodec) ? selectedCodec : targetCodecs[0] ?? ""}
           onChange={(event) => {
-            const next = encoders.find((encoder) => encoder.name === event.target.value);
-            onPatch({ encoder: event.target.value, codec: next?.codec ?? stream.codec });
+            onPatch({ encoder: null, codec: event.target.value });
           }}
         >
-          {!selectedName ? <option value="">{t("transcoding.noEncoderAvailable")}</option> : null}
-          {encoders.map((encoder) => <option key={encoder.name} value={encoder.name} title={encoderInfo(encoder, "subtitle", t)}>{formatCodecLabel(encoder.codec, "subtitle")} · {encoder.name}</option>)}
+          {targetCodecs.map((codec) => <option key={codec} value={codec}>{formatCodecLabel(codec, "subtitle")}</option>)}
         </select>
       </label>
       <StreamLanguageField
@@ -737,6 +759,15 @@ function clonePlan(plan: TranscodePlan): TranscodePlan {
     clone[kind] = clone[kind].map((stream) => stream.action === "keep" ? { ...stream, action: "copy" } : stream);
   }
   return clone;
+}
+
+function automaticEncoderPlan(plan: TranscodePlan): TranscodePlan {
+  return {
+    ...plan,
+    video_streams: plan.video_streams.map((stream) => stream.action === "encode" ? { ...stream, encoder: null } : stream),
+    audio_streams: plan.audio_streams.map((stream) => stream.action === "encode" ? { ...stream, encoder: null } : stream),
+    subtitle_streams: plan.subtitle_streams.map((stream) => stream.action === "encode" ? { ...stream, encoder: null } : stream),
+  };
 }
 
 function targetLabel(plan: TranscodePlan, federation: TranscodeFederation | null): string {
@@ -891,7 +922,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   useEffect(() => {
     if (!federation?.settings.enabled || !plan || federationAutoAppliedRef.current || plan.target_mode !== "local") return;
     federationAutoAppliedRef.current = true;
-    setPlan({ ...plan, target_mode: "automatic" });
+    setPlan({ ...automaticEncoderPlan(plan), target_mode: "automatic" });
   }, [federation?.settings.enabled, plan]);
 
   useEffect(() => {
@@ -960,7 +991,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     setValidating(true);
     setError(null);
     try {
-      const result = await api.validateFileTranscode(file.id, plan);
+      const result = await api.validateFileTranscode(file.id, automaticEncoderPlan(plan));
       setValidation(result);
       setPlan(result.normalized_plan);
       return result;
@@ -1174,7 +1205,12 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               const streamAction = stream.action === "keep" ? "copy" : stream.action;
               const codecKind = streamKindLabel(kind);
               const streamEncoders = kind === "video_streams" ? availableVideoEncoders : kind === "audio_streams" ? availableAudioEncoders : availableSubtitleEncoders;
-              const selectedEncoder = streamEncoders.find((encoder) => encoder.name === stream.encoder) ?? pickEncoder(kind, source?.codec, plan.container, streamEncoders);
+              const streamCodecs = targetCodecOptions(kind, plan.container);
+              const selectedCodec = stream.codec && streamCodecs.includes(stream.codec)
+                ? stream.codec
+                : streamCodecs[0] ?? source?.codec ?? "";
+              const selectedEncoder = streamEncoders.find((encoder) => encoder.codec === selectedCodec)
+                ?? pickEncoder(kind, selectedCodec, plan.container, streamEncoders);
               const resetToCopy = () => {
                 setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, {
                   action: "copy",
@@ -1206,17 +1242,17 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                   setValidation(null);
                   return;
                 }
-                const encoder = selectedEncoder ?? pickEncoder(kind, source?.codec, plan.container, streamEncoders);
-                const quality = encoderQualitySpec(encoder);
+                const targetCodec = selectedCodec || selectedEncoder?.codec || source?.codec || "";
+                const quality = encoderQualitySpec(selectedEncoder);
                 const sourceLanguage = source && "language" in source ? normalizeLanguageTag(source.language) : "und";
                 setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, {
                   action: "encode",
-                  encoder: encoder?.name ?? null,
-                  codec: encoder?.codec ?? stream.codec,
+                  encoder: null,
+                  codec: targetCodec || null,
                   crf: kind === "video_streams" && quality.mode === "crf" ? quality.default : null,
                   cq: kind === "video_streams" && quality.mode !== "crf" ? quality.default : null,
-                  preset: kind === "video_streams" ? defaultPresetForEncoder(encoder) : null,
-                  bitrate: kind === "audio_streams" ? defaultAudioBitrate(source as AudioStream | undefined, encoder?.name ?? "aac") || null : null,
+                  preset: null,
+                  bitrate: kind === "audio_streams" ? defaultAudioBitrate(source as AudioStream | undefined, targetCodec || "aac") || null : null,
                   language: kind !== "video_streams" ? sourceLanguage || "und" : null,
                   width: null,
                   height: null,

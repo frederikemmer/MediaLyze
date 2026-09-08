@@ -327,6 +327,55 @@ def test_worker_selection_accounts_for_network_and_prefers_local_on_true_tie() -
     assert tie.candidate.installation_id == "local"
 
 
+def test_worker_selection_resolves_target_codec_against_selected_worker() -> None:
+    plan = _cpu_plan(target_mode="automatic").model_copy(
+        update={"execution_mode": "hardware_required"}
+    )
+    plan.video_streams[0].encoder = "h264_nvenc"
+    candidate = federation.WorkerCandidate(
+        installation_id="windows-worker",
+        display_name="Windows worker",
+        is_local=False,
+        reachable=True,
+        accept_jobs=True,
+        capabilities={
+            "platform": "win32",
+            "encoders": [
+                {
+                    "name": "h264_qsv",
+                    "codec": "h264",
+                    "hardware": True,
+                    "available": True,
+                    "device_ids": ["qsv0"],
+                }
+            ],
+            "devices": [
+                {
+                    "id": "qsv0",
+                    "name": "Intel Quick Sync",
+                    "vendor": "intel",
+                    "backend": "qsv",
+                    "status": "available",
+                    "encoder_names": ["h264_qsv"],
+                }
+            ],
+        },
+        capability_matrix={},
+        resources={"parallel_jobs": 1},
+    )
+
+    selected = federation.select_worker(
+        [candidate],
+        plan,
+        source_size_bytes=10,
+        duration_seconds=10,
+    )
+
+    assert selected.resolved_plan is not None
+    assert selected.resolved_plan.video_streams[0].codec == "h264"
+    assert selected.resolved_plan.video_streams[0].encoder == "h264_qsv"
+
+
 def test_transfer_names_are_relative_and_chunk_state_is_resumable(tmp_path: Path) -> None:
     assert federation.validate_transfer_name("subtitles/Movie.en.srt") == "subtitles/Movie.en.srt"
     for unsafe in ("../secret", r"..\secret", "C:secret", r"C:\secret", r"\\server\secret", "/etc/passwd"):

@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Copy, LoaderCircle, Network, PlugZap, RefreshCw, RotateCcw, Unplug } from "lucide-react";
+import { Check, ChevronDown, Copy, History, LoaderCircle, Network, PlugZap, RefreshCw, Unplug } from "lucide-react";
 
 import { api, type TranscodeCapabilities, type TranscodeFederation, type TranscodeFederationMember } from "../lib/api";
+import { TooltipTrigger } from "./TooltipTrigger";
 
 type PendingAction = "save" | "discover" | "pair" | "reset" | string | null;
+
+type TranscodeFederationPanelProps = {
+  onData?: (data: TranscodeFederation) => void;
+};
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -18,7 +23,7 @@ function memberResourceSummary(member: TranscodeFederationMember, t: (key: strin
   return parts.join(" · ") || t("transcoding.federation.resourcesUnknown");
 }
 
-export function TranscodeFederationPanel() {
+export function TranscodeFederationPanel({ onData }: TranscodeFederationPanelProps = {}) {
   const { t } = useTranslation();
   const [data, setData] = useState<TranscodeFederation | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
@@ -28,10 +33,15 @@ export function TranscodeFederationPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const publishData = useCallback((next: TranscodeFederation) => {
+    setData(next);
+    onData?.(next);
+  }, [onData]);
+
   const load = useCallback(async () => {
     try {
       const initial = await api.transcodeFederation();
-      setData(initial);
+      publishData(initial);
       try {
         setCapabilities(await api.transcodeCapabilities());
       } catch {
@@ -39,18 +49,18 @@ export function TranscodeFederationPanel() {
       }
       if (initial.settings.enabled && initial.settings.discovery_enabled) {
         try {
-          setData(await api.discoverTranscodeFederation());
+          publishData(await api.discoverTranscodeFederation());
         } catch {
           // Discovery is best-effort; manual endpoints and the last known
           // member snapshot remain useful when UDP is unavailable.
-          setData(initial);
+          publishData(initial);
         }
       }
       setError(null);
     } catch (reason) {
       setError(errorMessage(reason));
     }
-  }, []);
+  }, [publishData]);
 
   useEffect(() => {
     void load();
@@ -75,7 +85,7 @@ export function TranscodeFederationPanel() {
     setPending("discover");
     setError(null);
     try {
-      setData(await api.discoverTranscodeFederation());
+      publishData(await api.discoverTranscodeFederation());
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -89,7 +99,7 @@ export function TranscodeFederationPanel() {
     setError(null);
     setNotice(null);
     try {
-      setData(await api.pairTranscodeFederation({ endpoint: peerEndpoint.trim(), pairing_code: code.trim() }));
+      publishData(await api.pairTranscodeFederation({ endpoint: peerEndpoint.trim(), pairing_code: code.trim() }));
       setEndpoint("");
       setPairingCode("");
       setNotice(t("transcoding.federation.paired"));
@@ -135,7 +145,7 @@ export function TranscodeFederationPanel() {
     setPending(member.installation_id);
     setError(null);
     try {
-      setData(await api.syncTranscodeFederationMember(member.installation_id));
+      publishData(await api.syncTranscodeFederationMember(member.installation_id));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -149,7 +159,9 @@ export function TranscodeFederationPanel() {
     setError(null);
     try {
       await api.excludeTranscodeFederationMember(member.installation_id);
-      setData((current) => current ? { ...current, members: current.members.filter((item) => item.installation_id !== member.installation_id) } : current);
+      if (data) {
+        publishData({ ...data, members: data.members.filter((item) => item.installation_id !== member.installation_id) });
+      }
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -170,13 +182,24 @@ export function TranscodeFederationPanel() {
     ? resourcePolicy.gpu as Record<string, unknown>
     : {};
   const hardwareDevices = capabilities?.devices?.filter((device) => device.status === "available") ?? [];
+  const hostnameUrls = settings.hostname_urls ?? [];
+  const ipUrls = settings.ip_urls ?? [];
   const saveResourcePolicy = (next: Record<string, unknown>) => void saveSettings({ resource_policy: next });
   return (
     <section className="transcode-federation-panel" aria-labelledby="transcode-federation-title">
       <div className="transcode-federation-heading">
         <div>
-          <h3 id="transcode-federation-title"><Network aria-hidden="true" />{t("transcoding.federation.title")}</h3>
-          <p className="field-hint">{t("transcoding.federation.description")}</p>
+          <div className="panel-title-row">
+            <h3 id="transcode-federation-title"><Network aria-hidden="true" />{t("transcoding.federation.title")}</h3>
+            <TooltipTrigger
+              ariaLabel={t("transcoding.federation.descriptionAria")}
+              content={t("transcoding.federation.description")}
+              maxWidth={380}
+              placement="auto"
+            >
+              ?
+            </TooltipTrigger>
+          </div>
         </div>
         <span className={`badge ${settings.enabled ? "is-success" : "is-muted"}`}>
           {settings.enabled ? t("transcoding.federation.enabled") : t("transcoding.federation.disabled")}
@@ -203,10 +226,49 @@ export function TranscodeFederationPanel() {
 
       <div className="transcode-federation-code-row">
         <label className="field"><span>{t("transcoding.federation.pairingCode")}</span><input className="settings-choice-input" value={settings.pairing_code} readOnly aria-label={t("transcoding.federation.pairingCode")} /></label>
-        <button type="button" className="secondary small" onClick={() => void copyCode()} disabled={disabled}><Copy aria-hidden="true" />{t("transcoding.federation.copyCode")}</button>
-        <button type="button" className="secondary small" onClick={() => void resetCode()} disabled={disabled || settings.pairing_code_from_environment}><RotateCcw aria-hidden="true" />{t("transcoding.federation.resetCode")}</button>
+        <TooltipTrigger
+          ariaLabel={t("transcoding.federation.copyCode")}
+          content={t("transcoding.federation.copyCode")}
+          className="secondary icon-only-button transcode-federation-code-action"
+          disabled={disabled}
+          pinOnClick={false}
+          onClick={() => void copyCode()}
+        >
+          <Copy aria-hidden="true" className="nav-icon" size={16} />
+        </TooltipTrigger>
+        <TooltipTrigger
+          ariaLabel={t("transcoding.federation.resetCode")}
+          content={t("transcoding.federation.resetCode")}
+          className="secondary icon-only-button transcode-federation-code-action"
+          disabled={disabled || settings.pairing_code_from_environment}
+          pinOnClick={false}
+          onClick={() => void resetCode()}
+        >
+          <History aria-hidden="true" className="nav-icon" size={16} />
+        </TooltipTrigger>
       </div>
       {settings.pairing_code_from_environment ? <p className="field-hint">{t("transcoding.federation.environmentCode")}</p> : null}
+
+      <div className="transcode-federation-addresses" aria-labelledby="transcode-federation-addresses-title">
+        <div className="transcode-federation-subheading">
+          <strong id="transcode-federation-addresses-title">{t("transcoding.federation.reachableAddresses")}</strong>
+          <span className="field-hint">{t("transcoding.federation.reachableAddressesHint")}</span>
+        </div>
+        <div className="transcode-federation-address-grid">
+          <div className="transcode-federation-address-group">
+            <span className="field-label">{t("transcoding.federation.hostnameAddress")}</span>
+            <div className="transcode-federation-address-list">
+              {hostnameUrls.length ? hostnameUrls.map((url) => <code key={url}>{url}</code>) : <span className="field-hint">{t("transcoding.federation.noHostnameAddress")}</span>}
+            </div>
+          </div>
+          <div className="transcode-federation-address-group">
+            <span className="field-label">{t("transcoding.federation.ipAddress")}</span>
+            <div className="transcode-federation-address-list">
+              {ipUrls.length ? ipUrls.map((url) => <code key={url}>{url}</code>) : <span className="field-hint">{t("transcoding.federation.noIpAddress")}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="transcode-federation-pairing">
         <div className="transcode-federation-subheading"><strong>{t("transcoding.federation.addMember")}</strong><span className="field-hint">{t("transcoding.federation.directOnly")}</span></div>
@@ -227,7 +289,6 @@ export function TranscodeFederationPanel() {
             <div className="transcode-federation-member-details">
               <div className="transcode-federation-member-actions"><span className="field-hint">{member.endpoint_urls[0] ?? member.installation_id}</span><button type="button" className="secondary small" disabled={disabled} onClick={() => void syncMember(member)}><RefreshCw className={pending === member.installation_id ? "spin" : undefined} aria-hidden="true" />{t("transcoding.federation.sync")}</button><button type="button" className="secondary small danger" disabled={disabled} onClick={() => void excludeMember(member)}><Unplug aria-hidden="true" />{t("transcoding.federation.exclude")}</button></div>
               <label className="app-settings-flag-toggle"><input type="checkbox" checked={member.accept_jobs} readOnly /><span>{t("transcoding.federation.acceptingJobs")}</span></label>
-              <details className="transcode-federation-matrix"><summary>{t("transcoding.federation.hardwareMatrix")} ({member.capability_matrix?.matrices.length ?? 0})</summary><div className="transcode-federation-matrix-list">{member.capability_matrix?.matrices.length ? member.capability_matrix.matrices.map((matrix) => <div key={matrix.device_id}><strong>{matrix.device_name}</strong><small>{matrix.backend} · {matrix.encode_codecs.join(", ") || t("transcoding.federation.noMatrixData")}</small></div>) : <span className="field-hint">{t("transcoding.federation.noMatrixData")}</span>}</div></details>
             </div>
           </details>
         )) : <p className="field-hint">{t("transcoding.federation.noMembers")}</p>}

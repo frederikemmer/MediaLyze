@@ -118,6 +118,60 @@ SUBTITLE_ENCODER_CODECS = {
     "ass": "ass",
     "webvtt": "webvtt",
 }
+TRANSCODE_CODEC_ALIASES = {
+    "avc": "h264",
+    "h.264": "h264",
+    "h264": "h264",
+    "av01": "av1",
+    "h.265": "hevc",
+    "h265": "hevc",
+    "hevc": "hevc",
+    "mpeg-2": "mpeg2video",
+    "mpeg2": "mpeg2video",
+    "mpeg2video": "mpeg2video",
+    "vp08": "vp8",
+    "vp8": "vp8",
+    "vp09": "vp9",
+    "vp9": "vp9",
+    "mjpeg": "mjpeg",
+    "aac": "aac",
+    "opus": "opus",
+    "vorbis": "vorbis",
+    "ac3": "ac3",
+    "eac3": "eac3",
+    "flac": "flac",
+    "mp3": "mp3",
+    "mov_text": "mov_text",
+    "movtext": "mov_text",
+    "srt": "subrip",
+    "subrip": "subrip",
+    "ass": "ass",
+    "webvtt": "webvtt",
+}
+SOFTWARE_VIDEO_ENCODER_PREFERENCES = {
+    "h264": ("libx264",),
+    "hevc": ("libx265",),
+    "av1": ("libsvtav1", "libaom-av1"),
+    "vp8": ("libvpx",),
+    "vp9": ("libvpx-vp9",),
+    "mpeg2video": ("mpeg2video",),
+    "mjpeg": ("mjpeg",),
+}
+AUDIO_ENCODER_PREFERENCES = {
+    "aac": ("aac", "libfdk_aac"),
+    "opus": ("libopus", "opus"),
+    "vorbis": ("libvorbis",),
+    "ac3": ("ac3",),
+    "eac3": ("eac3",),
+    "flac": ("flac",),
+    "mp3": ("libmp3lame",),
+}
+SUBTITLE_ENCODER_PREFERENCES = {
+    "mov_text": ("mov_text",),
+    "subrip": ("srt", "subrip"),
+    "ass": ("ass",),
+    "webvtt": ("webvtt",),
+}
 ENCODER_QUALITY_SPECS = {
     # mode, minimum, maximum, default, step.  The values mirror FFmpeg's
     # constant-quality controls for the encoder families MediaLyze exposes.
@@ -1318,7 +1372,7 @@ def _available_encoder(capabilities: TranscodeCapabilitiesRead, *preferred: str)
     return next((name for name in preferred if name in available), None)
 
 
-def _preferred_hardware_encoders(codec: str) -> tuple[str, ...]:
+def _preferred_hardware_encoders(codec: str, *, platform: str | None = None) -> tuple[str, ...]:
     """Return a platform-aware preference order for automatic profiles.
 
     The order is only a preference.  Availability still comes from the
@@ -1327,13 +1381,20 @@ def _preferred_hardware_encoders(codec: str) -> tuple[str, ...]:
     engine can win without a vendor setting in the user's configuration.
     """
 
-    if _is_macos():
+    platform_name = (platform or "").lower()
+    is_macos = platform_name.startswith("darwin") or platform_name.startswith("mac")
+    is_windows = platform_name.startswith("win") or platform_name.startswith("msys")
+    if not platform_name:
+        is_macos = _is_macos()
+        is_windows = _is_windows()
+    if is_macos:
         backends = ("videotoolbox", "qsv", "vaapi", "cuda", "amf")
-    elif _is_windows():
+    elif is_windows:
         backends = ("cuda", "amf", "qsv", "vaapi", "videotoolbox")
     else:
         backends = ("cuda", "qsv", "vaapi", "amf", "videotoolbox")
-    return tuple(f"{codec}_{backend}" for backend in backends)
+    encoder_prefix = "mpeg2" if codec == "mpeg2video" else codec
+    return tuple(f"{encoder_prefix}_{backend}" for backend in backends)
 
 
 def _listed_encoder(capabilities: TranscodeCapabilitiesRead, *preferred: str) -> str | None:
@@ -1513,6 +1574,13 @@ def _encoder_codec(encoder: str | None) -> str | None:
     if not encoder:
         return None
     return ({**VIDEO_ENCODER_CODECS, **AUDIO_ENCODER_CODECS, **SUBTITLE_ENCODER_CODECS}).get(encoder)
+
+
+def _canonical_transcode_codec(codec: str | None) -> str | None:
+    value = str(codec or "").strip().lower()
+    if not value:
+        return None
+    return TRANSCODE_CODEC_ALIASES.get(value, value)
 
 
 def _sanitize_filename(value: str, *, suffix: str) -> str:
@@ -1833,6 +1901,177 @@ def _hardware_render_node_for_encoder(
     return _resolve_hardware_render_node(getattr(settings, "hardware_render_node", None))
 
 
+def _encoder_matches_codec(
+    capability: TranscodeEncoderCapability,
+    codec: str,
+) -> bool:
+    capability_codec = _canonical_transcode_codec(capability.codec)
+    encoder_codec = _canonical_transcode_codec(_encoder_codec(capability.name))
+    return codec in {capability_codec, encoder_codec}
+
+
+def _encoder_can_use_device(
+    capabilities: TranscodeCapabilitiesRead,
+    capability: TranscodeEncoderCapability,
+    *,
+    target_device_id: str | None,
+) -> bool:
+    if not capability.hardware and _hardware_backend(capability.name) is None:
+        return True
+    if target_device_id == "cpu":
+        return False
+    backend = _hardware_backend(capability.name)
+    if backend is None:
+        return False
+    if target_device_id:
+        device = next(
+            (
+                item
+                for item in capabilities.devices
+                if item.id == target_device_id
+                and item.backend == backend
+                and item.status == "available"
+            ),
+            None,
+        )
+        if device is None:
+            return False
+        if capability.device_ids and device.id not in capability.device_ids:
+            return False
+        if device.encoder_names and capability.name not in device.encoder_names:
+            return False
+        return True
+    return _select_hardware_device_for_encoder(capabilities, capability.name) is not None
+
+
+def _automatic_encoder_candidates(
+    capabilities: TranscodeCapabilitiesRead,
+    *,
+    kind: str,
+    codec: str,
+    execution_mode: str,
+    target_device_id: str | None,
+) -> list[TranscodeEncoderCapability]:
+    if kind == "video" and execution_mode == "hardware_required":
+        preferred = _preferred_hardware_encoders(codec, platform=capabilities.platform)
+        candidates = [
+            item
+            for item in capabilities.encoders
+            if item.available
+            and (item.hardware or _hardware_backend(item.name) is not None)
+            and _encoder_matches_codec(item, codec)
+            and _encoder_can_use_device(
+                capabilities,
+                item,
+                target_device_id=target_device_id,
+            )
+        ]
+    elif kind == "video":
+        preferred = SOFTWARE_VIDEO_ENCODER_PREFERENCES.get(codec, ())
+        candidates = [
+            item
+            for item in capabilities.encoders
+            if item.available
+            and not item.hardware
+            and _hardware_backend(item.name) is None
+            and _encoder_matches_codec(item, codec)
+        ]
+    elif kind == "audio":
+        preferred = AUDIO_ENCODER_PREFERENCES.get(codec, ())
+        candidates = [
+            item
+            for item in capabilities.encoders
+            if item.available and not item.hardware and _encoder_matches_codec(item, codec)
+        ]
+    else:
+        preferred = SUBTITLE_ENCODER_PREFERENCES.get(codec, ())
+        candidates = [
+            item
+            for item in capabilities.encoders
+            if item.available and not item.hardware and _encoder_matches_codec(item, codec)
+        ]
+    by_name = {item.name: item for item in candidates}
+    ordered = [by_name[name] for name in preferred if name in by_name]
+    ordered.extend(item for item in candidates if item.name not in {entry.name for entry in ordered})
+    return ordered
+
+
+def resolve_transcode_plan_encoders(
+    plan: TranscodePlan,
+    capabilities: TranscodeCapabilitiesRead,
+    *,
+    execution_mode: str | None = None,
+    target_device_id: str | None = None,
+    force_auto: bool = False,
+) -> tuple[TranscodePlan, list[str]]:
+    """Resolve target codecs to encoders on the worker that will execute them.
+
+    The request contract deliberately keeps ``codec`` user-facing and treats
+    ``encoder`` as a normalized runtime detail.  Existing explicit encoder
+    plans remain supported for backwards compatibility, while federation
+    assignments always re-resolve against the selected worker's capabilities.
+    """
+
+    normalized_plan = plan.model_copy(deep=True)
+    mode = execution_mode or normalized_plan.execution_mode or "hardware_required"
+    selected_device_id = target_device_id or normalized_plan.target_device_id
+    errors: list[str] = []
+    stream_groups = (
+        ("video", normalized_plan.video_streams),
+        ("audio", normalized_plan.audio_streams),
+        ("subtitle", normalized_plan.subtitle_streams),
+    )
+    for kind, decisions in stream_groups:
+        for decision in decisions:
+            if decision.action != TranscodeStreamAction.encode:
+                continue
+            codec = _canonical_transcode_codec(decision.codec) or _canonical_transcode_codec(
+                _encoder_codec(decision.encoder)
+            )
+            if codec is None:
+                errors.append(
+                    f"Encoded {kind} stream {decision.stream_index} requires a target codec"
+                )
+                continue
+            decision.codec = codec
+            should_resolve = force_auto or not decision.encoder
+            if not should_resolve:
+                continue
+            candidates = _automatic_encoder_candidates(
+                capabilities,
+                kind=kind,
+                codec=codec,
+                execution_mode=mode,
+                target_device_id=selected_device_id,
+            )
+            selected = candidates[0] if candidates else None
+            if selected is None:
+                path = (
+                    "hardware"
+                    if kind == "video" and mode == "hardware_required"
+                    else "software"
+                )
+                errors.append(
+                    f"No available {path} encoder for {kind} stream {decision.stream_index} "
+                    f"targeting codec {codec} on this worker"
+                )
+                decision.encoder = None
+                continue
+            previous_encoder = decision.encoder
+            decision.encoder = selected.name
+            # A preset belongs to an encoder family.  Do not forward a preset
+            # chosen for the origin's encoder to a different target worker.
+            if kind == "video" and (force_auto or previous_encoder != selected.name):
+                decision.preset = None
+            if kind == "video" and selected.hardware and not _encoder_quality_spec(selected.name):
+                # VideoToolbox and future hardware encoders may be bitrate-only;
+                # an inherited CRF/CQ option would make the otherwise valid
+                # automatic plan fail at FFmpeg argument parsing.
+                decision.crf = None
+                decision.cq = None
+    return normalized_plan, errors
+
+
 def effective_cpu_count() -> float:
     """Return the smallest usable CPU capacity reported by the host/container."""
     fallback = float(max(1, os.cpu_count() or 1))
@@ -1916,8 +2155,16 @@ def validate_transcode_plan(
         plan.output_mode = output_mode
     execution_mode = plan.execution_mode or app_settings.transcoding.execution_mode
     plan.execution_mode = execution_mode
+    plan, encoder_errors = resolve_transcode_plan_encoders(
+        plan,
+        capabilities,
+        execution_mode=execution_mode,
+        target_device_id=device_id_override or plan.target_device_id,
+        force_auto=plan.target_mode != "local",
+    )
     errors: list[str] = []
     errors.extend(language_errors)
+    errors.extend(encoder_errors)
     warnings: list[str] = []
     kept: list[str] = []
     changed: list[str] = []

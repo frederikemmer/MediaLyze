@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -66,7 +67,9 @@ from backend.app.schemas.transcoding import (
 from backend.app.services.transcode_matrix import load_transcode_matrix
 from backend.app.services.transcoding import (
     HARDWARE_ENCODER_MARKERS,
+    _encoder_codec,
     get_transcode_capabilities,
+    resolve_transcode_plan_encoders,
     transcode_capacity,
 )
 from backend.app.utils.time import utc_now
@@ -116,6 +119,7 @@ class WorkerSelection:
     candidate: WorkerCandidate
     estimated_seconds: float
     reason: str
+    resolved_plan: TranscodePlan | None = None
 
 
 def _canonical_json(payload: Any) -> bytes:
@@ -465,6 +469,95 @@ def _state_endpoints(settings: Settings, state: dict[str, Any]) -> list[str]:
     return result
 
 
+def _usable_network_ip(value: str) -> str | None:
+    try:
+        address = ipaddress.ip_address(str(value).strip())
+    except ValueError:
+        return None
+    if address.is_loopback or address.is_unspecified or address.is_link_local or address.is_multicast:
+        return None
+    return str(address)
+
+
+def _format_local_endpoint(host: str, port: int) -> str:
+    normalized_host = str(host).strip().rstrip(".")
+    netloc = f"[{normalized_host}]:{int(port)}" if ":" in normalized_host else f"{normalized_host}:{int(port)}"
+    return f"http://{netloc}"
+
+
+def _append_unique(values: list[str], value: str) -> None:
+    if value and value not in values:
+        values.append(value)
+
+
+def _local_network_endpoints(settings: Settings, state: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Return hostname and IP URLs that can be used for direct pairing.
+
+    Explicitly advertised endpoints are authoritative and may use a different
+    scheme or externally mapped port.  Local aliases are only shown when they
+    resolve to at least one non-loopback address, so the settings page does not
+    present localhost or wildcard bindings as reachable peer addresses.
+    """
+
+    hostname_urls: list[str] = []
+    ip_urls: list[str] = []
+    for endpoint in _state_endpoints(settings, state):
+        try:
+            host = (urlsplit(endpoint).hostname or "").rstrip(".")
+        except ValueError:
+            continue
+        if not host:
+            continue
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            if host.lower() not in {"localhost", "localhost.localdomain"}:
+                _append_unique(hostname_urls, endpoint)
+        else:
+            if _usable_network_ip(host):
+                _append_unique(ip_urls, endpoint)
+
+    local_hosts: list[str] = []
+    for resolver in (socket.gethostname, socket.getfqdn):
+        try:
+            host = str(resolver() or "").strip().rstrip(".")
+        except OSError:
+            continue
+        if not host or host.lower() in {"localhost", "localhost.localdomain"}:
+            continue
+        if host not in local_hosts:
+            local_hosts.append(host)
+
+    for host in local_hosts:
+        literal_ip = _usable_network_ip(host)
+        if literal_ip:
+            _append_unique(ip_urls, _format_local_endpoint(literal_ip, settings.federation_port))
+            continue
+        try:
+            resolved = socket.getaddrinfo(
+                host,
+                int(settings.federation_port),
+                family=socket.AF_UNSPEC,
+                type=socket.SOCK_STREAM,
+            )
+        except OSError:
+            continue
+        resolved_ips: list[str] = []
+        for result in resolved:
+            if len(result) < 5 or not result[4]:
+                continue
+            resolved_ip = _usable_network_ip(str(result[4][0]))
+            if resolved_ip:
+                _append_unique(resolved_ips, resolved_ip)
+        if not resolved_ips:
+            continue
+        _append_unique(hostname_urls, _format_local_endpoint(host, settings.federation_port))
+        for resolved_ip in resolved_ips:
+            _append_unique(ip_urls, _format_local_endpoint(resolved_ip, settings.federation_port))
+
+    return hostname_urls, ip_urls
+
+
 def _local_resources(db: Session, settings: Settings, capabilities: dict[str, Any]) -> dict[str, Any]:
     try:
         import psutil
@@ -550,6 +643,7 @@ def local_descriptor(db: Session, settings: Settings) -> dict[str, Any]:
 
 def federation_settings_read(db: Session, settings: Settings) -> TranscodeFederationSettingsRead:
     state = get_federation_state(db, settings)
+    hostname_urls, ip_urls = _local_network_endpoints(settings, state)
     return TranscodeFederationSettingsRead(
         enabled=bool(settings.federation_enabled and state.get("enabled")),
         federation_id=str(state["federation_id"]),
@@ -561,6 +655,8 @@ def federation_settings_read(db: Session, settings: Settings) -> TranscodeFedera
         discovery_enabled=bool(state.get("discovery_enabled", True)),
         accept_jobs=bool(state.get("accept_jobs", True)),
         endpoint_urls=_state_endpoints(settings, state),
+        hostname_urls=hostname_urls,
+        ip_urls=ip_urls,
         resource_policy=_normalize_resource_policy(state.get("resource_policy")),
         protocol_version=PROTOCOL_VERSION,
         temp_budget_bytes=int(getattr(settings, "federation_temp_budget_bytes", 0)),
@@ -2410,6 +2506,51 @@ class DiscoveryResponder:
                     db.close()
 
 
+def _candidate_capabilities(candidate: WorkerCandidate) -> TranscodeCapabilitiesRead | None:
+    """Parse a worker descriptor without trusting incomplete peer state."""
+
+    raw = dict(candidate.capabilities) if isinstance(candidate.capabilities, dict) else {}
+    raw.setdefault("ffmpeg_available", True)
+    raw.setdefault("ffmpeg_path", "ffmpeg")
+    raw_encoders = raw.get("encoders")
+    if isinstance(raw_encoders, list):
+        normalized_encoders: list[dict[str, Any]] = []
+        for item in raw_encoders:
+            if not isinstance(item, dict):
+                continue
+            normalized = dict(item)
+            if not normalized.get("codec") and normalized.get("name"):
+                normalized["codec"] = _encoder_codec(str(normalized["name"])) or str(normalized["name"])
+            normalized_encoders.append(normalized)
+        raw["encoders"] = normalized_encoders
+    try:
+        return TranscodeCapabilitiesRead.model_validate(raw)
+    except ValueError:
+        return None
+
+
+def _resolve_worker_plan(
+    candidate: WorkerCandidate,
+    plan: TranscodePlan,
+) -> tuple[TranscodeCapabilitiesRead | None, TranscodePlan | None, str | None]:
+    capabilities = _candidate_capabilities(candidate)
+    if capabilities is None:
+        return None, None, "Worker capability data is incomplete"
+    if not capabilities.ffmpeg_available:
+        return capabilities, None, capabilities.error or "FFmpeg is unavailable on this worker"
+    execution_mode = plan.execution_mode or "hardware_required"
+    resolved_plan, errors = resolve_transcode_plan_encoders(
+        plan,
+        capabilities,
+        execution_mode=execution_mode,
+        target_device_id=plan.target_device_id,
+        force_auto=plan.target_mode != "local",
+    )
+    if errors:
+        return capabilities, None, "; ".join(errors)
+    return capabilities, resolved_plan, None
+
+
 def _capability_encoders(candidate: WorkerCandidate) -> list[dict[str, Any]]:
     values = candidate.capabilities.get("encoders") if isinstance(candidate.capabilities, dict) else []
     return [item for item in values if isinstance(item, dict)]
@@ -2455,10 +2596,12 @@ def _worker_resource_allowed(candidate: WorkerCandidate, plan: TranscodePlan, re
     return True, "A compatible GPU is enabled"
 
 
-def worker_supports_plan(candidate: WorkerCandidate, plan: TranscodePlan) -> tuple[bool, str]:
-    if not candidate.reachable or (not candidate.is_local and not candidate.accept_jobs):
-        return False, "Worker is offline or does not accept jobs"
-    encoders = {str(item.get("name")): item for item in _capability_encoders(candidate)}
+def _worker_supports_resolved_plan(
+    candidate: WorkerCandidate,
+    plan: TranscodePlan,
+    capabilities: TranscodeCapabilitiesRead,
+) -> tuple[bool, str]:
+    encoders = {item.name: item for item in capabilities.encoders}
     requested = [
         str(item.encoder or "")
         for item in plan.video_streams
@@ -2477,13 +2620,20 @@ def worker_supports_plan(candidate: WorkerCandidate, plan: TranscodePlan) -> tup
         return False, "The selected CPU cannot execute a hardware encoder plan"
     for encoder in requested:
         capability = encoders.get(encoder)
-        if capability is None or capability.get("available") is False:
+        if capability is None or capability.available is False:
             return False, f"Encoder {encoder} is not available on this worker"
-        if plan.target_device_id:
-            device_ids = capability.get("device_ids") or []
-            if device_ids and plan.target_device_id not in device_ids:
-                return False, f"Encoder {encoder} is not available on the selected device"
-    return True, "All requested encoders are available"
+        if plan.target_device_id and capability.device_ids and plan.target_device_id not in capability.device_ids:
+            return False, f"Encoder {encoder} is not available on the selected device"
+    return True, "Automatically selected encoders are available"
+
+
+def worker_supports_plan(candidate: WorkerCandidate, plan: TranscodePlan) -> tuple[bool, str]:
+    if not candidate.reachable or (not candidate.is_local and not candidate.accept_jobs):
+        return False, "Worker is offline or does not accept jobs"
+    capabilities, resolved_plan, resolution_error = _resolve_worker_plan(candidate, plan)
+    if capabilities is None or resolved_plan is None:
+        return False, resolution_error or "Worker cannot resolve this transcode plan"
+    return _worker_supports_resolved_plan(candidate, resolved_plan, capabilities)
 
 
 def estimate_worker_finish_seconds(
@@ -2520,7 +2670,12 @@ def select_worker(
 ) -> WorkerSelection:
     eligible: list[WorkerSelection] = []
     for candidate in candidates:
-        supported, reason = worker_supports_plan(candidate, plan)
+        if not candidate.reachable or (not candidate.is_local and not candidate.accept_jobs):
+            continue
+        capabilities, resolved_plan, _resolution_error = _resolve_worker_plan(candidate, plan)
+        if capabilities is None or resolved_plan is None:
+            continue
+        supported, reason = _worker_supports_resolved_plan(candidate, resolved_plan, capabilities)
         if not supported:
             continue
         eligible.append(
@@ -2532,6 +2687,7 @@ def select_worker(
                     duration_seconds=duration_seconds,
                 ),
                 reason=reason,
+                resolved_plan=resolved_plan,
             )
         )
     if not eligible:
@@ -3025,14 +3181,15 @@ def queue_remote_transcode_job(
 
     member = _remote_member(db, selection.candidate.installation_id)
     remote_capabilities = TranscodeCapabilitiesRead.model_validate(member.capabilities or {})
+    resolved_plan = selection.resolved_plan or plan
     validation = validate_transcode_plan(
         db,
         settings,
         media_file,
-        plan,
+        resolved_plan,
         output_subfolder=output_subfolder,
         capabilities_override=remote_capabilities,
-        device_id_override=plan.target_device_id,
+        device_id_override=resolved_plan.target_device_id,
     )
     if not validation.valid:
         raise FederationError("; ".join(validation.errors) or "Remote transcode plan is invalid", status_code=422)
