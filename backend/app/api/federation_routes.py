@@ -36,6 +36,7 @@ from backend.app.services.transcode_federation import (
     ensure_remote_storage_available,
     exclude_member,
     federation_read,
+    federation_settings_read,
     get_federation_state,
     local_descriptor,
     member_heartbeat,
@@ -89,10 +90,12 @@ def federation_passcode_reset(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationPasscodeResetRead:
-    code, from_environment = reset_pairing_code(db, settings)
+    reset_pairing_code(db, settings)
+    current = federation_settings_read(db, settings)
     return TranscodeFederationPasscodeResetRead(
-        pairing_code=code,
-        pairing_code_from_environment=from_environment,
+        pairing_code=current.pairing_code,
+        pairing_code_from_environment=current.pairing_code_from_environment,
+        pairing_code_expires_at=current.pairing_code_expires_at,
     )
 
 

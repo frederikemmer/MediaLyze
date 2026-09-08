@@ -594,6 +594,15 @@ Frontend design decision history:
 * Migration: remove those selectors and update the affected matrix catalog fixture; retain `.transcode-matrix-meta` only for the Accelerator tooltip content.
 * Status: active.
 
+### 2026-09-08 — Manage federation members in the shared transcode workspace
+
+* Decision: trusted federation members use a dedicated `Members` tab beside `Accelerators` in the shared Transcoding automation workspace, with the same searchable expandable list and borderless quick actions as profiles and rules. The compact automation tabs are labeled `Profiles`, `Rules`, `Accelerators`, and `Members`. Federation connection controls use the compact rectangular `settings-panel-header-action` pattern, with animated connect/telescope icons; copy actions use the shared animated `CopyIcon`, and tooltip bubbles fit their content. Successful copy actions stay silent and only clipboard errors become panel feedback. The federation enable control reuses the shared `toggle-switch` pattern. Both pairing actions are labeled `Connect`, and local endpoints use a flat responsive list with borderless copy actions instead of redundant type labels. Discovered candidates collect their peer pairing code in an inline field beside each Connect action, with missing-code feedback kept local to that field. The Federation heading stays concise, Found in Network exposes a borderless immediate refresh action, and the automation workspace uses a slightly larger separation above the tabs with a tighter gap below them.
+* Rationale: keep the Federation panel focused on pairing and local policy while giving member status, actions, and details one consistent workspace treatment.
+* Canonical references: `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, `frontend/src/components/TranscodeFederationPanel.tsx`, `frontend/src/components/AnimatedConnectIcon.tsx`, `frontend/src/components/AnimatedTelescopeIcon.tsx`, `frontend/src/components/CopyIcon.tsx`, `frontend/src/components/TooltipTrigger.tsx`, and the `Federation members tab` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors: `transcode-federation-members`, `transcode-federation-member`, `transcode-federation-member-main`, `transcode-federation-member-details`, and `transcode-federation-member-actions`.
+* Migration: remove the standalone member accordion from the Federation panel and keep member actions/state connected through `TranscodingSettingsPanel`.
+* Status: active.
+
 ## 8.3 Internationalization
 
 Current translation state:

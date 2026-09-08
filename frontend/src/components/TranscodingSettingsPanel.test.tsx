@@ -35,8 +35,9 @@ const federation: TranscodeFederation = {
     installation_id: "installation-test",
     federation_name: "Test federation",
     display_name: "Test installation",
-    pairing_code: "test-code",
+    pairing_code: "123456",
     pairing_code_from_environment: false,
+    pairing_code_expires_at: 0,
     discovery_enabled: false,
     accept_jobs: false,
     endpoint_urls: [],
@@ -247,10 +248,14 @@ describe("TranscodingSettingsPanel", () => {
     vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
     vi.spyOn(api, "libraries").mockResolvedValue([]);
     vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
+    vi.spyOn(api, "updateTranscodeFederation").mockResolvedValue(federation.settings);
+    vi.spyOn(api, "discoverTranscodeFederation").mockResolvedValue(federation);
+    vi.spyOn(api, "pairTranscodeFederation").mockResolvedValue(federation);
   });
 
   afterEach(() => {
     cleanup();
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
     vi.restoreAllMocks();
   });
 
@@ -279,25 +284,128 @@ describe("TranscodingSettingsPanel", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("keeps federation guidance in a tooltip beside the heading", async () => {
+  it("places the federation toggle in the heading without redundant status guidance", async () => {
+    vi.mocked(api.transcodeFederation).mockResolvedValueOnce({
+      ...federation,
+      discovered: [{
+        installation_id: "discovered-installation",
+        federation_id: "federation-test",
+        display_name: "Discovered worker",
+        endpoint_urls: ["http://worker:8091"],
+        protocol_version: 1,
+        reachable: true,
+        last_seen_at: null,
+      }],
+    });
+    vi.mocked(api.discoverTranscodeFederation).mockResolvedValue({
+      ...federation,
+      discovered: [{
+        installation_id: "discovered-installation",
+        federation_id: "federation-test",
+        display_name: "Discovered worker",
+        endpoint_urls: ["http://worker:8091"],
+        protocol_version: 1,
+        reachable: true,
+        last_seen_at: null,
+      }],
+    });
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    expect(await screen.findByRole("heading", { name: "Transcode federation" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Federation" })).toBeInTheDocument();
     expect(screen.queryByText("Pair trusted MediaLyze installations directly and let compatible workers execute structured transcode plans without exposing library paths.")).not.toBeInTheDocument();
+    const automationSection = document.querySelector("section.transcode-automation-section");
+    const federationPanel = document.querySelector("section.transcode-federation-panel");
+    expect(automationSection).not.toBeNull();
+    expect(federationPanel).not.toBeNull();
+    expect(federationPanel?.previousElementSibling).toBe(automationSection);
 
+    const federationToggle = screen.getByRole("switch", { name: "Enable direct federation for this installation" });
+    expect(federationToggle).not.toBeChecked();
+    expect(federationToggle.closest("label")).toHaveClass("toggle-switch", "transcode-federation-toggle");
+    expect(federationToggle.closest("label")).not.toHaveTextContent("Enable direct federation for this installation");
+    expect(federationToggle.closest("label")?.querySelector(".toggle-switch-track .toggle-switch-thumb")).not.toBeNull();
+    expect(federationToggle.closest(".transcode-federation-heading")).not.toBeNull();
+    expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Explain transcode federation" })).not.toBeInTheDocument();
+    fireEvent.click(federationToggle);
+    await waitFor(() => expect(api.updateTranscodeFederation).toHaveBeenCalledWith({ enabled: true }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     const copyButton = screen.getByRole("button", { name: "Copy code" });
     const resetButton = screen.getByRole("button", { name: "Reset code" });
-    expect(copyButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-code-action");
+    expect(copyButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-address-copy");
     expect(copyButton.querySelector("svg")).toBeInTheDocument();
+    expect(copyButton.closest(".transcode-federation-code")).not.toBeNull();
     expect(resetButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-code-action");
     expect(resetButton.querySelector("svg")).toBeInTheDocument();
+    expect(resetButton.closest(".transcode-federation-code-heading")).not.toBeNull();
+    expect(document.querySelector(".transcode-federation-code-group")?.closest(".transcode-federation-fields")).not.toBeNull();
+    expect(document.querySelector(".transcode-federation-code-progress")).not.toBeNull();
+    const addressCopyButtons = screen.getAllByRole("button", { name: "Copy address" });
+    expect(addressCopyButtons).toHaveLength(2);
+    for (const addressCopyButton of addressCopyButtons) {
+      expect(addressCopyButton).toHaveClass("tooltip-trigger", "icon-only-button", "transcode-federation-address-copy");
+      expect(addressCopyButton.querySelector("svg")).toBeInTheDocument();
+    }
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    fireEvent.click(addressCopyButtons[0]);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("http://medialyze-nas.local:8091"));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("123456"));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const connectButtons = screen.getAllByRole("button", { name: "Connect" });
+    expect(connectButtons).toHaveLength(2);
+    for (const connectButton of connectButtons) {
+      expect(connectButton).toHaveClass("secondary", "small", "settings-panel-header-action", "transcode-federation-connect-button");
+      expect(connectButton.querySelector("svg")).toBeInTheDocument();
+    }
+    const discoveredCodeInput = document.querySelector(".transcode-federation-peer-code-input") as HTMLInputElement;
+    expect(discoveredCodeInput).not.toBeNull();
+    expect(discoveredCodeInput).toHaveAttribute("placeholder", "Pairing code");
+    expect(discoveredCodeInput).toHaveAttribute("aria-label", "Pairing code");
+    expect(screen.queryByRole("button", { name: "Pair" })).not.toBeInTheDocument();
     expect(screen.getByText("Reachable network addresses")).toBeInTheDocument();
+    expect(screen.queryByText("Pairing is direct; members are not used as relays.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hostname")).not.toBeInTheDocument();
+    expect(screen.queryByText("IP address")).not.toBeInTheDocument();
+    expect(screen.queryByText("Respond to direct LAN discovery")).not.toBeInTheDocument();
+    expect(screen.queryByText("Accept remote jobs on this installation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Foreign-job resources")).not.toBeInTheDocument();
+    expect(screen.queryByText("Allow foreign CPU jobs")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Stable installation ID:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discover on LAN" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Discovered installations")).not.toBeInTheDocument();
+    const discoveredPanel = screen.getByText("Found in Network").closest(".transcode-federation-discovered");
+    expect(discoveredPanel).not.toBeNull();
+    expect(discoveredPanel?.querySelector(".transcode-federation-discovered-list")).not.toBeNull();
+    const refreshDiscoveryButton = screen.getByRole("button", { name: "Refresh discovery" });
+    expect(refreshDiscoveryButton).toHaveClass("tooltip-trigger", "icon-only-button", "compatibility-profile-quick-action", "transcode-federation-discovered-refresh");
+    fireEvent.click(refreshDiscoveryButton);
+    await waitFor(() => expect(api.discoverTranscodeFederation).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Add trusted installation")).not.toBeInTheDocument();
+    const pairing = discoveredPanel?.parentElement;
+    const manualPairForm = pairing?.querySelector(".transcode-federation-pair-form");
+    expect(manualPairForm).not.toBeNull();
+    expect(pairing?.firstElementChild).toBe(discoveredPanel);
+    expect(pairing?.lastElementChild).toBe(manualPairForm);
     expect(screen.getByText("http://medialyze-nas.local:8091")).toBeInTheDocument();
     expect(screen.getByText("http://192.168.1.20:8091")).toBeInTheDocument();
+    expect(screen.getByText("Discovered worker")).toBeInTheDocument();
+    expect(screen.getAllByText("http://worker:8091")).toHaveLength(1);
+    const discoveredConnectButton = discoveredPanel?.querySelector("button.transcode-federation-connect-button");
+    expect(discoveredConnectButton).not.toBeNull();
+    fireEvent.click(discoveredConnectButton as HTMLButtonElement);
+    expect(discoveredCodeInput).toHaveClass("is-invalid");
+    expect(discoveredCodeInput).toHaveAttribute("aria-invalid", "true");
+    await waitFor(() => expect(discoveredCodeInput).not.toHaveClass("is-invalid"), { timeout: 1500 });
+    expect(discoveredCodeInput).toHaveAttribute("aria-invalid", "false");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.change(discoveredCodeInput, { target: { value: "12a3456" } });
+    expect(discoveredCodeInput).toHaveValue("123456");
+    fireEvent.click(discoveredConnectButton as HTMLButtonElement);
+    await waitFor(() => expect(api.pairTranscodeFederation).toHaveBeenCalledWith({ endpoint: "http://worker:8091", pairing_code: "123456" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Explain transcode federation" }));
-
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Pair trusted MediaLyze installations directly and let compatible workers execute structured transcode plans without exposing library paths.");
   });
 
   it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
@@ -366,5 +474,23 @@ describe("TranscodingSettingsPanel", () => {
     expect(memberPill).toHaveTextContent("Federick-PC");
     expect(memberPill?.closest("details.transcode-device-matrix")).not.toBeNull();
     expect(screen.queryByText(/Hardware capability matrix/)).not.toBeInTheDocument();
+  });
+
+  it("shows federation members in the shared automation toggle", async () => {
+    vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMember);
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Members" }));
+
+    expect(await screen.findByText("Federick-PC")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search federation members" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync Federick-PC" })).toHaveClass("compatibility-profile-quick-action");
+    expect(screen.getByRole("button", { name: "Exclude Federick-PC" })).toHaveClass("compatibility-profile-quick-action");
+    expect(document.querySelector(".transcode-federation-members")).toBeNull();
+
+    fireEvent.click(screen.getByText("Federick-PC"));
+    expect(await screen.findByDisplayValue("http://federick-pc:8091")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("connected")).toBeInTheDocument();
+    expect(screen.getByText("Accept remote transcode jobs")).toBeInTheDocument();
   });
 });

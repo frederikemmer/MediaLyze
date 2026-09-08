@@ -91,7 +91,7 @@ describe("TranscodeProfilesRulesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accelerators" }));
     expect(screen.getByRole("button", { name: "Explain accelerators" })).toBeInTheDocument();
     expect(screen.getByTestId("capability-matrix")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Transcoding profiles" }));
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
     expect(screen.getByRole("searchbox", { name: "Search profiles" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reusable stream plans and automatic matching rules.")).not.toBeInTheDocument();
@@ -124,8 +124,9 @@ describe("TranscodeProfilesRulesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete My profile" }));
     await waitFor(() => expect(api.deleteTranscodeProfile).toHaveBeenCalledWith(custom.id));
 
-    fireEvent.click(screen.getByRole("button", { name: "Transcoding rules" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rules" }));
     expect(screen.getByRole("button", { name: "Explain transcoding rules" })).toBeInTheDocument();
+    expect(screen.queryByText("Rules are evaluated from top to bottom. A blocked winning rule does not fall through.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start inventory" })).not.toBeInTheDocument();

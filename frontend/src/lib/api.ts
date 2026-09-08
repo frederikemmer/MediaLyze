@@ -1645,6 +1645,7 @@ export type TranscodeFederationSettings = {
   display_name: string;
   pairing_code: string;
   pairing_code_from_environment: boolean;
+  pairing_code_expires_at: number;
   discovery_enabled: boolean;
   accept_jobs: boolean;
   endpoint_urls: string[];
@@ -2755,7 +2756,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   resetTranscodeFederationPasscode: () =>
-    request<{ pairing_code: string; pairing_code_from_environment: boolean }>("/transcoding/federation/passcode/reset", { method: "POST" }),
+    request<{ pairing_code: string; pairing_code_from_environment: boolean; pairing_code_expires_at: number }>("/transcoding/federation/passcode/reset", { method: "POST" }),
   discoverTranscodeFederation: () =>
     request<TranscodeFederation>("/transcoding/federation/discover", { method: "POST" }),
   pairTranscodeFederation: (payload: { endpoint: string; pairing_code: string }) =>

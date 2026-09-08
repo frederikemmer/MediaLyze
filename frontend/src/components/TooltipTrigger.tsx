@@ -116,8 +116,8 @@ export function TooltipTrigger({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const availableWidth = Math.max(0, viewportWidth - TOOLTIP_VIEWPORT_MARGIN * 2);
-    const resolvedWidth = Math.min(maxWidth, availableWidth);
-    const tooltipWidth = Math.min(tooltip.offsetWidth || resolvedWidth, resolvedWidth);
+    const resolvedMaxWidth = Math.min(maxWidth, availableWidth);
+    const tooltipWidth = Math.min(tooltip.offsetWidth || resolvedMaxWidth, resolvedMaxWidth);
     const tooltipHeight = tooltip.offsetHeight;
     const idealLeft =
       align === "center"
@@ -152,7 +152,8 @@ export function TooltipTrigger({
       if (
         current?.left === left &&
         current.top === top &&
-        current.width === resolvedWidth &&
+        current.width === "max-content" &&
+        current.maxWidth === resolvedMaxWidth &&
         current.maxHeight === maxHeight &&
         current.visibility === "visible"
       ) {
@@ -161,7 +162,8 @@ export function TooltipTrigger({
       return {
         left,
         top,
-        width: resolvedWidth,
+        width: "max-content",
+        maxWidth: resolvedMaxWidth,
         maxHeight,
         visibility: "visible",
       };

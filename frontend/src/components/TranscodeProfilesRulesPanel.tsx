@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, Copy, Plus, Power, Save, Search, ShieldCheck, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Power, RefreshCw, Save, Search, ShieldCheck, Trash2, Unplug, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -7,12 +7,15 @@ import {
   type LibrarySummary,
   type TranscodeCondition,
   type TranscodeConditionGroup,
+  type TranscodeFederation,
+  type TranscodeFederationMember,
   type TranscodeProfile,
   type TranscodeProfileDefinition,
   type TranscodeProfileStreamRule,
   type TranscodeRule,
 } from "../lib/api";
 import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
+import { CopyIcon } from "./CopyIcon";
 import { SlidingTogglePill } from "./SlidingTogglePill";
 import { SquarePenIcon } from "./SquarePenIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -37,11 +40,13 @@ type RuleDraft = {
   replacement_approved: boolean;
 };
 
-type AutomationTab = "profiles" | "rules" | "accelerators";
+type AutomationTab = "profiles" | "rules" | "accelerators" | "members";
 
 type TranscodeProfilesRulesPanelProps = {
   capabilityMatrix: ReactNode;
   acceleratorsTooltip: ReactNode;
+  federation?: TranscodeFederation | null;
+  onFederationData?: (data: TranscodeFederation) => void;
 };
 
 const CONDITION_FIELDS = [
@@ -122,6 +127,14 @@ function emptyProfileDefinition(): TranscodeProfileDefinition {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function memberResourceSummary(member: TranscodeFederationMember, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const resources = member.resources;
+  const cpuThreads = typeof resources.cpu_threads === "number" ? `${resources.cpu_threads} CPU` : null;
+  const freeBytes = typeof resources.temp_free_bytes === "number" ? `${Math.round(resources.temp_free_bytes / 1024 / 1024 / 1024)} GB free` : null;
+  const parts = [cpuThreads, freeBytes, `${member.active_jobs} ${t("transcoding.federation.activeJobs")}`].filter(Boolean);
+  return parts.join(" · ") || t("transcoding.federation.resourcesUnknown");
 }
 
 function profileDraftFrom(profile: TranscodeProfile): ProfileDraft {
@@ -387,15 +400,16 @@ function ProfileDefinitionEditor({
   );
 }
 
-export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTooltip }: TranscodeProfilesRulesPanelProps) {
+export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTooltip, federation = null, onFederationData }: TranscodeProfilesRulesPanelProps) {
   const { t } = useTranslation();
   const [profiles, setProfiles] = useState<TranscodeProfile[]>([]);
   const [rules, setRules] = useState<TranscodeRule[]>([]);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
   const [tab, setTab] = useState<AutomationTab>("profiles");
-  const [searchQueries, setSearchQueries] = useState<Record<AutomationTab, string>>({ profiles: "", rules: "", accelerators: "" });
+  const [searchQueries, setSearchQueries] = useState<Record<AutomationTab, string>>({ profiles: "", rules: "", accelerators: "", members: "" });
   const [expandedProfileId, setExpandedProfileId] = useState<number | null>(null);
   const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null);
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -404,6 +418,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [memberPending, setMemberPending] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -594,6 +609,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
   };
 
   const libraryNames = useMemo(() => new Map(libraries.map((library) => [library.id, library.name])), [libraries]);
+  const federationMembers = federation?.members ?? [];
   const normalizedSearchQuery = searchQueries[tab].trim().toLocaleLowerCase();
   const filteredProfiles = profiles.filter((profile) => {
     if (!normalizedSearchQuery) return true;
@@ -607,6 +623,16 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
       rule.output_mode,
       rule.output_subfolder,
       ...rule.library_ids.map((libraryId) => libraryNames.get(libraryId) ?? ""),
+    ].join(" ").toLocaleLowerCase().includes(normalizedSearchQuery);
+  });
+  const filteredMembers = federationMembers.filter((member) => {
+    if (!normalizedSearchQuery) return true;
+    return [
+      member.display_name,
+      member.installation_id,
+      member.status,
+      member.connection_status,
+      ...member.endpoint_urls,
     ].join(" ").toLocaleLowerCase().includes(normalizedSearchQuery);
   });
   const activeRuleProfile = useMemo(() => profiles.find((profile) => profile.id === ruleDraft?.profile_id), [profiles, ruleDraft?.profile_id]);
@@ -631,6 +657,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     setRuleEditorOpen(false);
     setExpandedProfileId(null);
     setExpandedRuleId(null);
+    setExpandedMemberId(null);
   };
 
   const toggleProfileRow = (profile: TranscodeProfile) => {
@@ -657,14 +684,44 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     setRuleEditorOpen(false);
   };
 
+  const syncMember = async (member: TranscodeFederationMember) => {
+    setMemberPending(member.installation_id);
+    setError(null);
+    try {
+      const next = await api.syncTranscodeFederationMember(member.installation_id);
+      onFederationData?.(next);
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
+
+  const excludeMember = async (member: TranscodeFederationMember) => {
+    if (!window.confirm(t("transcoding.federation.excludeConfirm", { name: member.display_name }))) return;
+    setMemberPending(member.installation_id);
+    setError(null);
+    try {
+      await api.excludeTranscodeFederationMember(member.installation_id);
+      if (federation) {
+        onFederationData?.({ ...federation, members: federation.members.filter((item) => item.installation_id !== member.installation_id) });
+      }
+      if (expandedMemberId === member.installation_id) setExpandedMemberId(null);
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
+
   const renderSearch = () => (
     <div className="compatibility-profile-search transcode-automation-search">
       <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
       <input
         type="search"
         value={searchQueries[tab]}
-        aria-label={t(tab === "profiles" ? "transcoding.automation.searchProfiles" : "transcoding.automation.searchRules")}
-        placeholder={t("transcoding.automation.searchPlaceholder")}
+        aria-label={t(tab === "profiles" ? "transcoding.automation.searchProfiles" : tab === "rules" ? "transcoding.automation.searchRules" : "transcoding.automation.searchMembers")}
+        placeholder={t(tab === "members" ? "transcoding.automation.membersSearchPlaceholder" : "transcoding.automation.searchPlaceholder")}
         onChange={(event) => setSearchQueries((current) => ({ ...current, [tab]: event.target.value }))}
       />
       {searchQueries[tab] ? (
@@ -839,7 +896,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
           disabled={busy}
           onClick={() => void duplicateProfile(profile)}
         >
-          <Copy aria-hidden="true" className="nav-icon" size={18} />
+          <CopyIcon aria-hidden="true" className="nav-icon" size={18} />
         </button>
       ) : null}
       <button
@@ -961,7 +1018,6 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
 
   const renderRuleList = () => (
     <div className="transcode-automation-tab-content">
-      <p className="field-hint">{t("transcoding.automation.priorityHint")}</p>
       <div className="compatibility-profile-list">
         {renderSearch()}
         {filteredRules.map((rule) => {
@@ -996,6 +1052,65 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     </div>
   );
 
+  const renderMemberList = () => (
+    <div className="transcode-automation-tab-content">
+      <div className="compatibility-profile-list">
+        {renderSearch()}
+        {federation === null ? <p className="compatibility-profile-search-empty">{t("transcoding.federation.loading")}</p> : filteredMembers.map((member) => {
+          const expanded = expandedMemberId === member.installation_id;
+          const memberBusy = busy || memberPending !== null;
+          const syncing = memberPending === member.installation_id;
+          return (
+            <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={member.installation_id}>
+              <div className="compatibility-profile-list-row">
+                <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => setExpandedMemberId(expanded ? null : member.installation_id)}>
+                  <span className="transcode-automation-list-copy transcode-federation-member-list-copy">
+                    <strong><span className={`status-dot ${member.reachable ? "is-online" : "is-offline"}`} aria-hidden="true" />{member.display_name}</strong>
+                    <small>{member.connection_status} · {memberResourceSummary(member, t)}</small>
+                  </span>
+                  <ChevronDown aria-hidden="true" />
+                </button>
+                <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
+                  <button
+                    type="button"
+                    className="secondary icon-only-button compatibility-profile-quick-action"
+                    aria-label={`${t("transcoding.federation.sync")} ${member.display_name}`}
+                    title={t("transcoding.federation.sync")}
+                    disabled={memberBusy}
+                    onClick={() => void syncMember(member)}
+                  >
+                    <RefreshCw className={syncing ? "spin" : undefined} aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary icon-only-button compatibility-profile-quick-action danger"
+                    aria-label={`${t("transcoding.federation.exclude")} ${member.display_name}`}
+                    title={t("transcoding.federation.exclude")}
+                    disabled={memberBusy}
+                    onClick={() => void excludeMember(member)}
+                  >
+                    <Unplug aria-hidden="true" size={18} />
+                  </button>
+                </div>
+              </div>
+              {expanded ? (
+                <div className="compatibility-profile-details transcode-automation-details transcode-federation-member-tab-details">
+                  <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid">
+                    <label><span>{t("transcoding.federation.memberEndpoint")}</span><input readOnly value={member.endpoint_urls[0] ?? member.installation_id} /></label>
+                    <label><span>{t("transcoding.federation.memberStatus")}</span><input readOnly value={member.connection_status} /></label>
+                  </div>
+                  <label className="app-settings-flag-toggle"><input type="checkbox" checked={member.accept_jobs} readOnly /><span>{t("transcoding.federation.acceptingJobs")}</span></label>
+                  {member.last_error ? <div className="notice error" role="alert">{member.last_error}</div> : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+        {federation !== null && !filteredMembers.length ? <p className="compatibility-profile-search-empty">{federationMembers.length ? t("transcoding.automation.membersSearchEmpty") : t("transcoding.federation.noMembers")}</p> : null}
+      </div>
+    </div>
+  );
+
   const panelAction = tab === "profiles" ? (
     <button type="button" className="secondary small settings-panel-header-action" onClick={startNewProfile} disabled={busy}>
       <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newProfile")}
@@ -1017,12 +1132,19 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
       <p>{t("transcoding.automation.priorityHint")}</p>
       <p>{t("transcoding.automation.securityHint")}</p>
     </div>
-  ) : acceleratorsTooltip;
+  ) : tab === "accelerators" ? acceleratorsTooltip : (
+    <div className="transcode-automation-description-tooltip">
+      <p>{t("transcoding.automation.membersDescription")}</p>
+      <p>{t("transcoding.federation.directOnly")}</p>
+    </div>
+  );
   const automationTooltipAriaLabel = tab === "profiles"
     ? t("transcoding.automation.profilesHelpAria")
     : tab === "rules"
       ? t("transcoding.automation.rulesHelpAria")
-      : t("transcoding.automation.acceleratorsHelpAria");
+      : tab === "accelerators"
+        ? t("transcoding.automation.acceleratorsHelpAria")
+        : t("transcoding.automation.membersHelpAria");
 
   return (
     <section className="app-settings-section transcode-automation-section">
@@ -1037,7 +1159,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
             <div className="transcode-automation-tab-controls">
               <div className="library-history-range-toggle" role="tablist" aria-label={t("transcoding.automation.managementTitle")}>
                 <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
-                {(["profiles", "rules", "accelerators"] as AutomationTab[]).map((key) => (
+                {(["profiles", "rules", "accelerators", "members"] as AutomationTab[]).map((key) => (
                   <button
                     key={key}
                     type="button"
@@ -1061,7 +1183,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
             </div>
             {panelAction ? <div className="settings-profile-toggle-actions">{panelAction}</div> : null}
           </div>
-          {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : capabilityMatrix}
+          {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix : renderMemberList()}
         </div>
       )}
     </section>

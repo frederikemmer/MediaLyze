@@ -28,9 +28,31 @@ All notable changes to this project will be documented in this file.
 - replace federation pairing-code text actions with borderless icon buttons and a restore-defaults history icon
 - show detected hostname and IP addresses for direct transcode federation pairing, including explicitly advertised endpoints
 - list tested federation-member hardware matrices in Accelerators with a member pill, instead of duplicating them inside each member accordion
+- move federation members into the shared transcoding automation toggle beside Accelerators, with the same searchable expandable list treatment as profiles and rules
+- shorten the transcoding automation tabs to Profiles and Rules and remove the inline rule-order hint
 - show an explicit empty state for the untested transcoding capability matrix and ask users to run the hardware test before displaying capability values
+- use rectangular Connect/Discover actions with animated connect/telescope icons and label both federation pairing actions as Connect
+- use a six-digit federation pairing code that rotates every 30 seconds, with a synchronized expiry indicator and responsive pairing-code placement beside the federation and installation names
+- remove the visible direct-federation toggle label and omit IPv6 entries from reachable pairing addresses
+- tighten the spacing around the Transcode federation heading and its compact settings panel
+- align discovered federation pairing-code inputs with their Connect buttons and keep peer endpoints beside names when space allows
+- increase the visual prominence of discovered federation installation names
+- remove direct-LAN, remote-job, and foreign-resource policy controls from the federation settings surface
+- remove the redundant stable installation ID display from the federation settings surface
+- group automatically found federation installations in a separated "Found in Network" panel and remove the manual LAN discovery action
+- present discovered federation pairing as one segmented input-and-action control and flash a short red outline for missing codes without moving the field
+- place the manual federation pairing fallback below the automatically found installations and match the displayed pairing-code height to adjacent settings inputs
+- place the Federation settings panel below the transcoding automation toggle and its profile, rule, accelerator, and member workspace
+- flatten reachable federation endpoints into a responsive copyable list, remove redundant address/pairing hints, and show discovered installation names without duplicate endpoints
+- use animated Copy and Telescope icons for Transcoding federation actions and size tooltip bubbles to their content
+- keep successful federation copy actions silent while still surfacing clipboard errors
+- use the shared toggle-switch control for enabling direct federation in Transcoding settings
+- add inline pairing-code inputs to discovered federation Connect actions with local missing-code feedback
+- keep routine transcode federation setting autosaves quiet instead of showing a success notice after every change
+- place the federation enable toggle in the panel heading and remove the redundant status pill and description tooltip
+- rename the federation heading to Federation, add an immediate Found in Network refresh action, and refine spacing around the automation tabs and content
 - refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
-- remove the redundant active-job count row and transient refresh indicator from the Transcoding table while keeping the live polling and header counters
+- remove redundant Transcoding header status counters, refresh timestamp, and bulk-add dialog; move Active/History into the compact rectangular toggle and make filter reset a tooltip-backed restore icon
 - refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart
 - keep the FFmpeg log collapsed by default and let the expanded speed chart fill its complete detail column
 - remove redundant Transcoding detail headings and show source-to-target video codec and dynamic-range conversions from persisted source metadata and the selected plan
@@ -84,6 +106,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - prevent federation detail requests from failing when a discovered peer has not provided capabilities yet
+- prevent LAN discovery from listing this installation's own advertised endpoints as connectable peers
 - re-admit an excluded federation peer when it is paired again with the current pairing code
 - ignore local or remote self-identities when exchanging federation exclusions so a peer cannot exclude itself again
 - fix startup migration handling for existing transcode databases when federation fields are introduced

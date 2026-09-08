@@ -82,6 +82,11 @@ DISCOVERY_MESSAGE = "medialyze-transcode-discovery"
 ENVELOPE_CONTEXT = b"medialyze-transcode-federation-envelope-v1"
 PAIRING_CONTEXT = b"medialyze-transcode-federation-pairing-v1"
 TIMESTAMP_TOLERANCE_SECONDS = 300
+PAIRING_CODE_ROTATION_SECONDS = 30
+PAIRING_CODE_LENGTH = 6
+PAIRING_CODE_MODULUS = 10**PAIRING_CODE_LENGTH
+PAIRING_CODE_CLOCK_SKEW_BUCKETS = 1
+PAIRING_CODE_CONTEXT = PAIRING_CONTEXT + b"-rotating-code-v1"
 
 
 class FederationError(RuntimeError):
@@ -270,9 +275,44 @@ def derive_shared_secret(
 
 
 def _new_pairing_code() -> str:
-    # URL-safe and copyable while retaining substantially more entropy than a
-    # short numeric PIN.  It is intentionally shown only in the local admin UI.
-    return secrets.token_urlsafe(12)
+    """Return a six-digit legacy-compatible placeholder code."""
+
+    return f"{secrets.randbelow(PAIRING_CODE_MODULUS):0{PAIRING_CODE_LENGTH}d}"
+
+
+def _new_pairing_secret() -> str:
+    return secrets.token_hex(32)
+
+
+def _pairing_secret_from_seed(seed: str) -> str:
+    """Derive a persistent-format secret from a legacy/configured seed."""
+
+    return hmac.new(
+        PAIRING_CONTEXT,
+        seed.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _pairing_bucket(now: float | None = None) -> int:
+    current = time.time() if now is None else float(now)
+    return int(current // PAIRING_CODE_ROTATION_SECONDS)
+
+
+def pairing_code_expires_at(now: float | None = None) -> int:
+    """Return the Unix timestamp at which the current displayed code expires."""
+
+    return (_pairing_bucket(now) + 1) * PAIRING_CODE_ROTATION_SECONDS
+
+
+def _pairing_code_for_bucket(secret: str, bucket: int) -> str:
+    digest = hmac.new(
+        _secret_bytes(secret),
+        PAIRING_CODE_CONTEXT + str(bucket).encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    value = int.from_bytes(digest[:8], "big") % PAIRING_CODE_MODULUS
+    return f"{value:0{PAIRING_CODE_LENGTH}d}"
 
 
 def _pairing_hash(code: str, salt_hex: str) -> str:
@@ -286,7 +326,7 @@ def _pairing_hash(code: str, salt_hex: str) -> str:
 
 def _default_federation_state(settings: Settings) -> dict[str, Any]:
     installation_id = uuid4().hex
-    pairing_code = settings.federation_passcode or _new_pairing_code()
+    pairing_code = _new_pairing_code()
     pairing_salt = secrets.token_bytes(16).hex()
     return {
         "version": 1,
@@ -301,6 +341,7 @@ def _default_federation_state(settings: Settings) -> dict[str, Any]:
         "pairing_code": pairing_code,
         "pairing_salt": pairing_salt,
         "pairing_hash": _pairing_hash(pairing_code, pairing_salt),
+        "pairing_secret": _new_pairing_secret(),
         "excluded_installation_ids": [],
         # CPU is enabled by default.  An empty GPU map means every locally
         # probed GPU is enabled; explicit false entries are the per-device
@@ -346,20 +387,19 @@ def get_federation_state(db: Session, settings: Settings) -> dict[str, Any]:
         else:
             setting.value = state
         db.commit()
+        state["pairing_code"] = _effective_pairing_code(settings, state)
         return state
     state = dict(setting.value)
     changed = False
+    if not str(state.get("pairing_secret") or "").strip():
+        legacy_seed = str(settings.federation_passcode or state.get("pairing_code") or "").strip()
+        state["pairing_secret"] = _pairing_secret_from_seed(legacy_seed) if legacy_seed else _new_pairing_secret()
+        changed = True
     defaults = _default_federation_state(settings)
     for key, value in defaults.items():
         if key not in state:
             state[key] = value
             changed = True
-    if settings.federation_passcode and state.get("pairing_code") != settings.federation_passcode:
-        # Environment configuration is authoritative for the active code, but
-        # does not rotate already derived member secrets.
-        state["pairing_code"] = settings.federation_passcode
-        state["pairing_hash"] = _pairing_hash(settings.federation_passcode, state["pairing_salt"])
-        changed = True
     normalized_policy = _normalize_resource_policy(state.get("resource_policy"))
     if normalized_policy != state.get("resource_policy"):
         state["resource_policy"] = normalized_policy
@@ -371,27 +411,56 @@ def get_federation_state(db: Session, settings: Settings) -> dict[str, Any]:
     if changed:
         setting.value = state
         db.commit()
+    # Keep this legacy field useful to callers while the actual secret remains
+    # stable and the displayed/authenticated code is derived from the current
+    # rotation bucket.
+    state["pairing_code"] = _effective_pairing_code(settings, state)
     return state
 
 
-def _effective_pairing_code(settings: Settings, state: dict[str, Any]) -> str:
-    return str(settings.federation_passcode or state.get("pairing_code") or "")
+def _effective_pairing_secret(settings: Settings, state: dict[str, Any]) -> str:
+    configured_seed = str(settings.federation_passcode or "").strip()
+    if configured_seed:
+        return _pairing_secret_from_seed(configured_seed)
+    secret = str(state.get("pairing_secret") or "").strip()
+    if secret:
+        return secret
+    legacy_seed = str(state.get("pairing_code") or "").strip()
+    return _pairing_secret_from_seed(legacy_seed) if legacy_seed else _new_pairing_secret()
+
+
+def _effective_pairing_code(
+    settings: Settings,
+    state: dict[str, Any],
+    now: float | None = None,
+) -> str:
+    return _pairing_code_for_bucket(
+        _effective_pairing_secret(settings, state),
+        _pairing_bucket(now),
+    )
 
 
 def verify_pairing_code(settings: Settings, state: dict[str, Any], code: str) -> bool:
-    candidate = str(code or "")
-    if len(candidate) < 4:
+    candidate = str(code or "").strip()
+    if len(candidate) != PAIRING_CODE_LENGTH or not all("0" <= char <= "9" for char in candidate):
         return False
-    expected = _pairing_hash(candidate, str(state["pairing_salt"]))
-    active_hash = _pairing_hash(_effective_pairing_code(settings, state), str(state["pairing_salt"]))
-    return hmac.compare_digest(expected, active_hash)
+    secret = _effective_pairing_secret(settings, state)
+    current_bucket = _pairing_bucket()
+    return any(
+        hmac.compare_digest(
+            candidate,
+            _pairing_code_for_bucket(secret, current_bucket + offset),
+        )
+        for offset in range(-PAIRING_CODE_CLOCK_SKEW_BUCKETS, PAIRING_CODE_CLOCK_SKEW_BUCKETS + 1)
+    )
 
 
 def reset_pairing_code(db: Session, settings: Settings) -> tuple[str, bool]:
     state = get_federation_state(db, settings)
     if settings.federation_passcode:
-        return settings.federation_passcode, True
-    code = _new_pairing_code()
+        return _effective_pairing_code(settings, state), True
+    state["pairing_secret"] = _new_pairing_secret()
+    code = _effective_pairing_code(settings, state)
     salt = secrets.token_bytes(16).hex()
     state["pairing_code"] = code
     state["pairing_salt"] = salt
@@ -473,6 +542,8 @@ def _usable_network_ip(value: str) -> str | None:
     try:
         address = ipaddress.ip_address(str(value).strip())
     except ValueError:
+        return None
+    if address.version != 4:
         return None
     if address.is_loopback or address.is_unspecified or address.is_link_local or address.is_multicast:
         return None
@@ -644,14 +715,16 @@ def local_descriptor(db: Session, settings: Settings) -> dict[str, Any]:
 def federation_settings_read(db: Session, settings: Settings) -> TranscodeFederationSettingsRead:
     state = get_federation_state(db, settings)
     hostname_urls, ip_urls = _local_network_endpoints(settings, state)
+    now = time.time()
     return TranscodeFederationSettingsRead(
         enabled=bool(settings.federation_enabled and state.get("enabled")),
         federation_id=str(state["federation_id"]),
         installation_id=str(state["installation_id"]),
         federation_name=str(state.get("federation_name") or "MediaLyze Federation"),
         display_name=str(state.get("display_name") or "MediaLyze"),
-        pairing_code=_effective_pairing_code(settings, state),
+        pairing_code=_effective_pairing_code(settings, state, now),
         pairing_code_from_environment=bool(settings.federation_passcode),
+        pairing_code_expires_at=pairing_code_expires_at(now),
         discovery_enabled=bool(state.get("discovery_enabled", True)),
         accept_jobs=bool(state.get("accept_jobs", True)),
         endpoint_urls=_state_endpoints(settings, state),
@@ -2403,21 +2476,9 @@ def discover_peers(
     *,
     timeout_seconds: float = 0.75,
 ) -> list[dict[str, Any]]:
-    """Discover direct LAN peers; configured endpoint URLs are also returned."""
+    """Discover direct LAN peers without presenting this installation as a peer."""
 
     found: dict[str, dict[str, Any]] = {}
-    for endpoint in descriptor.get("endpoint_urls", []):
-        try:
-            normalized = normalize_endpoint(endpoint)
-        except FederationError:
-            continue
-        found[normalized] = {
-            "installation_id": normalized,
-            "display_name": normalized,
-            "endpoint_urls": [normalized],
-            "protocol_version": PROTOCOL_VERSION,
-            "reachable": False,
-        }
     packet = json.dumps(discovery_payload(descriptor), separators=(",", ":")).encode("utf-8")
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:

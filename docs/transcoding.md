@@ -81,20 +81,32 @@ HTTP(S) protocol endpoint of another member. The normal local admin API remains
 available on its existing port; Docker and split-network deployments can expose
 the separate federation listener on port `8091` plus UDP discovery on `43211`.
 
-Each installation keeps a stable installation ID and a copyable pairing code.
-The local Transcoding settings panel shows detected hostname and IP endpoint URLs
-for pairing another installation. Explicitly advertised URLs are shown with their
-configured scheme and port; for Docker port mappings, NAT, or reverse proxies,
-set `MEDIALYZE_FEDERATION_ADVERTISE_URLS` to the address the peer can actually
-reach.
+Each installation keeps a stable installation ID and shows a six-digit pairing
+code for the initial connection. The code rotates automatically every 30
+seconds; the server verifies the current short-lived code with a small clock
+skew tolerance, while already trusted members continue using their established
+peer secret. The local Transcoding settings panel shows detected hostname and
+IP endpoint URLs in one responsive, copyable list for pairing another
+installation. Explicitly advertised URLs are shown with their configured
+scheme and port; for Docker port mappings, NAT, or reverse proxies, set
+`MEDIALYZE_FEDERATION_ADVERTISE_URLS` to the address the peer can actually
+reach. LAN discovery omits the local
+installation, and a discovered installation name is shown instead of repeating
+the same endpoint as its display label. Each discovered candidate has its own
+pairing-code field next to the Connect action; an empty code is indicated on
+that field without adding a panel-level notification.
 Pairing is accepted only when the human-supplied code matches, and the two
 installations derive a peer-specific authenticated/encrypted application
-envelope from that exchange. Resetting the code prevents future pairings but
-does not silently remove already trusted members; an excluded member must be
-paired again explicitly. LAN discovery only returns direct candidates and
-never grants trust by itself. The member list exposes reachability, acceptance
-of remote jobs, resources, and tested capabilities. The Transcoding settings
-page combines the local matrix with each member's locally persisted codec
+envelope from that exchange. Resetting the code immediately replaces the
+rotating-code secret, prevents future pairings with the previous code, and does
+not silently remove already trusted members; an excluded member must be paired
+again explicitly. LAN discovery only returns direct candidates from
+other installations and never presents this installation as a peer or grants
+trust by itself. The shared Transcoding automation workspace
+exposes the trusted member list with reachability, acceptance of remote jobs,
+and sync/exclude actions in the same searchable expandable treatment as
+profiles and rules. The Transcoding settings page combines the local matrix
+with each member's locally persisted codec
 matrix in the `Accelerators` tab and labels remote devices with their member
 name. The matrix is evidence of a path that passed the real FFmpeg probe; it
 is not a speed ranking and federation does not run an automatic benchmark on

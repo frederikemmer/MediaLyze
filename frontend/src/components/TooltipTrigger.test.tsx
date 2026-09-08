@@ -47,4 +47,20 @@ describe("TooltipTrigger", () => {
     fireEvent.scroll(screen.getByTestId("outside-scroll-target"));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
+
+  it("fits the tooltip width to its content", async () => {
+    render(
+      <TooltipTrigger ariaLabel="Open tooltip" content="Short tooltip" maxWidth={240}>
+        Trigger
+      </TooltipTrigger>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open tooltip" }));
+    const tooltip = await screen.findByRole("tooltip");
+
+    expect(tooltip).toHaveStyle({
+      width: "max-content",
+      maxWidth: "240px",
+    });
+  });
 });

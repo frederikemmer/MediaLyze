@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import ReactECharts from "echarts-for-react";
 import {
   Activity,
-  Check,
   ChevronDown,
   CircleAlert,
   CircleCheck,
@@ -10,13 +9,10 @@ import {
   Clock3,
   Cpu,
   ExternalLink,
-  Filter,
-  Gauge,
   HardDrive,
+  History,
   LoaderCircle,
   Play,
-  Plus,
-  RefreshCw,
   RotateCcw,
   Search,
   Square,
@@ -26,10 +22,10 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { TooltipTrigger } from "../components/TooltipTrigger";
+import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { useAppData } from "../lib/app-data";
 import {
   api,
-  type MediaFileSearchResult,
   type TranscodeCapabilities,
   type TranscodeHardwareDevice,
   type TranscodeJob,
@@ -725,10 +721,6 @@ function HardwareLoadStrip({
 
   return (
     <section className="transcoding-hardware-load is-compact" aria-label={t("transcoding.center.hardwareLoad")}>
-      <div className="transcoding-hardware-load-title">
-        <Gauge aria-hidden="true" />
-        <strong>{t("transcoding.center.hardwareLoad")}</strong>
-      </div>
       <div className="transcoding-hardware-load-items">
         {items.map((item) => {
           return (
@@ -752,165 +744,8 @@ function HardwareLoadStrip({
   );
 }
 
-function BulkTranscodeDialog({
-  libraries,
-  onClose,
-  onQueued,
-  t,
-}: {
-  libraries: Array<{ id: number; name: string }>;
-  onClose: () => void;
-  onQueued: (started: number, failed: number) => void;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}) {
-  const [query, setQuery] = useState("");
-  const [libraryId, setLibraryId] = useState<number | null>(null);
-  const [results, setResults] = useState<MediaFileSearchResult[]>([]);
-  const [selected, setSelected] = useState<Map<number, MediaFileSearchResult>>(new Map());
-  const [profile, setProfile] = useState<ProfileKey>("compatibility");
-  const [loading, setLoading] = useState(false);
-  const [queueing, setQueueing] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [queueError, setQueueError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setLoading(true);
-      setSearchError(null);
-      api.fileSearch({ query, libraryId, limit: 20, signal: controller.signal })
-        .then((payload) => setResults(payload.items))
-        .catch((error: Error) => {
-          if (error.name !== "AbortError") {
-            setResults([]);
-            setSearchError(error.message);
-          }
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
-        });
-    }, 180);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [libraryId, query]);
-
-  function toggleResult(result: MediaFileSearchResult) {
-    if (!result.video_codec) return;
-    setSelected((current) => {
-      const next = new Map(current);
-      if (next.has(result.id)) next.delete(result.id);
-      else next.set(result.id, result);
-      return next;
-    });
-  }
-
-  async function queueSelected() {
-    const items = [...selected.values()];
-    if (items.length === 0 || queueing) return;
-    setQueueing(true);
-    setQueueError(null);
-    const settled = await Promise.allSettled(items.map(async (item) => {
-      const data = await api.fileTranscode(item.id);
-      const plan = data.profiles[profile];
-      if (!plan) throw new Error(t("transcoding.center.profileUnavailable", { profile: t(`transcoding.profiles.${profile}`) }));
-      return api.startFileTranscode(item.id, plan);
-    }));
-    const started = settled.filter((result): result is PromiseFulfilledResult<TranscodeJob> => result.status === "fulfilled").length;
-    const failed = settled.length - started;
-    setQueueing(false);
-    if (started > 0) {
-      onQueued(started, failed);
-      onClose();
-    } else {
-      setQueueError(t("transcoding.center.queueFailed"));
-    }
-  }
-
-  return (
-    <div className="settings-create-library-backdrop transcoding-add-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="settings-create-library-dialog transcoding-add-dialog" role="dialog" aria-modal="true" aria-labelledby="transcoding-add-dialog-title">
-        <div className="settings-create-library-dialog-header">
-          <div>
-            <p className="eyebrow">{t("transcoding.center.eyebrow")}</p>
-            <h2 id="transcoding-add-dialog-title">{t("transcoding.center.addTitle")}</h2>
-            <p className="subtitle">{t("transcoding.center.addDescription")}</p>
-          </div>
-          <button type="button" className="secondary icon-only-button settings-create-library-dialog-close" aria-label={t("common.close")} onClick={onClose}>
-            <X aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="transcoding-bulk-controls">
-          <label className="transcoding-search-field">
-            <span className="sr-only">{t("transcoding.center.searchFiles")}</span>
-            <Search aria-hidden="true" />
-            <input autoFocus type="search" value={query} placeholder={t("transcoding.center.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
-          </label>
-          <label className="field transcoding-library-filter">
-            <span>{t("transcoding.filters.library")}</span>
-            <select value={libraryId ?? ""} onChange={(event) => setLibraryId(event.target.value ? Number(event.target.value) : null)}>
-              <option value="">{t("common.all")}</option>
-              {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
-            </select>
-          </label>
-          <label className="field transcoding-profile-filter">
-            <span>{t("transcoding.profile")}</span>
-            <select value={profile} onChange={(event) => setProfile(event.target.value as ProfileKey)}>
-              {PROFILE_KEYS.map((key) => <option key={key} value={key}>{t(`transcoding.profiles.${key}`)}</option>)}
-            </select>
-          </label>
-        </div>
-
-        {selected.size > 0 ? (
-          <div className="transcoding-selection-summary">
-            <strong>{t("transcoding.center.selectedCount", { count: selected.size })}</strong>
-            <div className="transcoding-selection-chips">
-              {[...selected.values()].map((item) => (
-                <button key={item.id} type="button" className="badge transcoding-selection-chip" onClick={() => toggleResult(item)} title={t("transcoding.center.removeSelected")}>
-                  <span>{item.filename}</span><X aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="transcoding-bulk-results" aria-live="polite">
-          {loading ? <div className="transcoding-bulk-status"><LoaderCircle className="spin" aria-hidden="true" />{t("transcoding.center.loadingFiles")}</div> : null}
-          {searchError ? <div className="alert" role="alert">{searchError}</div> : null}
-          {!loading && !searchError && results.length === 0 ? <div className="transcoding-bulk-status">{t("transcoding.center.noFiles")}</div> : null}
-          {results.map((result) => {
-            const selectable = Boolean(result.video_codec);
-            return (
-              <label key={result.id} className={`transcoding-select-result${selected.has(result.id) ? " is-selected" : ""}${!selectable ? " is-disabled" : ""}`}>
-                <input type="checkbox" checked={selected.has(result.id)} disabled={!selectable} onChange={() => toggleResult(result)} />
-                <span className="transcoding-select-result-copy">
-                  <strong>{result.filename}</strong>
-                  <span>{result.library_name} · {formatBytes(result.size_bytes)} · {result.resolution ?? t("transcoding.center.unknownResolution")}</span>
-                </span>
-                {!selectable ? <small>{t("transcoding.center.videoRequired")}</small> : null}
-              </label>
-            );
-          })}
-        </div>
-
-        <p className="field-hint transcoding-bulk-note"><Filter aria-hidden="true" />{t("transcoding.center.bulkSafetyNote")}</p>
-        {queueError ? <div className="alert" role="alert">{queueError}</div> : null}
-        <div className="settings-delete-library-actions transcoding-add-actions">
-          <button type="button" className="secondary" onClick={onClose}>{t("common.cancel")}</button>
-          <button type="button" disabled={selected.size === 0 || queueing} onClick={() => void queueSelected()}>
-            {queueing ? <LoaderCircle className="spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            {t("transcoding.center.startSelected", { count: selected.size })}
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 export function TranscodingPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { appSettings, libraries } = useAppData();
   const [tab, setTab] = useState<CenterTab>("active");
   const [activeJobs, setActiveJobs] = useState<TranscodeJob[]>([]);
@@ -925,8 +760,6 @@ export function TranscodingPage() {
   const [retryingIds, setRetryingIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<TranscodingColumnWidths>(() => getTranscodingColumnWidths());
   const [, setSpeedRevision] = useState(0);
@@ -955,7 +788,6 @@ export function TranscodingPage() {
     if (historyResult.status === "fulfilled") setHistoryJobs(historyResult.value.items);
     else failures.push(historyResult.reason instanceof Error ? historyResult.reason.message : String(historyResult.reason));
     setError(failures.length > 0 ? failures.join(" · ") : null);
-    setLastUpdated(new Date());
     refreshInFlightRef.current = false;
   }, []);
 
@@ -1003,13 +835,6 @@ export function TranscodingPage() {
     for (const job of activeJobs) byId.set(job.id, job);
     return [...byId.values()];
   }, [activeJobs, historyJobs]);
-  const counts = useMemo(() => ({
-    running: allJobs.filter((job) => job.status === "running").length,
-    queued: allJobs.filter((job) => job.status === "queued").length,
-    completed: allJobs.filter((job) => job.status === "completed").length,
-    failed: allJobs.filter((job) => job.status === "failed").length,
-  }), [allJobs]);
-
   const visibleJobs = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     const source = tab === "active" ? activeJobs : allJobs.filter((job) => job.status !== "queued" && job.status !== "running");
@@ -1168,51 +993,16 @@ export function TranscodingPage() {
             </div>
             <HardwareLoadStrip activeJobs={activeJobs} capabilities={capabilities} cpuCapacity={cpuCapacity} gpuCapacity={gpuCapacity} t={t} />
           </div>
-          <div className="transcoding-center-statuses" aria-live="polite">
-            <span className="scan-job-metric-item">
-              <span className="scan-job-metric-icon-wrap status-running" title={`${counts.running} ${t("transcoding.center.running")}`}>
-                <Play aria-hidden="true" />
-                <span className="scan-job-metric-value">{counts.running} {t("transcoding.center.running")}</span>
-              </span>
-            </span>
-            <span className="scan-job-metric-item">
-              <span className="scan-job-metric-sep" aria-hidden="true" />
-              <span className="scan-job-metric-icon-wrap status-queued" title={`${counts.queued} ${t("transcoding.center.queued")}`}>
-                <Clock3 aria-hidden="true" />
-                <span className="scan-job-metric-value">{counts.queued} {t("transcoding.center.queued")}</span>
-              </span>
-            </span>
-            <span className="scan-job-metric-item">
-              <span className="scan-job-metric-sep" aria-hidden="true" />
-              <span className="scan-job-metric-icon-wrap status-completed" title={`${counts.completed} ${t("transcoding.center.completed")}`}>
-                <Check aria-hidden="true" />
-                <span className="scan-job-metric-value">{counts.completed} {t("transcoding.center.completed")}</span>
-              </span>
-            </span>
-            <span className="scan-job-metric-item">
-              <span className="scan-job-metric-sep" aria-hidden="true" />
-              <span className="scan-job-metric-icon-wrap status-failed" title={`${counts.failed} ${t("transcoding.center.failed")}`}>
-                <CircleX aria-hidden="true" />
-                <span className="scan-job-metric-value">{counts.failed} {t("transcoding.center.failed")}</span>
-              </span>
-            </span>
-          </div>
-          <div className="transcoding-center-header-actions">
-            <span className="transcoding-last-updated">{lastUpdated ? new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdated) : t("transcoding.center.notUpdated")}</span>
-            <button type="button" onClick={() => { setNotice(null); setAddDialogOpen(true); }}>
-              <Plus aria-hidden="true" />{t("transcoding.center.addJobs")}
+          <div className="transcoding-center-tabs library-history-range-toggle" role="tablist" aria-label={t("transcoding.center.tabsAria")}>
+            <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
+            <button type="button" role="tab" aria-pressed={tab === "active"} data-toggle-key="active" className={`library-history-range-button${tab === "active" ? " active" : ""}`} onClick={() => setTab("active")}>
+              <span className="library-history-range-button-content"><span>{t("transcoding.center.activeTab")}</span><span className="transcoding-center-tab-count">{activeJobs.length}</span></span>
+            </button>
+            <button type="button" role="tab" aria-pressed={tab === "history"} data-toggle-key="history" className={`library-history-range-button${tab === "history" ? " active" : ""}`} onClick={() => setTab("history")}>
+              <span className="library-history-range-button-content"><span>{t("transcoding.center.historyTab")}</span><span className="transcoding-center-tab-count">{historyJobs.filter((job) => job.status !== "queued" && job.status !== "running").length}</span></span>
             </button>
           </div>
         </header>
-
-        <div className="transcoding-center-tabs" role="tablist" aria-label={t("transcoding.center.tabsAria")}>
-          <button type="button" role="tab" aria-selected={tab === "active"} className={tab === "active" ? "is-active" : ""} onClick={() => setTab("active")}>
-            {t("transcoding.center.activeTab")} <span>{activeJobs.length}</span>
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "is-active" : ""} onClick={() => setTab("history")}>
-            {t("transcoding.center.historyTab")} <span>{historyJobs.filter((job) => job.status !== "queued" && job.status !== "running").length}</span>
-          </button>
-        </div>
 
         <div className="transcoding-center-toolbar">
           <label className="transcoding-search-field">
@@ -1224,7 +1014,15 @@ export function TranscodingPage() {
           <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select><ChevronDown aria-hidden="true" /></label>
           <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}</select><ChevronDown aria-hidden="true" /></label>
           <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select><ChevronDown aria-hidden="true" /></label>
-          <button type="button" className="secondary small transcoding-reset-button" onClick={resetFilters}><RefreshCw aria-hidden="true" />{t("transcoding.center.resetFilters")}</button>
+          <TooltipTrigger
+            ariaLabel={t("transcoding.center.resetFilters")}
+            content={t("transcoding.center.resetFilters")}
+            className="secondary icon-only-button transcoding-reset-button"
+            pinOnClick={false}
+            onClick={resetFilters}
+          >
+            <History aria-hidden="true" className="nav-icon" size={16} />
+          </TooltipTrigger>
         </div>
 
         {error ? <div className="alert" role="alert">{error}</div> : null}
@@ -1285,7 +1083,6 @@ export function TranscodingPage() {
       </section>
 
       {capabilitiesError ? <p className="field-hint transcoding-capabilities-note"><CircleAlert aria-hidden="true" />{t("transcoding.center.capabilitiesUnavailable")}: {capabilitiesError}</p> : null}
-      {addDialogOpen ? <BulkTranscodeDialog libraries={libraries} onClose={() => setAddDialogOpen(false)} onQueued={(started, failed) => { setNotice(t(failed > 0 ? "transcoding.center.queueStartedWithFailures" : "transcoding.center.queueStarted", { started, failed })); void refreshJobs(); }} t={t} /> : null}
     </main>
   );
 }

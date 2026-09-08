@@ -135,7 +135,7 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
     settings = _settings(tmp_path).model_copy(
         update={
             "federation_port": 8091,
-            "federation_advertise_urls": "https://worker.example.lan:9443,http://192.168.1.40:8091,http://127.0.0.1:8091",
+            "federation_advertise_urls": "https://worker.example.lan:9443,http://192.168.1.40:8091,http://[2001:db8::40]:8091,http://127.0.0.1:8091",
         }
     )
 
@@ -146,6 +146,7 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
         return [
             (federation.socket.AF_INET, federation.socket.SOCK_STREAM, 6, "", ("192.168.1.20", 0)),
             (federation.socket.AF_INET, federation.socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
+            (federation.socket.AF_INET6, federation.socket.SOCK_STREAM, 6, "", ("2001:db8::20", 0, 0, 0)),
             (federation.socket.AF_INET6, federation.socket.SOCK_STREAM, 6, "", ("fe80::20", 0, 0, 0)),
         ]
 
@@ -163,6 +164,61 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
         "http://192.168.1.40:8091",
         "http://192.168.1.20:8091",
     ]
+
+
+def test_lan_discovery_excludes_the_local_installation_and_its_endpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    descriptor = {
+        "protocol_version": federation.PROTOCOL_VERSION,
+        "installation_id": "local-installation",
+        "federation_id": "federation-1",
+        "display_name": "Local",
+        "endpoint_urls": ["http://192.168.1.20:8091"],
+    }
+    remote = {
+        "message": federation.DISCOVERY_MESSAGE,
+        "protocol_version": federation.PROTOCOL_VERSION,
+        "installation_id": "remote-installation",
+        "federation_id": "federation-1",
+        "display_name": "Remote",
+        "endpoint_urls": ["http://192.168.1.21:8091"],
+        "reachable": True,
+    }
+    responses = [
+        (federation.discovery_payload(descriptor), ("192.168.1.20", 43211)),
+        (remote, ("192.168.1.21", 43211)),
+    ]
+
+    class FakeSocket:
+        def __enter__(self) -> "FakeSocket":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def setsockopt(self, *_args: object) -> None:
+            return None
+
+        def settimeout(self, *_args: object) -> None:
+            return None
+
+        def sendto(self, *_args: object) -> None:
+            return None
+
+        def recvfrom(self, _size: int) -> tuple[bytes, tuple[str, int]]:
+            if not responses:
+                raise federation.socket.timeout
+            payload, address = responses.pop(0)
+            return federation.json.dumps(payload).encode("utf-8"), address
+
+    monkeypatch.setattr(federation.socket, "socket", lambda *_args, **_kwargs: FakeSocket())
+
+    found = federation.discover_peers(settings, descriptor)
+
+    assert [peer["installation_id"] for peer in found] == ["remote-installation"]
 
 
 def test_pairing_re_admits_a_previously_excluded_member(
@@ -302,6 +358,34 @@ def test_pairing_code_state_keeps_stable_identity_and_rotates_future_pairings(tm
         assert new_code != old_code
         assert not federation.verify_pairing_code(settings, second, old_code)
         assert federation.verify_pairing_code(settings, second, new_code)
+
+
+def test_pairing_code_is_six_digits_and_rotates_every_thirty_seconds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    clock = {"now": 1000.25}
+    monkeypatch.setattr(federation.time, "time", lambda: clock["now"])
+    monkeypatch.setattr(federation, "_new_pairing_secret", lambda: "a" * 64)
+
+    with SessionLocal() as db:
+        first = federation.get_federation_state(db, settings)
+        first_code = first["pairing_code"]
+        assert len(first_code) == 6
+        assert first_code.isascii() and first_code.isdecimal()
+        assert federation.PAIRING_CODE_ROTATION_SECONDS == 30
+        assert federation.pairing_code_expires_at() == 1020
+
+        clock["now"] = 1030.25
+        second = federation.get_federation_state(db, settings)
+        second_code = second["pairing_code"]
+        assert second_code != first_code
+        assert federation.verify_pairing_code(settings, second, second_code)
+
+        clock["now"] = 1060.25
+        assert not federation.verify_pairing_code(settings, second, first_code)
 
 
 def test_worker_selection_accounts_for_network_and_prefers_local_on_true_tie() -> None:

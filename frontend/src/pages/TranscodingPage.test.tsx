@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
-import { api, type AppSettings, type FileTranscode, type TranscodeCapabilities, type TranscodeJob, type TranscodePlan } from "../lib/api";
+import { api, type AppSettings, type TranscodeCapabilities, type TranscodeJob, type TranscodePlan } from "../lib/api";
 import { TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/transcoding-column-widths";
 import { TranscodingPage } from "./TranscodingPage";
 
@@ -138,28 +138,6 @@ const capabilities: TranscodeCapabilities = {
   error: null,
 };
 
-function createFileTranscode(): FileTranscode {
-  return {
-    original: {
-      id: 10,
-      filename: "Bulk-one.mkv",
-      relative_path: "Bulk-one.mkv",
-      size_bytes: 1_000_000,
-      duration_seconds: 120,
-      width: 1920,
-      height: 1080,
-      dynamic_range: "sdr",
-      video_codec: "h264",
-      audio_codecs: [],
-      audio_languages: [],
-    },
-    profiles: { compatibility: plan, storage: plan, modern: plan },
-    attachments: [],
-    variants: [],
-    jobs: [],
-  };
-}
-
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/transcoding"]}>
@@ -190,15 +168,22 @@ describe("TranscodingPage", () => {
     expect(await screen.findByRole("heading", { name: "Transcoding" })).toBeInTheDocument();
     expect(screen.queryByText("Start several jobs together and keep an eye on their live throughput, hardware path, and queue state.")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Transcoding job summary")).not.toBeInTheDocument();
-    expect(screen.getByText("1 running")).toBeInTheDocument();
-    expect(screen.getByText("1 queued")).toBeInTheDocument();
-    expect(screen.getByText("1 completed")).toBeInTheDocument();
+    expect(screen.queryByText("1 running")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 queued")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 completed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add jobs" })).not.toBeInTheDocument();
+    const viewToggle = screen.getByRole("tablist", { name: "Transcoding views" });
+    expect(viewToggle).toHaveClass("library-history-range-toggle");
+    expect(within(viewToggle).getByRole("tab", { name: /Active/ })).toHaveAttribute("aria-pressed", "true");
+    expect(within(viewToggle).getByRole("tab", { name: /History/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Reset filters" })).toHaveClass("icon-only-button");
     expect(screen.getAllByRole("columnheader")).toHaveLength(5);
     expect(screen.getByText("Naturefilm-1.mkv")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Naturefilm-1.mkv" })).not.toBeInTheDocument();
     expect(screen.getAllByText("NVIDIA RTX 3080").length).toBeGreaterThan(0);
     const hardwareLoad = screen.getByRole("region", { name: "Hardware load" });
     expect(hardwareLoad.closest("header")).not.toBeNull();
+    expect(within(hardwareLoad).queryByText("Hardware load")).not.toBeInTheDocument();
     const hardwareTrigger = screen.getByRole("button", { name: "Show hardware load details for NVIDIA RTX 3080" });
     fireEvent.click(hardwareTrigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Encoder codecs");
@@ -293,35 +278,4 @@ describe("TranscodingPage", () => {
     await waitFor(() => expect(cancel).toHaveBeenCalledWith(1));
   });
 
-  it("queues several selected files with the chosen existing profile", async () => {
-    const fileSearch = vi.spyOn(api, "fileSearch").mockResolvedValue({
-      query: "",
-      library_id: null,
-      limit: 20,
-      items: [
-        { id: 10, library_id: 1, library_name: "Movies", library_type: "movies", filename: "Bulk-one.mkv", relative_path: "Bulk-one.mkv", size_bytes: 1_000_000, container: "mkv", duration: 120, quality_score: 7, video_codec: "h264", resolution: "1920x1080", hdr_type: "sdr" },
-        { id: 11, library_id: 2, library_name: "Series", library_type: "series", filename: "Bulk-two.mkv", relative_path: "Bulk-two.mkv", size_bytes: 2_000_000, container: "mkv", duration: 180, quality_score: 8, video_codec: "hevc", resolution: "3840x2160", hdr_type: "hdr10" },
-      ],
-    });
-    vi.spyOn(api, "fileTranscode").mockResolvedValue(createFileTranscode());
-    const start = vi.spyOn(api, "startFileTranscode").mockResolvedValue(createJob(100));
-
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Add jobs" }));
-    expect(await screen.findByText("Bulk-one.mkv")).toBeInTheDocument();
-    expect(fileSearch).toHaveBeenCalled();
-
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
-    expect(screen.getByText("2 files selected")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Start 2 jobs" }));
-
-    await waitFor(() => {
-      expect(start).toHaveBeenCalledTimes(2);
-      expect(start).toHaveBeenCalledWith(10, plan);
-      expect(start).toHaveBeenCalledWith(11, plan);
-    });
-  });
 });

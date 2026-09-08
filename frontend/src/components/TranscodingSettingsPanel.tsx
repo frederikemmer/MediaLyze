@@ -608,8 +608,13 @@ export function TranscodingSettingsPanel({
           </div>
         ) : null}
 
+        <TranscodeProfilesRulesPanel
+          capabilityMatrix={capabilityMatrix}
+          acceleratorsTooltip={acceleratorsTooltip}
+          federation={federation}
+          onFederationData={setFederation}
+        />
         <TranscodeFederationPanel onData={setFederation} />
-        <TranscodeProfilesRulesPanel capabilityMatrix={capabilityMatrix} acceleratorsTooltip={acceleratorsTooltip} />
       </div>
     </AsyncPanel>
   );

@@ -697,6 +697,7 @@ class TranscodeFederationSettingsRead(BaseModel):
     display_name: str
     pairing_code: str
     pairing_code_from_environment: bool = False
+    pairing_code_expires_at: int = 0
     discovery_enabled: bool = True
     accept_jobs: bool = True
     endpoint_urls: list[str] = Field(default_factory=list)
@@ -757,12 +758,13 @@ class TranscodeFederationRead(BaseModel):
 
 class TranscodeFederationPairRequest(BaseModel):
     endpoint: str = Field(min_length=1, max_length=2048)
-    pairing_code: str = Field(min_length=4, max_length=256)
+    pairing_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class TranscodeFederationPasscodeResetRead(BaseModel):
     pairing_code: str
     pairing_code_from_environment: bool = False
+    pairing_code_expires_at: int = 0
 
 
 class TranscodeFederationProtocolPairRequest(BaseModel):
@@ -771,7 +773,7 @@ class TranscodeFederationProtocolPairRequest(BaseModel):
     installation_id: str = Field(min_length=1, max_length=128)
     display_name: str = Field(min_length=1, max_length=255)
     endpoint_urls: list[str] = Field(default_factory=list, max_length=16)
-    pairing_code: str = Field(min_length=4, max_length=256)
+    pairing_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
     client_nonce: str = Field(min_length=16, max_length=128)
     accept_jobs: bool = True
     resources: dict[str, Any] = Field(default_factory=dict)
