@@ -127,6 +127,44 @@ def test_member_read_handles_discovered_peer_without_capabilities() -> None:
     assert result.capability_matrix is None
 
 
+def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path).model_copy(
+        update={
+            "federation_port": 8091,
+            "federation_advertise_urls": "https://worker.example.lan:9443,http://192.168.1.40:8091,http://127.0.0.1:8091",
+        }
+    )
+
+    monkeypatch.setattr(federation.socket, "gethostname", lambda: "medialyze-nas")
+    monkeypatch.setattr(federation.socket, "getfqdn", lambda: "medialyze-nas.local")
+
+    def fake_getaddrinfo(*_args: object, **_kwargs: object) -> list[tuple[object, ...]]:
+        return [
+            (federation.socket.AF_INET, federation.socket.SOCK_STREAM, 6, "", ("192.168.1.20", 0)),
+            (federation.socket.AF_INET, federation.socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
+            (federation.socket.AF_INET6, federation.socket.SOCK_STREAM, 6, "", ("fe80::20", 0, 0, 0)),
+        ]
+
+    monkeypatch.setattr(federation.socket, "getaddrinfo", fake_getaddrinfo)
+
+    with SessionLocal() as db:
+        result = federation.federation_settings_read(db, settings)
+
+    assert result.hostname_urls == [
+        "https://worker.example.lan:9443",
+        "http://medialyze-nas:8091",
+        "http://medialyze-nas.local:8091",
+    ]
+    assert result.ip_urls == [
+        "http://192.168.1.40:8091",
+        "http://192.168.1.20:8091",
+    ]
+
+
 def test_pairing_re_admits_a_previously_excluded_member(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -202,6 +240,21 @@ def test_pairing_re_admits_a_previously_excluded_member(
         refreshed_state = federation.get_federation_state(db, settings)
         assert target_id not in refreshed_state["excluded_installation_ids"]
         assert member.status == "active"
+
+
+def test_federation_state_drops_its_own_exclusion(tmp_path: Path) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        local_id = state["installation_id"]
+        state["excluded_installation_ids"] = [local_id, "other-peer", "other-peer"]
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.commit()
+
+        refreshed_state = federation.get_federation_state(db, settings)
+
+        assert refreshed_state["excluded_installation_ids"] == ["other-peer"]
 
 
 def test_secure_envelope_rejects_tampering_stale_messages_and_replays() -> None:

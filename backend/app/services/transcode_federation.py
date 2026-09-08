@@ -305,6 +305,24 @@ def _default_federation_state(settings: Settings) -> dict[str, Any]:
     }
 
 
+def _normalize_excluded_installation_ids(
+    state: dict[str, Any],
+    values: Any = None,
+    *,
+    ignored_ids: Iterable[str] = (),
+) -> list[str]:
+    source = state.get("excluded_installation_ids", []) if values is None else values
+    if not isinstance(source, (list, tuple, set)):
+        return []
+    ignored = {str(state.get("installation_id") or ""), *(str(item) for item in ignored_ids)}
+    normalized: set[str] = set()
+    for item in source:
+        candidate = str(item or "").strip()
+        if candidate and candidate not in ignored:
+            normalized.add(candidate)
+    return sorted(normalized)
+
+
 def _normalize_resource_policy(value: Any) -> dict[str, Any]:
     candidate = value if isinstance(value, dict) else {}
     gpu = candidate.get("gpu") if isinstance(candidate.get("gpu"), dict) else {}
@@ -341,6 +359,10 @@ def get_federation_state(db: Session, settings: Settings) -> dict[str, Any]:
     normalized_policy = _normalize_resource_policy(state.get("resource_policy"))
     if normalized_policy != state.get("resource_policy"):
         state["resource_policy"] = normalized_policy
+        changed = True
+    normalized_excluded = _normalize_excluded_installation_ids(state)
+    if normalized_excluded != state.get("excluded_installation_ids"):
+        state["excluded_installation_ids"] = normalized_excluded
         changed = True
     if changed:
         setting.value = state
@@ -879,14 +901,17 @@ def member_heartbeat(
     state = get_federation_state(db, settings)
     if member.installation_id in set(state.get("excluded_installation_ids", [])):
         raise FederationAuthenticationError("Federation member is excluded")
-    remote_excluded = {
-        str(item)
-        for item in payload.get("excluded_installation_ids", [])
-        if str(item).strip()
-    }
+    remote_excluded = set(
+        _normalize_excluded_installation_ids(
+            state,
+            payload.get("excluded_installation_ids", []),
+            ignored_ids=(member.installation_id,),
+        )
+    )
     if remote_excluded:
-        state["excluded_installation_ids"] = sorted(
-            set(state.get("excluded_installation_ids", [])) | remote_excluded
+        state["excluded_installation_ids"] = _normalize_excluded_installation_ids(
+            state,
+            [*state.get("excluded_installation_ids", []), *remote_excluded],
         )
         setting = db.get(AppSetting, FEDERATION_STATE_KEY)
         if setting is not None:
@@ -991,14 +1016,17 @@ def sync_peer(db: Session, settings: Settings, installation_id: str) -> dict[str
             member.installation_id,
         }:
             _upsert_member(db, known, reachable=bool(known.get("reachable", False)), connection_status="discovered")
-    remote_excluded = {
-        str(item)
-        for item in result.get("excluded_installation_ids", [])
-        if str(item).strip()
-    }
+    remote_excluded = set(
+        _normalize_excluded_installation_ids(
+            state,
+            result.get("excluded_installation_ids", []),
+            ignored_ids=(member.installation_id,),
+        )
+    )
     if remote_excluded:
-        state["excluded_installation_ids"] = sorted(
-            set(state.get("excluded_installation_ids", [])) | remote_excluded
+        state["excluded_installation_ids"] = _normalize_excluded_installation_ids(
+            state,
+            [*state.get("excluded_installation_ids", []), *remote_excluded],
         )
         setting = db.get(AppSetting, FEDERATION_STATE_KEY)
         if setting is not None:
