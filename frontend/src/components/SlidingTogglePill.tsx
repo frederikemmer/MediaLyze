@@ -7,12 +7,13 @@ type SlidingTogglePillProps = {
 
 export function SlidingTogglePill({ activeKey, className }: SlidingTogglePillProps) {
   const pillRef = useRef<HTMLSpanElement | null>(null);
-  const [style, setStyle] = useState<CSSProperties | undefined>(undefined);
+  const [style, setStyle] = useState<CSSProperties>({ visibility: "hidden" });
 
   useLayoutEffect(() => {
     const pill = pillRef.current;
     const container = pill?.parentElement;
     if (!pill || !container || !activeKey) {
+      setStyle({ visibility: "hidden" });
       return;
     }
 
@@ -25,6 +26,7 @@ export function SlidingTogglePill({ activeKey, className }: SlidingTogglePillPro
         width: activeButton.offsetWidth,
         height: activeButton.offsetHeight,
         transform: `translate(${activeButton.offsetLeft}px, ${activeButton.offsetTop}px)`,
+        visibility: "visible",
       });
     };
 
@@ -35,7 +37,11 @@ export function SlidingTogglePill({ activeKey, className }: SlidingTogglePillPro
 
     const observer = new ResizeObserver(update);
     observer.observe(container);
-    return () => observer.disconnect();
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [activeKey]);
 
   return <span ref={pillRef} className={className} style={style} aria-hidden="true" />;

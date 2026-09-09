@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   api,
+  type TranscodeFederation,
   type TranscodeProfile,
   type TranscodeProfileDefinition,
 } from "../lib/api";
@@ -48,6 +49,59 @@ function profile(overrides: Partial<TranscodeProfile> = {}): TranscodeProfile {
   };
 }
 
+const federationFixture: TranscodeFederation = {
+  settings: {
+    enabled: true,
+    federation_id: "federation-1",
+    installation_id: "local",
+    federation_name: "",
+    display_name: "Local installation",
+    pairing_code: "123456",
+    pairing_code_from_environment: false,
+    pairing_code_expires_at: 0,
+    discovery_enabled: true,
+    accept_jobs: true,
+    endpoint_urls: ["http://local:8091"],
+    hostname_urls: [],
+    ip_urls: [],
+    resource_policy: {},
+    protocol_version: 1,
+    temp_budget_bytes: 0,
+    result_retention_hours: 24,
+  },
+  members: [{
+    id: 1,
+    installation_id: "worker-02",
+    federation_id: "federation-1",
+    display_name: "Worker 02",
+    endpoint_urls: ["http://worker-02:8091"],
+    protocol_version: 1,
+    application_version: "0.18.0",
+    status: "active",
+    connection_status: "connected",
+    reachable: true,
+    accept_jobs: true,
+    resources: { cpu_threads: 16, temp_free_bytes: 420 * 1024 * 1024 * 1024 },
+    capabilities: null,
+    capability_matrix: null,
+    active_jobs: 0,
+    network_mbps: 1000,
+    last_seen_at: null,
+    last_sync_at: null,
+    last_error: null,
+  }],
+  discovered: [{
+    installation_id: "worker-01",
+    federation_id: "federation-1",
+    display_name: "Worker 01",
+    endpoint_urls: ["http://worker-01:8091"],
+    protocol_version: 1,
+    application_version: "0.18.0",
+    reachable: true,
+    last_seen_at: null,
+  }],
+};
+
 describe("TranscodeProfilesRulesPanel", () => {
   const builtin = profile();
   const custom = profile({
@@ -81,22 +135,38 @@ describe("TranscodeProfilesRulesPanel", () => {
   it("exposes editable custom profiles and makes built-in templates customizable without deleting them", async () => {
     const { container } = render(
       <TranscodeProfilesRulesPanel
-        capabilityMatrix={<div data-testid="capability-matrix" />}
+        capabilityMatrix={(tabControls) => (
+          <section className="transcode-automation-tab-content" data-testid="capability-matrix">
+            <div className="compatibility-profile-list">{tabControls}</div>
+          </section>
+        )}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
       />,
     );
 
-    expect(await screen.findByRole("tablist", { name: "Transcoding profiles and rules" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accelerators" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Accelerators" }));
+    const tabList = await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    expect(tabList).toHaveClass("transcode-automation-tab-list");
+    expect(tabList.querySelector(".library-history-range-pill")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Accelerators" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "Accelerators" }));
     expect(screen.getByRole("button", { name: "Explain accelerators" })).toBeInTheDocument();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Accelerators" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByTestId("capability-matrix")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
-    expect(screen.getByRole("searchbox", { name: "Search profiles" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Profiles" }));
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reusable stream plans and automatic matching rules.")).not.toBeInTheDocument();
     const descriptionTooltip = screen.getByRole("button", { name: "Explain transcoding profiles" });
     expect(descriptionTooltip).toHaveClass("tooltip-trigger");
+    fireEvent.click(descriptionTooltip);
+    const descriptionPortal = await screen.findByRole("tooltip");
+    expect(descriptionPortal).toHaveClass("transcode-automation-description-tooltip-portal-compact");
+    expect(descriptionPortal).toHaveStyle({ maxWidth: "300px" });
+    fireEvent.pointerDown(document.body);
     expect((await screen.findByRole("button", { name: "New profile" })).closest(".settings-profile-toggle-row")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Compatibility" })).toBeInTheDocument();
     expect(screen.queryByText("v1 · built-in")).not.toBeInTheDocument();
@@ -124,11 +194,109 @@ describe("TranscodeProfilesRulesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete My profile" }));
     await waitFor(() => expect(api.deleteTranscodeProfile).toHaveBeenCalledWith(custom.id));
 
-    fireEvent.click(screen.getByRole("button", { name: "Rules" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Rules" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Explain transcoding rules" })).toBeInTheDocument();
     expect(screen.queryByText("Rules are evaluated from top to bottom. A blocked winning rule does not fall through.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start inventory" })).not.toBeInTheDocument();
+  });
+
+  it("lists paired members before discovered peers and marks new pairing entries with plus icons", async () => {
+    const { container } = render(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={federationFixture}
+      />,
+    );
+
+    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+
+    const memberArticle = screen.getByText("Worker 02").closest("article");
+    const discoveredArticle = screen.getByText("Worker 01").closest("article");
+    expect(memberArticle).not.toBeNull();
+    expect(discoveredArticle).not.toBeNull();
+    expect(memberArticle!.compareDocumentPosition(discoveredArticle!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(memberArticle!.querySelector(".transcode-federation-entry-marker.transcode-federation-status-marker")).not.toBeNull();
+    expect(memberArticle!.querySelector(".transcode-federation-member-row")).not.toBeNull();
+    expect(memberArticle!.querySelector(".transcode-federation-member-trigger")).toHaveClass("compatibility-profile-list-trigger");
+    expect(memberArticle!.querySelector(".status-dot")).toHaveClass("is-online");
+    expect(memberArticle!.querySelector(".transcode-federation-status-trigger")).toHaveAttribute("aria-label", "Worker 02: Reachable");
+    expect(memberArticle!.querySelector(".transcode-federation-add-icon")).toBeNull();
+    expect(discoveredArticle!.querySelector(".transcode-federation-entry-marker.transcode-federation-add-icon")).not.toBeNull();
+    expect(discoveredArticle!.querySelector(".transcode-federation-peer-code-input")).toHaveAttribute("placeholder", "Pairing code");
+
+    expect(screen.queryByText("Add trusted installation")).not.toBeInTheDocument();
+    const manualItem = container.querySelector(".transcode-federation-manual-item");
+    const manualConnectControl = manualItem?.querySelector(".transcode-federation-peer-connect-control");
+    expect(manualConnectControl).not.toBeNull();
+    expect(manualConnectControl).toHaveClass("transcode-federation-manual-connect-control");
+    expect(manualConnectControl?.parentElement).toBe(manualItem);
+    expect(manualItem?.querySelector(":scope > .transcode-federation-add-icon")).not.toBeNull();
+    expect(manualItem?.querySelector(":scope > .transcode-federation-add-icon")?.parentElement).toBe(manualItem);
+    expect(manualConnectControl?.querySelector(":scope > .transcode-federation-add-icon")).toBeNull();
+    expect(manualConnectControl?.querySelector(':scope > input[type="url"]')).toHaveClass("transcode-federation-segment-input", "transcode-federation-manual-address-input");
+    expect(manualConnectControl?.querySelector(".transcode-federation-manual-code-input")).not.toBeNull();
+    expect(manualConnectControl?.querySelector(".transcode-federation-manual-code-input")).toHaveAttribute("placeholder", "Pairing code");
+    expect(manualConnectControl?.querySelector(".transcode-federation-connect-button")).not.toBeNull();
+    expect(manualConnectControl?.querySelector(".transcode-federation-manual-code-input")?.nextElementSibling).toBe(
+      manualConnectControl?.querySelector(".transcode-federation-connect-button"),
+    );
+  });
+
+  it("uses the member status dot for warning details instead of an inline alert", async () => {
+    const member = {
+      ...federationFixture.members[0],
+      last_error: "timed out",
+      connection_status: "connected",
+    };
+    const { container } = render(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={{ ...federationFixture, members: [member], discovered: [] }}
+      />,
+    );
+
+    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+
+    const memberArticle = container.querySelector(".compatibility-profile-list-item");
+    const statusTrigger = memberArticle?.querySelector<HTMLButtonElement>(".transcode-federation-status-trigger");
+    expect(statusTrigger).not.toBeNull();
+    expect(statusTrigger?.querySelector(".status-dot")).toHaveClass("is-warning");
+
+    fireEvent.focus(statusTrigger!);
+    expect(await screen.findByText("Last error")).toBeInTheDocument();
+    expect(screen.getByText("timed out")).toBeInTheDocument();
+
+    fireEvent.click(memberArticle!.querySelector<HTMLButtonElement>(".compatibility-profile-list-trigger")!);
+    expect(memberArticle?.querySelector(".notice.error")).toBeNull();
+  });
+
+  it("marks unreachable members as offline", async () => {
+    const member = {
+      ...federationFixture.members[0],
+      reachable: false,
+      connection_status: "offline",
+      last_error: "Connection refused",
+    };
+    const { container } = render(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={{ ...federationFixture, members: [member], discovered: [] }}
+      />,
+    );
+
+    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+
+    const statusDot = container.querySelector(".transcode-federation-status-trigger .status-dot");
+    expect(statusDot).toHaveClass("is-offline");
   });
 });

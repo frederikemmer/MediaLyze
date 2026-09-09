@@ -197,6 +197,7 @@ class ScanRuntimeManager:
         self.submitted_remote_attempt_ids: set[str] = set()
         self.cancel_requested_remote_attempt_ids: set[str] = set()
         self.federation_maintenance_submitted = False
+        self.federation_network_probe_pending = True
         self.connector_futures: dict[int, Future] = {}
         self.maintenance_executor = self._build_maintenance_executor()
         # Inventory automation is isolated from scans/transcodes, but its
@@ -282,6 +283,7 @@ class ScanRuntimeManager:
             self.transcode_executor = None
         with self.lock:
             self.federation_maintenance_submitted = False
+            self.federation_network_probe_pending = True
         if self.discovery_responder is not None:
             self.discovery_responder.stop()
             self.discovery_responder = None
@@ -567,6 +569,9 @@ class ScanRuntimeManager:
             db = SessionLocal()
             try:
                 if federation_enabled(db, self.settings):
+                    with self.lock:
+                        probe_all = self.federation_network_probe_pending
+                        self.federation_network_probe_pending = False
                     member_ids = [
                         member.installation_id
                         for member in db.scalars(
@@ -577,7 +582,12 @@ class ScanRuntimeManager:
                     ]
                     for installation_id in member_ids:
                         try:
-                            sync_peer(db, self.settings, installation_id)
+                            sync_peer(
+                                db,
+                                self.settings,
+                                installation_id,
+                                probe_all=probe_all,
+                            )
                         except FederationError:
                             logger.info(
                                 "Federation heartbeat failed for %s",

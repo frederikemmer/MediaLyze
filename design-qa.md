@@ -37,6 +37,48 @@ The connected test library currently contains files but no folder nodes. The rea
 
 final result: passed
 
+# Design QA: Transcoding automation navigation refinement (2026-09-09)
+
+## Requested adjustment
+
+- Implement the first selected concept as a compact horizontal navigation for Profiles, Rules, Accelerators, and Members.
+- Keep the navigation slightly taller than the first compact pass, remove the extra line directly under the tabs, and retain the separator between the navigation row and its content.
+- Replace the moving shared pill with a subtle per-tab active highlight.
+
+## Visual truth and evidence
+
+- Selected ImageGen source: `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: `http://localhost:5175/settings?section=transcoding` in the Codex In-app Browser.
+- Implementation capture: final In-app Browser screenshot at a 1624 × 1272 viewport; the browser surface exposes the capture inline rather than as a filesystem path.
+- State: dark theme, Profiles selected, Federation expanded, with the same compact MediaLyze settings composition visible in the source reference.
+
+## Fidelity surfaces
+
+- Layout and spacing: the four destinations remain in one horizontal row, the row is compact but not flattened, and the `New profile` action stays aligned at the far right.
+- Active state: the selected tab uses the MediaLyze accent underline and a restrained accent-tinted surface; the full-width tab-list line is removed.
+- Content separation: the lower divider on the automation row remains, preserving a clear boundary before the active menu content.
+- Typography and icons: existing MediaLyze typography, tooltip control, button treatment, profile actions, and Federation icons are preserved; no new raster or SVG assets were introduced.
+- Responsiveness: the narrow-width overflow rules remain scoped to the tab list and keep the navigation usable without changing the page-level overflow behavior. A separate narrow browser capture was not available through the current In-app Browser surface.
+
+## Interaction and accessibility checks
+
+- All four destinations render as semantic `tab` controls inside a labeled horizontal `tablist`.
+- Clicking tabs updates the selected state and swaps the active workspace content.
+- Arrow-key navigation was checked in the browser; `Rules` advanced to `Accelerators` and focus/selection moved with it.
+- Focus-visible styling remains available, inactive tabs are removed from the tab sequence, and the navigation keeps its existing tooltip and action controls.
+- Console inspection was not exposed by the current In-app Browser surface; no console-specific claim is made here.
+
+## Validation
+
+- Full frontend suite: 42 test files, 417 tests passed.
+- Production build: passed with `npm run build`.
+- The stale test queries were updated from `button` to the new semantic `tab` role.
+- The `/ui-elements` fixtures, `CHANGELOG.md`, and the frontend design decision history remain aligned with the new navigation pattern.
+
+No P0, P1, or P2 findings remain.
+
+final result: passed
+
 # Design QA: Transcoding table fit and responsive chart refinement (2026-09-07)
 
 ## Requested adjustments
@@ -260,5 +302,373 @@ final result: passed
 - The speed tooltip remains compact and fully contained inside the shortened chart area.
 - The UI catalog continues to represent the same compact five-column component.
 - The focused Transcoding test, full frontend suite (41 files / 407 tests), production build, locale parsing, and `git diff --check` passed; the duplicate-groups test also passed in an isolated retry after one transient first-run timing failure.
+
+final result: passed
+
+# Design QA: Transcoding automation navigation height and accent fade (2026-09-09)
+
+## Requested adjustment
+
+- Keep the automation navigation consistently sized while moving through Profiles, Rules, Accelerators, and Members.
+- Make the row slightly taller and soften the orange active-state glow so it fades rather than ending at a hard rectangular edge; extend the underline's falloff so it does not drop too quickly.
+
+## Visual truth and evidence
+
+- Selected ImageGen source: `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: `http://localhost:5173/settings?section=transcoding` in the Codex In-app Browser.
+- Implementation capture: final In-app Browser screenshot at a 1624 × 1272 viewport; the browser surface exposes the capture inline rather than as a filesystem path.
+- Comparison state: dark theme, Profiles selected, Federation expanded; the reference and final implementation were opened and reviewed in the same QA pass.
+
+## Fidelity surfaces
+
+- Typography and icons: existing MediaLyze type scale, weights, tooltip icon, refresh icon, and action icons remain unchanged and aligned.
+- Spacing and layout: the automation row now has a 40px minimum height, so trailing actions and tab content cannot make the top navigation jump between views; the separator before the content remains.
+- Colors and tokens: the selected tab uses the existing accent token with a broader blurred radial fade behind the label and a longer, gradual underline whose ends taper into transparency; inactive tabs retain the muted token.
+- Content and surfaces: Profiles, Rules, Accelerators, and Members remain visible in the same order, with the selected state isolated to the active tab and no extra tab-list border.
+- Responsiveness: the existing narrow-width rule keeps the tab list horizontally scrollable and the action group usable. A separate narrow browser capture was not available through the current In-app Browser surface.
+- Image quality and asset fidelity: no new image assets were needed; existing MediaLyze logo and icon assets remain in use.
+
+## Interaction and accessibility checks
+
+- Semantic `tablist`/`tab` structure remains intact with one selected tab and roving tab focus.
+- Clicked through Rules, Accelerators, and Members in the browser; each active accent followed the selected tab and the content changed without row-height drift.
+- Arrow-key navigation was previously verified for the same control group; focus and selection move together.
+- Focus-visible styling remains available, and the active glow is pointer-events-free.
+- Console inspection was not exposed by the current In-app Browser surface; no console-specific claim is made here.
+
+## Validation
+
+- Focused frontend tests: 2 test files, 10 tests passed.
+- Full frontend suite: 42 test files, 417 tests passed.
+- Production build: passed with `npm run build`.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain.
+
+final result: passed
+
+# Design QA: Federation member pairing control parity (2026-09-09)
+
+## Requested adjustment
+
+- Give the manual federation pairing row the same spacing and compact pairing-code/Connect grouping as automatically discovered peers, including the small vertical divider.
+
+## Visual truth and evidence
+
+- Source: the user-supplied Members-tab screenshots and selected pairing-code/Connect controls at `http://localhost:5173/settings?section=transcoding` (1624 × 1272).
+- Reference context: the existing MediaLyze Transcoding layout and the ImageGen source at `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: the same route in the Codex In-app Browser; final capture at a 1624 × 1272 viewport with Members selected and Federation expanded.
+
+## Fidelity surfaces
+
+- Layout: the manual form now keeps the endpoint flexible on the left and places pairing code plus Connect in an auto-sized group on the right, separated by the same 12px gap used by discovered peers.
+- Group styling: the manual code input reuses `.transcode-federation-peer-code-input`, so it shares the discovered-peer container border, radius, background, and compact height.
+- Divider: the manual Connect button reuses `.transcode-federation-peer-connect-control .transcode-federation-connect-button`, including its subtle left border.
+- Typography, icons, and tokens: existing settings inputs, shared Connect button styling, animated connection icon, and MediaLyze color tokens remain in use; no new assets were added.
+- Responsiveness: the mobile rule keeps the manual pairing group full-width when the form stacks; no separate narrow browser capture was available through the current In-app Browser surface.
+
+## Interaction and accessibility checks
+
+- The manual pairing input retains its accessible `Pairing code` label, numeric input constraints, validation state, and existing state handlers.
+- Connect remains a semantic button with its existing disabled and pairing behavior; no pairing action was triggered during visual QA.
+- The live Members tab shows the manual and discovered controls with matching compact grouping and the vertical divider visible.
+
+## Validation
+
+- Focused frontend tests: 2 test files, 10 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- `npm run build` remains blocked by unrelated pre-existing TypeScript errors in `frontend/src/lib/settings-search.ts:79`; the requested component bundle itself completed successfully.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Federation manual plus marker separation (2026-09-09)
+
+## Requested adjustment
+
+- Keep the manual plus marker vertically centered and remove the grouped field border/background from around it.
+
+## Visual truth and evidence
+
+- Source: user-supplied Members-tab screenshot and selected manual `Connect` control at `http://localhost:5173/settings?section=transcoding` (1624 × 1272).
+- Reference context: existing MediaLyze flat Federation list rows and inspected ImageGen source at `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: same route in the Codex In-app Browser with Members selected, Federation expanded, and manual pairing row visible after the local dev server was restored.
+
+## Fidelity surfaces
+
+- The plus marker is now a direct sibling of the grouped address/code/Connect control, so no rounded/bordered segment surrounds it.
+- Desktop marker uses the row's centered alignment; the grouped control remains 32px high and the address input still begins at the shared name column.
+- Narrow-width rules keep the marker beside the stacked group and align it with the first address segment.
+
+## Interaction and accessibility checks
+
+- Plus remains `aria-hidden` decorative icon; address and pairing fields retain existing accessible labels and behavior.
+- No pairing, disconnect, or persistent Federation mutation was triggered during QA.
+
+## Validation
+
+- Focused frontend test: `TranscodeProfilesRulesPanel.test.tsx`, 4 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- Browser measurement: marker is a direct child of `.transcode-federation-manual-item`, the grouped control has no marker child, and the desktop marker is vertically centered.
+- `git diff --check`: no whitespace errors; only repository line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Federation member row height parity (2026-09-09)
+
+## Requested adjustment
+
+- Make the trusted Federation member entries match the discovered-peer and manual-pairing entries in height so the shared Members workspace reads as one consistent list.
+
+## Visual truth and evidence
+
+- Source: the user-supplied Members-tab screenshot and selected `MacBook Pro` row at `http://localhost:5173/settings?section=transcoding` (1624 × 1272).
+- Reference context: the existing MediaLyze compact list-row pattern and the ImageGen source at `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: the same route in the Codex In-app Browser; final capture with Members selected and Federation expanded.
+
+## Fidelity surfaces
+
+- Row sizing: the three visible Federation entries now share a measured 38px outer row shell.
+- Inner alignment: the trusted member trigger shell and trigger use the same 32px compact content height as the discovered pairing control and manual pairing control.
+- Spacing and content: status marker, member name, summary, chevron, quick actions, plus markers, pairing fields, and Connect actions retain their existing positions and tokens.
+- Responsiveness: the fixed inner height is limited to the compact trigger shell; expanded details remain outside that shell and the existing narrow-width rules remain unchanged. No separate narrow browser capture was available through the current In-app Browser surface.
+
+## Interaction and accessibility checks
+
+- The member remains a semantic expandable button with its existing `aria-expanded` state and keyboard behavior.
+- Status tooltip, sync, disconnect, discovered pairing, and manual pairing controls remain available; no pairing or disconnect action was triggered during QA.
+- Browser measurement confirmed `outerRows: [38, 38, 38]`, `memberShell: 32`, and `peerControl: 32` for the visible list.
+
+## Validation
+
+- Focused frontend test: `TranscodeProfilesRulesPanel.test.tsx`, 4 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- The adjacent two-file test command still has 2 existing failures in `TranscodingSettingsPanel.test.tsx` caused by stale manual-pairing selectors and fixture expectations outside this CSS-only adjustment.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Federation manual address field parity (2026-09-09)
+
+## Requested adjustment
+
+- Match the manual Federation address field to the Pairing code field and make its visible/text start align with the name column used by the other Federation entries.
+
+## Visual truth and evidence
+
+- Source: the user-supplied Members-tab screenshot and selected manual `Connect` control at `http://localhost:5173/settings?section=transcoding` (1624 × 1272).
+- Reference context: the existing MediaLyze compact segmented-control treatment and the inspected ImageGen source at `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: the same route in the Codex In-app Browser with Members selected, Federation expanded, and the manual pairing row visible.
+
+## Fidelity surfaces
+
+- The manual address input now uses the same compact segment class, dark/light surface cascade, border, shadow, typography, and 30px height as the Pairing code input.
+- The plus marker remains in its own leading slot; the address field starts at x=403, matching the discovered Federation name start at x=403.
+- The manual code and Connect segments, their divider, and the shared 32px control height remain unchanged.
+- The existing narrow-width rules still stack the manual controls without changing their shared segment treatment; no separate narrow browser capture was available through the current In-app Browser surface.
+
+## Interaction and accessibility checks
+
+- The address field keeps `type="url"`, its existing placeholder and accessible label, and the existing disabled/onChange behavior.
+- Pairing-code validation and Connect behavior remain unchanged.
+- No pairing, disconnect, or federation mutation was triggered during QA.
+
+## Validation
+
+- Focused frontend test: `TranscodeProfilesRulesPanel.test.tsx`, 4 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- The adjacent `TranscodingSettingsPanel.test.tsx` suite still has 2 existing stale selector/fixture failures outside this styling change.
+- Browser measurement confirmed identical address/code background and metrics, plus `addressStart - peerNameStart = 0`.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Federation invalid pairing-code contour (2026-09-09)
+
+## Requested adjustment
+
+- Keep the red empty-code feedback on the discovered Pairing code field, but make its left corners follow the grouped control instead of ending as a clipped rectangle.
+
+## Visual truth and evidence
+
+- Source: the user-supplied Members-tab screenshot and selected empty `Pairing code` field at `http://localhost:5173/settings?section=transcoding` (1624 × 1272).
+- Reference context: the existing MediaLyze compact segmented-control treatment and the inspected ImageGen source at `C:\Users\frede\.codex\generated_images\01a0850c-58ec-72b3-aa3f-1bc72c9f59db\exec-4d65c52d-4305-4c4b-8dd9-6e8c182bc509.png` (1417 × 1110).
+- Implementation: the same route in the Codex In-app Browser with Members selected, Federation expanded, and the discovered Connect action pressed while its Pairing code is empty.
+
+## Fidelity surfaces
+
+- The first segment's invalid state now uses an 8px inner top-left and bottom-left radius, matching the 9px outer grouped control minus its 1px border.
+- The animated red border and glow remain local to the Pairing code segment; the neighboring Connect segment keeps its normal surface and divider.
+- The manual middle Pairing code segment remains square at its segment joins, while the existing narrow-width stacking rules remain unchanged.
+
+## Interaction and accessibility checks
+
+- Empty-code validation still adds `is-invalid` and keeps the existing `aria-invalid` state; no pairing request is sent for an empty code.
+- The reduced-motion invalid-state rule retains the same rounded first-segment geometry.
+- No federation connection, disconnect, or other persistent mutation was triggered during QA.
+
+## Validation
+
+- Focused frontend test: `TranscodeProfilesRulesPanel.test.tsx`, 4 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- Browser reproduction before the fix showed `borderRadius: 0px` on the invalid first segment and a clipped rectangular glow; after the fix it measured `8px 0px 0px 8px` with the same 2px glow and the parent remained `9px`/`overflow: hidden`.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Quality profile metric surface refinement (2026-09-09)
+
+## Requested adjustment
+
+- Remove the redundant inner panel around the metric rows inside an expanded quality profile.
+
+## Visual truth and evidence
+
+- Source: the user-supplied annotated screenshot at `http://localhost:5173/settings?section=quality-profiles` (1624 × 1272), with the nested metric list selected.
+- Implementation: the same local route in the Codex In-app Browser after the CSS refinement, at the same 1624 × 1272 viewport.
+- State: dark theme, Video tab selected, Default video expanded, metric sections collapsed after the hot reload; Resolution was also expanded once to verify the nested editor state.
+- The browser surface exposed the implementation captures inline rather than as filesystem paths; source and implementation use the same viewport and page chrome, so no density normalization was required.
+
+## Fidelity surfaces
+
+- Fonts and typography: existing MediaLyze heading, profile metadata, metric labels, weights, and helper text remain unchanged; only the unnecessary nested surface was removed.
+- Spacing and layout: metric rows now sit directly inside the expanded profile details with their existing row padding and separators; the outer profile list remains the single enclosing surface.
+- Colors and visual tokens: the metric list is transparent in both themes, so the profile surface and existing theme-aware separators provide the visual grouping without a second dark card.
+- Image quality and asset fidelity: no raster or custom visual asset is used; existing Lucide icons and shared controls remain intact.
+- Copy and content: profile names, media tabs, metric labels, weights, and action labels are unchanged.
+- Responsiveness: the change is surface-only and preserves the existing compact metric-row and transcode-tab responsive rules; a separate narrow browser capture was not available through the current In-app Browser surface.
+
+## Interaction and accessibility checks
+
+- The accessibility tree still exposes every metric as a separate `Configure … metric` disclosure button.
+- Clicking `Configure Resolution metric` visibly opened the three resolution controls; the profile row and metric disclosure states remained semantic and keyboard-addressable.
+- No profile save, duplicate, delete, rename, or other persistent mutation was triggered during QA.
+
+## Comparison history
+
+1. P2: the first implementation wrapped the metric list in a second bordered, rounded surface inside the already bordered expanded profile.
+2. Fix: removed the metric-list border, radius, and background while retaining the metric row separators and expanded settings styling.
+3. Post-fix evidence: the revised browser capture shows the metric rows flush within the expanded profile surface, with no redundant inner panel and no loss of the expandable editor affordance. No P0, P1, or P2 findings remain.
+
+## Validation
+
+- Focused frontend tests: `LibrariesPage.test.tsx` and `App.test.tsx`, 81 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- The full TypeScript build remains blocked by the unrelated pre-existing `api.testTranscodeFederationNetwork` type mismatch in `TranscodingSettingsPanel.tsx`; the targeted Quality profiles/App tests and Vite bundle pass.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+final result: passed
+
+# Design QA: Quality profile metadata alignment (2026-09-09)
+
+## Requested adjustment
+
+- Place profile metadata such as `Default · Built-in` beside the profile name instead of stacking it below the name.
+
+## Visual truth and evidence
+
+- Source: the user-supplied annotated screenshot at `http://localhost:5173/settings?section=quality-profiles` (1624 × 1272), with the `Default · Built-in` metadata selected.
+- Implementation: the same local route in the Codex In-app Browser after the layout refinement, with Video selected and `Default video` expanded.
+- State: dark theme, the compact media-type tabs visible, and the profile list using the shared Transcoding workspace row treatment.
+
+## Fidelity surfaces
+
+- Layout: the profile name and metadata now share one flex line with the existing chevron and quick-action columns unchanged.
+- Typography and color: the existing profile-name weight, muted metadata styling, ellipsis behavior, and compact spacing remain intact.
+- Responsiveness: the metadata and name can wrap as separate flex items only when the available row width is too narrow, preventing horizontal overflow while keeping the inline treatment at normal widths.
+- Interaction: the profile row remains one semantic disclosure button, and no action controls or expanded metric behavior changed.
+
+## Validation
+
+- Focused frontend tests: `LibrariesPage.test.tsx` and `App.test.tsx`, 81 tests passed.
+- Vite production bundle: passed with `npx vite build`.
+- The full TypeScript build remains blocked by the unrelated pre-existing `api.testTranscodeFederationNetwork` type mismatch in `TranscodingSettingsPanel.tsx`.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Compatibility profile development guidance tooltip (2026-09-09)
+
+## Requested adjustment
+
+- Move the persistent compatibility-profile development note into a tooltip beside the `Hardware & software profiles` panel heading.
+
+## Visual truth and evidence
+
+- Source: the user-supplied annotated screenshot at `http://localhost:5173/settings?section=compatibility-profiles` (1624 × 1272), with the heading and development note selected.
+- Implementation: the same local route in the Codex In-app Browser after the tooltip refinement.
+- State: dark theme, Hardware selected, with the profile catalog list and compact tab controls visible.
+
+## Fidelity surfaces
+
+- Layout: the profile catalog heading now owns the compact `?` trigger; the persistent paragraph is removed and the tabs move into the freed vertical space.
+- Tooltip: the existing shared `TooltipTrigger` supplies the same hover, focus, keyboard, pinned-click, and viewport-aware portal behavior used by other settings headings.
+- Typography and color: heading and tab styling remain unchanged; the development copy retains its localized text and is shown only on demand in the standard tooltip surface.
+- Responsiveness: the panel title row remains wrapping-capable, so the tooltip trigger stays usable beside the heading without forcing horizontal overflow.
+
+## Interaction and accessibility checks
+
+- The trigger is a semantic button with a localized accessible label and `aria-expanded` / `aria-describedby` state from the shared tooltip component.
+- The development note is absent from the persistent panel body and appears after activating the heading tooltip.
+- No profile edits, saves, deletes, or external links were triggered during QA.
+
+## Validation
+
+- Focused frontend tests: `CompatibilityProfilesPanel.test.tsx` and `App.test.tsx`, 26 tests passed, including the heading tooltip interaction.
+- Vite production bundle: passed with `npx vite build`.
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
+
+final result: passed
+
+# Design QA: Hardware and software profile surface alignment (2026-09-09)
+
+## Requested adjustment
+
+- Apply the compact Quality profiles treatment to Hardware & Software Profiles: underline tabs, one unified list surface, and expandable profile rows with the existing profile actions and editors preserved.
+
+## Visual truth and evidence
+
+- Source: the user-supplied annotated screenshot at `http://localhost:5173/settings?section=compatibility-profiles` (1624 × 1272), with the Hardware & software profiles catalog selected.
+- Implementation: Codex In-app Browser tab 4 at `http://localhost:5174/settings?section=compatibility-profiles`, captured after the refactor in the same dark theme. The browser capture exposed a 1624 × 992 CSS viewport; the source attachment includes the surrounding 1624 × 1272 page frame, so the comparison was normalized to the shared content region rather than browser height.
+- State: Hardware selected, search row visible, profile rows collapsed; a separate interaction capture opened the first hardware profile to verify the expanded detail state.
+
+## Fidelity surfaces
+
+- Layout: the old sliding-pill selector is replaced by the shared Transcoding underline tab row; the tab row, search, profile rows, and expandable details now live in one bordered surface like Quality profiles.
+- Typography and spacing: profile names use the shared `transcode-automation-list-copy` treatment and Quality profile row rhythm, while the existing compact quick-action column remains aligned on the right.
+- Color and tokens: active tab underline, borders, hover/focus surfaces, dark theme contrast, and action icon treatment reuse the existing Transcoding and compatibility-list tokens; no new visual system was introduced.
+- Copy and content: Hardware, Software / Player, and Combination remain localized; search labels change with the active tab, and the development guidance stays available through the heading tooltip rather than returning to a persistent paragraph.
+- Responsiveness and accessibility: tabs use `role="tab"`, `aria-selected`, roving `tabIndex`, and Arrow/Home/End navigation; the mobile Transcoding tab-row rules keep the controls horizontally scrollable and move the create action below when needed. Profile disclosure buttons expose expanded state and controls for their detail surfaces.
+
+## Interaction and browser checks
+
+- Browser capture showed all three tabs, the right-aligned Profile action, the search field, and the profile rows in the unified surface.
+- Software / Player switched correctly and updated its search label and profile list.
+- ArrowRight moved from Software / Player to Combination and selected the corresponding tab.
+- Clicking the first Hardware profile expanded its read-only detail editor and the profile-specific capability subsections; clicking it again collapsed the row.
+- Browser console error log was empty for the verified route.
+
+## Validation
+
+- Focused frontend tests: `CompatibilityProfilesPanel.test.tsx` and `App.test.tsx`, 26 tests passed.
+- Full frontend suite: 43 test files, 443 tests passed, including the updated nested Settings tab assertion.
+- Full frontend build: passed with `npm run build` (`tsc -b` and Vite production bundle).
+- `git diff --check`: no whitespace errors; only the repository's existing line-ending normalization warnings.
+
+No P0, P1, or P2 findings remain for this requested UI change.
 
 final result: passed

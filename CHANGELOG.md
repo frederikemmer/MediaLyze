@@ -22,6 +22,27 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- make ordinary action buttons use the compact rectangular control treatment used by library scans, connector bulk actions, and settings-table actions, while retaining pill shapes only for intentional tabs, statuses, and icon controls
+- distinguish icon-only controls with explicit bordered or borderless primitives and static or animated Lucide icon classes, while keeping icon spacing and dark-mode action surfaces theme-aware
+- keep native dropdown menus theme-aware so dark-mode options use readable dark surfaces with light text
+- preserve the established round, compact tooltip triggers when ordinary action buttons use the rectangular baseline
+- make Settings search cover nested settings tabs, rank the best contextual match with small typo tolerance, open it directly, and highlight the focused control
+- restore left-aligned Settings navigation entries and remove browser-native blue search reset glyphs so text-field controls follow the MediaLyze theme
+- tighten the vertical spacing between the Settings navigation heading and its search field
+- keep Settings search highlighting only for nested page controls, never the sidebar or top-level page shell, and left-align the navigation search results
+- keep the complete Settings navigation visible while search results expand below the search field, including App settings when there is no match
+- extend the federation member hover and focus highlight across the complete row, including the status point and quick actions, without layering the former trigger highlight on top
+- give the compact transcoding automation tabs a slightly larger click area and a broader upward hover highlight without changing their menu order
+- make the compact transcoding tab guidance tooltip smaller and vertically centered with the tab labels
+- make the compact settings control style the global baseline for ordinary inputs, selects, and textareas, and remove the legacy oversized control reset
+- unify ordinary select controls on the theme-aware Ideal dropdown spacing and remove legacy per-page chevrons and wrappers from connector mappings, Storage Map, and Transcoding filters
+- make application scrollbars use transparent tracks with theme-aware pill thumbs so scroll containers no longer render a light background
+- match accelerator matrix rows to the compact profile/rule row height and vertically center their backend and origin labels
+- remove the redundant remote-job acceptance option from federation member details
+- replace federation member endpoint/status details with linked available accelerators that open the matching capability matrix
+- let Test Hardware ask every connected federation member to refresh its capability matrix; each worker reruns the test when its FFmpeg or hardware capabilities changed
+- place partial-output cleanup into the same dropdown grid as the other transcoding runtime choices
+- label the partial-output choice concisely and use Remove/Keep actions instead of Yes/No
 - resolve file-detail transcodes from a target codec to a compatible encoder on the selected local or federation worker, so worker-specific encoder names are no longer required in the UI while hardware-required mode remains fail-closed
 - expose the direct transcode federation protocol and LAN discovery ports in the local development Compose file and document the required Docker mappings
 - move transcode federation guidance into a heading tooltip to keep the settings panel compact
@@ -33,7 +54,8 @@ All notable changes to this project will be documented in this file.
 - show an explicit empty state for the untested transcoding capability matrix and ask users to run the hardware test before displaying capability values
 - use rectangular Connect/Discover actions with animated connect/telescope icons and label both federation pairing actions as Connect
 - use a six-digit federation pairing code that rotates every 30 seconds, with a synchronized expiry indicator and responsive pairing-code placement beside the federation and installation names
-- remove the visible direct-federation toggle label and omit IPv6 entries from reachable pairing addresses
+- remove the visible direct-federation toggle label and omit loopback, wildcard, link-local, and multicast entries from reachable pairing addresses
+- exchange configured and locally resolved Federation endpoints after pairing, test all routes on pairing/startup/new-route/manual events, retry alternate addresses automatically with adaptive backoff after failures, and prefer the route with the best measured latency and bidirectional throughput
 - tighten the spacing around the Transcode federation heading and its compact settings panel
 - align discovered federation pairing-code inputs with their Connect buttons and keep peer endpoints beside names when space allows
 - increase the visual prominence of discovered federation installation names
@@ -41,8 +63,15 @@ All notable changes to this project will be documented in this file.
 - remove the redundant stable installation ID display from the federation settings surface
 - group automatically found federation installations in a separated "Found in Network" panel and remove the manual LAN discovery action
 - present discovered federation pairing as one segmented input-and-action control and flash a short red outline for missing codes without moving the field
+- match the manual federation pairing code and Connect action to the discovered-peer segmented control, including its compact spacing and vertical divider
 - place the manual federation pairing fallback below the automatically found installations and match the displayed pairing-code height to adjacent settings inputs
 - place the Federation settings panel below the transcoding automation toggle and its profile, rule, accelerator, and member workspace
+- make the Federation settings panel collapsible, move discovery refresh beside the Members tabs, remove global GPU/retry controls, and put manual federation pairing at the end of the member list
+- place the Federation disclosure chevron before the heading and remove the redundant network icon
+- align the Federation disclosure with the Libraries and Connectors chevrons and place its enable toggle between the chevron and heading
+- keep the installation name and pairing code in the collapsible Federation heading, remove the federation-name field, and allow inline installation-name editing
+- place the untested accelerator empty state inside the same bordered automation list used by the member workspace
+- move LAN-discovered installations and their pairing controls into the Members tab, place its toggle menu inside the member list, and show member resources plus application versions inline
 - flatten reachable federation endpoints into a responsive copyable list, remove redundant address/pairing hints, and show discovered installation names without duplicate endpoints
 - use animated Copy and Telescope icons for Transcoding federation actions and size tooltip bubbles to their content
 - keep successful federation copy actions silent while still surfacing clipboard errors
@@ -51,6 +80,8 @@ All notable changes to this project will be documented in this file.
 - keep routine transcode federation setting autosaves quiet instead of showing a success notice after every change
 - place the federation enable toggle in the panel heading and remove the redundant status pill and description tooltip
 - rename the federation heading to Federation, add an immediate Found in Network refresh action, and refine spacing around the automation tabs and content
+- use the same compact in-list automation tab row for Profiles, Rules, Accelerators, and Members
+- remove the obsolete search fields from the Profiles, Rules, and Accelerators tabs and replace the shared sliding pill with a compact, stable-height underline navigator with a soft active accent across the automation workspace
 - refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
 - remove redundant Transcoding header status counters, refresh timestamp, and bulk-add dialog; move Active/History into the compact rectangular toggle and make filter reset a tooltip-backed restore icon
 - refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart
@@ -84,8 +115,25 @@ All notable changes to this project will be documented in this file.
 - remove redundant version metadata from saved transcoding profile rows and use compact profile/action labels in the profile settings
 - align compatibility profile editor actions with the current rectangular settings controls, including filled orange save actions and dark-mode hover states
 - keep transcoding profile and rule editors in tandem with the Hard/Software profile form grid, read-only fields, and expandable capability sections
+- remember each accelerator matrix device's last expanded or collapsed state between visits
+- label local accelerator matrices with a distinct local-origin pill alongside federation-member pills
+- show only the accelerator backend in the compact device metadata line
+- show GPU and CPU icons for accelerator matrices based on the tested device class
+- list trusted federation members before discovered pairing suggestions and mark new and manual pairing entries with compact plus icons
+- equalize Federation member, discovered-peer, and manual-pairing rows with a shared 38px row shell and matching 32px compact content height
+- match the manual Federation address field to the compact pairing-code segment styling and align its text start with the Federation name column
+- round the invalid left Pairing code segment to the grouped control's inner radius so its red feedback is not clipped at the outer corner
+- move federation member errors into status-dot tooltips with green, orange, and red reachability states
+- unify manual federation pairing into the same segmented address, pairing-code, and Connect control as discovered peers
+- restore the active selection pill for Settings navigation entries
+- keep the manual Federation plus marker outside the grouped pairing control and center it with the shared Federation entry markers
 - integrate the transcoding profiles-and-rules labels into the compact tab toggles and place their formatted guidance tooltip beside the controls
 - place the capability matrix in a third Accelerators tab beside transcoding profiles and rules without changing the matrix cells
+- format Quality profiles like the Transcoding workspace, list all profiles per media type, and make each profile's scoring sections expandable
+- remove the redundant nested metric panel so profile sections sit directly in the expanded profile surface
+- place quality-profile metadata such as Default and Built-in inline beside the profile name, wrapping only when the available width requires it
+- move the compatibility profile catalog development note into a tooltip beside its panel heading
+- align Hardware & Software Profiles with the compact Quality profiles list, expandable rows, and underline tab navigation
 - remove the redundant global hardware-device selector so all probed devices remain available for automatic profile/rule selection
 - replace transcoding hardware radio and checkbox selection with one physical-device dropdown while keeping backend-specific paths grouped internally
 - move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern
@@ -105,7 +153,11 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- send Jellyfin API keys through the modern `MediaBrowser` authorization header so connections remain compatible when legacy authorization is disabled
+- remove light gray dark-mode fallbacks from the UI catalog and remaining semantic surface consumers by routing nested surfaces, borders, and ordinary UI surfaces through theme-aware tokens
+- apply the same theme-aware surface treatment to delete-library summaries, compatibility favorites, metadata search controls, file-detail download actions, and invalid search states
 - prevent federation detail requests from failing when a discovered peer has not provided capabilities yet
+- fix target-side federation transcodes failing during isolated MediaFile validation when no persisted library root exists
 - prevent LAN discovery from listing this installation's own advertised endpoints as connectable peers
 - re-admit an excluded federation peer when it is paired again with the current pairing code
 - ignore local or remote self-identities when exchanging federation exclusions so a peer cannot exclude itself again

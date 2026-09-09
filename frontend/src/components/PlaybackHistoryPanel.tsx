@@ -376,7 +376,7 @@ export function PlaybackHistoryPanel({
         {showProvider && providers.length > 1 ? (
           <label className="playback-history-provider-filter">
             <span className="playback-history-control-label">{t("jellyfin.playbackHistory.provider")}</span>
-            <select value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>
+            <select className="settings-choice-input" value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>
               <option value="all">{t("jellyfin.playbackHistory.allProviders")}</option>
               {providers.map((provider) => <option key={provider}>{provider}</option>)}
             </select>

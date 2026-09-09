@@ -127,6 +127,33 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
         connection.execute(
             text(
                 """
+                CREATE TABLE transcode_federation_members (
+                    id INTEGER PRIMARY KEY,
+                    installation_id VARCHAR(128) NOT NULL,
+                    federation_id VARCHAR(128) NOT NULL,
+                    display_name VARCHAR(255) NOT NULL,
+                    endpoint_urls JSON NOT NULL,
+                    protocol_version INTEGER NOT NULL,
+                    status VARCHAR(24) NOT NULL,
+                    connection_status VARCHAR(24) NOT NULL,
+                    reachable BOOLEAN NOT NULL,
+                    accept_jobs BOOLEAN NOT NULL,
+                    resources JSON NOT NULL,
+                    capabilities JSON NOT NULL,
+                    capability_matrix JSON NOT NULL,
+                    active_jobs INTEGER NOT NULL,
+                    network_mbps FLOAT NOT NULL,
+                    shared_secret VARCHAR(128),
+                    last_seen_at DATETIME,
+                    last_sync_at DATETIME,
+                    last_error VARCHAR(2048)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE transcode_jobs (
                     id INTEGER PRIMARY KEY
                 )
@@ -145,6 +172,9 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     scan_job_columns = {column["name"] for column in inspector.get_columns("scan_jobs")}
     media_file_history_columns = {column["name"] for column in inspector.get_columns("media_file_history")}
     library_history_columns = {column["name"] for column in inspector.get_columns("library_history")}
+    federation_member_columns = {
+        column["name"] for column in inspector.get_columns("transcode_federation_members")
+    }
     jellyfin_sync_job_columns = {
         column["name"] for column in inspector.get_columns("jellyfin_sync_jobs")
     }
@@ -153,6 +183,13 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     assert "app_settings" in inspector.get_table_names()
     assert "media_file_history" in inspector.get_table_names()
     assert "library_history" in inspector.get_table_names()
+    assert {
+        "application_version",
+        "preferred_endpoint_url",
+        "endpoint_metrics",
+        "network_latency_ms",
+        "network_probe_at",
+    }.issubset(federation_member_columns)
     assert {"last_scan_at", "scan_mode", "duplicate_detection_mode", "scan_config"}.issubset(library_columns)
     assert {
         "last_seen_at",

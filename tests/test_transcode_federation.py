@@ -16,6 +16,7 @@ from backend.app.models.entities import (
     TranscodeTransfer,
 )
 from backend.app.schemas.transcoding import (
+    TranscodeCapabilityMatrixRead,
     TranscodePlan,
     TranscodeStreamAction,
     TranscodeStreamPlan,
@@ -102,6 +103,13 @@ def _attempt(tmp_path: Path) -> TranscodeRemoteAttempt:
     )
 
 
+def test_remote_media_object_exposes_nullable_library_root_identity(tmp_path: Path) -> None:
+    media_file = federation._remote_media_object(_attempt(tmp_path))
+
+    assert media_file.library_root_id is None
+    assert media_file.library_root.path == str(tmp_path)
+
+
 def test_member_read_handles_discovered_peer_without_capabilities() -> None:
     member = TranscodeFederationMember(
         id=1,
@@ -127,6 +135,179 @@ def test_member_read_handles_discovered_peer_without_capabilities() -> None:
     assert result.capability_matrix is None
 
 
+def test_remote_member_capability_matrix_persists_remote_test_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    remote_matrix = TranscodeCapabilityMatrixRead(
+        status="completed",
+        tested_at=utc_now(),
+        ffmpeg_version="ffmpeg version remote-test",
+        matrices=[],
+    )
+
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.commit()
+        member = TranscodeFederationMember(
+            installation_id="remote-test-member",
+            federation_id="federation-1",
+            display_name="Remote test member",
+            endpoint_urls=["http://remote-test-member:8091"],
+            protocol_version=1,
+            status="active",
+            connection_status="offline",
+            reachable=False,
+            accept_jobs=True,
+            resources={},
+            capabilities={},
+            capability_matrix={},
+            active_jobs=0,
+            network_mbps=100.0,
+            shared_secret="s" * 32,
+        )
+        db.add(member)
+        db.commit()
+
+        def fake_post_secure_member(
+            _db: Session,
+            _settings: Settings,
+            _member: TranscodeFederationMember,
+            route: str,
+            payload: dict[str, object],
+            *,
+            timeout_seconds: float | None = None,
+        ) -> dict[str, object]:
+            assert route == "capability-matrix/test"
+            assert payload == {"kind": "capability_matrix_test"}
+            assert timeout_seconds is not None and timeout_seconds >= 300
+            return {"capability_matrix": remote_matrix.model_dump(mode="json")}
+
+        monkeypatch.setattr(federation, "_post_secure_member", fake_post_secure_member)
+
+        result = federation.test_remote_member_capability_matrix(
+            db,
+            settings,
+            member.installation_id,
+        )
+
+        assert result.status == "completed"
+        assert member.capability_matrix["status"] == "completed"
+        assert member.connection_status == "connected"
+        assert member.reachable is True
+        assert member.last_error is None
+
+
+def test_federation_protocol_capability_matrix_test_runs_target_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.api import federation_routes
+
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    remote_matrix = TranscodeCapabilityMatrixRead(status="completed")
+
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.commit()
+        member = TranscodeFederationMember(
+            installation_id="protocol-test-member",
+            federation_id=state["federation_id"],
+            display_name="Protocol test member",
+            status="active",
+            shared_secret="s" * 32,
+        )
+
+        monkeypatch.setattr(
+            federation_routes,
+            "decrypt_member_request",
+            lambda _db, _installation_id, _envelope: (member, {"kind": "capability_matrix_test"}),
+        )
+        monkeypatch.setattr(
+            federation_routes,
+            "run_transcode_matrix_test_if_changed",
+            lambda _settings: remote_matrix,
+        )
+        monkeypatch.setattr(
+            federation_routes,
+            "encrypt_member_response",
+            lambda _member, payload: payload,
+        )
+
+        result = federation_routes.federation_protocol_capability_matrix_test(
+            envelope={},
+            installation_id="protocol-test-origin",
+            db=db,
+            settings=settings,
+        )
+
+        assert result == {"capability_matrix": remote_matrix.model_dump(mode="json")}
+
+
+def test_remote_member_capability_matrix_delegates_refresh_decision_to_peer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    stored_matrix = TranscodeCapabilityMatrixRead(status="completed")
+
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        member = TranscodeFederationMember(
+            installation_id="completed-member",
+            federation_id="federation-1",
+            display_name="Completed member",
+            endpoint_urls=["http://completed-member:8091"],
+            status="active",
+            connection_status="connected",
+            reachable=True,
+            accept_jobs=True,
+            resources={},
+            capabilities={},
+            capability_matrix=stored_matrix.model_dump(mode="json"),
+            shared_secret="s" * 32,
+        )
+        db.add(member)
+        db.commit()
+
+        calls: list[tuple[str, dict[str, object]]] = []
+
+        def fake_post_secure_member(
+            _db: Session,
+            _settings: Settings,
+            _member: TranscodeFederationMember,
+            route: str,
+            payload: dict[str, object],
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            calls.append((route, payload))
+            return {"capability_matrix": stored_matrix.model_dump(mode="json")}
+
+        monkeypatch.setattr(
+            federation,
+            "_post_secure_member",
+            fake_post_secure_member,
+        )
+
+        result = federation.test_remote_member_capability_matrix(
+            db,
+            settings,
+            member.installation_id,
+        )
+
+        assert result.status == "completed"
+        assert result.model_dump(mode="json") == stored_matrix.model_dump(mode="json")
+        assert calls == [("capability-matrix/test", {"kind": "capability_matrix_test"})]
 def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -154,6 +335,8 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
 
     with SessionLocal() as db:
         result = federation.federation_settings_read(db, settings)
+        state = federation.get_federation_state(db, settings)
+        advertised = federation._local_advertised_endpoint_urls(settings, state)
 
     assert result.hostname_urls == [
         "https://worker.example.lan:9443",
@@ -162,8 +345,354 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
     ]
     assert result.ip_urls == [
         "http://192.168.1.40:8091",
+        "http://[2001:db8::40]:8091",
         "http://192.168.1.20:8091",
+        "http://[2001:db8::20]:8091",
     ]
+    assert set(result.hostname_urls + result.ip_urls).issubset(advertised)
+
+
+def test_member_endpoint_probe_selects_best_route_and_persists_every_observation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    endpoints = [
+        "http://slow-peer:8091",
+        "http://fast-peer:8091",
+        "http://low-latency-peer:8091",
+    ]
+    with SessionLocal() as db:
+        member = TranscodeFederationMember(
+            installation_id="probe-member",
+            federation_id="federation-1",
+            display_name="Probe member",
+            endpoint_urls=endpoints,
+            status="active",
+            connection_status="connected",
+            reachable=True,
+            accept_jobs=True,
+            resources={},
+            capabilities={},
+            capability_matrix={},
+            shared_secret="p" * 64,
+        )
+        db.add(member)
+        db.commit()
+
+        observations = {
+            endpoints[0]: {"latency_ms": 5.0, "upload_mbps": 100.0, "download_mbps": 100.0, "throughput_mbps": 100.0, "score_ms": 85.0},
+            endpoints[1]: {"latency_ms": 15.0, "upload_mbps": 1000.0, "download_mbps": 1000.0, "throughput_mbps": 1000.0, "score_ms": 23.0},
+            endpoints[2]: {"latency_ms": 1.0, "upload_mbps": 50.0, "download_mbps": 50.0, "throughput_mbps": 50.0, "score_ms": 161.0},
+        }
+        calls: list[str] = []
+
+        def fake_probe(
+            _settings: Settings,
+            _shared_secret: str,
+            endpoint: str,
+            **_kwargs: object,
+        ) -> dict[str, float]:
+            calls.append(endpoint)
+            return observations[endpoint]
+
+        monkeypatch.setattr(federation, "_probe_endpoint", fake_probe)
+
+        result = federation.probe_member_endpoints(db, settings, member, force=True)
+
+        assert calls == endpoints
+        assert result["http://slow-peer:8091"]["reachable"] is True
+        assert member.preferred_endpoint_url == "http://fast-peer:8091"
+        assert member.network_latency_ms == 15.0
+        assert member.network_mbps == 1000.0
+        assert set(member.endpoint_metrics) == set(endpoints)
+        assert all(item["reachable"] for item in member.endpoint_metrics.values())
+        assert member.network_probe_at is not None
+
+        federation._upsert_member(
+            db,
+            {
+                "installation_id": member.installation_id,
+                "federation_id": member.federation_id,
+                "display_name": member.display_name,
+                "endpoint_urls": endpoints,
+                "network_mbps": 10.0,
+            },
+            shared_secret=member.shared_secret,
+        )
+        assert member.network_mbps == 1000.0
+
+        member.network_probe_at = utc_now()
+        federation._upsert_member(
+            db,
+            {
+                "installation_id": member.installation_id,
+                "federation_id": member.federation_id,
+                "display_name": member.display_name,
+                "endpoint_urls": [*endpoints, "http://new-peer:8091"],
+            },
+            shared_secret=member.shared_secret,
+        )
+        assert member.network_probe_at is None
+
+
+def test_failed_endpoint_probes_use_backoff_until_the_route_is_due() -> None:
+    endpoint = "http://temporarily-unavailable-peer:8091"
+    member = TranscodeFederationMember(
+        installation_id="backoff-member",
+        federation_id="federation-1",
+        display_name="Backoff member",
+        endpoint_urls=[endpoint],
+        status="active",
+        connection_status="connected",
+        reachable=True,
+        shared_secret="b" * 64,
+    )
+
+    federation._record_endpoint_observation(
+        member,
+        endpoint,
+        reachable=False,
+        error="temporary failure",
+    )
+
+    metric = member.endpoint_metrics[endpoint]
+    assert metric["failure_count"] == 1
+    assert metric["next_probe_at"]
+    assert federation._member_endpoint_probe_candidates(member) == []
+
+    metric["next_probe_at"] = (utc_now() - timedelta(seconds=1)).isoformat()
+    assert federation._member_endpoint_probe_candidates(member) == [endpoint]
+
+
+def test_manual_federation_network_test_forces_all_connected_member_routes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path).model_copy(update={"federation_enabled": True})
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.add_all([
+            TranscodeFederationMember(
+                installation_id="manual-test-member-a",
+                federation_id="federation-1",
+                display_name="Member A",
+                endpoint_urls=["http://member-a:8091", "http://member-a-ip:8091"],
+                status="active",
+                connection_status="connected",
+                reachable=True,
+                shared_secret="a" * 64,
+            ),
+            TranscodeFederationMember(
+                installation_id="manual-test-member-b",
+                federation_id="federation-1",
+                display_name="Member B",
+                endpoint_urls=["http://member-b:8091"],
+                status="active",
+                connection_status="connected",
+                reachable=True,
+                shared_secret="b" * 64,
+            ),
+        ])
+        db.commit()
+        calls: list[tuple[str, bool, list[str] | None]] = []
+
+        def fake_probe(
+            _db: Session,
+            _settings: Settings,
+            member: TranscodeFederationMember,
+            *,
+            force: bool = False,
+            endpoints: list[str] | None = None,
+            **_kwargs: object,
+        ) -> dict[str, dict[str, object]]:
+            calls.append((member.installation_id, force, endpoints))
+            return {endpoint: {"reachable": True} for endpoint in (endpoints or member.endpoint_urls)}
+
+        monkeypatch.setattr(federation, "probe_member_endpoints", fake_probe)
+
+        federation.test_federation_network(db, settings)
+
+        assert calls == [
+            ("manual-test-member-a", True, None),
+            ("manual-test-member-b", True, None),
+        ]
+
+
+def test_secure_member_request_falls_back_after_the_preferred_endpoint_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    endpoints = ["http://unavailable-peer:8091", "http://available-peer:8091"]
+    with SessionLocal() as db:
+        member = TranscodeFederationMember(
+            installation_id="fallback-member",
+            federation_id="federation-1",
+            display_name="Fallback member",
+            endpoint_urls=endpoints,
+            status="active",
+            connection_status="connected",
+            reachable=True,
+            accept_jobs=True,
+            resources={},
+            capabilities={},
+            capability_matrix={},
+            shared_secret="f" * 64,
+            preferred_endpoint_url=endpoints[0],
+            network_probe_at=utc_now(),
+        )
+        db.add(member)
+        db.commit()
+        calls: list[str] = []
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return federation.encrypt_secure_payload(member.shared_secret or "", {"ok": True})
+
+        class FakeClient:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            def __enter__(self) -> "FakeClient":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def post(self, url: str, **_kwargs: object) -> FakeResponse:
+                calls.append(url)
+                if "unavailable-peer" in url:
+                    raise federation.httpx.HTTPError("connection refused")
+                return FakeResponse()
+
+        monkeypatch.setattr(federation.httpx, "Client", FakeClient)
+
+        result = federation._post_secure_member(
+            db,
+            settings,
+            member,
+            "heartbeat",
+            {"kind": "heartbeat"},
+        )
+
+        assert result == {"ok": True}
+        assert calls == [
+            "http://unavailable-peer:8091/api/transcoding/federation/protocol/heartbeat",
+            "http://available-peer:8091/api/transcoding/federation/protocol/heartbeat",
+        ]
+        assert member.endpoint_metrics["http://unavailable-peer:8091"]["reachable"] is False
+        assert member.endpoint_metrics["http://available-peer:8091"]["reachable"] is True
+        assert member.preferred_endpoint_url == "http://available-peer:8091"
+
+
+def test_network_probe_protocol_returns_a_bounded_authenticated_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.api import federation_routes
+
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    member = TranscodeFederationMember(
+        installation_id="probe-target",
+        federation_id="federation-1",
+        display_name="Probe target",
+        status="active",
+        shared_secret="t" * 64,
+    )
+    payload = {
+        "kind": "network_probe",
+        "probe_id": "probe-1",
+        "request_bytes": 3,
+        "response_bytes": 5,
+        "payload": federation.base64.urlsafe_b64encode(b"abc").decode("ascii"),
+    }
+
+    with SessionLocal() as db:
+        monkeypatch.setattr(
+            federation_routes,
+            "decrypt_member_request",
+            lambda _db, _installation_id, _envelope: (member, payload),
+        )
+        monkeypatch.setattr(
+            federation_routes,
+            "encrypt_member_response",
+            lambda _member, response: response,
+        )
+
+        result = federation_routes.federation_protocol_network_probe(
+            envelope={},
+            installation_id="probe-origin",
+            db=db,
+            settings=settings,
+        )
+
+    assert result["kind"] == "network_probe_response"
+    assert result["probe_id"] == "probe-1"
+    assert result["request_bytes"] == 3
+    assert result["response_bytes"] == 5
+    assert len(federation.base64.urlsafe_b64decode(str(result["payload"]).encode("ascii"))) == 5
+
+
+def test_probe_endpoint_measures_latency_and_both_transfer_directions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    secret = "m" * 64
+    member = TranscodeFederationMember(shared_secret=secret)
+    clock = iter([0.0, 0.01, 0.01, 0.07, 0.07, 0.13])
+
+    class FakeResponse:
+        def __init__(self, envelope: dict[str, object]) -> None:
+            self.envelope = envelope
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self.envelope
+
+    class FakeClient:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def post(self, _url: str, *, json: dict[str, object], **_kwargs: object) -> FakeResponse:
+            request = federation.decrypt_secure_payload(secret, json, seen_nonces=set())
+            response = federation.network_probe_response(request)
+            return FakeResponse(federation.encrypt_secure_payload(secret, response))
+
+    monkeypatch.setattr(federation.httpx, "Client", FakeClient)
+    monkeypatch.setattr(federation.time, "monotonic", lambda: next(clock))
+
+    result = federation._probe_endpoint(
+        settings,
+        secret,
+        "http://probe-peer:8091",
+        origin_installation_id="origin",
+    )
+
+    assert result["latency_ms"] == pytest.approx(10.0)
+    assert result["upload_mbps"] == pytest.approx(result["download_mbps"])
+    assert result["throughput_mbps"] == pytest.approx(result["upload_mbps"])
+    assert result["score_ms"] == pytest.approx(
+        federation._endpoint_score_ms(result["latency_ms"], result["throughput_mbps"])
+    )
 
 
 def test_lan_discovery_excludes_the_local_installation_and_its_endpoints(

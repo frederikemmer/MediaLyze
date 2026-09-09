@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
 from pathlib import Path
 from statistics import median
@@ -56,6 +57,7 @@ PARALLEL_PROBE_HEIGHT = 256
 PARALLEL_PROBE_FRAME_RATE = 30
 PARALLEL_PROBE_FRAMES = 240
 PARALLEL_PROBE_STREAM_LOOPS = 7
+MATRIX_FINGERPRINT_VERSION = 1
 
 
 class TranscodeMatrixBusyError(RuntimeError):
@@ -70,6 +72,71 @@ def _matrix_root(settings: Settings) -> Path:
 
 def _result_path(settings: Settings) -> Path:
     return _matrix_root(settings) / MATRIX_RESULT_FILE
+
+
+def transcode_capability_fingerprint(capabilities: TranscodeCapabilitiesRead) -> str:
+    """Return a stable fingerprint for the environment a matrix measures.
+
+    Probe timestamps and transient human-readable errors are deliberately
+    excluded.  The fingerprint instead covers the FFmpeg build, platform,
+    codec inventory, and physical-device properties that affect the matrix.
+    """
+
+    encoder_payload = [
+        {
+            "name": encoder.name,
+            "codec": encoder.codec,
+            "hardware": encoder.hardware,
+            "available": encoder.available,
+            "tested": encoder.tested,
+            "device_ids": sorted(encoder.device_ids),
+            "options": sorted(encoder.options),
+            "quality_mode": encoder.quality_mode,
+            "quality_min": encoder.quality_min,
+            "quality_max": encoder.quality_max,
+            "quality_default": encoder.quality_default,
+            "quality_step": encoder.quality_step,
+        }
+        for encoder in capabilities.encoders
+    ]
+    encoder_payload.sort(key=lambda item: (item["name"], item["codec"]))
+    device_payload = [
+        {
+            "id": device.id,
+            "name": device.name,
+            "vendor": device.vendor,
+            "backend": device.backend,
+            "driver_version": device.driver_version,
+            "compute_capability": device.compute_capability,
+            "memory_total_bytes": device.memory_total_bytes,
+            "render_node": device.render_node,
+            "native_device_index": device.native_device_index,
+            "device_class": device.device_class,
+            "decoder_codecs": sorted(device.decoder_codecs),
+            "encoder_names": sorted(device.encoder_names),
+            "encoder_codecs": sorted(device.encoder_codecs),
+            "supported_pixel_formats": sorted(device.supported_pixel_formats),
+            "supported_filters": sorted(device.supported_filters),
+            "status": device.status,
+        }
+        for device in capabilities.devices
+    ]
+    device_payload.sort(key=lambda item: item["id"])
+    payload = {
+        "fingerprint_version": MATRIX_FINGERPRINT_VERSION,
+        "ffmpeg_available": capabilities.ffmpeg_available,
+        "ffmpeg_path": capabilities.ffmpeg_path,
+        "version": capabilities.version,
+        "ffmpeg_version": capabilities.ffmpeg_version,
+        "platform": capabilities.platform,
+        "containers": sorted(capabilities.containers),
+        "decoder_codecs": sorted(capabilities.decoder_codecs),
+        "dolby_vision_passthrough": capabilities.dolby_vision_passthrough,
+        "encoders": encoder_payload,
+        "devices": device_payload,
+    }
+    canonical = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def load_transcode_matrix(settings: Settings) -> TranscodeCapabilityMatrixRead:
@@ -467,6 +534,11 @@ def _device_group_name(devices: list[TranscodeHardwareDevice]) -> str:
     return " · ".join(name_parts[:-1]) if len(name_parts) > 1 else first.name
 
 
+def _device_group_class(devices: list[TranscodeHardwareDevice]) -> str:
+    classes = {device.device_class for device in devices}
+    return next(iter(classes)) if len(classes) == 1 else "unknown"
+
+
 def _build_matrices(
     settings: Settings,
     capabilities: TranscodeCapabilitiesRead,
@@ -588,6 +660,7 @@ def _build_matrices(
                     device_id=device_key,
                     device_name=_device_group_name(devices),
                     backend=" + ".join(sorted({device.backend for device in devices})),
+                    device_class=_device_group_class(devices),
                     tested_at=tested_at,
                     decode_codecs=decode_codecs,
                     encode_codecs=encode_codecs,
@@ -602,28 +675,61 @@ def _build_matrices(
     )
 
 
-def run_transcode_matrix_test(settings: Settings) -> TranscodeCapabilityMatrixRead:
+def _matrix_result(
+    settings: Settings,
+    capabilities: TranscodeCapabilitiesRead,
+    capability_fingerprint: str,
+) -> TranscodeCapabilityMatrixRead:
+    if not capabilities.ffmpeg_available:
+        result = TranscodeCapabilityMatrixRead(
+            status="failed",
+            tested_at=utc_now(),
+            ffmpeg_version=capabilities.ffmpeg_version or capabilities.version,
+            error=capabilities.error or "FFmpeg is unavailable",
+        )
+    elif not capabilities.devices:
+        result = TranscodeCapabilityMatrixRead(
+            status="completed",
+            tested_at=utc_now(),
+            ffmpeg_version=capabilities.ffmpeg_version or capabilities.version,
+            matrices=[],
+        )
+    else:
+        result = _build_matrices(settings, capabilities)
+    return result.model_copy(update={"capability_fingerprint": capability_fingerprint})
+
+
+def _run_transcode_matrix_test(
+    settings: Settings,
+    *,
+    only_if_changed: bool,
+) -> TranscodeCapabilityMatrixRead:
     if not MATRIX_LOCK.acquire(blocking=False):
         raise TranscodeMatrixBusyError("A transcoding capability test is already running")
     try:
         capabilities = get_transcode_capabilities(settings, refresh=True)
-        if not capabilities.ffmpeg_available:
-            result = TranscodeCapabilityMatrixRead(
-                status="failed",
-                tested_at=utc_now(),
-                ffmpeg_version=capabilities.ffmpeg_version or capabilities.version,
-                error=capabilities.error or "FFmpeg is unavailable",
-            )
-        elif not capabilities.devices:
-            result = TranscodeCapabilityMatrixRead(
-                status="completed",
-                tested_at=utc_now(),
-                ffmpeg_version=capabilities.ffmpeg_version or capabilities.version,
-                matrices=[],
-            )
-        else:
-            result = _build_matrices(settings, capabilities)
+        fingerprint = transcode_capability_fingerprint(capabilities)
+        if only_if_changed:
+            existing = load_transcode_matrix(settings)
+            if (
+                existing.status == "completed"
+                and existing.capability_fingerprint == fingerprint
+            ):
+                return existing
+        result = _matrix_result(settings, capabilities, fingerprint)
         _store_transcode_matrix(settings, result)
         return result
     finally:
         MATRIX_LOCK.release()
+
+
+def run_transcode_matrix_test(settings: Settings) -> TranscodeCapabilityMatrixRead:
+    """Always run a fresh local matrix test after an explicit user request."""
+
+    return _run_transcode_matrix_test(settings, only_if_changed=False)
+
+
+def run_transcode_matrix_test_if_changed(settings: Settings) -> TranscodeCapabilityMatrixRead:
+    """Refresh the local matrix only when the measured environment changed."""
+
+    return _run_transcode_matrix_test(settings, only_if_changed=True)

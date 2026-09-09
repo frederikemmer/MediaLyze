@@ -36,10 +36,10 @@ export function TranscodeHistorySettingsPanel({ libraries }: { libraries: Librar
         <p className="field-hint">{t("transcoding.globalHistoryHint")}</p>
       </div>
       <div className="global-transcode-history-filters">
-        <label><span>{t("transcoding.filters.library")}</span><select value={libraryId} onChange={(event) => setLibraryId(event.target.value)}><option value="">{t("common.all")}</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
-        <label><span>{t("transcoding.filters.status")}</span><select value={status} onChange={(event) => setStatus(event.target.value as "" | TranscodeJob["status"])}><option value="">{t("common.all")}</option>{(["queued", "running", "completed", "canceled", "failed"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.status.${value}`)}</option>)}</select></label>
-        <label><span>{t("transcoding.filters.from")}</span><input type="datetime-local" value={startedAfter} onChange={(event) => setStartedAfter(event.target.value)} /></label>
-        <label><span>{t("transcoding.filters.to")}</span><input type="datetime-local" value={startedBefore} onChange={(event) => setStartedBefore(event.target.value)} /></label>
+        <label><span>{t("transcoding.filters.library")}</span><select className="settings-choice-input" value={libraryId} onChange={(event) => setLibraryId(event.target.value)}><option value="">{t("common.all")}</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
+        <label><span>{t("transcoding.filters.status")}</span><select className="settings-choice-input" value={status} onChange={(event) => setStatus(event.target.value as "" | TranscodeJob["status"])}><option value="">{t("common.all")}</option>{(["queued", "running", "completed", "canceled", "failed"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.status.${value}`)}</option>)}</select></label>
+        <label><span>{t("transcoding.filters.from")}</span><input className="settings-choice-input" type="datetime-local" value={startedAfter} onChange={(event) => setStartedAfter(event.target.value)} /></label>
+        <label><span>{t("transcoding.filters.to")}</span><input className="settings-choice-input" type="datetime-local" value={startedBefore} onChange={(event) => setStartedBefore(event.target.value)} /></label>
       </div>
       {loading ? <p className="field-hint">{t("panel.loading")}</p> : null}
       {error ? <p className="notice error">{error}</p> : null}

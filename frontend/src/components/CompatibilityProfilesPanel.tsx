@@ -6,8 +6,8 @@ import { AsyncPanel } from "./AsyncPanel";
 import { CopyIcon } from "./CopyIcon";
 import { DeleteIcon } from "./DeleteIcon";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
-import { SlidingTogglePill } from "./SlidingTogglePill";
 import { SquarePenIcon } from "./SquarePenIcon";
+import { TooltipTrigger } from "./TooltipTrigger";
 import {
   api,
   type CompatibilityProfile,
@@ -26,6 +26,7 @@ import {
 } from "../lib/profile-favorites";
 
 type ProfileTab = "hardware" | "software" | "compatibility";
+const PROFILE_TABS: ProfileTab[] = ["hardware", "software", "compatibility"];
 type EditableProfile = HardwareProfile | SoftwareProfile;
 type CapabilitySection = "video" | "audio" | "containers" | "subtitles" | "rules" | "sources";
 type CompatibilityCatalogCache = {
@@ -33,6 +34,18 @@ type CompatibilityCatalogCache = {
   software: SoftwareProfile[];
   compatibility: CompatibilityProfile[];
 };
+
+type CompatibilityProfilesPanelProps = {
+  searchFocus?: string | null;
+};
+
+function profileTabFromSearchFocus(searchFocus: string | null | undefined): ProfileTab | null {
+  if (!searchFocus?.startsWith("compatibility-tab-")) return null;
+  const value = searchFocus.slice("compatibility-tab-".length);
+  return value === "hardware" || value === "software" || value === "combination"
+    ? value === "combination" ? "compatibility" : value
+    : null;
+}
 
 const COMPATIBILITY_CATALOG_SESSION_KEY = "medialyze-compatibility-profile-catalog";
 
@@ -381,10 +394,10 @@ function softwareTemplate(): SoftwareProfile {
   };
 }
 
-export function CompatibilityProfilesPanel() {
+export function CompatibilityProfilesPanel({ searchFocus = null }: CompatibilityProfilesPanelProps = {}) {
   const { t } = useTranslation();
   const [initialCatalog] = useState(readCompatibilityCatalogCache);
-  const [tab, setTab] = useState<ProfileTab>("hardware");
+  const [tab, setTab] = useState<ProfileTab>(() => profileTabFromSearchFocus(searchFocus) ?? "hardware");
   const [hardware, setHardware] = useState<HardwareProfile[]>(initialCatalog?.hardware ?? []);
   const [software, setSoftware] = useState<SoftwareProfile[]>(initialCatalog?.software ?? []);
   const [compatibility, setCompatibility] = useState<CompatibilityProfile[]>(initialCatalog?.compatibility ?? []);
@@ -410,6 +423,16 @@ export function CompatibilityProfilesPanel() {
     compatibility: "",
   });
   const [favoriteProfileKeys, setFavoriteProfileKeys] = useState(readFavoriteProfileKeys);
+
+  useEffect(() => {
+    const nextTab = profileTabFromSearchFocus(searchFocus);
+    if (!nextTab || nextTab === tab) return;
+    setTab(nextTab);
+    setDraft(null);
+    setDraftOriginId(null);
+    setExpandedProfileId(null);
+    setCompatibilityDraft(null);
+  }, [searchFocus, tab]);
 
   async function load(showLoading = true) {
     if (showLoading) {
@@ -770,6 +793,7 @@ export function CompatibilityProfilesPanel() {
             <label>
               {t("compatibilityProfiles.fields.sourceLabel")}
               <input
+                className="settings-choice-input"
                 value={source.label}
                 readOnly={!editable}
                 onChange={(event) => updateCapabilityDraft("sources", sources.map((item, itemIndex) => (
@@ -781,6 +805,7 @@ export function CompatibilityProfilesPanel() {
               {t("compatibilityProfiles.fields.sourceUrl")}
               <span className={`compatibility-source-url-control${editable ? "" : " is-readonly"}`}>
                 <input
+                  className="settings-choice-input"
                   type="url"
                   value={source.url}
                   readOnly={!editable}
@@ -844,6 +869,7 @@ export function CompatibilityProfilesPanel() {
               {t("compatibilityProfiles.fields.format")}
               {section === "audio" ? (
                 <select
+                  className="settings-choice-input"
                   value={key}
                   disabled={!editable}
                   onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -863,6 +889,7 @@ export function CompatibilityProfilesPanel() {
                 </select>
               ) : (
                 <select
+                  className="settings-choice-input"
                   value={key}
                   disabled={!editable}
                   onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -885,6 +912,7 @@ export function CompatibilityProfilesPanel() {
             <label>
               {t("compatibilityProfiles.fields.support")}
               <select
+                className="settings-choice-input"
                 value={String(support)}
                 disabled={!editable}
                 onChange={(event) => {
@@ -947,6 +975,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.codec")}
                 <select
+                  className="settings-choice-input"
                   value={key}
                   disabled={!editable}
                   onChange={(event) => renameCapabilityEntry("video", key, event.target.value, record)}
@@ -993,6 +1022,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.maxResolution")}
                 <input
+                  className="settings-choice-input"
                   value={capability.max_resolution ?? ""}
                   readOnly={!editable}
                   placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
@@ -1002,6 +1032,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.maxFps")}
                 <input
+                  className="settings-choice-input"
                   type="number"
                   min={1}
                   value={capability.max_fps ?? ""}
@@ -1015,6 +1046,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.bitDepth")}
                 <input
+                  className="settings-choice-input"
                   value={(capability.bit_depth ?? []).join(", ")}
                   readOnly={!editable}
                   placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
@@ -1028,6 +1060,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.hdr")}
                 <input
+                  className="settings-choice-input"
                   value={(capability.hdr ?? []).join(", ")}
                   readOnly={!editable}
                   placeholder={t("compatibilityProfiles.placeholders.hdr")}
@@ -1067,6 +1100,7 @@ export function CompatibilityProfilesPanel() {
             <label>
               {t("compatibilityProfiles.fields.container")}
               <select
+                className="settings-choice-input"
                 value={container}
                 disabled={!editable}
                 onChange={(event) => updateCapabilityDraft("containers", containers.map((value, itemIndex) => (
@@ -1137,6 +1171,7 @@ export function CompatibilityProfilesPanel() {
                 {t(section === "video" ? "compatibilityProfiles.fields.codec" : "compatibilityProfiles.fields.format")}
                 {section === "video" ? (
                   <select
+                    className="settings-choice-input"
                     value={key}
                     disabled={!editable}
                     onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -1156,6 +1191,7 @@ export function CompatibilityProfilesPanel() {
                   </select>
                 ) : section === "audio" ? (
                   <select
+                    className="settings-choice-input"
                     value={key}
                     disabled={!editable}
                     onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -1175,6 +1211,7 @@ export function CompatibilityProfilesPanel() {
                   </select>
                 ) : section === "containers" ? (
                   <select
+                    className="settings-choice-input"
                     value={key}
                     disabled={!editable}
                     onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -1194,6 +1231,7 @@ export function CompatibilityProfilesPanel() {
                   </select>
                 ) : (
                   <select
+                    className="settings-choice-input"
                     value={key}
                     disabled={!editable}
                     onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
@@ -1216,6 +1254,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.playbackMode")}
                 <select
+                  className="settings-choice-input"
                   value={capability.mode}
                   disabled={!editable}
                   onChange={(event) => updateEntry(key, { mode: event.target.value as PlaybackMode })}
@@ -1246,6 +1285,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.maxResolution")}
                   <input
+                    className="settings-choice-input"
                     value={capability.max_resolution ?? ""}
                     readOnly={!editable}
                     placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
@@ -1255,6 +1295,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.maxFps")}
                   <input
+                    className="settings-choice-input"
                     type="number"
                     min={1}
                     value={capability.max_fps ?? ""}
@@ -1268,6 +1309,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.bitDepth")}
                   <input
+                    className="settings-choice-input"
                     value={(capability.bit_depth ?? []).join(", ")}
                     readOnly={!editable}
                     placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
@@ -1281,6 +1323,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.hdr")}
                   <input
+                    className="settings-choice-input"
                     value={(capability.hdr ?? []).join(", ")}
                     readOnly={!editable}
                     placeholder={t("compatibilityProfiles.placeholders.hdr")}
@@ -1292,6 +1335,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.codecProfiles")}
                   <input
+                    className="settings-choice-input"
                     value={(capability.profiles ?? []).join(", ")}
                     readOnly={!editable}
                     placeholder={t("compatibilityProfiles.placeholders.codecProfiles")}
@@ -1307,6 +1351,7 @@ export function CompatibilityProfilesPanel() {
                 <label>
                   {t("compatibilityProfiles.fields.maxChannels")}
                   <input
+                    className="settings-choice-input"
                     type="number"
                     min={1}
                     value={capability.max_channels ?? ""}
@@ -1321,6 +1366,7 @@ export function CompatibilityProfilesPanel() {
             <label className="compatibility-profile-reason">
               {t("compatibilityProfiles.fields.conditions")}
               <textarea
+                className="settings-choice-input"
                 key={`${key}-${JSON.stringify(capability.conditions ?? [])}`}
                 rows={3}
                 readOnly={!editable}
@@ -1354,7 +1400,7 @@ export function CompatibilityProfilesPanel() {
     );
   }
 
-  function renderProfileDetails(profile: EditableProfile) {
+  function renderProfileDetails(profile: EditableProfile, detailsId?: string) {
     const editing = Boolean(draft && draftOriginId === profile.id);
     const editable = editing;
     const active = editing && draft ? draft : profile;
@@ -1372,11 +1418,12 @@ export function CompatibilityProfilesPanel() {
         : "other";
 
     return (
-      <div className="compatibility-profile-details">
+      <div id={detailsId} className="compatibility-profile-details">
         <div className="compatibility-profile-form-grid">
           <label>
             {t("compatibilityProfiles.fields.name")}
             <input
+              className="settings-choice-input"
               value={active.name}
               readOnly={!editable}
               onChange={(event) => updateDraft({ name: event.target.value })}
@@ -1385,6 +1432,7 @@ export function CompatibilityProfilesPanel() {
           <label>
             {t("compatibilityProfiles.fields.category")}
             <select
+              className="settings-choice-input"
               value={active.category}
               disabled={!editable}
               onChange={(event) => updateDraft({ category: event.target.value })}
@@ -1404,6 +1452,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.manufacturer")}
                 <input
+                  className="settings-choice-input"
                   value={(active as HardwareProfile).manufacturer}
                   readOnly={!editable}
                   onChange={(event) => updateDraft({ manufacturer: event.target.value } as Partial<HardwareProfile>)}
@@ -1412,6 +1461,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.year")}
                 <input
+                  className="settings-choice-input"
                   type="number"
                   value={(active as HardwareProfile).year ?? ""}
                   readOnly={!editable}
@@ -1426,6 +1476,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.developer")}
                 <input
+                  className="settings-choice-input"
                   value={(active as SoftwareProfile).developer}
                   readOnly={!editable}
                   onChange={(event) => updateDraft({ developer: event.target.value } as Partial<SoftwareProfile>)}
@@ -1434,6 +1485,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.platforms")}
                 <input
+                  className="settings-choice-input"
                   value={(active as SoftwareProfile).platforms.join(", ")}
                   readOnly={!editable}
                   onChange={(event) => updateDraft({
@@ -1444,6 +1496,7 @@ export function CompatibilityProfilesPanel() {
               <label>
                 {t("compatibilityProfiles.fields.serverFallback")}
                 <select
+                  className="settings-choice-input"
                   value={(active as SoftwareProfile).server_fallback ?? "unsupported"}
                   disabled={!editable}
                   onChange={(event) => updateDraft({
@@ -1459,6 +1512,7 @@ export function CompatibilityProfilesPanel() {
           <label>
             {t("compatibilityProfiles.fields.verifiedBy")}
             <select
+              className="settings-choice-input"
               value={verificationSelection}
               disabled={!editable}
               onChange={(event) => {
@@ -1485,6 +1539,7 @@ export function CompatibilityProfilesPanel() {
             <label>
               {t("compatibilityProfiles.fields.otherVerification")}
               <input
+                className="settings-choice-input"
                 value={active.verified_by === "other" ? "" : active.verified_by ?? ""}
                 readOnly={!editable}
                 onChange={(event) => updateDraft({ verified_by: event.target.value || "other" })}
@@ -1494,6 +1549,7 @@ export function CompatibilityProfilesPanel() {
           <label className="compatibility-profile-field-wide">
             {t("compatibilityProfiles.fields.notes")}
             <textarea
+              className="settings-choice-input"
               rows={3}
               value={active.notes ?? ""}
               readOnly={!editable}
@@ -1552,7 +1608,7 @@ export function CompatibilityProfilesPanel() {
           <>
             <label className="compatibility-profile-reason">
               {t("compatibilityProfiles.reason")}
-              <textarea value={reason} rows={3} onChange={(event) => setReason(event.target.value)} />
+              <textarea className="settings-choice-input" value={reason} rows={3} onChange={(event) => setReason(event.target.value)} />
             </label>
             <div className="compatibility-profile-card-actions">
               <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveProfile()}>
@@ -1609,6 +1665,56 @@ export function CompatibilityProfilesPanel() {
     );
   }
 
+  function selectProfileTab(nextTab: ProfileTab) {
+    setTab(nextTab);
+    setDraft(null);
+    setDraftOriginId(null);
+    setExpandedProfileId(null);
+    setCompatibilityDraft(null);
+  }
+
+  function renderProfileTabs() {
+    return (
+      <div className="transcode-automation-tab-controls">
+        <div
+          className="transcode-automation-tab-list"
+          role="tablist"
+          aria-label={t("compatibilityProfiles.title")}
+          aria-orientation="horizontal"
+        >
+          {PROFILE_TABS.map((key, index) => (
+            <button
+              type="button"
+              id={`compatibility-profile-tab-${key}`}
+              role="tab"
+              className={`transcode-automation-tab-button${tab === key ? " active" : ""}`}
+              aria-selected={tab === key}
+              tabIndex={tab === key ? 0 : -1}
+              data-toggle-key={key}
+              data-settings-search-target={`compatibility-tab-${key === "compatibility" ? "combination" : key}`}
+              key={key}
+              onClick={() => selectProfileTab(key)}
+              onKeyDown={(event) => {
+                let nextIndex: number | null = null;
+                if (event.key === "ArrowRight") nextIndex = (index + 1) % PROFILE_TABS.length;
+                if (event.key === "ArrowLeft") nextIndex = (index + PROFILE_TABS.length - 1) % PROFILE_TABS.length;
+                if (event.key === "Home") nextIndex = 0;
+                if (event.key === "End") nextIndex = PROFILE_TABS.length - 1;
+                if (nextIndex === null) return;
+                event.preventDefault();
+                const nextTab = PROFILE_TABS[nextIndex];
+                selectProfileTab(nextTab);
+                window.requestAnimationFrame(() => document.getElementById(`compatibility-profile-tab-${nextTab}`)?.focus());
+              }}
+            >
+              <span className="transcode-automation-tab-label">{t(`compatibilityProfiles.tabs.${key}`)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const createAction = tab === "compatibility" ? (
     <button
       type="button"
@@ -1633,63 +1739,45 @@ export function CompatibilityProfilesPanel() {
   return (
     <AsyncPanel
       title={t("compatibilityProfiles.title")}
+      titleAddon={
+        <TooltipTrigger
+          ariaLabel={t("compatibilityProfiles.developmentNoteAria")}
+          content={t("compatibilityProfiles.developmentNote")}
+        >
+          ?
+        </TooltipTrigger>
+      }
       loading={loading}
       error={error}
       className="compatibility-profiles-async-panel"
     >
-      <div className="compatibility-profile-panel">
-        <p className="compatibility-profile-development-note">
-          {t("compatibilityProfiles.developmentNote")}
-        </p>
-        <div className="settings-profile-toggle-row">
-          <div
-            className="library-history-range-toggle"
-            role="tablist"
-            aria-label={t("compatibilityProfiles.title")}
-          >
-            <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
-            {(["hardware", "software", "compatibility"] as ProfileTab[]).map((key) => (
-              <button
-                type="button"
-                className={`library-history-range-button${tab === key ? " active" : ""}`}
-                data-toggle-key={key}
-                aria-pressed={tab === key}
-                key={key}
-                onClick={() => {
-                  setTab(key);
-                  setDraft(null);
-                  setDraftOriginId(null);
-                  setExpandedProfileId(null);
-                  setCompatibilityDraft(null);
-                }}
-              >
-                <span className="library-history-range-button-content">
-                  <span>{t(`compatibilityProfiles.tabs.${key}`)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+      <div className="compatibility-profile-list compatibility-profile-catalog-list">
+        <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+          {renderProfileTabs()}
           <div className="settings-profile-toggle-actions">{createAction}</div>
         </div>
 
-        {message ? <div className="alert">{message}</div> : null}
+        {message ? <div className="compatibility-profile-catalog-message alert">{message}</div> : null}
 
         {tab !== "compatibility" ? (
           <>
-            <div className="compatibility-profile-list">
-              {renderProfileSearch()}
-              {filteredProfiles.map((profile) => (
+            {renderProfileSearch()}
+            {filteredProfiles.map((profile) => {
+              const detailsId = `compatibility-profile-details-${profile.id}`;
+              const expanded = expandedProfileId === profile.id;
+              return (
                 <article
-                  className={`compatibility-profile-list-item${expandedProfileId === profile.id ? " is-expanded" : ""}`}
+                  className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`}
                   key={profile.id}
                 >
-                  <div className="compatibility-profile-list-row">
+                  <div className="compatibility-profile-list-row quality-profile-list-row">
                     <button
                       type="button"
                       className="compatibility-profile-list-trigger"
-                      aria-expanded={expandedProfileId === profile.id}
+                      aria-expanded={expanded}
+                      aria-controls={detailsId}
                       onClick={() => {
-                        if (expandedProfileId === profile.id) {
+                        if (expanded) {
                           setDraft(null);
                           setDraftOriginId(null);
                           setExpandedProfileId(null);
@@ -1700,46 +1788,53 @@ export function CompatibilityProfilesPanel() {
                         setExpandedProfileId(profile.id);
                       }}
                     >
-                      <span>{profile.name}</span>
+                      <span className="transcode-automation-list-copy compatibility-profile-list-copy">
+                        <strong>{profile.name}</strong>
+                      </span>
                       <ChevronDown aria-hidden="true" />
                     </button>
                     {renderProfileQuickActions(profile)}
                   </div>
-                  {expandedProfileId === profile.id ? renderProfileDetails(profile) : null}
+                  {expanded ? renderProfileDetails(profile, detailsId) : null}
                 </article>
-              ))}
-              {draft && draftOriginId === draft.id && !profiles.some((profile) => profile.id === draft.id) ? (
-                <article className="compatibility-profile-list-item is-expanded">
-                  <div className="compatibility-profile-list-row">
-                    <div className="compatibility-profile-list-trigger is-static">
-                      <span>{draft.name}</span>
-                      <ChevronDown aria-hidden="true" />
-                    </div>
+              );
+            })}
+            {draft && draftOriginId === draft.id && !profiles.some((profile) => profile.id === draft.id) ? (
+              <article className="compatibility-profile-list-item is-expanded">
+                <div className="compatibility-profile-list-row quality-profile-list-row">
+                  <div className="compatibility-profile-list-trigger is-static">
+                    <span className="transcode-automation-list-copy compatibility-profile-list-copy">
+                      <strong>{draft.name}</strong>
+                    </span>
+                    <ChevronDown aria-hidden="true" />
                   </div>
-                  {renderProfileDetails(draft)}
-                </article>
-              ) : null}
-              {!filteredProfiles.length && !(draft && draftOriginId === draft.id) ? (
-                <p className="compatibility-profile-search-empty">{t("compatibilityProfiles.searchEmpty")}</p>
-              ) : null}
-            </div>
+                </div>
+                {renderProfileDetails(draft, `compatibility-profile-details-${draft.id}`)}
+              </article>
+            ) : null}
+            {!filteredProfiles.length && !(draft && draftOriginId === draft.id) ? (
+              <p className="compatibility-profile-search-empty">{t("compatibilityProfiles.searchEmpty")}</p>
+            ) : null}
           </>
         ) : (
           <>
-            <div className="compatibility-profile-list">
-              {renderProfileSearch()}
-              {filteredCompatibility.map((profile) => (
+            {renderProfileSearch()}
+            {filteredCompatibility.map((profile) => {
+              const detailsId = `compatibility-profile-details-${profile.id}`;
+              const expanded = expandedProfileId === profile.id;
+              return (
                 <article
-                  className={`compatibility-profile-list-item${expandedProfileId === profile.id ? " is-expanded" : ""}`}
+                  className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`}
                   key={profile.id}
                 >
-                  <div className="compatibility-profile-list-row">
+                  <div className="compatibility-profile-list-row quality-profile-list-row">
                     <button
                       type="button"
                       className="compatibility-profile-list-trigger"
-                      aria-expanded={expandedProfileId === profile.id}
+                      aria-expanded={expanded}
+                      aria-controls={detailsId}
                       onClick={() => {
-                        if (expandedProfileId === profile.id) {
+                        if (expanded) {
                           setExpandedProfileId(null);
                           setCompatibilityDraft(null);
                         } else {
@@ -1747,19 +1842,34 @@ export function CompatibilityProfilesPanel() {
                         }
                       }}
                     >
-                      <span>{profile.name}</span>
+                      <span className="transcode-automation-list-copy compatibility-profile-list-copy">
+                        <strong>{profile.name}</strong>
+                      </span>
                       <ChevronDown aria-hidden="true" />
                     </button>
                     <div className="compatibility-profile-quick-actions">
                       {renderFavoriteAction("compatibility", profile.id, profile.name)}
                     </div>
                   </div>
-                  {expandedProfileId === profile.id && compatibilityDraft?.id === profile.id ? (
-                    <div className="compatibility-profile-details">
+                  {expanded && compatibilityDraft?.id === profile.id ? (
+                    <div id={detailsId} className="compatibility-profile-details">
                       <div className="compatibility-profile-form-grid">
-                        <label>{t("compatibilityProfiles.fields.name")}<input value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} /></label>
-                        <label>{t("compatibilityProfiles.tabs.hardware")}<select value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>{hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-                        <label>{t("compatibilityProfiles.tabs.software")}<select value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>{software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                        <label>
+                          {t("compatibilityProfiles.fields.name")}
+                          <input className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
+                        </label>
+                        <label>
+                          {t("compatibilityProfiles.tabs.hardware")}
+                          <select className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
+                            {hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          {t("compatibilityProfiles.tabs.software")}
+                          <select className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
+                            {software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                        </label>
                       </div>
                       <p>{profileNames.get(compatibilityDraft.hardware_profile_id)} + {profileNames.get(compatibilityDraft.software_profile_id)}</p>
                       <div className="compatibility-profile-card-actions">
@@ -1770,30 +1880,47 @@ export function CompatibilityProfilesPanel() {
                     </div>
                   ) : null}
                 </article>
-              ))}
-              {compatibilityDraft && !compatibility.some((profile) => profile.id === compatibilityDraft.id) ? (
-                <article className="compatibility-profile-list-item is-expanded">
+              );
+            })}
+            {compatibilityDraft && !compatibility.some((profile) => profile.id === compatibilityDraft.id) ? (
+              <article className="compatibility-profile-list-item is-expanded">
+                <div className="compatibility-profile-list-row quality-profile-list-row">
                   <div className="compatibility-profile-list-trigger is-static">
-                    <span>{compatibilityDraft.name}</span>
+                    <span className="transcode-automation-list-copy compatibility-profile-list-copy">
+                      <strong>{compatibilityDraft.name}</strong>
+                    </span>
                     <ChevronDown aria-hidden="true" />
                   </div>
-                  <div className="compatibility-profile-details">
-                    <div className="compatibility-profile-form-grid">
-                <label>{t("compatibilityProfiles.fields.name")}<input value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} /></label>
-                <label>{t("compatibilityProfiles.tabs.hardware")}<select value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>{hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-                <label>{t("compatibilityProfiles.tabs.software")}<select value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>{software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-                    </div>
-                <div className="compatibility-profile-card-actions">
-                  <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
-                  <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
                 </div>
+                <div id={`compatibility-profile-details-${compatibilityDraft.id}`} className="compatibility-profile-details">
+                  <div className="compatibility-profile-form-grid">
+                    <label>
+                      {t("compatibilityProfiles.fields.name")}
+                      <input className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
+                    </label>
+                    <label>
+                      {t("compatibilityProfiles.tabs.hardware")}
+                      <select className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
+                        {hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      {t("compatibilityProfiles.tabs.software")}
+                      <select className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
+                        {software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    </label>
                   </div>
-                </article>
-              ) : null}
-              {!filteredCompatibility.length && !compatibilityDraft ? (
-                <p className="compatibility-profile-search-empty">{t("compatibilityProfiles.searchEmpty")}</p>
-              ) : null}
-            </div>
+                  <div className="compatibility-profile-card-actions">
+                    <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
+                    <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
+                  </div>
+                </div>
+              </article>
+            ) : null}
+            {!filteredCompatibility.length && !compatibilityDraft ? (
+              <p className="compatibility-profile-search-empty">{t("compatibilityProfiles.searchEmpty")}</p>
+            ) : null}
           </>
         )}
       </div>

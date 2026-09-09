@@ -552,11 +552,74 @@ describe("LibrariesPage settings navigation", () => {
     });
 
     expect(desktopNavigationQueries.getByRole("button", { name: "Telemetry" })).toBeInTheDocument();
-    expect(desktopNavigationQueries.queryByRole("button", { name: "Quality profiles" })).not.toBeInTheDocument();
+    expect(desktopNavigationQueries.getByRole("button", { name: "Quality profiles" })).toBeInTheDocument();
 
     fireEvent.click(desktopNavigationQueries.getByRole("button", { name: "Telemetry" }));
     expect(screen.getByRole("searchbox", { name: "Search settings" })).toHaveValue("");
     expect(desktopNavigationQueries.getByRole("button", { name: "Quality profiles" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), {
+      target: { value: "zzzz" },
+    });
+    expect(screen.getAllByText("No settings match this search.")).not.toHaveLength(0);
+    expect(desktopNavigationQueries.getByRole("button", { name: "App settings" })).toBeInTheDocument();
+  });
+
+  it("shows the active selection pill for the selected settings panel", async () => {
+    renderPage({ initialEntry: "/settings?section=transcoding" });
+
+    const settingsMenu = await screen.findByLabelText("Settings menu");
+    const activeItem = settingsMenu.querySelector<HTMLButtonElement>(
+      '.settings-navigation-list .settings-navigation-item.active[data-settings-panel-id="transcoding"]',
+    );
+    expect(activeItem).not.toBeNull();
+    expect(activeItem).toHaveAttribute("aria-current", "page");
+
+    const activePill = activeItem?.querySelector<HTMLElement>(".nav-active-pill");
+    expect(activePill).not.toBeNull();
+    if (!activePill) throw new Error("The active settings navigation pill was not rendered");
+    expect(activePill).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("opens and highlights the best nested settings match, including a small typo", async () => {
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([]);
+    renderPage({ initialEntry: "/settings?section=libraries" });
+
+    fireEvent.change(await screen.findByRole("searchbox", { name: "Search settings" }), {
+      target: { value: "Combinaton" },
+    });
+
+    const combinationTab = await waitFor(() => {
+      const target = document.querySelector<HTMLButtonElement>(
+        '[data-settings-search-target="compatibility-tab-combination"]',
+      );
+      if (!target) throw new Error("Combination tab has not rendered yet");
+      return target;
+    });
+    await waitFor(() => {
+      expect(combinationTab).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByTestId("location-probe")).toHaveTextContent(
+        "/settings?section=compatibility-profiles&settingsFocus=compatibility-tab-combination",
+      );
+    });
+    expect(document.querySelector(".settings-navigation-panel .is-settings-search-highlighted")).not.toBeInTheDocument();
+  });
+
+  it("does not highlight the sidebar or page shell for a top-level settings match", async () => {
+    renderPage({ initialEntry: "/settings?section=libraries" });
+
+    fireEvent.change(await screen.findByRole("searchbox", { name: "Search settings" }), {
+      target: { value: "Transcoding" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location-probe")).toHaveTextContent(
+        "/settings?section=transcoding&settingsFocus=settings-panel-transcoding",
+      );
+    });
+    expect(document.querySelector(".is-settings-search-highlighted")).not.toBeInTheDocument();
   });
 
   it("opens a linked library at the central connector status", async () => {
@@ -1672,12 +1735,44 @@ describe("LibrariesPage ignore patterns", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Quality profiles" }));
     const mediaTypeTabs = await screen.findByRole("tablist", { name: "Media type" });
-    expect(mediaTypeTabs).toHaveClass("library-history-range-toggle");
-    expect(mediaTypeTabs.querySelector(".library-history-range-pill")).toBeInTheDocument();
-    expect(within(mediaTypeTabs).getAllByRole("button")).toHaveLength(3);
-    expect(within(mediaTypeTabs).getByRole("button", { name: "Video" })).toHaveClass("library-history-range-button", "active");
+    expect(mediaTypeTabs).toHaveClass("transcode-automation-tab-list");
+    expect(within(mediaTypeTabs).getAllByRole("tab")).toHaveLength(3);
+    expect(within(mediaTypeTabs).getByRole("tab", { name: "Video" })).toHaveClass("transcode-automation-tab-button", "active");
     expect(await screen.findByText("Visual density")).toBeInTheDocument();
     expect(screen.getByText("Video codec")).toBeInTheDocument();
+  });
+
+  it("lists profiles and expands their nested metric settings", async () => {
+    vi.spyOn(api, "qualityProfiles").mockResolvedValue([
+      createQualityProfileDefinition(),
+      createQualityProfileDefinition({
+        id: 2,
+        name: "Cinema",
+        is_default: false,
+        profile: {
+          ...DEFAULT_QUALITY_PROFILE,
+          active_metrics: ["resolution"],
+        },
+      }),
+    ]);
+
+    renderPage({ activePanel: "qualityProfiles" });
+
+    expect(await screen.findByText("Default video")).toBeInTheDocument();
+    expect(screen.getByText("Cinema")).toBeInTheDocument();
+    const cinemaTrigger = screen.getByRole("button", { name: /Cinema/ });
+    expect(cinemaTrigger).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(cinemaTrigger);
+
+    expect(cinemaTrigger).toHaveAttribute("aria-expanded", "true");
+    const resolutionToggle = screen.getByRole("button", { name: "Configure Resolution metric" });
+    expect(resolutionToggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(resolutionToggle);
+
+    expect(resolutionToggle).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByLabelText("Minimum")).toBeInTheDocument();
   });
 
   it("shows built-in quality profiles as protected and read-only", async () => {
@@ -1766,7 +1861,7 @@ describe("LibrariesPage ignore patterns", () => {
 
     renderPage({ activePanel: "qualityProfiles" });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Music" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Music" }));
     fireEvent.change(await screen.findByLabelText("Add metric"), { target: { value: "music_tags" } });
     expect(await screen.findByText("Music tags")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save profile" }));

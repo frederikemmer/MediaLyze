@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -98,6 +98,12 @@ import {
   resolutionCategoryChangeSummary,
 } from "../lib/resolution-categories";
 import { useScanJobs } from "../lib/scan-jobs";
+import {
+  isConfidentSettingsSearchMatch,
+  normalizeSettingsSearchQuery,
+  rankSettingsSearchTargets,
+  type SettingsSearchMatch,
+} from "../lib/settings-search";
 import { useTheme, type ThemePreference } from "../lib/theme";
 
 type CreateLibraryForm = {
@@ -813,6 +819,150 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
 
 const SETTINGS_NAV_ITEMS: SettingsNavigationItem[] = SETTINGS_NAV_GROUPS.flatMap((group) => group.items);
 
+type SettingsSearchTargetDefinition = {
+  id: string;
+  panel: SettingsPanelId;
+  labelKey: string;
+  aliases?: string[];
+  focus: string;
+};
+
+const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
+  {
+    id: "settings-panel-configured-libraries",
+    panel: "configuredLibraries",
+    labelKey: "libraries.settingsNavigationLibraries",
+    aliases: ["libraries", "library", "media folders", "bibliotheken", "medienordner"],
+    focus: "settings-panel-configuredLibraries",
+  },
+  {
+    id: "settings-panel-jellyfin",
+    panel: "jellyfin",
+    labelKey: "connectors.title",
+    aliases: ["connector", "connectors", "jellyfin", "verbindungen"],
+    focus: "settings-panel-jellyfin",
+  },
+  {
+    id: "settings-panel-quality-profiles",
+    panel: "qualityProfiles",
+    labelKey: "libraries.qualityProfiles.title",
+    aliases: ["quality", "quality score", "qualitätsprofile", "bewertung"],
+    focus: "settings-panel-qualityProfiles",
+  },
+  {
+    id: "settings-panel-compatibility-profiles",
+    panel: "compatibilityProfiles",
+    labelKey: "compatibilityProfiles.navigationTitle",
+    aliases: ["hardware software profiles", "compatibility", "geräteprofile", "kompatibilität"],
+    focus: "settings-panel-compatibilityProfiles",
+  },
+  {
+    id: "compatibility-tab-hardware",
+    panel: "compatibilityProfiles",
+    labelKey: "compatibilityProfiles.tabs.hardware",
+    aliases: ["hardware profile", "hardware profiles", "hardwareprofil", "hardwareprofile"],
+    focus: "compatibility-tab-hardware",
+  },
+  {
+    id: "compatibility-tab-software",
+    panel: "compatibilityProfiles",
+    labelKey: "compatibilityProfiles.tabs.software",
+    aliases: ["software", "player", "software profile", "softwareprofil", "spieler"],
+    focus: "compatibility-tab-software",
+  },
+  {
+    id: "compatibility-tab-combination",
+    panel: "compatibilityProfiles",
+    labelKey: "compatibilityProfiles.tabs.compatibility",
+    aliases: ["combination", "combinations", "kombination", "kombinationen", "compatibility profile"],
+    focus: "compatibility-tab-combination",
+  },
+  {
+    id: "settings-panel-resolution-categories",
+    panel: "resolutionCategories",
+    labelKey: "libraries.resolutionCategories.title",
+    aliases: ["resolution", "resolutions", "auflösung", "auflösungen"],
+    focus: "settings-panel-resolutionCategories",
+  },
+  {
+    id: "settings-panel-pattern-recognition",
+    panel: "patternRecognition",
+    labelKey: "libraries.settingsNavigationPatternRecognition",
+    aliases: ["patterns", "ignore patterns", "folder patterns", "muster", "ausschlussmuster"],
+    focus: "settings-panel-patternRecognition",
+  },
+  {
+    id: "settings-panel-app-settings",
+    panel: "appSettings",
+    labelKey: "libraries.appSettings",
+    aliases: ["application", "general", "app", "anwendung", "allgemein"],
+    focus: "settings-panel-appSettings",
+  },
+  {
+    id: "settings-panel-transcoding",
+    panel: "transcoding",
+    labelKey: "transcoding.settingsTitle",
+    aliases: ["transcode", "encoding", "ffmpeg", "umwandlung"],
+    focus: "settings-panel-transcoding",
+  },
+  {
+    id: "transcoding-tab-profiles",
+    panel: "transcoding",
+    labelKey: "transcoding.automation.tabs.profiles",
+    aliases: ["transcoding profiles", "profile", "saved profiles"],
+    focus: "transcoding-tab-profiles",
+  },
+  {
+    id: "transcoding-tab-rules",
+    panel: "transcoding",
+    labelKey: "transcoding.automation.tabs.rules",
+    aliases: ["transcoding rules", "automatic rules", "regeln", "automatische regeln"],
+    focus: "transcoding-tab-rules",
+  },
+  {
+    id: "transcoding-tab-accelerators",
+    panel: "transcoding",
+    labelKey: "transcoding.automation.tabs.accelerators",
+    aliases: ["hardware acceleration", "accelerator", "beschleuniger", "hardware diagnostics"],
+    focus: "transcoding-tab-accelerators",
+  },
+  {
+    id: "transcoding-tab-members",
+    panel: "transcoding",
+    labelKey: "transcoding.automation.tabs.members",
+    aliases: ["federation members", "trusted members", "mitglieder", "verbundmitglieder"],
+    focus: "transcoding-tab-members",
+  },
+  {
+    id: "transcoding-federation",
+    panel: "transcoding",
+    labelKey: "transcoding.federation.title",
+    aliases: ["federation", "peer", "peers", "worker federation", "verbund"],
+    focus: "transcoding-federation",
+  },
+  {
+    id: "settings-panel-history-retention",
+    panel: "historyRetention",
+    labelKey: "libraries.historyRetention.title",
+    aliases: ["history", "retention", "verlauf", "aufbewahrung"],
+    focus: "settings-panel-historyRetention",
+  },
+  {
+    id: "settings-panel-recent-scan-logs",
+    panel: "recentScanLogs",
+    labelKey: "scanLogs.title",
+    aliases: ["scan logs", "scans", "protokolle", "scanverlauf"],
+    focus: "settings-panel-recentScanLogs",
+  },
+  {
+    id: "settings-panel-telemetry",
+    panel: "telemetry",
+    labelKey: "telemetry.panel.title",
+    aliases: ["privacy", "anonymous data", "diagnostics", "telemetrie", "datenschutz"],
+    focus: "settings-panel-telemetry",
+  },
+];
+
 const QUALITY_METRICS_BY_MEDIA_TYPE: Record<QualityProfileMediaType, string[]> = {
   video: ["resolution", "visual_density", "video_codec", "audio_channels", "audio_codec", "dynamic_range", "language_preferences"],
   music: ["audio_channels", "audio_codec", "audio_bitrate", "sample_rate", "music_tags"],
@@ -872,6 +1022,7 @@ export function LibrariesPage() {
   const [qualityProfileDraft, setQualityProfileDraft] = useState<QualityProfileDefinition | null>(null);
   const [qualityProfileMessage, setQualityProfileMessage] = useState<string | null>(null);
   const [qualityProfileSaving, setQualityProfileSaving] = useState(false);
+  const [expandedQualityProfileId, setExpandedQualityProfileId] = useState<number | null>(null);
   const [expandedQualityProfileMetrics, setExpandedQualityProfileMetrics] = useState<Record<string, boolean>>({});
   const [isRenamingQualityProfile, setIsRenamingQualityProfile] = useState(false);
   const qualityProfileNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -1040,23 +1191,126 @@ export function LibrariesPage() {
   const activeSettingsNavItem =
     SETTINGS_NAV_ITEMS.find((item) => item.id === activeSettingsPanelId) ?? SETTINGS_NAV_ITEMS[0];
   const ActiveSettingsNavIcon = activeSettingsNavItem.icon;
-  const normalizedSettingsSearchQuery = settingsSearchQuery.trim().toLocaleLowerCase(i18n.resolvedLanguage);
-  const visibleSettingsNavigationGroups = SETTINGS_NAV_GROUPS.map((group) => {
-    const groupMatches = t(group.labelKey).toLocaleLowerCase(i18n.resolvedLanguage)
-      .includes(normalizedSettingsSearchQuery);
-    return {
-      ...group,
-      items: normalizedSettingsSearchQuery
-        ? group.items.filter((item) => (
-          groupMatches
-          || t(item.labelKey).toLocaleLowerCase(i18n.resolvedLanguage)
-            .includes(normalizedSettingsSearchQuery)
-        ))
-        : group.items,
-    };
-  }).filter((group) => group.items.length);
+  const normalizedSettingsSearchQuery = normalizeSettingsSearchQuery(settingsSearchQuery);
+  const settingsSearchTargets = useMemo(() => {
+    const pageLabels = new Map(
+      SETTINGS_NAV_ITEMS.map((item) => [item.id, t(item.labelKey)]),
+    );
+    return SETTINGS_SEARCH_TARGET_DEFINITIONS.map((definition) => ({
+      id: definition.id,
+      panel: definition.panel,
+      label: t(definition.labelKey),
+      context: pageLabels.get(definition.panel) ?? "",
+      aliases: definition.aliases,
+      focus: definition.focus,
+    }));
+  }, [i18n.resolvedLanguage, t]);
+  const settingsSearchMatches = useMemo(
+    () => rankSettingsSearchTargets(settingsSearchTargets, normalizedSettingsSearchQuery, activeSettingsPanelId),
+    [activeSettingsPanelId, normalizedSettingsSearchQuery, settingsSearchTargets],
+  );
+  const focusedSettingsSearchTarget = searchParams.get("settingsFocus");
+  const visibleSettingsNavigationGroups = SETTINGS_NAV_GROUPS;
   const targetLibraryId = Number(searchParams.get("library") || 0);
   const focusedSettingsControl = searchParams.get("focus");
+
+  const renderSettingsSearchResults = (mobile = false) => {
+    if (!normalizedSettingsSearchQuery) return null;
+    const matches = settingsSearchMatches.slice(0, 7);
+    return (
+      <div
+        className="settings-search-results"
+        role="listbox"
+        aria-label={t("libraries.settingsSearchResults")}
+      >
+        {matches.map((match, index) => (
+          <button
+            type="button"
+            role="option"
+            aria-selected={index === 0}
+            className={`settings-search-result${index === 0 ? " is-best-match" : ""}`}
+            key={match.target.id}
+            tabIndex={mobile && !isSettingsMobileMenuOpen ? -1 : undefined}
+            onClick={() => openSettingsSearchMatch(match)}
+          >
+            <span className="settings-search-result-label">{match.target.label}</span>
+            <span className="settings-search-result-context">{match.target.context}</span>
+          </button>
+        ))}
+        {!matches.length ? (
+          <div className="settings-search-result-empty">{t("libraries.settingsSearchEmpty")}</div>
+        ) : null}
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    const bestMatch = settingsSearchMatches[0];
+    if (normalizedSettingsSearchQuery.length < 3 || !isConfidentSettingsSearchMatch(bestMatch)) return;
+    const nextSection = settingsSectionForPanel(bestMatch.target.panel);
+    const nextFocus = bestMatch.target.focus ?? `settings-panel-${bestMatch.target.panel}`;
+    if (
+      activeSettingsPanelId === bestMatch.target.panel
+      && searchParams.get("section") === nextSection
+      && focusedSettingsSearchTarget === nextFocus
+    ) return;
+
+    setActiveSettingsPanelId(saveActiveSettingsPanel(bestMatch.target.panel));
+    setIsSettingsMobileMenuOpen(false);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("section", nextSection);
+    nextParams.set("settingsFocus", nextFocus);
+    if (bestMatch.target.panel !== "configuredLibraries") {
+      nextParams.delete("library");
+      nextParams.delete("focus");
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    activeSettingsPanelId,
+    focusedSettingsSearchTarget,
+    normalizedSettingsSearchQuery,
+    searchParams,
+    setSearchParams,
+    settingsSearchMatches,
+  ]);
+
+  useEffect(() => {
+    if (!focusedSettingsSearchTarget || focusedSettingsSearchTarget.startsWith("settings-panel-")) return;
+    let frame = 0;
+    let retryTimer: number | null = null;
+    let attempts = 0;
+    const focusTarget = () => {
+      const target = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-search-target]"))
+        .find((element) => (
+          element.dataset.settingsSearchTarget === focusedSettingsSearchTarget
+          && !element.closest('[aria-hidden="true"]')
+          && (() => {
+            let current: HTMLElement | null = element;
+            while (current) {
+              const styles = window.getComputedStyle(current);
+              if (styles.display === "none" || styles.visibility === "hidden") return false;
+              current = current.parentElement;
+            }
+            return true;
+          })()
+        ));
+      if (target) {
+        target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+        target.classList.add("is-settings-search-highlighted");
+        return;
+      }
+      attempts += 1;
+      if (attempts < 20) retryTimer = window.setTimeout(focusTarget, 100);
+    };
+    frame = window.requestAnimationFrame(focusTarget);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      document.querySelectorAll<HTMLElement>(".is-settings-search-highlighted").forEach((element) => {
+        element.classList.remove("is-settings-search-highlighted");
+      });
+    };
+  }, [activeSettingsPanelId, focusedSettingsSearchTarget, settingsSearchQuery]);
 
   useEffect(() => {
     return () => {
@@ -1344,6 +1598,7 @@ export function LibrariesPage() {
     setSelectedQualityProfileId(profile.id);
     setActiveQualityProfileMediaType(profile.media_type);
     setQualityProfileDraft(cloneQualityProfileDefinition(profile));
+    setExpandedQualityProfileId(profile.id);
     setQualityProfileMessage(null);
     setIsRenamingQualityProfile(false);
   }
@@ -1393,14 +1648,14 @@ export function LibrariesPage() {
     }
   }
 
-  async function deleteSelectedQualityProfile() {
-    if (!qualityProfileDraft || qualityProfileDraft.is_builtin) {
+  async function deleteSelectedQualityProfile(profile = qualityProfileDraft) {
+    if (!profile || profile.is_builtin) {
       return;
     }
     setQualityProfileSaving(true);
     setQualityProfileMessage(null);
     try {
-      await api.deleteQualityProfile(qualityProfileDraft.id);
+      await api.deleteQualityProfile(profile.id);
       await refreshQualityProfiles(false);
       void refreshLibraries(false, true).catch(() => undefined);
     } catch (reason) {
@@ -1410,17 +1665,17 @@ export function LibrariesPage() {
     }
   }
 
-  async function duplicateSelectedQualityProfile() {
-    if (!qualityProfileDraft) {
+  async function duplicateSelectedQualityProfile(profile = qualityProfileDraft) {
+    if (!profile) {
       return;
     }
     setQualityProfileSaving(true);
     setQualityProfileMessage(null);
     try {
       const created = await api.createQualityProfile({
-        name: t("libraries.qualityProfiles.duplicateName", { name: qualityProfileDraft.name }),
-        media_type: qualityProfileDraft.media_type,
-        profile: cloneQualityProfile(qualityProfileDraft.profile),
+        name: t("libraries.qualityProfiles.duplicateName", { name: profile.name }),
+        media_type: profile.media_type,
+        profile: cloneQualityProfile(profile.profile),
       });
       await refreshQualityProfiles(false);
       selectQualityProfile(created);
@@ -1431,16 +1686,16 @@ export function LibrariesPage() {
     }
   }
 
-  async function setSelectedQualityProfileAsDefault() {
-    if (!qualityProfileDraft || qualityProfileDraft.is_default) {
+  async function setSelectedQualityProfileAsDefault(profile = qualityProfileDraft) {
+    if (!profile || profile.is_default) {
       return;
     }
     setQualityProfileSaving(true);
     setQualityProfileMessage(null);
     try {
-      const updated = await api.updateQualityProfile(qualityProfileDraft.id, {
-        name: qualityProfileDraft.name,
-        profile: qualityProfileDraft.profile,
+      const updated = await api.updateQualityProfile(profile.id, {
+        name: profile.name,
+        profile: profile.profile,
         is_default: true,
       });
       await refreshQualityProfiles(false);
@@ -1504,6 +1759,7 @@ export function LibrariesPage() {
           ?? null;
         setSelectedQualityProfileId(selected?.id ?? null);
         setQualityProfileDraft(selected ? cloneQualityProfileDefinition(selected) : null);
+        setExpandedQualityProfileId(selected?.id ?? null);
         return payload;
       })
       .catch((reason: Error) => {
@@ -2484,11 +2740,34 @@ export function LibrariesPage() {
     setIsSettingsMobileMenuOpen(false);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("section", settingsSectionForPanel(panelId));
+    nextParams.delete("settingsFocus");
     if (panelId !== "configuredLibraries") {
       nextParams.delete("library");
       nextParams.delete("focus");
     }
     setSearchParams(nextParams);
+  }
+
+  function openSettingsSearchMatch(match: SettingsSearchMatch) {
+    const panelId = match.target.panel;
+    setActiveSettingsPanelId(saveActiveSettingsPanel(panelId));
+    setIsSettingsMobileMenuOpen(false);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("section", settingsSectionForPanel(panelId));
+    nextParams.set("settingsFocus", match.target.focus ?? `settings-panel-${panelId}`);
+    if (panelId !== "configuredLibraries") {
+      nextParams.delete("library");
+      nextParams.delete("focus");
+    }
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  function handleSettingsSearchChange(value: string) {
+    setSettingsSearchQuery(value);
+    if (value.trim() || !searchParams.get("settingsFocus")) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("settingsFocus");
+    setSearchParams(nextParams, { replace: true });
   }
 
   function toggleSettingsNavCollapsed() {
@@ -5281,14 +5560,174 @@ export function LibrariesPage() {
   function renderQualityProfilesPanel() {
     const visibleProfiles = qualityProfiles.filter((profile) => profile.media_type === activeQualityProfileMediaType);
     const draft = qualityProfileDraft;
-    const selectedPersistedProfile = draft ? qualityProfiles.find((profile) => profile.id === draft.id) ?? null : null;
     const isBuiltInProtected = Boolean(draft?.is_builtin);
     const builtInProtectedHint = t("libraries.qualityProfiles.builtInProtectedHint");
-    const hasUnsavedQualityProfileChanges =
-      !isBuiltInProtected && hasQualityProfileDraftChanges(draft, selectedPersistedProfile);
     const draftMetrics = draft ? activeQualityMetrics(draft.profile) : [];
     const availableMetrics = QUALITY_METRICS_BY_MEDIA_TYPE[activeQualityProfileMediaType].filter(
       (metric) => !draftMetrics.includes(metric),
+    );
+
+    const selectMediaType = (mediaType: QualityProfileMediaType) => {
+      setIsRenamingQualityProfile(false);
+      setActiveQualityProfileMediaType(mediaType);
+      const nextProfile =
+        qualityProfiles.find((profile) => profile.media_type === mediaType && profile.is_default)
+        ?? qualityProfiles.find((profile) => profile.media_type === mediaType)
+        ?? null;
+      if (nextProfile) {
+        selectQualityProfile(nextProfile);
+      } else {
+        setSelectedQualityProfileId(null);
+        setQualityProfileDraft(null);
+        setExpandedQualityProfileId(null);
+      }
+    };
+
+    const renderQualityProfileDetails = () => (
+      <div className="quality-profile-editor">
+        {draft ? (
+          <>
+            {availableMetrics.length ? (
+              <div className="quality-profile-add-row">
+                <select
+                  className="settings-choice-input"
+                  value=""
+                  disabled={isBuiltInProtected}
+                  title={isBuiltInProtected ? builtInProtectedHint : undefined}
+                  aria-label={t("libraries.qualityProfiles.addMetric")}
+                  onChange={(event) => {
+                    const metric = event.target.value;
+                    if (!metric) {
+                      return;
+                    }
+                    updateQualityProfileDraftProfile((profile) => {
+                      const next = setQualityMetricActive(profile, metric, true);
+                      const category = (next as unknown as Record<string, { weight?: number }>)[metric];
+                      if (category && (category.weight ?? 0) === 0) {
+                        return {
+                          ...next,
+                          [metric]: { ...category, weight: QUALITY_METRIC_DEFAULT_WEIGHTS[metric] ?? 3 },
+                        };
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  <option value="">{t("libraries.qualityProfiles.addMetric")}</option>
+                  {availableMetrics.map((metric) => (
+                    <option key={metric} value={metric}>
+                      {t(`libraries.quality.${metric}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="quality-profile-metric-list">
+              {draftMetrics.map((metric) => {
+                const category = (draft.profile as unknown as Record<string, { weight?: number }>)[metric];
+                const expansionKey = qualityProfileMetricExpansionKey(draft.id, metric);
+                const expanded = Boolean(expandedQualityProfileMetrics[expansionKey]);
+                const MetricToggleIcon = expanded ? ChevronDown : ChevronRight;
+                return (
+                  <div className={`quality-profile-metric-item${expanded ? " is-expanded" : ""}`} key={metric}>
+                    <div className="quality-profile-metric-row">
+                      <div className="quality-profile-metric-title">
+                        <button
+                          type="button"
+                          className="quality-profile-metric-toggle"
+                          aria-expanded={expanded}
+                          aria-label={t("libraries.qualityProfiles.configureMetric", { metric: t(`libraries.quality.${metric}`) })}
+                          onClick={() => toggleQualityProfileMetricExpansion(draft.id, metric)}
+                        >
+                          <MetricToggleIcon aria-hidden="true" className="nav-icon" size={16} />
+                        </button>
+                        <span className="quality-profile-metric-name">
+                          <strong>{t(`libraries.quality.${metric}`)}</strong>
+                          <TooltipTrigger
+                            ariaLabel={t("libraries.qualityProfiles.metricHintAria", { metric: t(`libraries.quality.${metric}`) })}
+                            className="quality-profile-metric-tooltip"
+                            content={t(`libraries.qualityProfiles.metricHints.${metric}`)}
+                            align="start"
+                            preserveLineBreaks
+                          />
+                          {metric === "resolution" ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="quality-profile-metric-link-button"
+                              aria-label={t("libraries.qualityProfiles.editResolutionCategories")}
+                              title={t("libraries.qualityProfiles.editResolutionCategories")}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                selectSettingsPanel("resolutionCategories");
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  selectSettingsPanel("resolutionCategories");
+                                }
+                              }}
+                            >
+                              <SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div className="quality-profile-weight-control">
+                        <input
+                          className="quality-profile-weight-input"
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={1}
+                          inputMode="numeric"
+                          aria-label={t("libraries.qualityProfiles.weightHintAria")}
+                          value={category?.weight ?? 0}
+                          disabled={isBuiltInProtected}
+                          title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.weightHint")}
+                          onChange={(event) => {
+                            const weight = Math.max(0, Math.min(10, Math.trunc(Number(event.target.value) || 0)));
+                            updateQualityProfileDraftProfile((profile) => ({
+                              ...profile,
+                              [metric]: {
+                                ...(profile as unknown as Record<string, object>)[metric],
+                                weight,
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary icon-only-button quality-profile-metric-remove-button"
+                        aria-label={t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
+                        title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
+                        disabled={isBuiltInProtected}
+                        onClick={() => updateQualityProfileDraftProfile((profile) => setQualityMetricActive(profile, metric, false))}
+                      >
+                        <RemoveIcon aria-hidden="true" className="nav-icon" size={18} />
+                      </button>
+                    </div>
+                    {expanded ? (
+                      <div className="quality-profile-metric-settings">
+                        {renderQualityProfileMetricSettings(draft, metric)}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            {qualityProfileMessage ? (
+              <div className="quality-profile-footer">
+                <span className="field-hint">{qualityProfileMessage}</span>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="field-hint">{t("libraries.qualityProfiles.empty")}</p>
+        )}
+      </div>
     );
 
     return (
@@ -5296,309 +5735,187 @@ export function LibrariesPage() {
         title={t("libraries.qualityProfiles.title")}
         loading={qualityProfilesLoading}
         error={qualityProfilesError}
-        collapseActions={
-          <button
-            type="button"
-            className="secondary small settings-panel-header-action"
-            disabled={qualityProfileSaving}
-            onClick={() => void createNewQualityProfile()}
-          >
-            <Plus aria-hidden="true" className="nav-icon" />
-            <span>{t("libraries.qualityProfiles.create")}</span>
-          </button>
-        }
       >
         <div className="quality-profile-panel-stack">
-          <div className="library-history-range-toggle" role="tablist" aria-label={t("libraries.qualityProfiles.mediaType")}>
-            <SlidingTogglePill
-              activeKey={activeQualityProfileMediaType}
-              className="nav-active-pill library-history-range-pill"
-            />
-            {(["video", "music", "audiobook"] as QualityProfileMediaType[]).map((mediaType) => (
-              <button
-                key={mediaType}
-                type="button"
-                data-toggle-key={mediaType}
-                className={`library-history-range-button${activeQualityProfileMediaType === mediaType ? " active" : ""}`}
-                aria-pressed={activeQualityProfileMediaType === mediaType}
-                onClick={() => {
-                  setIsRenamingQualityProfile(false);
-                  setActiveQualityProfileMediaType(mediaType);
-                  const nextProfile =
-                    qualityProfiles.find((profile) => profile.media_type === mediaType && profile.is_default)
-                    ?? qualityProfiles.find((profile) => profile.media_type === mediaType)
-                    ?? null;
-                  if (nextProfile) {
-                    selectQualityProfile(nextProfile);
-                  }
-                }}
-              >
-                <span className="library-history-range-button-content">
-                  <span>{t(`libraries.qualityProfiles.mediaTypes.${mediaType}`)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {draft ? (
-            <div className={`quality-profile-picker${isBuiltInProtected ? " is-protected" : ""}`}>
-              <div className="quality-profile-picker-control">
-                {isRenamingQualityProfile ? (
-                  <input
-                    ref={qualityProfileNameInputRef}
-                    id="quality-profile-name"
-                    className="quality-profile-picker-name-input"
-                    aria-label={t("libraries.qualityProfiles.name")}
-                    type="text"
-                    value={draft.name}
-                    disabled={isBuiltInProtected}
-                    title={isBuiltInProtected ? builtInProtectedHint : undefined}
-                    onChange={(event) => setQualityProfileDraft({ ...draft, name: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void saveQualityProfileDraft();
-                      }
-                      if (event.key === "Escape") {
-                        setIsRenamingQualityProfile(false);
-                        if (selectedPersistedProfile) {
-                          setQualityProfileDraft(cloneQualityProfileDefinition(selectedPersistedProfile));
-                        }
-                      }
-                    }}
-                  />
-                ) : (
-                  <select
-                    className="quality-profile-picker-trigger"
-                    aria-label={t("libraries.qualityProfiles.selectProfile")}
-                    value={selectedQualityProfileId ?? ""}
-                    onChange={(event) => {
-                      const profile = visibleProfiles.find((candidate) => candidate.id === Number(event.target.value));
-                      if (profile) {
-                        selectQualityProfile(profile);
-                      }
-                    }}
-                  >
-                    {visibleProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                        {profile.is_default ? ` — ${t("libraries.qualityProfiles.defaultBadge")}` : ""}
-                        {profile.is_builtin ? ` — ${t("libraries.qualityProfiles.builtInBadge")}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="quality-profile-picker-actions">
-                  {isBuiltInProtected ? (
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.qualityProfiles.builtInProtectedAria")}
-                      className="quality-profile-protected-tooltip"
-                      content={builtInProtectedHint}
-                      align="start"
-                    >
-                      <Lock aria-hidden="true" className="nav-icon" size={16} />
-                    </TooltipTrigger>
-                  ) : null}
-                  {hasUnsavedQualityProfileChanges ? (
+          <div className="compatibility-profile-list quality-profile-list">
+            <div className="settings-profile-toggle-row transcode-automation-toggle-row quality-profile-toggle-row">
+              <div className="transcode-automation-tab-controls">
+                <div className="transcode-automation-tab-list" role="tablist" aria-label={t("libraries.qualityProfiles.mediaType")} aria-orientation="horizontal">
+                  {(["video", "music", "audiobook"] as QualityProfileMediaType[]).map((mediaType, index) => (
                     <button
+                      key={mediaType}
                       type="button"
-                      className="quality-profile-action-button is-save"
-                      disabled={qualityProfileSaving}
-                      title={t("libraries.qualityProfiles.save")}
-                      aria-label={t("libraries.qualityProfiles.save")}
-                      onClick={() => void saveQualityProfileDraft()}
+                      id={`quality-profile-media-tab-${mediaType}`}
+                      role="tab"
+                      className={`transcode-automation-tab-button${activeQualityProfileMediaType === mediaType ? " active" : ""}`}
+                      aria-selected={activeQualityProfileMediaType === mediaType}
+                      tabIndex={activeQualityProfileMediaType === mediaType ? 0 : -1}
+                      data-toggle-key={mediaType}
+                      onClick={() => selectMediaType(mediaType)}
+                      onKeyDown={(event) => {
+                        let nextIndex: number | null = null;
+                        if (event.key === "ArrowRight") nextIndex = (index + 1) % 3;
+                        if (event.key === "ArrowLeft") nextIndex = (index + 2) % 3;
+                        if (event.key === "Home") nextIndex = 0;
+                        if (event.key === "End") nextIndex = 2;
+                        if (nextIndex === null) return;
+                        event.preventDefault();
+                        const nextMediaType = (["video", "music", "audiobook"] as QualityProfileMediaType[])[nextIndex];
+                        selectMediaType(nextMediaType);
+                        window.requestAnimationFrame(() => document.getElementById(`quality-profile-media-tab-${nextMediaType}`)?.focus());
+                      }}
                     >
-                      <Save aria-hidden="true" className="nav-icon" />
+                      <span className="transcode-automation-tab-label">{t(`libraries.qualityProfiles.mediaTypes.${mediaType}`)}</span>
                     </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="quality-profile-action-button"
-                    disabled={isBuiltInProtected || qualityProfileSaving}
-                    title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.rename")}
-                    aria-label={t("libraries.qualityProfiles.rename")}
-                    onClick={() => setIsRenamingQualityProfile(true)}
-                  >
-                    <SquarePenIcon aria-hidden="true" className="nav-icon" size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    className="quality-profile-action-button"
-                    disabled={draft.is_default || qualityProfileSaving}
-                    title={draft.is_default ? t("libraries.qualityProfiles.defaultBadge") : t("libraries.qualityProfiles.setDefault")}
-                    aria-label={t("libraries.qualityProfiles.setDefault")}
-                    onClick={() => void setSelectedQualityProfileAsDefault()}
-                  >
-                    <CheckIcon aria-hidden="true" className="nav-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="quality-profile-action-button"
-                    disabled={qualityProfileSaving}
-                    title={t("libraries.qualityProfiles.duplicate")}
-                    aria-label={t("libraries.qualityProfiles.duplicate")}
-                    onClick={() => void duplicateSelectedQualityProfile()}
-                  >
-                    <CopyIcon aria-hidden="true" className="nav-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="quality-profile-action-button"
-                    disabled={isBuiltInProtected || qualityProfileSaving}
-                    title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.delete")}
-                    aria-label={t("libraries.qualityProfiles.delete")}
-                    onClick={() => void deleteSelectedQualityProfile()}
-                  >
-                    <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
-                  </button>
+                  ))}
                 </div>
               </div>
+              <div className="settings-profile-toggle-actions">
+                <button
+                  type="button"
+                  className="secondary small settings-panel-header-action"
+                  disabled={qualityProfileSaving}
+                  onClick={() => void createNewQualityProfile()}
+                >
+                  <Plus aria-hidden="true" className="nav-icon" />
+                  <span>{t("libraries.qualityProfiles.create")}</span>
+                </button>
+              </div>
             </div>
-          ) : null}
-          <div className="quality-profile-workspace">
-            <div className="quality-profile-editor">
-              {draft ? (
-                <>
-                  {availableMetrics.length ? (
-                    <div className="quality-profile-add-row">
-                      <select
-                        className="settings-choice-input"
-                        value=""
-                        disabled={isBuiltInProtected}
-                        title={isBuiltInProtected ? builtInProtectedHint : undefined}
-                        aria-label={t("libraries.qualityProfiles.addMetric")}
-                        onChange={(event) => {
-                          const metric = event.target.value;
-                          if (!metric) {
-                            return;
+            {visibleProfiles.map((profile) => {
+              const expanded = expandedQualityProfileId === profile.id;
+              const profileDraft = draft?.id === profile.id ? draft : null;
+              const profileName = profileDraft?.name ?? profile.name;
+              const profileIsRenaming = expanded && isRenamingQualityProfile && profileDraft?.id === profile.id;
+              const profileHasUnsavedChanges = profileDraft
+                ? !profileDraft.is_builtin && hasQualityProfileDraftChanges(profileDraft, profile)
+                : false;
+              const profileBadges = [
+                profile.is_default ? t("libraries.qualityProfiles.defaultBadge") : null,
+                profile.is_builtin ? t("libraries.qualityProfiles.builtInBadge") : null,
+              ].filter((value): value is string => Boolean(value));
+              return (
+                <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={profile.id}>
+                  <div className="compatibility-profile-list-row quality-profile-list-row">
+                    {profileIsRenaming ? (
+                      <input
+                        ref={qualityProfileNameInputRef}
+                        id={`quality-profile-name-${profile.id}`}
+                        className="quality-profile-list-name-input"
+                        aria-label={t("libraries.qualityProfiles.name")}
+                        type="text"
+                        value={profileName}
+                        onChange={(event) => setQualityProfileDraft((current) => current?.id === profile.id ? { ...current, name: event.target.value } : current)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void saveQualityProfileDraft();
                           }
-                          updateQualityProfileDraftProfile((profile) => {
-                            const next = setQualityMetricActive(profile, metric, true);
-                            const category = (next as unknown as Record<string, { weight?: number }>)[metric];
-                            if (category && (category.weight ?? 0) === 0) {
-                              return {
-                                ...next,
-                                [metric]: { ...category, weight: QUALITY_METRIC_DEFAULT_WEIGHTS[metric] ?? 3 },
-                              };
-                            }
-                            return next;
-                          });
+                          if (event.key === "Escape") {
+                            setIsRenamingQualityProfile(false);
+                            setQualityProfileDraft(cloneQualityProfileDefinition(profile));
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="compatibility-profile-list-trigger"
+                        aria-expanded={expanded}
+                        aria-controls={`quality-profile-details-${profile.id}`}
+                        onClick={() => {
+                          if (expanded) {
+                            setExpandedQualityProfileId(null);
+                            setIsRenamingQualityProfile(false);
+                          } else {
+                            selectQualityProfile(profile);
+                          }
                         }}
                       >
-                        <option value="">{t("libraries.qualityProfiles.addMetric")}</option>
-                        {availableMetrics.map((metric) => (
-                          <option key={metric} value={metric}>
-                            {t(`libraries.quality.${metric}`)}
-                          </option>
-                        ))}
-                      </select>
+                        <span className="transcode-automation-list-copy quality-profile-list-copy">
+                          <strong>{profileName}</strong>
+                          {profileBadges.length ? <small>{profileBadges.join(" · ")}</small> : null}
+                        </span>
+                        <ChevronDown aria-hidden="true" />
+                      </button>
+                    )}
+                    <div className="compatibility-profile-quick-actions quality-profile-quick-actions">
+                      {profile.is_builtin ? (
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.qualityProfiles.builtInProtectedAria")}
+                          className="quality-profile-protected-tooltip"
+                          content={builtInProtectedHint}
+                          align="start"
+                        >
+                          <Lock aria-hidden="true" className="nav-icon" size={16} />
+                        </TooltipTrigger>
+                      ) : null}
+                      {profileHasUnsavedChanges ? (
+                        <button
+                          type="button"
+                          className="quality-profile-action-button is-save"
+                          disabled={qualityProfileSaving}
+                          title={t("libraries.qualityProfiles.save")}
+                          aria-label={t("libraries.qualityProfiles.save")}
+                          onClick={() => void saveQualityProfileDraft()}
+                        >
+                          <Save aria-hidden="true" className="nav-icon" />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="quality-profile-action-button"
+                        disabled={profile.is_builtin || qualityProfileSaving}
+                        title={profile.is_builtin ? builtInProtectedHint : t("libraries.qualityProfiles.rename")}
+                        aria-label={t("libraries.qualityProfiles.rename")}
+                        onClick={() => {
+                          selectQualityProfile(profile);
+                          setIsRenamingQualityProfile(true);
+                        }}
+                      >
+                        <SquarePenIcon aria-hidden="true" className="nav-icon" size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        className="quality-profile-action-button"
+                        disabled={profile.is_default || qualityProfileSaving}
+                        title={profile.is_default ? t("libraries.qualityProfiles.defaultBadge") : t("libraries.qualityProfiles.setDefault")}
+                        aria-label={t("libraries.qualityProfiles.setDefault")}
+                        onClick={() => void setSelectedQualityProfileAsDefault(profile)}
+                      >
+                        <CheckIcon aria-hidden="true" className="nav-icon" />
+                      </button>
+                      <button
+                        type="button"
+                        className="quality-profile-action-button"
+                        disabled={qualityProfileSaving}
+                        title={t("libraries.qualityProfiles.duplicate")}
+                        aria-label={t("libraries.qualityProfiles.duplicate")}
+                        onClick={() => void duplicateSelectedQualityProfile(profile)}
+                      >
+                        <CopyIcon aria-hidden="true" className="nav-icon" />
+                      </button>
+                      <button
+                        type="button"
+                        className="quality-profile-action-button"
+                        disabled={profile.is_builtin || qualityProfileSaving}
+                        title={profile.is_builtin ? builtInProtectedHint : t("libraries.qualityProfiles.delete")}
+                        aria-label={t("libraries.qualityProfiles.delete")}
+                        onClick={() => void deleteSelectedQualityProfile(profile)}
+                      >
+                        <DeleteIcon size={20} aria-hidden="true" className="nav-icon" />
+                      </button>
+                    </div>
+                  </div>
+                  {expanded && profileDraft ? (
+                    <div id={`quality-profile-details-${profile.id}`} className="quality-profile-details">
+                      {renderQualityProfileDetails()}
                     </div>
                   ) : null}
-                  <div className="quality-profile-metric-list">
-                  {draftMetrics.map((metric) => {
-                    const category = (draft.profile as unknown as Record<string, { weight?: number }>)[metric];
-                    const expansionKey = qualityProfileMetricExpansionKey(draft.id, metric);
-                    const expanded = Boolean(expandedQualityProfileMetrics[expansionKey]);
-                    const MetricToggleIcon = expanded ? ChevronDown : ChevronRight;
-                    return (
-                      <div className={`quality-profile-metric-item${expanded ? " is-expanded" : ""}`} key={metric}>
-                        <div className="quality-profile-metric-row">
-                          <div className="quality-profile-metric-title">
-                            <button
-                              type="button"
-                              className="quality-profile-metric-toggle"
-                              aria-expanded={expanded}
-                              aria-label={t("libraries.qualityProfiles.configureMetric", { metric: t(`libraries.quality.${metric}`) })}
-                              onClick={() => toggleQualityProfileMetricExpansion(draft.id, metric)}
-                            >
-                              <MetricToggleIcon aria-hidden="true" className="nav-icon" size={16} />
-                            </button>
-                            <span className="quality-profile-metric-name">
-                              <strong>{t(`libraries.quality.${metric}`)}</strong>
-                              <TooltipTrigger
-                                ariaLabel={t("libraries.qualityProfiles.metricHintAria", { metric: t(`libraries.quality.${metric}`) })}
-                                className="quality-profile-metric-tooltip"
-                                content={t(`libraries.qualityProfiles.metricHints.${metric}`)}
-                                align="start"
-                                preserveLineBreaks
-                              />
-                              {metric === "resolution" ? (
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  className="quality-profile-metric-link-button"
-                                  aria-label={t("libraries.qualityProfiles.editResolutionCategories")}
-                                  title={t("libraries.qualityProfiles.editResolutionCategories")}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    selectSettingsPanel("resolutionCategories");
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      selectSettingsPanel("resolutionCategories");
-                                    }
-                                  }}
-                                >
-                                  <SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />
-                                </span>
-                              ) : null}
-                            </span>
-                          </div>
-                          <div className="quality-profile-weight-control">
-                            <input
-                              className="quality-profile-weight-input"
-                              type="number"
-                              min={0}
-                              max={10}
-                              step={1}
-                              inputMode="numeric"
-                              aria-label={t("libraries.qualityProfiles.weightHintAria")}
-                              value={category?.weight ?? 0}
-                              disabled={isBuiltInProtected}
-                              title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.weightHint")}
-                              onChange={(event) => {
-                                const weight = Math.max(0, Math.min(10, Math.trunc(Number(event.target.value) || 0)));
-                                updateQualityProfileDraftProfile((profile) => ({
-                                  ...profile,
-                                  [metric]: {
-                                    ...(profile as unknown as Record<string, object>)[metric],
-                                    weight,
-                                  },
-                                }));
-                              }}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="secondary icon-only-button quality-profile-metric-remove-button"
-                            aria-label={t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
-                            title={isBuiltInProtected ? builtInProtectedHint : t("libraries.qualityProfiles.removeMetric", { metric: t(`libraries.quality.${metric}`) })}
-                            disabled={isBuiltInProtected}
-                            onClick={() => updateQualityProfileDraftProfile((profile) => setQualityMetricActive(profile, metric, false))}
-                          >
-                            <RemoveIcon aria-hidden="true" className="nav-icon" size={18} />
-                          </button>
-                        </div>
-                        {expanded ? (
-                          <div className="quality-profile-metric-settings">
-                            {renderQualityProfileMetricSettings(draft, metric)}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-                {qualityProfileMessage ? (
-                  <div className="quality-profile-footer">
-                    <span className="field-hint">{qualityProfileMessage}</span>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="field-hint">{t("libraries.qualityProfiles.empty")}</p>
-            )}
-          </div>
+                </article>
+              );
+            })}
+            {!visibleProfiles.length ? <p className="compatibility-profile-search-empty">{t("libraries.qualityProfiles.empty")}</p> : null}
           </div>
         </div>
       </AsyncPanel>
@@ -5647,17 +5964,20 @@ export function LibrariesPage() {
             className={`settings-mobile-navigation-menu${isSettingsMobileMenuOpen ? " is-open" : ""}`}
             aria-hidden={!isSettingsMobileMenuOpen}
           >
-            <label className="settings-navigation-search settings-mobile-navigation-search">
-              <Search aria-hidden="true" className="nav-icon" />
-              <span className="sr-only">{t("libraries.settingsSearchLabel")}</span>
-              <input
-                type="search"
-                value={settingsSearchQuery}
-                placeholder={t("libraries.settingsSearchPlaceholder")}
-                tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
-                onChange={(event) => setSettingsSearchQuery(event.target.value)}
-              />
-            </label>
+            <div className="settings-navigation-search-stack settings-mobile-navigation-search-stack">
+              <label className="settings-navigation-search settings-mobile-navigation-search">
+                <Search aria-hidden="true" className="nav-icon" />
+                <span className="sr-only">{t("libraries.settingsSearchLabel")}</span>
+                <input
+                  type="search"
+                  value={settingsSearchQuery}
+                  placeholder={t("libraries.settingsSearchPlaceholder")}
+                  tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
+                  onChange={(event) => handleSettingsSearchChange(event.target.value)}
+                />
+              </label>
+              {renderSettingsSearchResults(true)}
+            </div>
             <nav className="settings-mobile-navigation-list" aria-label={t("libraries.mobileSettingsNavigation")}>
               {visibleSettingsNavigationGroups.map((group) => (
                 <div className="settings-navigation-group" key={group.id}>
@@ -5675,7 +5995,7 @@ export function LibrariesPage() {
                         tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
                         onClick={() => selectSettingsPanel(item.id)}
                       >
-                        {active ? <SlidingTogglePill activeKey={item.id} className="nav-active-pill" /> : null}
+                        {active ? <span className="nav-active-pill" aria-hidden="true" /> : null}
                         <span className="settings-navigation-item-content">
                           <Icon aria-hidden="true" className="nav-icon" />
                           <span>{label}</span>
@@ -5685,9 +6005,6 @@ export function LibrariesPage() {
                   })}
                 </div>
               ))}
-              {!visibleSettingsNavigationGroups.length ? (
-                <div className="settings-navigation-empty">{t("libraries.settingsSearchEmpty")}</div>
-              ) : null}
             </nav>
             <div className="settings-mobile-navigation-quick-actions">
               <div className="settings-navigation-section-label">{t("libraries.quickActions")}</div>
@@ -5735,16 +6052,19 @@ export function LibrariesPage() {
             </button>
           </div>
           {!isSettingsNavCollapsed ? (
-            <label className="settings-navigation-search">
-              <Search aria-hidden="true" className="nav-icon" />
-              <span className="sr-only">{t("libraries.settingsSearchLabel")}</span>
-              <input
-                type="search"
-                value={settingsSearchQuery}
-                placeholder={t("libraries.settingsSearchPlaceholder")}
-                onChange={(event) => setSettingsSearchQuery(event.target.value)}
-              />
-            </label>
+            <div className="settings-navigation-search-stack">
+              <label className="settings-navigation-search">
+                <Search aria-hidden="true" className="nav-icon" />
+                <span className="sr-only">{t("libraries.settingsSearchLabel")}</span>
+                <input
+                  type="search"
+                  value={settingsSearchQuery}
+                  placeholder={t("libraries.settingsSearchPlaceholder")}
+                  onChange={(event) => handleSettingsSearchChange(event.target.value)}
+                />
+              </label>
+              {renderSettingsSearchResults()}
+            </div>
           ) : null}
           <nav className="settings-navigation-list">
             {(isSettingsNavCollapsed ? SETTINGS_NAV_GROUPS : visibleSettingsNavigationGroups).map((group) => (
@@ -5767,7 +6087,7 @@ export function LibrariesPage() {
                       data-settings-panel-id={item.id}
                       onClick={() => selectSettingsPanel(item.id)}
                     >
-                      {active ? <SlidingTogglePill activeKey={item.id} className="nav-active-pill" /> : null}
+                      {active ? <span className="nav-active-pill" aria-hidden="true" /> : null}
                       <span className="settings-navigation-item-content">
                         <Icon aria-hidden="true" className="nav-icon" />
                         {!isSettingsNavCollapsed ? <span>{label}</span> : null}
@@ -5777,9 +6097,6 @@ export function LibrariesPage() {
                 })}
               </div>
             ))}
-            {!isSettingsNavCollapsed && !visibleSettingsNavigationGroups.length ? (
-              <div className="settings-navigation-empty">{t("libraries.settingsSearchEmpty")}</div>
-            ) : null}
           </nav>
           <div className="settings-navigation-quick-actions">
             <div className="settings-navigation-divider" />
@@ -5800,7 +6117,9 @@ export function LibrariesPage() {
           </div>
         </aside>
 
-        <div className="settings-main-column">
+        <div
+          className="settings-main-column"
+        >
           {activeSettingsPanelId === "configuredLibraries" ? (
           <AsyncPanel
             title={t("libraries.settingsNavigationLibraries")}
@@ -5931,7 +6250,7 @@ export function LibrariesPage() {
                             <div className="meta-tags library-title-tags">
 	                              {isEditingLibraryIdentity ? (
 	                                <select
-	                                  className="library-title-type-select"
+                                  className="settings-choice-input library-title-type-select"
 	                                  value={identityForm?.type ?? library.type}
 	                                  aria-label={t("libraries.editTypeAria", { name: library.name })}
 	                                  disabled={isSavingLibraryIdentity || isDeletingLibrary}
@@ -6348,12 +6667,15 @@ export function LibrariesPage() {
           ) : null}
 
           {activeSettingsPanelId === "qualityProfiles" ? renderQualityProfilesPanel() : null}
-          {activeSettingsPanelId === "compatibilityProfiles" ? <CompatibilityProfilesPanel /> : null}
+          {activeSettingsPanelId === "compatibilityProfiles" ? (
+            <CompatibilityProfilesPanel searchFocus={focusedSettingsSearchTarget} />
+          ) : null}
           {activeSettingsPanelId === "transcoding" ? (
             <TranscodingSettingsPanel
               settings={appSettings}
               appSettingsLoaded={appSettingsLoaded}
               onUpdated={applyUpdatedAppSettingsState}
+              searchFocus={focusedSettingsSearchTarget}
             />
           ) : null}
 
@@ -6611,6 +6933,7 @@ export function LibrariesPage() {
                         <label>
                           <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
                           <select
+                            className="settings-choice-input"
                             value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
                             disabled={isSavingPatternRecognition}
                             onChange={(event) =>
@@ -6629,6 +6952,7 @@ export function LibrariesPage() {
                         <label>
                           <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
                           <select
+                            className="settings-choice-input"
                             value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
                             disabled={isSavingPatternRecognition}
                             onChange={(event) =>
@@ -7094,6 +7418,7 @@ export function LibrariesPage() {
                   <label htmlFor="app-language">{t("libraries.language")}</label>
                   <select
                     id="app-language"
+                    className="settings-choice-input"
                     value={i18n.resolvedLanguage ?? "en"}
                     onChange={(event) => void updateInterfaceLanguage(event.target.value as SupportedInterfaceLanguage)}
                   >
@@ -7108,6 +7433,7 @@ export function LibrariesPage() {
                   <label htmlFor="app-theme">{t("libraries.theme")}</label>
                   <select
                     id="app-theme"
+                    className="settings-choice-input"
                     value={themePref}
                     onChange={(event) => void updateColorTheme(event.target.value as ThemePreference)}
                   >
@@ -7134,6 +7460,7 @@ export function LibrariesPage() {
                     </div>
                     <select
                       id="scan-worker-count"
+                      className="settings-choice-input"
                       value={scanWorkerCountInput}
                       disabled={isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {
@@ -7161,6 +7488,7 @@ export function LibrariesPage() {
                     </div>
                     <select
                       id="parallel-scan-jobs"
+                      className="settings-choice-input"
                       value={parallelScanJobsInput}
                       disabled={isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {
@@ -7194,6 +7522,7 @@ export function LibrariesPage() {
                     </div>
                     <select
                       id="comparison-scatter-point-limit"
+                      className="settings-choice-input"
                       value={comparisonScatterPointLimitInput}
                       disabled={isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {

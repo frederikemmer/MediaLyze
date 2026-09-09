@@ -596,11 +596,122 @@ Frontend design decision history:
 
 ### 2026-09-08 — Manage federation members in the shared transcode workspace
 
-* Decision: trusted federation members use a dedicated `Members` tab beside `Accelerators` in the shared Transcoding automation workspace, with the same searchable expandable list and borderless quick actions as profiles and rules. The compact automation tabs are labeled `Profiles`, `Rules`, `Accelerators`, and `Members`. Federation connection controls use the compact rectangular `settings-panel-header-action` pattern, with animated connect/telescope icons; copy actions use the shared animated `CopyIcon`, and tooltip bubbles fit their content. Successful copy actions stay silent and only clipboard errors become panel feedback. The federation enable control reuses the shared `toggle-switch` pattern. Both pairing actions are labeled `Connect`, and local endpoints use a flat responsive list with borderless copy actions instead of redundant type labels. Discovered candidates collect their peer pairing code in an inline field beside each Connect action, with missing-code feedback kept local to that field. The Federation heading stays concise, Found in Network exposes a borderless immediate refresh action, and the automation workspace uses a slightly larger separation above the tabs with a tighter gap below them.
+* Decision: trusted federation members use a dedicated `Members` tab beside `Accelerators` in the shared Transcoding automation workspace, with the same expandable list and borderless quick actions as profiles and rules. The compact automation tabs are labeled `Profiles`, `Rules`, `Accelerators`, and `Members`. Federation connection controls use the compact rectangular `settings-panel-header-action` pattern, with animated connect/telescope icons; copy actions use the shared animated `CopyIcon`, and tooltip bubbles fit their content. Successful copy actions stay silent and only clipboard errors become panel feedback. The federation enable control reuses the shared `toggle-switch` pattern. Both pairing actions are labeled `Connect`, and local endpoints use a flat responsive list with borderless copy actions instead of redundant type labels. Discovered candidates collect their peer pairing code in an inline field beside each Connect action, with missing-code feedback kept local to that field; the manual fallback uses the same grouped code/Connect control and vertical divider, and its address input shares the pairing-code segment styling while starting at the shared Federation name column after the plus marker. The manual plus marker stays outside the grouped control and is vertically centered against the shared row. The first-position invalid pairing-code segment follows the grouped control's inner radius so animated red feedback remains visible through the outer corner. Member, discovered-peer, and manual rows share a 38px outer shell with a 32px inner content height. Expanded member details show only currently available accelerators from the member capability payload, and each accelerator links to its matching entry in the `Accelerators` matrix; endpoint and connection-status fields are intentionally omitted because the status marker and tooltip already communicate reachability. The Federation heading stays concise, Found in Network exposes a borderless immediate refresh action, and the automation workspace uses a slightly larger separation above the tabs with a tighter gap below them.
 * Rationale: keep the Federation panel focused on pairing and local policy while giving member status, actions, and details one consistent workspace treatment.
-* Canonical references: `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, `frontend/src/components/TranscodeFederationPanel.tsx`, `frontend/src/components/AnimatedConnectIcon.tsx`, `frontend/src/components/AnimatedTelescopeIcon.tsx`, `frontend/src/components/CopyIcon.tsx`, `frontend/src/components/TooltipTrigger.tsx`, and the `Federation members tab` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
-* Deprecated selectors: `transcode-federation-members`, `transcode-federation-member`, `transcode-federation-member-main`, `transcode-federation-member-details`, and `transcode-federation-member-actions`.
-* Migration: remove the standalone member accordion from the Federation panel and keep member actions/state connected through `TranscodingSettingsPanel`.
+* Canonical references: `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, `frontend/src/components/TranscodingSettingsPanel.tsx`, `frontend/src/components/TranscodeFederationPanel.tsx`, `frontend/src/lib/transcoding-matrix-state.ts`, `frontend/src/components/AnimatedConnectIcon.tsx`, `frontend/src/components/AnimatedTelescopeIcon.tsx`, `frontend/src/components/CopyIcon.tsx`, `frontend/src/components/TooltipTrigger.tsx`, and the `Federation members tab` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors: `transcode-federation-members`, `transcode-federation-member`, `transcode-federation-member-main`, `transcode-federation-member-details`, `transcode-federation-member-actions`, and the removed member-detail `compatibility-profile-form-grid` endpoint/status variant.
+* Migration: remove the standalone member accordion from the Federation panel, keep member actions/state connected through `TranscodingSettingsPanel`, and use capability-backed matrix links for the expanded member detail.
+* Status: active.
+
+### 2026-09-09 — Exchange and adaptively rank all Federation endpoints
+
+* Decision: paired installations exchange their configured and locally resolved HTTP(S) endpoints, retain the union as ordered fallbacks, and run authenticated latency/upload/download probes on pairing, startup, newly advertised routes, failed-route recovery, or an explicit manual network test. Healthy routes are not benchmarked on a fixed timer; failed routes use exponential recovery backoff. Future requests prefer the route with the lowest combined latency and representative transfer time, while retrying the remaining routes when the preferred route fails.
+* Rationale: a hostname, interface address, port mapping, or VPN route can disappear independently; direct federation should recover without manual re-pairing, avoid needless recurring benchmarks, and use the fastest currently reachable path.
+* Canonical references: `backend/app/services/transcode_federation.py`, `backend/app/api/federation_routes.py`, `TranscodeFederationMember.endpoint_metrics`, and `network/probe`.
+* Migration: add endpoint preference/metric persistence and SQLite additive columns; keep the existing authenticated heartbeat as the compatibility path for peers that do not expose the optional probe route; expose the manual network test beside Test Hardware only when Federation is active with a connected member.
+* Status: active.
+
+### 2026-09-09 — Use compact settings controls as the global form baseline
+
+* Decision: ordinary frontend inputs, selects, and textareas use the compact `settings-choice-input` treatment; the global fallback matches its 36px/9px/5px 12px metrics and excludes checkboxes, range controls, and hidden inputs.
+* Rationale: prevent the legacy oversized 12px 14px control reset from returning when a normal field is added without a local class.
+* Canonical references: `frontend/globals.css`, `.settings-choice-input` in `frontend/src/medialyze.css`, and the representative fixtures in `/ui-elements`.
+* Deprecated selectors: the unqualified `input, select, textarea` baseline and its 12px 14px padding / 12px radius are removed; specialized search, comparison, quality-picker, JSON-editor, checkbox, and range controls remain intentional exceptions.
+* Migration: all ordinary controls and catalog fixtures were marked with `settings-choice-input`; a global-style regression test guards the compact fallback and the absence of the legacy reset.
+* Status: active.
+
+### 2026-09-09 — Keep sliding selection pills mounted and measured
+
+* Decision: shared `SlidingTogglePill` controls are rendered as the stable first child of their toggle group, remain mounted while the selected view changes, and stay hidden until their first position is measured.
+* Rationale: selection feedback should animate from the current option to the newly selected option without an initial flash from the group's left edge.
+* Canonical references: `frontend/src/components/SlidingTogglePill.tsx`, the Transcoding automation workspace in `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, and its `Compact transcoding automation tabs` catalog fixture in `frontend/src/pages/UiElementsPage.tsx`.
+* Migration: Profiles, Rules, Accelerators, and Members now share the same tab/list DOM depth so the pill is reconciled across their conditional content; unrelated toggle groups continue using the shared component.
+* Status: active for unrelated toggle groups; superseded for the Transcoding automation workspace by the underline navigation below.
+
+### 2026-09-09 — Use compact underline navigation for transcode automation
+
+* Decision: the Transcoding automation workspace uses a compact horizontal text navigator with a stable minimum row height, a soft per-tab accent fade, and a per-tab orange underline for Profiles, Rules, Accelerators, and Members; the workspace no longer uses the shared sliding selection pill.
+* Rationale: keep the four destinations visible while removing the visually heavy capsule, the extra line directly under the tabs, and the impression that selection always enters from the left; the stable height, retained content separator, and softened active edge preserve the dense settings rhythm across all four views.
+* Canonical references: `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, the transcode automation tab styles in `frontend/src/medialyze.css`, and the `Compact transcoding automation tabs` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors: `transcode-automation` usage of `library-history-range-toggle`, `library-history-range-pill`, and `library-history-range-button`; those shared selectors remain intentional for unrelated toggle groups.
+* Migration: update the Profiles, Rules, Accelerators, and Members workspace plus all matching `/ui-elements` fixtures; keep `SlidingTogglePill` for existing non-transcoding toggle groups.
+* Status: active.
+
+### 2026-09-09 — Use theme-aware surface tokens for nested UI areas
+
+* Decision: nested cards, catalog fixtures, ordinary UI surfaces, borders, and muted text use the shared semantic tokens `--surface`, `--surface-subtle`, `--border`, and `--text-muted`; dark mode must not inherit light gray or white surface fallbacks.
+* Rationale: keep existing and future frontend areas on the active dark palette instead of requiring a one-off dark override for every new card or input.
+* Canonical references: `frontend/globals.css`, `--nested-surface` in `frontend/src/medialyze.css`, and the Theme tokens fixture in `frontend/src/pages/UiElementsPage.tsx`.
+* Migration: the UI catalog variant/token cards, delete-library summary, compatibility favorites, metadata search controls, file-detail download action, and Jellyfin library picker now use theme-aware surfaces; the generic semantic aliases cover connector status, external-source, library-status, and file-detail controls.
+* Status: active.
+
+### 2026-09-09 — Use transparent tracks for application scrollbars
+
+* Decision: application scrollbars use transparent tracks and theme-aware thin pill thumbs; component-specific scrollbar variants may adjust size but must preserve the transparent track.
+* Rationale: keep scroll containers from introducing light or gray rails in dark mode and align scrolling affordances with the compact control language.
+* Canonical references: the global scrollbar baseline in `frontend/globals.css`, the `Scan summary table` catalog fixture in `frontend/src/pages/UiElementsPage.tsx`, and existing scrollbar overrides in `frontend/src/medialyze.css`.
+* Migration: the global baseline now covers the scan summary table and every native scroll container; existing dialog, picker, and transcoding scrollbar variants retain transparent tracks.
+* Status: active.
+
+### 2026-09-09 — Use one canonical select control
+
+* Decision: ordinary `<select class="settings-choice-input">` controls use the same theme-aware 18px chevron, `right 12px` placement, and `8px 40px 8px 12px` padding as the accepted `Ideal` quality-profile dropdown; native option popups inherit the active light/dark color scheme and surface/text tokens.
+* Rationale: connector mappings and other standard selects must not fall back to a native edge-hugging arrow or accumulate page-specific arrow implementations, and their opened menus must remain readable in dark mode.
+* Canonical references: `select.settings-choice-input` in `frontend/src/medialyze.css`, the `--select-chevron` and `color-scheme` tokens in `frontend/globals.css`, and the quality-profile plus connector-mapping fixtures in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors: the old settings-main-column, quality-boundary, compatibility-form, library-title, and transcoding select-chevron overrides, plus `storage-map-select-wrap` and `transcoding-filter-field > svg`.
+* Migration: all ordinary selects now inherit the shared rule and theme-aware native popup colors; Storage Map and Transcoding filters no longer render separate ChevronDown siblings. The comparison-chart toolbar and integrated quality-profile picker remain intentional compact controls, but reuse the shared chevron token.
+* Status: active.
+
+### 2026-09-09 — Use compact rectangular action buttons as the ordinary baseline
+
+* Decision: ordinary text action buttons use the compact rectangular global `button` baseline with 32px height, 9px corners, and compact horizontal padding; `.small` actions use the 30px variant. This is the canonical treatment for primary, secondary, ghost, disabled, scan, connector bulk, and settings-table actions.
+* Rationale: the former 999px / 12px 18px fallback made ordinary actions look oversized and pill-shaped, while the accepted Manual scan, Select all, and Edit patterns already established a denser rectangular control language.
+* Canonical references: the global `button` and `button.small` rules in `frontend/globals.css`, the round `.tooltip-trigger` primitive in `frontend/src/medialyze.css`, `.library-scan-button.small`, `.jellyfin-user-bulk-button`, `.settings-panel-header-action.small`, and the Global button variants, tooltip, library settings, analyzed users, and Settings table fixtures in `frontend/src/pages/UiElementsPage.tsx`.
+* Intentional exceptions: navigation and selection tabs, status badges, scrollbar thumbs, progress tracks, round tooltip/help triggers, icon-only controls, and other explicitly named pill controls retain their local geometry when the capsule communicates grouping or state.
+* Migration: the global fallback and catalog variants now use the compact baseline; existing marked production examples inherit it without one-off geometry overrides. New ordinary buttons must not reintroduce the old oversized pill fallback.
+* Status: active.
+
+### 2026-09-09 — Distinguish icon-button surfaces and motion
+
+* Decision: new icon-only actions use the shared `icon-button` geometry plus an explicit `icon-button-bordered` or `icon-button-borderless` surface variant; `icon-button-static` and `icon-button-animated` document whether the Lucide symbol is static or uses an animated Lucide-derived variant. Bordered controls use a 32px rectangular hit area, 9px corners, balanced icon spacing, and theme-aware surface tokens.
+* Rationale: icon actions should not inherit ambiguous secondary fills, uneven padding, or light-mode shadows in dark mode, while the catalog must make the border and motion choices easy to compare.
+* Canonical references: the icon-button primitives in `frontend/src/medialyze.css`, the `Page-specific icon buttons` catalog fixture in `frontend/src/pages/UiElementsPage.tsx`, the bordered Quick scan action in `frontend/src/pages/LibraryDetailPage.tsx`, and the theme-aware Download cover action in the same stylesheet.
+* Deprecated selectors: bare `.icon-button` without a surface modifier for new icon-only actions; bare `.icon-only-button` remains a compatibility class for context-specific legacy controls during migration.
+* Migration: the catalog now shows bordered static Copy, borderless static Open/Compare, and bordered animated Quick scan variants; ordinary text actions such as Download cover remain text buttons and use the shared theme-aware surface treatment.
+* Intentional exceptions: navigation, tooltip/help, accordion, timeline, and compact row controls may retain their local geometry when their surrounding interaction requires a different hit area or borderless grouping.
+* Status: active.
+
+### 2026-09-09 — Use the Transcoding workspace pattern for quality profiles
+
+* Decision: Quality profiles use the same compact media-type tab row and expandable profile list as the Transcoding automation workspace; each profile contains its own expandable scoring sections such as Resolution, rendered directly in the profile surface without a redundant nested panel. Profile metadata stays inline beside the name on wide layouts and may wrap only when the available width requires it.
+* Rationale: keep profile management consistent across settings while making multiple profiles visible and reducing the need for a separate picker/editor mode.
+* Canonical references: `renderQualityProfilesPanel()` in `frontend/src/pages/LibrariesPage.tsx`, the shared compatibility-list and transcode-tab styles in `frontend/src/medialyze.css`, and the `Quality profiles list and metric accordions` catalog entry in `frontend/src/pages/UiElementsPage.tsx`.
+* Migration: replace the integrated profile select with the compact tab/list structure, preserve profile actions and API behavior, and retain metric-level editing inside the expanded profile row.
+* Status: active.
+
+### 2026-09-09 — Keep compatibility catalog guidance in the panel heading
+
+* Decision: the Hardware & software profiles development note is exposed through the shared `TooltipTrigger` beside the panel heading instead of occupying a persistent paragraph above the profile tabs.
+* Rationale: keep the catalog compact while preserving the explanation on demand through hover, focus, and keyboard activation.
+* Canonical references: `frontend/src/components/CompatibilityProfilesPanel.tsx`, `frontend/src/components/TooltipTrigger.tsx`, and the `Compact combination profile tabs` catalog fixture in `frontend/src/pages/UiElementsPage.tsx`.
+* Migration: remove the standalone `.compatibility-profile-development-note` surface and retain the localized note text plus a localized accessible label in the heading tooltip.
+* Status: active.
+
+### 2026-09-09 — Reuse the Quality profiles surface for Hardware & Software Profiles
+
+* Decision: Hardware & Software Profiles use the shared compact underline tab navigation, one bordered profile-list surface, and the same expandable row rhythm as Quality profiles; hardware, software, and combination profiles remain searchable and keep their existing quick actions and editors.
+* Rationale: keep the two profile catalogs visually consistent while preserving the larger hardware/software catalog's search and profile-specific editing behavior.
+* Canonical references: `frontend/src/components/CompatibilityProfilesPanel.tsx`, the shared `transcode-automation-tab-*` and compatibility-list styles in `frontend/src/medialyze.css`, and the `Compatibility profile list` / `Compact combination profile tabs` catalog fixtures in `frontend/src/pages/UiElementsPage.tsx`.
+* Deprecated selectors for this page: `.library-history-range-toggle`, `.library-history-range-button`, and `.library-history-range-pill` in `CompatibilityProfilesPanel.tsx` and its catalog fixture; the same selectors remain intentional in connector mapping, playback-history, and Transcoding job-center controls that still use the sliding selection pattern.
+* Migration: replace the compatibility catalog's sliding pill tabs and separate nested list surfaces with semantic underline tabs and one unified list surface; preserve profile search, favorites, editing, cloning, deleting, and combination creation behavior. Do not broaden this migration to the separately audited legacy controls without a dedicated design decision.
+* Status: active.
+
+### 2026-09-09 — Use contextual fuzzy search for Settings navigation
+
+* Decision: the Settings search indexes every settings page plus supported nested tabs, ranks localized labels and aliases with small typo tolerance, opens the best confident result directly, and keeps the matched control highlighted while the search remains active.
+* Rationale: users should be able to reach a setting by concept or nearby wording without first knowing which page or tab contains it.
+* Canonical references: `frontend/src/lib/settings-search.ts`, `frontend/src/pages/LibrariesPage.tsx`, the compatibility/transcoding tab components, and the Settings navigation fixture in `frontend/src/pages/UiElementsPage.tsx`.
+* Migration: the existing main-page navigation filter remains as the compact fallback; nested search results use the shared Settings navigation result surface and `data-settings-search-target` focus contract.
 * Status: active.
 
 ## 8.3 Internationalization

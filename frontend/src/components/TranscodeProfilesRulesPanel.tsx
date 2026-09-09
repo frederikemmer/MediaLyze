@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, Plus, Power, RefreshCw, Save, Search, ShieldCheck, Trash2, Unplug, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Power, RefreshCw, Save, ShieldCheck, Trash2, Unplug, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -7,16 +7,19 @@ import {
   type LibrarySummary,
   type TranscodeCondition,
   type TranscodeConditionGroup,
+  type TranscodeDeviceMatrix,
   type TranscodeFederation,
+  type TranscodeHardwareDevice,
   type TranscodeFederationMember,
   type TranscodeProfile,
   type TranscodeProfileDefinition,
   type TranscodeProfileStreamRule,
   type TranscodeRule,
 } from "../lib/api";
+import { buildTranscodingMatrixAnchorId, type TranscodingMatrixFocus } from "../lib/transcoding-matrix-state";
 import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
+import { AnimatedConnectIcon } from "./AnimatedConnectIcon";
 import { CopyIcon } from "./CopyIcon";
-import { SlidingTogglePill } from "./SlidingTogglePill";
 import { SquarePenIcon } from "./SquarePenIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
 
@@ -42,11 +45,21 @@ type RuleDraft = {
 
 type AutomationTab = "profiles" | "rules" | "accelerators" | "members";
 
+const AUTOMATION_TABS: AutomationTab[] = ["profiles", "rules", "accelerators", "members"];
+
+function automationTabFromSearchFocus(searchFocus: string | null | undefined): AutomationTab | null {
+  if (!searchFocus?.startsWith("transcoding-tab-")) return null;
+  const value = searchFocus.slice("transcoding-tab-".length);
+  return AUTOMATION_TABS.includes(value as AutomationTab) ? value as AutomationTab : null;
+}
+
 type TranscodeProfilesRulesPanelProps = {
-  capabilityMatrix: ReactNode;
+  capabilityMatrix: (tabControls: ReactNode) => ReactNode;
   acceleratorsTooltip: ReactNode;
   federation?: TranscodeFederation | null;
   onFederationData?: (data: TranscodeFederation) => void;
+  onAcceleratorMatrixFocus?: (focus: TranscodingMatrixFocus | null) => void;
+  searchFocus?: string | null;
 };
 
 const CONDITION_FIELDS = [
@@ -135,6 +148,138 @@ function memberResourceSummary(member: TranscodeFederationMember, t: (key: strin
   const freeBytes = typeof resources.temp_free_bytes === "number" ? `${Math.round(resources.temp_free_bytes / 1024 / 1024 / 1024)} GB free` : null;
   const parts = [cpuThreads, freeBytes, `${member.active_jobs} ${t("transcoding.federation.activeJobs")}`].filter(Boolean);
   return parts.join(" · ") || t("transcoding.federation.resourcesUnknown");
+}
+
+function memberListSummary(member: TranscodeFederationMember, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const version = member.application_version?.trim().replace(/^v/i, "");
+  return [
+    memberResourceSummary(member, t),
+    version ? t("transcoding.federation.version", { version }) : null,
+  ].filter(Boolean).join(" · ");
+}
+
+type MemberAccelerator = Pick<TranscodeHardwareDevice, "id" | "name" | "backend"> & {
+  matrixDeviceId: string;
+};
+
+function memberMatrixDeviceId(
+  device: Pick<TranscodeHardwareDevice, "id" | "render_node">,
+  matrices: TranscodeDeviceMatrix[],
+): string {
+  const matrix = matrices.find(({ device_id }) => device_id === device.id)
+    ?? matrices.find(({ device_id }) => device_id === `device:${device.id}`)
+    ?? (device.render_node
+      ? matrices.find(({ device_id }) => device_id === `render:${device.render_node}`)
+      : undefined);
+  return matrix?.device_id ?? device.id;
+}
+
+function memberAvailableAccelerators(member: TranscodeFederationMember): MemberAccelerator[] | null {
+  const devices = member.capabilities?.devices;
+  const matrices = member.capability_matrix?.status === "completed"
+    ? member.capability_matrix.matrices
+    : [];
+  if (devices) {
+    return devices
+      .filter((device) => device.status === "available")
+      .map((device) => ({
+        id: device.id,
+        name: device.name,
+        backend: device.backend,
+        matrixDeviceId: memberMatrixDeviceId(device, matrices),
+      }));
+  }
+  if (member.capability_matrix?.status !== "completed") return null;
+  return member.capability_matrix.matrices.map(({ device_id, device_name, backend }) => ({
+    id: device_id,
+    name: device_name,
+    backend,
+    matrixDeviceId: device_id,
+  }));
+}
+
+function installationVersionLabel(version: string | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string | null {
+  const normalizedVersion = version?.trim().replace(/^v/i, "");
+  return normalizedVersion ? t("transcoding.federation.version", { version: normalizedVersion }) : null;
+}
+
+type FederationMemberStatus = "online" | "warning" | "offline";
+
+const OFFLINE_MEMBER_CONNECTION_STATUSES = new Set(["offline", "unreachable", "disconnected"]);
+
+function federationMemberStatus(member: TranscodeFederationMember): FederationMemberStatus {
+  const connectionStatus = member.connection_status.trim().toLocaleLowerCase();
+  if (!member.reachable || OFFLINE_MEMBER_CONNECTION_STATUSES.has(connectionStatus)) {
+    return "offline";
+  }
+  if (Boolean(member.last_error?.trim()) || connectionStatus !== "connected" || member.status !== "active") {
+    return "warning";
+  }
+  return "online";
+}
+
+function federationMemberStatusLabel(
+  status: FederationMemberStatus,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const keys: Record<FederationMemberStatus, string> = {
+    online: "transcoding.federation.statusHealthy",
+    warning: "transcoding.federation.statusWarning",
+    offline: "transcoding.federation.statusOffline",
+  };
+  return t(keys[status]);
+}
+
+function formatFederationMemberLastSeen(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function federationMemberStatusTooltip(
+  member: TranscodeFederationMember,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ReactNode {
+  const status = federationMemberStatus(member);
+  const connectionStatus = member.connection_status.trim();
+  const lastError = member.last_error?.trim();
+  const lastSeen = formatFederationMemberLastSeen(member.last_seen_at);
+  return (
+    <div className="transcode-federation-status-tooltip">
+      <strong className={`transcode-federation-status-tooltip-heading is-${status}`}>
+        {federationMemberStatusLabel(status, t)}
+      </strong>
+      {status === "online" ? <p className="transcode-federation-status-tooltip-hint">{t("transcoding.federation.statusHealthyHint")}</p> : null}
+      {lastError ? (
+        <div className="transcode-federation-status-tooltip-item is-error">
+          <span>{t("transcoding.federation.lastError")}</span>
+          <p>{lastError}</p>
+        </div>
+      ) : null}
+      {connectionStatus && connectionStatus.toLocaleLowerCase() !== "connected" ? (
+        <div className="transcode-federation-status-tooltip-item">
+          <span>{t("transcoding.federation.connectionStatus")}</span>
+          <p>{connectionStatus}</p>
+        </div>
+      ) : null}
+      {member.status !== "active" ? (
+        <div className="transcode-federation-status-tooltip-item">
+          <span>{t("transcoding.federation.memberState")}</span>
+          <p>{member.status}</p>
+        </div>
+      ) : null}
+      {lastSeen && status !== "online" ? (
+        <div className="transcode-federation-status-tooltip-item">
+          <span>{t("transcoding.federation.lastSeen")}</span>
+          <p>{lastSeen}</p>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function profileDraftFrom(profile: TranscodeProfile): ProfileDraft {
@@ -359,13 +504,13 @@ function ProfileDefinitionEditor({
   return (
     <div className="settings-sidebar-stack">
       <div className="compatibility-profile-form-grid">
-        <label><span>{t("transcoding.container")}</span><select value={definition.container} onChange={(event) => onChange({ ...definition, container: event.target.value as TranscodeProfileDefinition["container"] })}>
+        <label><span>{t("transcoding.container")}</span><select className="settings-choice-input" value={definition.container} onChange={(event) => onChange({ ...definition, container: event.target.value as TranscodeProfileDefinition["container"] })}>
           {(["source", "mkv", "mp4", "webm"] as const).map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
         </select></label>
-        <label><span>{t("transcoding.executionMode")}</span><select value={definition.execution_mode} onChange={(event) => onChange({ ...definition, execution_mode: event.target.value as TranscodeProfileDefinition["execution_mode"] })}>
+        <label><span>{t("transcoding.executionMode")}</span><select className="settings-choice-input" value={definition.execution_mode} onChange={(event) => onChange({ ...definition, execution_mode: event.target.value as TranscodeProfileDefinition["execution_mode"] })}>
           <option value="inherit">{t("transcoding.automation.inheritGlobal")}</option><option value="hardware_required">{t("transcoding.hardwareRequired")}</option><option value="cpu_only">{t("transcoding.cpuOnly")}</option>
         </select></label>
-        <label><span>{t("transcoding.dynamicRange")}</span><select value={definition.dynamic_range} onChange={(event) => onChange({ ...definition, dynamic_range: event.target.value as TranscodeProfileDefinition["dynamic_range"] })}>
+        <label><span>{t("transcoding.dynamicRange")}</span><select className="settings-choice-input" value={definition.dynamic_range} onChange={(event) => onChange({ ...definition, dynamic_range: event.target.value as TranscodeProfileDefinition["dynamic_range"] })}>
           {(["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}
         </select></label>
       </div>
@@ -373,7 +518,7 @@ function ProfileDefinitionEditor({
         <label><input type="checkbox" checked={definition.filename_template_override} onChange={(event) => onChange({ ...definition, filename_template_override: event.target.checked })} /><span>{t("transcoding.filenameTemplateOverride")}</span></label>
         <label><input type="checkbox" checked={definition.include_subtitle_languages} onChange={(event) => onChange({ ...definition, include_subtitle_languages: event.target.checked })} /><span>{t("transcoding.filenameIncludeSubtitleLanguages")}</span></label>
       </div>
-      <label className="compatibility-profile-field-wide"><span>{t("transcoding.filenameTemplate")}</span><input disabled={!definition.filename_template_override} value={definition.filename_template} onChange={(event) => onChange({ ...definition, filename_template: event.target.value, filename_template_override: true })} /></label>
+      <label className="compatibility-profile-field-wide"><span>{t("transcoding.filenameTemplate")}</span><input className="settings-choice-input" disabled={!definition.filename_template_override} value={definition.filename_template} onChange={(event) => onChange({ ...definition, filename_template: event.target.value, filename_template_override: true })} /></label>
       <div className="transcode-global-options">
         {(["metadata", "chapters", "cover", "attachments"] as const).map((option) => (
           <label key={option}><input type="checkbox" checked={definition[option] === "keep"} onChange={(event) => onChange({ ...definition, [option]: event.target.checked ? "keep" : "drop" })} /><span>{t(`transcoding.options.${option}`)}</span></label>
@@ -400,13 +545,19 @@ function ProfileDefinitionEditor({
   );
 }
 
-export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTooltip, federation = null, onFederationData }: TranscodeProfilesRulesPanelProps) {
+export function TranscodeProfilesRulesPanel({
+  capabilityMatrix,
+  acceleratorsTooltip,
+  federation = null,
+  onFederationData,
+  onAcceleratorMatrixFocus,
+  searchFocus = null,
+}: TranscodeProfilesRulesPanelProps) {
   const { t } = useTranslation();
   const [profiles, setProfiles] = useState<TranscodeProfile[]>([]);
   const [rules, setRules] = useState<TranscodeRule[]>([]);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
-  const [tab, setTab] = useState<AutomationTab>("profiles");
-  const [searchQueries, setSearchQueries] = useState<Record<AutomationTab, string>>({ profiles: "", rules: "", accelerators: "", members: "" });
+  const [tab, setTab] = useState<AutomationTab>(() => automationTabFromSearchFocus(searchFocus) ?? "profiles");
   const [expandedProfileId, setExpandedProfileId] = useState<number | null>(null);
   const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
@@ -419,6 +570,17 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [memberPending, setMemberPending] = useState<string | null>(null);
+  const [discoveredPairingCodes, setDiscoveredPairingCodes] = useState<Record<string, string>>({});
+  const [manualEndpoint, setManualEndpoint] = useState("");
+  const [manualPairingCode, setManualPairingCode] = useState("");
+  const [invalidDiscoveredPairingCode, setInvalidDiscoveredPairingCode] = useState<string | null>(null);
+  const invalidDiscoveredPairingCodeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (invalidDiscoveredPairingCodeTimeoutRef.current !== null) {
+      window.clearTimeout(invalidDiscoveredPairingCodeTimeoutRef.current);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -446,7 +608,6 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
 
   const startNewProfile = () => {
     setTab("profiles");
-    setSearchQueries((current) => ({ ...current, profiles: "" }));
     setExpandedProfileId(null);
     setExpandedRuleId(null);
     setRuleDraft(null);
@@ -520,7 +681,6 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
 
   const startNewRule = () => {
     setTab("rules");
-    setSearchQueries((current) => ({ ...current, rules: "" }));
     setExpandedProfileId(null);
     setExpandedRuleId(null);
     setProfileDraft(null);
@@ -610,31 +770,6 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
 
   const libraryNames = useMemo(() => new Map(libraries.map((library) => [library.id, library.name])), [libraries]);
   const federationMembers = federation?.members ?? [];
-  const normalizedSearchQuery = searchQueries[tab].trim().toLocaleLowerCase();
-  const filteredProfiles = profiles.filter((profile) => {
-    if (!normalizedSearchQuery) return true;
-    return `${profile.name} ${profile.description} ${profile.version}`.toLocaleLowerCase().includes(normalizedSearchQuery);
-  });
-  const filteredRules = rules.filter((rule) => {
-    if (!normalizedSearchQuery) return true;
-    return [
-      rule.name,
-      rule.profile_name,
-      rule.output_mode,
-      rule.output_subfolder,
-      ...rule.library_ids.map((libraryId) => libraryNames.get(libraryId) ?? ""),
-    ].join(" ").toLocaleLowerCase().includes(normalizedSearchQuery);
-  });
-  const filteredMembers = federationMembers.filter((member) => {
-    if (!normalizedSearchQuery) return true;
-    return [
-      member.display_name,
-      member.installation_id,
-      member.status,
-      member.connection_status,
-      ...member.endpoint_urls,
-    ].join(" ").toLocaleLowerCase().includes(normalizedSearchQuery);
-  });
   const activeRuleProfile = useMemo(() => profiles.find((profile) => profile.id === ruleDraft?.profile_id), [profiles, ruleDraft?.profile_id]);
 
   const closeProfileEditor = () => {
@@ -649,7 +784,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     setRuleEditorOpen(false);
   };
 
-  const selectTab = (nextTab: AutomationTab) => {
+  const selectTab = (nextTab: AutomationTab, nextMatrixFocus: TranscodingMatrixFocus | null = null) => {
     setTab(nextTab);
     setProfileDraft(null);
     setRuleDraft(null);
@@ -658,7 +793,22 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     setExpandedProfileId(null);
     setExpandedRuleId(null);
     setExpandedMemberId(null);
+    onAcceleratorMatrixFocus?.(nextTab === "accelerators" ? nextMatrixFocus : null);
   };
+
+  useEffect(() => {
+    const nextTab = automationTabFromSearchFocus(searchFocus);
+    if (!nextTab || nextTab === tab) return;
+    setTab(nextTab);
+    setProfileDraft(null);
+    setRuleDraft(null);
+    setProfileEditorOpen(false);
+    setRuleEditorOpen(false);
+    setExpandedProfileId(null);
+    setExpandedRuleId(null);
+    setExpandedMemberId(null);
+    onAcceleratorMatrixFocus?.(null);
+  }, [onAcceleratorMatrixFocus, searchFocus, tab]);
 
   const toggleProfileRow = (profile: TranscodeProfile) => {
     if (expandedProfileId === profile.id) {
@@ -714,28 +864,73 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     }
   };
 
-  const renderSearch = () => (
-    <div className="compatibility-profile-search transcode-automation-search">
-      <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
-      <input
-        type="search"
-        value={searchQueries[tab]}
-        aria-label={t(tab === "profiles" ? "transcoding.automation.searchProfiles" : tab === "rules" ? "transcoding.automation.searchRules" : "transcoding.automation.searchMembers")}
-        placeholder={t(tab === "members" ? "transcoding.automation.membersSearchPlaceholder" : "transcoding.automation.searchPlaceholder")}
-        onChange={(event) => setSearchQueries((current) => ({ ...current, [tab]: event.target.value }))}
-      />
-      {searchQueries[tab] ? (
-        <button
-          type="button"
-          className="compatibility-profile-search-clear"
-          aria-label={t("transcoding.automation.clearSearch")}
-          onClick={() => setSearchQueries((current) => ({ ...current, [tab]: "" }))}
-        >
-          <X size={15} aria-hidden="true" />
-        </button>
-      ) : null}
-    </div>
-  );
+  const flashMissingDiscoveredPairingCode = (installationId: string) => {
+    setError(null);
+    setInvalidDiscoveredPairingCode(installationId);
+    if (invalidDiscoveredPairingCodeTimeoutRef.current !== null) {
+      window.clearTimeout(invalidDiscoveredPairingCodeTimeoutRef.current);
+    }
+    invalidDiscoveredPairingCodeTimeoutRef.current = window.setTimeout(() => {
+      setInvalidDiscoveredPairingCode((current) => current === installationId ? null : current);
+      invalidDiscoveredPairingCodeTimeoutRef.current = null;
+    }, 1200);
+  };
+
+  const discoverMembers = async () => {
+    setMemberPending("discover");
+    setError(null);
+    try {
+      onFederationData?.(await api.discoverTranscodeFederation());
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
+
+  const pairDiscovered = async (peer: TranscodeFederation["discovered"][number]) => {
+    const peerEndpoint = peer.endpoint_urls[0] ?? peer.installation_id;
+    const code = discoveredPairingCodes[peer.installation_id]?.trim() ?? "";
+    if (code.length !== 6) {
+      flashMissingDiscoveredPairingCode(peer.installation_id);
+      return;
+    }
+    setMemberPending(peer.installation_id);
+    setError(null);
+    try {
+      onFederationData?.(await api.pairTranscodeFederation({ endpoint: peerEndpoint, pairing_code: code }));
+      setDiscoveredPairingCodes((current) => {
+        const next = { ...current };
+        delete next[peer.installation_id];
+        return next;
+      });
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
+
+  const pairManual = async () => {
+    const endpoint = manualEndpoint.trim();
+    const code = manualPairingCode.trim();
+    if (!endpoint || code.length !== 6) {
+      if (endpoint) flashMissingDiscoveredPairingCode("manual");
+      return;
+    }
+    setMemberPending("manual");
+    setError(null);
+    try {
+      onFederationData?.(await api.pairTranscodeFederation({ endpoint, pairing_code: code }));
+      setManualEndpoint("");
+      setManualPairingCode("");
+      setInvalidDiscoveredPairingCode(null);
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
 
   const renderProfileSummary = (profile: TranscodeProfile) => {
     const definition = profile.definition;
@@ -790,12 +985,12 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
     return (
       <div className="compatibility-profile-details transcode-automation-details">
         <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid">
-          <label><span>{t("transcoding.container")}</span><select disabled value={definition.container} onChange={() => undefined}>{(["source", "mkv", "mp4", "webm"] as const).map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>
-          <label><span>{t("transcoding.executionMode")}</span><select disabled value={definition.execution_mode} onChange={() => undefined}>
+          <label><span>{t("transcoding.container")}</span><select className="settings-choice-input" disabled value={definition.container} onChange={() => undefined}>{(["source", "mkv", "mp4", "webm"] as const).map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>
+          <label><span>{t("transcoding.executionMode")}</span><select className="settings-choice-input" disabled value={definition.execution_mode} onChange={() => undefined}>
             <option value="inherit">{t("transcoding.automation.inheritGlobal")}</option><option value="hardware_required">{t("transcoding.hardwareRequired")}</option><option value="cpu_only">{t("transcoding.cpuOnly")}</option>
           </select></label>
-          <label><span>{t("transcoding.dynamicRange")}</span><select disabled value={definition.dynamic_range} onChange={() => undefined}>{(["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}</select></label>
-          <label><span>{t("transcoding.automation.usedByRules")}</span><input readOnly value={profile.used_by_rule_count} /></label>
+          <label><span>{t("transcoding.dynamicRange")}</span><select className="settings-choice-input" disabled value={definition.dynamic_range} onChange={() => undefined}>{(["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}</select></label>
+          <label><span>{t("transcoding.automation.usedByRules")}</span><input className="settings-choice-input" readOnly value={profile.used_by_rule_count} /></label>
         </div>
         <div className="compatibility-capability-sections transcode-automation-rule-sections">
           {ruleSections.map(({ key, label, rules }) => (
@@ -821,8 +1016,8 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
           <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closeProfileEditor}><X aria-hidden="true" size={14} /></button>
         </div>
         <div className="compatibility-profile-form-grid">
-          <label><span>{t("transcoding.automation.profileName")}</span><input value={profileDraft.name} onChange={(event) => setProfileDraft({ ...profileDraft, name: event.target.value })} /></label>
-          <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.profileDescription")}</span><textarea rows={3} value={profileDraft.description} onChange={(event) => setProfileDraft({ ...profileDraft, description: event.target.value })} /></label>
+          <label><span>{t("transcoding.automation.profileName")}</span><input className="settings-choice-input" value={profileDraft.name} onChange={(event) => setProfileDraft({ ...profileDraft, name: event.target.value })} /></label>
+          <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.profileDescription")}</span><textarea className="settings-choice-input" rows={3} value={profileDraft.description} onChange={(event) => setProfileDraft({ ...profileDraft, description: event.target.value })} /></label>
         </div>
         <ProfileDefinitionEditor definition={profileDraft.definition} onChange={(definition) => setProfileDraft({ ...profileDraft, definition })} />
         <div className="compatibility-profile-card-actions transcode-automation-editor-actions">
@@ -861,9 +1056,9 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
           <strong>{ruleDraft.id ? t("transcoding.automation.editRule") : t("transcoding.automation.newRule")}</strong>
           <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closeRuleEditor}><X aria-hidden="true" size={14} /></button>
         </div>
-        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.automation.ruleName")}</span><input value={ruleDraft.name} onChange={(event) => setRuleDraft({ ...ruleDraft, name: event.target.value })} /></label><label><span>{t("transcoding.automation.rulePriority")}</span><input type="number" min={0} value={ruleDraft.priority} onChange={(event) => setRuleDraft({ ...ruleDraft, priority: Math.max(0, Number(event.target.value) || 0) })} /></label><label><span>{t("transcoding.automation.profile")}</span><select value={ruleDraft.profile_id} onChange={(event) => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}</select></label></div>
-        <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.libraries")}</span><select multiple value={ruleDraft.library_ids.map(String)} onChange={(event) => setRuleDraft({ ...ruleDraft, library_ids: [...event.target.selectedOptions].map((option) => Number(option.value)) })}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
-        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.outputMode")}</span><select value={ruleDraft.output_mode} onChange={(event) => setRuleDraft({ ...ruleDraft, output_mode: event.target.value as RuleDraft["output_mode"], replacement_approved: false })}><option value="transcode_output">{t("transcoding.transcodeOutput")}</option><option value="same_directory">{t("transcoding.sameDirectory")}</option><option value="replace_original">{t("transcoding.replaceOriginal")}</option></select></label><label><span>{t("transcoding.automation.outputSubfolder")}</span><input value={ruleDraft.output_subfolder} disabled={ruleDraft.output_mode !== "transcode_output"} placeholder="anime/optimized" onChange={(event) => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} /></label></div>
+        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.automation.ruleName")}</span><input className="settings-choice-input" value={ruleDraft.name} onChange={(event) => setRuleDraft({ ...ruleDraft, name: event.target.value })} /></label><label><span>{t("transcoding.automation.rulePriority")}</span><input className="settings-choice-input" type="number" min={0} value={ruleDraft.priority} onChange={(event) => setRuleDraft({ ...ruleDraft, priority: Math.max(0, Number(event.target.value) || 0) })} /></label><label><span>{t("transcoding.automation.profile")}</span><select className="settings-choice-input" value={ruleDraft.profile_id} onChange={(event) => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}</select></label></div>
+        <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.libraries")}</span><select className="settings-choice-input" multiple value={ruleDraft.library_ids.map(String)} onChange={(event) => setRuleDraft({ ...ruleDraft, library_ids: [...event.target.selectedOptions].map((option) => Number(option.value)) })}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
+        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.outputMode")}</span><select className="settings-choice-input" value={ruleDraft.output_mode} onChange={(event) => setRuleDraft({ ...ruleDraft, output_mode: event.target.value as RuleDraft["output_mode"], replacement_approved: false })}><option value="transcode_output">{t("transcoding.transcodeOutput")}</option><option value="same_directory">{t("transcoding.sameDirectory")}</option><option value="replace_original">{t("transcoding.replaceOriginal")}</option></select></label><label><span>{t("transcoding.automation.outputSubfolder")}</span><input className="settings-choice-input" value={ruleDraft.output_subfolder} disabled={ruleDraft.output_mode !== "transcode_output"} placeholder="anime/optimized" onChange={(event) => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} /></label></div>
         {ruleDraft.output_mode === "replace_original" ? <p className="field-hint">{t("transcoding.replacementWarning")}</p> : null}
         <label className="transcode-filename-option"><input type="checkbox" checked={ruleDraft.enabled} disabled={ruleDraft.output_mode === "replace_original" && !ruleDraft.replacement_approved} onChange={(event) => setRuleDraft({ ...ruleDraft, enabled: event.target.checked })} /><span>{t("transcoding.automation.enabled")}</span></label>
         {ruleDraft.conditions ? <ConditionGroupEditor group={ruleDraft.conditions} onChange={(conditions) => setRuleDraft({ ...ruleDraft, conditions })} /> : <button type="button" className="secondary small settings-panel-header-action" onClick={() => setRuleDraft({ ...ruleDraft, conditions: { type: "group", operator: "and", children: [blankCondition()] } })}><Plus aria-hidden="true" size={14} />{t("transcoding.automation.addCondition")}</button>}
@@ -983,9 +1178,10 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
   };
 
   const renderProfileList = () => (
-    <div className="compatibility-profile-list">
-      {renderSearch()}
-      {filteredProfiles.map((profile) => {
+    <section className="transcode-automation-tab-content">
+      <div className="compatibility-profile-list">
+        {renderAutomationToggleRow(panelAction)}
+        {profiles.map((profile) => {
         const expanded = expandedProfileId === profile.id;
         const editing = expanded && profileEditorOpen && profileDraft?.id === profile.id;
         return (
@@ -1012,15 +1208,16 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
           {renderProfileEditor()}
         </article>
       ) : null}
-      {!filteredProfiles.length && !(profileDraft?.id === null && profileEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
-    </div>
+        {!profiles.length && !(profileDraft?.id === null && profileEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+      </div>
+    </section>
   );
 
   const renderRuleList = () => (
-    <div className="transcode-automation-tab-content">
+    <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list">
-        {renderSearch()}
-        {filteredRules.map((rule) => {
+        {renderAutomationToggleRow(panelAction)}
+        {rules.map((rule) => {
           const expanded = expandedRuleId === rule.id;
           const editing = expanded && ruleEditorOpen && ruleDraft?.id === rule.id;
           return (
@@ -1047,29 +1244,59 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
             {renderRuleEditor()}
           </article>
         ) : null}
-        {!filteredRules.length && !(ruleDraft?.id === null && ruleEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+        {!rules.length && !(ruleDraft?.id === null && ruleEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
       </div>
-    </div>
+    </section>
   );
 
   const renderMemberList = () => (
-    <div className="transcode-automation-tab-content">
+    <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list">
-        {renderSearch()}
-        {federation === null ? <p className="compatibility-profile-search-empty">{t("transcoding.federation.loading")}</p> : filteredMembers.map((member) => {
+        {renderAutomationToggleRow(
+          <TooltipTrigger
+            ariaLabel={t("transcoding.federation.refreshDiscovery")}
+            content={t("transcoding.federation.refreshDiscovery")}
+            className="secondary icon-only-button compatibility-profile-quick-action transcode-federation-discovered-refresh"
+            disabled={busy || memberPending !== null}
+            pinOnClick={false}
+            onClick={() => void discoverMembers()}
+          >
+            <RefreshCw aria-hidden="true" className={memberPending === "discover" ? "is-spinning" : undefined} size={16} />
+          </TooltipTrigger>,
+        )}
+        {federation === null ? <p className="compatibility-profile-search-empty">{t("transcoding.federation.loading")}</p> : null}
+        {federation !== null ? federationMembers.map((member) => {
           const expanded = expandedMemberId === member.installation_id;
           const memberBusy = busy || memberPending !== null;
           const syncing = memberPending === member.installation_id;
+          const memberStatus = federationMemberStatus(member);
+          const memberStatusLabel = federationMemberStatusLabel(memberStatus, t);
+          const availableAccelerators = memberAvailableAccelerators(member);
           return (
             <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={member.installation_id}>
-              <div className="compatibility-profile-list-row">
-                <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => setExpandedMemberId(expanded ? null : member.installation_id)}>
-                  <span className="transcode-automation-list-copy transcode-federation-member-list-copy">
-                    <strong><span className={`status-dot ${member.reachable ? "is-online" : "is-offline"}`} aria-hidden="true" />{member.display_name}</strong>
-                    <small>{member.connection_status} · {memberResourceSummary(member, t)}</small>
-                  </span>
-                  <ChevronDown aria-hidden="true" />
-                </button>
+              <div className="compatibility-profile-list-row transcode-federation-member-row">
+                <div className="transcode-federation-member-trigger-shell">
+                  <TooltipTrigger
+                    ariaLabel={`${member.display_name}: ${memberStatusLabel}`}
+                    content={federationMemberStatusTooltip(member, t)}
+                    className="transcode-federation-status-trigger"
+                    align="start"
+                    placement="auto"
+                    maxWidth={360}
+                    pinOnClick={false}
+                  >
+                    <span className="transcode-federation-entry-marker transcode-federation-status-marker">
+                      <span className={`status-dot is-${memberStatus}`} aria-hidden="true" />
+                    </span>
+                  </TooltipTrigger>
+                  <button type="button" className="compatibility-profile-list-trigger transcode-federation-member-trigger" aria-expanded={expanded} onClick={() => setExpandedMemberId(expanded ? null : member.installation_id)}>
+                    <span className="transcode-automation-list-copy transcode-federation-member-list-copy">
+                      <strong><span className="transcode-federation-member-name">{member.display_name}</span></strong>
+                      <small>{memberListSummary(member, t)}</small>
+                    </span>
+                    <ChevronDown aria-hidden="true" />
+                  </button>
+                </div>
                 <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
                   <button
                     type="button"
@@ -1095,20 +1322,127 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
               </div>
               {expanded ? (
                 <div className="compatibility-profile-details transcode-automation-details transcode-federation-member-tab-details">
-                  <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid">
-                    <label><span>{t("transcoding.federation.memberEndpoint")}</span><input readOnly value={member.endpoint_urls[0] ?? member.installation_id} /></label>
-                    <label><span>{t("transcoding.federation.memberStatus")}</span><input readOnly value={member.connection_status} /></label>
+                  <div className="transcode-federation-member-accelerators">
+                    <span className="transcode-federation-member-detail-label">{t("transcoding.federation.availableAccelerators")}</span>
+                    {availableAccelerators === null ? (
+                      <p className="field-hint">{t("transcoding.federation.acceleratorsUnavailable")}</p>
+                    ) : availableAccelerators.length ? (
+                      <ul className="transcode-federation-member-accelerator-list">
+                        {availableAccelerators.map((accelerator) => {
+                          const focus: TranscodingMatrixFocus = {
+                            memberInstallationId: member.installation_id,
+                            deviceId: accelerator.matrixDeviceId,
+                          };
+                          return (
+                            <li key={accelerator.id}>
+                              <a
+                                className="transcode-federation-member-accelerator-link"
+                                href={`#${buildTranscodingMatrixAnchorId(focus.memberInstallationId, focus.deviceId)}`}
+                                aria-label={`${t("transcoding.federation.openHardwareMatrix")}: ${accelerator.name}`}
+                                title={t("transcoding.federation.openHardwareMatrix")}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  selectTab("accelerators", focus);
+                                }}
+                              >
+                                <span className="transcode-federation-member-accelerator-copy">
+                                  <strong>{accelerator.name}</strong>
+                                  <small>{accelerator.backend}</small>
+                                </span>
+                                <ChevronRight aria-hidden="true" size={16} />
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="field-hint">{t("transcoding.federation.noAvailableAccelerators")}</p>
+                    )}
                   </div>
-                  <label className="app-settings-flag-toggle"><input type="checkbox" checked={member.accept_jobs} readOnly /><span>{t("transcoding.federation.acceptingJobs")}</span></label>
-                  {member.last_error ? <div className="notice error" role="alert">{member.last_error}</div> : null}
                 </div>
               ) : null}
             </article>
           );
+        }) : null}
+        {federation?.discovered.map((peer) => {
+          const peerEndpoint = peer.endpoint_urls[0] ?? peer.installation_id;
+          const peerName = peer.display_name?.trim() || peerEndpoint;
+          const endpointIsName = peerName.replace(/\/+$/, "").toLocaleLowerCase() === peerEndpoint.replace(/\/+$/, "").toLocaleLowerCase();
+          const codeIsInvalid = invalidDiscoveredPairingCode === peer.installation_id;
+          const memberBusy = busy || memberPending !== null;
+          const peerVersion = installationVersionLabel(peer.application_version, t);
+          return (
+            <article className="compatibility-profile-list-item transcode-federation-peer" key={peer.installation_id}>
+              <span><strong><Plus aria-hidden="true" className="transcode-federation-entry-marker transcode-federation-add-icon" size={16} /><span className="transcode-federation-peer-name">{peerName}</span></strong>{!endpointIsName || peerVersion ? <small>{[endpointIsName ? null : peerEndpoint, peerVersion].filter(Boolean).join(" · ")}</small> : null}</span>
+              <div className="transcode-federation-peer-connect-control">
+                <input
+                  className={`settings-choice-input transcode-federation-segment-input transcode-federation-peer-code-input${codeIsInvalid ? " is-invalid" : ""}`}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  pattern="[0-9]{6}"
+                  placeholder={t("transcoding.federation.pairingCode")}
+                  aria-label={t("transcoding.federation.pairingCode")}
+                  aria-invalid={codeIsInvalid}
+                  value={discoveredPairingCodes[peer.installation_id] ?? ""}
+                  disabled={memberBusy}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                    setDiscoveredPairingCodes((current) => ({ ...current, [peer.installation_id]: value }));
+                    if (value.length === 6 && codeIsInvalid) setInvalidDiscoveredPairingCode(null);
+                  }}
+                />
+                <button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button" disabled={memberBusy} onClick={() => void pairDiscovered(peer)}><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />{t("transcoding.federation.connect")}</button>
+              </div>
+            </article>
+          );
         })}
-        {federation !== null && !filteredMembers.length ? <p className="compatibility-profile-search-empty">{federationMembers.length ? t("transcoding.automation.membersSearchEmpty") : t("transcoding.federation.noMembers")}</p> : null}
+        {federation !== null && !federationMembers.length && !federation.discovered.length ? <p className="compatibility-profile-search-empty">{t("transcoding.federation.noMembers")}</p> : null}
+        {federation !== null ? (
+          <article className="compatibility-profile-list-item transcode-federation-manual-item">
+            <Plus aria-hidden="true" className="transcode-federation-entry-marker transcode-federation-add-icon" size={16} />
+            <div className="transcode-federation-peer-connect-control transcode-federation-manual-connect-control">
+              <input
+                className="settings-choice-input transcode-federation-segment-input transcode-federation-manual-address-input"
+                type="url"
+                placeholder={t("transcoding.federation.endpointPlaceholder")}
+                aria-label={t("transcoding.federation.endpointPlaceholder")}
+                value={manualEndpoint}
+                disabled={busy || memberPending !== null}
+                onChange={(event) => setManualEndpoint(event.target.value)}
+              />
+              <input
+                className={`settings-choice-input transcode-federation-segment-input transcode-federation-peer-code-input transcode-federation-manual-code-input${invalidDiscoveredPairingCode === "manual" ? " is-invalid" : ""}`}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                pattern="[0-9]{6}"
+                placeholder={t("transcoding.federation.pairingCode")}
+                aria-label={t("transcoding.federation.pairingCode")}
+                aria-invalid={invalidDiscoveredPairingCode === "manual"}
+                value={manualPairingCode}
+                disabled={busy || memberPending !== null}
+                onChange={(event) => {
+                  const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                  setManualPairingCode(value);
+                  if (value.length === 6 && invalidDiscoveredPairingCode === "manual") setInvalidDiscoveredPairingCode(null);
+                }}
+              />
+              <button
+                type="button"
+                className="secondary small settings-panel-header-action transcode-federation-connect-button"
+                disabled={busy || memberPending !== null || !manualEndpoint.trim()}
+                onClick={() => void pairManual()}
+              >
+                <AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />{t("transcoding.federation.connect")}
+              </button>
+            </div>
+          </article>
+        ) : null}
       </div>
-    </div>
+    </section>
   );
 
   const panelAction = tab === "profiles" ? (
@@ -1145,6 +1479,59 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
       : tab === "accelerators"
         ? t("transcoding.automation.acceleratorsHelpAria")
         : t("transcoding.automation.membersHelpAria");
+  const automationTooltipClassName = tab === "accelerators"
+    ? "transcode-automation-description-tooltip-portal"
+    : "transcode-automation-description-tooltip-portal transcode-automation-description-tooltip-portal-compact";
+
+  const renderTabControls = () => (
+    <div className="transcode-automation-tab-controls">
+      <div className="transcode-automation-tab-list" role="tablist" aria-label={t("transcoding.automation.managementTitle")} aria-orientation="horizontal">
+        {AUTOMATION_TABS.map((key, index) => (
+          <button
+            key={key}
+            type="button"
+            id={`transcode-automation-tab-${key}`}
+            data-settings-search-target={`transcoding-tab-${key}`}
+            role="tab"
+            className={`transcode-automation-tab-button${tab === key ? " active" : ""}`}
+            aria-selected={tab === key}
+            tabIndex={tab === key ? 0 : -1}
+            onClick={() => selectTab(key)}
+            onKeyDown={(event) => {
+              let nextIndex: number | null = null;
+              if (event.key === "ArrowRight") nextIndex = (index + 1) % AUTOMATION_TABS.length;
+              if (event.key === "ArrowLeft") nextIndex = (index - 1 + AUTOMATION_TABS.length) % AUTOMATION_TABS.length;
+              if (event.key === "Home") nextIndex = 0;
+              if (event.key === "End") nextIndex = AUTOMATION_TABS.length - 1;
+              if (nextIndex === null) return;
+              event.preventDefault();
+              const nextTab = AUTOMATION_TABS[nextIndex];
+              selectTab(nextTab);
+              window.requestAnimationFrame(() => document.getElementById(`transcode-automation-tab-${nextTab}`)?.focus());
+            }}
+          >
+            <span className="transcode-automation-tab-label">{t(`transcoding.automation.tabs.${key}`)}</span>
+          </button>
+        ))}
+      </div>
+      <TooltipTrigger
+        ariaLabel={automationTooltipAriaLabel}
+        tooltipClassName={automationTooltipClassName}
+        maxWidth={tab === "accelerators" ? 460 : 300}
+        align={tab === "accelerators" ? "center" : "start"}
+        placement={tab === "accelerators" ? "auto" : "center"}
+        content={automationTooltip}
+      >?
+      </TooltipTrigger>
+    </div>
+  );
+
+  const renderAutomationToggleRow = (trailingAction?: ReactNode) => (
+    <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+      {renderTabControls()}
+      {trailingAction ? <div className="settings-profile-toggle-actions">{trailingAction}</div> : null}
+    </div>
+  );
 
   return (
     <section className="app-settings-section transcode-automation-section">
@@ -1155,35 +1542,7 @@ export function TranscodeProfilesRulesPanel({ capabilityMatrix, acceleratorsTool
         </div>
       ) : error ? <div className="alert">{error}</div> : (
         <div className="compatibility-profile-panel transcode-automation-content">
-          <div className="settings-profile-toggle-row">
-            <div className="transcode-automation-tab-controls">
-              <div className="library-history-range-toggle" role="tablist" aria-label={t("transcoding.automation.managementTitle")}>
-                <SlidingTogglePill activeKey={tab} className="nav-active-pill library-history-range-pill" />
-                {(["profiles", "rules", "accelerators", "members"] as AutomationTab[]).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    data-toggle-key={key}
-                    className={`library-history-range-button${tab === key ? " active" : ""}`}
-                    aria-pressed={tab === key}
-                    onClick={() => selectTab(key)}
-                  >
-                    <span className="library-history-range-button-content"><span>{t(`transcoding.automation.tabs.${key}`)}</span></span>
-                  </button>
-                ))}
-              </div>
-              <TooltipTrigger
-                ariaLabel={automationTooltipAriaLabel}
-                tooltipClassName="transcode-automation-description-tooltip-portal"
-                maxWidth={tab === "accelerators" ? 460 : 380}
-                placement="auto"
-                content={automationTooltip}
-              >?
-              </TooltipTrigger>
-            </div>
-            {panelAction ? <div className="settings-profile-toggle-actions">{panelAction}</div> : null}
-          </div>
-          {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix : renderMemberList()}
+          {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix(renderAutomationToggleRow()) : renderMemberList()}
         </div>
       )}
     </section>

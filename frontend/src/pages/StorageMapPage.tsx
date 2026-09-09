@@ -1,6 +1,5 @@
 import {
   ArrowUp,
-  ChevronDown,
   ChevronRight,
   File,
   FileText,
@@ -702,59 +701,53 @@ export function StorageMapPage() {
               <div className="storage-map-toolbar">
                 <label className="storage-map-field storage-map-library-field">
                   <span>{t("storageMap.library")}</span>
-                  <span className="storage-map-select-wrap">
-                    <select
-                      value={selectedLibraryId ?? ""}
-                      disabled={!librariesLoaded}
-                      onChange={(event) => updateQuery({ library: event.target.value, path: null })}
-                    >
-                      {libraries.map((library) => (
-                        <option key={library.id} value={library.id}>
-                          {library.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown aria-hidden="true" />
-                  </span>
+                  <select
+                    className="settings-choice-input"
+                    value={selectedLibraryId ?? ""}
+                    disabled={!librariesLoaded}
+                    onChange={(event) => updateQuery({ library: event.target.value, path: null })}
+                  >
+                    {libraries.map((library) => (
+                      <option key={library.id} value={library.id}>
+                        {library.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="storage-map-field">
                   <span>{t("storageMap.colorBy")}</span>
-                  <span className="storage-map-select-wrap">
-                    <select
-                      value={colorMode}
-                      onChange={(event) => updateQuery({ color: event.target.value })}
-                    >
-                      {COLOR_MODE_GROUPS.map((group) => (
-                        <optgroup
-                          key={group.label}
-                          label={t(`storageMap.groups.${group.label}`)}
-                        >
-                          {group.modes.map((mode) => (
-                            <option key={mode} value={mode}>
-                              {t(`storageMap.modes.${mode}`)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <ChevronDown aria-hidden="true" />
-                  </span>
+                  <select
+                    className="settings-choice-input"
+                    value={colorMode}
+                    onChange={(event) => updateQuery({ color: event.target.value })}
+                  >
+                    {COLOR_MODE_GROUPS.map((group) => (
+                      <optgroup
+                        key={group.label}
+                        label={t(`storageMap.groups.${group.label}`)}
+                      >
+                        {group.modes.map((mode) => (
+                          <option key={mode} value={mode}>
+                            {t(`storageMap.modes.${mode}`)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
                 </label>
                 <label className="storage-map-field">
                   <span>{t("storageMap.sortBy")}</span>
-                  <span className="storage-map-select-wrap">
-                    <select
-                      value={sortMode}
-                      onChange={(event) => updateQuery({ sort: event.target.value })}
-                    >
-                      {SORT_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {t(`storageMap.sorts.${mode}`)}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown aria-hidden="true" />
-                  </span>
+                  <select
+                    className="settings-choice-input"
+                    value={sortMode}
+                    onChange={(event) => updateQuery({ sort: event.target.value })}
+                  >
+                    {SORT_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {t(`storageMap.sorts.${mode}`)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 {supportsJellyfinNames ? (
                   <div

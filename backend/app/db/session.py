@@ -167,6 +167,21 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "job_type": "ALTER TABLE connector_sync_jobs ADD COLUMN job_type VARCHAR(24) NOT NULL DEFAULT 'sync'",
         "sync_run_id": "ALTER TABLE connector_sync_jobs ADD COLUMN sync_run_id VARCHAR(64)",
     },
+    "transcode_federation_members": {
+        "application_version": "ALTER TABLE transcode_federation_members ADD COLUMN application_version VARCHAR(64)",
+        "preferred_endpoint_url": (
+            "ALTER TABLE transcode_federation_members ADD COLUMN preferred_endpoint_url VARCHAR(2048)"
+        ),
+        "endpoint_metrics": (
+            "ALTER TABLE transcode_federation_members ADD COLUMN endpoint_metrics JSON NOT NULL DEFAULT '{}'"
+        ),
+        "network_latency_ms": (
+            "ALTER TABLE transcode_federation_members ADD COLUMN network_latency_ms FLOAT"
+        ),
+        "network_probe_at": (
+            "ALTER TABLE transcode_federation_members ADD COLUMN network_probe_at DATETIME"
+        ),
+    },
     "transcode_remote_attempts": {
         "source_snapshot": "ALTER TABLE transcode_remote_attempts ADD COLUMN source_snapshot JSON NOT NULL DEFAULT '{}'",
     },

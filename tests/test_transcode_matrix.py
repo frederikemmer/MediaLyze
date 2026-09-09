@@ -3,6 +3,7 @@ from pathlib import Path
 from backend.app.core.config import RuntimeMode, Settings
 from backend.app.schemas.transcoding import (
     TranscodeCapabilitiesRead,
+    TranscodeCapabilityMatrixRead,
     TranscodeEncoderCapability,
     TranscodeHardwareDevice,
 )
@@ -49,6 +50,7 @@ def _capabilities() -> TranscodeCapabilitiesRead:
                 name="Test GPU",
                 vendor="nvidia",
                 backend="cuda",
+                device_class="dedicated",
                 encoder_names=["h264_nvenc", "hevc_nvenc"],
                 encoder_codecs=["h264", "hevc"],
                 status="available",
@@ -98,6 +100,7 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
 
     assert result.status == "completed"
     matrix = result.matrices[0]
+    assert matrix.device_class == "dedicated"
     hardware = next(
         cell for cell in matrix.cells
         if cell.decode_codec == "h264" and cell.encode_codec == "hevc"
@@ -113,7 +116,42 @@ def test_matrix_uses_hardware_only_after_complete_pair_passes_and_persists(tmp_p
     assert hardware.parallel_benchmark.baseline_median_seconds == 1.0
     assert [level.concurrency for level in hardware.parallel_benchmark.levels] == [1, 2, 4]
     assert fallback.status == "software"
+    assert result.capability_fingerprint
     assert transcode_matrix.load_transcode_matrix(settings) == result
+
+
+def test_matrix_refreshes_only_after_capability_fingerprint_changes(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    capabilities = _capabilities()
+    build_calls = 0
+
+    monkeypatch.setattr(
+        transcode_matrix,
+        "get_transcode_capabilities",
+        lambda *_args, **_kwargs: capabilities,
+    )
+
+    def fake_build(_settings, _capabilities):
+        nonlocal build_calls
+        build_calls += 1
+        return TranscodeCapabilityMatrixRead(
+            status="completed",
+            ffmpeg_version=_capabilities.ffmpeg_version,
+        )
+
+    monkeypatch.setattr(transcode_matrix, "_build_matrices", fake_build)
+
+    first = transcode_matrix.run_transcode_matrix_test_if_changed(settings)
+    second = transcode_matrix.run_transcode_matrix_test_if_changed(settings)
+
+    assert build_calls == 1
+    assert second == first
+
+    capabilities.devices[0].driver_version = "new-driver"
+    third = transcode_matrix.run_transcode_matrix_test_if_changed(settings)
+
+    assert build_calls == 2
+    assert third.capability_fingerprint != first.capability_fingerprint
 
 
 def test_parallel_capacity_reports_highest_level_before_repeatable_slowdown(monkeypatch) -> None:

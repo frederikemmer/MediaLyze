@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, FlaskConical, Search, X } from "lucide-react";
+import { ChevronDown, Cpu, FlaskConical, Gpu, Network } from "lucide-react";
 
 import { AsyncPanel } from "./AsyncPanel";
 import { PanelEmptyState } from "./PanelEmptyState";
@@ -20,11 +20,20 @@ import {
   type TranscodingSettings,
 } from "../lib/api";
 import { formatCodecLabel } from "../lib/format";
+import {
+  buildTranscodingMatrixEntryKey,
+  buildTranscodingMatrixAnchorId,
+  getTranscodingMatrixExpansionState,
+  saveTranscodingMatrixExpansionState,
+  type TranscodingMatrixExpansionState,
+  type TranscodingMatrixFocus,
+} from "../lib/transcoding-matrix-state";
 
 type TranscodingSettingsPanelProps = {
   settings: AppSettings;
   appSettingsLoaded: boolean;
   onUpdated: (settings: AppSettings) => void;
+  searchFocus?: string | null;
 };
 
 const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
@@ -41,6 +50,10 @@ const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
 
 function cloneTranscodingSettings(settings: TranscodingSettings): TranscodingSettings {
   return { ...settings };
+}
+
+function errorMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 function matrixCellLabel(cell: TranscodeMatrixCell, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -199,20 +212,21 @@ function cellFor(
   return cells.find((cell) => cell.decode_codec === decodeCodec && cell.encode_codec === encodeCodec);
 }
 
-function matrixDeviceIdLabel(matrix: TranscodeDeviceMatrix): string {
-  const raw = matrix.device_id.trim();
-  if (raw.startsWith("device:")) return raw.slice("device:".length);
-  if (raw.startsWith("render:")) {
-    const node = raw.slice("render:".length).split(/[\\/]/).filter(Boolean).pop();
-    return node || raw;
-  }
-  return raw;
+function matrixDeviceKind(matrix: TranscodeDeviceMatrix): "cpu" | "gpu" {
+  if (matrix.device_class === "integrated") return "cpu";
+  if (matrix.device_class === "dedicated") return "gpu";
+
+  const normalized = `${matrix.device_name} ${matrix.backend}`.toLowerCase();
+  return /\b(cpu|apu|igpu|integrated)\b/.test(normalized) || normalized.includes("radeon(tm) graphics")
+    ? "cpu"
+    : "gpu";
 }
 
 export function TranscodingSettingsPanel({
   settings,
   appSettingsLoaded,
   onUpdated,
+  searchFocus = null,
 }: TranscodingSettingsPanelProps) {
   const { t, i18n } = useTranslation();
   const currentSettings = settings.transcoding ?? DEFAULT_TRANSCODING_SETTINGS;
@@ -222,10 +236,15 @@ export function TranscodingSettingsPanel({
   const [federation, setFederation] = useState<TranscodeFederation | null>(null);
   const [loadingCapabilities, setLoadingCapabilities] = useState(true);
   const [testingMatrix, setTestingMatrix] = useState(false);
-  const [matrixSearch, setMatrixSearch] = useState("");
+  const [testingNetwork, setTestingNetwork] = useState(false);
+  const [matrixExpansionState, setMatrixExpansionState] = useState<TranscodingMatrixExpansionState>(
+    getTranscodingMatrixExpansionState,
+  );
+  const [matrixFocus, setMatrixFocus] = useState<TranscodingMatrixFocus | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [networkTestMessage, setNetworkTestMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -256,15 +275,59 @@ export function TranscodingSettingsPanel({
 
   async function runMatrixTest() {
     setTestingMatrix(true);
+    setNetworkTestMessage(null);
     setError(null);
+    const testErrors: string[] = [];
     try {
       const result = await api.testTranscodeCapabilityMatrix();
       setMatrix(result);
       await refreshCapabilities();
     } catch (reason) {
-      setError((reason as Error).message);
+      testErrors.push(errorMessage(reason));
+    }
+
+    try {
+      const currentFederation = federation ?? await api.transcodeFederation();
+      if (!federation) setFederation(currentFederation);
+      const connectedMembers = currentFederation.settings.enabled
+        ? currentFederation.members.filter((member) => (
+            member.status === "active"
+            && member.connection_status === "connected"
+          ))
+        : [];
+      for (const member of connectedMembers) {
+        try {
+          setFederation(await api.testTranscodeFederationMemberCapabilityMatrix(member.installation_id));
+        } catch (reason) {
+          testErrors.push(`${member.display_name}: ${errorMessage(reason)}`);
+        }
+      }
+    } catch (reason) {
+      testErrors.push(errorMessage(reason));
+    }
+
+    if (testErrors.length) setError(testErrors.join(" · "));
+    setTestingMatrix(false);
+  }
+
+  async function runNetworkTest() {
+    setTestingNetwork(true);
+    setNetworkTestMessage(null);
+    setError(null);
+    try {
+      const result = await api.testTranscodeFederationNetwork();
+      setFederation(result);
+      setNetworkTestMessage(t("transcoding.federationNetworkTestComplete"));
+    } catch (reason) {
+      setError(errorMessage(reason));
+      try {
+        setFederation(await api.transcodeFederation());
+      } catch {
+        // Preserve the last federation snapshot when refreshing after a
+        // failed diagnostic also crosses a transient connection failure.
+      }
     } finally {
-      setTestingMatrix(false);
+      setTestingNetwork(false);
     }
   }
 
@@ -302,6 +365,10 @@ export function TranscodingSettingsPanel({
     return () => window.clearTimeout(timer);
   }, [appSettingsLoaded, draft, pendingSave, saveSettings]);
 
+  useEffect(() => {
+    saveTranscodingMatrixExpansionState(matrixExpansionState);
+  }, [matrixExpansionState]);
+
   const matrixFfmpegVersion = matrix?.ffmpeg_version ?? capabilities?.version ?? capabilities?.ffmpeg_path ?? "—";
   const matrixDevices = matrix?.matrices ?? [];
   const matrixEntries = [
@@ -316,14 +383,38 @@ export function TranscodingSettingsPanel({
         : []
     )),
   ];
-  const normalizedMatrixSearch = matrixSearch.trim().toLocaleLowerCase();
-  const visibleMatrixEntries = normalizedMatrixSearch
-    ? matrixEntries.filter(({ deviceMatrix, memberName }) => (
-        `${deviceMatrix.device_name} ${deviceMatrix.backend} ${deviceMatrix.device_id} ${memberName ?? ""}`
-          .toLocaleLowerCase()
-          .includes(normalizedMatrixSearch)
-      ))
-    : matrixEntries;
+  const visibleMatrixEntryKeys = matrixEntries.map(({ deviceMatrix, memberInstallationId }) => (
+    buildTranscodingMatrixEntryKey(memberInstallationId, deviceMatrix.device_id)
+  ));
+  const hasStoredVisibleMatrixState = visibleMatrixEntryKeys.some((key) => (
+    Object.prototype.hasOwnProperty.call(matrixExpansionState, key)
+  ));
+  const matrixEntrySignature = visibleMatrixEntryKeys.join("|");
+  const matrixFocusEntryKey = matrixFocus
+    ? buildTranscodingMatrixEntryKey(matrixFocus.memberInstallationId, matrixFocus.deviceId)
+    : null;
+  const canTestFederationNetwork = Boolean(
+    federation?.settings.enabled
+      && federation.members.some((member) => (
+        member.status === "active"
+        && member.connection_status === "connected"
+      )),
+  );
+
+  useEffect(() => {
+    if (!matrixFocus) return undefined;
+    const anchorId = buildTranscodingMatrixAnchorId(
+      matrixFocus.memberInstallationId,
+      matrixFocus.deviceId,
+    );
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(anchorId);
+      if (!target) return;
+      target.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+      target.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [matrixEntrySignature, matrixFocus]);
 
   const acceleratorsTooltip = (
     <div className="transcode-matrix-meta">
@@ -332,48 +423,54 @@ export function TranscodingSettingsPanel({
     </div>
   );
 
-  const capabilityMatrix = (
-    <section className="app-settings-section transcode-capability-section">
-      <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
-        {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
-        {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
-        {!testingMatrix && matrix?.status === "not_run" && !matrixEntries.length ? <PanelEmptyState message={t("transcoding.matrixNotRun")} /> : null}
-        {!testingMatrix && matrix?.status === "completed" && !matrixEntries.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
-        {matrixEntries.length ? (
-          <div className="compatibility-profile-list transcode-capability-list">
-            <div className="compatibility-profile-search transcode-capability-search">
-              <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
-              <input
-                type="search"
-                value={matrixSearch}
-                aria-label={t("transcoding.matrixSearchLabel")}
-                placeholder={t("transcoding.matrixSearchPlaceholder")}
-                onChange={(event) => setMatrixSearch(event.target.value)}
-              />
-              {matrixSearch ? (
-                <button
-                  type="button"
-                  className="compatibility-profile-search-clear"
-                  aria-label={t("transcoding.matrixSearchClear")}
-                  onClick={() => setMatrixSearch("")}
-                >
-                  <X size={15} aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
-            {visibleMatrixEntries.length ? visibleMatrixEntries.map(({ deviceMatrix, memberName, memberInstallationId }, index) => (
-              <details className="compatibility-profile-list-item transcode-device-matrix" key={`${memberInstallationId ?? "local"}:${deviceMatrix.device_id}`} open={index === 0}>
-                <summary className="compatibility-profile-list-trigger">
-                  <span className="transcode-automation-list-copy transcode-capability-device-copy">
-                    <span className="transcode-capability-device-name">
-                      <strong>{deviceMatrix.device_name}</strong>
-                      {memberName ? <span className="badge transcode-federation-member-pill">{memberName}</span> : null}
-                    </span>
-                    <small>{deviceMatrix.backend} · {matrixDeviceIdLabel(deviceMatrix)}</small>
-                  </span>
-                  <ChevronDown aria-hidden="true" />
-                </summary>
-                <div className="transcode-matrix-scroll" tabIndex={0}>
+  const capabilityMatrix = (tabControls: ReactNode) => (
+    <section className="transcode-automation-tab-content transcode-capability-section transcode-capability-content">
+      <div className="compatibility-profile-list transcode-capability-list">
+          {tabControls}
+          {testingMatrix ? <div className="notice">{t("transcoding.matrixTestNotice")}</div> : null}
+          {matrix?.status === "failed" ? <div className="notice error">{matrix.error ?? t("transcoding.matrixFailed")}</div> : null}
+          {!testingMatrix && matrix?.status === "not_run" && !matrixEntries.length ? <PanelEmptyState message={t("transcoding.matrixNotRun")} /> : null}
+          {!testingMatrix && matrix?.status === "completed" && !matrixEntries.length ? <div className="notice">{t("transcoding.noHardware")}</div> : null}
+          {matrixEntries.length ? (
+            <>
+              {matrixEntries.map(({ deviceMatrix, memberName, memberInstallationId }, index) => {
+                const matrixEntryKey = buildTranscodingMatrixEntryKey(memberInstallationId, deviceMatrix.device_id);
+                const hasStoredMatrixState = Object.prototype.hasOwnProperty.call(matrixExpansionState, matrixEntryKey);
+                const matrixEntryOpen = matrixEntryKey === matrixFocusEntryKey
+                  ? true
+                  : hasStoredMatrixState
+                  ? matrixExpansionState[matrixEntryKey]
+                  : !hasStoredVisibleMatrixState && index === 0;
+                const deviceKind = matrixDeviceKind(deviceMatrix);
+                return (
+                  <details
+                    className="compatibility-profile-list-item transcode-device-matrix"
+                    id={buildTranscodingMatrixAnchorId(memberInstallationId, deviceMatrix.device_id)}
+                    key={matrixEntryKey}
+                    open={matrixEntryOpen}
+                    onToggle={(event) => {
+                      const nextState = event.currentTarget.open;
+                      setMatrixExpansionState((current) => ({ ...current, [matrixEntryKey]: nextState }));
+                    }}
+                  >
+                    <summary className="compatibility-profile-list-trigger">
+                      <span className="transcode-automation-list-copy transcode-capability-device-copy">
+                        <span className="transcode-capability-device-name">
+                          {deviceKind === "cpu" ? (
+                            <Cpu aria-hidden="true" className="transcode-capability-device-icon transcode-capability-device-icon-cpu" size={16} />
+                          ) : (
+                            <Gpu aria-hidden="true" className="transcode-capability-device-icon transcode-capability-device-icon-gpu" size={16} />
+                          )}
+                          <strong>{deviceMatrix.device_name}</strong>
+                          <span className={`badge transcode-federation-member-pill${memberInstallationId === null ? " transcode-federation-local-pill" : ""}`}>
+                            {memberName ?? "local"}
+                          </span>
+                        </span>
+                        <small>{deviceMatrix.backend}</small>
+                      </span>
+                      <ChevronDown aria-hidden="true" />
+                    </summary>
+                    <div className="transcode-matrix-scroll" tabIndex={0}>
                   <table className="transcode-matrix-table">
                     <thead>
                       <tr>
@@ -420,11 +517,12 @@ export function TranscodingSettingsPanel({
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </details>
-            )) : <p className="compatibility-profile-search-empty">{t("transcoding.matrixSearchEmpty")}</p>}
-          </div>
-        ) : null}
+                    </div>
+                  </details>
+                );
+              })}
+            </>
+          ) : null}
       </div>
     </section>
   );
@@ -442,19 +540,36 @@ export function TranscodingSettingsPanel({
         </TooltipTrigger>
       }
       headerAddon={
-        <button
-          type="button"
-          className="secondary small settings-panel-header-action"
-          onClick={() => void runMatrixTest()}
-          disabled={loadingCapabilities || testingMatrix}
-        >
-          <FlaskConical className={testingMatrix ? "spin" : undefined} aria-hidden="true" size={16} />
-          {testingMatrix ? t("transcoding.matrixTesting") : t("transcoding.matrixStartTest")}
-        </button>
+        <>
+          <button
+            type="button"
+            className="secondary small settings-panel-header-action"
+            onClick={() => void runMatrixTest()}
+            disabled={loadingCapabilities || testingMatrix || testingNetwork}
+          >
+            <FlaskConical className={testingMatrix ? "spin" : undefined} aria-hidden="true" size={16} />
+            {testingMatrix ? t("transcoding.matrixTesting") : t("transcoding.matrixStartTest")}
+          </button>
+          {canTestFederationNetwork ? (
+            <button
+              type="button"
+              className="secondary small settings-panel-header-action"
+              onClick={() => void runNetworkTest()}
+              disabled={testingMatrix || testingNetwork}
+            >
+              <Network className={testingNetwork ? "spin" : undefined} aria-hidden="true" size={16} />
+              {testingNetwork
+                ? t("transcoding.federationNetworkTesting")
+                : t("transcoding.federationNetworkTestStart")}
+            </button>
+          ) : null}
+        </>
       }
     >
       <div className="settings-sidebar-stack">
         {error ? <div className="notice error">{error}</div> : null}
+        {testingNetwork ? <div className="notice" role="status">{t("transcoding.federationNetworkTestNotice")}</div> : null}
+        {networkTestMessage ? <div className="notice" role="status">{networkTestMessage}</div> : null}
         <div className="app-settings-performance-grid">
           <div className="field">
             <div className="field-label-row">
@@ -469,6 +584,7 @@ export function TranscodingSettingsPanel({
             </div>
             <select
               id="transcoding-execution-mode"
+              className="settings-choice-input"
               value={draft.execution_mode}
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => updateDraft("execution_mode", event.target.value as TranscodingSettings["execution_mode"])}
@@ -490,6 +606,7 @@ export function TranscodingSettingsPanel({
             </div>
             <select
               id="transcoding-output-mode"
+              className="settings-choice-input"
               value={draft.default_output_mode}
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => updateDraft("default_output_mode", event.target.value as TranscodingSettings["default_output_mode"])}
@@ -513,6 +630,7 @@ export function TranscodingSettingsPanel({
             <input
               id="transcoding-cpu-budget"
               type="number"
+              className="settings-choice-input"
               min={1}
               max={100}
               value={draft.cpu_budget_percent}
@@ -524,6 +642,7 @@ export function TranscodingSettingsPanel({
             <label htmlFor="transcoding-cpu-jobs">{t("transcoding.cpuParallelJobs")}</label>
             <select
               id="transcoding-cpu-jobs"
+              className="settings-choice-input"
               value={draft.cpu_parallel_jobs}
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => {
@@ -536,21 +655,10 @@ export function TranscodingSettingsPanel({
             </select>
           </div>
           <div className="field">
-            <label htmlFor="transcoding-gpu-jobs">{t("transcoding.gpuParallelJobs")}</label>
-            <input
-              id="transcoding-gpu-jobs"
-              type="number"
-              min={1}
-              max={8}
-              value={draft.gpu_parallel_jobs_per_device}
-              disabled={!appSettingsLoaded || saving}
-              onChange={(event) => updateDraft("gpu_parallel_jobs_per_device", Math.max(1, Math.min(8, Number(event.target.value) || 1)))}
-            />
-          </div>
-          <div className="field">
             <label htmlFor="transcoding-error-policy">{t("transcoding.onError")}</label>
             <select
               id="transcoding-error-policy"
+              className="settings-choice-input"
               value={draft.on_error}
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => updateDraft("on_error", event.target.value as TranscodingSettings["on_error"])}
@@ -560,21 +668,10 @@ export function TranscodingSettingsPanel({
             </select>
           </div>
           <div className="field">
-            <label htmlFor="transcoding-retry-count">{t("transcoding.retryCount")}</label>
-            <input
-              id="transcoding-retry-count"
-              type="number"
-              min={0}
-              max={5}
-              value={draft.retry_count}
-              disabled={!appSettingsLoaded || saving}
-              onChange={(event) => updateDraft("retry_count", Math.max(0, Math.min(5, Number(event.target.value) || 0)))}
-            />
-          </div>
-          <div className="field">
             <label htmlFor="transcoding-existing-output">{t("transcoding.existingOutput")}</label>
             <select
               id="transcoding-existing-output"
+              className="settings-choice-input"
               value={draft.existing_output}
               disabled={!appSettingsLoaded || saving}
               onChange={(event) => updateDraft("existing_output", event.target.value as TranscodingSettings["existing_output"])}
@@ -583,17 +680,20 @@ export function TranscodingSettingsPanel({
               <option value="skip">{t("transcoding.skip")}</option>
             </select>
           </div>
+          <div className="field">
+            <label htmlFor="transcoding-remove-partial">{t("common.partialOutput")}</label>
+            <select
+              id="transcoding-remove-partial"
+              className="settings-choice-input"
+              value={draft.remove_partial_output ? "yes" : "no"}
+              disabled={!appSettingsLoaded || saving}
+              onChange={(event) => updateDraft("remove_partial_output", event.target.value === "yes")}
+            >
+              <option value="yes">{t("transcoding.actions.drop")}</option>
+              <option value="no">{t("transcoding.actions.keep")}</option>
+            </select>
+          </div>
         </div>
-
-        <label className="transcode-filename-option">
-          <input
-            type="checkbox"
-            checked={draft.remove_partial_output}
-            disabled={!appSettingsLoaded || saving}
-            onChange={(event) => updateDraft("remove_partial_output", event.target.checked)}
-          />
-          <span>{t("transcoding.removePartial")}</span>
-        </label>
 
         {draft.default_output_mode === "replace_original" ? (
           <div className="notice warning">
@@ -613,6 +713,8 @@ export function TranscodingSettingsPanel({
           acceleratorsTooltip={acceleratorsTooltip}
           federation={federation}
           onFederationData={setFederation}
+          onAcceleratorMatrixFocus={setMatrixFocus}
+          searchFocus={searchFocus}
         />
         <TranscodeFederationPanel onData={setFederation} />
       </div>

@@ -35,18 +35,26 @@ from backend.app.services.transcode_federation import (
     encrypt_member_response,
     ensure_remote_storage_available,
     exclude_member,
+    federation_enabled,
     federation_read,
     federation_settings_read,
     get_federation_state,
     local_descriptor,
     member_heartbeat,
+    network_probe_response,
     pair_with_peer,
     read_remote_result_chunk,
     record_transfer_chunk,
     remote_attempt_status,
     reset_pairing_code,
     sync_peer,
+    test_federation_network,
+    test_remote_member_capability_matrix,
     update_federation_settings,
+)
+from backend.app.services.transcode_matrix import (
+    TranscodeMatrixBusyError,
+    run_transcode_matrix_test_if_changed,
 )
 from backend.app.utils.time import utc_now
 
@@ -110,6 +118,18 @@ def federation_discover(
     return federation_read(db, settings, peers)
 
 
+@federation_router.post("/network/test", response_model=TranscodeFederationRead)
+def federation_network_test(
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeFederationRead:
+    try:
+        test_federation_network(db, settings)
+    except FederationError as exc:
+        raise _raise_federation_error(exc) from exc
+    return federation_read(db, settings)
+
+
 @federation_router.post("/members/pair", response_model=TranscodeFederationRead)
 def federation_pair(
     payload: TranscodeFederationPairRequest,
@@ -131,6 +151,22 @@ def federation_member_sync(
 ) -> TranscodeFederationRead:
     try:
         sync_peer(db, settings, installation_id)
+    except FederationError as exc:
+        raise _raise_federation_error(exc) from exc
+    return federation_read(db, settings)
+
+
+@federation_router.post(
+    "/members/{installation_id}/capability-matrix/test",
+    response_model=TranscodeFederationRead,
+)
+def federation_member_capability_matrix_test(
+    installation_id: str,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeFederationRead:
+    try:
+        test_remote_member_capability_matrix(db, settings, installation_id)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
     return federation_read(db, settings)
@@ -182,6 +218,44 @@ def federation_protocol_heartbeat(
     except FederationAuthenticationError as exc:
         raise _raise_federation_error(exc) from exc
     except FederationError as exc:
+        raise _raise_federation_error(exc) from exc
+
+
+@federation_protocol_router.post("/network/probe")
+def federation_protocol_network_probe(
+    envelope: TranscodeFederationProtocolSecureEnvelope,
+    installation_id: str = Header(alias="X-MediaLyze-Installation-ID"),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> dict[str, Any]:
+    try:
+        member, payload = decrypt_member_request(db, installation_id, envelope)
+        return encrypt_member_response(member, network_probe_response(payload))
+    except (FederationAuthenticationError, FederationError) as exc:
+        raise _raise_federation_error(exc) from exc
+
+
+@federation_protocol_router.post("/capability-matrix/test")
+def federation_protocol_capability_matrix_test(
+    envelope: TranscodeFederationProtocolSecureEnvelope,
+    installation_id: str = Header(alias="X-MediaLyze-Installation-ID"),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> dict[str, Any]:
+    try:
+        member, payload = decrypt_member_request(db, installation_id, envelope)
+        if payload.get("kind") != "capability_matrix_test":
+            raise FederationError("Unsupported federation capability request")
+        if not federation_enabled(db, settings):
+            raise FederationError("Federation is not enabled on this installation", status_code=409)
+        result = run_transcode_matrix_test_if_changed(settings)
+        return encrypt_member_response(
+            member,
+            {"capability_matrix": result.model_dump(mode="json")},
+        )
+    except TranscodeMatrixBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (FederationAuthenticationError, FederationError) as exc:
         raise _raise_federation_error(exc) from exc
 
 

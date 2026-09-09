@@ -116,7 +116,7 @@ describe("App routing", () => {
     expect(screen.getAllByText("Scan logs", { exact: false }).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Release notes", { exact: false }).length).toBeGreaterThan(0);
 
-    expect(screen.getByText("Quality picker and profile editor")).toBeInTheDocument();
+    expect(screen.getByText("Quality profiles list and metric accordions")).toBeInTheDocument();
     expect(screen.getByText("Analyzed files virtual table")).toBeInTheDocument();
     expect(screen.getByText("Recent scan log card")).toBeInTheDocument();
     expect(screen.getByText("Duplicate group cards")).toBeInTheDocument();

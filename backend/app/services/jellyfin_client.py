@@ -138,7 +138,10 @@ class JellyfinClient:
             "GET",
             url,
             params=params,
-            headers={"X-Emby-Token": self.api_key, "Accept": "application/json"},
+            headers={
+                "Authorization": f'MediaBrowser Token="{self.api_key}"',
+                "Accept": "application/json",
+            },
         )
         response = self._client.send(request, stream=True)
         try:

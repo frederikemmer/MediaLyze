@@ -1623,6 +1623,7 @@ export type TranscodeDeviceMatrix = {
   device_id: string;
   device_name: string;
   backend: string;
+  device_class?: "integrated" | "dedicated" | "unknown";
   tested_at: string;
   decode_codecs: string[];
   encode_codecs: string[];
@@ -1633,6 +1634,7 @@ export type TranscodeCapabilityMatrix = {
   status: "not_run" | "completed" | "failed";
   tested_at: string | null;
   ffmpeg_version: string | null;
+  capability_fingerprint?: string | null;
   matrices: TranscodeDeviceMatrix[];
   error: string | null;
 };
@@ -1664,6 +1666,7 @@ export type TranscodeFederationMember = {
   display_name: string;
   endpoint_urls: string[];
   protocol_version: number;
+  application_version?: string | null;
   status: string;
   connection_status: string;
   reachable: boolean;
@@ -1673,6 +1676,10 @@ export type TranscodeFederationMember = {
   capability_matrix: TranscodeCapabilityMatrix | null;
   active_jobs: number;
   network_mbps: number;
+  preferred_endpoint_url?: string | null;
+  endpoint_metrics?: Record<string, Record<string, unknown>>;
+  network_latency_ms?: number | null;
+  network_probe_at?: string | null;
   last_seen_at: string | null;
   last_sync_at: string | null;
   last_error: string | null;
@@ -1684,6 +1691,7 @@ export type TranscodeFederationPeer = {
   display_name: string;
   endpoint_urls: string[];
   protocol_version: number;
+  application_version?: string | null;
   reachable: boolean;
   last_seen_at: string | null;
 };
@@ -2755,6 +2763,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  testTranscodeFederationNetwork: () =>
+    request<TranscodeFederation>("/transcoding/federation/network/test", { method: "POST" }),
   resetTranscodeFederationPasscode: () =>
     request<{ pairing_code: string; pairing_code_from_environment: boolean; pairing_code_expires_at: number }>("/transcoding/federation/passcode/reset", { method: "POST" }),
   discoverTranscodeFederation: () =>
@@ -2764,6 +2774,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  testTranscodeFederationMemberCapabilityMatrix: (installationId: string) => {
+    const encodedInstallationId = encodeURIComponent(installationId);
+    return request<TranscodeFederation>(
+      `/transcoding/federation/members/${encodedInstallationId}/capability-matrix/test`,
+      { method: "POST" },
+    );
+  },
   syncTranscodeFederationMember: (installationId: string) =>
     request<TranscodeFederation>(`/transcoding/federation/members/${encodeURIComponent(installationId)}/sync`, { method: "POST" }),
   excludeTranscodeFederationMember: (installationId: string) =>

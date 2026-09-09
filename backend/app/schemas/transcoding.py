@@ -529,6 +529,7 @@ class TranscodeDeviceMatrixRead(BaseModel):
     device_id: str
     device_name: str
     backend: str
+    device_class: Literal["integrated", "dedicated", "unknown"] = "unknown"
     tested_at: datetime
     decode_codecs: list[str] = Field(default_factory=list)
     encode_codecs: list[str] = Field(default_factory=list)
@@ -539,6 +540,7 @@ class TranscodeCapabilityMatrixRead(BaseModel):
     status: Literal["not_run", "completed", "failed"] = "not_run"
     tested_at: datetime | None = None
     ffmpeg_version: str | None = None
+    capability_fingerprint: str | None = None
     matrices: list[TranscodeDeviceMatrixRead] = Field(default_factory=list)
     error: str | None = None
 
@@ -726,6 +728,7 @@ class TranscodeFederationMemberRead(BaseModel):
     display_name: str
     endpoint_urls: list[str] = Field(default_factory=list)
     protocol_version: int = 1
+    application_version: str | None = None
     status: str
     connection_status: str
     reachable: bool = False
@@ -735,6 +738,10 @@ class TranscodeFederationMemberRead(BaseModel):
     capability_matrix: TranscodeCapabilityMatrixRead | None = None
     active_jobs: int = 0
     network_mbps: float = 0.0
+    preferred_endpoint_url: str | None = None
+    endpoint_metrics: dict[str, Any] = Field(default_factory=dict)
+    network_latency_ms: float | None = None
+    network_probe_at: datetime | None = None
     last_seen_at: datetime | None = None
     last_sync_at: datetime | None = None
     last_error: str | None = None
@@ -746,6 +753,7 @@ class TranscodeFederationPeerRead(BaseModel):
     display_name: str
     endpoint_urls: list[str] = Field(default_factory=list)
     protocol_version: int = 1
+    application_version: str | None = None
     reachable: bool = False
     last_seen_at: datetime | None = None
 
@@ -775,6 +783,7 @@ class TranscodeFederationProtocolPairRequest(BaseModel):
     endpoint_urls: list[str] = Field(default_factory=list, max_length=16)
     pairing_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
     client_nonce: str = Field(min_length=16, max_length=128)
+    application_version: str | None = Field(default=None, max_length=64)
     accept_jobs: bool = True
     resources: dict[str, Any] = Field(default_factory=dict)
     capabilities: dict[str, Any] = Field(default_factory=dict)

@@ -3566,7 +3566,7 @@ export function LibraryDetailPage() {
             />
             <button
               type="button"
-              className="statistic-layout-action-button library-quickscan-button"
+              className="icon-button icon-button-bordered icon-button-animated statistic-layout-action-button library-quickscan-button"
               aria-label={activeJob ? t("libraryDetail.scanInProgress") : t("libraryDetail.quickScan")}
               title={activeJob ? t("libraryDetail.scanInProgress") : t("libraryDetail.quickScan")}
               disabled={!canStartQuickScan}

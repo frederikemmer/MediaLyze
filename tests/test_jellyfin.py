@@ -464,7 +464,8 @@ def test_client_sends_api_key_and_timeout() -> None:
         transport=httpx.MockTransport(handler),
     )
     client.get_system_info()
-    assert captured["headers"]["X-Emby-Token"] == "secret"
+    assert captured["headers"]["Authorization"] == 'MediaBrowser Token="secret"'
+    assert "X-Emby-Token" not in captured["headers"]
     assert client._client.timeout.read == 7
 
 
@@ -664,7 +665,7 @@ def test_client_rejects_cross_origin_redirect_without_forwarding_key() -> None:
         client.get_system_info()
 
     assert len(requests) == 1
-    assert requests[0].headers["X-Emby-Token"] == "secret"
+    assert requests[0].headers["Authorization"] == 'MediaBrowser Token="secret"'
     assert requests[0].url.host == "jellyfin.example"
 
 

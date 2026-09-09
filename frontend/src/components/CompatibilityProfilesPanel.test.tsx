@@ -97,8 +97,8 @@ describe("buildProfileIssue", () => {
 });
 
 describe("CompatibilityProfilesPanel", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     window.localStorage.clear();
   });
 
@@ -116,13 +116,24 @@ describe("CompatibilityProfilesPanel", () => {
 
     render(<CompatibilityProfilesPanel />);
 
+    const developmentNote = await screen.findByRole("button", {
+      name: "Explain the compatibility profile catalog status",
+    });
+    expect(developmentNote.closest(".panel-title-row")).toContainElement(
+      screen.getByRole("heading", { name: "Hardware & software profiles" }),
+    );
+    expect(screen.queryByText("This is a very early version of the profile catalog and it still needs to grow.", { exact: false })).not.toBeInTheDocument();
+
+    fireEvent.click(developmentNote);
+    expect(await screen.findByText("This is a very early version of the profile catalog and it still needs to grow.", { exact: false })).toBeInTheDocument();
+
     const tabs = await screen.findByRole("tablist", { name: "Hardware & software profiles" });
-    expect(tabs).toHaveClass("library-history-range-toggle");
-    expect(tabs.querySelector(".library-history-range-pill")).toBeInTheDocument();
-    expect(within(tabs).getAllByRole("button")).toHaveLength(3);
-    expect(within(tabs).getByRole("button", { name: "Hardware" })).toHaveClass("library-history-range-button", "active");
-    expect(await screen.findByRole("button", { name: "Combination" })).toBeInTheDocument();
-    expect((await screen.findByRole("button", { name: "Profile" })).closest(".settings-profile-toggle-row")).not.toBeNull();
+    expect(tabs).toHaveClass("transcode-automation-tab-list");
+    expect(tabs.querySelector(".library-history-range-pill")).toBeNull();
+    expect(within(tabs).getAllByRole("tab")).toHaveLength(3);
+    expect(within(tabs).getByRole("tab", { name: "Hardware" })).toHaveClass("transcode-automation-tab-button", "active");
+    expect(await screen.findByRole("tab", { name: "Combination" })).toBeInTheDocument();
+    expect((await screen.findByRole("button", { name: "Profile" })).closest(".transcode-automation-toggle-row")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Add local profile" })).not.toBeInTheDocument();
     const trigger = await screen.findByRole("button", { name: "Test Device" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -148,14 +159,14 @@ describe("CompatibilityProfilesPanel", () => {
     fireEvent.click(hardwareFavorite);
     expect(hardwareFavorite).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Software / Player" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Software / Player" }));
     const softwareFavorite = await screen.findByRole("button", {
       name: "Add Test Player to favorites",
     });
     fireEvent.click(softwareFavorite);
     expect(softwareFavorite).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Combination" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Combination" }));
     const combinationFavorite = await screen.findByRole("button", {
       name: "Add Test Combination to favorites",
     });
@@ -182,6 +193,7 @@ describe("CompatibilityProfilesPanel", () => {
 
     const manufacturer = await screen.findByLabelText("Manufacturer");
     expect(manufacturer).toHaveAttribute("readonly");
+    expect(manufacturer).toHaveClass("settings-choice-input");
 
     fireEvent.click(screen.getByRole("button", { name: "Edit profile Test Device" }));
 

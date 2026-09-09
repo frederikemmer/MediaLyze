@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 
 type TooltipAlign = "center" | "start";
-type TooltipPlacement = "below" | "auto";
+type TooltipPlacement = "below" | "auto" | "center";
 
 type TooltipTriggerProps = {
   content: ReactNode;
@@ -140,13 +140,22 @@ export function TooltipTrigger({
       placement === "auto" &&
       availableAbove > availableBelow &&
       tooltipHeight > availableBelow;
-    const maxHeight = Math.max(64, placeAbove ? availableAbove : availableBelow);
-    const top = placeAbove
-      ? Math.max(
-          TOOLTIP_VIEWPORT_MARGIN,
-          triggerRect.top - TOOLTIP_GAP - Math.min(tooltipHeight, maxHeight),
+    const maxHeight = placement === "center"
+      ? Math.max(64, viewportHeight - TOOLTIP_VIEWPORT_MARGIN * 2)
+      : Math.max(64, placeAbove ? availableAbove : availableBelow);
+    const visibleTooltipHeight = Math.min(tooltipHeight, maxHeight);
+    const centeredTop = triggerRect.top + triggerRect.height / 2 - visibleTooltipHeight / 2;
+    const top = placement === "center"
+      ? Math.min(
+          Math.max(TOOLTIP_VIEWPORT_MARGIN, centeredTop),
+          Math.max(TOOLTIP_VIEWPORT_MARGIN, viewportHeight - TOOLTIP_VIEWPORT_MARGIN - visibleTooltipHeight),
         )
-      : belowTop;
+      : placeAbove
+        ? Math.max(
+            TOOLTIP_VIEWPORT_MARGIN,
+            triggerRect.top - TOOLTIP_GAP - visibleTooltipHeight,
+          )
+        : belowTop;
 
     setTooltipStyle((current) => {
       if (

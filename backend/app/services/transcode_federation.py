@@ -16,11 +16,13 @@ put the listener behind HTTPS for an additional transport layer.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import ipaddress
 import json
 import logging
+import math
 import os
 import secrets
 import shutil
@@ -28,8 +30,9 @@ import socket
 import threading
 import time
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -87,6 +90,15 @@ PAIRING_CODE_LENGTH = 6
 PAIRING_CODE_MODULUS = 10**PAIRING_CODE_LENGTH
 PAIRING_CODE_CLOCK_SKEW_BUCKETS = 1
 PAIRING_CODE_CONTEXT = PAIRING_CONTEXT + b"-rotating-code-v1"
+FEDERATION_CAPABILITY_MATRIX_TIMEOUT_SECONDS = 300.0
+MAX_FEDERATION_ENDPOINTS = 16
+NETWORK_PROBE_ROUTE = "network/probe"
+NETWORK_PROBE_BYTES = 64 * 1024
+NETWORK_PROBE_MAX_BYTES = 512 * 1024
+NETWORK_PROBE_TIMEOUT_SECONDS = 3.0
+NETWORK_SCORE_SAMPLE_BYTES = 1_000_000
+NETWORK_PROBE_FAILURE_BASE_SECONDS = 5 * 60
+NETWORK_PROBE_FAILURE_MAX_SECONDS = 6 * 60 * 60
 
 
 class FederationError(RuntimeError):
@@ -503,7 +515,10 @@ def federation_enabled(db: Session, settings: Settings) -> bool:
 
 def normalize_endpoint(endpoint: str) -> str:
     value = str(endpoint or "").strip()
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError as exc:
+        raise FederationError("Endpoint must be an HTTP or HTTPS URL with a host") from exc
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         raise FederationError("Endpoint must be an HTTP or HTTPS URL with a host")
     if parts.username or parts.password or parts.query or parts.fragment:
@@ -512,6 +527,39 @@ def normalize_endpoint(endpoint: str) -> str:
     if path.endswith("/api/transcoding/federation/protocol"):
         path = path[: -len("/api/transcoding/federation/protocol")].rstrip("/")
     return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+
+
+def _normalize_endpoint_list(values: Iterable[Any], *, limit: int = MAX_FEDERATION_ENDPOINTS) -> list[str]:
+    """Normalize, validate, and bound endpoint data received from a peer."""
+
+    if values is None:
+        return []
+    if isinstance(values, (str, bytes)):
+        values = [values]
+    result: list[str] = []
+    for value in values:
+        try:
+            normalized = normalize_endpoint(str(value))
+        except (FederationError, ValueError):
+            continue
+        if normalized in result:
+            continue
+        result.append(normalized)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _merge_endpoint_urls(existing: Iterable[Any], incoming: Iterable[Any]) -> list[str]:
+    """Keep old addresses as fallbacks while preferring newly advertised ones."""
+
+    incoming_values: Iterable[Any] = [] if incoming is None else incoming
+    existing_values: Iterable[Any] = [] if existing is None else existing
+    if isinstance(incoming_values, (str, bytes)):
+        incoming_values = [incoming_values]
+    if isinstance(existing_values, (str, bytes)):
+        existing_values = [existing_values]
+    return _normalize_endpoint_list([*incoming_values, *existing_values])
 
 
 def _protocol_url(endpoint: str, route: str = "") -> str:
@@ -526,24 +574,16 @@ def _protocol_url(endpoint: str, route: str = "") -> str:
 
 def _state_endpoints(settings: Settings, state: dict[str, Any]) -> list[str]:
     configured = [item.strip() for item in str(settings.federation_advertise_urls or "").split(",") if item.strip()]
-    configured += [str(item) for item in state.get("endpoint_urls", []) if str(item).strip()]
-    result: list[str] = []
-    for item in configured:
-        try:
-            normalized = normalize_endpoint(item)
-        except FederationError:
-            continue
-        if normalized not in result:
-            result.append(normalized)
-    return result
+    state_endpoints = state.get("endpoint_urls", [])
+    if isinstance(state_endpoints, (list, tuple, set)):
+        configured.extend(str(item) for item in state_endpoints if str(item).strip())
+    return _normalize_endpoint_list(configured)
 
 
 def _usable_network_ip(value: str) -> str | None:
     try:
         address = ipaddress.ip_address(str(value).strip())
     except ValueError:
-        return None
-    if address.version != 4:
         return None
     if address.is_loopback or address.is_unspecified or address.is_link_local or address.is_multicast:
         return None
@@ -629,6 +669,16 @@ def _local_network_endpoints(settings: Settings, state: dict[str, Any]) -> tuple
     return hostname_urls, ip_urls
 
 
+def _local_advertised_endpoint_urls(settings: Settings, state: dict[str, Any]) -> list[str]:
+    """Return configured and locally resolved addresses for peer exchange."""
+
+    hostname_urls, ip_urls = _local_network_endpoints(settings, state)
+    return _merge_endpoint_urls(
+        _state_endpoints(settings, state),
+        [*hostname_urls, *ip_urls],
+    )
+
+
 def _local_resources(db: Session, settings: Settings, capabilities: dict[str, Any]) -> dict[str, Any]:
     try:
         import psutil
@@ -690,10 +740,11 @@ def local_descriptor(db: Session, settings: Settings) -> dict[str, Any]:
     ]
     return {
         "protocol_version": PROTOCOL_VERSION,
+        "application_version": settings.app_version,
         "installation_id": state["installation_id"],
         "federation_id": state["federation_id"],
         "display_name": state["display_name"],
-        "endpoint_urls": _state_endpoints(settings, state),
+        "endpoint_urls": _local_advertised_endpoint_urls(settings, state),
         "accept_jobs": bool(state.get("accept_jobs", True)),
         "resources": resources,
         "capabilities": capabilities,
@@ -759,6 +810,7 @@ def _member_read(member: TranscodeFederationMember) -> TranscodeFederationMember
             "display_name": member.display_name,
             "endpoint_urls": member.endpoint_urls or [],
             "protocol_version": member.protocol_version,
+            "application_version": member.application_version,
             "status": member.status,
             "connection_status": member.connection_status,
             "reachable": member.reachable,
@@ -768,11 +820,241 @@ def _member_read(member: TranscodeFederationMember) -> TranscodeFederationMember
             "capability_matrix": matrix,
             "active_jobs": member.active_jobs,
             "network_mbps": member.network_mbps,
+            "preferred_endpoint_url": member.preferred_endpoint_url,
+            "endpoint_metrics": member.endpoint_metrics or {},
+            "network_latency_ms": member.network_latency_ms,
+            "network_probe_at": member.network_probe_at,
             "last_seen_at": member.last_seen_at,
             "last_sync_at": member.last_sync_at,
             "last_error": member.last_error,
         }
     )
+
+
+def _member_endpoint_urls(member: TranscodeFederationMember) -> list[str]:
+    return _normalize_endpoint_list(member.endpoint_urls or [])
+
+
+def _endpoint_metrics_for_member(member: TranscodeFederationMember) -> dict[str, dict[str, Any]]:
+    raw_metrics = member.endpoint_metrics if isinstance(member.endpoint_metrics, dict) else {}
+    metrics: dict[str, dict[str, Any]] = {}
+    for raw_endpoint, raw_metric in raw_metrics.items():
+        if not isinstance(raw_metric, dict):
+            continue
+        try:
+            endpoint = normalize_endpoint(str(raw_endpoint))
+        except (FederationError, ValueError):
+            continue
+        metrics[endpoint] = dict(raw_metric)
+    return metrics
+
+
+def _endpoint_score_ms(latency_ms: float | None, throughput_mbps: float | None) -> float | None:
+    """Rank a route by latency plus the time to transfer a representative 1 MiB."""
+
+    try:
+        latency = float(latency_ms or 0.0)
+        throughput = float(throughput_mbps or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(latency) or not math.isfinite(throughput) or latency < 0 or throughput <= 0:
+        return None
+    transfer_ms = NETWORK_SCORE_SAMPLE_BYTES * 8 / throughput / 1_000_000 * 1_000
+    return latency + transfer_ms
+
+
+def _ordered_member_endpoints(member: TranscodeFederationMember) -> list[str]:
+    """Put the last measured best route first, followed by measured fallbacks."""
+
+    endpoints = _member_endpoint_urls(member)
+    metrics = _endpoint_metrics_for_member(member)
+    ranked = sorted(
+        (
+            endpoint
+            for endpoint in endpoints
+            if bool(metrics.get(endpoint, {}).get("reachable", False))
+            and _endpoint_score_ms(
+                metrics.get(endpoint, {}).get("latency_ms"),
+                metrics.get(endpoint, {}).get("throughput_mbps"),
+            )
+            is not None
+        ),
+        key=lambda endpoint: float(
+            _endpoint_score_ms(
+                metrics[endpoint].get("latency_ms"),
+                metrics[endpoint].get("throughput_mbps"),
+            )
+            or float("inf")
+        ),
+    )
+    preferred = ""
+    try:
+        preferred = normalize_endpoint(str(member.preferred_endpoint_url or ""))
+    except (FederationError, ValueError):
+        preferred = ""
+    ordered: list[str] = []
+    if preferred in endpoints and bool(metrics.get(preferred, {}).get("reachable", True)):
+        ordered.append(preferred)
+    for endpoint in ranked:
+        if endpoint not in ordered:
+            ordered.append(endpoint)
+    for endpoint in endpoints:
+        if endpoint not in ordered:
+            ordered.append(endpoint)
+    return ordered
+
+
+def _select_best_member_endpoint(member: TranscodeFederationMember) -> str | None:
+    metrics = _endpoint_metrics_for_member(member)
+    candidates = [
+        endpoint
+        for endpoint in _member_endpoint_urls(member)
+        if bool(metrics.get(endpoint, {}).get("reachable", False))
+        and _endpoint_score_ms(
+            metrics.get(endpoint, {}).get("latency_ms"),
+            metrics.get(endpoint, {}).get("throughput_mbps"),
+        )
+        is not None
+    ]
+    if not candidates:
+        return None
+    best = min(
+        candidates,
+        key=lambda endpoint: float(
+            _endpoint_score_ms(
+                metrics[endpoint].get("latency_ms"),
+                metrics[endpoint].get("throughput_mbps"),
+            )
+            or float("inf")
+        ),
+    )
+    metric = metrics[best]
+    member.preferred_endpoint_url = best
+    member.network_latency_ms = float(metric.get("latency_ms") or 0.0)
+    member.network_mbps = float(metric["throughput_mbps"])
+    member.endpoint_metrics = metrics
+    return best
+
+
+def _record_endpoint_observation(
+    member: TranscodeFederationMember,
+    endpoint: str,
+    *,
+    reachable: bool,
+    latency_ms: float | None = None,
+    upload_mbps: float | None = None,
+    download_mbps: float | None = None,
+    throughput_mbps: float | None = None,
+    error: str | None = None,
+    probe: bool = False,
+    probe_unsupported: bool = False,
+) -> None:
+    normalized_endpoint = normalize_endpoint(endpoint)
+    known_endpoints = set(_member_endpoint_urls(member))
+    metrics = _endpoint_metrics_for_member(member)
+    metric = metrics.setdefault(normalized_endpoint, {})
+    observed_at = utc_now()
+    metric["reachable"] = bool(reachable)
+    metric["last_checked_at"] = observed_at.isoformat()
+    if latency_ms is not None and math.isfinite(float(latency_ms)) and float(latency_ms) >= 0:
+        metric["latency_ms"] = round(float(latency_ms), 3)
+    if upload_mbps is not None and math.isfinite(float(upload_mbps)) and float(upload_mbps) > 0:
+        metric["upload_mbps"] = round(float(upload_mbps), 3)
+    if download_mbps is not None and math.isfinite(float(download_mbps)) and float(download_mbps) > 0:
+        metric["download_mbps"] = round(float(download_mbps), 3)
+    if throughput_mbps is not None and math.isfinite(float(throughput_mbps)) and float(throughput_mbps) > 0:
+        metric["throughput_mbps"] = round(float(throughput_mbps), 3)
+    else:
+        measured_directions = [
+            float(metric[key])
+            for key in ("upload_mbps", "download_mbps")
+            if metric.get(key) is not None
+        ]
+        if measured_directions:
+            metric["throughput_mbps"] = round(min(measured_directions), 3)
+    score = _endpoint_score_ms(metric.get("latency_ms"), metric.get("throughput_mbps"))
+    if score is None:
+        metric.pop("score_ms", None)
+    else:
+        metric["score_ms"] = round(score, 3)
+    if reachable:
+        metric.pop("error", None)
+        if probe:
+            metric["failure_count"] = 0
+            metric.pop("next_probe_at", None)
+            metric.pop("probe_failure", None)
+            metric.pop("probe_unsupported", None)
+        elif not metric.get("probe_failure"):
+            metric["failure_count"] = 0
+            metric.pop("next_probe_at", None)
+        member.reachable = True
+        member.connection_status = "connected"
+        member.last_error = None
+    else:
+        metric["error"] = str(error or "Endpoint could not be reached")[:2048]
+        try:
+            failure_count = max(0, int(metric.get("failure_count") or 0)) + 1
+        except (TypeError, ValueError):
+            failure_count = 1
+        backoff_seconds = min(
+            NETWORK_PROBE_FAILURE_MAX_SECONDS,
+            NETWORK_PROBE_FAILURE_BASE_SECONDS * (2 ** min(failure_count - 1, 10)),
+        )
+        metric["failure_count"] = failure_count
+        metric["next_probe_at"] = (
+            observed_at + timedelta(seconds=backoff_seconds)
+        ).isoformat()
+        if probe:
+            metric["probe_failure"] = True
+            if probe_unsupported:
+                metric["probe_unsupported"] = True
+        member.last_error = metric["error"]
+    member.endpoint_urls = _merge_endpoint_urls(member.endpoint_urls or [], metrics.keys())
+    if normalized_endpoint not in known_endpoints:
+        member.network_probe_at = None
+    member.endpoint_metrics = metrics
+
+
+def _metric_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _member_endpoint_probe_candidates(
+    member: TranscodeFederationMember,
+    *,
+    now: datetime | None = None,
+) -> list[str]:
+    """Return routes that need an event-driven probe right now.
+
+    Healthy routes are intentionally omitted.  A missing metric represents a
+    newly advertised route, while a failed route becomes eligible again only
+    after its exponential recovery backoff.
+    """
+
+    current = now or utc_now()
+    metrics = _endpoint_metrics_for_member(member)
+    candidates: list[str] = []
+    for endpoint in _member_endpoint_urls(member):
+        metric = metrics.get(endpoint)
+        if not metric:
+            candidates.append(endpoint)
+            continue
+        if metric.get("probe_unsupported"):
+            continue
+        next_probe_at = _metric_timestamp(metric.get("next_probe_at"))
+        if next_probe_at is not None and next_probe_at > current:
+            continue
+        if next_probe_at is not None or not bool(metric.get("reachable", False)):
+            candidates.append(endpoint)
+    return candidates
 
 
 def federation_read(
@@ -821,12 +1103,18 @@ def _upsert_member(
         )
     )
     if member is None:
+        endpoint_urls = _normalize_endpoint_list(
+            descriptor.get("endpoint_urls")
+            if isinstance(descriptor.get("endpoint_urls"), (list, tuple, set))
+            else []
+        )
         member = TranscodeFederationMember(
             installation_id=installation_id,
             federation_id=str(descriptor.get("federation_id") or ""),
             display_name=str(descriptor.get("display_name") or installation_id[:12]),
-            endpoint_urls=list(descriptor.get("endpoint_urls") or []),
+            endpoint_urls=endpoint_urls,
             protocol_version=int(descriptor.get("protocol_version") or 1),
+            application_version=str(descriptor.get("application_version") or "") or None,
             status="active" if shared_secret else "discovered",
             connection_status=connection_status,
             reachable=reachable,
@@ -846,8 +1134,17 @@ def _upsert_member(
     else:
         member.federation_id = str(descriptor.get("federation_id") or member.federation_id)
         member.display_name = str(descriptor.get("display_name") or member.display_name)
-        member.endpoint_urls = list(descriptor.get("endpoint_urls") or member.endpoint_urls or [])
+        previous_endpoints = set(_member_endpoint_urls(member))
+        incoming_endpoints = descriptor.get("endpoint_urls")
+        if isinstance(incoming_endpoints, (list, tuple, set)) and incoming_endpoints:
+            member.endpoint_urls = _merge_endpoint_urls(member.endpoint_urls or [], incoming_endpoints)
+        else:
+            member.endpoint_urls = _normalize_endpoint_list(member.endpoint_urls or [])
+        if set(member.endpoint_urls) - previous_endpoints:
+            member.network_probe_at = None
         member.protocol_version = int(descriptor.get("protocol_version") or member.protocol_version or 1)
+        if descriptor.get("application_version"):
+            member.application_version = str(descriptor["application_version"])
         member.connection_status = connection_status
         member.reachable = reachable
         member.accept_jobs = bool(descriptor.get("accept_jobs", member.accept_jobs))
@@ -856,7 +1153,8 @@ def _upsert_member(
         if isinstance(descriptor.get("capability_matrix"), dict):
             member.capability_matrix = descriptor["capability_matrix"]
         member.active_jobs = int(descriptor.get("active_jobs") or 0)
-        member.network_mbps = float(descriptor.get("network_mbps") or member.network_mbps or 100.0)
+        if not member.endpoint_metrics:
+            member.network_mbps = float(descriptor.get("network_mbps") or member.network_mbps or 100.0)
         member.last_seen_at = utc_now()
         member.last_sync_at = utc_now()
         if shared_secret:
@@ -917,6 +1215,7 @@ def accept_pairing_request(
             "display_name": item.display_name,
             "endpoint_urls": item.endpoint_urls or [],
             "protocol_version": item.protocol_version,
+            "application_version": item.application_version,
             "reachable": item.reachable,
             "accept_jobs": item.accept_jobs,
         }
@@ -957,6 +1256,350 @@ def _http_json(
     return result
 
 
+def _network_probe_payload(request_bytes: int, response_bytes: int) -> dict[str, Any]:
+    return {
+        "kind": "network_probe",
+        "probe_id": uuid4().hex,
+        "request_bytes": request_bytes,
+        "response_bytes": response_bytes,
+        "payload": base64.urlsafe_b64encode(secrets.token_bytes(request_bytes)).decode("ascii"),
+    }
+
+
+def network_probe_response(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate an authenticated probe and return a bounded response sample."""
+
+    if payload.get("kind") != "network_probe":
+        raise FederationError("Unsupported federation network probe")
+    try:
+        request_bytes = int(payload.get("request_bytes") or 0)
+        response_bytes = int(payload.get("response_bytes") or 0)
+    except (TypeError, ValueError) as exc:
+        raise FederationError("Invalid federation network probe size", status_code=422) from exc
+    if not 0 <= request_bytes <= NETWORK_PROBE_MAX_BYTES or not 0 <= response_bytes <= NETWORK_PROBE_MAX_BYTES:
+        raise FederationError("Federation network probe is too large", status_code=422)
+    encoded_request = str(payload.get("payload") or "")
+    try:
+        received = base64.urlsafe_b64decode(encoded_request.encode("ascii"))
+    except (binascii.Error, UnicodeError, ValueError) as exc:
+        raise FederationError("Invalid federation network probe payload", status_code=422) from exc
+    if len(received) != request_bytes:
+        raise FederationError("Federation network probe payload size mismatch", status_code=422)
+    return {
+        "kind": "network_probe_response",
+        "probe_id": str(payload.get("probe_id") or ""),
+        "request_bytes": request_bytes,
+        "response_bytes": response_bytes,
+        "payload": base64.urlsafe_b64encode(secrets.token_bytes(response_bytes)).decode("ascii"),
+    }
+
+
+def _probe_endpoint(
+    settings: Settings,
+    shared_secret: str,
+    endpoint: str,
+    *,
+    origin_installation_id: str,
+    timeout_seconds: float | None = None,
+) -> dict[str, float]:
+    """Measure latency and both transfer directions for one authenticated route."""
+
+    if not shared_secret:
+        raise FederationError("Federation member has no shared secret", status_code=503)
+    request_timeout = (
+        NETWORK_PROBE_TIMEOUT_SECONDS
+        if timeout_seconds is None
+        else max(0.1, float(timeout_seconds))
+    )
+    normalized_endpoint = normalize_endpoint(endpoint)
+
+    def send_probe(request_bytes: int, response_bytes: int) -> tuple[dict[str, Any], float]:
+        payload = _network_probe_payload(request_bytes, response_bytes)
+        started = time.monotonic()
+        try:
+            with httpx.Client(timeout=request_timeout) as client:
+                response = client.post(
+                    _protocol_url(normalized_endpoint, NETWORK_PROBE_ROUTE),
+                    json=encrypt_secure_payload(shared_secret, payload),
+                    headers={"X-MediaLyze-Installation-ID": origin_installation_id},
+                )
+                response.raise_for_status()
+                remote_envelope = response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500]
+            raise FederationError(
+                f"Peer rejected federation network probe: {detail}",
+                status_code=exc.response.status_code,
+            ) from exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise FederationError(f"Peer could not be reached: {exc}", status_code=503) from exc
+        if not isinstance(remote_envelope, dict):
+            raise FederationError("Peer returned an invalid federation probe response", status_code=502)
+        with _REPLAY_LOCK:
+            result = decrypt_secure_payload(
+                shared_secret,
+                remote_envelope,
+                seen_nonces=_REPLAY_NONCES,
+            )
+        if result.get("kind") != "network_probe_response" or result.get("probe_id") != payload["probe_id"]:
+            raise FederationError("Peer returned an invalid federation probe response", status_code=502)
+        try:
+            result_request_bytes = int(result.get("request_bytes"))
+            result_response_bytes = int(result.get("response_bytes"))
+        except (TypeError, ValueError) as exc:
+            raise FederationError("Peer returned an incomplete federation probe response", status_code=502) from exc
+        if result_request_bytes != request_bytes or result_response_bytes != response_bytes:
+            raise FederationError("Peer returned an incomplete federation probe response", status_code=502)
+        try:
+            received_response = base64.urlsafe_b64decode(str(result.get("payload") or "").encode("ascii"))
+        except (binascii.Error, UnicodeError, ValueError) as exc:
+            raise FederationError("Peer returned an invalid federation probe payload", status_code=502) from exc
+        if len(received_response) != response_bytes:
+            raise FederationError("Peer returned a federation probe payload size mismatch", status_code=502)
+        return result, max(0.001, time.monotonic() - started)
+
+    _, latency_seconds = send_probe(0, 0)
+    _, upload_seconds = send_probe(NETWORK_PROBE_BYTES, 0)
+    _, download_seconds = send_probe(0, NETWORK_PROBE_BYTES)
+    upload_mbps = NETWORK_PROBE_BYTES * 8 / max(0.001, upload_seconds - latency_seconds) / 1_000_000
+    download_mbps = NETWORK_PROBE_BYTES * 8 / max(0.001, download_seconds - latency_seconds) / 1_000_000
+    throughput_mbps = min(upload_mbps, download_mbps)
+    return {
+        "latency_ms": latency_seconds * 1_000,
+        "upload_mbps": upload_mbps,
+        "download_mbps": download_mbps,
+        "throughput_mbps": throughput_mbps,
+        "score_ms": _endpoint_score_ms(latency_seconds * 1_000, throughput_mbps) or 0.0,
+    }
+
+
+def probe_member_endpoints(
+    db: Session,
+    settings: Settings,
+    member: TranscodeFederationMember,
+    *,
+    force: bool = False,
+    timeout_seconds: float | None = None,
+    endpoints: Iterable[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Probe selected known endpoints and persist the best route for future traffic.
+
+    A forced probe checks the complete endpoint set.  Automatic maintenance
+    only checks routes that have no observation yet or whose failure backoff
+    has elapsed, so healthy routes are not retested on a fixed timer.
+    """
+
+    if not member.shared_secret or not member.endpoint_urls:
+        raise FederationError("Federation member is not ready for endpoint probes", status_code=503)
+    all_endpoints = _member_endpoint_urls(member)
+    if not all_endpoints:
+        raise FederationError("Federation member has no valid endpoint URL", status_code=503)
+    if endpoints is None:
+        probe_endpoints = all_endpoints if force else _member_endpoint_probe_candidates(member)
+    else:
+        requested_endpoints = _normalize_endpoint_list(endpoints)
+        probe_endpoints = [endpoint for endpoint in requested_endpoints if endpoint in all_endpoints]
+    if not probe_endpoints:
+        return _endpoint_metrics_for_member(member)
+    state = get_federation_state(db, settings)
+    observations: dict[str, dict[str, Any]] = {}
+    successful = False
+    unsupported_only = True
+    probe_results: dict[str, dict[str, float] | FederationError] = {}
+    with ThreadPoolExecutor(max_workers=min(4, len(probe_endpoints))) as executor:
+        futures = {
+            executor.submit(
+                _probe_endpoint,
+                settings,
+                str(member.shared_secret),
+                endpoint,
+                origin_installation_id=str(state["installation_id"]),
+                timeout_seconds=timeout_seconds,
+            ): endpoint
+            for endpoint in probe_endpoints
+        }
+        for future in as_completed(futures):
+            endpoint = futures[future]
+            try:
+                probe_results[endpoint] = future.result()
+            except FederationError as exc:
+                probe_results[endpoint] = exc
+            except Exception as exc:
+                probe_results[endpoint] = FederationError(
+                    f"Peer could not be reached: {exc}",
+                    status_code=503,
+                )
+    for endpoint in probe_endpoints:
+        observation_or_error = probe_results[endpoint]
+        if isinstance(observation_or_error, FederationError):
+            status_code = getattr(observation_or_error, "status_code", 503)
+            unsupported_only = unsupported_only and status_code in {404, 405}
+            observations[endpoint] = {
+                "reachable": False,
+                "error": str(observation_or_error)[:2048],
+                "status_code": status_code,
+            }
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=False,
+                error=str(observation_or_error),
+                probe=True,
+                probe_unsupported=status_code in {404, 405},
+            )
+        else:
+            successful = True
+            unsupported_only = False
+            observation = observation_or_error
+            observations[endpoint] = {"reachable": True, **observation}
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=True,
+                latency_ms=observation["latency_ms"],
+                upload_mbps=observation["upload_mbps"],
+                download_mbps=observation["download_mbps"],
+                throughput_mbps=observation["throughput_mbps"],
+                probe=True,
+            )
+    member.network_probe_at = utc_now()
+    known_reachable = any(
+        bool(_endpoint_metrics_for_member(member).get(endpoint, {}).get("reachable", False))
+        for endpoint in all_endpoints
+    )
+    if successful or known_reachable:
+        _select_best_member_endpoint(member)
+        member.reachable = True
+        member.connection_status = "connected"
+        member.last_error = None
+    elif unsupported_only:
+        # Older peers can still use the heartbeat/fallback path even before
+        # they implement the optional probe endpoint.
+        member.last_error = None
+    elif not unsupported_only:
+        member.reachable = False
+        member.connection_status = "offline"
+        member.last_error = "No known federation endpoint completed an authenticated network probe"
+    db.commit()
+    return observations
+
+
+def _post_member_envelope(
+    db: Session,
+    settings: Settings,
+    member: TranscodeFederationMember,
+    route: str,
+    payload: dict[str, Any],
+    *,
+    timeout_seconds: float | None = None,
+) -> dict[str, Any]:
+    """Post one idempotent secure request, falling back across known endpoints."""
+
+    state = get_federation_state(db, settings)
+    request_timeout = (
+        float(settings.federation_request_timeout_seconds)
+        if timeout_seconds is None
+        else max(0.1, float(timeout_seconds))
+    )
+    failures: list[str] = []
+    peer_responded = False
+    for endpoint in _ordered_member_endpoints(member):
+        started = time.monotonic()
+        # A fresh nonce makes a retry through another interface valid even if
+        # the first request reached the peer but its response was lost.
+        envelope = encrypt_member_response(member, payload)
+        try:
+            with httpx.Client(timeout=request_timeout) as client:
+                response = client.post(
+                    _protocol_url(endpoint, route),
+                    json=envelope,
+                    headers={"X-MediaLyze-Installation-ID": state["installation_id"]},
+                )
+                response.raise_for_status()
+                remote_envelope = response.json()
+        except httpx.HTTPStatusError as exc:
+            peer_responded = True
+            detail = exc.response.text[:500]
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=exc.response.status_code not in {404, 405},
+                latency_ms=(time.monotonic() - started) * 1_000,
+                error=detail,
+            )
+            if exc.response.status_code not in {404, 405} and exc.response.status_code < 500:
+                db.commit()
+                raise FederationError(
+                    "Peer rejected the secure federation request",
+                    status_code=exc.response.status_code,
+                ) from exc
+            failures.append(f"{endpoint}: HTTP {exc.response.status_code}")
+            continue
+        except (httpx.HTTPError, ValueError) as exc:
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=False,
+                latency_ms=(time.monotonic() - started) * 1_000,
+                error=str(exc),
+            )
+            failures.append(f"{endpoint}: {exc}")
+            continue
+        if not isinstance(remote_envelope, dict):
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=False,
+                latency_ms=(time.monotonic() - started) * 1_000,
+                error="Peer returned an invalid federation response",
+            )
+            failures.append(f"{endpoint}: invalid response")
+            continue
+        try:
+            with _REPLAY_LOCK:
+                result = decrypt_secure_payload(
+                    member.shared_secret or "",
+                    remote_envelope,
+                    seen_nonces=_REPLAY_NONCES,
+                )
+        except FederationError as exc:
+            _record_endpoint_observation(
+                member,
+                endpoint,
+                reachable=False,
+                latency_ms=(time.monotonic() - started) * 1_000,
+                error=str(exc),
+            )
+            failures.append(f"{endpoint}: {exc}")
+            continue
+        _record_endpoint_observation(
+            member,
+            endpoint,
+            reachable=True,
+            latency_ms=(time.monotonic() - started) * 1_000,
+        )
+        member.last_seen_at = utc_now()
+        preferred_endpoint = ""
+        try:
+            preferred_endpoint = normalize_endpoint(str(member.preferred_endpoint_url or ""))
+        except (FederationError, ValueError):
+            pass
+        if not preferred_endpoint or not _endpoint_metrics_for_member(member).get(
+            preferred_endpoint,
+            {},
+        ).get("reachable", True):
+            member.preferred_endpoint_url = endpoint
+        _select_best_member_endpoint(member)
+        return result
+    if not peer_responded:
+        member.reachable = False
+        member.connection_status = "offline"
+        member.last_error = "; ".join(failures)[-2048:] or "No known federation endpoint could be reached"
+        db.commit()
+    message = "; ".join(failures)[-2048:] or "No known federation endpoint completed the request"
+    raise FederationError(f"Peer could not be reached through known endpoints: {message}", status_code=503)
+
+
 def pair_with_peer(
     db: Session,
     settings: Settings,
@@ -981,10 +1624,38 @@ def pair_with_peer(
         "pairing_code": pairing_code,
         "client_nonce": client_nonce,
     }
-    response = _http_json(settings, endpoint, "pair", request)
+    hello_endpoints = _normalize_endpoint_list(
+        hello.get("endpoint_urls")
+        if isinstance(hello.get("endpoint_urls"), (list, tuple, set))
+        else []
+    )
+    response: dict[str, Any] | None = None
+    pair_endpoints = _normalize_endpoint_list([endpoint, *hello_endpoints])
+    for index, pair_endpoint in enumerate(pair_endpoints):
+        try:
+            response = _http_json(settings, pair_endpoint, "pair", request)
+            break
+        except FederationError as exc:
+            if exc.status_code not in {502, 503, 504}:
+                raise
+            if index == len(pair_endpoints) - 1:
+                raise
+    if response is None:
+        raise FederationError("Peer could not be reached through its advertised endpoints", status_code=503)
     server_nonce = str(response.get("server_nonce") or "")
     target = dict(response.get("target")) if isinstance(response.get("target"), dict) else dict(hello)
-    target["endpoint_urls"] = list(target.get("endpoint_urls") or [endpoint])
+    target_endpoints = target.get("endpoint_urls")
+    target["endpoint_urls"] = _normalize_endpoint_list(
+        [
+            endpoint,
+            *hello_endpoints,
+            *(
+                target_endpoints
+                if isinstance(target_endpoints, (list, tuple, set))
+                else []
+            ),
+        ],
+    )
     target_id = str(target.get("installation_id") or hello.get("installation_id") or "")
     if not server_nonce or not target_id:
         raise FederationError("Peer returned an incomplete pairing response", status_code=502)
@@ -1009,6 +1680,12 @@ def pair_with_peer(
         setting.value = state
     member = _upsert_member(db, target, shared_secret=shared_secret)
     db.commit()
+    try:
+        probe_member_endpoints(db, settings, member, force=True)
+    except FederationError:
+        # Pairing itself is already complete.  A later maintenance heartbeat
+        # will retry the authenticated route probes without losing the member.
+        logger.info("Federation endpoint probes could not complete after pairing", exc_info=True)
     if auto_pair_known:
         for known in response.get("known_members", []):
             if not isinstance(known, dict) or known.get("installation_id") in {
@@ -1016,13 +1693,23 @@ def pair_with_peer(
                 target_id,
             }:
                 continue
-            urls = known.get("endpoint_urls") if isinstance(known.get("endpoint_urls"), list) else []
+            urls = _normalize_endpoint_list(
+                known.get("endpoint_urls")
+                if isinstance(known.get("endpoint_urls"), (list, tuple, set))
+                else []
+            )
             if not urls:
                 continue
-            try:
-                pair_with_peer(db, settings, str(urls[0]), pairing_code, auto_pair_known=False)
-            except FederationError:
-                logger.info("Known federation member could not be paired directly", exc_info=True)
+            paired = False
+            for known_endpoint in urls:
+                try:
+                    pair_with_peer(db, settings, known_endpoint, pairing_code, auto_pair_known=False)
+                    paired = True
+                    break
+                except FederationError:
+                    continue
+            if not paired:
+                logger.info("Known federation member could not be paired through any advertised endpoint")
     return member
 
 
@@ -1112,6 +1799,7 @@ def member_heartbeat(
                 "display_name": item.display_name,
                 "endpoint_urls": item.endpoint_urls or [],
                 "protocol_version": item.protocol_version,
+                "application_version": item.application_version,
                 "reachable": item.reachable,
                 "accept_jobs": item.accept_jobs,
             }
@@ -1129,6 +1817,7 @@ def _member_descriptors(db: Session, local_installation_id: str) -> list[dict[st
             "display_name": item.display_name,
             "endpoint_urls": item.endpoint_urls or [],
             "protocol_version": item.protocol_version,
+            "application_version": item.application_version,
             "reachable": item.reachable,
             "accept_jobs": item.accept_jobs,
         }
@@ -1137,12 +1826,22 @@ def _member_descriptors(db: Session, local_installation_id: str) -> list[dict[st
     ]
 
 
-def sync_peer(db: Session, settings: Settings, installation_id: str) -> dict[str, Any]:
-    """Exchange an authenticated descriptor and membership snapshot."""
+def sync_peer(
+    db: Session,
+    settings: Settings,
+    installation_id: str,
+    *,
+    probe_all: bool = False,
+) -> dict[str, Any]:
+    """Exchange an authenticated descriptor and optionally refresh routes.
+
+    Heartbeats keep membership state fresh, but do not trigger a periodic
+    network benchmark.  The initial full probe is supplied by the runtime on
+    startup; later maintenance probes only newly advertised or failed routes.
+    """
 
     member = _member_for_installation(db, installation_id)
-    endpoints = [str(item) for item in (member.endpoint_urls or []) if str(item).strip()]
-    if not endpoints:
+    if not _member_endpoint_urls(member):
         raise FederationError("Federation member has no endpoint URL", status_code=503)
     state = get_federation_state(db, settings)
     payload = {
@@ -1150,32 +1849,7 @@ def sync_peer(db: Session, settings: Settings, installation_id: str) -> dict[str
         "members": _member_descriptors(db, state["installation_id"]),
         "excluded_installation_ids": list(state.get("excluded_installation_ids", [])),
     }
-    envelope = encrypt_member_response(member, payload)
-    try:
-        with httpx.Client(timeout=float(settings.federation_request_timeout_seconds)) as client:
-            response = client.post(
-                _protocol_url(endpoints[0], "heartbeat"),
-                json=envelope,
-                headers={"X-MediaLyze-Installation-ID": state["installation_id"]},
-            )
-            response.raise_for_status()
-            remote_envelope = response.json()
-        _, result = decrypt_member_request(
-            # The response is keyed by the same member.  ``decrypt_member_request``
-            # is intentionally used here so timestamp, replay, and tag checks
-            # stay identical in both directions.
-            db,
-            member.installation_id,
-            remote_envelope,
-        )
-    except httpx.HTTPStatusError as exc:
-        mark_member_offline(db, installation_id, exc.response.text[:500])
-        raise FederationError("Peer rejected federation heartbeat", status_code=exc.response.status_code) from exc
-    except (httpx.HTTPError, ValueError, FederationError) as exc:
-        mark_member_offline(db, installation_id, str(exc))
-        if isinstance(exc, FederationError):
-            raise
-        raise FederationError(f"Peer could not be reached: {exc}", status_code=503) from exc
+    result = _post_member_envelope(db, settings, member, "heartbeat", payload)
     descriptor = result.get("descriptor") if isinstance(result.get("descriptor"), dict) else None
     if descriptor:
         _upsert_member(db, descriptor, shared_secret=member.shared_secret)
@@ -1209,6 +1883,24 @@ def sync_peer(db: Session, settings: Settings, installation_id: str) -> dict[str
             if excluded_member is not None:
                 excluded_member.status = "excluded"
                 excluded_member.accept_jobs = False
+    probe_endpoints = (
+        _member_endpoint_urls(member)
+        if probe_all
+        else _member_endpoint_probe_candidates(member)
+    )
+    if probe_endpoints:
+        try:
+            probe_member_endpoints(
+                db,
+                settings,
+                member,
+                force=probe_all,
+                endpoints=probe_endpoints,
+            )
+        except FederationError:
+            # Heartbeats remain useful when a peer has not implemented the
+            # optional probe route or all routes are temporarily unavailable.
+            logger.info("Federation endpoint probes could not complete", exc_info=True)
     db.commit()
     return result
 
@@ -1219,32 +1911,90 @@ def _post_secure_member(
     member: TranscodeFederationMember,
     route: str,
     payload: dict[str, Any],
+    *,
+    timeout_seconds: float | None = None,
 ) -> dict[str, Any]:
     if not member.shared_secret or not member.endpoint_urls:
         raise FederationError("Federation member is not ready for secure requests", status_code=503)
-    state = get_federation_state(db, settings)
-    envelope = encrypt_member_response(member, payload)
+    return _post_member_envelope(
+        db,
+        settings,
+        member,
+        route,
+        payload,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def test_federation_network(db: Session, settings: Settings) -> None:
+    """Run a complete, user-requested route test for every connected member."""
+
+    if not federation_enabled(db, settings):
+        raise FederationError("Federation is not enabled on this installation", status_code=409)
+    members = db.scalars(
+        select(TranscodeFederationMember).where(
+            TranscodeFederationMember.status == "active",
+            TranscodeFederationMember.connection_status == "connected",
+        )
+    ).all()
+    if not members:
+        raise FederationError(
+            "No connected federation installation is available for a network test",
+            status_code=409,
+        )
+
+    failures: list[str] = []
+    for member in members:
+        try:
+            observations = probe_member_endpoints(db, settings, member, force=True)
+            if not any(bool(observation.get("reachable")) for observation in observations.values()):
+                failures.append(f"{member.display_name}: no known endpoint completed a probe")
+        except FederationError as exc:
+            failures.append(f"{member.display_name}: {exc}")
+    db.commit()
+    if failures:
+        raise FederationError(
+            "Federation network test failed: " + "; ".join(failures)[-1900:],
+            status_code=503,
+        )
+
+
+def test_remote_member_capability_matrix(
+    db: Session,
+    settings: Settings,
+    installation_id: str,
+) -> TranscodeCapabilityMatrixRead:
+    """Run the isolated capability test on one connected federation member."""
+
+    if not federation_enabled(db, settings):
+        raise FederationError("Federation is not enabled on this installation", status_code=409)
+    member = _remote_member(db, installation_id)
+    response = _post_secure_member(
+        db,
+        settings,
+        member,
+        "capability-matrix/test",
+        {"kind": "capability_matrix_test"},
+        timeout_seconds=max(
+            float(settings.federation_request_timeout_seconds),
+            FEDERATION_CAPABILITY_MATRIX_TIMEOUT_SECONDS,
+        ),
+    )
     try:
-        with httpx.Client(timeout=float(settings.federation_request_timeout_seconds)) as client:
-            response = client.post(
-                _protocol_url(str(member.endpoint_urls[0]), route),
-                json=envelope,
-                headers={"X-MediaLyze-Installation-ID": state["installation_id"]},
-            )
-            response.raise_for_status()
-            remote_envelope = response.json()
-        with _REPLAY_LOCK:
-            return decrypt_secure_payload(
-                member.shared_secret,
-                remote_envelope,
-                seen_nonces=_REPLAY_NONCES,
-            )
-    except httpx.HTTPStatusError as exc:
-        mark_member_offline(db, member.installation_id, exc.response.text[:500])
-        raise FederationError("Peer rejected the secure federation request", status_code=exc.response.status_code) from exc
-    except (httpx.HTTPError, ValueError) as exc:
-        mark_member_offline(db, member.installation_id, str(exc))
-        raise FederationError(f"Peer could not be reached: {exc}", status_code=503) from exc
+        result = TranscodeCapabilityMatrixRead.model_validate(response.get("capability_matrix"))
+    except (TypeError, ValueError) as exc:
+        raise FederationError(
+            "Peer returned an invalid capability matrix",
+            status_code=502,
+        ) from exc
+    member.capability_matrix = result.model_dump(mode="json")
+    member.reachable = True
+    member.connection_status = "connected"
+    member.last_seen_at = utc_now()
+    member.last_sync_at = utc_now()
+    member.last_error = None
+    db.commit()
+    return result
 
 
 def _transfer_descriptor(transfer: TranscodeTransfer, db: Session) -> dict[str, Any]:
@@ -1603,6 +2353,11 @@ def _remote_media_object(attempt: TranscodeRemoteAttempt) -> Any:
     return SimpleNamespace(
         id=0,
         library_id=0,
+        # The target-side validation path still reads the nullable root
+        # identity when it derives the default output layout.  There is no
+        # persisted library root on the isolated worker, but the attribute
+        # must exist so validation can use the supplied workspace overrides.
+        library_root_id=None,
         library_root=SimpleNamespace(path=str(workspace)),
         library=SimpleNamespace(path=str(workspace)),
         relative_path=attempt.source_filename,
@@ -2176,6 +2931,7 @@ def execute_remote_transcode_job(
                     direction="upload",
                     bytes_transferred=sent_bytes,
                     duration_seconds=max(0.001, time.monotonic() - started),
+                    endpoint_url=member.preferred_endpoint_url,
                 )
             transfer.transferred_bytes = transfer.total_bytes
             transfer.status = "complete"
@@ -2276,6 +3032,7 @@ def execute_remote_transcode_job(
                 direction="download",
                 bytes_transferred=result_transfer.transferred_bytes,
                 duration_seconds=max(0.001, time.monotonic() - started),
+                endpoint_url=member.preferred_endpoint_url,
             )
             db.commit()
         if not verify_transfer_checksum(result_transfer):
@@ -2368,6 +3125,7 @@ def record_network_metric(
     direction: str,
     bytes_transferred: int,
     duration_seconds: float,
+    endpoint_url: str | None = None,
 ) -> None:
     if direction not in {"upload", "download"} or bytes_transferred <= 0 or duration_seconds <= 0:
         return
@@ -2385,6 +3143,15 @@ def record_network_metric(
     # making one small transfer an unbounded speed ranking.
     previous = float(member.network_mbps or 0.0)
     member.network_mbps = measured_mbps if previous <= 0 else (previous * 0.35 + measured_mbps * 0.65)
+    if endpoint_url:
+        _record_endpoint_observation(
+            member,
+            endpoint_url,
+            reachable=True,
+            upload_mbps=measured_mbps if direction == "upload" else None,
+            download_mbps=measured_mbps if direction == "download" else None,
+        )
+        _select_best_member_endpoint(member)
 
 
 def cleanup_federation_attempts(db: Session, settings: Settings, *, now: datetime | None = None) -> int:
@@ -2449,6 +3216,7 @@ def discovery_payload(descriptor: dict[str, Any]) -> dict[str, Any]:
     return {
         "message": DISCOVERY_MESSAGE,
         "protocol_version": PROTOCOL_VERSION,
+        "application_version": descriptor.get("application_version"),
         "installation_id": descriptor.get("installation_id"),
         "federation_id": descriptor.get("federation_id"),
         "display_name": descriptor.get("display_name"),
@@ -2552,12 +3320,12 @@ class DiscoveryResponder:
                 try:
                     descriptor = local_descriptor(db, self.settings)
                     response = discovery_payload(descriptor)
-                    if not response["endpoint_urls"]:
-                        host = _local_discovery_host(address)
-                        if host:
-                            response["endpoint_urls"] = [
-                                f"http://{host}:{int(self.settings.federation_port)}"
-                            ]
+                    host = _local_discovery_host(address)
+                    if host:
+                        response["endpoint_urls"] = _merge_endpoint_urls(
+                            response.get("endpoint_urls") or [],
+                            [_format_local_endpoint(host, int(self.settings.federation_port))],
+                        )
                     sock.sendto(json.dumps(response).encode("utf-8"), address)
                 except OSError:
                     break

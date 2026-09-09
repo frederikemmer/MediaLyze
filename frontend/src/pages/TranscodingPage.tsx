@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import ReactECharts from "echarts-for-react";
 import {
   Activity,
-  ChevronDown,
   CircleAlert,
   CircleCheck,
   CircleX,
@@ -1011,9 +1010,9 @@ export function TranscodingPage() {
             <input type="search" value={search} placeholder={t("transcoding.center.searchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
             {search ? <button type="button" className="transcoding-search-clear" aria-label={t("transcoding.center.clearSearch")} onClick={() => setSearch("")}><X aria-hidden="true" /></button> : null}
           </label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select><ChevronDown aria-hidden="true" /></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}</select><ChevronDown aria-hidden="true" /></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select><ChevronDown aria-hidden="true" /></label>
+          <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select className="settings-choice-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select></label>
+          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select className="settings-choice-input" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}</select></label>
+          <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select className="settings-choice-input" value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select></label>
           <TooltipTrigger
             ariaLabel={t("transcoding.center.resetFilters")}
             content={t("transcoding.center.resetFilters")}

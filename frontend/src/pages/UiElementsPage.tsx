@@ -35,6 +35,7 @@ import {
   FlaskConical,
   GitCompare,
   Gauge,
+  Gpu,
   History,
   HardDrive,
   House,
@@ -46,6 +47,7 @@ import {
   ListFilter,
   Lock,
   Map,
+  Network,
   PanelBottomClose,
   PanelLeftClose,
   PanelRightClose,
@@ -160,6 +162,11 @@ const colorTokens = [
   { name: "--muted", value: "var(--muted)" },
   { name: "--panel", value: "var(--panel)" },
   { name: "--panel-strong", value: "var(--panel-strong)" },
+  { name: "--surface", value: "var(--surface)" },
+  { name: "--surface-subtle", value: "var(--surface-subtle)" },
+  { name: "--border", value: "var(--border)" },
+  { name: "--scrollbar-thumb", value: "var(--scrollbar-thumb)" },
+  { name: "--scrollbar-thumb-hover", value: "var(--scrollbar-thumb-hover)" },
   { name: "--accent", value: "var(--accent)" },
   { name: "--accent-2", value: "var(--accent-2)" },
   { name: "--accent-3", value: "var(--accent-3)" },
@@ -438,7 +445,7 @@ function AnalyzedFilesTable() {
   );
 }
 
-function SettingsNavigationFixture({ collapsed = false }: { collapsed?: boolean }) {
+function SettingsNavigationFixture({ collapsed = false, noResults = false }: { collapsed?: boolean; noResults?: boolean }) {
   return (
     <div className={`settings-layout${collapsed ? " is-settings-nav-collapsed" : ""}`}>
       <aside className="settings-navigation-panel" aria-label="Settings navigation">
@@ -460,7 +467,7 @@ function SettingsNavigationFixture({ collapsed = false }: { collapsed?: boolean 
         <div id="settings-mobile-navigation-menu" className="settings-mobile-navigation-menu" aria-hidden="true">
           <nav className="settings-mobile-navigation-list" aria-label="Mobile settings navigation">
             <button type="button" className="settings-navigation-item settings-mobile-navigation-item active" aria-current="page" tabIndex={-1}>
-              <span className="nav-active-pill" />
+              <span className="nav-active-pill" aria-hidden="true" />
               <span className="settings-navigation-item-content">
                 <Folder className="nav-icon" aria-hidden="true" />
                 <span>Libraries</span>
@@ -487,17 +494,29 @@ function SettingsNavigationFixture({ collapsed = false }: { collapsed?: boolean 
           </button>
         </div>
         {!collapsed ? (
-          <label className="settings-navigation-search">
-            <span className="sr-only">Search settings</span>
-            <Search aria-hidden="true" />
-            <input type="search" placeholder="Search settings…" />
-          </label>
+          <div className="settings-navigation-search-stack">
+            <label className="settings-navigation-search">
+              <span className="sr-only">Search settings</span>
+              <Search aria-hidden="true" />
+              <input type="search" value={noResults ? "zzzz" : "Combinaton"} readOnly placeholder="Search settings…" />
+            </label>
+            <div className="settings-search-results" role="listbox" aria-label="Settings search results">
+              {noResults ? (
+                <div className="settings-search-result-empty">No settings match this search.</div>
+              ) : (
+                <button type="button" role="option" aria-selected="true" className="settings-search-result is-best-match">
+                  <span className="settings-search-result-label">Combination</span>
+                  <span className="settings-search-result-context">Hardware &amp; software profiles</span>
+                </button>
+              )}
+            </div>
+          </div>
         ) : null}
         <nav className="settings-navigation-list">
           <div className="settings-navigation-group">
             {!collapsed ? <div className="settings-navigation-group-label">Libraries &amp; Sources</div> : null}
             <button type="button" className="settings-navigation-item active" aria-current="page" aria-label="Libraries" data-settings-panel-id="configuredLibraries">
-              <span className="nav-active-pill" />
+              <span className="nav-active-pill" aria-hidden="true" />
               <span className="settings-navigation-item-content">
                 <Folder className="nav-icon" aria-hidden="true" />
                 {!collapsed ? <span>Libraries</span> : null}
@@ -597,92 +616,159 @@ function QualityPickerFixture({ open = false }: { open?: boolean }) {
 function QualityProfileFixture() {
   return (
     <div className="quality-profile-panel-stack">
-      <div className="library-history-range-toggle" role="tablist" aria-label="Media type">
-        <SlidingTogglePill activeKey="video" className="nav-active-pill library-history-range-pill" />
-        {(["video", "music", "audiobook"] as const).map((mediaType) => (
-          <button
-            key={mediaType}
-            type="button"
-            data-toggle-key={mediaType}
-            className={`library-history-range-button${mediaType === "video" ? " active" : ""}`}
-            aria-pressed={mediaType === "video"}
-          >
-            <span className="library-history-range-button-content">
-              <span>{mediaType === "video" ? "Video" : mediaType === "music" ? "Music" : "Audiobook"}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="quality-profile-picker is-protected">
-        <div className="quality-profile-picker-control">
-          <select className="quality-profile-picker-trigger" defaultValue="default-video" aria-label="Select profile">
-            <option value="default-video">Default video — Default — Built-in</option>
-            <option value="cinema">Cinema</option>
-          </select>
-          <div className="quality-profile-picker-actions">
-            <TooltipTrigger
-              ariaLabel="Built-in default profile protection"
-              className="quality-profile-protected-tooltip"
-              content="Built-in default profiles are protected for app updates. Duplicate this profile or create a new one to make changes."
-              align="start"
-            >
-              <Lock className="nav-icon" aria-hidden="true" size={16} />
-            </TooltipTrigger>
-            <button type="button" className="quality-profile-action-button" disabled title="Built-in default profiles are protected for app updates.">
-              <Save className="nav-icon" aria-hidden="true" />
-            </button>
-            <button type="button" className="quality-profile-action-button" title="Duplicate profile">
-              <CopyIcon className="nav-icon" aria-hidden="true" />
+      <div className="compatibility-profile-list quality-profile-list">
+        <div className="settings-profile-toggle-row transcode-automation-toggle-row quality-profile-toggle-row">
+          <div className="transcode-automation-tab-controls">
+            <div className="transcode-automation-tab-list" role="tablist" aria-label="Media type" aria-orientation="horizontal">
+              <button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}>
+                <span className="transcode-automation-tab-label">Video</span>
+              </button>
+              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}>
+                <span className="transcode-automation-tab-label">Music</span>
+              </button>
+              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}>
+                <span className="transcode-automation-tab-label">Audiobook</span>
+              </button>
+            </div>
+          </div>
+          <div className="settings-profile-toggle-actions">
+            <button type="button" className="secondary small settings-panel-header-action">
+              <Plus aria-hidden="true" className="nav-icon" />
+              <span>New profile</span>
             </button>
           </div>
         </div>
-      </div>
-      <div className="quality-profile-metric-list">
-        <div className="quality-profile-metric-item">
-          <div className="quality-profile-metric-row">
-            <button type="button" className="quality-profile-metric-toggle" aria-pressed="true">
-              <CheckIcon className="nav-icon" aria-hidden="true" />
+        <article className="compatibility-profile-list-item is-expanded">
+          <div className="compatibility-profile-list-row quality-profile-list-row">
+            <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true" aria-controls="catalog-quality-profile-details-default">
+              <span className="transcode-automation-list-copy quality-profile-list-copy">
+                <strong>Default video</strong>
+                <small>Default · Built-in</small>
+              </span>
+              <ChevronDown aria-hidden="true" />
             </button>
-            <div className="quality-profile-metric-name">
-              <strong>Resolution</strong>
-              <span className="subtitle">Weight and boundary controls</span>
-            </div>
-            <div className="quality-profile-weight-control">
-              <input
-                className="quality-profile-weight-input"
-                type="number"
-                defaultValue={8}
-                aria-label="Explain metric weight"
-                title="Metric weight from 1 to 10. Higher values make this metric count more in the final quality score."
-              />
-            </div>
-          </div>
-          <div className="quality-profile-metric-settings-grid">
-            <div className="quality-profile-boundary-field">
-              <span>Minimum</span>
-              <select className="settings-choice-input" defaultValue="1080p" aria-label="Minimum">
-                <option value="1080p">1080p</option>
-                <option value="4k">4k</option>
-                <option value="8k">8k</option>
-              </select>
-            </div>
-            <div className="quality-profile-boundary-field">
-              <span>Ideal</span>
-              <select className="settings-choice-input" defaultValue="4k" aria-label="Ideal">
-                <option value="1080p">1080p</option>
-                <option value="4k">4k</option>
-                <option value="8k">8k</option>
-              </select>
-            </div>
-            <div className="quality-profile-boundary-field">
-              <span>Maximum</span>
-              <select className="settings-choice-input" defaultValue="8k" aria-label="Maximum">
-                <option value="4k">4k</option>
-                <option value="8k">8k</option>
-              </select>
+            <div className="compatibility-profile-quick-actions quality-profile-quick-actions">
+              <TooltipTrigger
+                ariaLabel="Built-in default profile protection"
+                className="quality-profile-protected-tooltip"
+                content="Built-in default profiles are protected for app updates. Duplicate this profile or create a new one to make changes."
+                align="start"
+              >
+                <Lock className="nav-icon" aria-hidden="true" size={16} />
+              </TooltipTrigger>
+              <button type="button" className="quality-profile-action-button" disabled title="Built-in default profiles are protected for app updates.">
+                <Save className="nav-icon" aria-hidden="true" />
+              </button>
+              <button type="button" className="quality-profile-action-button" disabled title="Built-in default profiles are protected for app updates.">
+                <SquarePenIcon className="nav-icon" aria-hidden="true" />
+              </button>
+              <button type="button" className="quality-profile-action-button" title="Duplicate profile">
+                <CopyIcon className="nav-icon" aria-hidden="true" />
+              </button>
+              <button type="button" className="quality-profile-action-button" disabled title="Built-in default profiles are protected for app updates.">
+                <DeleteIcon className="nav-icon" aria-hidden="true" />
+              </button>
             </div>
           </div>
-        </div>
+          <div id="catalog-quality-profile-details-default" className="quality-profile-details">
+            <div className="quality-profile-editor">
+              <div className="quality-profile-add-row">
+                <select className="settings-choice-input" defaultValue="" aria-label="Add metric">
+                  <option value="">Add metric…</option>
+                  <option value="dynamic_range">Dynamic range</option>
+                  <option value="language_preferences">Language preferences</option>
+                </select>
+              </div>
+              <div className="quality-profile-metric-list">
+                <div className="quality-profile-metric-item is-expanded">
+                  <div className="quality-profile-metric-row">
+                    <div className="quality-profile-metric-title">
+                      <button type="button" className="quality-profile-metric-toggle" aria-expanded="true" aria-label="Configure Resolution metric">
+                        <ChevronDown className="nav-icon" aria-hidden="true" size={16} />
+                      </button>
+                      <span className="quality-profile-metric-name">
+                        <strong>Resolution</strong>
+                        <TooltipTrigger ariaLabel="Explain Resolution metric" className="quality-profile-metric-tooltip" content="Resolution score based on the selected resolution categories." />
+                        <span role="button" tabIndex={0} className="quality-profile-metric-link-button" aria-label="Edit resolution categories" title="Edit resolution categories">
+                          <SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />
+                        </span>
+                      </span>
+                    </div>
+                    <div className="quality-profile-weight-control">
+                      <input className="quality-profile-weight-input" type="number" defaultValue={8} aria-label="Explain metric weight" />
+                    </div>
+                    <button type="button" className="secondary icon-only-button quality-profile-metric-remove-button" aria-label="Remove Resolution metric">
+                      <Trash2 aria-hidden="true" className="nav-icon" size={18} />
+                    </button>
+                  </div>
+                  <div className="quality-profile-metric-settings">
+                    <div className="quality-profile-metric-settings-grid">
+                      <div className="quality-profile-boundary-field">
+                        <span>Minimum</span>
+                        <select className="settings-choice-input" defaultValue="1080p" aria-label="Minimum">
+                          <option value="1080p">1080p</option>
+                          <option value="4k">4k</option>
+                        </select>
+                      </div>
+                      <div className="quality-profile-boundary-field">
+                        <span>Ideal</span>
+                        <select className="settings-choice-input" defaultValue="4k" aria-label="Ideal">
+                          <option value="1080p">1080p</option>
+                          <option value="4k">4k</option>
+                        </select>
+                      </div>
+                      <div className="quality-profile-boundary-field">
+                        <span>Maximum</span>
+                        <select className="settings-choice-input" defaultValue="8k" aria-label="Maximum">
+                          <option value="4k">4k</option>
+                          <option value="8k">8k</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="quality-profile-metric-item">
+                  <div className="quality-profile-metric-row">
+                    <div className="quality-profile-metric-title">
+                      <button type="button" className="quality-profile-metric-toggle" aria-expanded="false" aria-label="Configure Visual density metric">
+                        <ChevronRight className="nav-icon" aria-hidden="true" size={16} />
+                      </button>
+                      <span className="quality-profile-metric-name"><strong>Visual density</strong></span>
+                    </div>
+                    <div className="quality-profile-weight-control">
+                      <input className="quality-profile-weight-input" type="number" defaultValue={10} aria-label="Explain metric weight" />
+                    </div>
+                    <button type="button" className="secondary icon-only-button quality-profile-metric-remove-button" aria-label="Remove Visual density metric">
+                      <Trash2 aria-hidden="true" className="nav-icon" size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article className="compatibility-profile-list-item">
+          <div className="compatibility-profile-list-row quality-profile-list-row">
+            <button type="button" className="compatibility-profile-list-trigger" aria-expanded="false">
+              <span className="transcode-automation-list-copy quality-profile-list-copy">
+                <strong>Cinema</strong>
+                <small>Custom</small>
+              </span>
+              <ChevronDown aria-hidden="true" />
+            </button>
+            <div className="compatibility-profile-quick-actions quality-profile-quick-actions">
+              <button type="button" className="quality-profile-action-button" aria-label="Set as default" title="Set as default">
+                <CheckIcon className="nav-icon" aria-hidden="true" />
+              </button>
+              <button type="button" className="quality-profile-action-button" aria-label="Duplicate profile" title="Duplicate profile">
+                <CopyIcon className="nav-icon" aria-hidden="true" />
+              </button>
+              <button type="button" className="quality-profile-action-button" aria-label="Delete profile" title="Delete profile">
+                <DeleteIcon className="nav-icon" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </article>
       </div>
     </div>
   );
@@ -695,7 +781,7 @@ function SearchFilterFixture({ invalid = false }: { invalid?: boolean }) {
         <button type="button" className="metadata-search-icon-button" aria-label="Search field">
           <Search aria-hidden="true" className="nav-icon" />
         </button>
-        <input defaultValue={invalid ? ">=4GB,<" : "codec:hevc, hdr:!sdr"} aria-label="Structured search" />
+        <input type="search" defaultValue={invalid ? ">=4GB,<" : "codec:hevc, hdr:!sdr"} aria-label="Structured search" />
         <button type="button" className="metadata-search-remove" aria-label="Clear search">
           <X aria-hidden="true" className="nav-icon" />
         </button>
@@ -1163,7 +1249,7 @@ export function UiElementsPage() {
           <span className="badge scan-badge">{t("uiElements.devOnly")}</span>
           <label className="field ui-elements-theme-field">
             <span>{t("uiElements.themePreview")}</span>
-            <select value={themePreference} onChange={(event) => updateThemePreview(event.target.value as ThemePreference)}>
+            <select className="settings-choice-input" value={themePreference} onChange={(event) => updateThemePreview(event.target.value as ThemePreference)}>
               <option value="system">{t("theme.system")}</option>
               <option value="light">{t("theme.light")}</option>
               <option value="dark">{t("theme.dark")}</option>
@@ -1189,7 +1275,7 @@ export function UiElementsPage() {
         <div className="ui-elements-content">
           <CatalogSection definition={catalogSections[0]}>
             <VariantGroup title="Tokens and type">
-              <VariantCard title="Theme tokens" source={`${source}: globals.css`} classes={["--bg", "--panel", "--accent", "--accent-2"]} wide>
+              <VariantCard title="Theme tokens" source={`${source}: globals.css`} classes={["--bg", "--panel", "--surface", "--surface-subtle", "--border", "--scrollbar-thumb", "--scrollbar-thumb-hover", "--accent", "--accent-2"]} wide>
                 <div className="ui-elements-token-grid">
                   {colorTokens.map((token) => (
                     <article key={token.name} className="ui-elements-token">
@@ -1264,19 +1350,22 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[2]}>
             <VariantGroup title="Navigation and settings controls">
-              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action"]} wide>
+              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action", "settings-navigation-search-stack", "settings-search-results", "settings-search-result", "settings-search-result-label", "settings-search-result-context"]} wide>
                 <SettingsNavigationFixture />
               </VariantCard>
-              <VariantCard title="Compatibility profile list" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-list-row", "compatibility-profile-quick-actions"]} wide>
+              <VariantCard title="Settings sidebar · no search match" source={`${settings} > Navigation > Search empty`} classes={["settings-navigation-panel", "settings-navigation-search-stack", "settings-search-results", "settings-search-result-empty"]} wide>
+                <SettingsNavigationFixture noResults />
+              </VariantCard>
+              <VariantCard title="Compatibility profile list" source={`${settings} > Hard/Software Profiles`} classes={["compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-list-copy", "compatibility-profile-list-copy", "compatibility-profile-details", "settings-choice-input"]} wide>
                 <div className="compatibility-profile-list">
                   <div className="compatibility-profile-search">
                     <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
                     <input type="search" placeholder="Search profiles" aria-label="Search hardware profiles" />
                   </div>
                   <article className="compatibility-profile-list-item">
-                    <div className="compatibility-profile-list-row">
+                    <div className="compatibility-profile-list-row quality-profile-list-row">
                       <button type="button" className="compatibility-profile-list-trigger">
-                        <span>Apple TV 4K 3rd Gen</span>
+                        <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>Apple TV 4K 3rd Gen</strong></span>
                         <ChevronDown aria-hidden="true" />
                       </button>
                       <div className="compatibility-profile-quick-actions">
@@ -1296,9 +1385,9 @@ export function UiElementsPage() {
                     </div>
                   </article>
                   <article className="compatibility-profile-list-item is-expanded">
-                    <div className="compatibility-profile-list-row">
+                    <div className="compatibility-profile-list-row quality-profile-list-row">
                       <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true">
-                        <span>VLC 3 Desktop</span>
+                        <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>VLC 3 Desktop</strong></span>
                         <ChevronDown aria-hidden="true" />
                       </button>
                       <div className="compatibility-profile-quick-actions">
@@ -1318,32 +1407,32 @@ export function UiElementsPage() {
                     </div>
                     <div className="compatibility-profile-details">
                       <div className="compatibility-profile-form-grid">
-                        <label>Name<input readOnly value="VLC 3 Desktop" /></label>
+                        <label>Name<input className="settings-choice-input" readOnly value="VLC 3 Desktop" /></label>
                         <label>
                           Category
-                          <select disabled defaultValue="player">
+                          <select className="settings-choice-input" disabled defaultValue="player">
                             <option value="player">Media player</option>
                             <option value="other">Other</option>
                           </select>
                         </label>
-                        <label>Developer<input readOnly value="VideoLAN" /></label>
-                        <label>Verified by<select disabled defaultValue="project-documentation"><option value="project-documentation">Project documentation</option></select></label>
+                        <label>Developer<input className="settings-choice-input" readOnly value="VideoLAN" /></label>
+                        <label>Verified by<select className="settings-choice-input" disabled defaultValue="project-documentation"><option value="project-documentation">Project documentation</option></select></label>
                       </div>
                     </div>
                   </article>
                 </div>
               </VariantCard>
-              <VariantCard title="Structured compatibility capability editor" source={`${settings} > Hard/Software Profiles > Profile details`} classes={["compatibility-capability-section", "compatibility-capability-row", "compatibility-capability-limits"]} status="Nested surfaces follow the active theme without light gray fallbacks." wide>
+              <VariantCard title="Structured compatibility capability editor" source={`${settings} > Hard/Software Profiles > Profile details`} classes={["compatibility-capability-section", "compatibility-capability-row", "compatibility-capability-limits", "settings-choice-input"]} status="Nested surfaces follow the active theme without light gray fallbacks." wide>
                 <details className="compatibility-capability-section" open>
                   <summary>Sources</summary>
                   <div className="compatibility-capability-section-body">
                     <div className="compatibility-capability-editor">
                       <div className="compatibility-capability-row compatibility-source-row">
-                        <label>Label<input defaultValue="Technical specifications" /></label>
+                        <label>Label<input className="settings-choice-input" defaultValue="Technical specifications" /></label>
                         <label>
                           URL
                           <span className="compatibility-source-url-control is-readonly">
-                            <input type="url" readOnly value="https://example.com/specifications" />
+                            <input className="settings-choice-input" type="url" readOnly value="https://example.com/specifications" />
                             <button type="button" className="secondary icon-only-button compatibility-source-open-button" aria-label="Open source in a new tab">
                               <SquareArrowOutUpRight size={17} aria-hidden="true" />
                             </button>
@@ -1360,7 +1449,7 @@ export function UiElementsPage() {
                       <div className="compatibility-capability-row">
                         <label>
                           Format
-                          <select defaultValue="truehd">
+                          <select className="settings-choice-input" defaultValue="truehd">
                             <option value="aac">AAC (aac)</option>
                             <option value="eac3">Dolby Digital Plus / E-AC-3 (eac3)</option>
                             <option value="truehd">Dolby TrueHD (truehd)</option>
@@ -1370,7 +1459,7 @@ export function UiElementsPage() {
                         </label>
                         <label>
                           Support
-                          <select defaultValue="passthrough_only">
+                          <select className="settings-choice-input" defaultValue="passthrough_only">
                             <option value="true">Supported</option>
                             <option value="limited">Limited</option>
                             <option value="passthrough_only">Passthrough only</option>
@@ -1388,7 +1477,7 @@ export function UiElementsPage() {
                   <div className="compatibility-capability-row">
                     <label>
                       Codec
-                      <select defaultValue="hevc">
+                      <select className="settings-choice-input" defaultValue="hevc">
                         <option value="h264">H.264 / AVC (h264)</option>
                         <option value="hevc">H.265 / HEVC (hevc)</option>
                         <option value="vvc">H.266 / VVC (vvc)</option>
@@ -1404,16 +1493,16 @@ export function UiElementsPage() {
                     </label>
                   </div>
                   <div className="compatibility-capability-limits">
-                    <label>Max. resolution<input placeholder="e.g. 4K" /></label>
-                    <label>Max. FPS<input placeholder="e.g. 60" /></label>
-                    <label>Bit depth<input placeholder="e.g. 8, 10" /></label>
-                    <label>HDR formats<input placeholder="e.g. HDR10, Dolby Vision" /></label>
+                    <label>Max. resolution<input className="settings-choice-input" placeholder="e.g. 4K" /></label>
+                    <label>Max. FPS<input className="settings-choice-input" placeholder="e.g. 60" /></label>
+                    <label>Bit depth<input className="settings-choice-input" placeholder="e.g. 8, 10" /></label>
+                    <label>HDR formats<input className="settings-choice-input" placeholder="e.g. HDR10, Dolby Vision" /></label>
                   </div>
                 </div>
                 <div className="compatibility-capability-row compatibility-container-row">
                   <label>
                     Container
-                    <select defaultValue="mkv">
+                    <select className="settings-choice-input" defaultValue="mkv">
                       <option value="mp4">MP4 / ISO Base Media (mp4)</option>
                       <option value="mkv">Matroska Video (mkv)</option>
                       <option value="webm">WebM (webm)</option>
@@ -1425,7 +1514,7 @@ export function UiElementsPage() {
                 <div className="compatibility-capability-row">
                   <label>
                     Subtitle format
-                    <select defaultValue="subrip">
+                    <select className="settings-choice-input" defaultValue="subrip">
                       <option value="subrip">SubRip / SRT (subrip)</option>
                       <option value="ass">Advanced SubStation Alpha (ass)</option>
                       <option value="webvtt">WebVTT (webvtt)</option>
@@ -1436,10 +1525,10 @@ export function UiElementsPage() {
                 </div>
                 <div className="compatibility-video-capability">
                   <div className="compatibility-capability-row">
-                    <label>Codec<select defaultValue="hevc"><option value="hevc">H.265 / HEVC (hevc)</option></select></label>
+                    <label>Codec<select className="settings-choice-input" defaultValue="hevc"><option value="hevc">H.265 / HEVC (hevc)</option></select></label>
                     <label>
                       Playback mode
-                      <select defaultValue="conditional">
+                      <select className="settings-choice-input" defaultValue="conditional">
                         <option value="direct">Direct</option>
                         <option value="direct_stream">Direct stream / remux</option>
                         <option value="video_transcode">Video transcode</option>
@@ -1449,7 +1538,7 @@ export function UiElementsPage() {
                   </div>
                   <label className="compatibility-profile-reason">
                     Conditions (JSON)
-                    <textarea readOnly rows={3} value={'[{"kind":"device_capability","value":"HEVC decoder"}]'} />
+                    <textarea className="settings-choice-input" readOnly rows={3} value={'[{"kind":"device_capability","value":"HEVC decoder"}]'} />
                   </label>
                 </div>
                 <details className="compatibility-capability-section" open>
@@ -1459,33 +1548,41 @@ export function UiElementsPage() {
                   </div>
                 </details>
               </VariantCard>
-              <VariantCard title="Compact combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["settings-profile-toggle-row", "settings-profile-toggle-actions", "library-history-range-toggle", "library-history-range-button", "library-history-range-pill", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
-                <div className="compatibility-profile-panel">
-                  <p className="compatibility-profile-development-note">
-                    This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections.
-                  </p>
-                  <div className="settings-profile-toggle-row">
-                    <div className="library-history-range-toggle" role="tablist" aria-label="Hardware & software profiles">
-                      <SlidingTogglePill activeKey="hardware" className="nav-active-pill library-history-range-pill" />
+              <VariantCard title="Compact combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["panel-title-row", "tooltip-trigger", "compatibility-profile-list", "compatibility-profile-catalog-list", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "settings-profile-toggle-actions", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
+                <div className="compatibility-profile-list compatibility-profile-catalog-list">
+                  <div className="panel-title-row">
+                    <h2>Hardware &amp; software profiles</h2>
+                    <TooltipTrigger
+                      ariaLabel="Explain the compatibility profile catalog status"
+                      content="This is a very early version of the profile catalog and it still needs to grow. MediaLyze improves through community contributions, so please suggest your own profiles, additions, and corrections."
+                    >
+                      ?
+                    </TooltipTrigger>
+                  </div>
+                  <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+                    <div className="transcode-automation-tab-controls">
+                      <div className="transcode-automation-tab-list" role="tablist" aria-label="Hardware & software profiles" aria-orientation="horizontal">
                       {(["hardware", "software", "compatibility"] as const).map((profileTab) => (
                         <button
                           key={profileTab}
                           type="button"
+                          id={`catalog-compatibility-profile-tab-${profileTab}`}
+                          role="tab"
                           data-toggle-key={profileTab}
-                          className={`library-history-range-button${profileTab === "hardware" ? " active" : ""}`}
-                          aria-pressed={profileTab === "hardware"}
+                          className={`transcode-automation-tab-button${profileTab === "hardware" ? " active" : ""}`}
+                          aria-selected={profileTab === "hardware"}
+                          tabIndex={profileTab === "hardware" ? 0 : -1}
                         >
-                          <span className="library-history-range-button-content">
-                            <span>
-                              {profileTab === "hardware"
-                                ? "Hardware"
-                                : profileTab === "software"
-                                  ? "Software / Player"
-                                  : "Combination"}
-                            </span>
+                          <span className="transcode-automation-tab-label">
+                            {profileTab === "hardware"
+                              ? "Hardware"
+                              : profileTab === "software"
+                                ? "Software / Player"
+                                : "Combination"}
                           </span>
                         </button>
                       ))}
+                      </div>
                     </div>
                     <div className="settings-profile-toggle-actions">
                       <button type="button" className="secondary small settings-panel-header-action compatibility-profile-header-action">
@@ -1494,6 +1591,23 @@ export function UiElementsPage() {
                       </button>
                     </div>
                   </div>
+                  <div className="compatibility-profile-search">
+                    <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+                    <input type="search" placeholder="Search profiles" aria-label="Search Hardware profiles" />
+                  </div>
+                  <article className="compatibility-profile-list-item">
+                    <div className="compatibility-profile-list-row quality-profile-list-row">
+                      <button type="button" className="compatibility-profile-list-trigger" aria-expanded="false">
+                        <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>Apple TV 4K 3rd Gen</strong></span>
+                        <ChevronDown aria-hidden="true" />
+                      </button>
+                      <div className="compatibility-profile-quick-actions">
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Add Apple TV profile to favorites">
+                          <AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
                 </div>
               </VariantCard>
               <VariantCard title="Library title actions" source={`${settings} > Libraries`} classes={["library-title-actions", "library-action-tooltip-trigger", "library-change-path-button", "settings-panel-header-action"]}>
@@ -1638,7 +1752,7 @@ export function UiElementsPage() {
               <VariantCard title="Collapsed settings sidebar" source={`${settings} > Navigation`} classes={["is-settings-nav-collapsed", "settings-navigation-item-content"]}>
                 <SettingsNavigationFixture collapsed />
               </VariantCard>
-              <VariantCard title="Native settings select · persistent single chevron" source={`${settings} > Libraries / Quality profiles`} classes={["settings-choice-input"]} status="Theme colors must not reset the chevron background layer.">
+              <VariantCard title="Native settings select · persistent single chevron" source={`${settings} > Libraries / Quality profiles`} classes={["settings-choice-input"]} status="Theme-aware native popup surfaces keep option text readable in light and dark mode.">
                 <div className="settings-main-column">
                   <div className="field">
                     <select className="settings-choice-input" defaultValue="system" aria-label="Theme">
@@ -1682,7 +1796,7 @@ export function UiElementsPage() {
                   </div>
                 </article>
               </VariantCard>
-              <VariantCard title="Connector mapping modes · auto, manual, stale, multi-root" source={`${settings} > Connectors > Connection`} classes={["connector-mapping-section", "connector-mapping-mode", "connector-mapping-card", "connector-technical-details", "mapping-stale"]} wide>
+              <VariantCard title="Connector mapping modes · auto, manual, stale, multi-root" source={`${settings} > Connectors > Connection`} classes={["connector-mapping-section", "connector-mapping-mode", "connector-mapping-card", "connector-technical-details", "settings-choice-input", "mapping-stale"]} wide>
                 <section className="connector-detail-section connector-mapping-section">
                   <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="true"><div><h4>Path mappings</h4><p>Map connector locations to one or more MediaLyze roots.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Path mapping mode"><SlidingTogglePill activeKey="manual" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Collapse Path mappings" aria-expanded="true"><ChevronDown className="nav-icon" /></button></div>
                   <div className="connector-mapping-body">
@@ -1850,7 +1964,7 @@ export function UiElementsPage() {
               <VariantCard title="Ignore pattern rows" source={`${settings} > Ignore patterns`} classes={["ignore-pattern-section", "ignore-pattern-row", "settings-choice-input", "ignore-pattern-action-button"]} wide>
                 <IgnorePatternFixture />
               </VariantCard>
-              <VariantCard title="Quality picker and profile editor" source={`${settings} > Quality profiles`} classes={["library-history-range-toggle", "library-history-range-button", "library-history-range-pill", "quality-picker-field", "quality-profile-picker-control", "quality-profile-picker-trigger", "quality-profile-boundary-field", "quality-profile-metric-item", "quality-profile-weight-input"]} wide>
+              <VariantCard title="Quality profiles list and metric accordions" source={`${settings} > Quality profiles`} classes={["compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "quality-profile-toggle-row", "quality-profile-list-row", "transcode-automation-tab-list", "transcode-automation-tab-button", "quality-profile-details", "quality-profile-action-button", "quality-profile-metric-list", "quality-profile-metric-item", "quality-profile-metric-toggle", "quality-profile-weight-input"]} wide>
                 <QualityProfileFixture />
               </VariantCard>
             </VariantGroup>
@@ -1878,15 +1992,34 @@ export function UiElementsPage() {
                   onAddPanel={() => undefined}
                 />
               </VariantCard>
-              <VariantCard title="Page-specific icon buttons" source={`${scanLogs} / ${fileDetail} / ${libraryDetail}`} classes={["scan-log-copy-button", "file-detail-cover-button", "duplicate-group-open-button", "library-quickscan-button", "file-detail-navigation-actions"]}>
+              <VariantCard
+                title="Page-specific icon buttons"
+                source={`${scanLogs} / ${fileDetail} / ${libraryDetail}`}
+                classes={[
+                  "icon-button",
+                  "icon-button-borderless",
+                  "icon-button-bordered",
+                  "icon-button-static",
+                  "icon-button-animated",
+                  "scan-log-copy-button",
+                  "file-detail-cover-button",
+                  "duplicate-group-open-button",
+                  "library-quickscan-button",
+                  "file-detail-navigation-actions",
+                ]}
+              >
                 <div className="ui-elements-control-grid">
-                  <button type="button" className="scan-log-copy-button" aria-label="Copy"><Copy className="nav-icon" /></button>
-                  <button type="button" className="file-detail-cover-button secondary small"><Download className="nav-icon" /> Download cover</button>
-                  <button type="button" className="secondary icon-only-button duplicate-group-open-button" aria-label="Open"><ArrowUpRight className="duplicate-group-open-icon" /></button>
-                  <button type="button" className="secondary icon-only-button duplicate-group-action duplicate-group-compare-action" aria-label="Compare">
-                    <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} />
+                  <button type="button" className="icon-button icon-button-bordered icon-button-static scan-log-copy-button" aria-label="Copy">
+                    <Copy className="nav-icon" aria-hidden="true" />
                   </button>
-                  <button type="button" className="statistic-layout-action-button library-quickscan-button" aria-label="Quick scan" title="Quick scan">
+                  <button type="button" className="file-detail-cover-button secondary small"><Download className="nav-icon" /> Download cover</button>
+                  <button type="button" className="icon-button icon-button-borderless icon-button-static duplicate-group-open-button" aria-label="Open">
+                    <ArrowUpRight className="duplicate-group-open-icon" aria-hidden="true" />
+                  </button>
+                  <button type="button" className="icon-button icon-button-borderless icon-button-static duplicate-group-action duplicate-group-compare-action" aria-label="Compare">
+                    <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} aria-hidden="true" />
+                  </button>
+                  <button type="button" className="icon-button icon-button-bordered icon-button-animated statistic-layout-action-button library-quickscan-button" aria-label="Quick scan" title="Quick scan">
                     <AnimatedSearchIcon className="statistic-layout-action-icon" size={18} aria-hidden="true" />
                   </button>
                   <button type="button" className="secondary small settings-panel-header-action file-detail-navigation-back-button" aria-label="Back" title="Back">
@@ -2098,7 +2231,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding job center" source="TranscodingPage" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "transcoding-job-table", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot"]} wide>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "transcoding-job-table", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
                 <div className="transcoding-center-panel">
                   <div className="transcoding-center-header">
                     <div className="transcoding-center-heading">
@@ -2120,8 +2253,8 @@ export function UiElementsPage() {
                   </div>
                   <div className="transcoding-center-toolbar">
                     <label className="transcoding-search-field"><Search aria-hidden="true" /><input type="search" placeholder="Search files…" /></label>
-                    <label className="transcoding-filter-field"><span>Status</span><select defaultValue="all"><option value="all">All statuses</option></select><ChevronDown aria-hidden="true" /></label>
-                    <label className="transcoding-filter-field"><span>Hardware</span><select defaultValue="all"><option value="all">All hardware</option></select><ChevronDown aria-hidden="true" /></label>
+                    <label className="transcoding-filter-field"><span>Status</span><select className="settings-choice-input" defaultValue="all"><option value="all">All statuses</option></select></label>
+                    <label className="transcoding-filter-field"><span>Hardware</span><select className="settings-choice-input" defaultValue="all"><option value="all">All hardware</option></select></label>
                     <TooltipTrigger ariaLabel="Reset filters" content="Reset filters" className="secondary icon-only-button transcoding-reset-button" pinOnClick={false}><History aria-hidden="true" className="nav-icon" size={16} /></TooltipTrigger>
                   </div>
                   <div className="transcoding-table-scroll">
@@ -2158,7 +2291,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[9]}>
             <VariantGroup title="Library and file detail variants">
-              <VariantCard title="Storage map explorer" source="StorageMapPage" classes={["storage-map-explorer", "storage-map-toolbar", "storage-map-treemap", "storage-map-tile", "storage-map-tile-tooltip"]} wide>
+              <VariantCard title="Storage map explorer" source="StorageMapPage" classes={["storage-map-explorer", "storage-map-toolbar", "storage-map-treemap", "storage-map-tile", "storage-map-tile-tooltip", "settings-choice-input"]} wide>
                 <div className="storage-map-panel">
                   <div className="storage-map-header">
                     <div className="storage-map-title-block">
@@ -2181,54 +2314,45 @@ export function UiElementsPage() {
                       <div className="storage-map-toolbar">
                         <label className="storage-map-field storage-map-library-field">
                           <span>Library</span>
-                          <span className="storage-map-select-wrap">
-                            <select defaultValue="movies">
-                              <option value="movies">Movies 4K</option>
-                            </select>
-                            <ChevronDown aria-hidden="true" />
-                          </span>
+                          <select className="settings-choice-input" defaultValue="movies">
+                            <option value="movies">Movies 4K</option>
+                          </select>
                         </label>
                         <label className="storage-map-field">
                           <span>Color</span>
-                          <span className="storage-map-select-wrap">
-                            <select defaultValue="quality">
-                              <optgroup label="Video">
-                                <option value="codec">Video codec</option>
-                                <option value="resolution">Resolution</option>
-                                <option value="hdr">Dynamic range</option>
-                                <option value="frame_rate">Frame rate</option>
-                                <option value="bit_depth">Video bit depth</option>
-                              </optgroup>
-                              <optgroup label="Audio">
-                                <option value="audio_codec">Audio codec</option>
-                                <option value="audio_channels">Audio channels</option>
-                                <option value="audio_bitrate">Audio bitrate</option>
-                                <option value="audio_language">Audio language</option>
-                              </optgroup>
-                              <optgroup label="Subtitles">
-                                <option value="subtitle_status">Subtitle availability</option>
-                                <option value="subtitle_language">Subtitle language</option>
-                              </optgroup>
-                              <optgroup label="File">
-                                <option value="container">Container</option>
-                                <option value="size">File size</option>
-                                <option value="duration">Duration</option>
-                                <option value="bitrate">Overall bitrate</option>
-                                <option value="quality">Quality score</option>
-                                <option value="analysis_status">Analysis status</option>
-                              </optgroup>
-                            </select>
-                            <ChevronDown aria-hidden="true" />
-                          </span>
+                          <select className="settings-choice-input" defaultValue="quality">
+                            <optgroup label="Video">
+                              <option value="codec">Video codec</option>
+                              <option value="resolution">Resolution</option>
+                              <option value="hdr">Dynamic range</option>
+                              <option value="frame_rate">Frame rate</option>
+                              <option value="bit_depth">Video bit depth</option>
+                            </optgroup>
+                            <optgroup label="Audio">
+                              <option value="audio_codec">Audio codec</option>
+                              <option value="audio_channels">Audio channels</option>
+                              <option value="audio_bitrate">Audio bitrate</option>
+                              <option value="audio_language">Audio language</option>
+                            </optgroup>
+                            <optgroup label="Subtitles">
+                              <option value="subtitle_status">Subtitle availability</option>
+                              <option value="subtitle_language">Subtitle language</option>
+                            </optgroup>
+                            <optgroup label="File">
+                              <option value="container">Container</option>
+                              <option value="size">File size</option>
+                              <option value="duration">Duration</option>
+                              <option value="bitrate">Overall bitrate</option>
+                              <option value="quality">Quality score</option>
+                              <option value="analysis_status">Analysis status</option>
+                            </optgroup>
+                          </select>
                         </label>
                         <label className="storage-map-field">
                           <span>Order</span>
-                          <span className="storage-map-select-wrap">
-                            <select defaultValue="size">
-                              <option value="size">Size</option>
-                            </select>
-                            <ChevronDown aria-hidden="true" />
-                          </span>
+                          <select className="settings-choice-input" defaultValue="size">
+                            <option value="size">Size</option>
+                          </select>
                         </label>
                         <div className="distribution-chart-mode-toggle analyzed-file-name-source-toggle storage-map-name-source-toggle" role="group" aria-label="Displayed file name">
                           <SlidingTogglePill activeKey="jellyfin" className="nav-active-pill distribution-chart-mode-pill" />
@@ -2614,29 +2738,45 @@ export function UiElementsPage() {
                   <section className="transcode-validation is-valid"><h3><Check aria-hidden="true" />Change preview</h3><strong>Arrival [1920x1080, SDR, H264] [en].mp4</strong><code>ffmpeg -i Arrival.mkv -map 0:0 -c:v:0 libx264 …</code></section>
                 </div>
               </VariantCard>
-              <VariantCard title="Direct transcode federation pairing" source="TranscodeFederationPanel" classes={["transcode-federation-panel", "transcode-federation-heading", "panel-title-row", "tooltip-trigger", "icon-only-button", "transcode-federation-code-action", "transcode-federation-code-group", "transcode-federation-code-heading", "transcode-federation-code", "transcode-federation-code-progress", "settings-panel-header-action", "transcode-federation-connect-button", "transcode-federation-action-icon", "transcode-federation-subheading", "transcode-federation-addresses", "transcode-federation-address-list", "transcode-federation-address-item", "transcode-federation-address-copy", "field-label", "toggle-switch", "toggle-switch-track", "toggle-switch-thumb", "transcode-federation-toggle", "transcode-federation-fields", "transcode-federation-pairing", "transcode-federation-pair-form", "transcode-federation-discovered", "transcode-federation-discovered-heading", "transcode-federation-discovered-refresh", "compatibility-profile-quick-action", "transcode-federation-discovered-list", "transcode-federation-peer", "transcode-federation-peer-connect-control", "transcode-federation-peer-code-input", "is-invalid", "status-dot"]} wide>
+              <VariantCard title="Direct transcode federation pairing" source="TranscodeFederationPanel" classes={["transcode-federation-panel", "transcode-federation-heading", "transcode-federation-heading-main", "transcode-federation-section-chevron", "transcode-federation-installation", "transcode-federation-installation-name", "transcode-federation-name-action", "transcode-federation-heading-actions", "transcode-federation-code-summary", "transcode-federation-code-summary-label", "transcode-federation-header-code", "transcode-federation-content", "tooltip-trigger", "icon-only-button", "transcode-federation-code-action", "transcode-federation-code", "transcode-federation-code-progress", "transcode-federation-subheading", "transcode-federation-addresses", "transcode-federation-address-list", "transcode-federation-address-item", "transcode-federation-address-copy", "toggle-switch", "toggle-switch-track", "toggle-switch-thumb", "transcode-federation-toggle"]} wide>
                 <section className="transcode-federation-panel">
                   <div className="transcode-federation-heading">
-                    <div><div className="panel-title-row"><h3><Server aria-hidden="true" />Federation</h3></div></div>
-                  <label className="toggle-switch transcode-federation-toggle"><input type="checkbox" role="switch" defaultChecked aria-label="Enable direct federation for this installation" /><span className="toggle-switch-track" aria-hidden="true"><span className="toggle-switch-thumb" /></span></label>
+                    <div className="transcode-federation-heading-main">
+                      <button type="button" className="transcode-federation-section-chevron" aria-label="Collapse Federation" title="Collapse Federation" aria-expanded="true" aria-controls="catalog-federation-body"><ChevronDown aria-hidden="true" className="nav-icon" /></button>
+                      <label className="toggle-switch transcode-federation-toggle"><input type="checkbox" role="switch" defaultChecked aria-label="Enable direct federation for this installation" /><span className="toggle-switch-track" aria-hidden="true"><span className="toggle-switch-thumb" /></span></label>
+                      <h3>Federation</h3>
+                      <div className="transcode-federation-installation"><span className="transcode-federation-installation-name">Living room server</span><button type="button" className="secondary icon-only-button transcode-federation-name-action" aria-label="Edit: Installation name" title="Edit: Installation name"><SquarePenIcon aria-hidden="true" className="nav-icon" size={16} /></button></div>
+                    </div>
+                    <div className="transcode-federation-heading-actions">
+                      <div className="transcode-federation-code-summary"><span className="transcode-federation-code-summary-label">Pairing code</span><div className="transcode-federation-address-item transcode-federation-code transcode-federation-header-code"><code title="048271" aria-label="Pairing code">048271</code><TooltipTrigger ariaLabel="Copy code" content="Copy code" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger><span className="transcode-federation-code-progress" aria-hidden="true"><span style={{ "--pairing-code-progress-start": 0.35, "--pairing-code-progress-duration": "19500ms" } as React.CSSProperties} /></span></div><TooltipTrigger ariaLabel="Reset code" content="Reset code" className="secondary icon-only-button transcode-federation-code-action" pinOnClick={false}><History aria-hidden="true" className="nav-icon" size={16} /></TooltipTrigger></div>
+                    </div>
                   </div>
-                  <div className="app-settings-performance-grid transcode-federation-fields"><label className="field"><span>Federation name</span><input className="settings-choice-input" defaultValue="Home media workers" /></label><label className="field"><span>Installation name</span><input className="settings-choice-input" defaultValue="Living room server" /></label><div className="transcode-federation-code-group"><div className="transcode-federation-code-heading"><span className="field-label">Pairing code</span><TooltipTrigger ariaLabel="Reset code" content="Reset code" className="secondary icon-only-button transcode-federation-code-action" pinOnClick={false}><History aria-hidden="true" className="nav-icon" size={16} /></TooltipTrigger></div><div className="transcode-federation-address-item transcode-federation-code"><code title="048271" aria-label="Pairing code">048271</code><TooltipTrigger ariaLabel="Copy code" content="Copy code" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger><span className="transcode-federation-code-progress" aria-hidden="true"><span style={{ "--pairing-code-progress-start": 0.35, "--pairing-code-progress-duration": "19500ms" } as React.CSSProperties} /></span></div></div></div>
-                  <div className="transcode-federation-addresses"><div className="transcode-federation-subheading"><strong>Reachable network addresses</strong></div><div className="transcode-federation-address-list"><div className="transcode-federation-address-item"><code>http://medialyze-nas.local:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div><div className="transcode-federation-address-item"><code>http://192.168.1.20:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div></div></div>
-                  <div className="transcode-federation-pairing"><div className="transcode-federation-discovered"><div className="transcode-federation-discovered-heading"><strong>Found in Network</strong><TooltipTrigger ariaLabel="Refresh discovery" content="Refresh discovery" className="secondary icon-only-button compatibility-profile-quick-action transcode-federation-discovered-refresh" pinOnClick={false}><RefreshCw aria-hidden="true" size={16} /></TooltipTrigger></div><div className="transcode-federation-discovered-list"><div className="transcode-federation-peer"><span><strong>Worker 01</strong><small>http://worker-01:8091</small></span><div className="transcode-federation-peer-connect-control"><input className="settings-choice-input transcode-federation-peer-code-input is-invalid" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="Pairing code" aria-label="Pairing code" value="" readOnly onChange={() => undefined} /><button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button"><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />Connect</button></div></div><div className="transcode-federation-peer"><span><strong>Worker 02</strong><small>http://worker-02:8091</small></span><div className="transcode-federation-peer-connect-control"><input className="settings-choice-input transcode-federation-peer-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="Pairing code" aria-label="Pairing code" value="" readOnly onChange={() => undefined} /><button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button"><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />Connect</button></div></div></div></div><div className="transcode-federation-pair-form"><input className="settings-choice-input" value="http://worker-02:8091" readOnly onChange={() => undefined} /><input className="settings-choice-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="Pairing code" aria-label="Pairing code" value="123456" readOnly onChange={() => undefined} /><button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button"><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />Connect</button></div></div>
+                  <div id="catalog-federation-body" className="transcode-federation-content"><div className="transcode-federation-addresses"><div className="transcode-federation-subheading"><strong>Reachable network addresses</strong></div><div className="transcode-federation-address-list"><div className="transcode-federation-address-item"><code>http://medialyze-nas.local:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div><div className="transcode-federation-address-item"><code>http://192.168.1.20:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div></div></div></div>
                 </section>
               </VariantCard>
-              <VariantCard title="New installation: untested capability matrix" source={`${settings} > Transcoding > Accelerators (before Test Hardware)`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "transcode-capability-section", "transcode-capability-content", "compatibility-profile-panel", "panel-empty-state", "panel-empty-state-icon"]}>
+              <VariantCard title="New installation: untested capability matrix" source={`${settings} > Transcoding > Accelerators (before Test Hardware)`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "transcode-automation-tab-content", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "compatibility-profile-list", "panel-empty-state", "panel-empty-state-icon"]}>
                 <div className="panel-header">
                   <div className="panel-title-row"><h2>Transcoding</h2></div>
                   <div className="async-panel-header-status"><button type="button" className="secondary small settings-panel-header-action"><FlaskConical aria-hidden="true" size={16} />Test Hardware</button></div>
                 </div>
-                <section className="app-settings-section transcode-capability-section">
-                  <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
+                <section className="transcode-automation-tab-content transcode-capability-section transcode-capability-content">
+                  <div className="compatibility-profile-list transcode-capability-list">
+                    <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+                      <div className="transcode-automation-tab-controls">
+                        <div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding profiles and rules" aria-orientation="horizontal">
+                          <button type="button" id="catalog-untested-transcode-tab-profiles" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Profiles</span></button>
+                          <button type="button" id="catalog-untested-transcode-tab-rules" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Rules</span></button>
+                          <button type="button" id="catalog-untested-transcode-tab-accelerators" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}><span className="transcode-automation-tab-label">Accelerators</span></button>
+                          <button type="button" id="catalog-untested-transcode-tab-members" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Members</span></button>
+                        </div>
+                        <TooltipTrigger ariaLabel="Explain accelerators" tooltipClassName="transcode-automation-description-tooltip-portal" maxWidth={460} content={<div className="transcode-matrix-meta"><strong>FFmpeg: ffmpeg version test</strong><p>Hardware counts use representative codec pairs and repeated measurements.</p></div>}>?</TooltipTrigger>
+                      </div>
+                    </div>
                     <PanelEmptyState message="No capability matrix data yet. Run the hardware test to populate this matrix." />
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Tested transcoding settings and accelerator matrix" source={`${settings} > Transcoding (after Test Hardware)`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field", "field-label-row", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "transcode-capability-search", "compatibility-profile-panel", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "compatibility-profile-search-empty", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "transcode-automation-list-copy", "transcode-capability-device-copy", "transcode-capability-device-name", "transcode-federation-member-pill", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-path", "transcode-matrix-tooltip-path-arrow", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-workload", "transcode-matrix-tooltip-summary", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-matrix-axis-label", "transcode-matrix-axis-label-horizontal", "transcode-matrix-axis-label-vertical", "transcode-replacement-warning"]} wide>
+              <VariantCard title="Tested transcoding settings and compact accelerator matrix · local and federation origins" source={`${settings} > Transcoding (after Test Hardware)`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "settings-sidebar-stack", "app-settings-performance-grid", "field", "field-label-row", "transcode-automation-tab-content", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "transcode-automation-list-copy", "transcode-capability-device-copy", "transcode-capability-device-name", "transcode-capability-device-icon", "transcode-capability-device-icon-gpu", "transcode-capability-device-icon-cpu", "transcode-federation-member-pill", "transcode-federation-local-pill", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-cell-trigger", "transcode-matrix-tooltip-preview", "transcode-matrix-tooltip-content", "transcode-matrix-tooltip-heading", "transcode-matrix-tooltip-status", "transcode-matrix-tooltip-row", "transcode-matrix-tooltip-path", "transcode-matrix-tooltip-path-arrow", "transcode-matrix-tooltip-benchmark", "transcode-matrix-tooltip-workload", "transcode-matrix-tooltip-summary", "transcode-matrix-tooltip-level", "transcode-matrix-tooltip-runs", "transcode-matrix-tooltip-level-result", "transcode-matrix-axis-label", "transcode-matrix-axis-label-horizontal", "transcode-matrix-axis-label-vertical", "transcode-replacement-warning"]} wide>
                 <div className="panel-header">
                   <div className="panel-title-row">
                     <h2>Transcoding</h2>
@@ -2649,23 +2789,23 @@ export function UiElementsPage() {
                       <FlaskConical aria-hidden="true" size={16} />
                       Test Hardware
                     </button>
+                    <button type="button" className="secondary small settings-panel-header-action">
+                      <Network aria-hidden="true" size={16} />
+                      Test network
+                    </button>
                   </div>
                 </div>
                 <div className="settings-sidebar-stack">
                   <div className="app-settings-performance-grid">
-                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-execution">Execution mode</label><TooltipTrigger ariaLabel="Explain hardware-required execution" content="Hardware-required jobs fail clearly when the selected encoder or device is unavailable; they never fall back silently to CPU.">?</TooltipTrigger></div><select id="catalog-transcoding-execution" defaultValue="hardware_required"><option value="hardware_required">Hardware required</option><option value="cpu_only">CPU only</option></select></div>
-                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-output">Default output mode</label><TooltipTrigger ariaLabel="Explain default output mode" content="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.">?</TooltipTrigger></div><select id="catalog-transcoding-output" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></div>
-                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><TooltipTrigger ariaLabel="Explain CPU budget" content="Soft budget shared across active CPU transcode jobs; short bursts can exceed it.">?</TooltipTrigger></div><input id="catalog-transcoding-cpu" type="number" defaultValue="90" /></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-execution">Execution mode</label><TooltipTrigger ariaLabel="Explain hardware-required execution" content="Hardware-required jobs fail clearly when the selected encoder or device is unavailable; they never fall back silently to CPU.">?</TooltipTrigger></div><select id="catalog-transcoding-execution" className="settings-choice-input" defaultValue="hardware_required"><option value="hardware_required">Hardware required</option><option value="cpu_only">CPU only</option></select></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-output">Default output mode</label><TooltipTrigger ariaLabel="Explain default output mode" content="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.">?</TooltipTrigger></div><select id="catalog-transcoding-output" className="settings-choice-input" defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></div>
+                    <div className="field"><div className="field-label-row"><label htmlFor="catalog-transcoding-cpu">CPU budget (%)</label><TooltipTrigger ariaLabel="Explain CPU budget" content="Soft budget shared across active CPU transcode jobs; short bursts can exceed it.">?</TooltipTrigger></div><input id="catalog-transcoding-cpu" className="settings-choice-input" type="number" defaultValue="90" /></div>
+                    <div className="field"><label htmlFor="catalog-transcoding-remove-partial">Partial output</label><select id="catalog-transcoding-remove-partial" className="settings-choice-input" defaultValue="yes"><option value="yes">Remove</option><option value="no">Keep</option></select></div>
                   </div>
-                  <section className="app-settings-section transcode-capability-section">
-                    <div className="compatibility-profile-panel transcode-automation-content transcode-capability-content">
-                      <div className="compatibility-profile-list transcode-capability-list">
-                        <div className="compatibility-profile-search transcode-capability-search">
-                          <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
-                          <input type="search" aria-label="Search hardware devices" placeholder="Search devices" />
-                        </div>
-                      <details className="compatibility-profile-list-item transcode-device-matrix" open>
-                        <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><span className="transcode-capability-device-name"><strong>NVIDIA GeForce RTX 3080</strong><span className="badge transcode-federation-member-pill">Worker 02</span></span><small>cuda · cuda0</small></span><ChevronDown aria-hidden="true" /></summary>
+                  <section className="transcode-automation-tab-content transcode-capability-section transcode-capability-content">
+                    <div className="compatibility-profile-list transcode-capability-list">
+                      <details className="compatibility-profile-list-item transcode-device-matrix">
+                        <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><span className="transcode-capability-device-name"><Gpu aria-hidden="true" className="transcode-capability-device-icon transcode-capability-device-icon-gpu" size={16} /><strong>NVIDIA GeForce RTX 3080</strong><span className="badge transcode-federation-member-pill">Worker 02</span></span><small>cuda</small></span><ChevronDown aria-hidden="true" /></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
                           <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner"><span className="transcode-matrix-axis-label transcode-matrix-axis-label-horizontal">Encode</span><span className="transcode-matrix-axis-label transcode-matrix-axis-label-vertical">Decode</span></th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 3×</td></tr><tr><th>AV1</th><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-software">Software</td><td className="transcode-matrix-unsupported">—</td></tr></tbody></table>
                          </div>
@@ -2689,37 +2829,33 @@ export function UiElementsPage() {
                            </TooltipTrigger>
                          </div>
                       </details>
-                       <details className="compatibility-profile-list-item transcode-device-matrix">
-                         <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><span className="transcode-capability-device-name"><strong>Intel CPU iGPU · Quick Sync</strong></span><small>qsv + vaapi · renderD128</small></span><ChevronDown aria-hidden="true" /></summary>
+                      <details className="compatibility-profile-list-item transcode-device-matrix" open>
+                        <summary className="compatibility-profile-list-trigger"><span className="transcode-automation-list-copy transcode-capability-device-copy"><span className="transcode-capability-device-name"><Cpu aria-hidden="true" className="transcode-capability-device-icon transcode-capability-device-icon-cpu" size={16} /><strong>Intel CPU iGPU · Quick Sync</strong><span className="badge transcode-federation-member-pill transcode-federation-local-pill">local</span></span><small>qsv + vaapi</small></span><ChevronDown aria-hidden="true" /></summary>
                         <div className="transcode-matrix-scroll" tabIndex={0}>
                           <table className="transcode-matrix-table"><thead><tr><th className="transcode-matrix-corner"><span className="transcode-matrix-axis-label transcode-matrix-axis-label-horizontal">Encode</span><span className="transcode-matrix-axis-label transcode-matrix-axis-label-vertical">Decode</span></th><th>H.264 / AVC</th><th>H.265 / HEVC</th><th>AV1</th></tr></thead><tbody><tr><th>H.264 / AVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>H.265 / HEVC</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr><tr><th>AV1</th><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-hardware">HW · 4×</td><td className="transcode-matrix-software">Software</td></tr></tbody></table>
                          </div>
                        </details>
-                       </div>
-                     </div>
-                   </section>
+                    </div>
+                  </section>
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
                 </div>
               </VariantCard>
-              <VariantCard title="Compact transcoding automation tabs" source={`${settings} > Transcoding > TranscodeProfilesRulesPanel`} classes={["transcode-automation-section", "settings-profile-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-content", "transcode-automation-search", "transcode-automation-quick-actions", "settings-profile-toggle-actions", "transcode-automation-content", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "transcode-capability-search", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "compatibility-profile-card-actions", "compatibility-profile-form-grid", "compatibility-profile-field-wide", "compatibility-capability-sections", "compatibility-capability-section", "compatibility-capability-section-body", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "transcode-capability-device-copy", "transcode-capability-device-name", "transcode-federation-member-pill", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-scroll", "transcode-automation-summary-form-grid", "transcode-automation-rule-sections", "transcode-automation-section-summary", "transcode-profile-section-count", "transcode-profile-rule", "transcode-profile-rule-summary", "transcode-profile-rule-summary-grid", "transcode-profile-rule-field", "transcode-profile-rule-section", "transcode-automation-description-tooltip", "transcode-automation-description-tooltip-portal", "transcode-automation-details", "transcode-automation-editor", "transcode-automation-editor-actions", "transcode-condition-group", "transcode-condition-list", "transcode-condition-row", "transcode-actions", "settings-panel-header-action", "transcode-action-button", "badge"]} wide>
+              <VariantCard title="Compact transcoding automation tabs · expanded hit areas" source={`${settings} > Transcoding > TranscodeProfilesRulesPanel`} classes={["transcode-automation-section", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "transcode-automation-tab-content", "transcode-automation-quick-actions", "settings-profile-toggle-actions", "transcode-automation-content", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "compatibility-profile-card-actions", "compatibility-profile-form-grid", "compatibility-profile-field-wide", "compatibility-capability-sections", "compatibility-capability-section", "compatibility-capability-section-body", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "transcode-capability-device-copy", "transcode-capability-device-name", "transcode-federation-member-pill", "transcode-device-matrix", "transcode-matrix-table", "transcode-matrix-scroll", "transcode-automation-summary-form-grid", "transcode-automation-rule-sections", "transcode-automation-section-summary", "transcode-profile-section-count", "transcode-profile-rule", "transcode-profile-rule-summary", "transcode-profile-rule-summary-grid", "transcode-profile-rule-field", "transcode-profile-rule-section", "transcode-automation-description-tooltip", "transcode-automation-description-tooltip-portal", "transcode-automation-details", "transcode-automation-editor", "transcode-automation-editor-actions", "transcode-condition-group", "transcode-condition-list", "transcode-condition-row", "transcode-actions", "settings-panel-header-action", "transcode-action-button", "badge"]} wide>
                 <section className="app-settings-section transcode-automation-section">
                   <div className="compatibility-profile-panel transcode-automation-content">
-                    <div className="settings-profile-toggle-row">
-                      <div className="transcode-automation-tab-controls">
-                        <div className="library-history-range-toggle" role="tablist" aria-label="Transcoding profiles and rules">
-                          <SlidingTogglePill activeKey="profiles" className="nav-active-pill library-history-range-pill" />
-                          <button type="button" data-toggle-key="profiles" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Profiles</span></span></button>
-                          <button type="button" data-toggle-key="rules" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Rules</span></span></button>
-                          <button type="button" data-toggle-key="accelerators" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Accelerators</span></span></button>
+                    <section className="transcode-automation-tab-content">
+                      <div className="compatibility-profile-list">
+                      <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+                        <div className="transcode-automation-tab-controls">
+                          <div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding profiles and rules" aria-orientation="horizontal">
+                            <button type="button" id="catalog-automation-transcode-tab-profiles" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}><span className="transcode-automation-tab-label">Profiles</span></button>
+                            <button type="button" id="catalog-automation-transcode-tab-rules" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Rules</span></button>
+                            <button type="button" id="catalog-automation-transcode-tab-accelerators" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Accelerators</span></button>
+                            <button type="button" id="catalog-automation-transcode-tab-members" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Members</span></button>
+                          </div>
+                          <TooltipTrigger ariaLabel="Explain transcoding profiles" tooltipClassName="transcode-automation-description-tooltip-portal transcode-automation-description-tooltip-portal-compact" maxWidth={300} align="start" placement="center" content={<div className="transcode-automation-description-tooltip"><p>Reusable versioned stream plans; built-in profiles are immutable templates.</p><p>Automation uses the existing path, collision, capability, queue, and retry safeguards.</p></div>}>?</TooltipTrigger>
                         </div>
-                        <TooltipTrigger ariaLabel="Explain transcoding profiles" tooltipClassName="transcode-automation-description-tooltip-portal" maxWidth={380} content={<div className="transcode-automation-description-tooltip"><p>Reusable versioned stream plans; built-in profiles are immutable templates.</p><p>Automation uses the existing path, collision, capability, queue, and retry safeguards.</p></div>}>?</TooltipTrigger>
-                      </div>
-                      <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus size={14} aria-hidden="true" />New profile</button></div>
-                    </div>
-                    <div className="compatibility-profile-list">
-                      <div className="compatibility-profile-search">
-                        <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
-                        <input type="search" aria-label="Search profiles" placeholder="Search profiles and rules" />
+                        <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus size={14} aria-hidden="true" />New profile</button></div>
                       </div>
                       <article className="compatibility-profile-list-item is-expanded">
                         <div className="compatibility-profile-list-row">
@@ -2730,52 +2866,61 @@ export function UiElementsPage() {
                           </div>
                         </div>
                           <div className="compatibility-profile-details transcode-automation-details">
-                           <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid"><label><span>Container</span><select disabled value="mkv" onChange={() => undefined}><option value="mkv">MKV</option></select></label><label><span>Execution mode</span><select disabled value="inherit" onChange={() => undefined}><option value="inherit">Use global setting</option></select></label><label><span>Dynamic range</span><select disabled value="preserve" onChange={() => undefined}><option value="preserve">Preserve</option></select></label><label><span>Used by automatic rules</span><input readOnly value="2" /></label></div>
+                           <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid"><label><span>Container</span><select className="settings-choice-input" disabled value="mkv" onChange={() => undefined}><option value="mkv">MKV</option></select></label><label><span>Execution mode</span><select className="settings-choice-input" disabled value="inherit" onChange={() => undefined}><option value="inherit">Use global setting</option></select></label><label><span>Dynamic range</span><select className="settings-choice-input" disabled value="preserve" onChange={() => undefined}><option value="preserve">Preserve</option></select></label><label><span>Used by automatic rules</span><input className="settings-choice-input" readOnly value="2" /></label></div>
                            <div className="compatibility-capability-sections transcode-automation-rule-sections"><details className="compatibility-capability-section"><summary className="transcode-automation-section-summary"><span>Video stream rules</span><strong className="transcode-profile-section-count">1</strong></summary><div className="compatibility-capability-section-body"><div className="transcode-profile-rule transcode-profile-rule-summary"><strong>Encode</strong><div className="transcode-profile-rule-summary-grid"><div><span>Codec match</span><strong>h264</strong></div><div><span>Stream action</span><strong>Encode</strong></div></div></div></div></details><details className="compatibility-capability-section"><summary className="transcode-automation-section-summary"><span>Audio stream rules</span><strong className="transcode-profile-section-count">0</strong></summary><div className="compatibility-capability-section-body"><p className="field-hint">—</p></div></details></div>
-                          <p className="field-hint">MKV / HEVC, copy compatible streams, encode unmatched video.</p>
-                        </div>
-                      </article>
-                    </div>
-                  </div>
-                </section>
+                           <p className="field-hint">MKV / HEVC, copy compatible streams, encode unmatched video.</p>
+                         </div>
+                       </article>
+                     </div>
+                     </section>
+                   </div>
+                 </section>
               </VariantCard>
-              <VariantCard title="Federation members tab" source={`${settings} > Transcoding > Members`} classes={["transcode-automation-section", "settings-profile-toggle-row", "transcode-automation-tab-controls", "transcode-automation-content", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcode-automation-tab-content", "transcode-automation-search", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "compatibility-profile-form-grid", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "status-dot", "app-settings-flag-toggle", "badge"]} wide>
+              <VariantCard title="Federation members tab" source={`${settings} > Transcoding > Members`} classes={["transcode-automation-section", "transcode-automation-content", "transcode-automation-tab-content", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-federation-discovered-refresh", "transcode-federation-member-row", "transcode-federation-member-trigger-shell", "transcode-federation-member-trigger", "transcode-federation-status-trigger", "transcode-federation-status-tooltip", "transcode-federation-status-tooltip-heading", "transcode-federation-status-tooltip-hint", "transcode-federation-status-tooltip-item", "transcode-federation-peer", "transcode-federation-peer-name", "transcode-federation-member-name", "transcode-federation-entry-marker", "transcode-federation-status-marker", "transcode-federation-add-icon", "transcode-federation-peer-connect-control", "transcode-federation-segment-input", "transcode-federation-peer-code-input", "transcode-federation-connect-button", "transcode-federation-action-icon", "transcode-federation-manual-item", "transcode-federation-manual-address-input", "transcode-federation-manual-code-input", "transcode-federation-manual-connect-control", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "transcode-federation-member-accelerators", "transcode-federation-member-detail-label", "transcode-federation-member-accelerator-list", "transcode-federation-member-accelerator-link", "transcode-federation-member-accelerator-copy", "status-dot"]} wide>
                 <section className="app-settings-section transcode-automation-section">
                   <div className="compatibility-profile-panel transcode-automation-content">
-                    <div className="settings-profile-toggle-row">
-                      <div className="transcode-automation-tab-controls">
-                        <div className="library-history-range-toggle" role="tablist" aria-label="Transcoding profiles and rules">
-                          <SlidingTogglePill activeKey="members" className="nav-active-pill library-history-range-pill" />
-                          <button type="button" data-toggle-key="profiles" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Profiles</span></span></button>
-                          <button type="button" data-toggle-key="rules" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Rules</span></span></button>
-                          <button type="button" data-toggle-key="accelerators" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Accelerators</span></span></button>
-                          <button type="button" data-toggle-key="members" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Members</span></span></button>
-                        </div>
-                        <TooltipTrigger ariaLabel="Explain federation members" tooltipClassName="transcode-automation-description-tooltip-portal" maxWidth={380} content={<div className="transcode-automation-description-tooltip"><p>Review trusted federation installations, their reachability, and whether they may accept remote transcode jobs.</p><p>Pairing is direct; members are not used as relays.</p></div>}>?</TooltipTrigger>
-                      </div>
-                    </div>
-                    <div className="transcode-automation-tab-content">
+                     <section className="transcode-automation-tab-content">
                       <div className="compatibility-profile-list">
-                        <div className="compatibility-profile-search transcode-automation-search">
-                          <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
-                          <input type="search" aria-label="Search federation members" placeholder="Search federation members" />
+                        <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+                          <div className="transcode-automation-tab-controls">
+                            <div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding profiles and rules" aria-orientation="horizontal">
+                              <button type="button" id="catalog-members-transcode-tab-profiles" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Profiles</span></button>
+                              <button type="button" id="catalog-members-transcode-tab-rules" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Rules</span></button>
+                              <button type="button" id="catalog-members-transcode-tab-accelerators" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Accelerators</span></button>
+                              <button type="button" id="catalog-members-transcode-tab-members" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}><span className="transcode-automation-tab-label">Members</span></button>
+                            </div>
+                            <TooltipTrigger ariaLabel="Explain federation members" tooltipClassName="transcode-automation-description-tooltip-portal transcode-automation-description-tooltip-portal-compact" maxWidth={300} align="start" placement="center" content={<div className="transcode-automation-description-tooltip"><p>Review trusted federation installations and their reachability.</p><p>Pairing is direct; members are not used as relays.</p></div>}>?</TooltipTrigger>
+                            <TooltipTrigger ariaLabel="Refresh discovery" content="Refresh discovery" className="secondary icon-only-button compatibility-profile-quick-action transcode-federation-discovered-refresh" pinOnClick={false}><RefreshCw aria-hidden="true" size={16} /></TooltipTrigger>
+                        </div>
                         </div>
                         <article className="compatibility-profile-list-item is-expanded">
-                          <div className="compatibility-profile-list-row">
-                            <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true"><span className="transcode-automation-list-copy transcode-federation-member-list-copy"><strong><span className="status-dot is-online" aria-hidden="true" />Worker 02</strong><small>connected · 16 CPU · 420 GB free · 0 active jobs</small></span><ChevronDown aria-hidden="true" /></button>
-                            <div className="compatibility-profile-quick-actions transcode-automation-quick-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Sync Worker 02" title="Sync"><RefreshCw size={18} aria-hidden="true" /></button><button type="button" className="secondary icon-only-button compatibility-profile-quick-action danger" aria-label="Exclude Worker 02" title="Exclude"><Unplug size={18} aria-hidden="true" /></button></div>
+                          <div className="compatibility-profile-list-row transcode-federation-member-row">
+                            <div className="transcode-federation-member-trigger-shell">
+                              <TooltipTrigger ariaLabel="Worker 02: Connection warning" className="transcode-federation-status-trigger" align="start" placement="auto" maxWidth={360} pinOnClick={false} content={<div className="transcode-federation-status-tooltip"><strong className="transcode-federation-status-tooltip-heading is-warning">Connection warning</strong><div className="transcode-federation-status-tooltip-item is-error"><span>Last error</span><p>timed out</p></div></div>}>
+                                <span className="transcode-federation-entry-marker transcode-federation-status-marker"><span className="status-dot is-warning" aria-hidden="true" /></span>
+                              </TooltipTrigger>
+                              <button type="button" className="compatibility-profile-list-trigger transcode-federation-member-trigger" aria-expanded="true"><span className="transcode-automation-list-copy transcode-federation-member-list-copy"><strong><span className="transcode-federation-member-name">Worker 02</span></strong><small>16 CPU · 420 GB free · 0 active jobs · v0.18.0</small></span><ChevronDown aria-hidden="true" /></button>
+                            </div>
+                            <div className="compatibility-profile-quick-actions transcode-automation-quick-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Sync Worker 02" title="Sync"><RefreshCw size={18} aria-hidden="true" /></button><button type="button" className="secondary icon-only-button compatibility-profile-quick-action danger" aria-label="Disconnect Worker 02" title="Disconnect"><Unplug size={18} aria-hidden="true" /></button></div>
                           </div>
                           <div className="compatibility-profile-details transcode-automation-details transcode-federation-member-tab-details">
-                            <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid"><label><span>Endpoint</span><input readOnly value="http://worker-02:8091" onChange={() => undefined} /></label><label><span>Connection status</span><input readOnly value="connected" onChange={() => undefined} /></label></div>
-                            <label className="app-settings-flag-toggle"><input type="checkbox" defaultChecked /><span>Accept remote transcode jobs</span></label>
+                            <div className="transcode-federation-member-accelerators">
+                              <span className="transcode-federation-member-detail-label">Available accelerators</span>
+                              <ul className="transcode-federation-member-accelerator-list">
+                                <li><a className="transcode-federation-member-accelerator-link" href="#catalog-members-transcode-matrix-cuda0"><span className="transcode-federation-member-accelerator-copy"><strong>NVIDIA GeForce RTX 3080</strong><small>cuda</small></span><ChevronRight aria-hidden="true" size={16} /></a></li>
+                                <li><a className="transcode-federation-member-accelerator-link" href="#catalog-members-transcode-matrix-qsv0"><span className="transcode-federation-member-accelerator-copy"><strong>Intel Quick Sync</strong><small>qsv</small></span><ChevronRight aria-hidden="true" size={16} /></a></li>
+                              </ul>
+                            </div>
                           </div>
                         </article>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </VariantCard>
-              <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare"]} wide>
+                        <article className="compatibility-profile-list-item transcode-federation-peer"><span><strong><Plus aria-hidden="true" className="transcode-federation-add-icon" size={16} /><span className="transcode-federation-peer-name">Worker 01</span></strong><small>http://worker-01:8091 · v0.18.0</small></span><div className="transcode-federation-peer-connect-control"><input className="settings-choice-input transcode-federation-segment-input transcode-federation-peer-code-input is-invalid" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="Pairing code" aria-label="Pairing code" value="" readOnly onChange={() => undefined} /><button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button"><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />Connect</button></div></article>
+                        <article className="compatibility-profile-list-item transcode-federation-manual-item"><Plus aria-hidden="true" className="transcode-federation-entry-marker transcode-federation-add-icon" size={16} /><div className="transcode-federation-peer-connect-control transcode-federation-manual-connect-control"><input className="settings-choice-input transcode-federation-segment-input transcode-federation-manual-address-input" type="url" placeholder="http://host:8091" aria-label="http://host:8091" value="" readOnly onChange={() => undefined} /><input className="settings-choice-input transcode-federation-segment-input transcode-federation-peer-code-input transcode-federation-manual-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="Pairing code" aria-label="Pairing code" value="" readOnly onChange={() => undefined} /><button type="button" className="secondary small settings-panel-header-action transcode-federation-connect-button"><AnimatedConnectIcon className="transcode-federation-action-icon" size={16} aria-hidden="true" />Connect</button></div></article>
+                       </div>
+                       </section>
+                     </div>
+                   </section>
+               </VariantCard>
+               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare"]} wide>
                 <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
                   <h3>Synchronized preview comparison</h3>
                   <VideoWipeCompare first={{ src: "data:video/mp4;base64,", label: "Original" }} second={{ src: "data:video/mp4;base64,", label: "Variant" }} />
@@ -2817,7 +2962,7 @@ export function UiElementsPage() {
                       </button>
                     </div>
                     <div className="form-grid">
-                      <div className="field"><label>Name</label><input defaultValue="Movies" /></div>
+                      <div className="field"><label>Name</label><input className="settings-choice-input" defaultValue="Movies" /></div>
                     </div>
                   </section>
                 </div>
@@ -2883,7 +3028,7 @@ export function UiElementsPage() {
                     <p className="settings-delete-library-assets-note">Media files and assets in the library path are not deleted or modified.</p>
                     <div className="settings-delete-library-confirm-form">
                       <label>Type Movies to confirm.</label>
-                      <input defaultValue="Movies" />
+                      <input className="settings-choice-input" defaultValue="Movies" />
                       <div className="settings-delete-library-actions">
                         <button type="button" className="secondary">Cancel</button>
                         <button type="button" className="settings-delete-library-confirm-button">Delete library</button>
@@ -2932,11 +3077,11 @@ export function UiElementsPage() {
                 <div className="settings-sidebar-stack">
                   <section className="app-settings-section transcode-automation-section">
                     <div className="compatibility-profile-panel transcode-automation-content">
-                      <div className="settings-profile-toggle-row"><div className="transcode-automation-tab-controls"><div className="library-history-range-toggle" role="tablist" aria-label="Transcoding profiles and rules"><button type="button" className="library-history-range-button active" aria-pressed="true">Profiles</button><button type="button" className="library-history-range-button" aria-pressed="false">Rules</button><button type="button" className="library-history-range-button" aria-pressed="false">Accelerators</button><button type="button" className="library-history-range-button" aria-pressed="false">Members</button></div></div></div>
+                      <div className="settings-profile-toggle-row"><div className="transcode-automation-tab-controls"><div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding profiles and rules" aria-orientation="horizontal"><button type="button" id="catalog-transcode-stack-profiles" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}><span className="transcode-automation-tab-label">Profiles</span></button><button type="button" id="catalog-transcode-stack-rules" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Rules</span></button><button type="button" id="catalog-transcode-stack-accelerators" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Accelerators</span></button><button type="button" id="catalog-transcode-stack-members" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}><span className="transcode-automation-tab-label">Members</span></button></div></div></div>
                     </div>
                   </section>
                   <section className="transcode-federation-panel">
-                    <div className="transcode-federation-heading"><div className="panel-title-row"><h3><Server aria-hidden="true" />Federation</h3></div></div>
+                    <div className="transcode-federation-heading"><div className="transcode-federation-heading-main"><button type="button" className="transcode-federation-section-chevron" aria-label="Collapse Federation" title="Collapse Federation" aria-expanded="true"><ChevronDown aria-hidden="true" className="nav-icon" /></button><label className="toggle-switch transcode-federation-toggle"><input type="checkbox" role="switch" defaultChecked aria-label="Enable direct federation for this installation" /><span className="toggle-switch-track" aria-hidden="true"><span className="toggle-switch-thumb" /></span></label><h3>Federation</h3></div></div>
                   </section>
                 </div>
               </VariantCard>
