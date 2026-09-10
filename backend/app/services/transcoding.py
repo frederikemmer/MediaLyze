@@ -225,6 +225,12 @@ FILENAME_TOKENS = {
     "container",
     "videoBitrate",
 }
+FILENAME_CLEANUP_PATTERNS = {
+    "square_brackets": r"\[[^\[\]]*\]",
+    "round_brackets": r"\([^()]*\)",
+    "square_and_round_brackets": r"\[[^\[\]]*\]|\([^()]*\)",
+    "all_brackets": r"\[[^\[\]]*\]|\([^()]*\)|\{[^{}]*\}",
+}
 BITMAP_SUBTITLE_CODECS = {"dvb_subtitle", "dvd_subtitle", "hdmv_pgs_subtitle", "pgs", "xsub"}
 CAPABILITIES_LOCK = Lock()
 
@@ -1629,13 +1635,14 @@ def _token_values(media_file: MediaFile, plan: TranscodePlan) -> dict[str, str]:
         language = (decision.language or (row.language if row else None) or "").strip()
         if language:
             subtitle_languages.add(language)
+    metadata_separator = plan.filename_metadata_separator
     bitrate = primary_video.bitrate if primary_video else None
     return {
         "resolution": f"{width}x{height}" if width and height else "",
         "dynRange": plan.dynamic_range if plan.dynamic_range != "preserve" else (media_file.primary_video_hdr_type or ""),
         "codec": (codec or "").upper(),
-        "audioLanguages": "+".join(sorted(audio_languages)),
-        "subtitleLanguages": "+".join(sorted(subtitle_languages)),
+        "audioLanguages": metadata_separator.join(sorted(audio_languages)),
+        "subtitleLanguages": metadata_separator.join(sorted(subtitle_languages)),
         "container": plan.container.upper(),
         "videoBitrate": f"{round(bitrate / 1_000_000, 1):g}Mbps" if bitrate else "",
     }
@@ -1648,6 +1655,20 @@ def _effective_filename_template(plan: TranscodePlan) -> str:
             template += " [{subtitleLanguages}]"
         return template
     return plan.filename_template
+
+
+def _clean_filename_stem(stem: str, plan: TranscodePlan) -> str:
+    preset = plan.filename_cleanup_preset
+    if preset == "none":
+        return stem
+    pattern = plan.filename_cleanup_regex if preset == "custom" else FILENAME_CLEANUP_PATTERNS.get(preset)
+    if not pattern:
+        return stem
+    try:
+        cleaned = re.sub(pattern, "", stem)
+    except re.error as exc:
+        raise ValueError(f"Invalid filename cleanup regex: {exc}") from exc
+    return re.sub(r"\s+", " ", cleaned).strip(" ._-")
 
 
 def render_output_filename(media_file: MediaFile, plan: TranscodePlan) -> str:
@@ -1664,7 +1685,8 @@ def render_output_filename(media_file: MediaFile, plan: TranscodePlan) -> str:
     rendered = re.sub(r"\[\s*,\s*", "[", rendered)
     rendered = re.sub(r"\s+", " ", rendered).strip(" ,;|+-")
     suffix = f".{plan.container}"
-    stem = _sanitize_filename(f"{Path(media_file.filename).stem} {rendered}".strip(), suffix=suffix)
+    source_stem = _clean_filename_stem(Path(media_file.filename).stem, plan)
+    stem = _sanitize_filename(f"{source_stem} {rendered}".strip(), suffix=suffix)
     return f"{stem}{suffix}"
 
 

@@ -74,6 +74,16 @@ class TranscodePlan(BaseModel):
     # changes its display string.
     filename_template_override: bool | None = None
     include_subtitle_languages: bool = False
+    filename_metadata_separator: str = Field(default=", ", max_length=32)
+    filename_cleanup_preset: Literal[
+        "none",
+        "square_brackets",
+        "round_brackets",
+        "square_and_round_brackets",
+        "all_brackets",
+        "custom",
+    ] = "none"
+    filename_cleanup_regex: str | None = Field(default=None, max_length=256)
     # ``None`` inherits the persisted global runtime settings. This keeps the
     # request contract backwards-compatible while preserving the global
     # hardware-required default for older API clients.
@@ -170,6 +180,16 @@ class TranscodeProfileDefinition(BaseModel):
     )
     filename_template_override: bool = False
     include_subtitle_languages: bool = False
+    filename_metadata_separator: str = Field(default=", ", max_length=32)
+    filename_cleanup_preset: Literal[
+        "none",
+        "square_brackets",
+        "round_brackets",
+        "square_and_round_brackets",
+        "all_brackets",
+        "custom",
+    ] = "none"
+    filename_cleanup_regex: str | None = Field(default=None, max_length=256)
     execution_mode: Literal["inherit", "hardware_required", "cpu_only"] = "inherit"
 
 

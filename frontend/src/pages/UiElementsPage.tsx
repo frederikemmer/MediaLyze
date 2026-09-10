@@ -9,6 +9,7 @@ import {
   AudioLines,
   CalendarDays,
   Check,
+  Captions,
   Clock3,
   CircleStop,
   CircleX,
@@ -31,6 +32,7 @@ import {
   FileText,
   FileVideo,
   Files,
+  Film,
   Folder,
   FlaskConical,
   GitCompare,
@@ -465,6 +467,13 @@ function SettingsNavigationFixture({ collapsed = false, noResults = false }: { c
           <ChevronDown aria-hidden="true" className="settings-mobile-menu-chevron" />
         </button>
         <div id="settings-mobile-navigation-menu" className="settings-mobile-navigation-menu" aria-hidden="true">
+          <div className="settings-navigation-search-stack settings-mobile-navigation-search-stack">
+            <label className="settings-navigation-search settings-mobile-navigation-search">
+              <span className="sr-only">Search settings</span>
+              <Search aria-hidden="true" />
+              <input type="search" value={noResults ? "zzzz" : "Combinaton"} readOnly placeholder="Search settings…" />
+            </label>
+          </div>
           <nav className="settings-mobile-navigation-list" aria-label="Mobile settings navigation">
             <button type="button" className="settings-navigation-item settings-mobile-navigation-item active" aria-current="page" tabIndex={-1}>
               <span className="nav-active-pill" aria-hidden="true" />
@@ -1336,7 +1345,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Brand, version, and update labels" source={header} classes={["app-title-link", "app-version", "app-version-update"]}>
+              <VariantCard title="Brand, version, and update labels" source={header} classes={["app-title-link", "app-version", "app-version-update"]} status="The header version pill stays compact and 30% smaller beside the MediaLyze title.">
                 <div className="app-title-block">
                   <a href="/" className="app-title-link" aria-label="Dashboard" onClick={preventCatalogNavigation}>
                     <h1>MediaLyze</h1>
@@ -1350,7 +1359,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[2]}>
             <VariantGroup title="Navigation and settings controls">
-              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action", "settings-navigation-search-stack", "settings-search-results", "settings-search-result", "settings-search-result-label", "settings-search-result-context"]} wide>
+              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action", "settings-navigation-search-stack", "settings-mobile-navigation-search-stack", "settings-mobile-navigation-search", "settings-search-results", "settings-search-result", "settings-search-result-label", "settings-search-result-context"]} wide>
                 <SettingsNavigationFixture />
               </VariantCard>
               <VariantCard title="Settings sidebar · no search match" source={`${settings} > Navigation > Search empty`} classes={["settings-navigation-panel", "settings-navigation-search-stack", "settings-search-results", "settings-search-result-empty"]} wide>
@@ -2086,36 +2095,38 @@ export function UiElementsPage() {
               <VariantCard
                 title="Resolution category restore action"
                 source={`${settings} > Resolution categories`}
-                classes={["panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button"]}
+                classes={["resolution-categories-async-panel", "panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button"]}
                 wide
               >
-                <div className="panel-title-row">
-                  <h2>Resolution categories</h2>
-                  <TooltipTrigger
-                    ariaLabel="Explain reduced default resolution thresholds"
-                    content={[
-                      "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
-                      "",
-                      "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
-                      "Reference dimensions:",
-                      "8k: 7680x4320",
-                      "4k / UHD: 3840x2160",
-                      "1080p / Full HD: 1920x1080",
-                      "720p / HD: 1280x720",
-                    ].join("\n")}
-                    preserveLineBreaks
-                  >
-                    ?
-                  </TooltipTrigger>
-                  <div className="async-panel-toggle-actions">
+                <div className="resolution-categories-async-panel">
+                  <div className="panel-title-row">
+                    <h2>Resolution categories</h2>
                     <TooltipTrigger
-                      ariaLabel="Restore defaults"
-                      content="Restore defaults"
-                      className="secondary icon-only-button resolution-category-restore-button"
-                      pinOnClick={false}
+                      ariaLabel="Explain reduced default resolution thresholds"
+                      content={[
+                        "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
+                        "",
+                        "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
+                        "Reference dimensions:",
+                        "8k: 7680x4320",
+                        "4k / UHD: 3840x2160",
+                        "1080p / Full HD: 1920x1080",
+                        "720p / HD: 1280x720",
+                      ].join("\n")}
+                      preserveLineBreaks
                     >
-                      <History aria-hidden="true" className="nav-icon" size={16} />
+                      ?
                     </TooltipTrigger>
+                    <div className="async-panel-toggle-actions">
+                      <TooltipTrigger
+                        ariaLabel="Restore defaults"
+                        content="Restore defaults"
+                        className="secondary icon-only-button resolution-category-restore-button"
+                        pinOnClick={false}
+                      >
+                        <History aria-hidden="true" className="nav-icon" size={16} />
+                      </TooltipTrigger>
+                    </div>
                   </div>
                 </div>
               </VariantCard>
@@ -2703,35 +2714,58 @@ export function UiElementsPage() {
                   </section>
                 </div>
               </VariantCard>
-              <VariantCard title="Compact transcoding plan" source="TranscodingPanel" classes={["transcoding-panel", "transcode-control", "settings-choice-input", "transcode-stream-row", "transcode-stream-group", "transcode-stream-group-summary", "transcode-stream-encode-fields", "transcode-video-encode-fields", "transcode-control-field", "transcode-codec-field", "transcode-preset-field", "transcode-range-row", "transcode-filename-section", "transcode-filename-preview", "transcode-action-button", "transcode-preview-link"]} wide>
+              <VariantCard title="Compact transcoding plan" source="TranscodingPanel" classes={["transcoding-panel", "transcode-control", "settings-choice-input", "transcode-stream-tabs", "transcode-stream-tab", "transcode-stream-tab-count", "transcode-stream-tabpanel", "transcode-stream-list", "transcode-stream-list-item", "transcode-stream-list-row", "transcode-stream-row-trigger", "transcode-stream-row-copy", "transcode-stream-action-icon", "transcode-action-field", "transcode-action-select", "transcode-stream-details", "transcode-stream-copy-details", "transcode-stream-copy-note", "transcode-stream-encode-fields", "transcode-video-encode-fields", "transcode-control-field", "transcode-dynamic-range-field", "transcode-codec-field", "transcode-preset-field", "transcode-range-row", "transcode-quality-range", "transcode-range-value", "transcode-filename-section", "transcode-filename-header", "transcode-filename-toggle", "transcode-filename-chevron", "transcode-filename-body", "transcode-filename-template-input", "transcode-filename-template-editor", "transcode-filename-inline-token", "transcode-filename-inline-text", "transcode-filename-metadata-tools", "transcode-filename-metadata-toggle", "transcode-filename-token-list", "transcode-filename-token-pill", "transcode-filename-divider-field", "transcode-filename-cleanup", "transcode-filename-cleanup-heading", "transcode-filename-field", "transcode-filename-preview", "transcode-action-button", "transcode-preview-link"]} wide>
                 <div className="transcoding-panel">
                   <div className="transcode-configuration-grid">
                     <label><span>Profile</span><select className="settings-choice-input transcode-control" defaultValue="compatibility"><option value="compatibility">Original / copy</option></select></label>
                     <label><span>Target container</span><select className="settings-choice-input transcode-control" defaultValue="mp4"><option value="mp4">MP4</option></select></label>
+                    <label><span>Output mode</span><select className="settings-choice-input transcode-control" title="Separate output works with a read-only media mount; same-directory and replacement require a writable media directory." defaultValue="transcode_output"><option value="transcode_output">Separate Transcode_Output</option><option value="same_directory">Next to source file</option><option value="replace_original">Replace original</option></select></label>
+                    <label><span>Execution target</span><select className="settings-choice-input transcode-control" title="Execution target: local. Automatic mode includes queueing, transfer, transcoding and result publishing." defaultValue="local"><option value="local">This installation</option><option value="automatic">Automatic federation worker</option></select></label>
                   </div>
-                  <details className="transcode-stream-group" open>
-                    <summary className="transcode-stream-group-summary"><span>Video streams</span><span className="transcode-stream-group-count">1</span></summary>
-                    <article className="transcode-stream-row">
-                      <div><strong>#0</strong><span>HEVC</span></div>
-                      <select className="settings-choice-input transcode-control" defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select>
-                      <div className="transcode-stream-encode-fields transcode-video-encode-fields">
-                        <label className="transcode-control-field transcode-codec-field"><span className="transcode-field-label"><span>Target codec</span><TooltipTrigger ariaLabel="Explain automatic encoder selection" content="The target worker chooses a compatible encoder for this codec and its available hardware device automatically." /></span><select className="settings-choice-input transcode-control" defaultValue="hevc"><option value="h264">H.264 / AVC</option><option value="hevc">H.265 / HEVC</option><option value="av1">AV1</option></select></label>
-                        <label className="transcode-control-field"><span className="transcode-field-label"><span>Quality (ICQ)</span><TooltipTrigger ariaLabel="Explain quality control" content="Lower values mean higher quality for Intel QSV's constant-quality mode." /></span><span className="transcode-range-row"><input className="settings-choice-input transcode-control" type="range" min="1" max="51" defaultValue="23" /><output>23</output></span></label>
-                        <label className="transcode-control-field transcode-preset-field"><span className="transcode-field-label"><span>Speed preset</span><TooltipTrigger ariaLabel="Explain encoding speed preset" content="Faster presets reduce encoding time but usually reduce compression efficiency and increase file size." /></span><select className="settings-choice-input transcode-control" defaultValue="medium"><option value="veryfast">veryfast · Very fast</option><option value="fast">fast · Fast</option><option value="medium">medium · Balanced</option><option value="slow">slow · Slow</option><option value="veryslow">veryslow · Very slow</option></select></label>
-                        <label className="transcode-control-field"><span className="transcode-field-label"><span>Output resolution</span><TooltipTrigger ariaLabel="Explain output resolution" content="Only equal or lower heights are offered." /></span><select className="settings-choice-input transcode-control" defaultValue="1920x1080"><option value="1920x1080">1080p (1920×1080)</option></select></label>
+                  <div className="transcode-automation-tab-controls transcode-stream-tabs">
+                    <div className="transcode-automation-tab-list" role="tablist" aria-label="Stream types" aria-orientation="horizontal">
+                      <button type="button" id="catalog-transcode-stream-tab-video" className="transcode-automation-tab-button transcode-stream-tab active" role="tab" aria-selected="true" aria-controls="catalog-transcode-stream-panel-video"><Film aria-hidden="true" size={16} /><span className="transcode-automation-tab-label">Video</span><span className="transcode-stream-tab-count">6</span></button>
+                      <button type="button" id="catalog-transcode-stream-tab-audio" className="transcode-automation-tab-button transcode-stream-tab" role="tab" aria-selected="false" aria-controls="catalog-transcode-stream-panel-audio" tabIndex={-1}><AudioLines aria-hidden="true" size={16} /><span className="transcode-automation-tab-label">Audio</span><span className="transcode-stream-tab-count">2</span></button>
+                      <button type="button" id="catalog-transcode-stream-tab-subtitles" className="transcode-automation-tab-button transcode-stream-tab" role="tab" aria-selected="false" aria-controls="catalog-transcode-stream-panel-subtitles" tabIndex={-1}><Captions aria-hidden="true" size={16} /><span className="transcode-automation-tab-label">Subtitles</span><span className="transcode-stream-tab-count">1</span></button>
+                    </div>
+                  </div>
+                  <div id="catalog-transcode-stream-panel-video" className="transcode-stream-tabpanel" role="tabpanel" aria-labelledby="catalog-transcode-stream-tab-video">
+                    <div className="transcode-stream-list">
+                      <article className="transcode-stream-list-item is-expanded">
+                        <div className="transcode-stream-list-row">
+                          <button type="button" className="transcode-stream-row-trigger" aria-expanded="true" aria-controls="catalog-transcode-stream-details-video-0"><span className="transcode-stream-row-copy"><strong>#0</strong><span>HEVC</span><span className="transcode-language-badge">Undetermined</span></span><ChevronDown aria-hidden="true" /></button>
+                          <div className="transcode-action-field is-expanded" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 0" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div>
+                        </div>
+                        <div id="catalog-transcode-stream-details-video-0" className="transcode-stream-details">
+                          <div className="transcode-stream-encode-fields transcode-video-encode-fields">
+                            <label className="transcode-control-field transcode-dynamic-range-field"><span className="transcode-field-label"><span>Dynamic range</span></span><select className="settings-choice-input transcode-control" defaultValue="preserve"><option value="preserve">Preserve</option><option value="sdr">SDR</option><option value="hdr10">HDR10</option><option value="hlg">HLG</option></select></label>
+                            <label className="transcode-control-field transcode-codec-field"><span className="transcode-field-label"><span>Target codec</span><TooltipTrigger ariaLabel="Explain automatic encoder selection" content="The target worker chooses a compatible encoder for this codec and its available hardware device automatically." /></span><select className="settings-choice-input transcode-control" defaultValue="hevc"><option value="h264">H.264 / AVC</option><option value="hevc">H.265 / HEVC</option><option value="av1">AV1</option></select></label>
+                            <label className="transcode-control-field"><span className="transcode-field-label"><span>Quality (ICQ)</span><TooltipTrigger ariaLabel="Explain quality control" content="Lower values mean higher quality for Intel QSV's constant-quality mode." /></span><span className="transcode-range-row"><input className="settings-choice-input transcode-control transcode-quality-range is-reversed" type="range" min="1" max="51" defaultValue="23" /><input className="settings-choice-input transcode-control transcode-range-value" type="number" min="1" max="51" defaultValue="23" aria-label="video 0 quality value" /></span></label>
+                            <label className="transcode-control-field transcode-preset-field"><span className="transcode-field-label"><span>Speed preset</span><TooltipTrigger ariaLabel="Explain encoding speed preset" content="Faster presets reduce encoding time but usually reduce compression efficiency and increase file size." /></span><select className="settings-choice-input transcode-control" defaultValue="medium"><option value="veryfast">veryfast · Very fast</option><option value="fast">fast · Fast</option><option value="medium">medium · Balanced</option><option value="slow">slow · Slow</option><option value="veryslow">veryslow · Very slow</option></select></label>
+                            <label className="transcode-control-field"><span className="transcode-field-label"><span>Output resolution</span><TooltipTrigger ariaLabel="Explain output resolution" content="Only equal or lower heights are offered." /></span><select className="settings-choice-input transcode-control" defaultValue="1920x1080"><option value="1920x1080">1080p (1920×1080)</option></select></label>
+                          </div>
+                        </div>
+                      </article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#1</strong><span>H.264 / AVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 1" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#2</strong><span>AV1</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-action-field is-collapsed" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 2" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#3</strong><span>HEVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-action-field is-collapsed" data-action="drop"><Trash2 aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 3" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="drop"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#4</strong><span>MPEG-2</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 4" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#5</strong><span>MJPEG</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 5" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></article>
+                    </div>
+                  </div>
+                  <section className="media-card library-settings-card transcode-filename-section is-expanded">
+                    <header className="transcode-filename-header"><button type="button" className="transcode-filename-toggle" aria-expanded="true" aria-controls="catalog-transcode-filename"><span className="transcode-filename-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="transcode-filename-heading"><h3>Filename template</h3></span></button><TooltipTrigger ariaLabel="Explain filename template" content="Use tokens in braces and optional groups in square brackets." /></header>
+                    <div className="transcode-filename-body" id="catalog-transcode-filename">
+                      <div className="settings-choice-input transcode-control transcode-filename-template-input transcode-filename-template-editor" contentEditable role="textbox" aria-label="Filename template" aria-multiline="false" suppressContentEditableWarning>
+                        <span className="transcode-filename-inline-text">[</span><span className="transcode-filename-inline-token" contentEditable={false} data-filename-token="resolution">{'{resolution}'}</span><span className="transcode-filename-inline-text">, </span><span className="transcode-filename-inline-token" contentEditable={false} data-filename-token="dynRange">{'{dynRange}'}</span><span className="transcode-filename-inline-text">, </span><span className="transcode-filename-inline-token" contentEditable={false} data-filename-token="codec">{'{codec}'}</span><span className="transcode-filename-inline-text">] [</span><span className="transcode-filename-inline-token" contentEditable={false} data-filename-token="audioLanguages">{'{audioLanguages}'}</span><span className="transcode-filename-inline-text">] [</span><span className="transcode-filename-inline-token" contentEditable={false} data-filename-token="subtitleLanguages">{'{subtitleLanguages}'}</span><span className="transcode-filename-inline-text">]</span>
                       </div>
-                    </article>
-                  </details>
-                  <details className="transcode-stream-group">
-                    <summary className="transcode-stream-group-summary"><span>Audio streams</span><span className="transcode-stream-group-count">2</span></summary>
-                  </details>
-                  <section className="transcode-filename-section">
-                    <div className="transcode-filename-heading"><h3>Filename template</h3><TooltipTrigger ariaLabel="Explain filename template" content="Use tokens in braces and optional groups in square brackets." /></div>
-                    <label className="transcode-filename-option"><input type="checkbox" defaultChecked />Override default template</label>
-                    <label className="transcode-filename-option"><input type="checkbox" defaultChecked />Include subtitle languages</label>
-                    <input className="settings-choice-input transcode-control" defaultValue="[{resolution}, {dynRange}, {codec}] [{audioLanguages}] [{subtitleLanguages}]" />
-                    <small>Tokens: {'{resolution}, {dynRange}, {codec}, {audioLanguages}, {subtitleLanguages}'}</small>
-                    <div className="transcode-filename-preview"><span>Finished filename preview</span><code>Arrival [1920x1080, SDR, H264] [en] [de].mp4</code></div>
+                      <div className="transcode-filename-metadata-tools">
+                        <button type="button" className="secondary small settings-panel-header-action transcode-filename-metadata-toggle" aria-expanded="false"><Plus aria-hidden="true" size={14} />Add metadata</button>
+                      </div>
+                      <label className="transcode-filename-field transcode-filename-divider-field"><span className="transcode-field-label"><span>Metadata divider</span><TooltipTrigger ariaLabel="Explain metadata divider" content="Separates multiple values from one metadata token, such as audio or subtitle languages." /></span><input className="settings-choice-input transcode-control" defaultValue=", " /></label>
+                      <div className="transcode-filename-cleanup"><div className="transcode-filename-cleanup-heading"><div><h4>Source filename cleanup</h4><p>Remove bracketed sections from the original filename before adding metadata.</p></div><TooltipTrigger ariaLabel="Explain source filename cleanup" content="Presets use regular expressions; custom removes every match." /></div><label className="transcode-filename-field"><span>Removal preset</span><select className="settings-choice-input transcode-control" defaultValue="square_brackets"><option value="none">Keep original filename</option><option value="square_brackets">Square brackets [ … ]</option><option value="custom">Custom regular expression</option></select></label><p className="field-hint">Remove every non-nested section such as [1080p] or [WEB-DL].</p></div>
+                      <div className="transcode-filename-preview"><span>Finished filename preview</span><code>Arrival [1920x1080, SDR, H264] [en] [de, fr].mp4</code></div>
+                    </div>
                   </section>
                   <div className="transcode-actions"><button type="button" className="secondary transcode-action-button">✓ Validate plan</button><button type="button" className="transcode-action-button">Start transcoding</button></div>
                   <div className="transcode-preview-link-card"><a className="secondary transcode-preview-link" href="#">Open synchronized preview</a></div>
@@ -2920,7 +2954,7 @@ export function UiElementsPage() {
                      </div>
                    </section>
                </VariantCard>
-               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare"]} wide>
+               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare", "video-wipe-stage", "video-wipe-divider", "video-wipe-handle", "video-wipe-label", "video-wipe-controls"]} wide>
                 <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
                   <h3>Synchronized preview comparison</h3>
                   <VideoWipeCompare first={{ src: "data:video/mp4;base64,", label: "Original" }} second={{ src: "data:video/mp4;base64,", label: "Variant" }} />

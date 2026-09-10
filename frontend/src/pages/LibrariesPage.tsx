@@ -6682,6 +6682,7 @@ export function LibrariesPage() {
           {activeSettingsPanelId === "resolutionCategories" ? (
           <AsyncPanel
             title={t("libraries.resolutionCategories.title")}
+            className="resolution-categories-async-panel"
             titleAddon={
               <TooltipTrigger
                 ariaLabel="Explain reduced default resolution thresholds"

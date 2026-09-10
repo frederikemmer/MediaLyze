@@ -303,7 +303,10 @@ def test_filename_template_can_include_selected_subtitle_languages(monkeypatch, 
         validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
 
     assert validation.valid is True
-    assert validation.output_filename == "Movie [1920x1080, HDR10, H264] [en] [de+en].mp4"
+    assert validation.output_filename == "Movie [1920x1080, HDR10, H264] [en] [de, en].mp4"
+
+    plan.filename_metadata_separator = ","
+    assert transcoding.render_output_filename(media_file, plan) == "Movie [1920x1080, HDR10, H264] [en] [de,en].mp4"
 
 
 def test_custom_filename_template_requires_supported_tokens_only(tmp_path) -> None:
@@ -322,6 +325,28 @@ def test_custom_filename_template_requires_supported_tokens_only(tmp_path) -> No
             assert "unknown" in str(exc)
         else:
             raise AssertionError("Unknown filename token was accepted")
+
+
+def test_filename_cleanup_removes_bracketed_source_sections_and_supports_custom_regex(tmp_path) -> None:
+    factory = _session_factory()
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.filename = "Movie [1080p] (WEB-DL).mkv"
+        plan = _compatibility_plan()
+        plan.filename_cleanup_preset = "square_and_round_brackets"
+        assert transcoding.render_output_filename(media_file, plan) == "Movie [1920x1080, HDR10, H264] [en].mp4"
+
+        plan.filename_cleanup_preset = "custom"
+        plan.filename_cleanup_regex = r"\s*\[[^\]]*\]"
+        assert transcoding.render_output_filename(media_file, plan) == "Movie (WEB-DL) [1920x1080, HDR10, H264] [en].mp4"
+
+        plan.filename_cleanup_regex = "["
+        try:
+            transcoding.render_output_filename(media_file, plan)
+        except ValueError as exc:
+            assert "Invalid filename cleanup regex" in str(exc)
+        else:
+            raise AssertionError("Invalid filename cleanup regex was accepted")
 
 
 def test_validation_keeps_crf_and_hardware_cq_distinct(monkeypatch, tmp_path) -> None:

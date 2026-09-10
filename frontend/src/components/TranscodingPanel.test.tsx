@@ -198,9 +198,32 @@ describe("TranscodingPanel", () => {
     render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
 
     expect((await screen.findAllByText("Movie.mkv")).length).toBeGreaterThan(0);
-    expect(screen.getByRole("combobox", { name: "Action for stream 0" })).toHaveValue("encode");
-    expect(screen.getByRole("combobox", { name: "Action for stream 0" })).toHaveClass("settings-choice-input", "transcode-control");
-    expect(screen.getByRole("slider", { name: "video 0 quality" })).toHaveClass("settings-choice-input", "transcode-control");
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(screen.getByRole("tab", { name: /Video/ })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: /Audio/ }));
+    expect(screen.getByRole("combobox", { name: "Action for stream 1" })).toHaveValue("copy");
+    fireEvent.click(screen.getByRole("tab", { name: /Subtitles/ }));
+    expect(screen.getByRole("combobox", { name: "Action for stream 2" })).toHaveValue("copy");
+    fireEvent.click(screen.getByRole("tab", { name: /Video/ }));
+    const streamAction = screen.getByRole("combobox", { name: "Action for stream 0" });
+    expect(streamAction).toHaveValue("copy");
+    expect(streamAction).toHaveClass("settings-choice-input", "transcode-control", "transcode-action-select");
+    expect(streamAction).toHaveAttribute("title", "Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output.");
+    expect(streamAction.closest(".transcode-action-field")).toHaveClass("is-collapsed");
+    expect(screen.queryByRole("combobox", { name: "video 0 dynamic range" })).not.toBeInTheDocument();
+    fireEvent.change(streamAction, { target: { value: "encode" } });
+    fireEvent.click(screen.getByRole("button", { name: /video 0: H\.265 \/ HEVC/ }));
+    expect(screen.getByRole("button", { name: /video 0: H\.265 \/ HEVC/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("combobox", { name: "Action for stream 0" }).closest(".transcode-action-field")).toHaveClass("is-expanded");
+    expect(screen.queryByRole("button", { name: "Explain stream action" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Output mode" })).toHaveAttribute("title", "Separate output works with a read-only media mount; same-directory and replacement require a writable media directory.");
+    expect(screen.getByRole("combobox", { name: "Execution target" })).toHaveAttribute("title", "Execution target: local. Automatic mode includes queueing, transfer, transcoding and result publishing.");
+    expect(screen.getByRole("combobox", { name: "video 0 dynamic range" })).toHaveValue("preserve");
+    expect(screen.getByRole("slider", { name: "video 0 quality" })).toHaveClass("settings-choice-input", "transcode-control", "transcode-quality-range", "is-reversed");
+    const qualityValue = screen.getByRole("spinbutton", { name: "video 0 quality value" });
+    expect(qualityValue).toHaveValue(23);
+    fireEvent.change(qualityValue, { target: { value: "29" } });
+    expect(qualityValue).toHaveValue(29);
     expect(screen.getByRole("combobox", { name: "video 0 speed preset" })).toHaveValue("medium");
     expect(screen.getByRole("combobox", { name: "video 0 resolution" })).toHaveClass("settings-choice-input", "transcode-control");
     expect(screen.getByRole("combobox", { name: "video 0 codec" })).toHaveValue("h264");
@@ -210,7 +233,8 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("combobox", { name: "video 0 speed preset" })).toHaveValue("medium");
     fireEvent.change(screen.getByRole("combobox", { name: "video 0 speed preset" }), { target: { value: "slow" } });
     fireEvent.change(screen.getByRole("combobox", { name: "video 0 resolution" }), { target: { value: "1280x720" } });
-    fireEvent.click(screen.getByText("Subtitle streams"));
+    fireEvent.change(screen.getByRole("combobox", { name: "video 0 dynamic range" }), { target: { value: "hdr10" } });
+    fireEvent.click(screen.getByRole("tab", { name: /Subtitles/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Action for stream 2" }), { target: { value: "drop" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /Movie\.en\.srt/ }));
     fireEvent.click(screen.getByRole("button", { name: "Validate plan" }));
@@ -229,6 +253,7 @@ describe("TranscodingPanel", () => {
     expect(sentPlan.video_streams[0].encoder).toBeNull();
     expect(sentPlan.audio_streams[0].encoder).toBeNull();
     expect(sentPlan.video_streams[0].preset).toBe("slow");
+    expect(sentPlan.dynamic_range).toBe("hdr10");
     expect(sentPlan.subtitle_streams[0].action).toBe("drop");
     expect(sentPlan.external_subtitles[0]).toMatchObject({ subtitle_id: 8, action: "encode" });
   });
@@ -244,25 +269,80 @@ describe("TranscodingPanel", () => {
     await waitFor(() => expect(api.cancelTranscodeJob).toHaveBeenCalledWith(5));
   });
 
-  it("previews the generated filename and supports subtitle-language templates", async () => {
+  it("previews the generated filename and supports metadata tokens with a custom divider", async () => {
     render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
     await screen.findAllByText("Movie.mkv");
 
-    expect(screen.getByText("Movie [1920x1080, HDR10, H264] [en].mp4")).toBeInTheDocument();
-    const subtitleOption = screen.getByRole("checkbox", { name: "Include subtitle languages" });
-    const overrideOption = screen.getByRole("checkbox", { name: "Override default template" });
-    expect(subtitleOption).not.toBeChecked();
-    expect(overrideOption).not.toBeChecked();
-
-    fireEvent.click(subtitleOption);
-    expect(screen.getByRole("textbox", { name: "Filename template" })).toHaveValue("[{resolution}, {dynRange}, {codec}] [{audioLanguages}] [{subtitleLanguages}]");
-    expect(screen.getByText("Movie [1920x1080, HDR10, H264] [en] [de].mp4")).toBeInTheDocument();
-
-    fireEvent.click(overrideOption);
+    expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
     const templateInput = screen.getByRole("textbox", { name: "Filename template" });
     expect(templateInput).not.toBeDisabled();
-    fireEvent.change(templateInput, { target: { value: "[{codec}] [{subtitleLanguages}]" } });
-    expect(screen.getByText("Movie [H264] [de].mp4")).toBeInTheDocument();
+    expect(templateInput.textContent).toBe("[{resolution}, {dynRange}, {codec}] [{audioLanguages}]");
+    expect(templateInput.querySelector('[data-filename-token="resolution"]')).toBeInTheDocument();
+
+    const audioToken = templateInput.querySelector('[data-filename-token="audioLanguages"]');
+    expect(audioToken).toBeInTheDocument();
+    templateInput.focus();
+    const insertionCaret = document.createRange();
+    insertionCaret.setStartAfter(audioToken as Node);
+    insertionCaret.collapse(true);
+    const insertionSelection = window.getSelection();
+    insertionSelection?.removeAllRanges();
+    insertionSelection?.addRange(insertionCaret);
+    fireEvent.select(templateInput);
+
+    const addMetadata = screen.getByRole("button", { name: "Add metadata" });
+    fireEvent.click(addMetadata);
+    expect(addMetadata).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Subtitle languages" }));
+    expect(templateInput.textContent).toBe("[{resolution}, {dynRange}, {codec}] [{audioLanguages}{subtitleLanguages}]");
+
+    templateInput.textContent = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}] [{subtitleLanguages}]";
+    fireEvent.input(templateInput);
+    expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en] [de].mp4")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Movie\.en\.srt/ }));
+    expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en] [de, en].mp4")).toBeInTheDocument();
+
+    const dividerInput = screen.getByRole("textbox", { name: "Metadata divider" });
+    fireEvent.change(dividerInput, { target: { value: "," } });
+    expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en] [de,en].mp4")).toBeInTheDocument();
+
+    templateInput.textContent = "[{codec}] [{subtitleLanguages}]";
+    fireEvent.input(templateInput);
+    expect(screen.getByText("Movie [HEVC] [de,en].mp4")).toBeInTheDocument();
+
+    const subtitleToken = templateInput.querySelector('[data-filename-token="subtitleLanguages"]');
+    expect(subtitleToken).toBeInTheDocument();
+    templateInput.focus();
+    const selection = document.createRange();
+    selection.setStartAfter(subtitleToken as Node);
+    selection.collapse(true);
+    const browserSelection = window.getSelection();
+    browserSelection?.removeAllRanges();
+    browserSelection?.addRange(selection);
+    fireEvent.keyDown(templateInput, { key: "Backspace" });
+    await waitFor(() => expect(templateInput.textContent).toBe("[{codec}] []"));
+  });
+
+  it("collapses filename controls and removes selected source-name sections", async () => {
+    const filename = { ...file, filename: "Movie [1080p] (WEB-DL).mkv" } as MediaFileDetail;
+    render(<MemoryRouter><TranscodingPanel file={filename} /></MemoryRouter>);
+    await screen.findAllByText("Movie.mkv");
+
+    const toggle = screen.getByRole("button", { name: "Filename template" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("textbox", { name: "Filename template" })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    const cleanupPreset = screen.getByRole("combobox", { name: "Removal preset" });
+    fireEvent.change(cleanupPreset, { target: { value: "square_and_round_brackets" } });
+    expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
+
+    fireEvent.change(cleanupPreset, { target: { value: "custom" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Custom regular expression" }), { target: { value: "\\s*\\[[^\\]]*\\]" } });
+    expect(screen.getByText("Movie (WEB-DL) [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
   });
 
   it("applies a saved profile and switches back to expert editing", async () => {

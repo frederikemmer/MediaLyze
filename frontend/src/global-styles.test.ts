@@ -33,6 +33,12 @@ describe("global theme styles", () => {
     );
   });
 
+  it("keeps the application version pill compact beside the header title", () => {
+    expect(componentStyles).toMatch(
+      /\.app-version\s*\{[^}]*min-height:\s*0[^}]*padding:\s*2px 6px[^}]*font-size:\s*0\.6rem[^}]*line-height:\s*normal/s,
+    );
+  });
+
   it("distinguishes bordered and borderless icon-button surfaces", () => {
     expect(componentStyles).toMatch(
       /button\.icon-button\s*\{[^}]*width:\s*32px[^}]*height:\s*32px[^}]*min-width:\s*32px[^}]*min-height:\s*32px[^}]*border-radius:\s*9px/s,
@@ -94,6 +100,15 @@ describe("global theme styles", () => {
     );
     expect(componentStyles).toMatch(
       /\.settings-layout\.is-settings-nav-collapsed \.settings-navigation-header\s*\{[^}]*padding:\s*2px 0 0/s,
+    );
+  });
+
+  it("keeps only the dedicated search visible in the mobile Settings menu", () => {
+    expect(componentStyles).toMatch(
+      /@media\s*\(max-width:\s*900px\)[\s\S]*?\.settings-navigation-panel\s*>\s*\.settings-navigation-search-stack\s*\{[^}]*display:\s*none/s,
+    );
+    expect(componentStyles).toMatch(
+      /\.settings-mobile-navigation-search-stack\s*\{[^}]*display:\s*grid/s,
     );
   });
 

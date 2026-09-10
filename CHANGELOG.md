@@ -4,175 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+The next release focuses on hardware-aware transcoding, trusted worker federation, and clearer media-management workflows. Details may change before release.
+
 ### ✨ New
 
-- add opt-in direct transcode federation between trusted MediaLyze installations with stable identities, pairing-code trust, authenticated/encrypted protocol messages, LAN discovery, capability/resource exchange, automatic or explicit worker selection, leased CPU/GPU reservations, resumable SHA-256 chunk transfers, isolated target workspaces, origin-side result validation/publication, visible remote phases, and Docker protocol/discovery port configuration
-- add a dedicated Transcoding job center with multi-file profile-based queueing, live active-job monitoring, sampled speed charts, hardware visibility, cancellation/retry actions, and a separate history view built on the existing CPU/GPU slot scheduler
-- add a compact, collapsible per-device transcoding capability matrix that locally tests every exposed decode-to-encode codec direction, distinguishes complete hardware paths from software-only and unavailable paths, and measures the highest repeatable full-speed concurrency level up to twenty simultaneous hardware sessions without touching media libraries or normal job history
-- show consistent hover/focus details for every tested matrix cell, including repeated runs, medians, slowdown limits, and the practical parallel-session recommendation
-- add safe FFmpeg transcoding for regular video files with three editable profiles, structured expert plans, validated CPU/hardware encoders, stream-level mapping, external subtitle embedding, progress and cancellation, linked analyzed variants, Wipe comparison, searchable job history, and independent retention controls
-- add versioned saved transcoding profiles with abstract ordered stream rules, disabled-by-default library automation rules, nested file conditions, pagewise previews/inventory, immutable job provenance, durable deduplication, safe output subfolders, and explicit per-version replacement approval
-- add global transcoding runtime settings with hardware-required/CPU-only execution, a 90% CPU budget, dedicated CPU/GPU slots, explicit output policies, retries, partial-output cleanup, real NVIDIA capability probes, and automatic Docker GPU wiring
-- add verified macOS VideoToolbox hardware encoding for the desktop sidecar, including Apple-device detection, H.264/HEVC profile selection, and runtime smoke tests
-- automatically inventory and probe all visible Linux DRM render nodes plus native Windows AMD AMF and Intel QSV targets, binding each job to a device that actually passed its encoder test
-- make the Docker auto-launchers pass Linux render/video group IDs together with `/dev/dri` and preserve them for non-root `PUID/PGID` processes, so AMD and Intel VAAPI/QSV containers need no hand-written GPU override
-- include the Debian Mesa and full Intel non-free VAAPI user-space driver plus the Intel oneVPL GPU runtime on amd64 in the Linux image where the target architecture provides them, so AMD VAAPI and Intel Arc QSV do not depend on a manually extended container image
-- keep same-directory transcoded variants out of primary library counts, statistics, duplicate groups, exports, telemetry/storage aggregates, and future scans while retaining detail and job-history visibility
-- pin and checksum desktop FFmpeg artifacts and the multi-architecture Docker FFmpeg package, with build-time verification and a fixed Debian base line
+- **Hardware-aware video transcoding** — create validated FFmpeg plans with CPU or tested hardware execution, stream controls, output policies, progress, cancellation, linked variants, and side-by-side comparison.
+- **A dedicated transcoding job center** — queue multiple files, monitor progress, see hardware usage, cancel or retry jobs, and review completed work.
+- **Trusted transcode federation** — pair MediaLyze installations, discover workers on the local network, exchange capabilities, and send jobs to a selected or automatically chosen worker.
+- **Per-device capability testing** — see which decode and encode paths are available and how much practical parallel hardware capacity each device provides.
+- **Reusable transcoding profiles and automation** — save stream rules for repeatable conversions and prepare optional library-specific automation.
+- **Clearer transcoding and file-detail workflows** — use compact stream editing, filename templates, metadata tokens, source-name cleanup, and responsive synchronized preview comparison.
+- **More portable hardware support** — discover platform-specific media engines and wire supported Docker devices while keeping hardware-required execution explicit.
 
 ### ✨ Enhancements
 
-- make ordinary action buttons use the compact rectangular control treatment used by library scans, connector bulk actions, and settings-table actions, while retaining pill shapes only for intentional tabs, statuses, and icon controls
-- distinguish icon-only controls with explicit bordered or borderless primitives and static or animated Lucide icon classes, while keeping icon spacing and dark-mode action surfaces theme-aware
-- keep native dropdown menus theme-aware so dark-mode options use readable dark surfaces with light text
-- preserve the established round, compact tooltip triggers when ordinary action buttons use the rectangular baseline
-- make Settings search cover nested settings tabs, rank the best contextual match with small typo tolerance, open it directly, and highlight the focused control
-- restore left-aligned Settings navigation entries and remove browser-native blue search reset glyphs so text-field controls follow the MediaLyze theme
-- tighten the vertical spacing between the Settings navigation heading and its search field
-- keep Settings search highlighting only for nested page controls, never the sidebar or top-level page shell, and left-align the navigation search results
-- keep the complete Settings navigation visible while search results expand below the search field, including App settings when there is no match
-- extend the federation member hover and focus highlight across the complete row, including the status point and quick actions, without layering the former trigger highlight on top
-- give the compact transcoding automation tabs a slightly larger click area and a broader upward hover highlight without changing their menu order
-- make the compact transcoding tab guidance tooltip smaller and vertically centered with the tab labels
-- make the compact settings control style the global baseline for ordinary inputs, selects, and textareas, and remove the legacy oversized control reset
-- unify ordinary select controls on the theme-aware Ideal dropdown spacing and remove legacy per-page chevrons and wrappers from connector mappings, Storage Map, and Transcoding filters
-- make application scrollbars use transparent tracks with theme-aware pill thumbs so scroll containers no longer render a light background
-- match accelerator matrix rows to the compact profile/rule row height and vertically center their backend and origin labels
-- remove the redundant remote-job acceptance option from federation member details
-- replace federation member endpoint/status details with linked available accelerators that open the matching capability matrix
-- let Test Hardware ask every connected federation member to refresh its capability matrix; each worker reruns the test when its FFmpeg or hardware capabilities changed
-- place partial-output cleanup into the same dropdown grid as the other transcoding runtime choices
-- label the partial-output choice concisely and use Remove/Keep actions instead of Yes/No
-- resolve file-detail transcodes from a target codec to a compatible encoder on the selected local or federation worker, so worker-specific encoder names are no longer required in the UI while hardware-required mode remains fail-closed
-- expose the direct transcode federation protocol and LAN discovery ports in the local development Compose file and document the required Docker mappings
-- move transcode federation guidance into a heading tooltip to keep the settings panel compact
-- replace federation pairing-code text actions with borderless icon buttons and a restore-defaults history icon
-- show detected hostname and IP addresses for direct transcode federation pairing, including explicitly advertised endpoints
-- list tested federation-member hardware matrices in Accelerators with a member pill, instead of duplicating them inside each member accordion
-- move federation members into the shared transcoding automation toggle beside Accelerators, with the same searchable expandable list treatment as profiles and rules
-- shorten the transcoding automation tabs to Profiles and Rules and remove the inline rule-order hint
-- show an explicit empty state for the untested transcoding capability matrix and ask users to run the hardware test before displaying capability values
-- use rectangular Connect/Discover actions with animated connect/telescope icons and label both federation pairing actions as Connect
-- use a six-digit federation pairing code that rotates every 30 seconds, with a synchronized expiry indicator and responsive pairing-code placement beside the federation and installation names
-- remove the visible direct-federation toggle label and omit loopback, wildcard, link-local, and multicast entries from reachable pairing addresses
-- exchange configured and locally resolved Federation endpoints after pairing, test all routes on pairing/startup/new-route/manual events, retry alternate addresses automatically with adaptive backoff after failures, and prefer the route with the best measured latency and bidirectional throughput
-- tighten the spacing around the Transcode federation heading and its compact settings panel
-- align discovered federation pairing-code inputs with their Connect buttons and keep peer endpoints beside names when space allows
-- increase the visual prominence of discovered federation installation names
-- remove direct-LAN, remote-job, and foreign-resource policy controls from the federation settings surface
-- remove the redundant stable installation ID display from the federation settings surface
-- group automatically found federation installations in a separated "Found in Network" panel and remove the manual LAN discovery action
-- present discovered federation pairing as one segmented input-and-action control and flash a short red outline for missing codes without moving the field
-- match the manual federation pairing code and Connect action to the discovered-peer segmented control, including its compact spacing and vertical divider
-- place the manual federation pairing fallback below the automatically found installations and match the displayed pairing-code height to adjacent settings inputs
-- place the Federation settings panel below the transcoding automation toggle and its profile, rule, accelerator, and member workspace
-- make the Federation settings panel collapsible, move discovery refresh beside the Members tabs, remove global GPU/retry controls, and put manual federation pairing at the end of the member list
-- place the Federation disclosure chevron before the heading and remove the redundant network icon
-- align the Federation disclosure with the Libraries and Connectors chevrons and place its enable toggle between the chevron and heading
-- keep the installation name and pairing code in the collapsible Federation heading, remove the federation-name field, and allow inline installation-name editing
-- place the untested accelerator empty state inside the same bordered automation list used by the member workspace
-- move LAN-discovered installations and their pairing controls into the Members tab, place its toggle menu inside the member list, and show member resources plus application versions inline
-- flatten reachable federation endpoints into a responsive copyable list, remove redundant address/pairing hints, and show discovered installation names without duplicate endpoints
-- use animated Copy and Telescope icons for Transcoding federation actions and size tooltip bubbles to their content
-- keep successful federation copy actions silent while still surfacing clipboard errors
-- use the shared toggle-switch control for enabling direct federation in Transcoding settings
-- add inline pairing-code inputs to discovered federation Connect actions with local missing-code feedback
-- keep routine transcode federation setting autosaves quiet instead of showing a success notice after every change
-- place the federation enable toggle in the panel heading and remove the redundant status pill and description tooltip
-- rename the federation heading to Federation, add an immediate Found in Network refresh action, and refine spacing around the automation tabs and content
-- use the same compact in-list automation tab row for Profiles, Rules, Accelerators, and Members
-- remove the obsolete search fields from the Profiles, Rules, and Accelerators tabs and replace the shared sliding pill with a compact, stable-height underline navigator with a soft active accent across the automation workspace
-- refine the Transcoding job center with clearer status-icon spacing, borderless row action icons, and single-open row details activated by clicking a job row instead of a separate chevron
-- remove redundant Transcoding header status counters, refresh timestamp, and bulk-add dialog; move Active/History into the compact rectangular toggle and make filter reset a tooltip-backed restore icon
-- refine expanded Transcoding details with a row-level source-file icon action, a full-width FFmpeg log disclosure, filename-only source/output labels with path tooltips, a start/duration/ETA time range, and a larger unobstructed speed chart
-- keep the FFmpeg log collapsed by default and let the expanded speed chart fill its complete detail column
-- remove redundant Transcoding detail headings and show source-to-target video codec and dynamic-range conversions from persisted source metadata and the selected plan
-- make Transcoding table columns resizable with the same drag handles and persisted browser widths as the Library Detail table
-- streamline the Transcoding header by removing redundant helper copy, showing job counts as shared status metrics, and moving hardware load into compact tooltip-backed slot indicators beside the page title
-- refine the Transcoding table defaults with a compact actions column, responsive speed charts, and transparent overflow scrollbars
-- make Transcoding filenames plain text, keep asset navigation on the trailing icon action, and allow the resizable content columns to shrink closer to their truncated minimums
-- keep the expanded Transcoding speed-chart tooltip compact and confined to the chart bounds so it cannot be hidden behind the table edge
-- combine Transcoding progress, time left, and speed into one resizable status column with an inline speed chart and full-width progress track
-- compact the combined Transcoding status cell so its metrics, speed graph, and progress track follow the surrounding table density
-- recognize vendor-identified Intel CPU/iGPU and AMD APU/iGPU DRM media engines even when an FFmpeg build exposes only a subset of their backend families, keep each physical render node usable through its passing QSV/VAAPI encoders, and label matrix software fallbacks as Software
-- clarify and regression-test automatic Intel Quick Sync CPU/iGPU and AMD VCN/APU media-engine paths on Linux and native Windows, while keeping CPU software encoding explicit
-- bind native Windows AMF/QSV probes, transcode jobs, and codec matrices to the physical D3D11 adapter that passed, so hybrid NVIDIA plus AMD/Intel systems expose and test each media engine independently
-- clarify that one CPU-safe Docker Compose definition plus the standard GPU-wiring launchers covers NVIDIA, Intel, and AMD host configurations, while desktop installers use the bundled platform FFmpeg for every native adapter
-- document the verified Intel Arc Linux Docker capability matrix, including the available QSV/VAAPI encoder paths and concrete backend combinations that remain unavailable
-- compact and modernize Transcode form controls, align select chevrons consistently, and remove the verbose encoder-option hint from the stream plan
-- use the current rectangular settings actions for transcoding automation controls, with editable copies for built-in profiles and guarded custom-profile deletion
-- autosave transcoding runtime changes and present saved profiles and automatic rules in the same searchable, expandable workspace as hardware/software profiles
-- remove manual reload, preview, and inventory actions from the profile/rule settings workspace until their dedicated workflow is introduced
-- align profile creation actions with the compact profile-tab toggles instead of placing them in panel headers
-- streamline transcoding matrix tooltips by removing duplicate result and benchmark guidance while retaining decoder, encoder, workload, and measured run details
-- show decoder and encoder paths inline with a directional arrow in transcoding matrix tooltips
-- place the transcoding matrix axis labels at the table edges instead of stacking them in the corner
-- remove the redundant transcoding capability matrix legend because each cell already identifies its result
-- make the transcoding guidance tooltip follow the active tab and consolidate FFmpeg/concurrency details beside the Accelerators tab
-- simplify transcoding settings labels to Transcoding and Test Hardware
-- package the capability matrix in the same compact searchable device-list treatment as the compatibility profile panels without changing matrix cells
-- align Pattern recognition accordions with the compact left-chevron settings disclosure pattern and add breathing room to matrix device headers while keeping backend identifiers inline
-- remove redundant version metadata from saved transcoding profile rows and use compact profile/action labels in the profile settings
-- align compatibility profile editor actions with the current rectangular settings controls, including filled orange save actions and dark-mode hover states
-- keep transcoding profile and rule editors in tandem with the Hard/Software profile form grid, read-only fields, and expandable capability sections
-- remember each accelerator matrix device's last expanded or collapsed state between visits
-- label local accelerator matrices with a distinct local-origin pill alongside federation-member pills
-- show only the accelerator backend in the compact device metadata line
-- show GPU and CPU icons for accelerator matrices based on the tested device class
-- list trusted federation members before discovered pairing suggestions and mark new and manual pairing entries with compact plus icons
-- equalize Federation member, discovered-peer, and manual-pairing rows with a shared 38px row shell and matching 32px compact content height
-- match the manual Federation address field to the compact pairing-code segment styling and align its text start with the Federation name column
-- round the invalid left Pairing code segment to the grouped control's inner radius so its red feedback is not clipped at the outer corner
-- move federation member errors into status-dot tooltips with green, orange, and red reachability states
-- unify manual federation pairing into the same segmented address, pairing-code, and Connect control as discovered peers
-- restore the active selection pill for Settings navigation entries
-- keep the manual Federation plus marker outside the grouped pairing control and center it with the shared Federation entry markers
-- integrate the transcoding profiles-and-rules labels into the compact tab toggles and place their formatted guidance tooltip beside the controls
-- place the capability matrix in a third Accelerators tab beside transcoding profiles and rules without changing the matrix cells
-- format Quality profiles like the Transcoding workspace, list all profiles per media type, and make each profile's scoring sections expandable
-- remove the redundant nested metric panel so profile sections sit directly in the expanded profile surface
-- place quality-profile metadata such as Default and Built-in inline beside the profile name, wrapping only when the available width requires it
-- move the compatibility profile catalog development note into a tooltip beside its panel heading
-- align Hardware & Software Profiles with the compact Quality profiles list, expandable rows, and underline tab navigation
-- remove the redundant global hardware-device selector so all probed devices remain available for automatic profile/rule selection
-- replace transcoding hardware radio and checkbox selection with one physical-device dropdown while keeping backend-specific paths grouped internally
-- move Transcoding runtime guidance into heading tooltips, compact the Pattern recognition docs action, and align quality-profile dropdown chevrons with the current select pattern
-- streamline Pattern recognition restore actions into tooltip-backed icon controls, consolidate Bonus and Ignore pattern accordions, and use a responsive Show & Seasons settings grid
-- refine Pattern recognition tooltips, external documentation links, borderless restore controls, and main-section separators
-- move Resolution categories reset into a borderless tooltip-backed header icon
-- align Resolution categories editing with profile settings using a bottom add action and animated delete icons
-- improve quality-profile metric weight contrast by using the theme ink color for weight values
-- align quality and compatibility profile type selectors with the rectangular segmented-toggle control
-- align library connector and path actions with compact rectangular controls and smaller settings inputs
-- streamline connector controls with an enabled toggle, API-key dialog replacement flow, and compact Test action
-- constrain stream editing to safe Copy / Encode / Remove controls with encoder-aware quality and bitrate sliders, aspect-ratio-preserving downscale presets, localized BCP 47 language selection, and copy-by-default profiles
-- add encoder-specific video speed presets alongside quality controls, including Intel QSV, NVENC, AMF, x264/x265, and SVT-AV1 guidance
-- make Intel QSV/VAAPI HEVC, AV1, VP9, MPEG-2, and MJPEG encoders survive capability detection with backend-specific hardware probes and explicit DRM-device selection
-- streamline the Transcode page with collapsible stream groups, compact action controls, tooltip-based guidance, live filename previews with subtitle-language tokens, and a synchronized comparison Preview route for linked variants
-- improve filename duplicate matching with title-core cleanup for release-style suffixes, runtime tolerance filtering, and configurable Pattern recognition settings
+- **Refined settings and compatibility profiles** — provide consistent responsive controls, searchable profile catalogs, and clearer capability and member views.
+
+### 🔒 Security
+
+- refresh dependencies and desktop packaging safeguards for current security advisories
 
 ### 🐛 Bug fixes
 
-- send Jellyfin API keys through the modern `MediaBrowser` authorization header so connections remain compatible when legacy authorization is disabled
-- remove light gray dark-mode fallbacks from the UI catalog and remaining semantic surface consumers by routing nested surfaces, borders, and ordinary UI surfaces through theme-aware tokens
-- apply the same theme-aware surface treatment to delete-library summaries, compatibility favorites, metadata search controls, file-detail download actions, and invalid search states
-- prevent federation detail requests from failing when a discovered peer has not provided capabilities yet
-- fix target-side federation transcodes failing during isolated MediaFile validation when no persisted library root exists
-- prevent LAN discovery from listing this installation's own advertised endpoints as connectable peers
-- re-admit an excluded federation peer when it is paired again with the current pairing code
-- ignore local or remote self-identities when exchanging federation exclusions so a peer cannot exclude itself again
-- fix startup migration handling for existing transcode databases when federation fields are introduced
-- require a hardware-only decode probe before labeling a matrix direction as a complete hardware path, and expose MPEG-2/MJPEG software fallback encoders instead of reporting them as unavailable
-- suppress the short-lived Windows console windows created by FFmpeg, FFprobe, and hardware capability probes in the desktop app
-- make the Windows test suite independent of optional symlink privileges and explicit about the platform when checking FFprobe path normalization
-- run the cross-platform Electron version-stamping step through Bash so Windows does not interpret the POSIX environment variable syntax as an unset PowerShell variable
-- keep custom select chevrons single and correctly positioned when applying light or dark theme background colors, and render compatibility capability sections with theme-aware nested surfaces instead of light gray dark-mode fallbacks [#180](https://github.com/frederikemmer/MediaLyze/pull/180) by [@MadsThy](https://github.com/MadsThy)
-- initialize Intel VAAPI/QSV hardware devices from a Linux DRM render node during capability checks and transcoding, and include the required Intel runtime drivers in AMD64 Docker images
-- require an explicit server-side confirmation for original replacement and report a clear failure when an advertised hardware encoder fails its runtime smoke test instead of falling back to CPU
-- make Debian Docker builds install the exact checked FFmpeg DEB, expose NVIDIA video capabilities, and normalize the copied entrypoint for Linux containers
-- keep CUDA/NVENC capability probes working in minimal Linux and Docker Desktop WSL2 containers without `nvidia-smi` or a Linux DRM render node by using the CUDA Driver API fallback
-- document that Docker Desktop on macOS cannot expose the Apple GPU or VideoToolbox framework to the Linux container; macOS hardware encoding is therefore desktop-only while the container remains CPU-safe unless a supported Linux GPU runtime is available
-- verify the pinned FFmpeg source before macOS Mach-O re-signing so the ARM64 desktop sidecar build does not reject its own packaged binary as a checksum mismatch
+- improve the reliability of federation pairing, worker lifecycle, capability testing, and transcode execution
 
 ### New Contributors
 

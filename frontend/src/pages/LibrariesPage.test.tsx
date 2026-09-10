@@ -1633,6 +1633,7 @@ describe("LibrariesPage ignore patterns", () => {
     expect(restoreButton.closest(".async-panel-toggle-actions")).not.toBeNull();
 
     const heading = screen.getByRole("heading", { name: "Resolution categories" });
+    expect(heading.closest(".resolution-categories-async-panel")).not.toBeNull();
     const titleRow = heading.closest(".panel-title-row");
     expect(titleRow).not.toBeNull();
     expect(titleRow?.querySelector(".async-panel-toggle-actions")).toContainElement(restoreButton);
@@ -2093,6 +2094,7 @@ describe("LibrariesPage settings panels", () => {
       "true",
     );
     expect(menu).toHaveAttribute("aria-hidden", "false");
+    expect(within(menu as HTMLElement).getByRole("searchbox", { name: "Search settings" })).toBeInTheDocument();
     expect(within(menu as HTMLElement).getByRole("button", { name: "full scan" })).toBeInTheDocument();
 
     fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));

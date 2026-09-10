@@ -1337,6 +1337,14 @@ export type TranscodeStreamPlan = {
   title?: string | null;
 };
 
+export type FilenameCleanupPreset =
+  | "none"
+  | "square_brackets"
+  | "round_brackets"
+  | "square_and_round_brackets"
+  | "all_brackets"
+  | "custom";
+
 export type TranscodePlan = {
   version: 1;
   profile: "compatibility" | "storage" | "modern" | "expert";
@@ -1359,6 +1367,9 @@ export type TranscodePlan = {
   filename_template: string;
   filename_template_override?: boolean | null;
   include_subtitle_languages?: boolean;
+  filename_metadata_separator?: string | null;
+  filename_cleanup_preset?: FilenameCleanupPreset | null;
+  filename_cleanup_regex?: string | null;
   output_mode?: "transcode_output" | "same_directory" | "replace_original" | null;
   execution_mode?: "hardware_required" | "cpu_only" | null;
   replacement_confirmed?: boolean;
@@ -1408,6 +1419,9 @@ export type TranscodeProfileDefinition = {
   filename_template: string;
   filename_template_override: boolean;
   include_subtitle_languages: boolean;
+  filename_metadata_separator?: string | null;
+  filename_cleanup_preset?: FilenameCleanupPreset | null;
+  filename_cleanup_regex?: string | null;
   execution_mode: "inherit" | "hardware_required" | "cpu_only";
 };
 

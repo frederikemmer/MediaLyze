@@ -754,6 +754,9 @@ def materialize_transcode_profile(
         filename_template=definition.filename_template,
         filename_template_override=definition.filename_template_override,
         include_subtitle_languages=definition.include_subtitle_languages,
+        filename_metadata_separator=definition.filename_metadata_separator,
+        filename_cleanup_preset=definition.filename_cleanup_preset,
+        filename_cleanup_regex=definition.filename_cleanup_regex,
         output_mode=output_mode,
         execution_mode=execution_mode,
     )
