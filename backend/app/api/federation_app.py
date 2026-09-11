@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from backend.app.api.deps import get_app_settings
 from backend.app.api.federation_routes import federation_protocol_router
 from backend.app.core.config import Settings
-from backend.app.db.session import init_db
 
 
 def create_federation_app(settings: Settings | None = None, runtime=None) -> FastAPI:
@@ -17,7 +16,12 @@ def create_federation_app(settings: Settings | None = None, runtime=None) -> Fas
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        init_db()
+        # The protocol server is normally hosted in the same process as the
+        # main application.  Its database has already been initialized by the
+        # main application lifespan; running the migrations a second time from
+        # this listener can contend with the active SQLite connection and keep
+        # Uvicorn from becoming ready.  Standalone callers are responsible for
+        # initializing their application database before serving this ASGI app.
         yield
 
     app = FastAPI(

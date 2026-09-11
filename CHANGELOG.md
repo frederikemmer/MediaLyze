@@ -34,6 +34,7 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 
 ### 🐛 Bug fixes
 
+- start the separate Federation listener without re-running SQLite initialization in a second in-process Uvicorn lifespan, avoiding startup timeouts on production databases
 - surface unavailable Federation listeners and mismatched peer endpoints with actionable connection errors instead of leaving stale peers marked connected
 - confirm Federation member disconnects and make still-visible installations available for explicit re-pairing under discovered installations
 - improve the reliability of federation pairing, worker lifecycle, capability testing, and transcode execution

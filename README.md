@@ -237,7 +237,11 @@ For packaged `.app`, `.dmg`, `.exe`, and `AppImage` builds, see [docs/build_desk
 
 ## Docker configuration
 
-Relevant environment variables:
+The complete environment-variable reference, including application settings,
+Federation, Docker Compose interpolation, entrypoint permissions, defaults,
+and security notes is in [docs/environment.md](docs/environment.md).
+
+The most commonly used variables are:
 
 - `MEDIALYZE_RUNTIME`: runtime mode, `server` or `desktop`, default `server`
 - `CONFIG_PATH`: writable config/data directory, default `/config` in server mode and the OS user-data directory in desktop mode
