@@ -1671,6 +1671,9 @@ export type TranscodeFederationSettings = {
   protocol_version: number;
   temp_budget_bytes: number;
   result_retention_hours: number;
+  listener_status?: "unknown" | "disabled" | "starting" | "running" | "error";
+  listener_port?: number | null;
+  listener_error?: string | null;
 };
 
 export type TranscodeFederationMember = {

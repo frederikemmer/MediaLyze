@@ -729,6 +729,9 @@ class TranscodeFederationSettingsRead(BaseModel):
     protocol_version: int = 1
     temp_budget_bytes: int = 0
     result_retention_hours: int = 24
+    listener_status: Literal["unknown", "disabled", "starting", "running", "error"] = "unknown"
+    listener_port: int | None = None
+    listener_error: str | None = None
 
 
 class TranscodeFederationSettingsUpdate(BaseModel):

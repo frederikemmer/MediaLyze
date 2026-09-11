@@ -559,10 +559,14 @@ function CoverDetailsList({
 function PreviewDetailsPanel({
   detail,
   comparison,
+  comparisonLoading = false,
+  comparisonError = null,
   t,
 }: {
   detail: MediaFileDetail | null;
   comparison?: MediaFileDetail | null;
+  comparisonLoading?: boolean;
+  comparisonError?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
   if (!detail) {
@@ -572,31 +576,41 @@ function PreviewDetailsPanel({
   const isVideoPreview = hasVideoMetadata(detail);
   const previewUrl = api.fileMediaUrl(detail.id);
 
-  if (comparison && isVideoPreview && hasVideoMetadata(comparison)) {
-    return (
-      <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
-        <h3>{t("transcoding.previewComparison")}</h3>
-        <VideoWipeCompare
-          first={{ src: previewUrl, label: detail.filename }}
-          second={{ src: api.fileMediaUrl(comparison.id), label: comparison.filename }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="file-detail-preview-panel">
-      <div className="file-detail-preview-player-shell">
-        {isVideoPreview ? (
-          <video className="file-detail-preview-player" controls preload="metadata" src={previewUrl}>
-            {t("fileDetail.previewUnsupported")}
-          </video>
-        ) : (
-          <audio className="file-detail-preview-player file-detail-preview-player-audio" controls preload="metadata" src={previewUrl}>
-            {t("fileDetail.previewUnsupported")}
-          </audio>
-        )}
+    <div className="file-detail-preview-stack">
+      <div className="file-detail-preview-panel">
+        <div className="file-detail-preview-player-shell">
+          {isVideoPreview ? (
+            <video className="file-detail-preview-player" controls preload="metadata" src={previewUrl}>
+              {t("fileDetail.previewUnsupported")}
+            </video>
+          ) : (
+            <audio className="file-detail-preview-player file-detail-preview-player-audio" controls preload="metadata" src={previewUrl}>
+              {t("fileDetail.previewUnsupported")}
+            </audio>
+          )}
+        </div>
       </div>
+
+      {comparisonLoading ? (
+        <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
+          <h3>{t("transcoding.previewComparison")}</h3>
+          <p className="field-hint">{t("panel.loading")}</p>
+        </div>
+      ) : comparisonError ? (
+        <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
+          <h3>{t("transcoding.previewComparison")}</h3>
+          <p className="notice compact error" role="alert">{comparisonError}</p>
+        </div>
+      ) : comparison && isVideoPreview && hasVideoMetadata(comparison) ? (
+        <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
+          <h3>{t("transcoding.previewComparison")}</h3>
+          <VideoWipeCompare
+            first={{ src: previewUrl, label: detail.filename }}
+            second={{ src: api.fileMediaUrl(comparison.id), label: comparison.filename }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1945,8 +1959,8 @@ export function FileDetailPage() {
     },
     preview: {
       title: t("fileDetail.preview"),
-      loading: (!file && !error) || previewComparisonLoading,
-      error: error ?? previewComparisonError,
+      loading: !file && !error,
+      error,
       titleAddon: (
         <TooltipTrigger
           ariaLabel={t("fileDetail.previewPlaybackWarningAria")}
@@ -1977,7 +1991,15 @@ export function FileDetailPage() {
           </div>
         </div>
       ),
-      body: <PreviewDetailsPanel detail={file} comparison={previewComparison} t={t} />,
+      body: (
+        <PreviewDetailsPanel
+          detail={file}
+          comparison={previewComparison}
+          comparisonLoading={previewComparisonLoading}
+          comparisonError={previewComparisonError}
+          t={t}
+        />
+      ),
     },
     transcoding: {
       title: t("transcoding.title"),

@@ -152,7 +152,7 @@ function renderPage() {
 beforeEach(() => {
   window.localStorage.clear();
   vi.spyOn(api, "activeTranscodeJobs").mockResolvedValue({ items: [createJob(1), createJob(2, { status: "queued", speed: null, device_id: null, hardware_backend: null, progress_percent: 0 })], total: 2 });
-  vi.spyOn(api, "transcodeJobs").mockResolvedValue({ items: [createJob(3, { status: "completed", progress_percent: 100, speed: null, eta_seconds: null, finished_at: "2026-09-07T12:40:00Z" })], total: 1 });
+  vi.spyOn(api, "transcodeJobs").mockResolvedValue({ items: [createJob(3, { status: "completed", result_file_id: 33, progress_percent: 100, speed: null, eta_seconds: null, finished_at: "2026-09-07T12:40:00Z" })], total: 1 });
   vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
 });
 
@@ -234,6 +234,18 @@ describe("TranscodingPage", () => {
 
     expect(secondRow).toHaveAttribute("aria-expanded", "true");
     expect(firstRow).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens the source preview with the completed variant comparison", async () => {
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /History/ }));
+
+    const comparisonLink = await screen.findByRole("link", { name: "Open synchronized preview" });
+    expect(comparisonLink).toHaveAttribute("href", "/files/3/preview?compare=33");
+
+    fireEvent.click(screen.getByTestId("transcode-job-3"));
+    expect(screen.getAllByRole("link", { name: "Open synchronized preview" })).toHaveLength(2);
   });
 
   it("restores and persists resizable transcoding column widths", async () => {

@@ -490,6 +490,8 @@ def update_federation_settings(
     db: Session,
     settings: Settings,
     update: TranscodeFederationSettingsUpdate,
+    *,
+    runtime: Any | None = None,
 ) -> TranscodeFederationSettingsRead:
     state = get_federation_state(db, settings)
     for key in ("enabled", "federation_name", "display_name", "discovery_enabled", "accept_jobs"):
@@ -506,7 +508,7 @@ def update_federation_settings(
     else:
         setting.value = state
     db.commit()
-    return federation_settings_read(db, settings)
+    return federation_settings_read(db, settings, runtime=runtime)
 
 
 def federation_enabled(db: Session, settings: Settings) -> bool:
@@ -763,10 +765,46 @@ def local_descriptor(db: Session, settings: Settings) -> dict[str, Any]:
     }
 
 
-def federation_settings_read(db: Session, settings: Settings) -> TranscodeFederationSettingsRead:
+def _federation_listener_state(runtime: Any | None) -> dict[str, Any]:
+    if runtime is None:
+        return {"status": "unknown", "port": None, "error": None}
+    reader = getattr(runtime, "get_federation_listener_status", None)
+    try:
+        raw = reader() if callable(reader) else {
+            "status": getattr(runtime, "federation_protocol_status", "unknown"),
+            "port": getattr(runtime, "federation_protocol_port", None),
+            "error": getattr(runtime, "federation_protocol_error", None),
+        }
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return {"status": "unknown", "port": None, "error": None}
+    if not isinstance(raw, dict):
+        return {"status": "unknown", "port": None, "error": None}
+    status = str(raw.get("status") or "unknown")
+    if status not in {"unknown", "disabled", "starting", "running", "error"}:
+        status = "unknown"
+    port = raw.get("port")
+    try:
+        port = int(port) if port is not None else None
+    except (TypeError, ValueError):
+        port = None
+    error = raw.get("error")
+    return {
+        "status": status,
+        "port": port,
+        "error": str(error)[:2048] if error else None,
+    }
+
+
+def federation_settings_read(
+    db: Session,
+    settings: Settings,
+    *,
+    runtime: Any | None = None,
+) -> TranscodeFederationSettingsRead:
     state = get_federation_state(db, settings)
     hostname_urls, ip_urls = _local_network_endpoints(settings, state)
     now = time.time()
+    listener = _federation_listener_state(runtime)
     return TranscodeFederationSettingsRead(
         enabled=bool(settings.federation_enabled and state.get("enabled")),
         federation_id=str(state["federation_id"]),
@@ -785,6 +823,9 @@ def federation_settings_read(db: Session, settings: Settings) -> TranscodeFedera
         protocol_version=PROTOCOL_VERSION,
         temp_budget_bytes=int(getattr(settings, "federation_temp_budget_bytes", 0)),
         result_retention_hours=int(getattr(settings, "federation_result_retention_hours", 24)),
+        listener_status=listener["status"],
+        listener_port=listener["port"],
+        listener_error=listener["error"],
     )
 
 
@@ -1057,10 +1098,28 @@ def _member_endpoint_probe_candidates(
     return candidates
 
 
+def _federation_route_failure_message(route: str, status_code: int) -> str:
+    if status_code in {401, 403}:
+        return (
+            "Peer rejected the secure Federation request. The endpoint may belong to a "
+            "different or older MediaLyze installation; verify that the advertised Federation "
+            "port belongs to the paired installation and pair it again if its identity changed."
+        )
+    if status_code in {404, 405}:
+        return (
+            f"Peer does not support the Federation route '{route}' (HTTP {status_code}). "
+            "It may be an older or different listener; update both installations and verify "
+            "the advertised Federation address."
+        )
+    return f"Peer rejected the secure Federation request (HTTP {status_code})"
+
+
 def federation_read(
     db: Session,
     settings: Settings,
     discovered: Iterable[dict[str, Any]] = (),
+    *,
+    runtime: Any | None = None,
 ) -> TranscodeFederationRead:
     state = get_federation_state(db, settings)
     excluded = set(state.get("excluded_installation_ids", []))
@@ -1074,13 +1133,14 @@ def federation_read(
     peers = []
     for peer in discovered:
         try:
-            if peer.get("installation_id") in excluded:
-                continue
+            # An excluded member is no longer trusted, but it may still be
+            # visible on the LAN. Keep it in discovery so the user can see
+            # the result of disconnecting it and explicitly pair it again.
             peers.append(TranscodeFederationPeerRead.model_validate(peer))
         except Exception:
             continue
     return TranscodeFederationRead(
-        settings=federation_settings_read(db, settings),
+        settings=federation_settings_read(db, settings, runtime=runtime),
         members=members,
         discovered=peers,
     )
@@ -1247,8 +1307,11 @@ def _http_json(
             response.raise_for_status()
             result = response.json()
     except httpx.HTTPStatusError as exc:
-        detail = exc.response.text[:500]
-        raise FederationError(f"Peer rejected federation request: {detail}", status_code=exc.response.status_code) from exc
+        if exc.response.status_code in {401, 403, 404, 405}:
+            detail = _federation_route_failure_message(route, exc.response.status_code)
+        else:
+            detail = f"Peer rejected federation request: {exc.response.text[:500]}"
+        raise FederationError(detail, status_code=exc.response.status_code) from exc
     except (httpx.HTTPError, ValueError) as exc:
         raise FederationError(f"Peer could not be reached: {exc}", status_code=503) from exc
     if not isinstance(result, dict):
@@ -1503,6 +1566,7 @@ def _post_member_envelope(
     )
     failures: list[str] = []
     peer_responded = False
+    secure_request_failed = False
     for endpoint in _ordered_member_endpoints(member):
         started = time.monotonic()
         # A fresh nonce makes a retry through another interface valid even if
@@ -1528,14 +1592,26 @@ def _post_member_envelope(
                 error=detail,
             )
             if exc.response.status_code not in {404, 405} and exc.response.status_code < 500:
+                failure_message = _federation_route_failure_message(route, exc.response.status_code)
+                if exc.response.status_code in {401, 403} or route == "heartbeat":
+                    member.reachable = False
+                    member.connection_status = "offline"
+                    member.last_error = failure_message[-2048:]
                 db.commit()
                 raise FederationError(
-                    "Peer rejected the secure federation request",
+                    failure_message,
                     status_code=exc.response.status_code,
                 ) from exc
-            failures.append(f"{endpoint}: HTTP {exc.response.status_code}")
+            if route == "heartbeat" and exc.response.status_code in {404, 405}:
+                secure_request_failed = True
+            failures.append(
+                f"{endpoint}: "
+                f"{_federation_route_failure_message(route, exc.response.status_code)}"
+            )
             continue
         except (httpx.HTTPError, ValueError) as exc:
+            if route == "heartbeat":
+                secure_request_failed = True
             _record_endpoint_observation(
                 member,
                 endpoint,
@@ -1546,6 +1622,8 @@ def _post_member_envelope(
             failures.append(f"{endpoint}: {exc}")
             continue
         if not isinstance(remote_envelope, dict):
+            if route == "heartbeat":
+                secure_request_failed = True
             _record_endpoint_observation(
                 member,
                 endpoint,
@@ -1563,6 +1641,7 @@ def _post_member_envelope(
                     seen_nonces=_REPLAY_NONCES,
                 )
         except FederationError as exc:
+            secure_request_failed = True
             _record_endpoint_observation(
                 member,
                 endpoint,
@@ -1570,7 +1649,11 @@ def _post_member_envelope(
                 latency_ms=(time.monotonic() - started) * 1_000,
                 error=str(exc),
             )
-            failures.append(f"{endpoint}: {exc}")
+            failures.append(
+                f"{endpoint}: secure response could not be verified. The endpoint may belong "
+                "to a different or older MediaLyze installation; verify the advertised "
+                f"Federation address and pair it again if needed. Details: {exc}"
+            )
             continue
         _record_endpoint_observation(
             member,
@@ -1591,7 +1674,7 @@ def _post_member_envelope(
             member.preferred_endpoint_url = endpoint
         _select_best_member_endpoint(member)
         return result
-    if not peer_responded:
+    if not peer_responded or secure_request_failed:
         member.reachable = False
         member.connection_status = "offline"
         member.last_error = "; ".join(failures)[-2048:] or "No known federation endpoint could be reached"
@@ -1948,7 +2031,20 @@ def test_federation_network(db: Session, settings: Settings) -> None:
         try:
             observations = probe_member_endpoints(db, settings, member, force=True)
             if not any(bool(observation.get("reachable")) for observation in observations.values()):
-                failures.append(f"{member.display_name}: no known endpoint completed a probe")
+                unsupported = [
+                    endpoint
+                    for endpoint, observation in observations.items()
+                    if int(observation.get("status_code") or 0) in {404, 405}
+                ]
+                if unsupported:
+                    failures.append(
+                        f"{member.display_name}: no endpoint supports the authenticated "
+                        "Federation network probe. The member may be an older or different "
+                        "listener; update both installations and verify the advertised "
+                        "Federation address."
+                    )
+                else:
+                    failures.append(f"{member.display_name}: no known endpoint completed a probe")
         except FederationError as exc:
             failures.append(f"{member.display_name}: {exc}")
     db.commit()

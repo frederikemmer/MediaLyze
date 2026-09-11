@@ -19,6 +19,9 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 ### ✨ Enhancements
 
 - **Refined settings and compatibility profiles** — provide consistent responsive controls, searchable profile catalogs, and clearer capability and member views.
+- **Left-aligned connector headers** — keep provider names and server URLs anchored to the start of the accordion toggle.
+- **Preview completed transcodes in context** — keep the original preview visible above the synchronized variant comparison and link completed jobs from the transcoding center directly to that comparison.
+- **Refined library detail controls** — use borderless title actions, smaller rectangular chart toggles, and connected history controls with clear section dividers.
 
 ### 🔒 Security
 
@@ -26,6 +29,8 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 
 ### 🐛 Bug fixes
 
+- surface unavailable Federation listeners and mismatched peer endpoints with actionable connection errors instead of leaving stale peers marked connected
+- confirm Federation member disconnects and make still-visible installations available for explicit re-pairing under discovered installations
 - improve the reliability of federation pairing, worker lifecycle, capability testing, and transcode execution
 
 ### New Contributors

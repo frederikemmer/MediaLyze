@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -134,6 +135,15 @@ from backend.app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
+FEDERATION_PROTOCOL_START_TIMEOUT_SECONDS = 5.0
+
+
+def _is_address_in_use(error: OSError) -> bool:
+    return (
+        getattr(error, "winerror", None) == 10048
+        or getattr(error, "errno", None) in {48, 98, 10048}
+    )
+
 
 class ScanCancelPersistenceError(RuntimeError):
     def __init__(self, canceled_job_ids: list[int]) -> None:
@@ -194,6 +204,9 @@ class ScanRuntimeManager:
         self.discovery_responder: DiscoveryResponder | None = None
         self.federation_protocol_server = None
         self.federation_protocol_thread: threading.Thread | None = None
+        self.federation_protocol_status = "disabled"
+        self.federation_protocol_error: str | None = None
+        self.federation_protocol_port: int | None = None
         self.submitted_remote_attempt_ids: set[str] = set()
         self.cancel_requested_remote_attempt_ids: set[str] = set()
         self.federation_maintenance_submitted = False
@@ -287,12 +300,7 @@ class ScanRuntimeManager:
         if self.discovery_responder is not None:
             self.discovery_responder.stop()
             self.discovery_responder = None
-        if self.federation_protocol_server is not None:
-            self.federation_protocol_server.should_exit = True
-        if self.federation_protocol_thread is not None:
-            self.federation_protocol_thread.join(timeout=3)
-            self.federation_protocol_thread = None
-            self.federation_protocol_server = None
+        self._stop_federation_protocol_server()
         self._shutdown_executor(self.maintenance_executor, cancel_futures=True)
         if self.automation_executor is not None:
             self._shutdown_executor(self.automation_executor, cancel_futures=True)
@@ -541,6 +549,83 @@ class ScanRuntimeManager:
                 self.discovery_responder = None
             self._stop_federation_protocol_server()
 
+    def get_federation_listener_status(self) -> dict[str, object]:
+        with self.lock:
+            return {
+                "status": self.federation_protocol_status,
+                "port": self.federation_protocol_port,
+                "error": self.federation_protocol_error,
+            }
+
+    def _set_federation_listener_status(
+        self,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        with self.lock:
+            self.federation_protocol_status = status
+            self.federation_protocol_error = error
+            self.federation_protocol_port = (
+                int(self.settings.federation_port)
+                if status != "disabled"
+                else None
+            )
+
+    def _check_federation_port_available(self) -> None:
+        host = str(self.settings.federation_host or "0.0.0.0")
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.bind((host, int(self.settings.federation_port)))
+
+    def _federation_listener_error_message(self, error: BaseException) -> str:
+        port = int(self.settings.federation_port)
+        if isinstance(error, OSError) and _is_address_in_use(error):
+            return (
+                f"Federation listener is unavailable on port {port}: the port is already in use "
+                "by another process. Stop the other MediaLyze instance or configure "
+                "MEDIALYZE_FEDERATION_PORT to a free port and advertise the matching address. "
+                "Remote sync and network tests remain unavailable until this listener is running."
+            )
+        return (
+            f"Federation listener could not start on port {port}. Remote sync and network tests "
+            f"remain unavailable until this listener is running. Details: {error}"
+        )
+
+    def _run_federation_protocol_server(self, server) -> None:
+        try:
+            server.run()
+        except BaseException as error:
+            message = self._federation_listener_error_message(error)
+            self._set_federation_listener_status("error", message)
+            logger.exception("Federation protocol listener stopped unexpectedly")
+        finally:
+            if (
+                self.federation_protocol_server is server
+                and not getattr(server, "started", False)
+                and not getattr(server, "should_exit", False)
+                and self.federation_protocol_status != "error"
+            ):
+                self._set_federation_listener_status(
+                    "error",
+                    self._federation_listener_error_message(
+                        RuntimeError("the listener stopped before it became ready")
+                    ),
+                )
+
+    def _dispose_federation_protocol_server(self) -> None:
+        server = self.federation_protocol_server
+        if server is not None:
+            server.should_exit = True
+        thread = self.federation_protocol_thread
+        if (
+            thread is not None
+            and thread is not threading.current_thread()
+            and thread.ident is not None
+        ):
+            thread.join(timeout=3)
+        self.federation_protocol_thread = None
+        self.federation_protocol_server = None
+
     def _ensure_federation_maintenance_job(self) -> None:
         self.scheduler.add_job(
             self.request_federation_maintenance,
@@ -613,13 +698,22 @@ class ScanRuntimeManager:
 
     def _ensure_federation_protocol_server(self) -> None:
         if self.federation_protocol_server is not None:
-            return
+            if (
+                self.federation_protocol_thread is not None
+                and self.federation_protocol_thread.is_alive()
+                and self.federation_protocol_status in {"starting", "running"}
+            ):
+                return
+            self._dispose_federation_protocol_server()
         # The regular API already exposes the protocol routes.  A second
         # listener is only needed when the configured federation port is
         # distinct, which is the normal desktop/split-network arrangement.
         if int(self.settings.federation_port) == int(self.settings.app_port):
+            self._set_federation_listener_status("running")
             return
+        self._set_federation_listener_status("starting")
         try:
+            self._check_federation_port_available()
             import uvicorn
 
             from backend.app.api.federation_app import create_federation_app
@@ -634,25 +728,41 @@ class ScanRuntimeManager:
                 )
             )
             thread = threading.Thread(
-                target=server.run,
+                target=self._run_federation_protocol_server,
+                args=(server,),
                 name="medialyze-federation-protocol",
                 daemon=True,
             )
             self.federation_protocol_server = server
             self.federation_protocol_thread = thread
             thread.start()
-        except Exception:
-            self.federation_protocol_server = None
-            self.federation_protocol_thread = None
+        except BaseException as error:
+            self._dispose_federation_protocol_server()
+            message = self._federation_listener_error_message(error)
+            self._set_federation_listener_status("error", message)
             logger.exception("Unable to start the optional federation protocol listener")
+            return
+
+        deadline = time.monotonic() + FEDERATION_PROTOCOL_START_TIMEOUT_SECONDS
+        while (
+            not getattr(server, "started", False)
+            and thread.is_alive()
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+        if getattr(server, "started", False):
+            self._set_federation_listener_status("running")
+            return
+
+        message = self.federation_protocol_error or self._federation_listener_error_message(
+            RuntimeError("the listener did not become ready in time")
+        )
+        self._dispose_federation_protocol_server()
+        self._set_federation_listener_status("error", message)
 
     def _stop_federation_protocol_server(self) -> None:
-        if self.federation_protocol_server is not None:
-            self.federation_protocol_server.should_exit = True
-        if self.federation_protocol_thread is not None:
-            self.federation_protocol_thread.join(timeout=3)
-        self.federation_protocol_server = None
-        self.federation_protocol_thread = None
+        self._dispose_federation_protocol_server()
+        self._set_federation_listener_status("disabled")
 
     def submit_remote_attempt(self, attempt_id: str) -> None:
         attempt_key = str(getattr(attempt_id, "id", attempt_id))

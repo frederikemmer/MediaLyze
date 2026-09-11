@@ -523,6 +523,25 @@ describe("TranscodingSettingsPanel", () => {
 
   });
 
+  it("explains when the local federation listener is unavailable", async () => {
+    vi.mocked(api.transcodeFederation).mockResolvedValueOnce({
+      ...federation,
+      settings: {
+        ...federation.settings,
+        listener_status: "error",
+        listener_port: 8091,
+        listener_error: "Federation listener is unavailable on port 8091: the port is already in use by another process.",
+      },
+    });
+
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    const warning = await screen.findByRole("alert");
+    expect(warning).toHaveTextContent("Federation listener unavailable");
+    expect(warning).toHaveTextContent("port 8091");
+    expect(warning).toHaveTextContent("already in use by another process");
+  });
+
   it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 

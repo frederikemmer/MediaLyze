@@ -75,6 +75,13 @@ function basename(path: string): string {
   return parts.at(-1) ?? path;
 }
 
+function previewComparisonPath(job: TranscodeJob): string | null {
+  if (job.status !== "completed" || !job.source_file_id || !job.result_file_id || job.source_file_id === job.result_file_id) {
+    return null;
+  }
+  return `/files/${job.source_file_id}/preview?compare=${job.result_file_id}`;
+}
+
 function parseSpeed(value: string | null): number | null {
   if (!value) return null;
   const parsed = Number.parseFloat(value.replace(",", "."));
@@ -396,6 +403,7 @@ function JobRow({
   const hardware = hardwareLabelForJob(job, capabilities, t);
   const videoTransform = videoTransformForJob(job, t);
   const canCancel = job.status === "queued" || job.status === "running";
+  const completedPreviewPath = previewComparisonPath(job);
   const fileLabel = basename(job.source_path_snapshot);
   const statusText = statusLabel(job.status, t);
   const elapsed = elapsedSeconds(job);
@@ -467,10 +475,10 @@ function JobRow({
           ) : null}
           {job.source_file_id ? (
             <Link
-              to={`/files/${job.source_file_id}`}
+              to={completedPreviewPath ?? `/files/${job.source_file_id}`}
               className="secondary icon-only-button transcoding-job-action"
-              aria-label={t("transcoding.openSource")}
-              title={t("transcoding.openSource")}
+              aria-label={completedPreviewPath ? t("transcoding.openPreviewComparison") : t("transcoding.openSource")}
+              title={completedPreviewPath ? t("transcoding.openPreviewComparison") : t("transcoding.openSource")}
               onClick={(event) => event.stopPropagation()}
             >
               <ExternalLink aria-hidden="true" />
@@ -533,8 +541,11 @@ function JobRow({
               </details>
               {job.result_file_id ? (
                 <div className="transcoding-detail-links">
-                  <Link to={`/files/${job.result_file_id}`} onClick={(event) => event.stopPropagation()}>
-                    <ExternalLink aria-hidden="true" />{t("transcoding.center.openResult")}
+                  <Link
+                    to={completedPreviewPath ?? `/files/${job.result_file_id}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <ExternalLink aria-hidden="true" />{completedPreviewPath ? t("transcoding.openPreviewComparison") : t("transcoding.center.openResult")}
                   </Link>
                 </div>
               ) : null}

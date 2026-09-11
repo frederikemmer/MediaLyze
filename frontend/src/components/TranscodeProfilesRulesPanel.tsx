@@ -564,6 +564,7 @@ export function TranscodeProfilesRulesPanel({
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
@@ -851,12 +852,17 @@ export function TranscodeProfilesRulesPanel({
     if (!window.confirm(t("transcoding.federation.excludeConfirm", { name: member.display_name }))) return;
     setMemberPending(member.installation_id);
     setError(null);
+    setNotice(null);
     try {
       await api.excludeTranscodeFederationMember(member.installation_id);
       if (federation) {
         onFederationData?.({ ...federation, members: federation.members.filter((item) => item.installation_id !== member.installation_id) });
       }
       if (expandedMemberId === member.installation_id) setExpandedMemberId(null);
+      setNotice(t("transcoding.federation.excludeSucceeded", { name: member.display_name }));
+      // Refresh discovery after disconnecting so an installation that is
+      // still reachable moves into the pairing list immediately.
+      onFederationData?.(await api.discoverTranscodeFederation());
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -1542,6 +1548,7 @@ export function TranscodeProfilesRulesPanel({
         </div>
       ) : error ? <div className="alert">{error}</div> : (
         <div className="compatibility-profile-panel transcode-automation-content">
+          {notice ? <div className="notice success" role="status">{notice}</div> : null}
           {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix(renderAutomationToggleRow()) : renderMemberList()}
         </div>
       )}

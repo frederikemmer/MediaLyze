@@ -38,6 +38,7 @@ import {
   GitCompare,
   Gauge,
   Gpu,
+  Hash,
   History,
   HardDrive,
   House,
@@ -54,6 +55,7 @@ import {
   PanelLeftClose,
   PanelRightClose,
   PanelTopClose,
+  Percent,
   Play,
   Plus,
   PlugZap,
@@ -1782,7 +1784,7 @@ export function UiElementsPage() {
                   </AsyncPanel>
                 </div>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
+              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
                 <article className="media-card library-settings-card connector-connection-card is-expanded">
                   <header className="connector-connection-header">
                     <div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Disable"><input type="checkbox" role="switch" defaultChecked aria-label="Disable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="true"><span className="connector-connection-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="jellyfin" title="Jellyfin"><ConnectorProviderIcon provider="jellyfin" aria-hidden="true" /><span className="sr-only">Jellyfin</span></span><strong>Living Room</strong><span className="connector-connection-url">https://living-room.example</span></span></span></button></div>
@@ -1828,7 +1830,7 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · collapsed connection" source={`${settings} > Connectors`} classes={["connector-connection-card", "is-collapsed", "connector-connection-header", "connector-connection-header-main", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "connector-status"]}>
+              <VariantCard title="Shared connector accordion · collapsed connection" source={`${settings} > Connectors`} classes={["connector-connection-card", "is-collapsed", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "connector-status"]}>
                 <article className="media-card library-settings-card connector-connection-card is-collapsed"><header className="connector-connection-header"><div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Enable"><input type="checkbox" role="switch" aria-label="Enable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="false"><span className="connector-connection-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="plex" title="Plex"><ConnectorProviderIcon provider="plex" aria-hidden="true" /><span className="sr-only">Plex</span></span><strong>Archive</strong><span className="connector-connection-url">https://archive.example</span></span></span></button></div><span className="connector-status status-success">Synchronized</span></header></article>
               </VariantCard>
               <VariantCard title="Add connector dialog · provider dropdown with Plex Soon™" source={`${settings} > Connectors > Add connection`} classes={["connector-add-dialog", "connector-provider-field", "settings-choice-input"]} wide>
@@ -1874,7 +1876,7 @@ export function UiElementsPage() {
               <VariantCard title="Create library from detected Jellyfin catalog" source={`${settings} > Libraries > Add library`} classes={["jellyfin-create-library-options", "jellyfin-create-library-option"]} wide>
                 <section className="jellyfin-create-library-options"><div><h3>Add a detected Jellyfin library</h3><p className="field-hint">Select a catalog, then choose its local media path.</p></div><div className="jellyfin-create-library-option-list"><button type="button" className="jellyfin-create-library-option is-selected" aria-pressed="true"><strong>Archive</strong><span>420 Jellyfin items</span></button><button type="button" className="jellyfin-create-library-option" aria-pressed="false"><strong>Concerts</strong><span>88 Jellyfin items</span></button></div><div className="notice success">The Jellyfin library will be linked automatically after creation.</div></section>
               </VariantCard>
-              <VariantCard title="Jellyfin-linked MediaLyze library" source="LibraryDetailPage" classes={["library-jellyfin-icon-trigger", "analyzed-file-name-source-toggle"]} wide>
+              <VariantCard title="Jellyfin-linked MediaLyze library" source="LibraryDetailPage" classes={["library-statistic-title-row", "library-jellyfin-icon-trigger", "analyzed-file-name-source-toggle"]} wide>
                 <div className="stack">
                   <section className="panel stack statistic-layout-header-panel library-statistic-layout-header-panel">
                     <div className="panel-title-row library-statistic-title-row"><h2>Movies</h2><TooltipTrigger ariaLabel="Connected to Jellyfin library Movies" className="library-jellyfin-icon-trigger" content={<span className="library-jellyfin-icon-tooltip"><strong>Connected to Jellyfin library Movies</strong><span>Last synchronization: today</span></span>}><JellyfinIcon aria-hidden="true" /></TooltipTrigger><TooltipTrigger ariaLabel="Show library path" content="/media/movies">?</TooltipTrigger></div>
@@ -2028,7 +2030,7 @@ export function UiElementsPage() {
                   <button type="button" className="icon-button icon-button-borderless icon-button-static duplicate-group-action duplicate-group-compare-action" aria-label="Compare">
                     <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} aria-hidden="true" />
                   </button>
-                  <button type="button" className="icon-button icon-button-bordered icon-button-animated statistic-layout-action-button library-quickscan-button" aria-label="Quick scan" title="Quick scan">
+                  <button type="button" className="icon-button icon-button-borderless icon-button-animated statistic-layout-action-button library-quickscan-button" aria-label="Quick scan" title="Quick scan">
                     <AnimatedSearchIcon className="statistic-layout-action-icon" size={18} aria-hidden="true" />
                   </button>
                   <button type="button" className="secondary small settings-panel-header-action file-detail-navigation-back-button" aria-label="Back" title="Back">
@@ -2211,6 +2213,36 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard title="Distribution chart panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
                 <DistributionChartPanel title="Quality score" distribution={numericDistribution} metricId="quality_score" />
+              </VariantCard>
+              <VariantCard title="Connected library history controls" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "library-history-toolbar", "library-history-picker-button"]} wide>
+                <section className="panel library-history-panel">
+                  <div className="panel-title-row panel-title-row-with-actions">
+                    <h2>Media library history</h2>
+                    <div className="library-history-actions">
+                      <div className="library-history-range-toggle" role="group" aria-label="Select history range">
+                        <SlidingTogglePill activeKey="30d" className="nav-active-pill library-history-range-pill" />
+                        <button type="button" data-toggle-key="7d" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>7d</span></span></button>
+                        <button type="button" data-toggle-key="30d" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>30d</span></span></button>
+                        <button type="button" data-toggle-key="1y" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>1y</span></span></button>
+                        <button type="button" data-toggle-key="all" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>All</span></span></button>
+                        <div className="library-history-range-custom-shell" data-toggle-key="custom">
+                          <button type="button" className="library-history-range-button library-history-range-button-custom" aria-pressed="false"><span className="library-history-range-button-content"><CalendarDays aria-hidden="true" className="distribution-chart-mode-icon" /><span>Custom</span></span></button>
+                        </div>
+                      </div>
+                      <div className="distribution-chart-mode-toggle" role="group" aria-label="Chart display mode">
+                        <SlidingTogglePill activeKey="count" className="nav-active-pill distribution-chart-mode-pill" />
+                        <button type="button" data-toggle-key="count" className="distribution-chart-mode-button active" aria-label="Count" aria-pressed="true"><span className="distribution-chart-mode-button-content"><Hash aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
+                        <button type="button" data-toggle-key="percentage" className="distribution-chart-mode-button" aria-label="Percentage" aria-pressed="false"><span className="distribution-chart-mode-button-content"><Percent aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
+                      </div>
+                      <div className="library-history-toolbar search-filter-picker">
+                        <button type="button" className="search-filter-picker-button search-filter-picker-button-standalone library-history-picker-button" aria-label="Resolution mix" aria-haspopup="menu" aria-expanded="false">
+                          <Layers size={18} aria-hidden="true" />
+                          <span className="library-history-picker-button-label">Resolution mix</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </VariantCard>
               <VariantCard title="Comparison chart panel with Jellyfin playback axes" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select", "comparison-chart-content"]} wide>
                 <ComparisonChartFixture />
@@ -2788,6 +2820,12 @@ export function UiElementsPage() {
                   <div id="catalog-federation-body" className="transcode-federation-content"><div className="transcode-federation-addresses"><div className="transcode-federation-subheading"><strong>Reachable network addresses</strong></div><div className="transcode-federation-address-list"><div className="transcode-federation-address-item"><code>http://medialyze-nas.local:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div><div className="transcode-federation-address-item"><code>http://192.168.1.20:8091</code><TooltipTrigger ariaLabel="Copy address" content="Copy address" className="secondary icon-only-button transcode-federation-address-copy" pinOnClick={false}><CopyIcon aria-hidden="true" className="nav-icon" size={15} /></TooltipTrigger></div></div></div></div>
                 </section>
               </VariantCard>
+              <VariantCard title="Federation listener unavailable" source={`${settings} > Transcoding > Federation`} classes={["transcode-federation-panel", "transcode-federation-heading", "transcode-federation-heading-main", "transcode-federation-section-chevron", "transcode-federation-toggle", "transcode-federation-listener-error", "alert"]} wide>
+                <section className="transcode-federation-panel">
+                  <div className="transcode-federation-heading"><div className="transcode-federation-heading-main"><button type="button" className="transcode-federation-section-chevron" aria-label="Collapse Federation" title="Collapse Federation" aria-expanded="true"><ChevronDown aria-hidden="true" className="nav-icon" /></button><label className="toggle-switch transcode-federation-toggle"><input type="checkbox" role="switch" defaultChecked aria-label="Enable direct federation for this installation" /><span className="toggle-switch-track" aria-hidden="true"><span className="toggle-switch-thumb" /></span></label><h3>Federation</h3></div></div>
+                  <div className="alert transcode-federation-listener-error" role="alert"><strong>Federation listener unavailable</strong><span>Federation listener is unavailable on port 8091: the port is already in use by another process. Remote sync and network tests remain unavailable until this listener is running.</span></div>
+                </section>
+              </VariantCard>
               <VariantCard title="New installation: untested capability matrix" source={`${settings} > Transcoding > Accelerators (before Test Hardware)`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "settings-panel-header-action", "transcode-automation-tab-content", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "transcode-capability-section", "transcode-capability-content", "transcode-capability-list", "compatibility-profile-list", "panel-empty-state", "panel-empty-state-icon"]}>
                 <div className="panel-header">
                   <div className="panel-title-row"><h2>Transcoding</h2></div>
@@ -2910,9 +2948,10 @@ export function UiElementsPage() {
                    </div>
                  </section>
               </VariantCard>
-              <VariantCard title="Federation members tab" source={`${settings} > Transcoding > Members`} classes={["transcode-automation-section", "transcode-automation-content", "transcode-automation-tab-content", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-federation-discovered-refresh", "transcode-federation-member-row", "transcode-federation-member-trigger-shell", "transcode-federation-member-trigger", "transcode-federation-status-trigger", "transcode-federation-status-tooltip", "transcode-federation-status-tooltip-heading", "transcode-federation-status-tooltip-hint", "transcode-federation-status-tooltip-item", "transcode-federation-peer", "transcode-federation-peer-name", "transcode-federation-member-name", "transcode-federation-entry-marker", "transcode-federation-status-marker", "transcode-federation-add-icon", "transcode-federation-peer-connect-control", "transcode-federation-segment-input", "transcode-federation-peer-code-input", "transcode-federation-connect-button", "transcode-federation-action-icon", "transcode-federation-manual-item", "transcode-federation-manual-address-input", "transcode-federation-manual-code-input", "transcode-federation-manual-connect-control", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "transcode-federation-member-accelerators", "transcode-federation-member-detail-label", "transcode-federation-member-accelerator-list", "transcode-federation-member-accelerator-link", "transcode-federation-member-accelerator-copy", "status-dot"]} wide>
+              <VariantCard title="Federation members tab" source={`${settings} > Transcoding > Members`} classes={["transcode-automation-section", "transcode-automation-content", "transcode-automation-tab-content", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-federation-discovered-refresh", "transcode-federation-member-row", "transcode-federation-member-trigger-shell", "transcode-federation-member-trigger", "transcode-federation-status-trigger", "transcode-federation-status-tooltip", "transcode-federation-status-tooltip-heading", "transcode-federation-status-tooltip-hint", "transcode-federation-status-tooltip-item", "transcode-federation-peer", "transcode-federation-peer-name", "transcode-federation-member-name", "transcode-federation-entry-marker", "transcode-federation-status-marker", "transcode-federation-add-icon", "transcode-federation-peer-connect-control", "transcode-federation-segment-input", "transcode-federation-peer-code-input", "transcode-federation-connect-button", "transcode-federation-action-icon", "transcode-federation-manual-item", "transcode-federation-manual-address-input", "transcode-federation-manual-code-input", "transcode-federation-manual-connect-control", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-quick-actions", "compatibility-profile-quick-action", "compatibility-profile-details", "transcode-automation-list-copy", "transcode-federation-member-list-copy", "transcode-federation-member-tab-details", "transcode-federation-member-accelerators", "transcode-federation-member-detail-label", "transcode-federation-member-accelerator-list", "transcode-federation-member-accelerator-link", "transcode-federation-member-accelerator-copy", "status-dot", "notice", "success"]} wide>
                 <section className="app-settings-section transcode-automation-section">
                   <div className="compatibility-profile-panel transcode-automation-content">
+                    <div className="notice success" role="status">Worker 02 disconnected. It is now available under Discovered installations for pairing again.</div>
                      <section className="transcode-automation-tab-content">
                       <div className="compatibility-profile-list">
                         <div className="settings-profile-toggle-row transcode-automation-toggle-row">
@@ -2954,10 +2993,17 @@ export function UiElementsPage() {
                      </div>
                    </section>
                </VariantCard>
-               <VariantCard title="Synchronized preview comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-comparison-panel", "video-wipe-compare", "video-wipe-stage", "video-wipe-divider", "video-wipe-handle", "video-wipe-label", "video-wipe-controls"]} wide>
-                <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
-                  <h3>Synchronized preview comparison</h3>
-                  <VideoWipeCompare first={{ src: "data:video/mp4;base64,", label: "Original" }} second={{ src: "data:video/mp4;base64,", label: "Variant" }} />
+              <VariantCard title="Preview with synchronized comparison" source="FileDetailPage > Preview (?compare=variant)" classes={["file-detail-preview-stack", "file-detail-preview-comparison-panel", "video-wipe-compare", "video-wipe-stage", "video-wipe-divider", "video-wipe-handle", "video-wipe-label", "video-wipe-controls"]} wide>
+                <div className="file-detail-preview-stack">
+                  <div className="file-detail-preview-panel">
+                    <div className="file-detail-preview-player-shell">
+                      <video className="file-detail-preview-player" controls aria-label="Original preview" />
+                    </div>
+                  </div>
+                  <div className="file-detail-preview-panel file-detail-preview-comparison-panel">
+                    <h3>Synchronized preview comparison</h3>
+                    <VideoWipeCompare first={{ src: "data:video/mp4;base64,", label: "Original" }} second={{ src: "data:video/mp4;base64,", label: "Variant" }} />
+                  </div>
                 </div>
               </VariantCard>
               <VariantCard title="Path browser fixture" source={`${settings} > Create library`} classes={["path-browser", "path-entry", "path-browser-selected-item"]}>

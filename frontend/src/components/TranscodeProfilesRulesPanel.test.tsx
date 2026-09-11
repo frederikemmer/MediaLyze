@@ -248,6 +248,59 @@ describe("TranscodeProfilesRulesPanel", () => {
     );
   });
 
+  it("confirms disconnect and refreshes the installation as a discovered peer", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const disconnectedPeer = {
+      installation_id: federationFixture.members[0].installation_id,
+      federation_id: federationFixture.members[0].federation_id,
+      display_name: federationFixture.members[0].display_name,
+      endpoint_urls: federationFixture.members[0].endpoint_urls,
+      protocol_version: federationFixture.members[0].protocol_version,
+      application_version: federationFixture.members[0].application_version,
+      reachable: true,
+      last_seen_at: null,
+    };
+    const refreshedFederation: TranscodeFederation = {
+      ...federationFixture,
+      members: [],
+      discovered: [disconnectedPeer],
+    };
+    vi.spyOn(api, "excludeTranscodeFederationMember").mockResolvedValue(undefined);
+    vi.spyOn(api, "discoverTranscodeFederation").mockResolvedValue(refreshedFederation);
+    const onFederationData = vi.fn();
+    const { rerender } = render(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={federationFixture}
+        onFederationData={onFederationData}
+      />,
+    );
+
+    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Worker 02" }));
+
+    await waitFor(() => expect(api.excludeTranscodeFederationMember).toHaveBeenCalledWith("worker-02"));
+    await waitFor(() => expect(api.discoverTranscodeFederation).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledWith("Disconnect Worker 02? It will no longer receive automatic jobs.");
+    expect(await screen.findByRole("status")).toHaveTextContent("Worker 02 disconnected.");
+    expect(onFederationData).toHaveBeenCalledWith(expect.objectContaining({ members: [] }));
+    expect(onFederationData).toHaveBeenLastCalledWith(refreshedFederation);
+
+    rerender(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={refreshedFederation}
+        onFederationData={onFederationData}
+      />,
+    );
+    const discoveredArticle = screen.getByText("Worker 02").closest("article");
+    expect(discoveredArticle?.querySelector(".transcode-federation-add-icon")).not.toBeNull();
+    expect(discoveredArticle?.querySelector(".transcode-federation-peer-code-input")).not.toBeNull();
+  });
+
   it("uses the member status dot for warning details instead of an inline alert", async () => {
     const member = {
       ...federationFixture.members[0],

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+import httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -350,6 +352,113 @@ def test_federation_settings_expose_hostname_and_ip_pairing_endpoints(
         "http://[2001:db8::20]:8091",
     ]
     assert set(result.hostname_urls + result.ip_urls).issubset(advertised)
+
+
+def test_federation_settings_expose_listener_failure(
+    tmp_path: Path,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    runtime = SimpleNamespace(
+        get_federation_listener_status=lambda: {
+            "status": "error",
+            "port": 8091,
+            "error": "Federation listener is unavailable because port 8091 is already in use.",
+        }
+    )
+
+    with SessionLocal() as db:
+        result = federation.federation_settings_read(db, settings, runtime=runtime)
+
+    assert result.listener_status == "error"
+    assert result.listener_port == 8091
+    assert result.listener_error == (
+        "Federation listener is unavailable because port 8091 is already in use."
+    )
+
+
+def test_sync_marks_member_offline_when_heartbeat_route_is_not_supported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+
+    class FakeResponse:
+        status_code = 404
+        text = '{"detail":"Not Found"}'
+
+        def raise_for_status(self) -> None:
+            request = httpx.Request("POST", "http://old-listener:8091")
+            response = httpx.Response(self.status_code, request=request, text=self.text)
+            raise httpx.HTTPStatusError("404 Not Found", request=request, response=response)
+
+    class FakeClient:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def post(self, *_args: object, **_kwargs: object) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(federation.httpx, "Client", FakeClient)
+    monkeypatch.setattr(
+        federation,
+        "local_descriptor",
+        lambda _db, _settings: {"installation_id": "local-installation"},
+    )
+
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        member = TranscodeFederationMember(
+            installation_id="old-listener-member",
+            federation_id=state["federation_id"],
+            display_name="Old listener",
+            endpoint_urls=["http://old-listener:8091"],
+            protocol_version=1,
+            status="active",
+            connection_status="connected",
+            reachable=True,
+            accept_jobs=True,
+            resources={},
+            capabilities={},
+            capability_matrix={},
+            shared_secret="s" * 32,
+        )
+        db.add(member)
+        db.commit()
+
+        with pytest.raises(federation.FederationError, match="older or different listener"):
+            federation.sync_peer(db, settings, member.installation_id)
+
+        assert member.connection_status == "offline"
+        assert member.reachable is False
+        assert "heartbeat" in (member.last_error or "")
+
+
+def test_federation_listener_guard_explains_unavailable_operations() -> None:
+    from backend.app.api import federation_routes
+
+    runtime = SimpleNamespace(
+        get_federation_listener_status=lambda: {
+            "status": "error",
+            "port": 8091,
+            "error": "Federation listener is unavailable on port 8091.",
+        }
+    )
+
+    with pytest.raises(federation.FederationError) as exc_info:
+        federation_routes._ensure_federation_listener_ready(runtime)
+
+    assert exc_info.value.status_code == 503
+    assert str(exc_info.value) == "Federation listener is unavailable on port 8091."
 
 
 def test_member_endpoint_probe_selects_best_route_and_persists_every_observation(
@@ -748,6 +857,49 @@ def test_lan_discovery_excludes_the_local_installation_and_its_endpoints(
     found = federation.discover_peers(settings, descriptor)
 
     assert [peer["installation_id"] for peer in found] == ["remote-installation"]
+
+
+def test_federation_read_keeps_an_excluded_lan_peer_available_for_re_pairing(tmp_path: Path) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path).model_copy(update={"federation_enabled": True})
+    discovered = {
+        "installation_id": "remote-installation",
+        "federation_id": "federation-1",
+        "display_name": "Remote",
+        "endpoint_urls": ["http://remote:8091"],
+        "protocol_version": federation.PROTOCOL_VERSION,
+        "reachable": True,
+        "last_seen_at": None,
+    }
+    with SessionLocal() as db:
+        state = federation.get_federation_state(db, settings)
+        state["enabled"] = True
+        state["excluded_installation_ids"] = ["remote-installation"]
+        db.get(AppSetting, federation.FEDERATION_STATE_KEY).value = state
+        db.add(
+            TranscodeFederationMember(
+                installation_id="remote-installation",
+                federation_id="federation-1",
+                display_name="Remote",
+                endpoint_urls=["http://remote:8091"],
+                protocol_version=federation.PROTOCOL_VERSION,
+                status="excluded",
+                connection_status="offline",
+                reachable=False,
+                accept_jobs=False,
+                resources={},
+                capabilities={},
+                capability_matrix={},
+                active_jobs=0,
+                network_mbps=100.0,
+            )
+        )
+        db.commit()
+
+        result = federation.federation_read(db, settings, [discovered])
+
+    assert result.members == []
+    assert [peer.installation_id for peer in result.discovered] == ["remote-installation"]
 
 
 def test_pairing_re_admits_a_previously_excluded_member(

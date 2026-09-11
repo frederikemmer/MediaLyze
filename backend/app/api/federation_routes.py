@@ -69,12 +69,43 @@ def _raise_federation_error(exc: FederationError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
+def _ensure_federation_listener_ready(runtime: Any) -> None:
+    reader = getattr(runtime, "get_federation_listener_status", None)
+    if callable(reader):
+        try:
+            state = reader()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return
+    else:
+        state = {
+            "status": getattr(runtime, "federation_protocol_status", "unknown"),
+            "port": getattr(runtime, "federation_protocol_port", None),
+            "error": getattr(runtime, "federation_protocol_error", None),
+        }
+    if not isinstance(state, dict):
+        return
+    status = str(state.get("status") or "unknown")
+    if status == "error":
+        raise FederationError(
+            str(state.get("error") or "The local Federation listener is unavailable"),
+            status_code=503,
+        )
+    if status == "starting":
+        port = state.get("port") or "the configured port"
+        raise FederationError(
+            f"The local Federation listener is still starting on port {port}. "
+            "Retry the operation in a moment.",
+            status_code=503,
+        )
+
+
 @federation_router.get("", response_model=TranscodeFederationRead)
 def federation_detail(
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
-    return federation_read(db, settings)
+    return federation_read(db, settings, runtime=runtime)
 
 
 @federation_router.patch("", response_model=TranscodeFederationSettingsRead)
@@ -85,10 +116,10 @@ def federation_update(
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationSettingsRead:
     try:
-        result = update_federation_settings(db, settings, payload)
+        update_federation_settings(db, settings, payload, runtime=runtime)
         if hasattr(runtime, "_refresh_federation_transport"):
             runtime._refresh_federation_transport()
-        return result
+        return federation_settings_read(db, settings, runtime=runtime)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
 
@@ -110,50 +141,57 @@ def federation_passcode_reset(
 @federation_router.post("/discover", response_model=TranscodeFederationRead)
 def federation_discover(
     timeout_seconds: float = Query(default=0.75, ge=0.1, le=3.0),
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
     descriptor = local_descriptor(db, settings)
     peers = discover_peers(settings, descriptor, timeout_seconds=timeout_seconds)
-    return federation_read(db, settings, peers)
+    return federation_read(db, settings, peers, runtime=runtime)
 
 
 @federation_router.post("/network/test", response_model=TranscodeFederationRead)
 def federation_network_test(
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
     try:
+        _ensure_federation_listener_ready(runtime)
         test_federation_network(db, settings)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
-    return federation_read(db, settings)
+    return federation_read(db, settings, runtime=runtime)
 
 
 @federation_router.post("/members/pair", response_model=TranscodeFederationRead)
 def federation_pair(
     payload: TranscodeFederationPairRequest,
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
     try:
+        _ensure_federation_listener_ready(runtime)
         pair_with_peer(db, settings, payload.endpoint, payload.pairing_code)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
-    return federation_read(db, settings)
+    return federation_read(db, settings, runtime=runtime)
 
 
 @federation_router.post("/members/{installation_id}/sync", response_model=TranscodeFederationRead)
 def federation_member_sync(
     installation_id: str,
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
     try:
+        _ensure_federation_listener_ready(runtime)
         sync_peer(db, settings, installation_id)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
-    return federation_read(db, settings)
+    return federation_read(db, settings, runtime=runtime)
 
 
 @federation_router.post(
@@ -162,14 +200,16 @@ def federation_member_sync(
 )
 def federation_member_capability_matrix_test(
     installation_id: str,
+    runtime: Any = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeFederationRead:
     try:
+        _ensure_federation_listener_ready(runtime)
         test_remote_member_capability_matrix(db, settings, installation_id)
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
-    return federation_read(db, settings)
+    return federation_read(db, settings, runtime=runtime)
 
 
 @federation_router.delete("/members/{installation_id}", status_code=204)

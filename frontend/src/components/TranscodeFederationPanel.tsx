@@ -222,6 +222,9 @@ export function TranscodeFederationPanel({ onData }: TranscodeFederationPanelPro
 
   const settings = data.settings;
   const disabled = pending !== null;
+  const listenerError = settings.listener_status === "error"
+    ? settings.listener_error?.trim() || t("transcoding.federation.listenerUnavailableHint")
+    : null;
   const hostnameUrls = settings.hostname_urls ?? [];
   const ipUrls = settings.ip_urls ?? [];
   const reachableUrls = Array.from(new Set([...hostnameUrls, ...ipUrls]));
@@ -357,6 +360,12 @@ export function TranscodeFederationPanel({ onData }: TranscodeFederationPanelPro
         </div>
       </div>
 
+      {listenerError ? (
+        <div className="alert transcode-federation-listener-error" role="alert">
+          <strong>{t("transcoding.federation.listenerUnavailable")}</strong>
+          <span>{listenerError}</span>
+        </div>
+      ) : null}
       {error ? <div className="notice error" role="alert">{error}</div> : null}
       {notice ? <div className="notice compact" role="status">{notice}</div> : null}
 

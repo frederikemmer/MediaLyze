@@ -1110,6 +1110,7 @@ describe("FileDetailPage", () => {
     const { container } = renderPage(file.id, `/files/${file.id}/preview?compare=${variant.id}`);
 
     expect(await screen.findByRole("heading", { name: "Synchronized preview comparison" })).toBeInTheDocument();
+    expect(container.querySelector(".file-detail-preview-player")).toHaveAttribute("src", `/api/files/${file.id}/media`);
     expect(container.querySelectorAll(".video-wipe-stage video")).toHaveLength(2);
     expect(container.querySelector(".video-wipe-label-first")).toHaveTextContent(file.filename);
     expect(container.querySelector(".video-wipe-label-second")).toHaveTextContent(variant.filename);

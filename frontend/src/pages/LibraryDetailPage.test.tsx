@@ -761,7 +761,9 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByRole("columnheader", { name: /Play count/ })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "4" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Quick scan" }));
+    const quickScanButton = screen.getByRole("button", { name: "Quick scan" });
+    expect(quickScanButton).toHaveClass("icon-button-borderless");
+    fireEvent.click(quickScanButton);
     await waitFor(() => expect(scanLibrarySpy).toHaveBeenCalledWith(libraryId, "incremental"));
     expect(syncJellyfinSpy).toHaveBeenCalledTimes(1);
   });
