@@ -14,7 +14,7 @@ import {
   type TranscodeProfilePlan,
   type TranscodeValidation,
 } from "../lib/api";
-import { TranscodingPanel } from "./TranscodingPanel";
+import { FileTranscodeHistory, TranscodingPanel } from "./TranscodingPanel";
 
 const compatibilityPlan: TranscodePlan = {
   version: 1,
@@ -198,6 +198,8 @@ describe("TranscodingPanel", () => {
     render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
 
     expect((await screen.findAllByText("Movie.mkv")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Linked variants" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Transcoding history" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(3);
     expect(screen.getByRole("tab", { name: /Video/ })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("tab", { name: /Audio/ }));
@@ -244,7 +246,7 @@ describe("TranscodingPanel", () => {
     fireEvent.click(screen.getByText("Generated FFmpeg command"));
     expect(screen.getAllByText(validation.ffmpeg_command).length).toBeGreaterThan(0);
     expect(screen.getByText(/Poster Font\.ttf/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open synchronized preview" })).toHaveAttribute("href", "/files/1/preview?compare=2");
+    expect(screen.queryByRole("link", { name: "Open synchronized preview" })).not.toBeInTheDocument();
     expect(screen.getByText("Full transcoding plan")).toBeInTheDocument();
 
     const sentPlan = vi.mocked(api.validateFileTranscode).mock.calls[0][1];
@@ -264,7 +266,7 @@ describe("TranscodingPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start transcoding" }));
 
     expect(await screen.findByText("25%")).toBeInTheDocument();
-    expect(screen.getByText(/2.0x/)).toBeInTheDocument();
+    expect(screen.getByText(/2.0×/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(api.cancelTranscodeJob).toHaveBeenCalledWith(5));
   });
@@ -274,6 +276,9 @@ describe("TranscodingPanel", () => {
     await screen.findAllByText("Movie.mkv");
 
     expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
+    expect(screen.queryByText("Type text directly or insert metadata tokens with Add metadata.")).not.toBeInTheDocument();
+    expect(screen.getByText("Finished filename preview").closest(".transcode-filename-preview")).toHaveClass("is-prominent");
+    expect(screen.getByRole("textbox", { name: "Metadata divider" }).closest(".transcode-filename-options-row")).toContainElement(screen.getByRole("combobox", { name: "Removal preset" }));
     const templateInput = screen.getByRole("textbox", { name: "Filename template" });
     expect(templateInput).not.toBeDisabled();
     expect(templateInput.textContent).toBe("[{resolution}, {dynRange}, {codec}] [{audioLanguages}]");
@@ -322,6 +327,30 @@ describe("TranscodingPanel", () => {
     browserSelection?.addRange(selection);
     fireEvent.keyDown(templateInput, { key: "Backspace" });
     await waitFor(() => expect(templateInput.textContent).toBe("[{codec}] []"));
+  });
+
+  it("keeps the transcode history in the combined file history section", async () => {
+    render(<MemoryRouter><FileTranscodeHistory fileId={file.id} /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "File & Transcode history" })).toBeInTheDocument();
+    expect(screen.getByText("Movie [1080p].mp4")).toBeInTheDocument();
+  });
+
+  it("keeps the embedded progress view compact and hides empty attachments and raw probe details", async () => {
+    vi.mocked(api.fileTranscode).mockResolvedValue({ ...payload, attachments: [] });
+    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
+    await screen.findAllByText("Movie.mkv");
+
+    expect(screen.queryByText("Raw ffprobe JSON")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Attachments" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No embedded attachments detected.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start transcoding" }));
+
+    const progress = await screen.findByRole("link", { name: "Open transcoding center" });
+    expect(progress).toHaveAttribute("href", "/transcoding");
+    expect(progress.closest(".transcode-progress-compact")).toBeInTheDocument();
+    expect(screen.getByTestId("echarts-react")).toBeInTheDocument();
   });
 
   it("collapses filename controls and removes selected source-name sections", async () => {

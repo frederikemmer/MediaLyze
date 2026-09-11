@@ -1377,7 +1377,7 @@
     "probeScore": "Puntuación de análisis",
     "probeScoreTooltipAria": "Explicar la puntuación de análisis de ffprobe",
     "probeScoreTooltip": "Esta es la puntuación de confianza de ffprobe al detectar el formato contenedor, de 0 a 100. No es la puntuación de calidad de MediaLyze y no evalúa la calidad de imagen, audio ni archivo.",
-    "preview": "Vista previa (Beta)",
+    "preview": "Vista previa",
     "previewSupportedFormats": "La reproducción en el navegador funciona mejor actualmente con vídeo MP4/WebM y audio MP3, M4A, WAV, OGG o FLAC. La compatibilidad de códecs puede variar según el navegador.",
     "previewReportPrompt": "Si un archivo multimedia no se reproduce correctamente, informa del problema o sube una muestra para ayudar a mejorar la función de vista previa.",
     "previewReportLink": "Informar archivo",
@@ -1415,6 +1415,7 @@
     "rawJsonCopied": "JSON bruto de ffprobe copiado",
     "history": {
       "title": "Historial del archivo",
+      "withTranscoding": "Historial de archivo y transcodificación",
       "empty": "El historial del archivo aparece después de que un escaneo capture una instantánea modificada de este archivo.",
       "limited": "Mostrando las {{shown}} entradas más recientes de {{total}} del historial.",
       "since": "Desde {{start}}",
@@ -1836,7 +1837,7 @@
     "validation": { "title": "Vista previa de cambios", "kept_streams": "Conservado", "changed_streams": "Cambiado", "removed_streams": "Eliminado", "added_streams": "Añadido" }, "command": "Comando FFmpeg generado",
     "status": { "queued": "En cola", "running": "En curso", "completed": "Completado", "canceled": "Cancelado", "failed": "Fallido" }, "eta": "unos {{seconds}} s restantes", "variants": "Variantes vinculadas", "noVariants": "Aún no hay variantes transcodificadas.",
     "analysisStatus": { "awaiting_analysis": "Esperando análisis", "pending": "Análisis pendiente", "analyzing": "Analizando", "ready": "Analizado", "failed": "Análisis fallido" },
-    "previewComparison": "Comparación de vistas previas sincronizada", "openPreviewComparison": "Abrir vista previa sincronizada", "wipeComparison": "Comparación Wipe sincronizada", "openVariant": "Abrir variante", "openComparison": "Abrir comparación de metadatos", "openSource": "Abrir archivo fuente", "sourcePath": "Ruta de origen", "outputPath": "Ruta de salida", "device": "Dispositivo", "hardwareBackend": "Backend de hardware", "ffmpegVersion": "Versión de FFmpeg", "threads": "Hilos de FFmpeg", "progress": "Progreso", "speed": "Velocidad", "etaLabel": "Tiempo restante", "retryAttempts": "Intentos / reintentos",
+    "previewComparison": "Comparación de vistas previas sincronizada", "openPreviewComparison": "Abrir vista previa sincronizada", "openTranscodingCenter": "Abrir centro de transcodificación", "wipeComparison": "Comparación Wipe sincronizada", "openVariant": "Abrir variante", "openComparison": "Abrir comparación de metadatos", "openSource": "Abrir archivo fuente", "sourcePath": "Ruta de origen", "outputPath": "Ruta de salida", "device": "Dispositivo", "hardwareBackend": "Backend de hardware", "ffmpegVersion": "Versión de FFmpeg", "threads": "Hilos de FFmpeg", "progress": "Progreso", "speed": "Velocidad", "etaLabel": "Tiempo restante", "retryAttempts": "Intentos / reintentos",
     "history": { "title": "Historial de transcodificación", "empty": "No hay trabajos de transcodificación.", "plan": "Plan de transcodificación completo" },
     "federation": {
       "title": "Federación",

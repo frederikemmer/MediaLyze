@@ -42,19 +42,45 @@ def media_type_for_media_file(media_file: MediaFile) -> QualityProfileMediaType:
 
 def ensure_default_quality_profiles(db: Session, resolution_categories: list[ResolutionCategory]) -> None:
     for existing_profile in db.scalars(
-        select(QualityProfileDefinition).where(QualityProfileDefinition.is_builtin.is_(False))
+        select(QualityProfileDefinition)
+        .where(QualityProfileDefinition.is_builtin.is_(False))
+        .order_by(QualityProfileDefinition.id.asc())
     ).all():
         reserved_media_type = _media_type_for_reserved_default_profile_name(existing_profile.name)
+        if reserved_media_type is None and not _is_generated_default_profile_copy(existing_profile.name):
+            continue
+        if reserved_media_type is None:
+            reserved_media_type = _media_type_for_generated_default_profile_copy(existing_profile.name)
         if reserved_media_type is None:
             continue
         reserved_profile = normalize_quality_profile(
             default_quality_profile_for_media_type(reserved_media_type.value),
             resolution_categories,
         )
+        profile_matches_default = (
+            normalize_quality_profile(existing_profile.profile, resolution_categories) == reserved_profile
+        )
+        if existing_profile.media_type == reserved_media_type and profile_matches_default:
+            continue
         if (
-            existing_profile.media_type == reserved_media_type
-            and normalize_quality_profile(existing_profile.profile, resolution_categories) == reserved_profile
+            existing_profile.media_type != reserved_media_type
+            and profile_matches_default
+            and _is_default_profile_copy_name(existing_profile.name, reserved_media_type)
+            and not _profile_is_assigned(db, existing_profile.id)
         ):
+            existing_reserved_profile = db.scalar(
+                select(QualityProfileDefinition).where(
+                    QualityProfileDefinition.media_type == reserved_media_type,
+                    func.lower(QualityProfileDefinition.name) == DEFAULT_PROFILE_NAMES[reserved_media_type].casefold(),
+                    QualityProfileDefinition.id != existing_profile.id,
+                )
+            )
+            if existing_reserved_profile is None:
+                existing_profile.media_type = reserved_media_type
+                existing_profile.name = DEFAULT_PROFILE_NAMES[reserved_media_type]
+                existing_profile.is_builtin = True
+            else:
+                db.delete(existing_profile)
             continue
         existing_profile.name = _unique_profile_name(
             db,
@@ -401,6 +427,40 @@ def _unique_profile_name(db: Session, base_name: str, *, profile_id: int | None 
     while f"{base_name} {index}".casefold() in existing or _is_reserved_default_profile_name(f"{base_name} {index}"):
         index += 1
     return f"{base_name} {index}"
+
+
+def _profile_is_assigned(db: Session, profile_id: int) -> bool:
+    return db.scalar(
+        select(Library.id)
+        .where(Library.quality_profile_id == profile_id)
+        .limit(1)
+    ) is not None
+
+
+def _is_default_profile_copy_name(name: str, media_type: QualityProfileMediaType) -> bool:
+    normalized = name.strip().casefold()
+    reserved_name = DEFAULT_PROFILE_NAMES[media_type].casefold()
+    if normalized == reserved_name:
+        return True
+    prefix = f"{reserved_name} custom"
+    if normalized == prefix:
+        return True
+    suffix = normalized.removeprefix(prefix).strip()
+    return bool(suffix) and suffix.isdigit()
+
+
+def _is_generated_default_profile_copy(name: str) -> bool:
+    return any(
+        _is_default_profile_copy_name(name, media_type)
+        for media_type in QualityProfileMediaType
+    )
+
+
+def _media_type_for_generated_default_profile_copy(name: str) -> QualityProfileMediaType | None:
+    for media_type in QualityProfileMediaType:
+        if _is_default_profile_copy_name(name, media_type):
+            return media_type
+    return None
 
 
 def _is_reserved_default_profile_name(name: str) -> bool:

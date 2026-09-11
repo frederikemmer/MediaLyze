@@ -10,6 +10,7 @@ import {
   type AppSettings,
   type CompatibilityEvaluation,
   type CompatibilityProfile,
+  type FileTranscode,
   type HardwareProfile,
   type JellyfinFileOverlay,
   type MediaFileDetail,
@@ -413,6 +414,9 @@ function renderPage(fileId: number, path = `/files/${fileId}`) {
       total: 0,
       items: [],
     });
+  }
+  if (path.includes("/preview") && !vi.isMockFunction(api.fileTranscode)) {
+    vi.spyOn(api, "fileTranscode").mockResolvedValue({ variants: [], jobs: [] } as unknown as FileTranscode);
   }
   if (!vi.isMockFunction(api.fileCompatibility)) {
     vi.spyOn(api, "fileCompatibility").mockResolvedValue([]);
@@ -1062,8 +1066,8 @@ describe("FileDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Transcode" })).toBeInTheDocument();
-    await selectFileDetailPanel("Preview (Beta)");
-    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
+    await selectFileDetailPanel("Preview");
+    expect(await screen.findByRole("heading", { name: "Preview" })).toBeInTheDocument();
     expect(
       screen.getByText(
         "Browser playback currently works best with MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio. Codec support may vary by browser.",
@@ -1117,6 +1121,37 @@ describe("FileDetailPage", () => {
     expect(fileRequest).toHaveBeenCalledWith(variant.id, { includeRawFfprobe: false });
   });
 
+  it("shows the newest linked transcoded variant automatically in the preview", async () => {
+    const file = createFileDetail();
+    const variant: MediaFileDetail = {
+      ...file,
+      id: 88,
+      filename: "Variant.mp4",
+      relative_path: "Shows/Season01/Variant.mp4",
+      extension: "mp4",
+      container: "mp4",
+      resolution: "1920x802",
+      hdr_type: "SDR",
+      video_codec: "h264",
+      video_streams: [{ ...file.video_streams[0], codec: "h264", width: 1920, height: 802, hdr_type: "SDR" }],
+    };
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    const fileRequest = vi.spyOn(api, "file").mockImplementation((id) => Promise.resolve(Number(id) === file.id ? file : variant));
+    vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
+    const transcodeRequest = vi.spyOn(api, "fileTranscode").mockResolvedValue({
+      variants: [{ output_file_id: variant.id }],
+      jobs: [],
+    } as unknown as FileTranscode);
+
+    const { container } = renderPage(file.id, `/files/${file.id}/preview`);
+
+    expect(await screen.findByRole("heading", { name: "Synchronized preview comparison" })).toBeInTheDocument();
+    expect(transcodeRequest).toHaveBeenCalledWith(file.id, expect.any(AbortSignal));
+    expect(fileRequest).toHaveBeenCalledWith(variant.id, { includeRawFfprobe: false });
+    expect(container.querySelectorAll(".video-wipe-stage video")).toHaveLength(2);
+    expect(container.querySelector(".video-wipe-label-second")).toHaveTextContent(variant.filename);
+  });
+
   it("renders an audio preview panel for audio-only files", async () => {
     const file: MediaFileDetail = {
       ...createFileDetail(),
@@ -1147,8 +1182,8 @@ describe("FileDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Transcode" })).not.toBeInTheDocument();
-    await selectFileDetailPanel("Preview (Beta)");
-    expect(await screen.findByRole("heading", { name: "Preview (Beta)" })).toBeInTheDocument();
+    await selectFileDetailPanel("Preview");
+    expect(await screen.findByRole("heading", { name: "Preview" })).toBeInTheDocument();
     const player = container.querySelector(".file-detail-preview-player") as HTMLAudioElement | null;
     expect(player?.tagName).toBe("AUDIO");
     expect(player).toHaveAttribute("src", `/api/files/${file.id}/media`);

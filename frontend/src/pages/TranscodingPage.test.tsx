@@ -151,7 +151,22 @@ function renderPage() {
 
 beforeEach(() => {
   window.localStorage.clear();
-  vi.spyOn(api, "activeTranscodeJobs").mockResolvedValue({ items: [createJob(1), createJob(2, { status: "queued", speed: null, device_id: null, hardware_backend: null, progress_percent: 0 })], total: 2 });
+  vi.spyOn(api, "activeTranscodeJobs").mockResolvedValue({
+    items: [
+      createJob(1, { started_at: "2026-09-07T12:20:00Z", updated_at: "2026-09-07T12:29:00Z" }),
+      createJob(2, {
+        status: "queued",
+        created_at: "2026-09-07T12:10:00Z",
+        started_at: null,
+        speed: null,
+        device_id: null,
+        hardware_backend: null,
+        progress_percent: 0,
+        updated_at: "2026-09-07T12:35:00Z",
+      }),
+    ],
+    total: 2,
+  });
   vi.spyOn(api, "transcodeJobs").mockResolvedValue({ items: [createJob(3, { status: "completed", result_file_id: 33, progress_percent: 100, speed: null, eta_seconds: null, finished_at: "2026-09-07T12:40:00Z" })], total: 1 });
   vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
 });
@@ -198,6 +213,11 @@ describe("TranscodingPage", () => {
     expect(screen.getByRole("button", { name: "Cancel Naturefilm-1.mkv" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Open source file" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Close job details" })).not.toBeInTheDocument();
+    const firstRow = screen.getByTestId("transcode-job-1");
+    const secondRow = screen.getByTestId("transcode-job-2");
+    expect(firstRow).toHaveAttribute("aria-expanded", "false");
+    expect(secondRow).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(firstRow);
     await waitFor(() => expect(screen.getByTestId("transcode-job-1")).toHaveAttribute("aria-expanded", "true"));
     expect(screen.queryByText("Time range")).not.toBeInTheDocument();
     expect(screen.queryByText("Source → output")).not.toBeInTheDocument();
@@ -228,12 +248,42 @@ describe("TranscodingPage", () => {
 
     const firstRow = await screen.findByTestId("transcode-job-1");
     const secondRow = screen.getByTestId("transcode-job-2");
-    await waitFor(() => expect(firstRow).toHaveAttribute("aria-expanded", "true"));
+    expect(firstRow).toHaveAttribute("aria-expanded", "false");
+    expect(secondRow).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(secondRow);
 
     expect(secondRow).toHaveAttribute("aria-expanded", "true");
     expect(firstRow).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(secondRow);
+
+    expect(secondRow).toHaveAttribute("aria-expanded", "false");
+    expect(firstRow).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the default start-time order until a column header is selected", async () => {
+    renderPage();
+
+    const table = screen.getByRole("table");
+    const jobRows = () => within(table).getAllByRole("row")
+      .map((row) => row.getAttribute("data-testid"))
+      .filter((testId): testId is string => Boolean(testId));
+
+    await screen.findByTestId("transcode-job-1");
+    expect(jobRows()).toEqual(["transcode-job-1", "transcode-job-2"]);
+    expect(within(table).getByRole("columnheader", { name: "Progress" })).toHaveAttribute("aria-sort", "none");
+
+    const progressHeader = within(table).getByRole("columnheader", { name: "Progress" });
+    fireEvent.click(within(progressHeader).getByRole("button", { name: "Progress" }));
+
+    expect(progressHeader).toHaveAttribute("aria-sort", "descending");
+    expect(jobRows()).toEqual(["transcode-job-1", "transcode-job-2"]);
+
+    fireEvent.click(within(progressHeader).getByRole("button", { name: /^Progress/ }));
+
+    expect(progressHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(jobRows()).toEqual(["transcode-job-2", "transcode-job-1"]);
   });
 
   it("opens the source preview with the completed variant comparison", async () => {

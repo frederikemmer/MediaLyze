@@ -22,6 +22,7 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 - **Left-aligned connector headers** — keep provider names and server URLs anchored to the start of the accordion toggle.
 - **Preview completed transcodes in context** — keep the original preview visible above the synchronized variant comparison and link completed jobs from the transcoding center directly to that comparison.
 - **Refined library detail controls** — use borderless title actions, smaller rectangular chart toggles, and connected history controls with clear section dividers.
+- **Stabilized the transcoding job list** — keep the default order based on start time, allow explicit column sorting, and leave job details collapsed until selected.
 
 ### 🔒 Security
 

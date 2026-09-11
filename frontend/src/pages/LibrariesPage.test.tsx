@@ -1719,6 +1719,11 @@ describe("LibrariesPage ignore patterns", () => {
   it("shows active metrics in the quality profiles settings panel", async () => {
     const library = createLibrarySummary();
     vi.spyOn(api, "libraries").mockResolvedValue([library]);
+    vi.spyOn(api, "qualityProfiles").mockResolvedValue([
+      createQualityProfileDefinition(),
+      createQualityProfileDefinition({ id: 2, name: "Default music", media_type: "music" }),
+      createQualityProfileDefinition({ id: 3, name: "Default audiobook", media_type: "audiobook" }),
+    ]);
     vi.spyOn(api, "appSettings").mockResolvedValue(
       createAppSettings({
         resolution_categories: [
@@ -1739,8 +1744,17 @@ describe("LibrariesPage ignore patterns", () => {
     expect(mediaTypeTabs).toHaveClass("transcode-automation-tab-list");
     expect(within(mediaTypeTabs).getAllByRole("tab")).toHaveLength(3);
     expect(within(mediaTypeTabs).getByRole("tab", { name: "Video" })).toHaveClass("transcode-automation-tab-button", "active");
+    const videoProfileTrigger = await screen.findByRole("button", { name: /Default video/ });
+    expect(videoProfileTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Visual density")).not.toBeInTheDocument();
+    fireEvent.click(videoProfileTrigger);
     expect(await screen.findByText("Visual density")).toBeInTheDocument();
     expect(screen.getByText("Video codec")).toBeInTheDocument();
+
+    fireEvent.click(within(mediaTypeTabs).getByRole("tab", { name: "Music" }));
+    expect(await screen.findByRole("button", { name: /Default music/ })).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(within(mediaTypeTabs).getByRole("tab", { name: "Audiobook" }));
+    expect(await screen.findByRole("button", { name: /Default audiobook/ })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("lists profiles and expands their nested metric settings", async () => {
@@ -1793,8 +1807,9 @@ describe("LibrariesPage ignore patterns", () => {
     expect(await screen.findByRole("button", { name: "Built-in default profile protection" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rename profile" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete profile" })).toBeDisabled();
-    expect(screen.getByLabelText("Add metric")).toBeDisabled();
 
+    fireEvent.click(screen.getByRole("button", { name: /Default video/ }));
+    expect(screen.getByLabelText("Add metric")).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Configure Visual density metric" }));
     expect(await screen.findByLabelText("Minimum (GB/hour)")).toBeDisabled();
     expect(screen.getAllByLabelText("Explain metric weight").every((input) => input.hasAttribute("disabled"))).toBe(true);
@@ -1805,6 +1820,7 @@ describe("LibrariesPage ignore patterns", () => {
 
     renderPage({ activePanel: "qualityProfiles" });
 
+    fireEvent.click(await screen.findByRole("button", { name: /Default video/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Configure Visual density metric" }));
     const minimumInput = await screen.findByLabelText("Minimum (GB/hour)");
     const idealInput = screen.getByLabelText("Ideal (GB/hour)");
@@ -1863,6 +1879,7 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage({ activePanel: "qualityProfiles" });
 
     fireEvent.click(await screen.findByRole("tab", { name: "Music" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Default music/ }));
     fireEvent.change(await screen.findByLabelText("Add metric"), { target: { value: "music_tags" } });
     expect(await screen.findByText("Music tags")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save profile" }));

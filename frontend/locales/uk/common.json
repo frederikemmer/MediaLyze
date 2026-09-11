@@ -1377,7 +1377,7 @@
     "probeScore": "Оцінка розпізнавання",
     "probeScoreTooltipAria": "Пояснення оцінки розпізнавання ffprobe",
     "probeScoreTooltip": "Це оцінка впевненості ffprobe у виявленні формату контейнера від 0 до 100. Це не оцінка якості MediaLyze і не характеризує якість зображення, звуку чи файлу.",
-    "preview": "Попередній перегляд (Бета)",
+    "preview": "Попередній перегляд",
     "previewSupportedFormats": "Найкраще у браузері відтворюються відео MP4/WebM та аудіо MP3, M4A, WAV, OGG або FLAC. Підтримка кодеків залежить від браузера.",
     "previewReportPrompt": "Якщо медіафайл відтворюється некоректно, будь ласка, повідомте про це або завантажте зразок для покращення функції перегляду.",
     "previewReportLink": "Повідомити про файл",
@@ -1415,6 +1415,7 @@
     "rawJsonCopied": "Сирий JSON ffprobe скопійовано",
     "history": {
       "title": "Історія файлу",
+      "withTranscoding": "Історія файлу та транскодування",
       "empty": "Історія файлу з'явиться після того, як сканування зафіксує змінений знімок.",
       "limited": "Показано останні {{shown}} з {{total}} записів історії.",
       "since": "З {{start}}",
@@ -1836,7 +1837,7 @@
     "validation": { "title": "Попередній перегляд змін", "kept_streams": "Збережено", "changed_streams": "Змінено", "removed_streams": "Видалено", "added_streams": "Додано" }, "command": "Створена команда FFmpeg",
     "status": { "queued": "У черзі", "running": "Виконується", "completed": "Завершено", "canceled": "Скасовано", "failed": "Помилка" }, "eta": "залишилося близько {{seconds}} с", "variants": "Пов’язані варіанти", "noVariants": "Транскодованих варіантів ще немає.",
     "analysisStatus": { "awaiting_analysis": "Очікує аналізу", "pending": "Аналіз очікується", "analyzing": "Аналізується", "ready": "Проаналізовано", "failed": "Помилка аналізу" },
-    "previewComparison": "Синхронізоване порівняння попереднього перегляду", "openPreviewComparison": "Відкрити синхронізований перегляд", "wipeComparison": "Синхронізоване Wipe-порівняння", "openVariant": "Відкрити варіант", "openComparison": "Відкрити порівняння метаданих", "openSource": "Відкрити джерело", "sourcePath": "Шлях джерела", "outputPath": "Шлях результату", "device": "Пристрій", "hardwareBackend": "Апаратний бекенд", "ffmpegVersion": "Версія FFmpeg", "threads": "Потоки FFmpeg", "progress": "Прогрес", "speed": "Швидкість", "etaLabel": "Залишилося", "retryAttempts": "Спроби / повтори",
+    "previewComparison": "Синхронізоване порівняння попереднього перегляду", "openPreviewComparison": "Відкрити синхронізований перегляд", "openTranscodingCenter": "Відкрити центр транскодування", "wipeComparison": "Синхронізоване Wipe-порівняння", "openVariant": "Відкрити варіант", "openComparison": "Відкрити порівняння метаданих", "openSource": "Відкрити джерело", "sourcePath": "Шлях джерела", "outputPath": "Шлях результату", "device": "Пристрій", "hardwareBackend": "Апаратний бекенд", "ffmpegVersion": "Версія FFmpeg", "threads": "Потоки FFmpeg", "progress": "Прогрес", "speed": "Швидкість", "etaLabel": "Залишилося", "retryAttempts": "Спроби / повтори",
     "history": { "title": "Історія транскодування", "empty": "Немає завдань транскодування.", "plan": "Повний план транскодування" },
     "federation": {
       "title": "Федерація",

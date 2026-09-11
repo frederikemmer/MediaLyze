@@ -1788,25 +1788,42 @@ export function FileDetailPage() {
   }, [fileId]);
 
   useEffect(() => {
-    if (!comparisonFileId) {
+    if (
+      !isPreviewRoute ||
+      !file ||
+      String(file.id) !== fileId ||
+      !hasVideoMetadata(file)
+    ) {
       setPreviewComparison(null);
       setPreviewComparisonLoading(false);
       setPreviewComparisonError(null);
       return;
     }
     let active = true;
+    const controller = new AbortController();
     setPreviewComparison(null);
     setPreviewComparisonLoading(true);
     setPreviewComparisonError(null);
-    api
-      .file(comparisonFileId, { includeRawFfprobe: false })
-      .then((payload) => {
-        if (!active) return;
-        setPreviewComparison(payload);
-        setPreviewComparisonError(null);
-      })
+
+    const loadComparison = async () => {
+      let targetFileId = comparisonFileId;
+      if (!targetFileId && file.video_streams.length > 0) {
+        const transcode = await api.fileTranscode(file.id, controller.signal);
+        targetFileId = transcode.variants.find(
+          (variant) => variant.output_file_id && variant.output_file_id !== file.id,
+        )?.output_file_id ?? null;
+      }
+      if (!targetFileId || !active) return;
+
+      const payload = await api.file(targetFileId, { includeRawFfprobe: false });
+      if (!active) return;
+      setPreviewComparison(payload);
+      setPreviewComparisonError(null);
+    };
+
+    void loadComparison()
       .catch((reason: Error) => {
-        if (!active) return;
+        if (!active || reason.name === "AbortError") return;
         setPreviewComparisonError(reason.message);
       })
       .finally(() => {
@@ -1814,8 +1831,9 @@ export function FileDetailPage() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [comparisonFileId]);
+  }, [comparisonFileId, file, fileId, isPreviewRoute]);
 
   const currentRawProbeState =
     rawProbeState.fileId === fileId

@@ -1594,11 +1594,11 @@ export function LibrariesPage() {
     setExpandedQualityProfileMetrics((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  function selectQualityProfile(profile: QualityProfileDefinition) {
+  function selectQualityProfile(profile: QualityProfileDefinition, expand = true) {
     setSelectedQualityProfileId(profile.id);
     setActiveQualityProfileMediaType(profile.media_type);
     setQualityProfileDraft(cloneQualityProfileDefinition(profile));
-    setExpandedQualityProfileId(profile.id);
+    setExpandedQualityProfileId(expand ? profile.id : null);
     setQualityProfileMessage(null);
     setIsRenamingQualityProfile(false);
   }
@@ -1759,7 +1759,7 @@ export function LibrariesPage() {
           ?? null;
         setSelectedQualityProfileId(selected?.id ?? null);
         setQualityProfileDraft(selected ? cloneQualityProfileDefinition(selected) : null);
-        setExpandedQualityProfileId(selected?.id ?? null);
+        setExpandedQualityProfileId(null);
         return payload;
       })
       .catch((reason: Error) => {
@@ -5575,7 +5575,7 @@ export function LibrariesPage() {
         ?? qualityProfiles.find((profile) => profile.media_type === mediaType)
         ?? null;
       if (nextProfile) {
-        selectQualityProfile(nextProfile);
+        selectQualityProfile(nextProfile, false);
       } else {
         setSelectedQualityProfileId(null);
         setQualityProfileDraft(null);

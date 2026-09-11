@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import ReactECharts from "echarts-for-react";
 import {
   Activity,
   CircleAlert,
@@ -21,6 +20,13 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { TooltipTrigger } from "../components/TooltipTrigger";
+import {
+  phaseForTranscodeJob,
+  parseTranscodeSpeed,
+  transcodeProgressValue,
+  transferForTranscodeJob,
+  TranscodeProgressSummary,
+} from "../components/TranscodeProgressSummary";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { useAppData } from "../lib/app-data";
 import {
@@ -29,7 +35,7 @@ import {
   type TranscodeHardwareDevice,
   type TranscodeJob,
 } from "../lib/api";
-import { formatBytes, formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
+import { formatCodecLabel, formatContainerLabel, formatDate, formatDuration } from "../lib/format";
 import { formatHdrType } from "../lib/hdr";
 import {
   getTranscodingColumnWidths,
@@ -45,6 +51,9 @@ type CenterTab = "active" | "history";
 type StatusFilter = "all" | JobStatus;
 type TargetFilter = "all" | ProfileKey;
 type HardwareFilter = "all" | "hardware" | "cpu";
+type SortDirection = "asc" | "desc";
+type SortableTranscodingColumnKey = Exclude<TranscodingColumnKey, "actions">;
+type TranscodingSortKey = "start_time" | SortableTranscodingColumnKey;
 
 const TRANSCODING_COLUMNS = [
   { key: "file", labelKey: "transcoding.center.fileColumn", defaultWidth: "26%", minPx: 160, maxPx: 1400 },
@@ -75,27 +84,77 @@ function basename(path: string): string {
   return parts.at(-1) ?? path;
 }
 
+function parseTimestamp(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function jobStartTimestamp(job: TranscodeJob): number {
+  return parseTimestamp(job.started_at) ?? parseTimestamp(job.created_at) ?? 0;
+}
+
+function sortIndicator(direction: SortDirection): string {
+  return direction === "asc" ? "↑" : "↓";
+}
+
+function ariaSortValue(isActive: boolean, direction: SortDirection): "none" | "ascending" | "descending" {
+  if (!isActive) return "none";
+  return direction === "asc" ? "ascending" : "descending";
+}
+
+function compareSortText(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function compareTranscodingJobs(
+  left: TranscodeJob,
+  right: TranscodeJob,
+  sortKey: TranscodingSortKey,
+  sortDirection: SortDirection,
+  capabilities: TranscodeCapabilities | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): number {
+  let comparison = 0;
+  switch (sortKey) {
+    case "start_time":
+      comparison = jobStartTimestamp(left) - jobStartTimestamp(right);
+      break;
+    case "file":
+      comparison = compareSortText(basename(left.source_path_snapshot), basename(right.source_path_snapshot));
+      break;
+    case "target":
+      comparison = compareSortText(targetForJob(left, t).label, targetForJob(right, t).label);
+      break;
+    case "hardware":
+      comparison = compareSortText(
+        hardwareLabelForJob(left, capabilities, t).label,
+        hardwareLabelForJob(right, capabilities, t).label,
+      );
+      break;
+    case "progress":
+      comparison = transcodeProgressValue(left) - transcodeProgressValue(right);
+      break;
+  }
+
+  if (comparison !== 0) {
+    return sortDirection === "asc" ? comparison : -comparison;
+  }
+
+  const startTimeComparison = jobStartTimestamp(right) - jobStartTimestamp(left);
+  if (startTimeComparison !== 0) return startTimeComparison;
+  return right.id - left.id;
+}
+
+function isSortableTranscodingColumnKey(key: TranscodingColumnKey): key is SortableTranscodingColumnKey {
+  return key !== "actions";
+}
+
 function previewComparisonPath(job: TranscodeJob): string | null {
   if (job.status !== "completed" || !job.source_file_id || !job.result_file_id || job.source_file_id === job.result_file_id) {
     return null;
   }
   return `/files/${job.source_file_id}/preview?compare=${job.result_file_id}`;
-}
-
-function parseSpeed(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = Number.parseFloat(value.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatSpeedLabel(value: string | null): string {
-  if (!value?.trim()) return "—";
-  const trimmed = value.trim();
-  return /x$/i.test(trimmed) ? `${trimmed.slice(0, -1)}×` : trimmed;
-}
-
-function progressValue(job: TranscodeJob): number {
-  return Math.max(0, Math.min(100, Number.isFinite(job.progress_percent) ? job.progress_percent : 0));
 }
 
 function elapsedSeconds(job: TranscodeJob): number | null {
@@ -181,21 +240,6 @@ function workerForJob(job: TranscodeJob, t: (key: string, options?: Record<strin
   return job.target_member_id ?? t("transcoding.federation.targetAutomatic");
 }
 
-function phaseForJob(job: TranscodeJob, t: (key: string, options?: Record<string, unknown>) => string): string {
-  const phase = job.processing_phase || (job.status === "running" ? "transcoding" : job.status);
-  return t(`transcoding.federation.phases.${phase}`, { defaultValue: job.phase_detail || phase });
-}
-
-function transferForJob(job: TranscodeJob): string | null {
-  if (job.source_transfer_total_bytes) {
-    return `${formatBytes(job.source_transfer_bytes ?? 0)} / ${formatBytes(job.source_transfer_total_bytes)}`;
-  }
-  if (job.result_transfer_total_bytes) {
-    return `${formatBytes(job.result_transfer_bytes ?? 0)} / ${formatBytes(job.result_transfer_total_bytes)}`;
-  }
-  return null;
-}
-
 function statusLabel(status: JobStatus, t: (key: string, options?: Record<string, unknown>) => string): string {
   return t(`transcoding.status.${status}`);
 }
@@ -206,146 +250,6 @@ function JobStatusIcon({ status }: { status: JobStatus }) {
   if (status === "completed") return <CircleCheck aria-hidden="true" />;
   if (status === "failed") return <CircleX aria-hidden="true" />;
   return <CircleAlert aria-hidden="true" />;
-}
-
-function speedSeries(job: TranscodeJob, sampledSpeeds: number[]): number[] {
-  const values = sampledSpeeds.length > 0 ? sampledSpeeds : [];
-  const current = parseSpeed(job.speed);
-  if (current !== null && (values.length === 0 || values.at(-1) !== current)) {
-    return [...values, current];
-  }
-  return values.length > 0 ? values : [0];
-}
-
-function speedTooltipFormatter(params: unknown): string {
-  const firstParam = Array.isArray(params) ? params[0] : params;
-  if (!firstParam || typeof firstParam !== "object" || !("value" in firstParam)) return "—";
-
-  const rawValue = (firstParam as { value?: unknown }).value;
-  const value = Array.isArray(rawValue) ? rawValue.at(-1) : rawValue;
-  const numericValue = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numericValue)) return "—";
-
-  return `${numericValue.toLocaleString(undefined, { maximumFractionDigits: 1 })}×`;
-}
-
-type SpeedChartVariant = "combined" | "detail";
-
-function SpeedChart({
-  job,
-  sampledSpeeds,
-  variant = "detail",
-  t,
-}: {
-  job: TranscodeJob;
-  sampledSpeeds: number[];
-  variant?: SpeedChartVariant;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}) {
-  const values = speedSeries(job, sampledSpeeds);
-  const combined = variant === "combined";
-  const option = {
-    animation: false,
-    grid: combined ? { left: 0, right: 0, top: 4, bottom: 4 } : { left: 34, right: 8, top: 8, bottom: 22 },
-    xAxis: {
-      type: "category",
-      show: !combined,
-      boundaryGap: false,
-      data: values.map((_, index) => (index === values.length - 1 ? t("transcoding.center.now") : `-${values.length - index - 1}`)),
-      axisLine: { lineStyle: { color: "rgba(127, 140, 141, 0.26)" } },
-      axisLabel: { color: "#8c948f", fontSize: 10 },
-    },
-    yAxis: {
-      type: "value",
-      show: !combined,
-      min: 0,
-      splitNumber: 2,
-      axisLabel: { color: "#8c948f", fontSize: 10, formatter: (value: number) => `${value}×` },
-      splitLine: { lineStyle: { color: "rgba(127, 140, 141, 0.14)" } },
-    },
-    tooltip: {
-      trigger: "axis",
-      confine: true,
-      renderMode: "html",
-      padding: [4, 7],
-      backgroundColor: "var(--panel-strong)",
-      borderColor: "var(--nested-surface-border)",
-      borderWidth: 1,
-      textStyle: { color: "var(--ink)", fontSize: 11, fontFamily: "inherit" },
-      extraCssText: "border-radius: 7px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);",
-      formatter: speedTooltipFormatter,
-    },
-    series: [
-      {
-        type: "line",
-        data: values,
-        smooth: 0.28,
-        symbol: "none",
-        lineStyle: { color: "#1b998b", width: combined ? 2.5 : 2 },
-        areaStyle: { color: "rgba(27, 153, 139, 0.12)" },
-      },
-    ],
-  };
-
-  return (
-    <ReactECharts
-      option={option}
-      style={{ width: "100%", height: combined ? 58 : "100%" }}
-      opts={{ renderer: "svg" }}
-    />
-  );
-}
-
-function JobProgressCell({
-  job,
-  sampledSpeeds,
-  t,
-}: {
-  job: TranscodeJob;
-  sampledSpeeds: number[];
-  t: (key: string, options?: Record<string, unknown>) => string;
-}) {
-  const progress = progressValue(job);
-  const statusText = statusLabel(job.status, t);
-  const phaseText = phaseForJob(job, t);
-  const transferText = transferForJob(job);
-
-  if (job.status === "running") {
-    return (
-      <div className="transcoding-progress-summary is-running">
-        <div className="transcoding-progress-metrics">
-          <div className="transcoding-progress-metric">
-            <strong>{Math.round(progress)}%</strong>
-            <span>{t("transcoding.center.progressColumn")}</span>
-          </div>
-          <div className="transcoding-progress-metric">
-            <strong>{job.eta_seconds === null ? "—" : formatDuration(job.eta_seconds)}</strong>
-            <span>{t("transcoding.center.etaColumn")}</span>
-          </div>
-          <div className="transcoding-progress-metric is-accent">
-            <strong>{formatSpeedLabel(job.speed)}</strong>
-            <span>{t("transcoding.center.speedColumn")}</span>
-          </div>
-        </div>
-        <div className="transcoding-progress-chart">
-          <SpeedChart job={job} sampledSpeeds={sampledSpeeds} variant="combined" t={t} />
-        </div>
-        <span className="transcoding-progress-track" aria-label={t("transcoding.center.progressAria", { value: Math.round(progress) })}>
-          <span style={{ width: `${progress}%` }} />
-        </span>
-        <span className="transcoding-progress-phase" title={job.phase_detail ?? phaseText}>{phaseText}</span>
-        {transferText ? <span className="transcoding-progress-transfer">{transferText}</span> : null}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`transcoding-progress-static status-${job.status}`}>
-      {job.status === "completed" ? <strong>{Math.round(progress)}%</strong> : null}
-      <span>{job.status === "queued" ? phaseText || t("transcoding.center.waitingForSlot") : phaseText || statusText}</span>
-      {transferText ? <small className="transcoding-progress-transfer">{transferText}</small> : null}
-    </div>
-  );
 }
 
 function hardwareStatusForJob(
@@ -381,7 +285,7 @@ function JobRow({
   expanded,
   canceling,
   retrying,
-  onOpen,
+  onToggle,
   onCancel,
   onRetry,
   t,
@@ -393,7 +297,7 @@ function JobRow({
   expanded: boolean;
   canceling: boolean;
   retrying: boolean;
-  onOpen: () => void;
+  onToggle: () => void;
   onCancel: () => void;
   onRetry: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -412,7 +316,7 @@ function JobRow({
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    onOpen();
+    onToggle();
   };
 
   return (
@@ -422,7 +326,7 @@ function JobRow({
         data-testid={`transcode-job-${job.id}`}
         tabIndex={0}
         aria-expanded={expanded}
-        onClick={onOpen}
+        onClick={onToggle}
         onKeyDown={handleRowKeyDown}
       >
         <td className="transcoding-file-cell">
@@ -447,7 +351,7 @@ function JobRow({
           <span>{hardware.detail}</span>
         </td>
         <td className="transcoding-progress-cell">
-          <JobProgressCell job={job} sampledSpeeds={sampledSpeeds} t={t} />
+          <TranscodeProgressSummary job={job} sampledSpeeds={sampledSpeeds} t={t} />
         </td>
         <td className="transcoding-actions-cell">
           {canCancel ? (
@@ -520,9 +424,9 @@ function JobRow({
                   <div><dt>{t("transcoding.center.startTime")}</dt><dd>{job.started_at ? formatDate(job.started_at) : "—"}</dd></div>
                   <div><dt>{t("transcoding.center.durationSoFar")}</dt><dd>{elapsed === null ? "—" : formatDuration(elapsed)}</dd></div>
                   <div><dt>{t("transcoding.center.eta")}</dt><dd>{eta}</dd></div>
-                  <div><dt>{t("transcoding.federation.phase")}</dt><dd>{phaseForJob(job, t)}</dd></div>
+                  <div><dt>{t("transcoding.federation.phase")}</dt><dd>{phaseForTranscodeJob(job, t)}</dd></div>
                   <div><dt>{t("transcoding.federation.target")}</dt><dd>{worker}</dd></div>
-                  {transferForJob(job) ? <div><dt>{job.result_transfer_total_bytes ? t("transcoding.federation.resultTransfer") : t("transcoding.federation.sourceTransfer")}</dt><dd>{transferForJob(job)}</dd></div> : null}
+                  {transferForTranscodeJob(job) ? <div><dt>{job.result_transfer_total_bytes ? t("transcoding.federation.resultTransfer") : t("transcoding.federation.sourceTransfer")}</dt><dd>{transferForTranscodeJob(job)}</dd></div> : null}
                 </dl>
               </div>
               <div className="transcoding-job-detail-side">
@@ -766,6 +670,8 @@ export function TranscodingPage() {
   const [targetFilter, setTargetFilter] = useState<TargetFilter>("all");
   const [hardwareFilter, setHardwareFilter] = useState<HardwareFilter>("all");
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<TranscodingSortKey>("start_time");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [cancelingIds, setCancelingIds] = useState<Set<number>>(new Set());
   const [retryingIds, setRetryingIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -775,7 +681,6 @@ export function TranscodingPage() {
   const [, setSpeedRevision] = useState(0);
   const speedHistoryRef = useRef<Map<number, number[]>>(new Map());
   const refreshInFlightRef = useRef(false);
-  const expandedInitializedRef = useRef(false);
   const headerCellRefs = useRef<Partial<Record<TranscodingColumnKey, HTMLTableCellElement | null>>>({});
   const resizeStateRef = useRef<{
     columnKey: TranscodingColumnKey;
@@ -823,19 +728,13 @@ export function TranscodingPage() {
   useEffect(() => {
     let changed = false;
     for (const job of activeJobs) {
-      const value = parseSpeed(job.speed);
+      const value = parseTranscodeSpeed(job.speed);
       if (value === null) continue;
       const current = speedHistoryRef.current.get(job.id) ?? [];
       speedHistoryRef.current.set(job.id, [...current, value].slice(-36));
       changed = true;
     }
     if (changed) setSpeedRevision((value) => value + 1);
-  }, [activeJobs]);
-
-  useEffect(() => {
-    if (expandedInitializedRef.current || activeJobs.length === 0) return;
-    setExpandedJobId(activeJobs.find((job) => job.status === "running")?.id ?? activeJobs[0].id);
-    expandedInitializedRef.current = true;
   }, [activeJobs]);
 
   const libraryMap = useMemo(() => new Map(libraries.map((library) => [library.id, library.name])), [libraries]);
@@ -860,15 +759,8 @@ export function TranscodingPage() {
           .toLocaleLowerCase()
           .includes(normalizedSearch);
       })
-      .sort((left, right) => {
-        if (tab === "active") {
-          const statusOrder = { running: 0, queued: 1, failed: 2, canceled: 3, completed: 4 } as Record<JobStatus, number>;
-          const statusDifference = statusOrder[left.status] - statusOrder[right.status];
-          if (statusDifference !== 0) return statusDifference;
-        }
-        return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
-      });
-  }, [activeJobs, allJobs, hardwareFilter, search, statusFilter, tab, targetFilter]);
+      .sort((left, right) => compareTranscodingJobs(left, right, sortKey, sortDirection, capabilities, t));
+  }, [activeJobs, allJobs, capabilities, hardwareFilter, search, sortDirection, sortKey, statusFilter, t, tab, targetFilter]);
 
   const cpuParallelJobs = appSettings.transcoding?.cpu_parallel_jobs;
   const cpuCapacity = typeof cpuParallelJobs === "number" ? cpuParallelJobs : null;
@@ -878,6 +770,16 @@ export function TranscodingPage() {
     setStatusFilter("all");
     setTargetFilter("all");
     setHardwareFilter("all");
+  }
+
+  function updateSort(nextKey: SortableTranscodingColumnKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextKey);
+    setSortDirection(nextKey === "progress" ? "desc" : "asc");
   }
 
   function beginColumnResize(columnKey: TranscodingColumnKey, event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1052,12 +954,21 @@ export function TranscodingPage() {
                 {TRANSCODING_COLUMNS.map((column) => (
                   <th
                     key={column.key}
+                    aria-sort={isSortableTranscodingColumnKey(column.key) ? ariaSortValue(sortKey === column.key, sortDirection) : undefined}
                     ref={(element) => {
                       headerCellRefs.current[column.key] = element;
                     }}
                     style={{ width: transcodingColumnWidth(column, columnWidthOverrides[column.key]) }}
                   >
-                    {t(column.labelKey)}
+                    {isSortableTranscodingColumnKey(column.key) ? (
+                      <button type="button" className="column-sort" onClick={() => updateSort(column.key as SortableTranscodingColumnKey)}>
+                        <span>{t(column.labelKey)}</span>
+                        <span className={`sort-indicator${sortKey === column.key ? " is-active" : ""}`} aria-hidden="true">
+                          {sortKey === column.key ? sortIndicator(sortDirection) : ""}
+                        </span>
+                        {sortKey === column.key ? <span className="sr-only">{t(`sort.${sortDirection}`)}</span> : null}
+                      </button>
+                    ) : t(column.labelKey)}
                     <button
                       type="button"
                       className="column-resize-handle"
@@ -1080,7 +991,7 @@ export function TranscodingPage() {
                   expanded={expandedJobId === job.id}
                   canceling={cancelingIds.has(job.id)}
                   retrying={retryingIds.has(job.id)}
-                  onOpen={() => setExpandedJobId(job.id)}
+                  onToggle={() => setExpandedJobId((current) => (current === job.id ? null : job.id))}
                   onCancel={() => void cancelJob(job)}
                   onRetry={() => void retryJob(job)}
                   t={t}

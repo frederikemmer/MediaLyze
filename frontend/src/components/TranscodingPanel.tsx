@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, Film, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
+import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -21,6 +21,7 @@ import {
 } from "../lib/api";
 import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
 import { formatLanguageLabel, languageOptions, normalizeLanguageTag } from "../lib/language";
+import { parseTranscodeSpeed, TranscodeProgressSummary } from "./TranscodeProgressSummary";
 import { TooltipTrigger } from "./TooltipTrigger";
 
 const PROFILE_KEYS = ["compatibility", "storage", "modern"] as const;
@@ -1103,7 +1104,7 @@ export function FileTranscodeHistory({ fileId }: { fileId: string | number }) {
   }, [fileId]);
   return (
     <section className="transcode-history-section">
-      <h3>{t("transcoding.history.title")}</h3>
+      <h3>{t("fileDetail.history.withTranscoding")}</h3>
       {error ? <p className="notice error">{error}</p> : null}
       {jobs ? <TranscodeJobHistory jobs={jobs} /> : <p className="field-hint">{t("panel.loading")}</p>}
     </section>
@@ -1131,7 +1132,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   const [metadataTokensOpen, setMetadataTokensOpen] = useState(false);
   const filenameTemplateInputRef = useRef<HTMLDivElement | null>(null);
   const filenameTemplateSelectionRef = useRef<{ start: number; end: number } | null>(null);
-  const [rawProbe, setRawProbe] = useState<Record<string, unknown> | null>(file.raw_ffprobe_json);
+  const speedHistoryRef = useRef<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -1171,12 +1172,11 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     setOpenFilenameSection(true);
     setMetadataTokensOpen(false);
     filenameTemplateSelectionRef.current = null;
+    speedHistoryRef.current = [];
     setError(null);
     setLoading(true);
     void refresh().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
   }, [refresh]);
-
-  useEffect(() => setRawProbe(file.raw_ffprobe_json), [file.id, file.raw_ffprobe_json]);
 
   useEffect(() => {
     if (!federation?.settings.enabled || !plan || federationAutoAppliedRef.current || plan.target_mode !== "local") return;
@@ -1195,6 +1195,13 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, [job, refresh]);
+
+  useEffect(() => {
+    if (!job || !jobIsActive(job)) return;
+    const value = parseTranscodeSpeed(job.speed);
+    if (value === null || speedHistoryRef.current.at(-1) === value) return;
+    speedHistoryRef.current = [...speedHistoryRef.current, value].slice(-36);
+  }, [job?.id, job?.speed, job?.status]);
 
   const availableVideoEncoders = useMemo(
     () => capabilities?.encoders.filter((encoder) => (
@@ -1388,14 +1395,6 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
           <div><dt>{t("fileTable.codec")}</dt><dd>{formatCodecLabel(data.original.video_codec, "video")}</dd></div>
           <div><dt>{t("fileTable.hdr")}</dt><dd>{data.original.dynamic_range ?? "SDR"}</dd></div>
         </dl>
-        <details onToggle={(event) => {
-          if (event.currentTarget.open && rawProbe === null) {
-            void api.fileRawFfprobe(file.id).then((payload) => setRawProbe(payload.raw_ffprobe_json ?? {})).catch((reason: Error) => setError(reason.message));
-          }
-        }}>
-          <summary>{t("fileDetail.rawJson")}</summary>
-          <pre className="json-preview">{JSON.stringify(rawProbe ?? {}, null, 2)}</pre>
-        </details>
       </section>
 
       <div className="transcode-configuration-grid">
@@ -1712,9 +1711,9 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
         ) : null}
       </section>
 
-      <section className="transcode-stream-section">
-        <h3>{t("transcoding.attachments")}</h3>
-        {!data.attachments.length ? <p className="field-hint">{t("transcoding.noAttachments")}</p> : (
+      {data.attachments.length ? (
+        <section className="transcode-stream-section">
+          <h3>{t("transcoding.attachments")}</h3>
           <div className="transcode-attachment-list">
             {data.attachments.map((attachment) => (
               <article key={attachment.stream_index}>
@@ -1723,8 +1722,8 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
               </article>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <div className="transcode-global-options">
         {(["chapters", "metadata", "cover", "attachments"] as const).map((option) => (
@@ -1833,87 +1832,84 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
                     </div>
                   ) : null}
                 </div>
-                <label className="transcode-filename-field transcode-filename-divider-field">
-                  <span className="transcode-field-label">
-                    <span>{t("transcoding.filenameMetadataSeparator")}</span>
-                    <TooltipTrigger
-                      ariaLabel={t("transcoding.filenameMetadataSeparatorHelpAria")}
-                      content={t("transcoding.filenameMetadataSeparatorHelp")}
-                    />
-                  </span>
-                  <input
-                    className={transcodeControlClass}
-                    aria-label={t("transcoding.filenameMetadataSeparator")}
-                    value={plan.filename_metadata_separator ?? ", "}
-                    onChange={(event) => {
-                      setExpertPlan({
-                        ...plan,
-                        profile: "expert",
-                        filename_metadata_separator: event.target.value,
-                      });
-                      setValidation(null);
-                    }}
-                  />
-                </label>
-                <div className="transcode-filename-cleanup">
-                  <div className="transcode-filename-cleanup-heading">
-                    <div>
-                      <h4>{t("transcoding.filenameCleanup")}</h4>
-                      <p>{t("transcoding.filenameCleanupDescription")}</p>
-                    </div>
-                    <TooltipTrigger
-                      ariaLabel={t("transcoding.filenameCleanupHelpAria")}
-                      content={t("transcoding.filenameCleanupHelp")}
-                    />
-                  </div>
-                  <label className="transcode-filename-field">
-                    <span>{t("transcoding.filenameCleanupPreset")}</span>
-                    <select
+                <div className="transcode-filename-options-row">
+                  <label className="transcode-filename-field transcode-filename-divider-field">
+                    <span className="transcode-field-label">
+                      <span>{t("transcoding.filenameMetadataSeparator")}</span>
+                      <TooltipTrigger
+                        ariaLabel={t("transcoding.filenameMetadataSeparatorHelpAria")}
+                        content={t("transcoding.filenameMetadataSeparatorHelp")}
+                      />
+                    </span>
+                    <input
                       className={transcodeControlClass}
-                      aria-label={t("transcoding.filenameCleanupPreset")}
-                      value={filenameCleanupPreset}
+                      aria-label={t("transcoding.filenameMetadataSeparator")}
+                      value={plan.filename_metadata_separator ?? ", "}
                       onChange={(event) => {
                         setExpertPlan({
                           ...plan,
                           profile: "expert",
-                          filename_cleanup_preset: event.target.value as FilenameCleanupPreset,
+                          filename_metadata_separator: event.target.value,
                         });
                         setValidation(null);
                       }}
-                    >
-                      {FILENAME_CLEANUP_OPTIONS.map(({ value, labelKey }) => (
-                        <option key={value} value={value}>{t(`transcoding.filenameCleanupOptions.${labelKey}`)}</option>
-                      ))}
-                    </select>
+                    />
                   </label>
-                  {filenameCleanupPreset === "custom" ? (
-                    <label className="transcode-filename-field">
-                      <span>{t("transcoding.filenameCleanupRegex")}</span>
-                      <input
+                  <div className="transcode-filename-cleanup">
+                    <div className="transcode-filename-cleanup-heading">
+                      <h4>{t("transcoding.filenameCleanup")}</h4>
+                      <TooltipTrigger
+                        ariaLabel={t("transcoding.filenameCleanupHelpAria")}
+                        content={t("transcoding.filenameCleanupHelp")}
+                      />
+                    </div>
+                    <label className="transcode-filename-field transcode-filename-cleanup-control">
+                      <span className="sr-only">{t("transcoding.filenameCleanupPreset")}</span>
+                      <select
                         className={transcodeControlClass}
-                        aria-label={t("transcoding.filenameCleanupRegex")}
-                        placeholder={t("transcoding.filenameCleanupRegexPlaceholder")}
-                        value={plan.filename_cleanup_regex ?? ""}
+                        aria-label={t("transcoding.filenameCleanupPreset")}
+                        value={filenameCleanupPreset}
                         onChange={(event) => {
                           setExpertPlan({
                             ...plan,
                             profile: "expert",
-                            filename_cleanup_preset: "custom",
-                            filename_cleanup_regex: event.target.value,
+                            filename_cleanup_preset: event.target.value as FilenameCleanupPreset,
                           });
                           setValidation(null);
                         }}
-                      />
+                      >
+                        {FILENAME_CLEANUP_OPTIONS.map(({ value, labelKey }) => (
+                          <option key={value} value={value}>{t(`transcoding.filenameCleanupOptions.${labelKey}`)}</option>
+                        ))}
+                      </select>
                     </label>
-                  ) : null}
-                  <p className="field-hint">{t(`transcoding.filenameCleanupDescriptions.${filenameCleanupPreset}`)}</p>
-                  {cleanupError ? <p className="notice compact error" role="alert">{t("transcoding.filenameCleanupInvalid")}</p> : null}
+                    {filenameCleanupPreset === "custom" ? (
+                      <label className="transcode-filename-field transcode-filename-cleanup-control">
+                        <span className="sr-only">{t("transcoding.filenameCleanupRegex")}</span>
+                        <input
+                          className={transcodeControlClass}
+                          aria-label={t("transcoding.filenameCleanupRegex")}
+                          placeholder={t("transcoding.filenameCleanupRegexPlaceholder")}
+                          value={plan.filename_cleanup_regex ?? ""}
+                          onChange={(event) => {
+                            setExpertPlan({
+                              ...plan,
+                              profile: "expert",
+                              filename_cleanup_preset: "custom",
+                              filename_cleanup_regex: event.target.value,
+                            });
+                            setValidation(null);
+                          }}
+                        />
+                      </label>
+                    ) : null}
+                    {cleanupError ? <p className="notice compact error" role="alert">{t("transcoding.filenameCleanupInvalid")}</p> : null}
+                  </div>
                 </div>
-                <div className="transcode-filename-preview">
+                <div className="transcode-filename-preview is-prominent">
                   <span>{t("transcoding.filenamePreview")}</span>
                   <code aria-live="polite">{preview}</code>
                 </div>
-                <small className="transcode-filename-help">{t("transcoding.filenameTemplateInputHelp")}</small>
               </div>
             ) : null}
           </section>
@@ -1946,39 +1942,20 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
       ) : null}
 
       {activeJob ? (
-        <section className="transcode-progress" aria-live="polite">
-          <div><strong>{t(`transcoding.status.${activeJob.status}`)}</strong><span>{Math.round(activeJob.progress_percent)}%</span></div>
-          <progress max={100} value={activeJob.progress_percent} />
-          <p className="transcode-progress-phase">{t(`transcoding.federation.phases.${activeJob.processing_phase ?? "queued"}`, { defaultValue: activeJob.phase_detail ?? activeJob.processing_phase ?? "queued" })}</p>
-          {activeJob.source_transfer_total_bytes ? <p className="transcode-progress-transfer">{t("transcoding.federation.sourceTransfer")}: {formatBytes(activeJob.source_transfer_bytes ?? 0)} / {formatBytes(activeJob.source_transfer_total_bytes)}</p> : null}
-          {activeJob.result_transfer_total_bytes ? <p className="transcode-progress-transfer">{t("transcoding.federation.resultTransfer")}: {formatBytes(activeJob.result_transfer_bytes ?? 0)} / {formatBytes(activeJob.result_transfer_total_bytes)}</p> : null}
-          <p>{activeJob.speed ?? "—"} · {activeJob.eta_seconds != null ? t("transcoding.eta", { seconds: Math.ceil(activeJob.eta_seconds) }) : "—"}</p>
-          <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then(setJob)}><Square aria-hidden="true" />{t("common.cancel")}</button>
+        <section className="transcode-progress transcode-progress-compact" aria-live="polite">
+          <div className="transcode-progress-compact-content">
+            <TranscodeProgressSummary job={activeJob} sampledSpeeds={speedHistoryRef.current} t={t} compact />
+            <Link className="secondary small transcode-progress-center-link" to="/transcoding">
+              <ExternalLink aria-hidden="true" />
+              {t("transcoding.openTranscodingCenter")}
+            </Link>
+          </div>
+          <div className="transcode-progress-actions">
+            <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then(setJob)}><Square aria-hidden="true" />{t("common.cancel")}</button>
+          </div>
         </section>
       ) : null}
 
-      <section className="transcode-variants">
-        <h3>{t("transcoding.variants")}</h3>
-        {(() => {
-          const comparisonVariant = data.variants.find((variant) => variant.output_file_id);
-          return comparisonVariant?.output_file_id ? (
-            <div className="transcode-preview-link-card">
-              <Link
-                className="secondary transcode-preview-link"
-                to={`/files/${data.original.id ?? file.id}/preview?compare=${comparisonVariant.output_file_id}`}
-              >
-                <Play aria-hidden="true" />
-                {t("transcoding.openPreviewComparison")}
-              </Link>
-            </div>
-          ) : <p className="field-hint">{t("transcoding.noVariants")}</p>;
-        })()}
-      </section>
-
-      <section className="transcode-history-section">
-        <h3>{t("transcoding.history.title")}</h3>
-        <TranscodeJobHistory jobs={data.jobs} />
-      </section>
     </div>
   );
 }
