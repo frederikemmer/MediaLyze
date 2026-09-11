@@ -19,6 +19,7 @@ from backend.app.models.entities import (
 )
 from backend.app.schemas.transcoding import (
     TranscodeCapabilityMatrixRead,
+    TranscodeFederationEndpointPreferenceUpdate,
     TranscodePlan,
     TranscodeStreamAction,
     TranscodeStreamPlan,
@@ -701,6 +702,89 @@ def test_secure_member_request_falls_back_after_the_preferred_endpoint_fails(
         assert member.endpoint_metrics["http://unavailable-peer:8091"]["reachable"] is False
         assert member.endpoint_metrics["http://available-peer:8091"]["reachable"] is True
         assert member.preferred_endpoint_url == "http://available-peer:8091"
+
+
+def test_favorite_endpoint_is_skipped_only_for_a_known_failure_with_a_reachable_alternative() -> None:
+    favorite = "http://favorite-peer:8091"
+    alternative = "http://alternative-peer:8091"
+    member = TranscodeFederationMember(
+        installation_id="favorite-member",
+        federation_id="federation-1",
+        display_name="Favorite member",
+        endpoint_urls=[favorite, alternative],
+        status="active",
+        connection_status="connected",
+        reachable=True,
+        shared_secret="v" * 64,
+        preferred_endpoint_url=alternative,
+        favorite_endpoint_url=favorite,
+        endpoint_metrics={
+            favorite: {"reachable": False, "latency_ms": 2.0, "throughput_mbps": 1000.0},
+            alternative: {"reachable": True, "latency_ms": 15.0, "throughput_mbps": 100.0},
+        },
+    )
+
+    assert federation._ordered_member_endpoints(member) == [alternative, favorite]
+    assert federation._select_best_member_endpoint(member) == alternative
+    assert member.preferred_endpoint_url == alternative
+    assert member.favorite_endpoint_url == favorite
+
+    member.endpoint_metrics[favorite]["reachable"] = None
+    assert federation._ordered_member_endpoints(member)[0] == favorite
+
+
+def test_member_endpoint_preferences_persist_favorite_and_blocked_state(
+    tmp_path: Path,
+) -> None:
+    SessionLocal = _session_factory()
+    settings = _settings(tmp_path)
+    favorite = "http://favorite-peer:8091"
+    alternative = "http://alternative-peer:8091"
+    with SessionLocal() as db:
+        member = TranscodeFederationMember(
+            installation_id="preference-member",
+            federation_id="federation-1",
+            display_name="Preference member",
+            endpoint_urls=[favorite, alternative],
+            status="active",
+            connection_status="connected",
+            reachable=True,
+            shared_secret="w" * 64,
+            endpoint_metrics={
+                favorite: {"reachable": True, "latency_ms": 2.0, "throughput_mbps": 1000.0},
+                alternative: {"reachable": True, "latency_ms": 15.0, "throughput_mbps": 100.0},
+            },
+        )
+        db.add(member)
+        db.commit()
+
+        federation.update_member_endpoint_preference(
+            db,
+            settings,
+            member.installation_id,
+            TranscodeFederationEndpointPreferenceUpdate(endpoint=favorite, favorite=True),
+        )
+        assert member.favorite_endpoint_url == favorite
+        assert member.preferred_endpoint_url == favorite
+
+        federation.update_member_endpoint_preference(
+            db,
+            settings,
+            member.installation_id,
+            TranscodeFederationEndpointPreferenceUpdate(endpoint=favorite, blocked=True),
+        )
+        assert member.endpoint_metrics[favorite]["blocked"] is True
+        assert member.preferred_endpoint_url == alternative
+        assert member.favorite_endpoint_url == favorite
+
+        federation.update_member_endpoint_preference(
+            db,
+            settings,
+            member.installation_id,
+            TranscodeFederationEndpointPreferenceUpdate(endpoint=favorite, blocked=False),
+        )
+        assert "blocked" not in member.endpoint_metrics[favorite]
+        assert member.preferred_endpoint_url == favorite
 
 
 def test_network_probe_protocol_returns_a_bounded_authenticated_response(

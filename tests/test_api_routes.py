@@ -47,6 +47,7 @@ from pathlib import Path
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
 from backend.app.services.media_service import COVER_PNG_CACHE
+from backend.app.services.quality import default_quality_profile_for_media_type
 from backend.app.services.update_status import UPDATE_STATUS_KEY
 from backend.app.services.runtime import ScanCancelPersistenceError
 
@@ -275,6 +276,39 @@ def test_quality_profiles_keep_user_default_and_refresh_builtin_defaults() -> No
         ]
         assert [profile["name"] for profile in active_music_defaults] == ["My active music profile"]
         assert any(profile["name"] == "Default audiobook custom" for profile in profiles)
+
+
+def test_quality_profiles_migrate_unassigned_cross_media_default_copies_idempotently() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    with session_factory() as db:
+        legacy_default = QualityProfileDefinition(
+            name="Default audiobook",
+            media_type=QualityProfileMediaType.music,
+            profile=default_quality_profile_for_media_type("audiobook"),
+            is_default=True,
+            is_builtin=False,
+        )
+        stale_copy = QualityProfileDefinition(
+            name="Default audiobook custom",
+            media_type=QualityProfileMediaType.music,
+            profile=default_quality_profile_for_media_type("audiobook"),
+            is_default=False,
+            is_builtin=False,
+        )
+        db.add_all([legacy_default, stale_copy])
+        db.commit()
+
+        client = _build_test_app(db)
+        first_profiles = client.get("/api/quality-profiles").json()
+        second_profiles = client.get("/api/quality-profiles").json()
+
+        assert [profile["name"] for profile in first_profiles if profile["media_type"] == "music"] == ["Default music"]
+        assert [profile["name"] for profile in first_profiles if profile["media_type"] == "audiobook"] == ["Default audiobook"]
+        assert [profile["name"] for profile in second_profiles if profile["media_type"] == "music"] == ["Default music"]
+        assert [profile["name"] for profile in second_profiles if profile["media_type"] == "audiobook"] == ["Default audiobook"]
 
 
 def test_quality_profile_names_are_global_case_insensitive_and_default_names_reserved() -> None:

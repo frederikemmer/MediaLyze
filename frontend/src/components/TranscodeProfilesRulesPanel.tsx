@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Power, RefreshCw, Save, ShieldCheck, Trash2, Unplug, X } from "lucide-react";
+import { Ban, Clock3, Gauge, ArrowDown, ArrowUp, ChevronDown, Plus, Power, RefreshCw, Save, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -7,16 +7,14 @@ import {
   type LibrarySummary,
   type TranscodeCondition,
   type TranscodeConditionGroup,
-  type TranscodeDeviceMatrix,
   type TranscodeFederation,
-  type TranscodeHardwareDevice,
   type TranscodeFederationMember,
   type TranscodeProfile,
   type TranscodeProfileDefinition,
   type TranscodeProfileStreamRule,
   type TranscodeRule,
 } from "../lib/api";
-import { buildTranscodingMatrixAnchorId, type TranscodingMatrixFocus } from "../lib/transcoding-matrix-state";
+import { type TranscodingMatrixFocus } from "../lib/transcoding-matrix-state";
 import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
 import { AnimatedConnectIcon } from "./AnimatedConnectIcon";
 import { CopyIcon } from "./CopyIcon";
@@ -158,44 +156,26 @@ function memberListSummary(member: TranscodeFederationMember, t: (key: string, o
   ].filter(Boolean).join(" · ");
 }
 
-type MemberAccelerator = Pick<TranscodeHardwareDevice, "id" | "name" | "backend"> & {
-  matrixDeviceId: string;
-};
-
-function memberMatrixDeviceId(
-  device: Pick<TranscodeHardwareDevice, "id" | "render_node">,
-  matrices: TranscodeDeviceMatrix[],
-): string {
-  const matrix = matrices.find(({ device_id }) => device_id === device.id)
-    ?? matrices.find(({ device_id }) => device_id === `device:${device.id}`)
-    ?? (device.render_node
-      ? matrices.find(({ device_id }) => device_id === `render:${device.render_node}`)
-      : undefined);
-  return matrix?.device_id ?? device.id;
+function normalizedEndpointKey(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\/+$/, "").toLocaleLowerCase();
 }
 
-function memberAvailableAccelerators(member: TranscodeFederationMember): MemberAccelerator[] | null {
-  const devices = member.capabilities?.devices;
-  const matrices = member.capability_matrix?.status === "completed"
-    ? member.capability_matrix.matrices
-    : [];
-  if (devices) {
-    return devices
-      .filter((device) => device.status === "available")
-      .map((device) => ({
-        id: device.id,
-        name: device.name,
-        backend: device.backend,
-        matrixDeviceId: memberMatrixDeviceId(device, matrices),
-      }));
-  }
-  if (member.capability_matrix?.status !== "completed") return null;
-  return member.capability_matrix.matrices.map(({ device_id, device_name, backend }) => ({
-    id: device_id,
-    name: device_name,
-    backend,
-    matrixDeviceId: device_id,
-  }));
+function memberEndpointMetric(member: TranscodeFederationMember, endpoint: string): Record<string, unknown> {
+  const metrics = member.endpoint_metrics ?? {};
+  const exact = metrics[endpoint];
+  if (exact) return exact;
+  const key = normalizedEndpointKey(endpoint);
+  return Object.entries(metrics).find(([candidate]) => normalizedEndpointKey(candidate) === key)?.[1] ?? {};
+}
+
+function finiteEndpointMetric(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return value;
+}
+
+function formatEndpointMetric(value: unknown, unit: string): string {
+  const number = finiteEndpointMetric(value);
+  return number === null ? "—" : `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(number)} ${unit}`;
 }
 
 function installationVersionLabel(version: string | null | undefined, t: (key: string, options?: Record<string, unknown>) => string): string | null {
@@ -848,6 +828,28 @@ export function TranscodeProfilesRulesPanel({
     }
   };
 
+  const updateMemberEndpoint = async (
+    member: TranscodeFederationMember,
+    endpoint: string,
+    update: { favorite?: boolean; blocked?: boolean },
+  ) => {
+    const actionKey = `${member.installation_id}:${endpoint}`;
+    setMemberPending(actionKey);
+    setError(null);
+    try {
+      onFederationData?.(
+        await api.updateTranscodeFederationMemberEndpoint(member.installation_id, {
+          endpoint,
+          ...update,
+        }),
+      );
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberPending(null);
+    }
+  };
+
   const excludeMember = async (member: TranscodeFederationMember) => {
     if (!window.confirm(t("transcoding.federation.excludeConfirm", { name: member.display_name }))) return;
     setMemberPending(member.installation_id);
@@ -1277,7 +1279,7 @@ export function TranscodeProfilesRulesPanel({
           const syncing = memberPending === member.installation_id;
           const memberStatus = federationMemberStatus(member);
           const memberStatusLabel = federationMemberStatusLabel(memberStatus, t);
-          const availableAccelerators = memberAvailableAccelerators(member);
+          const favoriteEndpointKey = normalizedEndpointKey(member.favorite_endpoint_url);
           return (
             <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={member.installation_id}>
               <div className="compatibility-profile-list-row transcode-federation-member-row">
@@ -1328,42 +1330,81 @@ export function TranscodeProfilesRulesPanel({
               </div>
               {expanded ? (
                 <div className="compatibility-profile-details transcode-automation-details transcode-federation-member-tab-details">
-                  <div className="transcode-federation-member-accelerators">
-                    <span className="transcode-federation-member-detail-label">{t("transcoding.federation.availableAccelerators")}</span>
-                    {availableAccelerators === null ? (
-                      <p className="field-hint">{t("transcoding.federation.acceleratorsUnavailable")}</p>
-                    ) : availableAccelerators.length ? (
-                      <ul className="transcode-federation-member-accelerator-list">
-                        {availableAccelerators.map((accelerator) => {
-                          const focus: TranscodingMatrixFocus = {
-                            memberInstallationId: member.installation_id,
-                            deviceId: accelerator.matrixDeviceId,
-                          };
+                  <div className="transcode-federation-member-connections">
+                    <span className="transcode-federation-member-detail-label">{t("transcoding.federation.availableConnections")}</span>
+                    <p className="field-hint">{t("transcoding.federation.favoriteFallbackHint")}</p>
+                    {member.endpoint_urls.length ? (
+                      <ul className="transcode-federation-member-endpoint-list">
+                        {member.endpoint_urls.map((endpoint) => {
+                          const metric = memberEndpointMetric(member, endpoint);
+                          const hasObservation = Object.prototype.hasOwnProperty.call(metric, "reachable") || typeof metric.last_checked_at === "string";
+                          const isReachable = metric.reachable === true;
+                          const isBlocked = metric.blocked === true;
+                          const isFavorite = normalizedEndpointKey(endpoint) === favoriteEndpointKey;
+                          const endpointStatus = isBlocked
+                            ? "blocked"
+                            : !hasObservation
+                              ? "notTested"
+                              : isReachable
+                                ? "reachable"
+                                : "unreachable";
+                          const statusKey = endpointStatus === "blocked"
+                            ? "transcoding.federation.endpointBlocked"
+                            : endpointStatus === "notTested"
+                              ? "transcoding.federation.endpointNotTested"
+                              : endpointStatus === "reachable"
+                                ? "transcoding.federation.endpointReachable"
+                                : "transcoding.federation.endpointUnreachable";
+                          const checkedAt = typeof metric.last_checked_at === "string" && metric.last_checked_at.trim()
+                            ? new Date(metric.last_checked_at)
+                            : null;
+                          const checkedAtLabel = checkedAt && !Number.isNaN(checkedAt.valueOf())
+                            ? t("transcoding.federation.testedAt", { time: checkedAt.toLocaleString() })
+                            : null;
+                          const actionKey = `${member.installation_id}:${endpoint}`;
+                          const endpointPending = memberPending === actionKey;
                           return (
-                            <li key={accelerator.id}>
-                              <a
-                                className="transcode-federation-member-accelerator-link"
-                                href={`#${buildTranscodingMatrixAnchorId(focus.memberInstallationId, focus.deviceId)}`}
-                                aria-label={`${t("transcoding.federation.openHardwareMatrix")}: ${accelerator.name}`}
-                                title={t("transcoding.federation.openHardwareMatrix")}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  selectTab("accelerators", focus);
-                                }}
-                              >
-                                <span className="transcode-federation-member-accelerator-copy">
-                                  <strong>{accelerator.name}</strong>
-                                  <small>{accelerator.backend}</small>
-                                </span>
-                                <ChevronRight aria-hidden="true" size={16} />
-                              </a>
+                            <li className={`transcode-federation-member-endpoint is-${endpointStatus.toLocaleLowerCase()}${isFavorite ? " is-favorite" : ""}${isBlocked ? " is-blocked" : ""}`} key={endpoint}>
+                              <div className="transcode-federation-member-endpoint-main">
+                                <span className={`status-dot ${endpointStatus === "reachable" ? "is-online" : endpointStatus === "notTested" ? "is-warning" : "is-offline"}`} aria-hidden="true" />
+                                <code title={endpoint}>{endpoint}</code>
+                                {isFavorite ? <span className="badge transcode-federation-endpoint-favorite">{t("transcoding.federation.favorite")}</span> : null}
+                              </div>
+                              <div className="transcode-federation-member-endpoint-metrics">
+                                <span title={t("transcoding.federation.ping")}><Clock3 aria-hidden="true" size={13} />{t("transcoding.federation.ping")} <strong>{formatEndpointMetric(metric.latency_ms, "ms")}</strong></span>
+                                <span title={t("transcoding.federation.throughput")}><Gauge aria-hidden="true" size={13} />{t("transcoding.federation.throughput")} <strong>{formatEndpointMetric(metric.throughput_mbps, "Mbit/s")}</strong></span>
+                                <span className={`transcode-federation-endpoint-status is-${endpointStatus.toLocaleLowerCase()}`}>{t(statusKey)}</span>
+                                {checkedAtLabel ? <small>{checkedAtLabel}</small> : null}
+                              </div>
+                              <div className="transcode-federation-member-endpoint-actions">
+                                <button
+                                  type="button"
+                                  className={`secondary icon-only-button compatibility-profile-quick-action transcode-federation-member-endpoint-action${isFavorite ? " is-favorite" : ""}${endpointPending ? " is-pending" : ""}`}
+                                  aria-label={`${isFavorite ? t("transcoding.federation.removeFavoriteEndpoint") : t("transcoding.federation.setFavoriteEndpoint")}: ${endpoint}`}
+                                  aria-pressed={isFavorite}
+                                  title={isFavorite ? t("transcoding.federation.removeFavoriteEndpoint") : t("transcoding.federation.setFavoriteEndpoint")}
+                                  disabled={memberBusy || (isBlocked && !isFavorite)}
+                                  onClick={() => void updateMemberEndpoint(member, endpoint, { favorite: !isFavorite })}
+                                >
+                                  <Star aria-hidden="true" size={16} fill={isFavorite ? "currentColor" : "none"} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`secondary icon-only-button compatibility-profile-quick-action transcode-federation-member-endpoint-action${isBlocked ? " is-blocked" : ""}${endpointPending ? " is-pending" : ""}`}
+                                  aria-label={`${isBlocked ? t("transcoding.federation.unblockEndpoint") : t("transcoding.federation.blockEndpoint")}: ${endpoint}`}
+                                  aria-pressed={isBlocked}
+                                  title={isBlocked ? t("transcoding.federation.unblockEndpoint") : t("transcoding.federation.blockEndpoint")}
+                                  disabled={memberBusy}
+                                  onClick={() => void updateMemberEndpoint(member, endpoint, { blocked: !isBlocked })}
+                                >
+                                  <Ban aria-hidden="true" size={16} />
+                                </button>
+                              </div>
                             </li>
                           );
                         })}
                       </ul>
-                    ) : (
-                      <p className="field-hint">{t("transcoding.federation.noAvailableAccelerators")}</p>
-                    )}
+                    ) : <p className="field-hint">{t("transcoding.federation.noConnections")}</p>}
                   </div>
                 </div>
               ) : null}

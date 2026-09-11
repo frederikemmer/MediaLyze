@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Captions,
   ChevronDown,
+  ChevronRight,
   Clapperboard,
   Cpu,
   FileClock,
@@ -222,6 +223,73 @@ function formatQualityNote(note: string, t: (key: string, options?: Record<strin
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function escapeCsvCell(value: unknown): string {
+  const text = Array.isArray(value) ? value.join(" | ") : value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildQualityBreakdownCsv(
+  qualityDetail: MediaFileQualityScoreDetail,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const rows: unknown[][] = [
+    [
+      "section",
+      "category_key",
+      "category",
+      "score",
+      "raw_score",
+      "weight",
+      "active",
+      "skipped",
+      "unknown_mapping",
+      "actual",
+      "minimum",
+      "ideal",
+      "maximum",
+      "notes",
+    ],
+    ["summary", "overall", t("fileDetail.qualityBreakdown"), qualityDetail.score, qualityDetail.score_raw],
+    ...qualityDetail.breakdown.categories.map((category) => [
+      "category",
+      category.key,
+      t(`quality.category.${category.key}`),
+      category.score,
+      "",
+      category.weight,
+      category.active,
+      category.skipped,
+      category.unknown_mapping,
+      formatQualityBreakdownValue(category.key, category.actual, t),
+      formatQualityBreakdownValue(category.key, category.minimum, t),
+      formatQualityBreakdownValue(category.key, category.ideal, t),
+      category.maximum === undefined ? "" : formatQualityBreakdownValue(category.key, category.maximum, t),
+      category.notes.map((note) => formatQualityNote(note, t)).join(" | "),
+    ]),
+  ];
+  return `\uFEFF${rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function triggerCsvDownload(blob: Blob, filename: string): void {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
+function downloadQualityBreakdownReport(
+  qualityDetail: MediaFileQualityScoreDetail,
+  filename: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): void {
+  const csv = buildQualityBreakdownCsv(qualityDetail, t);
+  triggerCsvDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename);
+}
+
 function QualityBreakdownCategoryList({
   qualityDetail,
   t,
@@ -291,6 +359,9 @@ function QualityBreakdownCategoryList({
         return (
           <details className="stream-detail-entry quality-detail-entry" key={category.key} open={index === 0}>
             <summary className="stream-detail-entry-head quality-detail-entry-head">
+              <span className="stream-detail-entry-chevron" aria-hidden="true">
+                <ChevronRight className="nav-icon" />
+              </span>
               <div className="stream-tooltip-inline">
                 <strong>{t(`quality.category.${category.key}`)}</strong>
                 {meta.length > 0 ? (
@@ -303,7 +374,9 @@ function QualityBreakdownCategoryList({
                   </div>
                 ) : null}
               </div>
-              <span>{formatQualityNumber(category.score)} / 100</span>
+              <span className="stream-detail-entry-summary-value">
+                {formatQualityNumber(category.score)} / 100
+              </span>
             </summary>
             <div className="stream-detail-entry-body">
               {detailRows.map((row) => (
@@ -363,9 +436,18 @@ function ChaptersList({
 
   return (
     <div className="stream-tooltip-content stream-tooltip-content-panel">
-      <div className="stream-tooltip-summary">
-        <strong>{t("fileDetail.chapters")}</strong>
-        <span>{chapters.length}</span>
+      <div className="stream-tooltip-summary file-detail-chapter-summary">
+        <div className="file-detail-chapter-summary-copy">
+          <strong>{t("fileDetail.chapters")}</strong>
+          <span>{chapters.length}</span>
+        </div>
+        <button
+          type="button"
+          className="secondary small settings-panel-header-action file-detail-chapter-export-button"
+          onClick={() => void handleExport()}
+        >
+          {t("fileDetail.exportChapters")}
+        </button>
       </div>
       <div className="file-detail-chapter-tools">
         <input
@@ -378,9 +460,6 @@ function ChaptersList({
           placeholder={t("fileDetail.chapterSearchPlaceholder")}
           aria-label={t("fileDetail.chapterSearch")}
         />
-        <button type="button" className="secondary-button" onClick={() => void handleExport()}>
-          {t("fileDetail.exportChapters")}
-        </button>
       </div>
       {visibleChapters.map((chapter, index) => (
         <div className="stream-tooltip-row" key={`${chapter.chapter_index}-${chapter.start_time ?? index}`}>
@@ -970,7 +1049,10 @@ function FavoriteCompatibilityResults({
         return (
         <details className="compatibility-favorite-section" key={section.type} open>
           <summary>
-            <span>{section.label}</span>
+            <span className="compatibility-favorite-section-chevron" aria-hidden="true">
+              <ChevronRight className="nav-icon" />
+            </span>
+            <span className="compatibility-favorite-section-label">{section.label}</span>
             <span className="compatibility-favorite-count">{favoriteCount}</span>
           </summary>
           <div
@@ -1031,7 +1113,10 @@ function FavoriteCompatibilityResults({
               return (
                 <details className={`compatibility-favorite-profile${status ? ` status-${status}` : ""}`} key={profile.id}>
                   <summary className="compatibility-favorite-profile-summary">
-                    <span>{profile.name}</span>
+                    <span className="compatibility-favorite-profile-chevron" aria-hidden="true">
+                      <ChevronRight className="nav-icon" />
+                    </span>
+                    <span className="compatibility-favorite-profile-name">{profile.name}</span>
                     <span className="compatibility-favorite-profile-actions">
                       {status ? (
                         <span className={`compatibility-status-badge status-${status}`}>
@@ -1604,6 +1689,9 @@ function FileHistoryPanel({
         return (
           <details className="file-history-entry" key={entry.id} open={index === 0}>
             <summary className="file-history-entry-head">
+              <span className="file-history-entry-chevron" aria-hidden="true">
+                <ChevronRight className="nav-icon" />
+              </span>
               <strong>{formatHistoryRange(state, t)}</strong>
             </summary>
             <dl className="file-history-metrics">
@@ -1789,7 +1877,7 @@ export function FileDetailPage() {
 
   useEffect(() => {
     if (
-      !isPreviewRoute ||
+      activePanelId !== "preview" ||
       !file ||
       String(file.id) !== fileId ||
       !hasVideoMetadata(file)
@@ -1833,7 +1921,7 @@ export function FileDetailPage() {
       active = false;
       controller.abort();
     };
-  }, [comparisonFileId, file, fileId, isPreviewRoute]);
+  }, [activePanelId, comparisonFileId, file, fileId]);
 
   const currentRawProbeState =
     rawProbeState.fileId === fileId
@@ -2029,6 +2117,21 @@ export function FileDetailPage() {
       title: t("fileDetail.qualityBreakdown"),
       loading: !qualityDetail && !qualityError && !error,
       error: null,
+      actions: qualityDetail ? (
+        <button
+          type="button"
+          className="secondary small settings-panel-header-action file-detail-quality-export-button"
+          aria-label={t("fileDetail.exportQualityBreakdown")}
+          onClick={() => downloadQualityBreakdownReport(
+            qualityDetail,
+            `${file?.filename ?? `media-file-${qualityDetail.id}`}-quality.csv`,
+            t,
+          )}
+        >
+          <DownloadIcon size={16} aria-hidden="true" />
+          <span>{t("fileDetail.exportQualityBreakdown")}</span>
+        </button>
+      ) : null,
       body: qualityDetail ? (
         <QualityBreakdownCategoryList qualityDetail={qualityDetail} t={t} />
       ) : (

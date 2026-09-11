@@ -189,6 +189,10 @@ function toLibraryPathForm(library: LibrarySummary, isDesktop: boolean): Library
   };
 }
 
+function libraryRootAliasKey(libraryId: number, rootId: number): string {
+  return `${libraryId}:${rootId}`;
+}
+
 function isDeterminateScanProgress(
   progressMode: "indeterminate" | "determinate" | undefined,
   filesTotal: number,
@@ -1030,6 +1034,8 @@ export function LibrariesPage() {
   const [libraryMessages, setLibraryMessages] = useState<Record<number, string | null>>({});
   const [libraryIdentityForms, setLibraryIdentityForms] = useState<Record<number, LibraryIdentityForm>>({});
   const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
+  const [libraryRootAliasDrafts, setLibraryRootAliasDrafts] = useState<Record<string, string>>({});
+  const [libraryRootAliasPending, setLibraryRootAliasPending] = useState<Record<string, boolean>>({});
   const [selectedJellyfinLibraryId, setSelectedJellyfinLibraryId] = useState<number | null>(null);
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
   const [isCreateLibraryDialogOpen, setIsCreateLibraryDialogOpen] = useState(false);
@@ -2136,6 +2142,22 @@ export function LibrariesPage() {
     };
   }, []);
 
+  const hasOpenLibraryDialog = isCreateLibraryDialogOpen || Boolean(pathDialogForm) || Boolean(libraryPendingDeletion);
+
+  useEffect(() => {
+    if (!hasOpenLibraryDialog) {
+      return undefined;
+    }
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [hasOpenLibraryDialog]);
+
   useEffect(() => {
     if (!isCreateLibraryDialogOpen) {
       return undefined;
@@ -2559,6 +2581,8 @@ export function LibrariesPage() {
     const normalized = displayName.trim();
     const current = roots.find((root) => root.id === rootId);
     if (!normalized || !current || current.display_name === normalized) return;
+    const aliasKey = libraryRootAliasKey(library.id, rootId);
+    setLibraryRootAliasPending((pending) => ({ ...pending, [aliasKey]: true }));
     try {
       const updated = await api.updateLibrarySettings(library.id, {
         roots: roots.map((root) => ({
@@ -2569,8 +2593,19 @@ export function LibrariesPage() {
       });
       upsertLibrary(updated);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
+      setLibraryRootAliasDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[aliasKey];
+        return next;
+      });
     } catch (reason) {
       setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+    } finally {
+      setLibraryRootAliasPending((pending) => {
+        const next = { ...pending };
+        delete next[aliasKey];
+        return next;
+      });
     }
   }
 
@@ -5368,9 +5403,10 @@ export function LibrariesPage() {
                 />
                 <button
                   type="button"
-                  className="secondary"
+                  className="history-retention-primary-button small path-browser-add-button"
                   onClick={addDesktopLibraryPath}
                 >
+                  <Plus aria-hidden="true" />
                   {t("pathBrowser.addCurrent")}
                 </button>
                 <button
@@ -5383,11 +5419,13 @@ export function LibrariesPage() {
               </div>
               <div className="path-browser-selected-list">
                 {form.paths.length ? form.paths.map((path) => (
-                  <span key={path} className="path-browser-selected-item">
-                    <span className="badge">{path}</span>
+                  <div key={path} className="path-browser-selected-item">
+                    <span className="path-browser-selected-path">{path}</span>
                     <button
                       type="button"
-                      className="ghost small"
+                      className="secondary icon-only-button path-browser-selected-remove"
+                      title={t("pathBrowser.remove")}
+                      aria-label={t("pathBrowser.remove")}
                       onClick={() =>
                         setForm((current) => ({
                           ...current,
@@ -5395,10 +5433,10 @@ export function LibrariesPage() {
                         }))
                       }
                     >
-                      {t("pathBrowser.remove")}
+                      <X aria-hidden="true" />
                     </button>
-                  </span>
-                )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
+                  </div>
+                )) : <div className="path-browser-empty-selection">{t("pathBrowser.noneSelected")}</div>}
               </div>
               {formPathInspection ? (
                 <div className="meta-row">
@@ -5469,10 +5507,11 @@ export function LibrariesPage() {
                 />
                 <button
                   type="button"
-                  className="secondary"
+                  className="history-retention-primary-button small path-browser-add-button"
                   onClick={addDesktopPathDialogPath}
                   disabled={isSavingPathDialog}
                 >
+                  <Plus aria-hidden="true" />
                   {t("pathBrowser.addCurrent")}
                 </button>
                 <button
@@ -5486,12 +5525,14 @@ export function LibrariesPage() {
               </div>
               <div className="path-browser-selected-list">
                 {pathDialogForm.paths.length ? pathDialogForm.paths.map((path) => (
-                  <span key={path} className="path-browser-selected-item">
-                    <span className="badge">{path}</span>
+                  <div key={path} className="path-browser-selected-item">
+                    <span className="path-browser-selected-path">{path}</span>
                     <button
                       type="button"
-                      className="ghost small"
+                      className="secondary icon-only-button path-browser-selected-remove"
                       disabled={isSavingPathDialog}
+                      title={t("pathBrowser.remove")}
+                      aria-label={t("pathBrowser.remove")}
                       onClick={() =>
                         setPathDialogForm((current) =>
                           current
@@ -5503,10 +5544,10 @@ export function LibrariesPage() {
                         )
                       }
                     >
-                      {t("pathBrowser.remove")}
+                      <X aria-hidden="true" />
                     </button>
-                  </span>
-                )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
+                  </div>
+                )) : <div className="path-browser-empty-selection">{t("pathBrowser.noneSelected")}</div>}
               </div>
               {pathDialogInspection ? (
                 <div className="meta-row">
@@ -5550,7 +5591,11 @@ export function LibrariesPage() {
             }
           />
         )}
-        <button type="submit" className="history-retention-primary-button" disabled={isSavingPathDialog}>
+        <button
+          type="submit"
+          className={pathDialogForm.paths.length ? "history-retention-primary-button" : "secondary"}
+          disabled={isSavingPathDialog || !pathDialogForm.paths.length}
+        >
           {isSavingPathDialog ? t("libraries.savingPath") : t("libraries.savePath")}
         </button>
       </form>
@@ -6405,8 +6450,15 @@ export function LibrariesPage() {
                     <div className="library-settings-body" id={`library-settings-body-${library.id}`}>
                       <section className="library-settings-section">
                         <div className="library-settings-section-heading">
-                          <h4>{t("connectors.libraryStatus.title")}</h4>
-                          <p>{t("connectors.libraryStatus.description")}</p>
+                          <div className="library-settings-section-title">
+                            <h4>{t("connectors.libraryStatus.title")}</h4>
+                            <TooltipTrigger
+                              ariaLabel={t("connectors.libraryStatus.descriptionAria")}
+                              content={t("connectors.libraryStatus.description")}
+                            >
+                              ?
+                            </TooltipTrigger>
+                          </div>
                         </div>
                         <div className="library-settings-section-grid is-single-column">
                           <div className="connector-library-status-list">
@@ -6424,8 +6476,15 @@ export function LibrariesPage() {
 
                       <section className="library-settings-section">
                         <div className="library-settings-section-heading">
-                          <h4>{t("libraries.sections.source.title")}</h4>
-                          <p>{t("libraries.sections.source.description")}</p>
+                          <div className="library-settings-section-title">
+                            <h4>{t("libraries.sections.source.title")}</h4>
+                            <TooltipTrigger
+                              ariaLabel={t("libraries.sections.source.descriptionAria")}
+                              content={t("libraries.sections.source.description")}
+                            >
+                              ?
+                            </TooltipTrigger>
+                          </div>
                         </div>
                         <div className="library-settings-section-grid is-single-column">
                           <div className="field library-source-field">
@@ -6438,16 +6497,71 @@ export function LibrariesPage() {
                                 title={activeLibraryScanJob ? t("libraries.changePathActiveScanTooltip") : t("libraries.changePathTooltip")}
                                 onClick={() => openLibraryPathDialog(library)}
                               >
+                                <Plus aria-hidden="true" />
                                 {t("libraries.changePath")}
                               </button>
                             </div>
                             <div className="library-source-paths">
-                              {(library.roots?.length ? library.roots : [{ id: 0, path: library.path, display_name: "", path_key: library.path }]).map((root) => (
-                                <div className="library-root-row" key={`${library.id}-${root.path}`}>
-                                  {root.id ? <label><span>{t("connectors.rootAlias")}</span><input className="settings-choice-input" defaultValue={root.display_name} onBlur={(event) => void updateLibraryRootAlias(library, root.id, event.target.value)} /></label> : null}
-                                  <code>{root.path}</code>
-                                </div>
-                              ))}
+                              {(library.roots?.length ? library.roots : [{ id: 0, path: library.path, display_name: "", path_key: library.path }]).map((root) => {
+                                const aliasKey = root.id ? libraryRootAliasKey(library.id, root.id) : "";
+                                const aliasValue = root.id ? (libraryRootAliasDrafts[aliasKey] ?? root.display_name) : "";
+                                const normalizedAlias = aliasValue.trim();
+                                const isAliasPending = root.id ? Boolean(libraryRootAliasPending[aliasKey]) : false;
+                                return (
+                                  <div className="library-root-row" key={`${library.id}-${root.path}`}>
+                                    {root.id ? (
+                                      <div className="library-root-alias-control">
+                                        <label className="library-root-alias-field">
+                                          <span>{t("connectors.rootAlias")}</span>
+                                          <input
+                                            className="library-root-alias-input"
+                                            value={aliasValue}
+                                            onChange={(event) => setLibraryRootAliasDrafts((drafts) => ({
+                                              ...drafts,
+                                              [aliasKey]: event.target.value,
+                                            }))}
+                                          />
+                                        </label>
+                                        <label className="library-root-path-field">
+                                          <span>{t("libraries.mediaPaths")}</span>
+                                          <input
+                                            className="library-root-path-input"
+                                            value={root.path}
+                                            readOnly
+                                            aria-label={`${t("libraries.mediaPaths")}: ${root.path}`}
+                                          />
+                                        </label>
+                                        <button
+                                          type="button"
+                                          className="secondary icon-only-button library-root-alias-save-button"
+                                          aria-label={t("connectors.saveRootAlias")}
+                                          title={t("connectors.saveRootAlias")}
+                                          disabled={
+                                            isDeletingLibrary
+                                            || Boolean(activeLibraryScanJob)
+                                            || isAliasPending
+                                            || !normalizedAlias
+                                            || normalizedAlias === root.display_name
+                                          }
+                                          onClick={() => void updateLibraryRootAlias(library, root.id, aliasValue)}
+                                        >
+                                          <Save aria-hidden="true" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="library-root-path-only">
+                                        <span>{t("libraries.mediaPaths")}</span>
+                                        <input
+                                          className="library-root-path-input"
+                                          value={root.path}
+                                          readOnly
+                                          aria-label={`${t("libraries.mediaPaths")}: ${root.path}`}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>

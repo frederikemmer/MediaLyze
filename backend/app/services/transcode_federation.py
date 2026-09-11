@@ -59,6 +59,7 @@ from backend.app.schemas.transcoding import (
     TranscodeCapabilitiesRead,
     TranscodeCapabilityMatrixRead,
     TranscodeFederationMemberRead,
+    TranscodeFederationEndpointPreferenceUpdate,
     TranscodeFederationPeerRead,
     TranscodeFederationProtocolPairRequest,
     TranscodeFederationProtocolSecureEnvelope,
@@ -862,6 +863,7 @@ def _member_read(member: TranscodeFederationMember) -> TranscodeFederationMember
             "active_jobs": member.active_jobs,
             "network_mbps": member.network_mbps,
             "preferred_endpoint_url": member.preferred_endpoint_url,
+            "favorite_endpoint_url": member.favorite_endpoint_url,
             "endpoint_metrics": member.endpoint_metrics or {},
             "network_latency_ms": member.network_latency_ms,
             "network_probe_at": member.network_probe_at,
@@ -904,16 +906,49 @@ def _endpoint_score_ms(latency_ms: float | None, throughput_mbps: float | None) 
     return latency + transfer_ms
 
 
+def _normalized_optional_endpoint(value: Any) -> str:
+    if value is None or not str(value).strip():
+        return ""
+    try:
+        return normalize_endpoint(str(value))
+    except (FederationError, ValueError):
+        return ""
+
+
+def _member_favorite_endpoint(member: TranscodeFederationMember) -> str:
+    favorite = _normalized_optional_endpoint(getattr(member, "favorite_endpoint_url", None))
+    return favorite if favorite in _member_endpoint_urls(member) else ""
+
+
+def _endpoint_is_reachable(metrics: dict[str, dict[str, Any]], endpoint: str) -> bool:
+    return metrics.get(endpoint, {}).get("reachable") is True
+
+
+def _endpoint_is_unreachable(metrics: dict[str, dict[str, Any]], endpoint: str) -> bool:
+    return metrics.get(endpoint, {}).get("reachable") is False
+
+
+def _endpoint_is_blocked(metrics: dict[str, dict[str, Any]], endpoint: str) -> bool:
+    return bool(metrics.get(endpoint, {}).get("blocked", False))
+
+
 def _ordered_member_endpoints(member: TranscodeFederationMember) -> list[str]:
-    """Put the last measured best route first, followed by measured fallbacks."""
+    """Order routes while retaining an explicit favorite as the normal route.
+
+    An explicitly favored route is only demoted after an observation has shown
+    it is unreachable and another route is known to be reachable.  Unknown
+    routes are still retained as fallbacks, but they are not enough evidence to
+    override the user's preference.
+    """
 
     endpoints = _member_endpoint_urls(member)
     metrics = _endpoint_metrics_for_member(member)
+    usable_endpoints = [endpoint for endpoint in endpoints if not _endpoint_is_blocked(metrics, endpoint)]
     ranked = sorted(
         (
             endpoint
-            for endpoint in endpoints
-            if bool(metrics.get(endpoint, {}).get("reachable", False))
+            for endpoint in usable_endpoints
+            if _endpoint_is_reachable(metrics, endpoint)
             and _endpoint_score_ms(
                 metrics.get(endpoint, {}).get("latency_ms"),
                 metrics.get(endpoint, {}).get("throughput_mbps"),
@@ -928,18 +963,38 @@ def _ordered_member_endpoints(member: TranscodeFederationMember) -> list[str]:
             or float("inf")
         ),
     )
-    preferred = ""
-    try:
-        preferred = normalize_endpoint(str(member.preferred_endpoint_url or ""))
-    except (FederationError, ValueError):
-        preferred = ""
+    ranked_set = set(ranked)
+    reachable_without_score = [
+        endpoint
+        for endpoint in usable_endpoints
+        if _endpoint_is_reachable(metrics, endpoint) and endpoint not in ranked_set
+    ]
+    unknown = [
+        endpoint
+        for endpoint in usable_endpoints
+        if not _endpoint_is_reachable(metrics, endpoint)
+        and not _endpoint_is_unreachable(metrics, endpoint)
+    ]
+    unreachable = [endpoint for endpoint in usable_endpoints if _endpoint_is_unreachable(metrics, endpoint)]
+    favorite = _member_favorite_endpoint(member)
+    preferred = favorite or _normalized_optional_endpoint(member.preferred_endpoint_url)
+    has_reachable_alternative = any(
+        endpoint != preferred and _endpoint_is_reachable(metrics, endpoint)
+        for endpoint in usable_endpoints
+    )
     ordered: list[str] = []
-    if preferred in endpoints and bool(metrics.get(preferred, {}).get("reachable", True)):
+    if preferred in usable_endpoints and not (
+        _endpoint_is_unreachable(metrics, preferred) and has_reachable_alternative
+    ):
         ordered.append(preferred)
-    for endpoint in ranked:
+    for endpoint in (*ranked, *reachable_without_score, *unknown, *unreachable):
         if endpoint not in ordered:
             ordered.append(endpoint)
-    for endpoint in endpoints:
+    # Keep a temporarily unavailable favorite as a last resort when no tested
+    # alternative can be used.  This is important for transient observations.
+    if preferred in usable_endpoints and preferred not in ordered:
+        ordered.append(preferred)
+    for endpoint in usable_endpoints:
         if endpoint not in ordered:
             ordered.append(endpoint)
     return ordered
@@ -947,32 +1002,70 @@ def _ordered_member_endpoints(member: TranscodeFederationMember) -> list[str]:
 
 def _select_best_member_endpoint(member: TranscodeFederationMember) -> str | None:
     metrics = _endpoint_metrics_for_member(member)
-    candidates = [
+    endpoints = _member_endpoint_urls(member)
+    usable_endpoints = [endpoint for endpoint in endpoints if not _endpoint_is_blocked(metrics, endpoint)]
+    scored_candidates = [
         endpoint
-        for endpoint in _member_endpoint_urls(member)
-        if bool(metrics.get(endpoint, {}).get("reachable", False))
+        for endpoint in usable_endpoints
+        if _endpoint_is_reachable(metrics, endpoint)
         and _endpoint_score_ms(
             metrics.get(endpoint, {}).get("latency_ms"),
             metrics.get(endpoint, {}).get("throughput_mbps"),
         )
         is not None
     ]
-    if not candidates:
-        return None
-    best = min(
-        candidates,
-        key=lambda endpoint: float(
-            _endpoint_score_ms(
-                metrics[endpoint].get("latency_ms"),
-                metrics[endpoint].get("throughput_mbps"),
-            )
-            or float("inf")
-        ),
+    favorite = _member_favorite_endpoint(member)
+    preferred = favorite or _normalized_optional_endpoint(member.preferred_endpoint_url)
+    has_reachable_alternative = any(
+        endpoint != preferred and _endpoint_is_reachable(metrics, endpoint)
+        for endpoint in usable_endpoints
     )
+    best: str | None = None
+    if favorite and favorite in usable_endpoints and not (
+        _endpoint_is_unreachable(metrics, favorite) and has_reachable_alternative
+    ):
+        best = favorite
+    if best is None and scored_candidates:
+        best = min(
+            scored_candidates,
+            key=lambda endpoint: float(
+                _endpoint_score_ms(
+                    metrics[endpoint].get("latency_ms"),
+                    metrics[endpoint].get("throughput_mbps"),
+                )
+                or float("inf")
+            ),
+        )
+    if best is None and not favorite and preferred in usable_endpoints and not (
+        _endpoint_is_unreachable(metrics, preferred) and has_reachable_alternative
+    ):
+        best = preferred
+    if best is None:
+        reachable_candidates = [
+            endpoint for endpoint in usable_endpoints if _endpoint_is_reachable(metrics, endpoint)
+        ]
+        if reachable_candidates:
+            best = reachable_candidates[0]
+    if best is None:
+        # A favorite (or the last effective route) remains the only option when
+        # no other endpoint has a positive observation yet.
+        best = preferred if preferred in usable_endpoints else None
+    if best is None:
+        return None
     metric = metrics[best]
     member.preferred_endpoint_url = best
-    member.network_latency_ms = float(metric.get("latency_ms") or 0.0)
-    member.network_mbps = float(metric["throughput_mbps"])
+    latency = metric.get("latency_ms")
+    throughput = metric.get("throughput_mbps")
+    try:
+        if latency is not None and math.isfinite(float(latency)) and float(latency) >= 0:
+            member.network_latency_ms = float(latency)
+    except (TypeError, ValueError):
+        pass
+    try:
+        if throughput is not None and math.isfinite(float(throughput)) and float(throughput) > 0:
+            member.network_mbps = float(throughput)
+    except (TypeError, ValueError):
+        pass
     member.endpoint_metrics = metrics
     return best
 
@@ -1085,6 +1178,8 @@ def _member_endpoint_probe_candidates(
     candidates: list[str] = []
     for endpoint in _member_endpoint_urls(member):
         metric = metrics.get(endpoint)
+        if _endpoint_is_blocked(metrics, endpoint):
+            continue
         if not metric:
             candidates.append(endpoint)
             continue
@@ -1457,11 +1552,14 @@ def probe_member_endpoints(
     all_endpoints = _member_endpoint_urls(member)
     if not all_endpoints:
         raise FederationError("Federation member has no valid endpoint URL", status_code=503)
+    probeable_endpoints = [
+        endpoint for endpoint in all_endpoints if not _endpoint_is_blocked(_endpoint_metrics_for_member(member), endpoint)
+    ]
     if endpoints is None:
-        probe_endpoints = all_endpoints if force else _member_endpoint_probe_candidates(member)
+        probe_endpoints = probeable_endpoints if force else _member_endpoint_probe_candidates(member)
     else:
         requested_endpoints = _normalize_endpoint_list(endpoints)
-        probe_endpoints = [endpoint for endpoint in requested_endpoints if endpoint in all_endpoints]
+        probe_endpoints = [endpoint for endpoint in requested_endpoints if endpoint in probeable_endpoints]
     if not probe_endpoints:
         return _endpoint_metrics_for_member(member)
     state = get_federation_state(db, settings)
@@ -1528,7 +1626,7 @@ def probe_member_endpoints(
     member.network_probe_at = utc_now()
     known_reachable = any(
         bool(_endpoint_metrics_for_member(member).get(endpoint, {}).get("reachable", False))
-        for endpoint in all_endpoints
+        for endpoint in probeable_endpoints
     )
     if successful or known_reachable:
         _select_best_member_endpoint(member)
@@ -1662,16 +1760,6 @@ def _post_member_envelope(
             latency_ms=(time.monotonic() - started) * 1_000,
         )
         member.last_seen_at = utc_now()
-        preferred_endpoint = ""
-        try:
-            preferred_endpoint = normalize_endpoint(str(member.preferred_endpoint_url or ""))
-        except (FederationError, ValueError):
-            pass
-        if not preferred_endpoint or not _endpoint_metrics_for_member(member).get(
-            preferred_endpoint,
-            {},
-        ).get("reachable", True):
-            member.preferred_endpoint_url = endpoint
         _select_best_member_endpoint(member)
         return result
     if not peer_responded or secure_request_failed:
@@ -3287,6 +3375,48 @@ def cleanup_federation_attempts(db: Session, settings: Settings, *, now: datetim
     ):
         db.commit()
     return removed
+
+
+def update_member_endpoint_preference(
+    db: Session,
+    settings: Settings,
+    installation_id: str,
+    update: TranscodeFederationEndpointPreferenceUpdate,
+) -> TranscodeFederationMember:
+    """Persist a user's favorite/block choice for one member route."""
+
+    if update.favorite is None and update.blocked is None:
+        raise FederationError("An endpoint preference update must change favorite or blocked state")
+    member = db.scalar(
+        select(TranscodeFederationMember).where(
+            TranscodeFederationMember.installation_id == installation_id
+        )
+    )
+    if member is None:
+        raise FederationError("Federation member was not found", status_code=404)
+    endpoint = normalize_endpoint(update.endpoint)
+    if endpoint not in _member_endpoint_urls(member):
+        raise FederationError("The endpoint is not advertised by this federation member", status_code=404)
+
+    metrics = _endpoint_metrics_for_member(member)
+    metric = metrics.setdefault(endpoint, {})
+    if update.favorite is not None:
+        if update.favorite and _endpoint_is_blocked(metrics, endpoint):
+            raise FederationError("Unblock the endpoint before making it a favorite", status_code=409)
+        current_favorite = _member_favorite_endpoint(member)
+        member.favorite_endpoint_url = endpoint if update.favorite else (
+            None if current_favorite == endpoint else member.favorite_endpoint_url
+        )
+    if update.blocked is not None:
+        if update.blocked:
+            metric["blocked"] = True
+        else:
+            metric.pop("blocked", None)
+
+    member.endpoint_metrics = metrics
+    _select_best_member_endpoint(member)
+    db.commit()
+    return member
 
 
 def exclude_member(db: Session, settings: Settings, installation_id: str) -> None:

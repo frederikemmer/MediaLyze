@@ -79,6 +79,7 @@ def ensure_default_quality_profiles(db: Session, resolution_categories: list[Res
                 existing_profile.media_type = reserved_media_type
                 existing_profile.name = DEFAULT_PROFILE_NAMES[reserved_media_type]
                 existing_profile.is_builtin = True
+                db.flush()
             else:
                 db.delete(existing_profile)
             continue

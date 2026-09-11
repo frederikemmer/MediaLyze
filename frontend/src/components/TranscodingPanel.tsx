@@ -1055,6 +1055,9 @@ function TranscodeJobHistory({ jobs }: { jobs: TranscodeJob[] }) {
       {jobs.map((job) => (
         <details key={job.id} className="file-history-entry">
           <summary className="file-history-entry-head">
+            <span className="file-history-entry-chevron" aria-hidden="true">
+              <ChevronRight className="nav-icon" />
+            </span>
             <strong>{t(`transcoding.profiles.${job.profile}`, { defaultValue: job.profile })}</strong>
             <span className={`badge transcode-status-${job.status}`}>{t(`transcoding.status.${job.status}`)}</span>
             <span>{job.output_relative_path}</span>

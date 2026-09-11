@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowUp, Plus, X } from "lucide-react";
 
 import { api, type BrowseResponse } from "../lib/api";
 
@@ -54,46 +55,51 @@ export function PathBrowser({ value, selectedPaths, onChange, onAddPath, onRemov
         <span className="meta-label">{t("pathBrowser.selected")}</span>
         <div className="path-browser-selected-list">
           {selectedPaths.length ? selectedPaths.map((path) => (
-            <span key={path} className="path-browser-selected-item badge">
-              <span>{path}</span>
-              <span className="path-browser-pill-divider" aria-hidden="true" />
+            <div key={path} className="path-browser-selected-item">
+              <span className="path-browser-selected-path">{path}</span>
               <button
                 type="button"
-                className="path-browser-pill-remove"
+                className="secondary icon-only-button path-browser-selected-remove"
                 onClick={() => onRemovePath(path)}
+                title={t("pathBrowser.remove")}
                 aria-label={t("pathBrowser.remove")}
               >
-                ×
+                <X aria-hidden="true" />
               </button>
-            </span>
-          )) : <div className="badge">{t("pathBrowser.noneSelected")}</div>}
+            </div>
+          )) : <div className="path-browser-empty-selection">{t("pathBrowser.noneSelected")}</div>}
         </div>
       </div>
       {error ? <div className="alert">{error}</div> : null}
       <div className="path-browser">
         <div className="toolbar">
-          <strong>{currentPathLabel ?? ""}</strong>
-          <div className="toolbar-actions">
-            <button
-              type="button"
-              className="secondary small"
-              onClick={() => onAddPath(currentPath)}
-            >
-              {t("pathBrowser.addCurrent")}
-            </button>
+          <div className="path-browser-current-location">
+            <strong>{currentPathLabel ?? t("pathBrowser.root")}</strong>
             {canNavigateUp ? (
               <button
                 type="button"
-                className="secondary small"
+                className="secondary icon-only-button path-browser-up-button"
                 onClick={() => {
                   const nextPath = browser?.parent_path ?? ".";
                   setCurrentPath(nextPath);
                   onChange(nextPath);
                 }}
+                title={t("pathBrowser.up")}
+                aria-label={t("pathBrowser.up")}
               >
-                {t("pathBrowser.up")}
+                <ArrowUp aria-hidden="true" />
               </button>
             ) : null}
+          </div>
+          <div className="toolbar-actions">
+            <button
+              type="button"
+              className="history-retention-primary-button small path-browser-add-button"
+              onClick={() => onAddPath(currentPath)}
+            >
+              <Plus aria-hidden="true" />
+              {t("pathBrowser.addCurrent")}
+            </button>
           </div>
         </div>
         <div className="listing path-list">

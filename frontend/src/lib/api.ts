@@ -1694,6 +1694,7 @@ export type TranscodeFederationMember = {
   active_jobs: number;
   network_mbps: number;
   preferred_endpoint_url?: string | null;
+  favorite_endpoint_url?: string | null;
   endpoint_metrics?: Record<string, Record<string, unknown>>;
   network_latency_ms?: number | null;
   network_probe_at?: string | null;
@@ -2800,6 +2801,14 @@ export const api = {
   },
   syncTranscodeFederationMember: (installationId: string) =>
     request<TranscodeFederation>(`/transcoding/federation/members/${encodeURIComponent(installationId)}/sync`, { method: "POST" }),
+  updateTranscodeFederationMemberEndpoint: (
+    installationId: string,
+    payload: { endpoint: string; favorite?: boolean; blocked?: boolean },
+  ) =>
+    request<TranscodeFederation>(
+      `/transcoding/federation/members/${encodeURIComponent(installationId)}/endpoints`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    ),
   excludeTranscodeFederationMember: (installationId: string) =>
     request<void>(`/transcoding/federation/members/${encodeURIComponent(installationId)}`, { method: "DELETE" }),
   transcodeProfiles: () => request<TranscodeProfile[]>("/transcoding/profiles"),

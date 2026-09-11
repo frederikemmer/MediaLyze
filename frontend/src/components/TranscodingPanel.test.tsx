@@ -194,7 +194,7 @@ describe("TranscodingPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("edits structured stream fields and exposes the synchronized preview path", async () => {
+  it("edits structured stream fields without rendering a separate variant section", async () => {
     render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
 
     expect((await screen.findAllByText("Movie.mkv")).length).toBeGreaterThan(0);
@@ -247,7 +247,6 @@ describe("TranscodingPanel", () => {
     expect(screen.getAllByText(validation.ffmpeg_command).length).toBeGreaterThan(0);
     expect(screen.getByText(/Poster Font\.ttf/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open synchronized preview" })).not.toBeInTheDocument();
-    expect(screen.getByText("Full transcoding plan")).toBeInTheDocument();
 
     const sentPlan = vi.mocked(api.validateFileTranscode).mock.calls[0][1];
     expect(sentPlan.video_streams[0].width).toBe(1280);

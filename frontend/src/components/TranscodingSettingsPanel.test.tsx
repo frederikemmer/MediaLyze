@@ -241,6 +241,15 @@ const federationWithMember: TranscodeFederation = {
     },
     active_jobs: 0,
     network_mbps: 1000,
+    favorite_endpoint_url: null,
+    endpoint_metrics: {
+      "http://federick-pc:8091": {
+        reachable: true,
+        latency_ms: 4.2,
+        throughput_mbps: 812.5,
+        last_checked_at: "2026-09-04T12:00:00Z",
+      },
+    },
     last_seen_at: "2026-09-04T12:00:00Z",
     last_sync_at: "2026-09-04T12:00:00Z",
     last_error: null,
@@ -701,7 +710,7 @@ describe("TranscodingSettingsPanel", () => {
     expect(screen.queryByText(/Hardware capability matrix/)).not.toBeInTheDocument();
   });
 
-  it("shows federation members in the shared automation toggle", async () => {
+  it("shows federation member connections in the shared automation toggle", async () => {
     vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMember);
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
@@ -718,31 +727,25 @@ describe("TranscodingSettingsPanel", () => {
     expect(document.querySelector(".transcode-federation-members")).toBeNull();
 
     fireEvent.click(screen.getByText("Federick-PC"));
-    const acceleratorLink = await screen.findByRole("link", { name: /NVIDIA GeForce RTX 3080/ });
+    expect(await screen.findByText("Available connections")).toBeInTheDocument();
+    expect(screen.getByText("http://federick-pc:8091")).toBeInTheDocument();
+    expect(document.querySelector(".transcode-federation-member-endpoint-metrics")).toHaveTextContent(/4[.,]2 ms/);
+    expect(document.querySelector(".transcode-federation-member-endpoint-metrics")).toHaveTextContent(/812[.,]5 Mbit\/s/);
     expect(screen.queryByDisplayValue("http://federick-pc:8091")).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("connected")).not.toBeInTheDocument();
-    expect(acceleratorLink).toHaveAttribute(
-      "href",
-      `#${buildTranscodingMatrixAnchorId("member-installation", "cuda0")}`,
-    );
+    expect(screen.queryByText("Available accelerators")).not.toBeInTheDocument();
     expect(document.querySelector(".transcode-federation-member-tab-details .app-settings-flag-toggle")).toBeNull();
-    fireEvent.click(acceleratorLink);
-    expect(screen.getByRole("tab", { name: "Accelerators" })).toHaveAttribute("aria-selected", "true");
-    expect(document.getElementById(buildTranscodingMatrixAnchorId("member-installation", "cuda0"))).toHaveAttribute("open");
   });
 
-  it("maps raw member accelerator ids to grouped capability matrix entries", async () => {
+  it("keeps member hardware details out of the Members view", async () => {
     vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMemberCapabilities);
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole("tab", { name: "Members" }));
     fireEvent.click(await screen.findByText("Federick-PC"));
 
-    const acceleratorLink = await screen.findByRole("link", { name: /NVIDIA GeForce RTX 3080/ });
-    const matrixAnchor = buildTranscodingMatrixAnchorId("member-installation", "device:cuda0");
-    expect(acceleratorLink).toHaveAttribute("href", `#${matrixAnchor}`);
-
-    fireEvent.click(acceleratorLink);
-    expect(document.getElementById(matrixAnchor)).toHaveAttribute("open");
+    expect(await screen.findByText("Available connections")).toBeInTheDocument();
+    expect(screen.queryByText("NVIDIA GeForce RTX 3080")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available accelerators")).not.toBeInTheDocument();
   });
 });

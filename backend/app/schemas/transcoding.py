@@ -762,6 +762,7 @@ class TranscodeFederationMemberRead(BaseModel):
     active_jobs: int = 0
     network_mbps: float = 0.0
     preferred_endpoint_url: str | None = None
+    favorite_endpoint_url: str | None = None
     endpoint_metrics: dict[str, Any] = Field(default_factory=dict)
     network_latency_ms: float | None = None
     network_probe_at: datetime | None = None
@@ -790,6 +791,12 @@ class TranscodeFederationRead(BaseModel):
 class TranscodeFederationPairRequest(BaseModel):
     endpoint: str = Field(min_length=1, max_length=2048)
     pairing_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TranscodeFederationEndpointPreferenceUpdate(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=2048)
+    favorite: bool | None = None
+    blocked: bool | None = None
 
 
 class TranscodeFederationPasscodeResetRead(BaseModel):

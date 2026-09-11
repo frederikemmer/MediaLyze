@@ -17,6 +17,7 @@ from backend.app.core.config import Settings
 from backend.app.models.entities import TranscodeRemoteAttempt, TranscodeTransfer
 from backend.app.schemas.transcoding import (
     TranscodeFederationPairRequest,
+    TranscodeFederationEndpointPreferenceUpdate,
     TranscodeFederationPasscodeResetRead,
     TranscodeFederationProtocolPairRequest,
     TranscodeFederationProtocolSecureEnvelope,
@@ -50,6 +51,7 @@ from backend.app.services.transcode_federation import (
     sync_peer,
     test_federation_network,
     test_remote_member_capability_matrix,
+    update_member_endpoint_preference,
     update_federation_settings,
 )
 from backend.app.services.transcode_matrix import (
@@ -192,6 +194,23 @@ def federation_member_sync(
     except FederationError as exc:
         raise _raise_federation_error(exc) from exc
     return federation_read(db, settings, runtime=runtime)
+
+
+@federation_router.patch(
+    "/members/{installation_id}/endpoints",
+    response_model=TranscodeFederationRead,
+)
+def federation_member_endpoint_preference(
+    installation_id: str,
+    payload: TranscodeFederationEndpointPreferenceUpdate,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeFederationRead:
+    try:
+        update_member_endpoint_preference(db, settings, installation_id, payload)
+    except FederationError as exc:
+        raise _raise_federation_error(exc) from exc
+    return federation_read(db, settings)
 
 
 @federation_router.post(

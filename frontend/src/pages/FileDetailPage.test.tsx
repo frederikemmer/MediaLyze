@@ -415,7 +415,7 @@ function renderPage(fileId: number, path = `/files/${fileId}`) {
       items: [],
     });
   }
-  if (path.includes("/preview") && !vi.isMockFunction(api.fileTranscode)) {
+  if (!vi.isMockFunction(api.fileTranscode)) {
     vi.spyOn(api, "fileTranscode").mockResolvedValue({ variants: [], jobs: [] } as unknown as FileTranscode);
   }
   if (!vi.isMockFunction(api.fileCompatibility)) {
@@ -799,7 +799,7 @@ describe("FileDetailPage", () => {
     expect(within(sections[0] as HTMLElement).getByText("Other Device")).toBeInTheDocument();
     const visibleHardwareNames = Array.from(
       (sections[0] as HTMLElement).querySelectorAll(
-        ".compatibility-favorite-profile-summary > span:first-child, .compatibility-favorite-profile-row > span:first-child",
+        ".compatibility-favorite-profile-summary > .compatibility-favorite-profile-name, .compatibility-favorite-profile-row > span:first-child",
       ),
     ).map((node) => node.textContent);
     expect(visibleHardwareNames).toEqual(["Test Device", "Other Device"]);
@@ -997,7 +997,9 @@ describe("FileDetailPage", () => {
     expect(screen.getByText("Opening")).toBeInTheDocument();
     expect(screen.queryByText("Chapter 2")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Export chapters" }));
+    const exportButton = screen.getByRole("button", { name: "Export chapters" });
+    expect(exportButton.closest(".file-detail-chapter-summary")).not.toBeNull();
+    fireEvent.click(exportButton);
     await waitFor(() => expect(downloadChapters).toHaveBeenCalledWith(file.id));
     expect(createObjectUrl).toHaveBeenCalled();
     expect(anchorClick).toHaveBeenCalled();
@@ -1143,8 +1145,9 @@ describe("FileDetailPage", () => {
       jobs: [],
     } as unknown as FileTranscode);
 
-    const { container } = renderPage(file.id, `/files/${file.id}/preview`);
+    const { container } = renderPage(file.id);
 
+    await selectFileDetailPanel("Preview");
     expect(await screen.findByRole("heading", { name: "Synchronized preview comparison" })).toBeInTheDocument();
     expect(transcodeRequest).toHaveBeenCalledWith(file.id, expect.any(AbortSignal));
     expect(fileRequest).toHaveBeenCalledWith(variant.id, { includeRawFfprobe: false });
@@ -1279,6 +1282,15 @@ describe("FileDetailPage", () => {
 
   it("shows quality score categories as expandable stream-style detail entries", async () => {
     const file = createFileDetail();
+    let qualityCsvBlob: Blob | undefined;
+    const createObjectUrl = vi.fn((blob: Blob) => {
+      qualityCsvBlob = blob;
+      return "blob:quality";
+    });
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { value: createObjectUrl, configurable: true });
+    Object.defineProperty(window.URL, "revokeObjectURL", { value: revokeObjectUrl, configurable: true });
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
     vi.spyOn(api, "fileQualityScore").mockResolvedValue(createQualityDetail());
@@ -1287,6 +1299,15 @@ describe("FileDetailPage", () => {
 
     await selectFileDetailPanel("Quality breakdown");
     expect(await screen.findByRole("heading", { name: "Quality breakdown" })).toBeInTheDocument();
+    const qualityExportButton = screen.getByRole("button", { name: "Export quality report (CSV)" });
+    fireEvent.click(qualityExportButton);
+    await waitFor(() => expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob)));
+    const qualityCsv = await qualityCsvBlob?.text();
+    expect(qualityCsv).toBeDefined();
+    expect(qualityCsv).toContain("category_key");
+    expect(qualityCsv).toContain("visual_density");
+    expect(anchorClick).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:quality");
     const entries = Array.from(container.querySelectorAll("details.quality-detail-entry"));
     expect(entries).toHaveLength(4);
     expect(entries[0]).toHaveAttribute("open");
@@ -1463,7 +1484,7 @@ describe("FileDetailPage", () => {
     const activePanel = container.querySelector(".file-detail-active-panel") as HTMLElement;
     const firstHeader = activePanel.querySelector(".stream-detail-entry-head") as HTMLElement;
     expect(firstHeader.querySelector(".stream-tooltip-inline strong")).toHaveTextContent("Dolby Digital Plus");
-    expect(firstHeader.querySelector(":scope > span")).toHaveTextContent("en");
+    expect(firstHeader.querySelector(":scope > .stream-detail-entry-summary-value")).toHaveTextContent("en");
     expect(within(activePanel).getByRole("button", { name: "Show quality first" })).toHaveAttribute(
       "aria-pressed",
       "true",

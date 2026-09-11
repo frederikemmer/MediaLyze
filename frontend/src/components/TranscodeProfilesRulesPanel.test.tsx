@@ -86,6 +86,15 @@ const federationFixture: TranscodeFederation = {
     capability_matrix: null,
     active_jobs: 0,
     network_mbps: 1000,
+    favorite_endpoint_url: null,
+    endpoint_metrics: {
+      "http://worker-02:8091": {
+        reachable: true,
+        latency_ms: 4.2,
+        throughput_mbps: 812.5,
+        last_checked_at: "2026-09-10T10:00:00Z",
+      },
+    },
     last_seen_at: null,
     last_sync_at: null,
     last_error: null,
@@ -299,6 +308,60 @@ describe("TranscodeProfilesRulesPanel", () => {
     const discoveredArticle = screen.getByText("Worker 02").closest("article");
     expect(discoveredArticle?.querySelector(".transcode-federation-add-icon")).not.toBeNull();
     expect(discoveredArticle?.querySelector(".transcode-federation-peer-code-input")).not.toBeNull();
+  });
+
+  it("shows tested member connections and exposes favorite and block actions", async () => {
+    const onFederationData = vi.fn();
+    const nextFederation = {
+      ...federationFixture,
+      members: [{
+        ...federationFixture.members[0],
+        favorite_endpoint_url: "http://worker-02:8091",
+        endpoint_metrics: {
+          ...federationFixture.members[0].endpoint_metrics,
+          "http://worker-02:8091": {
+            ...federationFixture.members[0].endpoint_metrics?.["http://worker-02:8091"],
+            blocked: true,
+          },
+        },
+      }],
+    } satisfies TranscodeFederation;
+    const updateEndpoint = vi.spyOn(api, "updateTranscodeFederationMemberEndpoint").mockResolvedValue(nextFederation);
+    const { container } = render(
+      <TranscodeProfilesRulesPanel
+        capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
+        acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
+        federation={federationFixture}
+        onFederationData={onFederationData}
+      />,
+    );
+
+    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".transcode-federation-member-trigger")!);
+
+    expect(screen.getByText("Available connections")).toBeInTheDocument();
+    const endpointMetrics = container.querySelector(".transcode-federation-member-endpoint-metrics");
+    expect(endpointMetrics).toHaveTextContent(/4[.,]2 ms/);
+    expect(endpointMetrics).toHaveTextContent(/812[.,]5 Mbit\/s/);
+    expect(screen.getByText("Reachable")).toBeInTheDocument();
+    expect(screen.queryByText("Available accelerators")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use this connection as favorite: http://worker-02:8091" }));
+    await waitFor(() => expect(updateEndpoint).toHaveBeenCalledWith("worker-02", {
+      endpoint: "http://worker-02:8091",
+      favorite: true,
+    }));
+    expect(onFederationData).toHaveBeenCalledWith(nextFederation);
+
+    fireEvent.click(screen.getByRole("button", { name: "Block this connection: http://worker-02:8091" }));
+    await waitFor(() => expect(updateEndpoint).toHaveBeenCalledWith("worker-02", {
+      endpoint: "http://worker-02:8091",
+      blocked: true,
+    }));
+
+    const memberArticle = container.querySelector(".compatibility-profile-list-item");
+    expect(memberArticle?.querySelectorAll(".transcode-federation-member-endpoint-action")).toHaveLength(2);
   });
 
   it("uses the member status dot for warning details instead of an inline alert", async () => {

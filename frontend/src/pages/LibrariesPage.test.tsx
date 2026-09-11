@@ -636,7 +636,7 @@ describe("LibrariesPage settings navigation", () => {
       initialEntry: "/settings?section=libraries&library=3&focus=path-mapping",
     });
 
-    expect(await screen.findByRole("heading", { name: "Connector assignments" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connectors" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Path mapping (optional)" })).not.toBeInTheDocument();
   });
 });
@@ -1947,7 +1947,7 @@ describe("LibrariesPage Jellyfin library assignments", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     await expandLibrarySettings();
-    expect(await screen.findByRole("heading", { name: "Connector assignments" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connectors" })).toBeInTheDocument();
     const openConnectorLink = await screen.findByRole("link", { name: "Open connector" });
     expect(openConnectorLink).toHaveClass(
       "secondary",
@@ -2460,11 +2460,15 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.queryByText("/media/movies")).not.toBeInTheDocument();
     await expandLibrarySettings();
     expect(screen.getByRole("button", { name: "Hide settings for Movies" })).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByText("/media/movies")).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "MediaLyze paths: /media/movies" })).toBeInTheDocument();
     const changePathButton = screen.getByRole("button", { name: "Change path" });
     expect(changePathButton).toHaveClass("secondary", "small", "settings-panel-header-action", "library-change-path-button");
-    expect(screen.getByRole("textbox", { name: "Root alias" })).toHaveClass("settings-choice-input");
-    expect(screen.getByRole("heading", { name: "Connector assignments" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Root alias" })).toHaveClass("library-root-alias-input");
+    expect(screen.getByRole("textbox", { name: "MediaLyze paths: /media/movies" })).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Save root alias" })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "Connectors" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain connector assignments" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain the media source settings" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Associated Jellyfin library" })).not.toBeInTheDocument();
 
     const detailsButton = await screen.findByRole("button", { name: "Show library details for Movies" });
@@ -2480,8 +2484,33 @@ describe("LibrariesPage settings panels", () => {
 
     fireEvent.focus(detailsButton);
 
-    await waitFor(() => expect(screen.getAllByText("/media/movies")).toHaveLength(2));
-    expect(screen.getByText("0 files")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("0 files")).toBeInTheDocument());
+  });
+
+  it("saves a changed root alias while keeping the MediaLyze path read-only", async () => {
+    const library = createLibrarySummary({
+      roots: [{ id: 1, path: "/media/movies", display_name: "Movies", path_key: "/media/movies" }],
+    });
+    vi.spyOn(api, "libraries").mockResolvedValue([library]);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(
+      createLibrarySummary({
+        roots: [{ id: 1, path: "/media/movies", display_name: "Films", path_key: "/media/movies" }],
+      }),
+    );
+
+    renderPage();
+    await expandLibrarySettings();
+
+    const aliasInput = screen.getByRole("textbox", { name: "Root alias" });
+    const pathInput = screen.getByRole("textbox", { name: "MediaLyze paths: /media/movies" });
+    fireEvent.change(aliasInput, { target: { value: "Films" } });
+    expect(pathInput).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Save root alias" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save root alias" }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, {
+      roots: [{ id: 1, path: "/media/movies", display_name: "Films" }],
+    }));
   });
 
   it("toggles dashboard visibility from the library action button and refreshes dashboard data", async () => {
@@ -2622,10 +2651,13 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change path" }));
 
     expect(await screen.findByRole("dialog", { name: "Change path for Movies" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-    fireEvent.click(screen.getByRole("button", { name: /media/ }));
+    expect(document.body.style.overflow).toBe("hidden");
+    const pathDialog = screen.getByRole("dialog", { name: "Change path for Movies" });
+    fireEvent.click(within(pathDialog).getByRole("button", { name: "Remove" }));
+    expect(within(pathDialog).getByRole("button", { name: "Save selection" })).toBeDisabled();
+    fireEvent.click(within(pathDialog).getByRole("button", { name: /^media/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add current folder" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save path" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(1, {
@@ -2664,11 +2696,12 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change path" }));
 
     expect(await screen.findByText("Path does not exist")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    const pathDialog = screen.getByRole("dialog", { name: "Change path for Movies" });
+    fireEvent.click(within(pathDialog).getByRole("button", { name: "Remove" }));
     fireEvent.click(screen.getByRole("button", { name: "Up" }));
-    fireEvent.click(await screen.findByRole("button", { name: /media/ }));
+    fireEvent.click(await within(pathDialog).findByRole("button", { name: /^media/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add current folder" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save path" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(1, {
@@ -2702,10 +2735,11 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change path" }));
 
     expect(await screen.findByRole("dialog", { name: "Change path for Movies" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    const pathDialog = screen.getByRole("dialog", { name: "Change path for Movies" });
+    fireEvent.click(within(pathDialog).getByRole("button", { name: "Remove" }));
     fireEvent.click(screen.getByRole("button", { name: "Choose folder" }));
     expect(await screen.findByText("/mnt/new-media")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save path" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(1, {

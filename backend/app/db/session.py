@@ -172,6 +172,9 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "preferred_endpoint_url": (
             "ALTER TABLE transcode_federation_members ADD COLUMN preferred_endpoint_url VARCHAR(2048)"
         ),
+        "favorite_endpoint_url": (
+            "ALTER TABLE transcode_federation_members ADD COLUMN favorite_endpoint_url VARCHAR(2048)"
+        ),
         "endpoint_metrics": (
             "ALTER TABLE transcode_federation_members ADD COLUMN endpoint_metrics JSON NOT NULL DEFAULT '{}'"
         ),

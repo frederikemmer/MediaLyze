@@ -1623,6 +1623,7 @@ class TranscodeFederationMember(TimestampMixin, Base):
     active_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     network_mbps: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)
     preferred_endpoint_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    favorite_endpoint_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     endpoint_metrics: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     network_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     network_probe_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

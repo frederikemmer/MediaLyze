@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { ChevronRight } from "lucide-react";
 
 import { api, type LibrarySummary, type TranscodeJob } from "../lib/api";
 import { formatDate } from "../lib/format";
@@ -47,7 +48,12 @@ export function TranscodeHistorySettingsPanel({ libraries }: { libraries: Librar
       <div className="transcode-history-list">
         {jobs.map((job) => (
           <details key={job.id} className="file-history-entry">
-            <summary className="file-history-entry-head"><strong>{job.output_relative_path}</strong><span className={`badge transcode-status-${job.status}`}>{t(`transcoding.status.${job.status}`)}</span><span>{formatDate(job.created_at)}</span></summary>
+            <summary className="file-history-entry-head">
+              <span className="file-history-entry-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span>
+              <strong>{job.output_relative_path}</strong>
+              <span className={`badge transcode-status-${job.status}`}>{t(`transcoding.status.${job.status}`)}</span>
+              <span>{formatDate(job.created_at)}</span>
+            </summary>
             <div className="transcode-job-detail">
               <dl>
                 <div><dt>{t("transcoding.sourcePath")}</dt><dd><code>{job.source_path_snapshot}</code></dd></div>

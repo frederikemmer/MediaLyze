@@ -186,6 +186,7 @@ def test_init_db_adds_missing_columns_for_existing_sqlite_schema() -> None:
     assert {
         "application_version",
         "preferred_endpoint_url",
+        "favorite_endpoint_url",
         "endpoint_metrics",
         "network_latency_ms",
         "network_probe_at",

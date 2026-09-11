@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 import type { AudioStream, MediaFileStreamDetails, VideoStream } from "../lib/api";
 import { formatCodecLabel, formatSpatialAudioProfileLabel } from "../lib/format";
@@ -354,6 +355,9 @@ export function StreamDetailsList({
           return (
             <details className="stream-detail-entry" key={streamKey} open={index === 0}>
               <summary className="stream-detail-entry-head">
+                <span className="stream-detail-entry-chevron" aria-hidden="true">
+                  <ChevronRight className="nav-icon" />
+                </span>
                 <div className="stream-tooltip-inline">
                   <strong>{showLanguageAsPrimary ? row?.trail ?? t("fileTable.na") : row?.lead ?? t("fileTable.na")}</strong>
                   {row?.meta.length ? (
@@ -371,7 +375,9 @@ export function StreamDetailsList({
                     <strong>{row?.lead ?? t("fileTable.na")}</strong>
                   </div>
                 ) : (
-                  <span>{row?.trail ?? t("streamDetails.streamNumber", { number: stream.stream_index })}</span>
+                  <span className="stream-detail-entry-summary-value">
+                    {row?.trail ?? t("streamDetails.streamNumber", { number: stream.stream_index })}
+                  </span>
                 )}
               </summary>
               <div className="stream-detail-entry-body">
