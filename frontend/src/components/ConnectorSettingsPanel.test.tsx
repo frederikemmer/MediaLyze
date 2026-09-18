@@ -197,6 +197,7 @@ describe("ConnectorSettingsPanel", () => {
 
     const testButton = await screen.findByRole("button", { name: "Test" });
     expect(testButton).toHaveClass("connector-action-button");
+    expect(testButton.querySelector("svg")).toHaveClass("lucide-network");
     fireEvent.click(testButton);
     await waitFor(() => expect(testConnection).toHaveBeenCalledWith(CONNECTION.id, { base_url: CONNECTION.base_url }));
     const enabledSwitch = screen.getByRole("switch", { name: "Disable" });

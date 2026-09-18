@@ -1636,7 +1636,12 @@ describe("LibrariesPage ignore patterns", () => {
     expect(heading.closest(".resolution-categories-async-panel")).not.toBeNull();
     const titleRow = heading.closest(".panel-title-row");
     expect(titleRow).not.toBeNull();
-    expect(titleRow?.querySelector(".async-panel-toggle-actions")).toContainElement(restoreButton);
+    const titleActions = titleRow?.querySelector(".async-panel-toggle-actions");
+    expect(titleActions).toContainElement(restoreButton);
+    const addButton = screen.getByRole("button", { name: "Add category" });
+    expect(titleActions).toContainElement(addButton);
+    expect(titleActions?.firstElementChild).toBe(restoreButton);
+    expect(titleActions?.lastElementChild).toBe(addButton);
     expect(document.querySelector(".resolution-category-actions")).not.toBeInTheDocument();
 
     fireEvent.click(restoreButton);
@@ -1690,6 +1695,7 @@ describe("LibrariesPage ignore patterns", () => {
     await waitFor(() => expect(addButton).toBeEnabled());
     expect(addButton).toHaveClass("secondary", "small", "settings-panel-header-action", "resolution-category-add");
     expect(addButton.closest(".resolution-category-table-shell")).toBeNull();
+    expect(addButton.closest(".async-panel-toggle-actions")).not.toBeNull();
     expect(screen.queryByPlaceholderText("New category")).not.toBeInTheDocument();
 
     fireEvent.click(addButton);

@@ -22,7 +22,13 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 - **Left-aligned connector headers** — keep provider names and server URLs anchored to the start of the accordion toggle.
 - **Preview completed transcodes in context** — keep the original preview visible above the synchronized variant comparison and link completed jobs from the transcoding center directly to that comparison.
 - **Predictable Federation endpoint routing** — keep a favored connection as the default, expose per-address test metrics, and fall back only when it is unreachable and another address is reachable; blocked addresses are excluded from routing.
-- **Refined library detail controls** — use borderless title actions, smaller rectangular chart toggles, and connected history controls with clear section dividers.
+- **Refined library detail controls** — use borderless title actions, smaller rectangular chart toggles, and separate history controls with clear spacing.
+- **Square icon toggle options** — keep symbol-only segmented controls square across dashboard, library, comparison, storage, and playback views.
+- **Connected rectangular comparison controls** — keep both metric selectors, axis swap, and renderer menu compactly grouped with clear focus states.
+- **Compact metadata search rows** — match field-specific search bars to the main file search control while preserving their field icons and clear actions.
+- **Compact analyzed-files count** — keep the indexed-entry badge closer to the header version pill in size without removing its quick count cue.
+- **Consistent connector test icon** — use the established network symbol for connector connection tests.
+- **Grouped resolution category actions** — keep restore defaults and add category together on the right side of the panel heading.
 - **Stabilized the transcoding job list** — keep the default order based on start time, allow explicit column sorting, and leave job details collapsed until selected.
 - **Refined quality profile cards** — start each media type with collapsed profile details and highlight the complete profile area on hover.
 - **Refined library path settings** — move supporting copy into heading tooltips, provide connected editable root aliases with read-only MediaLyze paths, and make the folder-selection dialog denser and scroll-safe.

@@ -5,7 +5,7 @@ import {
   CircleStop,
   FolderPlus,
   KeyRound,
-  Link2,
+  Network,
   Plus,
   RefreshCw,
   Search,
@@ -554,7 +554,7 @@ function ConnectionCard({
             </div>
             <div className="jellyfin-actions">
               <button type="button" className="connector-action-button" disabled={!dirty || !draft.name.trim() || !draft.baseUrl.trim() || !validInterval || pending !== null || syncRunning} onClick={() => void save()}><Check aria-hidden="true" />{t("common.save")}</button>
-              <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning} onClick={() => void testConnection()}>{pending === "test" ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <Link2 aria-hidden="true" />}{t("connectors.test")}</button>
+              <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning} onClick={() => void testConnection()}>{pending === "test" ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <Network aria-hidden="true" />}{t("connectors.test")}</button>
               <button type="button" className="secondary small connector-action-button" disabled={pending !== null || syncRunning || dirty || !connection.enabled} onClick={() => void syncNow()}><RefreshCw aria-hidden="true" />{t("connectors.sync")}</button>
               {syncRunning ? <button type="button" className="secondary small connector-action-button" disabled={pending !== null} onClick={() => void cancelSync()}><CircleStop aria-hidden="true" />{t("connectors.cancel")}</button> : null}
               <button type="button" className="secondary small connector-action-button connector-secret-action-button" disabled={pending !== null || syncRunning} onClick={() => setSecretDialogOpen(true)}><KeyRound aria-hidden="true" />{t(connection.has_secret ? "connectors.secretDialog.replaceButton" : "connectors.secretDialog.setButton")}</button>

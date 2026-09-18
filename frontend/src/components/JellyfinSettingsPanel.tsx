@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   CircleStop,
   Link2,
+  Network,
   RefreshCw,
   Search,
   Server,
@@ -436,7 +437,7 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
               {connection.enabled ? t("jellyfin.disableIntegration") : t("jellyfin.enableIntegration")}
             </button>
             <button className="secondary small" type="button" disabled={connectionBusy || syncRunning || autoSaving} onClick={() => void testConnection()}>
-              {pending === "test" ? <RefreshCw aria-hidden="true" className="is-spinning" /> : <Link2 aria-hidden="true" />} {t("jellyfin.testConnection")}
+              {pending === "test" ? <RefreshCw aria-hidden="true" className="is-spinning" /> : <Network aria-hidden="true" />} {t("jellyfin.testConnection")}
             </button>
             <button className="secondary small" type="button" disabled={connectionBusy || syncRunning || autoSaving || connectionDirty || !connection.enabled} onClick={() => void syncNow()}>
               <RefreshCw aria-hidden="true" className={pending === "sync" ? "is-spinning" : ""} /> {t("jellyfin.syncNow")}

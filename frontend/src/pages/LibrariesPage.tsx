@@ -6807,20 +6807,31 @@ export function LibrariesPage() {
               </TooltipTrigger>
             }
             collapseActions={
-              <TooltipTrigger
-                ariaLabel={t("libraries.resolutionCategories.restoreDefaults")}
-                content={t("libraries.resolutionCategories.restoreDefaults")}
-                className="secondary icon-only-button resolution-category-restore-button"
-                disabled={
-                  !appSettingsLoaded ||
-                  isSavingResolutionCategories ||
-                  resolutionCategoryDefaultsChangeKind === "none"
-                }
-                pinOnClick={false}
-                onClick={() => void restoreDefaultResolutionCategories()}
-              >
-                <History aria-hidden="true" className="nav-icon" size={16} />
-              </TooltipTrigger>
+              <>
+                <TooltipTrigger
+                  ariaLabel={t("libraries.resolutionCategories.restoreDefaults")}
+                  content={t("libraries.resolutionCategories.restoreDefaults")}
+                  className="secondary icon-only-button resolution-category-restore-button"
+                  disabled={
+                    !appSettingsLoaded ||
+                    isSavingResolutionCategories ||
+                    resolutionCategoryDefaultsChangeKind === "none"
+                  }
+                  pinOnClick={false}
+                  onClick={() => void restoreDefaultResolutionCategories()}
+                >
+                  <History aria-hidden="true" className="nav-icon" size={16} />
+                </TooltipTrigger>
+                <button
+                  type="button"
+                  className="secondary small settings-panel-header-action resolution-category-add"
+                  onClick={addResolutionCategoryDraft}
+                  disabled={!appSettingsLoaded || isSavingResolutionCategories}
+                >
+                  <Plus aria-hidden="true" className="nav-icon" size={15} />
+                  {t("libraries.resolutionCategories.addCategory")}
+                </button>
+              </>
             }
           >
             <div className="settings-sidebar-stack">
@@ -6895,15 +6906,6 @@ export function LibrariesPage() {
                   </tbody>
                 </table>
               </div>
-              <button
-                type="button"
-                className="secondary small settings-panel-header-action resolution-category-add"
-                onClick={addResolutionCategoryDraft}
-                disabled={!appSettingsLoaded || isSavingResolutionCategories}
-              >
-                <Plus aria-hidden="true" className="nav-icon" size={15} />
-                {t("libraries.resolutionCategories.addCategory")}
-              </button>
               {isSavingResolutionCategories ? <p className="field-hint">Saving resolution categories…</p> : null}
               {resolutionCategoryChangeKind === "labels" ? (
                 <p className="field-hint">

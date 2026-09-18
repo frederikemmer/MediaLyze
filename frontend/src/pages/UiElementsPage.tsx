@@ -47,7 +47,6 @@ import {
   Info,
   Layers,
   LayoutPanelTop,
-  Link2,
   ListFilter,
   Lock,
   Map,
@@ -1777,7 +1776,7 @@ export function UiElementsPage() {
                   </AsyncPanel>
                 </div>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
+              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-action-button", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
                 <article className="media-card library-settings-card connector-connection-card is-expanded">
                   <header className="connector-connection-header">
                     <div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Disable"><input type="checkbox" role="switch" defaultChecked aria-label="Disable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="true"><span className="connector-connection-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="jellyfin" title="Jellyfin"><ConnectorProviderIcon provider="jellyfin" aria-hidden="true" /><span className="sr-only">Jellyfin</span></span><strong>Living Room</strong><span className="connector-connection-url">https://living-room.example</span></span></span></button></div>
@@ -1786,7 +1785,7 @@ export function UiElementsPage() {
                   <div className="library-settings-body connector-connection-body">
                     <section className="connector-detail-section">
                       <div className="connector-form-grid"><label><span>Name</span><input className="settings-choice-input" defaultValue="Living Room" /></label><label><span>Server URL</span><input className="settings-choice-input" defaultValue="https://living-room.example" /></label><label><span>Sync interval (minutes)</span><input className="settings-choice-input" type="number" defaultValue="60" /></label></div>
-                      <div className="jellyfin-actions"><button type="button" className="connector-action-button"><Check aria-hidden="true" />Save</button><button type="button" className="secondary small connector-action-button"><Link2 aria-hidden="true" />Test</button><button type="button" className="secondary small connector-action-button"><RefreshCw aria-hidden="true" />Sync now</button><button type="button" className="secondary small connector-action-button"><CircleStop aria-hidden="true" />Cancel sync</button><button type="button" className="secondary small connector-action-button connector-secret-action-button"><KeyRound aria-hidden="true" />Replace key</button><button type="button" className="secondary small danger connector-action-button"><Trash2 aria-hidden="true" />Remove</button></div>
+                      <div className="jellyfin-actions"><button type="button" className="connector-action-button"><Check aria-hidden="true" />Save</button><button type="button" className="secondary small connector-action-button"><Network aria-hidden="true" />Test</button><button type="button" className="secondary small connector-action-button"><RefreshCw aria-hidden="true" />Sync now</button><button type="button" className="secondary small connector-action-button"><CircleStop aria-hidden="true" />Cancel sync</button><button type="button" className="secondary small connector-action-button connector-secret-action-button"><KeyRound aria-hidden="true" />Replace key</button><button type="button" className="secondary small danger connector-action-button"><Trash2 aria-hidden="true" />Remove</button></div>
                     </section>
                     <section className="connector-detail-section connector-mapping-section">
                       <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><div><h4>Library assignments</h4><p>Assign connector libraries automatically from verified paths or choose them manually.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Library assignments" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
@@ -1869,7 +1868,7 @@ export function UiElementsPage() {
               <VariantCard title="Create library from detected Jellyfin catalog" source={`${settings} > Libraries > Add library`} classes={["jellyfin-create-library-options", "jellyfin-create-library-option"]} wide>
                 <section className="jellyfin-create-library-options"><div><h3>Add a detected Jellyfin library</h3><p className="field-hint">Select a catalog, then choose its local media path.</p></div><div className="jellyfin-create-library-option-list"><button type="button" className="jellyfin-create-library-option is-selected" aria-pressed="true"><strong>Archive</strong><span>420 Jellyfin items</span></button><button type="button" className="jellyfin-create-library-option" aria-pressed="false"><strong>Concerts</strong><span>88 Jellyfin items</span></button></div><div className="notice success">The Jellyfin library will be linked automatically after creation.</div></section>
               </VariantCard>
-              <VariantCard title="Jellyfin-linked MediaLyze library" source="LibraryDetailPage" classes={["library-statistic-title-row", "library-jellyfin-icon-trigger", "analyzed-file-name-source-toggle"]} wide>
+              <VariantCard title="Jellyfin-linked MediaLyze library" source="LibraryDetailPage" classes={["library-statistic-title-row", "library-jellyfin-icon-trigger", "analyzed-file-name-source-toggle", "analyzed-files-count"]} wide>
                 <div className="stack">
                   <section className="panel stack statistic-layout-header-panel library-statistic-layout-header-panel">
                     <div className="panel-title-row library-statistic-title-row"><h2>Movies</h2><TooltipTrigger ariaLabel="Connected to Jellyfin library Movies" className="library-jellyfin-icon-trigger" content={<span className="library-jellyfin-icon-tooltip"><strong>Connected to Jellyfin library Movies</strong><span>Last synchronization: today</span></span>}><JellyfinIcon aria-hidden="true" /></TooltipTrigger><TooltipTrigger ariaLabel="Show library path" content="/media/movies">?</TooltipTrigger></div>
@@ -1885,6 +1884,7 @@ export function UiElementsPage() {
                           <button type="button" data-toggle-key="jellyfin" className="distribution-chart-mode-button analyzed-file-name-source-button" aria-label="Show Jellyfin names" aria-pressed="false"><span className="distribution-chart-mode-button-content"><JellyfinIcon aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
                         </div>
                         <button type="button" className="secondary icon-only-button statistic-layout-action-button" aria-label="Edit table view"><Settings aria-hidden="true" /></button>
+                        <span className="analyzed-files-count" aria-label="4 indexed entries">4</span>
                       </div>
                     </div>
                     <div className="media-data-table" role="table">
@@ -1944,7 +1944,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Structured search" source={`${libraryDetail} > Analyzed files`} classes={["async-panel-header-status", "metadata-search-fields", "metadata-search-control", "metadata-search-icon-button", "metadata-search-remove", "data-table-search-layout"]}>
+              <VariantCard title="Structured search · compact metadata rows" source={`${libraryDetail} > Analyzed files`} classes={["async-panel-header-status", "metadata-search-fields", "metadata-search-row", "metadata-search-control", "metadata-search-icon-button", "metadata-search-remove", "data-table-search-layout"]}>
                 <div className="stack">
                   <div className="library-layout-panel-analyzed-files">
                     <div className="panel-header">
@@ -2088,9 +2088,9 @@ export function UiElementsPage() {
                 <AnalyzedFilesTable />
               </VariantCard>
               <VariantCard
-                title="Resolution category restore action"
+                title="Resolution category title actions"
                 source={`${settings} > Resolution categories`}
-                classes={["resolution-categories-async-panel", "panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button"]}
+                classes={["resolution-categories-async-panel", "panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button", "resolution-category-add"]}
                 wide
               >
                 <div className="resolution-categories-async-panel">
@@ -2121,14 +2121,17 @@ export function UiElementsPage() {
                       >
                         <History aria-hidden="true" className="nav-icon" size={16} />
                       </TooltipTrigger>
+                      <button type="button" className="secondary small settings-panel-header-action resolution-category-add">
+                        <Plus size={15} aria-hidden="true" /> Add category
+                      </button>
                     </div>
                   </div>
                 </div>
               </VariantCard>
               <VariantCard
-                title="Resolution categories add and delete actions"
+                title="Resolution category table actions"
                 source={`${settings} > Resolution categories`}
-                classes={["resolution-category-table-shell", "resolution-category-table", "resolution-category-add", "resolution-category-action-button"]}
+                classes={["resolution-category-table-shell", "resolution-category-table", "resolution-category-action-button"]}
                 wide
               >
                 <div className="settings-sidebar-stack">
@@ -2151,9 +2154,6 @@ export function UiElementsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <button type="button" className="secondary small settings-panel-header-action resolution-category-add">
-                    <Plus size={15} aria-hidden="true" /> Add category
-                  </button>
                 </div>
               </VariantCard>
               <VariantCard title="Settings table" source={`${settings} > Resolution categories`} classes={["settings-table-shell", "settings-data-table"]}>
@@ -2207,7 +2207,7 @@ export function UiElementsPage() {
               <VariantCard title="Distribution chart panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
                 <DistributionChartPanel title="Quality score" distribution={numericDistribution} metricId="quality_score" />
               </VariantCard>
-              <VariantCard title="Connected library history controls" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "library-history-toolbar", "library-history-picker-button"]} wide>
+              <VariantCard title="Connected library history controls · separate groups" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "distribution-chart-mode-pill", "library-history-toolbar", "library-history-picker-button"]} wide>
                 <section className="panel library-history-panel">
                   <div className="panel-title-row panel-title-row-with-actions">
                     <h2>Media library history</h2>
@@ -2237,7 +2237,7 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Comparison chart panel with Jellyfin playback axes" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select", "comparison-chart-content"]} wide>
+              <VariantCard title="Comparison chart panel with connected rectangular controls" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
                 <ComparisonChartFixture />
               </VariantCard>
             </VariantGroup>
@@ -2533,7 +2533,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Multi-source connector playback in file details" source={`${fileDetail} > Overview / Streaming / Cover`} classes={["file-detail-overview", "format-details-content", "jellyfin-streaming-panel", "file-detail-streaming-availability-tooltip", "library-history-range-toggle", "library-history-range-custom-shell", "playback-history-display-control", "playback-history-display-heading", "playback-history-data-summary", "playback-history-timeline-axis", "playback-history-availability-boundary", "playback-history-availability-note", "playback-history-search", "playback-history-timestamp", "playback-history-undated", "playback-history-undated-list", "playback-history-display-toggle", "playback-history-export-button", "file-detail-cover-comparison"]} wide>
+              <VariantCard title="Multi-source connector playback in file details" source={`${fileDetail} > Overview / Streaming / Cover`} classes={["file-detail-overview", "format-details-content", "jellyfin-streaming-panel", "file-detail-streaming-availability-tooltip", "library-history-range-toggle", "library-history-range-custom-shell", "playback-history-display-control", "playback-history-display-heading", "playback-history-data-summary", "playback-history-timeline-axis", "playback-history-availability-boundary", "playback-history-availability-note", "playback-history-search", "playback-history-timestamp", "playback-history-undated", "playback-history-undated-list", "playback-history-display-toggle", "playback-history-display-button", "playback-history-export-button", "file-detail-cover-comparison"]} wide>
                 <div className="file-detail-overview">
                   <div className="file-detail-title-row"><h3 className="file-detail-title">Arrival.2016.mkv</h3></div>
                   <div className="meta-tags file-detail-overview-badges"><span className="badge">HEVC</span><span className="badge">UHD</span><div className="jellyfin-overview-badge-group is-separated"><span className="badge"><Server aria-hidden="true" />Jellyfin</span><span className="badge">Movie</span></div></div>

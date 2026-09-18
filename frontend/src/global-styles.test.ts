@@ -33,10 +33,106 @@ describe("global theme styles", () => {
     );
   });
 
+  it("keeps symbol-only segmented toggle options square", () => {
+    const distributionModeButton = componentStyles.match(
+      /\.distribution-chart-mode-button\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(distributionModeButton).toMatch(/box-sizing:\s*border-box/);
+    expect(distributionModeButton).toMatch(/width:\s*26px/);
+    expect(distributionModeButton).toMatch(/height:\s*26px/);
+    expect(distributionModeButton).toMatch(/min-width:\s*26px/);
+    expect(distributionModeButton).toMatch(/min-height:\s*26px/);
+    expect(componentStyles).toMatch(
+      /\.playback-history-display-toggle \.library-history-range-button\.tooltip-trigger\s*\{[^}]*box-sizing:\s*border-box[^}]*width:\s*30px[^}]*height:\s*30px[^}]*min-width:\s*30px[^}]*min-height:\s*30px/s,
+    );
+  });
+
+  it("keeps library history controls as separate surfaces", () => {
+    const libraryHistoryActions = componentStyles.match(
+      /(?:^|\n)\.library-history-actions\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(libraryHistoryActions).toMatch(/gap:\s*8px/);
+    expect(libraryHistoryActions).not.toContain("background:");
+    expect(libraryHistoryActions).not.toContain("border:");
+    expect(componentStyles).not.toMatch(
+      /\.library-history-panel \.library-history-actions >/,
+    );
+  });
+
+  it("uses connected rectangular controls for comparison charts", () => {
+    const comparisonToolbar = componentStyles.match(
+      /(?:^|\n)\.comparison-chart-toolbar\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const comparisonSelectShell = componentStyles.match(
+      /(?:^|\n)\.comparison-chart-select-shell\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const comparisonSwapButton = componentStyles.match(
+      /(?:^|\n)\.comparison-chart-swap-button\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const comparisonRendererButton = componentStyles.match(
+      /(?:^|\n)\.comparison-chart-renderer-button\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(comparisonToolbar).toMatch(/gap:\s*0/);
+    expect(comparisonToolbar).toMatch(/border:\s*1px solid/);
+    expect(comparisonToolbar).toMatch(/border-radius:\s*10px/);
+    expect(comparisonToolbar).toMatch(/background-color:/);
+    expect(comparisonToolbar).toMatch(/overflow:\s*hidden/);
+    expect(comparisonSelectShell).toMatch(/border:\s*0/);
+    expect(comparisonSelectShell).toMatch(/background-color:\s*transparent/);
+    expect(componentStyles).toMatch(
+      /\.comparison-chart-toolbar > \* \+ \*\s*\{[^}]*border-left:/s,
+    );
+    expect(comparisonSwapButton).toMatch(/width:\s*36px/);
+    expect(comparisonSwapButton).toMatch(/height:\s*36px/);
+    expect(comparisonSwapButton).toMatch(/border:\s*0/);
+    expect(comparisonSwapButton).toMatch(/border-radius:\s*0/);
+    expect(comparisonRendererButton).toMatch(/width:\s*42px/);
+    expect(comparisonRendererButton).toMatch(/height:\s*36px/);
+    expect(comparisonRendererButton).toMatch(/border:\s*0/);
+    expect(comparisonRendererButton).toMatch(/border-radius:\s*0/);
+  });
+
+  it("keeps metadata search rows aligned with the compact file search", () => {
+    const metadataSearchIconAndRemove = componentStyles.match(
+      /\.metadata-search-row \.metadata-search-icon-button,[\s\S]*?\.metadata-search-row \.metadata-search-remove\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const metadataSearchInput = [...componentStyles.matchAll(
+      /\.metadata-search-row \.metadata-search-control input\s*\{[^}]*\}/gs,
+    )]
+      .map((match) => match[0])
+      .find((block) => block.includes("height: 36px")) ?? "";
+
+    expect(metadataSearchIconAndRemove).toMatch(/box-sizing:\s*border-box/);
+    expect(metadataSearchIconAndRemove).toMatch(/width:\s*40px/);
+    expect(metadataSearchIconAndRemove).toMatch(/height:\s*36px/);
+    expect(metadataSearchIconAndRemove).toMatch(/min-width:\s*40px/);
+    expect(metadataSearchIconAndRemove).toMatch(/min-height:\s*36px/);
+    expect(metadataSearchInput).toMatch(/height:\s*36px/);
+    expect(metadataSearchInput).toMatch(/min-height:\s*36px/);
+    expect(metadataSearchInput).toMatch(/padding:\s*7px 12px/);
+    expect(componentStyles).toMatch(
+      /\.search-filter-picker-item\s*\{[^}]*justify-content:\s*flex-start/s,
+    );
+  });
+
   it("keeps the application version pill compact beside the header title", () => {
     expect(componentStyles).toMatch(
       /\.app-version\s*\{[^}]*min-height:\s*0[^}]*padding:\s*2px 6px[^}]*font-size:\s*0\.6rem[^}]*line-height:\s*normal/s,
     );
+  });
+
+  it("keeps the analyzed-files count badge between the title and version-pill sizes", () => {
+    const analyzedFilesCount = componentStyles.match(
+      /\.analyzed-files-count\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(analyzedFilesCount).toMatch(/min-height:\s*26px/);
+    expect(analyzedFilesCount).toMatch(/padding:\s*0 8px/);
+    expect(analyzedFilesCount).toMatch(/font-size:\s*0\.78rem/);
+    expect(analyzedFilesCount).toMatch(/line-height:\s*1/);
   });
 
   it("distinguishes bordered and borderless icon-button surfaces", () => {
