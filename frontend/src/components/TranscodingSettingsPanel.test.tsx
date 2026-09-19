@@ -304,7 +304,7 @@ describe("TranscodingSettingsPanel", () => {
     vi.spyOn(api, "transcodeCapabilityMatrix").mockResolvedValue(notRunMatrix);
     vi.spyOn(api, "testTranscodeCapabilityMatrix").mockResolvedValue(completedMatrix);
     vi.spyOn(api, "transcodeFederation").mockResolvedValue(federation);
-    vi.spyOn(api, "transcodeProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "transcodePresets").mockResolvedValue([]);
     vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
     vi.spyOn(api, "libraries").mockResolvedValue([]);
     vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
@@ -332,7 +332,7 @@ describe("TranscodingSettingsPanel", () => {
     expect(screen.queryByLabelText("Retries")).not.toBeInTheDocument();
     const profileList = document.querySelector(".compatibility-profile-list");
     expect(profileList?.querySelector(".transcode-automation-toggle-row")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "New profile" }).closest(".transcode-automation-toggle-row")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "New preset" }).closest(".transcode-automation-toggle-row")).not.toBeNull();
 
     const executionMode = screen.getByRole("combobox", { name: "Execution mode" });
     const removePartialOutput = screen.getByRole("combobox", { name: "Partial output" });
@@ -350,6 +350,19 @@ describe("TranscodingSettingsPanel", () => {
     await waitFor(() => expect(api.updateAppSettings).toHaveBeenCalledWith({
       transcoding: expect.objectContaining({ remove_partial_output: false }),
     }));
+  });
+
+  it.each([
+    { language: "en", expectedLabel: "Central Output Folder" },
+    { language: "de", expectedLabel: "Zentraler Ausgabeordner" },
+    { language: "es", expectedLabel: "Carpeta central de salida" },
+    { language: "uk", expectedLabel: "Центральна папка виводу" },
+  ])("localizes the central output folder option ($language)", async ({ language, expectedLabel }) => {
+    await i18n.changeLanguage(language);
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+
+    const outputOption = await screen.findByRole("option", { name: expectedLabel });
+    expect(outputOption).toHaveValue("transcode_output");
   });
 
   it("shows a neutral empty state until the first capability matrix test", async () => {
@@ -674,7 +687,7 @@ describe("TranscodingSettingsPanel", () => {
       [buildTranscodingMatrixEntryKey(null, "render:/dev/dri/renderD128")]: true,
     }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Profiles" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Presets" }));
     fireEvent.click(screen.getByRole("tab", { name: "Accelerators" }));
     await screen.findAllByRole("table");
 

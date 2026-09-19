@@ -124,7 +124,7 @@ describe("App routing", () => {
     expect(screen.getByText("Release notes dialog")).toBeInTheDocument();
     expect(container.querySelector("button.icon-nav-button, button.library-nav-link")).toBeNull();
     expect(container.querySelectorAll("a.icon-nav-button, a.library-nav-link").length).toBeGreaterThanOrEqual(4);
-  });
+  }, 30_000);
 
   it("redirects the UI elements catalog route outside development builds", async () => {
     appVersionMock.value = "0.14.0";

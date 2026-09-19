@@ -1763,6 +1763,7 @@ export function FileDetailPage() {
     fileId: string;
     panelId: FileDetailPanelId;
   }>(() => ({ fileId, panelId: isPreviewRoute ? "preview" : DEFAULT_FILE_DETAIL_PANEL_ID }));
+  const [transcodePresetHeaderTarget, setTranscodePresetHeaderTarget] = useState<HTMLDivElement | null>(null);
   const activePanelId =
     activePanelState.fileId === fileId
       ? activePanelState.panelId
@@ -2053,6 +2054,7 @@ export function FileDetailPage() {
       error: string | null;
       titleAddon?: ReactNode;
       subtitleAddon?: ReactNode;
+      headerAddon?: ReactNode;
       actions?: ReactNode;
       body: ReactNode;
     }
@@ -2108,10 +2110,19 @@ export function FileDetailPage() {
       ),
     },
     transcoding: {
-      title: t("transcoding.title"),
+      title: t("transcoding.betaTitle"),
       loading: !file && !error,
       error,
-      body: file ? <TranscodingPanel file={file} /> : null,
+      titleAddon: (
+        <TooltipTrigger
+          ariaLabel={t("transcoding.betaHelpAria")}
+          content={t("transcoding.betaHelp")}
+        />
+      ),
+      headerAddon: (
+        <div className="transcode-preset-header-slot" ref={setTranscodePresetHeaderTarget} />
+      ),
+      body: file ? <TranscodingPanel file={file} presetHeaderTarget={transcodePresetHeaderTarget} /> : null,
     },
     qualityBreakdown: {
       title: t("fileDetail.qualityBreakdown"),
@@ -2480,6 +2491,7 @@ export function FileDetailPage() {
           className="file-detail-active-panel"
           titleAddon={activePanel.titleAddon}
           subtitleAddon={activePanel.subtitleAddon}
+          headerAddon={activePanel.headerAddon}
           collapseActions={activePanel.actions}
         >
           {activePanel.body}

@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
   type TranscodeFederation,
-  type TranscodeProfile,
-  type TranscodeProfileDefinition,
+  type TranscodePreset,
+  type TranscodePresetDefinition,
 } from "../lib/api";
-import { TranscodeProfilesRulesPanel } from "./TranscodeProfilesRulesPanel";
+import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
 
-const definition: TranscodeProfileDefinition = {
+const definition: TranscodePresetDefinition = {
   version: 1,
   container: "source",
   video_rules: [],
@@ -33,7 +33,7 @@ const definition: TranscodeProfileDefinition = {
   execution_mode: "inherit",
 };
 
-function profile(overrides: Partial<TranscodeProfile> = {}): TranscodeProfile {
+function preset(overrides: Partial<TranscodePreset> = {}): TranscodePreset {
   return {
     id: 1,
     name: "Compatibility",
@@ -111,16 +111,16 @@ const federationFixture: TranscodeFederation = {
   }],
 };
 
-describe("TranscodeProfilesRulesPanel", () => {
-  const builtin = profile();
-  const custom = profile({
+describe("TranscodePresetsRulesPanel", () => {
+  const builtin = preset();
+  const custom = preset({
     id: 2,
-    name: "My profile",
+    name: "My preset",
     description: "My custom stream plan.",
     is_builtin: false,
     builtin_key: null,
   });
-  const copy = profile({
+  const copy = preset({
     id: 3,
     name: "Compatibility copy",
     description: "Copy compatible streams.",
@@ -129,11 +129,11 @@ describe("TranscodeProfilesRulesPanel", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(api, "transcodeProfiles").mockResolvedValue([builtin, custom]);
+    vi.spyOn(api, "transcodePresets").mockResolvedValue([builtin, custom]);
     vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
     vi.spyOn(api, "libraries").mockResolvedValue([]);
-    vi.spyOn(api, "duplicateTranscodeProfile").mockResolvedValue(copy);
-    vi.spyOn(api, "deleteTranscodeProfile").mockResolvedValue(undefined);
+    vi.spyOn(api, "duplicateTranscodePreset").mockResolvedValue(copy);
+    vi.spyOn(api, "deleteTranscodePreset").mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -141,9 +141,9 @@ describe("TranscodeProfilesRulesPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("exposes editable custom profiles and makes built-in templates customizable without deleting them", async () => {
+  it("exposes editable custom presets and makes built-in templates customizable without deleting them", async () => {
     const { container } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => (
           <section className="transcode-automation-tab-content" data-testid="capability-matrix">
             <div className="compatibility-profile-list">{tabControls}</div>
@@ -153,37 +153,37 @@ describe("TranscodeProfilesRulesPanel", () => {
       />,
     );
 
-    const tabList = await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    const tabList = await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     expect(tabList).toHaveClass("transcode-automation-tab-list");
     expect(tabList.querySelector(".library-history-range-pill")).toBeNull();
     expect(screen.getByRole("tab", { name: "Accelerators" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Presets" })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("tab", { name: "Accelerators" }));
     expect(screen.getByRole("button", { name: "Explain accelerators" })).toBeInTheDocument();
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Accelerators" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Presets" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByTestId("capability-matrix")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Profiles" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Presets" }));
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Profiles" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Presets" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reusable stream plans and automatic matching rules.")).not.toBeInTheDocument();
-    const descriptionTooltip = screen.getByRole("button", { name: "Explain transcoding profiles" });
+    const descriptionTooltip = screen.getByRole("button", { name: "Explain transcoding presets" });
     expect(descriptionTooltip).toHaveClass("tooltip-trigger");
     fireEvent.click(descriptionTooltip);
     const descriptionPortal = await screen.findByRole("tooltip");
     expect(descriptionPortal).toHaveClass("transcode-automation-description-tooltip-portal-compact");
     expect(descriptionPortal).toHaveStyle({ maxWidth: "300px" });
     fireEvent.pointerDown(document.body);
-    expect((await screen.findByRole("button", { name: "New profile" })).closest(".settings-profile-toggle-row")).not.toBeNull();
+    expect((await screen.findByRole("button", { name: "New preset" })).closest(".settings-profile-toggle-row")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Compatibility" })).toBeInTheDocument();
     expect(screen.queryByText("v1 · built-in")).not.toBeInTheDocument();
 
     const customizeButton = await screen.findByRole("button", { name: "Customize Compatibility" });
     expect(customizeButton).toHaveClass("compatibility-profile-quick-action");
 
-    const editButton = screen.getByRole("button", { name: "Edit My profile" });
+    const editButton = screen.getByRole("button", { name: "Edit My preset" });
     expect(editButton).toHaveClass("compatibility-profile-quick-action");
 
     const builtinDeleteButton = screen.getByRole("button", { name: "Delete Compatibility" });
@@ -191,17 +191,17 @@ describe("TranscodeProfilesRulesPanel", () => {
     expect(builtinDeleteButton).toHaveAttribute("title", "Built-in templates cannot be deleted; create a copy to customize one.");
 
     fireEvent.click(editButton);
-    expect(await screen.findByDisplayValue("My profile")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("My preset")).toBeInTheDocument();
     expect(screen.getByDisplayValue("My custom stream plan.").tagName).toBe("TEXTAREA");
     expect(container.querySelector("details.compatibility-capability-section")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     fireEvent.click(customizeButton);
-    await waitFor(() => expect(api.duplicateTranscodeProfile).toHaveBeenCalledWith(builtin.id));
-    expect(await screen.findByText("Edit profile")).toBeInTheDocument();
+    await waitFor(() => expect(api.duplicateTranscodePreset).toHaveBeenCalledWith(builtin.id));
+    expect(await screen.findByText("Edit preset")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete My profile" }));
-    await waitFor(() => expect(api.deleteTranscodeProfile).toHaveBeenCalledWith(custom.id));
+    fireEvent.click(screen.getByRole("button", { name: "Delete My preset" }));
+    await waitFor(() => expect(api.deleteTranscodePreset).toHaveBeenCalledWith(custom.id));
 
     fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
@@ -215,14 +215,14 @@ describe("TranscodeProfilesRulesPanel", () => {
 
   it("lists paired members before discovered peers and marks new pairing entries with plus icons", async () => {
     const { container } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={federationFixture}
       />,
     );
 
-    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     fireEvent.click(screen.getByRole("tab", { name: "Members" }));
 
     const memberArticle = screen.getByText("Worker 02").closest("article");
@@ -278,7 +278,7 @@ describe("TranscodeProfilesRulesPanel", () => {
     vi.spyOn(api, "discoverTranscodeFederation").mockResolvedValue(refreshedFederation);
     const onFederationData = vi.fn();
     const { rerender } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={federationFixture}
@@ -286,7 +286,7 @@ describe("TranscodeProfilesRulesPanel", () => {
       />,
     );
 
-    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     fireEvent.click(screen.getByRole("tab", { name: "Members" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Worker 02" }));
 
@@ -298,7 +298,7 @@ describe("TranscodeProfilesRulesPanel", () => {
     expect(onFederationData).toHaveBeenLastCalledWith(refreshedFederation);
 
     rerender(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={refreshedFederation}
@@ -328,7 +328,7 @@ describe("TranscodeProfilesRulesPanel", () => {
     } satisfies TranscodeFederation;
     const updateEndpoint = vi.spyOn(api, "updateTranscodeFederationMemberEndpoint").mockResolvedValue(nextFederation);
     const { container } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={federationFixture}
@@ -336,7 +336,7 @@ describe("TranscodeProfilesRulesPanel", () => {
       />,
     );
 
-    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     fireEvent.click(screen.getByRole("tab", { name: "Members" }));
     fireEvent.click(container.querySelector<HTMLButtonElement>(".transcode-federation-member-trigger")!);
 
@@ -371,14 +371,14 @@ describe("TranscodeProfilesRulesPanel", () => {
       connection_status: "connected",
     };
     const { container } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={{ ...federationFixture, members: [member], discovered: [] }}
       />,
     );
 
-    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     fireEvent.click(screen.getByRole("tab", { name: "Members" }));
 
     const memberArticle = container.querySelector(".compatibility-profile-list-item");
@@ -402,14 +402,14 @@ describe("TranscodeProfilesRulesPanel", () => {
       last_error: "Connection refused",
     };
     const { container } = render(
-      <TranscodeProfilesRulesPanel
+      <TranscodePresetsRulesPanel
         capabilityMatrix={(tabControls) => <section className="transcode-automation-tab-content">{tabControls}</section>}
         acceleratorsTooltip={<div data-testid="accelerators-tooltip" />}
         federation={{ ...federationFixture, members: [member], discovered: [] }}
       />,
     );
 
-    await screen.findByRole("tablist", { name: "Transcoding profiles and rules" });
+    await screen.findByRole("tablist", { name: "Transcoding presets and rules" });
     fireEvent.click(screen.getByRole("tab", { name: "Members" }));
 
     const statusDot = container.querySelector(".transcode-federation-status-trigger .status-dot");

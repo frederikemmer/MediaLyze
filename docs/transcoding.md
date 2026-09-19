@@ -2,9 +2,9 @@
 
 MediaLyze can create a new video variant with FFmpeg from the `Transcoding` panel of a file detail page. The feature is intentionally limited to files with a regular video stream. The default is a separate `Transcode_Output` tree; writing beside the source is explicit, and replacing the original requires a server-side confirmation and creates no byte-for-byte backup.
 
-## Profiles and plans
+## Built-in presets and plans
 
-The initial profiles are editable starting points:
+The built-in presets are starting points for a plan:
 
 - **Original / copy:** uses the source container when it can carry the existing streams and copies every internal stream unchanged. This is the default and keeps the source codec, quality, language, HDR signaling, and stream metadata intact.
 - **Save storage:** MKV/HEVC, CRF or CQ 22, preserved resolution, frame rate, and dynamic range, with non-video streams copied where compatible.
@@ -24,17 +24,19 @@ Validation resolves all files below their library root and returns the target, s
 
 Video encode controls use constant-quality ranges and optional speed presets while the backend maps those values to the resolved encoder's supported FFmpeg options. The file-detail UI exposes the target codec, not the worker-specific encoder; only even-pixel 360p–2160p presets that are no larger than the source are offered. Audio encode controls use fixed, codec-appropriate bitrate presets. Stream languages are normalized to BCP 47 while retaining regional subtags and the original code in the localized label; `und` and unknown codes remain explicit.
 
-## Saved profiles and automatic rules
+## Saved presets and automatic rules
 
-The Transcoding settings page also stores reusable, versioned profile definitions in SQLite. A profile is an ordered set of stream rules for video, audio, internal subtitles, and optional external subtitle sidecars. Each rule can match codec, language, and default-track state and can copy, convert, or remove the matching stream. Internal streams that do not match a rule are copied; external sidecars are not embedded unless an external-subtitle rule explicitly selects them. Saved profiles contain abstract stream criteria rather than file-specific stream indexes, subtitle IDs, or raw FFmpeg arguments. A saved profile is materialized against the current file into the same concrete `TranscodePlan` used by the file-detail workflow.
+The Transcoding settings page stores reusable, versioned preset definitions in SQLite. A preset is an ordered set of stream rules for video, audio, internal subtitles, and optional external subtitle sidecars. Each rule can match codec, language, and default-track state and can copy, convert, or remove the matching stream. Internal streams that do not match a rule are copied; external sidecars are not embedded unless an external-subtitle rule explicitly selects them. Saved presets contain abstract stream criteria rather than file-specific stream indexes, subtitle IDs, or raw FFmpeg arguments. A saved preset is materialized against the current file into the same concrete `TranscodePlan` used by the file-detail workflow.
 
-The three built-in profiles are immutable starting points. Users can create, edit, duplicate, and delete custom profiles; a profile in use by a rule cannot be deleted. Profile versions and the selected profile version are recorded on every queued job. Jobs also retain the rule version and a complete rule/profile snapshot, so later edits do not change the provenance of an existing run.
+The three built-in presets are immutable starting points. Users can create, edit, duplicate, and delete custom presets; a preset in use by a rule cannot be deleted. Preset versions and the selected preset version are recorded on every queued job. Jobs also retain the rule version and a complete rule/preset snapshot, so later edits do not change the provenance of an existing run.
 
-Automatic rules are disabled when created. Each rule has an explicit library selection, a priority, a profile, an output mode, and a safe optional output subfolder. Conditions reuse the analyzed-file dimensions used by the file search (including path/name, size, duration, quality, bitrate, codecs, resolution, HDR, audio/subtitle languages and codecs, and stream properties) and can be nested with `AND` or `OR`. Active rules are evaluated in priority order; the first matching rule wins. A winning rule that is blocked by validation, a missing capability, an unsafe target, or missing replacement approval is recorded as blocked and does not fall through to a lower-priority rule.
+Automatic rules are disabled when created. Each rule has an explicit library selection, a priority, a preset, an output mode, and a safe optional output subfolder. Conditions reuse the analyzed-file dimensions used by the file search (including path/name, size, duration, quality, bitrate, codecs, resolution, HDR, audio/subtitle languages and codecs, and stream properties) and can be nested with `AND` or `OR`. Active rules are evaluated in priority order; the first matching rule wins. A winning rule that is blocked by validation, a missing capability, an unsafe target, or missing replacement approval is recorded as blocked and does not fall through to a lower-priority rule.
 
-Separate-output jobs use `Transcode_Output` and can optionally use a rule-relative subfolder. The subfolder is normalized and rejected when it is absolute, escapes through `..`, contains a drive/UNC prefix, or contains control/path-separator abuse. Same-directory output and original replacement do not accept a rule subfolder. Replace-original rules are disabled until the current rule version is explicitly approved; changing their match, library, profile, output mode, or subfolder revokes approval and cancels queued work. Reordering rules changes their evaluation priority and version while preserving an already approved replacement contract.
+Separate-output jobs use `Transcode_Output` and can optionally use a rule-relative subfolder. The subfolder is normalized and rejected when it is absolute, escapes through `..`, contains a drive/UNC prefix, or contains control/path-separator abuse. Same-directory output and original replacement do not accept a rule subfolder. Replace-original rules are disabled until the current rule version is explicitly approved; changing their match, library, preset, output mode, or subfolder revokes approval and cancels queued work. Reordering rules changes their evaluation priority and version while preserving an already approved replacement contract.
 
-The management API exposes profile and rule CRUD, rule ordering and replacement approval, a bounded preview, pagewise inventory start/cancel/status, and durable run history. Inventory uses the same source size/mtime and rule/profile version identity for deduplication, records skipped/blocked/completed decisions, and never retries failed work implicitly. A successful, error-free full or incremental scan can enqueue only newly analyzed or changed primary video files for matching rules. Canceled, failed, or partially failed scans do not trigger automation, and automation output variants are not re-enqueued as primary sources. Restart recovery cancels orphaned queued automation work; running transcodes retain their immutable job snapshot and are finalized by the normal job runtime.
+The management API exposes preset and rule CRUD, rule ordering and replacement approval, a bounded preview, pagewise inventory start/cancel/status, and durable run history. Inventory uses the same source size/mtime and rule/preset version identity for deduplication, records skipped/blocked/completed decisions, and never retries failed work implicitly. A successful, error-free full or incremental scan can enqueue only newly analyzed or changed primary video files for matching rules. Canceled, failed, or partially failed scans do not trigger automation, and automation output variants are not re-enqueued as primary sources. Restart recovery cancels orphaned queued automation work; running transcodes retain their immutable job snapshot and are finalized by the normal job runtime.
+
+The canonical management endpoint is `/api/transcoding/presets`. The former `/api/transcoding/profiles` paths and profile-named storage/plan fields remain compatibility aliases for existing clients and data.
 
 ## CPU- and APU-integrated media engines
 
@@ -105,7 +107,7 @@ other installations and never presents this installation as a peer or grants
 trust by itself. The shared Transcoding automation workspace
 exposes the trusted member list with reachability, acceptance of remote jobs,
 and sync/exclude actions in the same searchable expandable treatment as
-profiles and rules. The Transcoding settings page combines the local matrix
+presets and rules. The Transcoding settings page combines the local matrix
 with each member's locally persisted codec
 matrix in the `Accelerators` tab and labels remote devices with their member
 name. The matrix is evidence of a path that passed the real FFmpeg probe; it
@@ -173,7 +175,7 @@ The Transcoding panel exposes a single synchronized-preview link for the newest 
 
 Docker installs the pinned Debian FFmpeg `5.1.9` package (`7:5.1.9-0+deb12u1`) in `python:3.12-slim-bookworm` and verifies the architecture-specific DEB SHA-256 before installation; this build includes the NVENC, QSV, and VAAPI encoder families and uses `FFMPEG_PATH=ffmpeg` by default. Desktop sidecars receive the pinned `ffmpeg-static` 5.3.0 binary from Electron packaging; the Windows bundle includes the native NVENC, AMF, and QSV encoder families, while macOS bundles VideoToolbox support. On macOS, the bundled FFmpeg exposes the VideoToolbox H.264/HEVC encoders and MediaLyze verifies them with a real one-frame smoke test before showing Apple VideoToolbox as available. In the current ARM64 bundle, the executable reports FFmpeg 6.0 although the manifest labels the corresponding pinned artifact 6.1.1. `MEDIALYZE_FFMPEG_DIR` selects a packaging input; `FFMPEG_PATH` is the runtime override. Release packaging verifies the desktop binary and performs a one-frame encode on Windows, macOS, and Linux. The complete platform/source/checksum record is in [the FFmpeg manifest](ffmpeg-manifest.json). Docker image builds accept the manifest's explicit version and checksum build arguments; they never download a `latest` binary during container startup.
 
-The global `transcoding` app setting controls `hardware_required` versus `cpu_only`, the 90% default CPU budget, CPU/GPU parallel slots, output policy, retry/error handling, and partial-output cleanup. All devices that pass the real capability probe remain candidates; a file-detail target codec is resolved to a compatible encoder and device automatically on the selected worker at transcode time. Explicit encoder fields from older profiles, rules, or API clients remain validated for compatibility. The settings page shows the last real capability probe and the reason a device or encoder is unavailable.
+The global `transcoding` app setting controls `hardware_required` versus `cpu_only`, the 90% default CPU budget, CPU/GPU parallel slots, output policy, retry/error handling, and partial-output cleanup. All devices that pass the real capability probe remain candidates; a file-detail target codec is resolved to a compatible encoder and device automatically on the selected worker at transcode time. Explicit encoder fields from older presets, rules, or API clients remain validated for compatibility. The settings page shows the last real capability probe and the reason a device or encoder is unavailable.
 
 ## NVIDIA GPU on local Windows and Docker
 
@@ -250,7 +252,7 @@ sysfs metadata; the runtime probe is authoritative.
 The desktop version supports Apple Silicon and Intel Mac graphics through
 macOS VideoToolbox. It uses the bundled `h264_videotoolbox` and
 `hevc_videotoolbox` encoders, and only enables the device after a real runtime
-probe succeeds. The `Save storage` profile automatically prefers HEVC
+probe succeeds. The `Save storage` preset automatically prefers HEVC
 VideoToolbox when hardware-required mode is active.
 
 Docker Desktop for macOS runs the Linux image inside a virtual machine and

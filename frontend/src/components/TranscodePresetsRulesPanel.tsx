@@ -9,9 +9,9 @@ import {
   type TranscodeConditionGroup,
   type TranscodeFederation,
   type TranscodeFederationMember,
-  type TranscodeProfile,
-  type TranscodeProfileDefinition,
-  type TranscodeProfileStreamRule,
+  type TranscodePreset,
+  type TranscodePresetDefinition,
+  type TranscodePresetStreamRule,
   type TranscodeRule,
 } from "../lib/api";
 import { type TranscodingMatrixFocus } from "../lib/transcoding-matrix-state";
@@ -21,11 +21,11 @@ import { CopyIcon } from "./CopyIcon";
 import { SquarePenIcon } from "./SquarePenIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
 
-type ProfileDraft = {
+type PresetDraft = {
   id: number | null;
   name: string;
   description: string;
-  definition: TranscodeProfileDefinition;
+  definition: TranscodePresetDefinition;
 };
 
 type RuleDraft = {
@@ -41,9 +41,9 @@ type RuleDraft = {
   replacement_approved: boolean;
 };
 
-type AutomationTab = "profiles" | "rules" | "accelerators" | "members";
+type AutomationTab = "presets" | "rules" | "accelerators" | "members";
 
-const AUTOMATION_TABS: AutomationTab[] = ["profiles", "rules", "accelerators", "members"];
+const AUTOMATION_TABS: AutomationTab[] = ["presets", "rules", "accelerators", "members"];
 
 function automationTabFromSearchFocus(searchFocus: string | null | undefined): AutomationTab | null {
   if (!searchFocus?.startsWith("transcoding-tab-")) return null;
@@ -51,7 +51,7 @@ function automationTabFromSearchFocus(searchFocus: string | null | undefined): A
   return AUTOMATION_TABS.includes(value as AutomationTab) ? value as AutomationTab : null;
 }
 
-type TranscodeProfilesRulesPanelProps = {
+type TranscodePresetsRulesPanelProps = {
   capabilityMatrix: (tabControls: ReactNode) => ReactNode;
   acceleratorsTooltip: ReactNode;
   federation?: TranscodeFederation | null;
@@ -112,7 +112,7 @@ const CONDITION_OPERATORS = [
   "missing",
 ];
 
-function emptyProfileDefinition(): TranscodeProfileDefinition {
+function emptyPresetDefinition(): TranscodePresetDefinition {
   return {
     version: 1,
     container: "source",
@@ -262,12 +262,12 @@ function federationMemberStatusTooltip(
   );
 }
 
-function profileDraftFrom(profile: TranscodeProfile): ProfileDraft {
+function presetDraftFrom(preset: TranscodePreset): PresetDraft {
   return {
-    id: profile.id,
-    name: profile.name,
-    description: profile.description,
-    definition: clone(profile.definition),
+    id: preset.id,
+    name: preset.name,
+    description: preset.description,
+    definition: clone(preset.definition),
   };
 }
 
@@ -381,10 +381,10 @@ function ConditionGroupEditor({
   );
 }
 
-type ProfileRuleListKey = "video_rules" | "audio_rules" | "subtitle_rules" | "external_subtitle_rules";
-type ProfileRuleKind = "video" | "audio" | "subtitle" | "external";
+type PresetRuleListKey = "video_rules" | "audio_rules" | "subtitle_rules" | "external_subtitle_rules";
+type PresetRuleKind = "video" | "audio" | "subtitle" | "external";
 
-function emptyStreamRule(kind: ProfileRuleKind): TranscodeProfileStreamRule {
+function emptyStreamRule(kind: PresetRuleKind): TranscodePresetStreamRule {
   return {
     match_codecs: [],
     match_languages: [],
@@ -423,74 +423,74 @@ function StreamRuleEditor({
   onRemove,
   onMove,
 }: {
-  kind: ProfileRuleKind;
-  rule: TranscodeProfileStreamRule;
+  kind: PresetRuleKind;
+  rule: TranscodePresetStreamRule;
   index: number;
   ruleCount: number;
-  onChange: (patch: Partial<TranscodeProfileStreamRule>) => void;
+  onChange: (patch: Partial<TranscodePresetStreamRule>) => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
 }) {
   const { t } = useTranslation();
   return (
-    <div className="transcode-profile-rule">
+    <div className="transcode-preset-rule">
       <div className="transcode-condition-row">
-        <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.matchCodec")}</span><input className="settings-choice-input transcode-control" placeholder="h264, hevc" value={rule.match_codecs.join(", ")} onChange={(event) => onChange({ match_codecs: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} /></label>
-        <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.matchLanguage")}</span><input className="settings-choice-input transcode-control" placeholder="de, en" value={rule.match_languages.join(", ")} onChange={(event) => onChange({ match_languages: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} /></label>
-        <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.matchDefault")}</span><select className="settings-choice-input transcode-control" value={rule.match_default === null ? "any" : String(rule.match_default)} onChange={(event) => onChange({ match_default: event.target.value === "any" ? null : event.target.value === "true" })}><option value="any">{t("transcoding.automation.anyTrack")}</option><option value="true">{t("transcoding.automation.defaultTrack")}</option><option value="false">{t("transcoding.automation.nonDefaultTrack")}</option></select></label>
-        <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.streamAction")}</span><select className="settings-choice-input transcode-control" value={rule.action} onChange={(event) => onChange({ action: event.target.value as TranscodeProfileStreamRule["action"] })}><option value="copy">{t("transcoding.actions.copy")}</option><option value="convert">{t("transcoding.actions.encode")}</option><option value="remove">{t("transcoding.actions.drop")}</option></select></label>
+        <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.matchCodec")}</span><input className="settings-choice-input transcode-control" placeholder="h264, hevc" value={rule.match_codecs.join(", ")} onChange={(event) => onChange({ match_codecs: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} /></label>
+        <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.matchLanguage")}</span><input className="settings-choice-input transcode-control" placeholder="de, en" value={rule.match_languages.join(", ")} onChange={(event) => onChange({ match_languages: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} /></label>
+        <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.matchDefault")}</span><select className="settings-choice-input transcode-control" value={rule.match_default === null ? "any" : String(rule.match_default)} onChange={(event) => onChange({ match_default: event.target.value === "any" ? null : event.target.value === "true" })}><option value="any">{t("transcoding.automation.anyTrack")}</option><option value="true">{t("transcoding.automation.defaultTrack")}</option><option value="false">{t("transcoding.automation.nonDefaultTrack")}</option></select></label>
+        <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.streamAction")}</span><select className="settings-choice-input transcode-control" value={rule.action} onChange={(event) => onChange({ action: event.target.value as TranscodePresetStreamRule["action"] })}><option value="copy">{t("transcoding.actions.copy")}</option><option value="convert">{t("transcoding.actions.encode")}</option><option value="remove">{t("transcoding.actions.drop")}</option></select></label>
         <button type="button" className="secondary icon-only-button" title={t("transcoding.automation.moveUp")} disabled={index === 0} onClick={() => onMove(-1)}><ArrowUp aria-hidden="true" size={14} /></button>
         <button type="button" className="secondary icon-only-button" title={t("transcoding.automation.moveDown")} disabled={index === ruleCount - 1} onClick={() => onMove(1)}><ArrowDown aria-hidden="true" size={14} /></button>
         <button type="button" className="secondary icon-only-button" title={t("transcoding.automation.removeStreamRule")} onClick={onRemove}><Trash2 aria-hidden="true" size={14} /></button>
       </div>
       {rule.action === "convert" ? (
-        <div className="transcode-condition-row transcode-profile-rule-details">
-          <label className="field transcode-profile-rule-field"><span>{t("transcoding.encoder")}</span><input className="settings-choice-input transcode-control" placeholder={kind === "video" ? "hevc" : kind === "audio" ? "aac" : "subrip"} value={rule.codec ?? ""} onChange={(event) => onChange({ codec: event.target.value || null })} /></label>
-          <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.encoderOptional")}</span><input className="settings-choice-input transcode-control" placeholder="auto" value={rule.encoder ?? ""} onChange={(event) => onChange({ encoder: event.target.value || null })} /></label>
-          <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.bitrate")}</span><input className="settings-choice-input transcode-control" type="number" min="1" value={rule.bitrate ?? ""} onChange={(event) => onChange({ bitrate: numberOrNull(event.target.value) })} /></label>
+        <div className="transcode-condition-row transcode-preset-rule-details">
+          <label className="field transcode-preset-rule-field"><span>{t("transcoding.encoder")}</span><input className="settings-choice-input transcode-control" placeholder={kind === "video" ? "hevc" : kind === "audio" ? "aac" : "subrip"} value={rule.codec ?? ""} onChange={(event) => onChange({ codec: event.target.value || null })} /></label>
+          <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.encoderOptional")}</span><input className="settings-choice-input transcode-control" placeholder="auto" value={rule.encoder ?? ""} onChange={(event) => onChange({ encoder: event.target.value || null })} /></label>
+          <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.bitrate")}</span><input className="settings-choice-input transcode-control" type="number" min="1" value={rule.bitrate ?? ""} onChange={(event) => onChange({ bitrate: numberOrNull(event.target.value) })} /></label>
           {kind === "video" ? <>
-            <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.quality")}</span><input className="settings-choice-input transcode-control" type="number" min="0" max="255" value={rule.crf ?? ""} onChange={(event) => onChange({ crf: numberOrNull(event.target.value) })} /></label>
-            <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.width")}</span><input className="settings-choice-input transcode-control" type="number" min="16" value={rule.width ?? ""} onChange={(event) => onChange({ width: numberOrNull(event.target.value) })} /></label>
-            <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.height")}</span><input className="settings-choice-input transcode-control" type="number" min="16" value={rule.height ?? ""} onChange={(event) => onChange({ height: numberOrNull(event.target.value) })} /></label>
-            <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.frameRate")}</span><input className="settings-choice-input transcode-control" type="number" min="0.01" step="0.01" value={rule.frame_rate ?? ""} onChange={(event) => onChange({ frame_rate: numberOrNull(event.target.value) })} /></label>
-            <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.preset")}</span><input className="settings-choice-input transcode-control" value={rule.preset ?? ""} onChange={(event) => onChange({ preset: event.target.value || null })} /></label>
+            <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.quality")}</span><input className="settings-choice-input transcode-control" type="number" min="0" max="255" value={rule.crf ?? ""} onChange={(event) => onChange({ crf: numberOrNull(event.target.value) })} /></label>
+            <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.width")}</span><input className="settings-choice-input transcode-control" type="number" min="16" value={rule.width ?? ""} onChange={(event) => onChange({ width: numberOrNull(event.target.value) })} /></label>
+            <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.height")}</span><input className="settings-choice-input transcode-control" type="number" min="16" value={rule.height ?? ""} onChange={(event) => onChange({ height: numberOrNull(event.target.value) })} /></label>
+            <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.frameRate")}</span><input className="settings-choice-input transcode-control" type="number" min="0.01" step="0.01" value={rule.frame_rate ?? ""} onChange={(event) => onChange({ frame_rate: numberOrNull(event.target.value) })} /></label>
+            <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.preset")}</span><input className="settings-choice-input transcode-control" value={rule.preset ?? ""} onChange={(event) => onChange({ preset: event.target.value || null })} /></label>
           </> : null}
-          <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.languageOverride")}</span><input className="settings-choice-input transcode-control" value={rule.language ?? ""} onChange={(event) => onChange({ language: event.target.value || null })} /></label>
-          <label className="field transcode-profile-rule-field"><span>{t("transcoding.automation.titleOverride")}</span><input className="settings-choice-input transcode-control" value={rule.title ?? ""} onChange={(event) => onChange({ title: event.target.value || null })} /></label>
+          <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.languageOverride")}</span><input className="settings-choice-input transcode-control" value={rule.language ?? ""} onChange={(event) => onChange({ language: event.target.value || null })} /></label>
+          <label className="field transcode-preset-rule-field"><span>{t("transcoding.automation.titleOverride")}</span><input className="settings-choice-input transcode-control" value={rule.title ?? ""} onChange={(event) => onChange({ title: event.target.value || null })} /></label>
         </div>
       ) : null}
     </div>
   );
 }
 
-function ProfileDefinitionEditor({
+function PresetDefinitionEditor({
   definition,
   onChange,
 }: {
-  definition: TranscodeProfileDefinition;
-  onChange: (definition: TranscodeProfileDefinition) => void;
+  definition: TranscodePresetDefinition;
+  onChange: (definition: TranscodePresetDefinition) => void;
 }) {
   const { t } = useTranslation();
-  const sections: Array<{ key: ProfileRuleListKey; kind: ProfileRuleKind; label: string; hint?: string }> = [
+  const sections: Array<{ key: PresetRuleListKey; kind: PresetRuleKind; label: string; hint?: string }> = [
     { key: "video_rules", kind: "video", label: t("transcoding.automation.videoRules") },
     { key: "audio_rules", kind: "audio", label: t("transcoding.automation.audioRules") },
     { key: "subtitle_rules", kind: "subtitle", label: t("transcoding.automation.subtitleRules") },
     { key: "external_subtitle_rules", kind: "external", label: t("transcoding.automation.externalSubtitleRules"), hint: t("transcoding.automation.externalSubtitlesHint") },
   ];
-  const updateRule = (key: ProfileRuleListKey, index: number, patch: Partial<TranscodeProfileStreamRule>) => {
+  const updateRule = (key: PresetRuleListKey, index: number, patch: Partial<TranscodePresetStreamRule>) => {
     const next = definition[key].map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule);
     onChange({ ...definition, [key]: next });
   };
   return (
     <div className="settings-sidebar-stack">
       <div className="compatibility-profile-form-grid">
-        <label><span>{t("transcoding.container")}</span><select className="settings-choice-input" value={definition.container} onChange={(event) => onChange({ ...definition, container: event.target.value as TranscodeProfileDefinition["container"] })}>
+        <label><span>{t("transcoding.container")}</span><select className="settings-choice-input" value={definition.container} onChange={(event) => onChange({ ...definition, container: event.target.value as TranscodePresetDefinition["container"] })}>
           {(["source", "mkv", "mp4", "webm"] as const).map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
         </select></label>
-        <label><span>{t("transcoding.executionMode")}</span><select className="settings-choice-input" value={definition.execution_mode} onChange={(event) => onChange({ ...definition, execution_mode: event.target.value as TranscodeProfileDefinition["execution_mode"] })}>
+        <label><span>{t("transcoding.executionMode")}</span><select className="settings-choice-input" value={definition.execution_mode} onChange={(event) => onChange({ ...definition, execution_mode: event.target.value as TranscodePresetDefinition["execution_mode"] })}>
           <option value="inherit">{t("transcoding.automation.inheritGlobal")}</option><option value="hardware_required">{t("transcoding.hardwareRequired")}</option><option value="cpu_only">{t("transcoding.cpuOnly")}</option>
         </select></label>
-        <label><span>{t("transcoding.dynamicRange")}</span><select className="settings-choice-input" value={definition.dynamic_range} onChange={(event) => onChange({ ...definition, dynamic_range: event.target.value as TranscodeProfileDefinition["dynamic_range"] })}>
+        <label><span>{t("transcoding.dynamicRange")}</span><select className="settings-choice-input" value={definition.dynamic_range} onChange={(event) => onChange({ ...definition, dynamic_range: event.target.value as TranscodePresetDefinition["dynamic_range"] })}>
           {(["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}
         </select></label>
       </div>
@@ -505,8 +505,8 @@ function ProfileDefinitionEditor({
         ))}
       </div>
       {sections.map(({ key, kind, label, hint }) => (
-        <details className="compatibility-capability-section transcode-profile-rule-section" key={key}>
-          <summary className="transcode-automation-section-summary"><span>{label}</span><strong className="transcode-profile-section-count">{definition[key].length}</strong></summary>
+        <details className="compatibility-capability-section transcode-preset-rule-section" key={key}>
+          <summary className="transcode-automation-section-summary"><span>{label}</span><strong className="transcode-preset-section-count">{definition[key].length}</strong></summary>
           <div className="compatibility-capability-section-body">
             <div className="field-label-row"><strong>{label}</strong><button type="button" className="secondary small settings-panel-header-action" onClick={() => onChange({ ...definition, [key]: [...definition[key], emptyStreamRule(kind)] })}><Plus aria-hidden="true" size={14} />{t("transcoding.automation.addStreamRule")}</button></div>
             {definition[key].map((rule, index) => <StreamRuleEditor key={`${key}-${index}`} kind={kind} rule={rule} index={index} ruleCount={definition[key].length} onChange={(patch) => updateRule(key, index, patch)} onMove={(direction) => {
@@ -525,29 +525,29 @@ function ProfileDefinitionEditor({
   );
 }
 
-export function TranscodeProfilesRulesPanel({
+export function TranscodePresetsRulesPanel({
   capabilityMatrix,
   acceleratorsTooltip,
   federation = null,
   onFederationData,
   onAcceleratorMatrixFocus,
   searchFocus = null,
-}: TranscodeProfilesRulesPanelProps) {
+}: TranscodePresetsRulesPanelProps) {
   const { t } = useTranslation();
-  const [profiles, setProfiles] = useState<TranscodeProfile[]>([]);
+  const [presets, setPresets] = useState<TranscodePreset[]>([]);
   const [rules, setRules] = useState<TranscodeRule[]>([]);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
-  const [tab, setTab] = useState<AutomationTab>(() => automationTabFromSearchFocus(searchFocus) ?? "profiles");
-  const [expandedProfileId, setExpandedProfileId] = useState<number | null>(null);
+  const [tab, setTab] = useState<AutomationTab>(() => automationTabFromSearchFocus(searchFocus) ?? "presets");
+  const [expandedPresetId, setExpandedPresetId] = useState<number | null>(null);
   const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
+  const [presetDraft, setPresetDraft] = useState<PresetDraft | null>(null);
   const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
-  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [presetEditorOpen, setPresetEditorOpen] = useState(false);
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [memberPending, setMemberPending] = useState<string | null>(null);
@@ -566,12 +566,12 @@ export function TranscodeProfilesRulesPanel({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextProfiles, nextRules, nextLibraries] = await Promise.all([
-        api.transcodeProfiles(),
+      const [nextPresets, nextRules, nextLibraries] = await Promise.all([
+        api.transcodePresets(),
         api.transcodeRules(),
         api.libraries(),
       ]);
-      setProfiles(nextProfiles);
+      setPresets(nextPresets);
       setRules(nextRules);
       setLibraries(nextLibraries);
       setError(null);
@@ -587,37 +587,37 @@ export function TranscodeProfilesRulesPanel({
     if (!loaded) void load();
   }, [load, loaded]);
 
-  const startNewProfile = () => {
-    setTab("profiles");
-    setExpandedProfileId(null);
+  const startNewPreset = () => {
+    setTab("presets");
+    setExpandedPresetId(null);
     setExpandedRuleId(null);
     setRuleDraft(null);
     setRuleEditorOpen(false);
-    setProfileDraft({ id: null, name: "", description: "", definition: emptyProfileDefinition() });
-    setProfileEditorOpen(true);
+    setPresetDraft({ id: null, name: "", description: "", definition: emptyPresetDefinition() });
+    setPresetEditorOpen(true);
   };
 
-  const editProfile = (profile: TranscodeProfile) => {
-    if (profile.is_builtin) {
-      void duplicateProfile(profile);
+  const editPreset = (preset: TranscodePreset) => {
+    if (preset.is_builtin) {
+      void duplicatePreset(preset);
       return;
     }
-    setProfileDraft(profileDraftFrom(profile));
-    setProfileEditorOpen(true);
-    setExpandedProfileId(profile.id);
+    setPresetDraft(presetDraftFrom(preset));
+    setPresetEditorOpen(true);
+    setExpandedPresetId(preset.id);
   };
 
-  const saveProfile = async () => {
-    if (!profileDraft?.name.trim()) return;
+  const savePreset = async () => {
+    if (!presetDraft?.name.trim()) return;
     setBusy(true);
     try {
-      const saved = profileDraft.id
-        ? await api.updateTranscodeProfile(profileDraft.id, { name: profileDraft.name.trim(), description: profileDraft.description, definition: profileDraft.definition })
-        : await api.createTranscodeProfile({ name: profileDraft.name.trim(), description: profileDraft.description, definition: profileDraft.definition });
-      setProfiles((current) => profileDraft.id ? current.map((profile) => profile.id === saved.id ? saved : profile) : [...current, saved]);
-      setProfileDraft(profileDraftFrom(saved));
-      setTab("profiles");
-      setExpandedProfileId(saved.id);
+      const saved = presetDraft.id
+        ? await api.updateTranscodePreset(presetDraft.id, { name: presetDraft.name.trim(), description: presetDraft.description, definition: presetDraft.definition })
+        : await api.createTranscodePreset({ name: presetDraft.name.trim(), description: presetDraft.description, definition: presetDraft.definition });
+      setPresets((current) => presetDraft.id ? current.map((preset) => preset.id === saved.id ? saved : preset) : [...current, saved]);
+      setPresetDraft(presetDraftFrom(saved));
+      setTab("presets");
+      setExpandedPresetId(saved.id);
       setError(null);
     } catch (reason) {
       setError((reason as Error).message);
@@ -626,15 +626,15 @@ export function TranscodeProfilesRulesPanel({
     }
   };
 
-  const duplicateProfile = async (profile: TranscodeProfile) => {
+  const duplicatePreset = async (preset: TranscodePreset) => {
     setBusy(true);
     try {
-      const copy = await api.duplicateTranscodeProfile(profile.id);
-      setProfiles((current) => [...current, copy]);
-      setProfileDraft(profileDraftFrom(copy));
-      setProfileEditorOpen(true);
-      setTab("profiles");
-      setExpandedProfileId(copy.id);
+      const copy = await api.duplicateTranscodePreset(preset.id);
+      setPresets((current) => [...current, copy]);
+      setPresetDraft(presetDraftFrom(copy));
+      setPresetEditorOpen(true);
+      setTab("presets");
+      setExpandedPresetId(copy.id);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -642,17 +642,17 @@ export function TranscodeProfilesRulesPanel({
     }
   };
 
-  const removeProfile = async (profile: TranscodeProfile) => {
-    if (profile.is_builtin || profile.used_by_rule_count) return;
+  const removePreset = async (preset: TranscodePreset) => {
+    if (preset.is_builtin || preset.used_by_rule_count) return;
     setBusy(true);
     try {
-      await api.deleteTranscodeProfile(profile.id);
-      setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
-      if (profileDraft?.id === profile.id) {
-        setProfileDraft(null);
-        setProfileEditorOpen(false);
+      await api.deleteTranscodePreset(preset.id);
+      setPresets((current) => current.filter((entry) => entry.id !== preset.id));
+      if (presetDraft?.id === preset.id) {
+        setPresetDraft(null);
+        setPresetEditorOpen(false);
       }
-      if (expandedProfileId === profile.id) setExpandedProfileId(null);
+      if (expandedPresetId === preset.id) setExpandedPresetId(null);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -662,13 +662,13 @@ export function TranscodeProfilesRulesPanel({
 
   const startNewRule = () => {
     setTab("rules");
-    setExpandedProfileId(null);
+    setExpandedPresetId(null);
     setExpandedRuleId(null);
-    setProfileDraft(null);
-    setProfileEditorOpen(false);
-    const defaultProfile = profiles[0];
+    setPresetDraft(null);
+    setPresetEditorOpen(false);
+    const defaultPreset = presets[0];
     const defaultLibrary = libraries[0];
-    setRuleDraft({ id: null, name: "", enabled: false, priority: rules.length, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultProfile?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", replacement_approved: false });
+    setRuleDraft({ id: null, name: "", enabled: false, priority: rules.length, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", replacement_approved: false });
     setRuleEditorOpen(true);
   };
 
@@ -700,8 +700,8 @@ export function TranscodeProfilesRulesPanel({
 
   const editRule = (rule: TranscodeRule) => {
     setTab("rules");
-    setProfileDraft(null);
-    setProfileEditorOpen(false);
+    setPresetDraft(null);
+    setPresetEditorOpen(false);
     setRuleDraft(ruleDraftFrom(rule));
     setRuleEditorOpen(true);
     setExpandedRuleId(rule.id);
@@ -751,12 +751,12 @@ export function TranscodeProfilesRulesPanel({
 
   const libraryNames = useMemo(() => new Map(libraries.map((library) => [library.id, library.name])), [libraries]);
   const federationMembers = federation?.members ?? [];
-  const activeRuleProfile = useMemo(() => profiles.find((profile) => profile.id === ruleDraft?.profile_id), [profiles, ruleDraft?.profile_id]);
+  const activeRulePreset = useMemo(() => presets.find((preset) => preset.id === ruleDraft?.profile_id), [presets, ruleDraft?.profile_id]);
 
-  const closeProfileEditor = () => {
-    if (profileDraft?.id === null) setExpandedProfileId(null);
-    setProfileDraft(null);
-    setProfileEditorOpen(false);
+  const closePresetEditor = () => {
+    if (presetDraft?.id === null) setExpandedPresetId(null);
+    setPresetDraft(null);
+    setPresetEditorOpen(false);
   };
 
   const closeRuleEditor = () => {
@@ -767,11 +767,11 @@ export function TranscodeProfilesRulesPanel({
 
   const selectTab = (nextTab: AutomationTab, nextMatrixFocus: TranscodingMatrixFocus | null = null) => {
     setTab(nextTab);
-    setProfileDraft(null);
+    setPresetDraft(null);
     setRuleDraft(null);
-    setProfileEditorOpen(false);
+    setPresetEditorOpen(false);
     setRuleEditorOpen(false);
-    setExpandedProfileId(null);
+    setExpandedPresetId(null);
     setExpandedRuleId(null);
     setExpandedMemberId(null);
     onAcceleratorMatrixFocus?.(nextTab === "accelerators" ? nextMatrixFocus : null);
@@ -781,26 +781,26 @@ export function TranscodeProfilesRulesPanel({
     const nextTab = automationTabFromSearchFocus(searchFocus);
     if (!nextTab || nextTab === tab) return;
     setTab(nextTab);
-    setProfileDraft(null);
+    setPresetDraft(null);
     setRuleDraft(null);
-    setProfileEditorOpen(false);
+    setPresetEditorOpen(false);
     setRuleEditorOpen(false);
-    setExpandedProfileId(null);
+    setExpandedPresetId(null);
     setExpandedRuleId(null);
     setExpandedMemberId(null);
     onAcceleratorMatrixFocus?.(null);
   }, [onAcceleratorMatrixFocus, searchFocus, tab]);
 
-  const toggleProfileRow = (profile: TranscodeProfile) => {
-    if (expandedProfileId === profile.id) {
-      setExpandedProfileId(null);
-      setProfileDraft(null);
-      setProfileEditorOpen(false);
+  const togglePresetRow = (preset: TranscodePreset) => {
+    if (expandedPresetId === preset.id) {
+      setExpandedPresetId(null);
+      setPresetDraft(null);
+      setPresetEditorOpen(false);
       return;
     }
-    setExpandedProfileId(profile.id);
-    setProfileDraft(null);
-    setProfileEditorOpen(false);
+    setExpandedPresetId(preset.id);
+    setPresetDraft(null);
+    setPresetEditorOpen(false);
   };
 
   const toggleRuleRow = (rule: TranscodeRule) => {
@@ -940,15 +940,15 @@ export function TranscodeProfilesRulesPanel({
     }
   };
 
-  const renderProfileSummary = (profile: TranscodeProfile) => {
-    const definition = profile.definition;
+  const renderPresetSummary = (preset: TranscodePreset) => {
+    const definition = preset.definition;
     const executionLabel = definition.execution_mode === "hardware_required"
       ? t("transcoding.hardwareRequired")
       : definition.execution_mode === "cpu_only"
         ? t("transcoding.cpuOnly")
         : t("transcoding.automation.inheritGlobal");
     const dynamicRangeLabel = t(`transcoding.dynamicRanges.${definition.dynamic_range}`, { defaultValue: definition.dynamic_range });
-    const ruleSections: Array<{ key: ProfileRuleListKey; label: string; rules: TranscodeProfileStreamRule[] }> = [
+    const ruleSections: Array<{ key: PresetRuleListKey; label: string; rules: TranscodePresetStreamRule[] }> = [
       { key: "video_rules", label: t("transcoding.automation.videoRules"), rules: definition.video_rules },
       { key: "audio_rules", label: t("transcoding.automation.audioRules"), rules: definition.audio_rules },
       { key: "subtitle_rules", label: t("transcoding.automation.subtitleRules"), rules: definition.subtitle_rules },
@@ -960,12 +960,12 @@ export function TranscodeProfilesRulesPanel({
       : value
         ? t("transcoding.automation.defaultTrack")
         : t("transcoding.automation.nonDefaultTrack");
-    const actionLabel = (action: TranscodeProfileStreamRule["action"]) => action === "convert"
+    const actionLabel = (action: TranscodePresetStreamRule["action"]) => action === "convert"
       ? t("transcoding.actions.encode")
       : action === "remove"
         ? t("transcoding.actions.drop")
         : t("transcoding.actions.copy");
-    const renderRuleSummary = (rule: TranscodeProfileStreamRule, index: number) => {
+    const renderRuleSummary = (rule: TranscodePresetStreamRule, index: number) => {
       const values: Array<[string, string]> = [
         [t("transcoding.automation.matchCodec"), valueOrDash(rule.match_codecs.join(", "))],
         [t("transcoding.automation.matchLanguage"), valueOrDash(rule.match_languages.join(", "))],
@@ -982,9 +982,9 @@ export function TranscodeProfilesRulesPanel({
         );
       }
       return (
-        <div className="transcode-profile-rule transcode-profile-rule-summary" key={`${rule.action}-${index}`}>
+        <div className="transcode-preset-rule transcode-preset-rule-summary" key={`${rule.action}-${index}`}>
           <strong>{actionLabel(rule.action)}</strong>
-          <div className="transcode-profile-rule-summary-grid">
+          <div className="transcode-preset-rule-summary-grid">
             {values.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
           </div>
         </div>
@@ -998,38 +998,38 @@ export function TranscodeProfilesRulesPanel({
             <option value="inherit">{t("transcoding.automation.inheritGlobal")}</option><option value="hardware_required">{t("transcoding.hardwareRequired")}</option><option value="cpu_only">{t("transcoding.cpuOnly")}</option>
           </select></label>
           <label><span>{t("transcoding.dynamicRange")}</span><select className="settings-choice-input" disabled value={definition.dynamic_range} onChange={() => undefined}>{(["preserve", "sdr", "hdr10", "hlg", "dolby_vision"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.dynamicRanges.${value}`)}</option>)}</select></label>
-          <label><span>{t("transcoding.automation.usedByRules")}</span><input className="settings-choice-input" readOnly value={profile.used_by_rule_count} /></label>
+          <label><span>{t("transcoding.automation.usedByRules")}</span><input className="settings-choice-input" readOnly value={preset.used_by_rule_count} /></label>
         </div>
         <div className="compatibility-capability-sections transcode-automation-rule-sections">
           {ruleSections.map(({ key, label, rules }) => (
             <details className="compatibility-capability-section" key={key}>
-              <summary className="transcode-automation-section-summary"><span>{label}</span><strong className="transcode-profile-section-count">{rules.length}</strong></summary>
+              <summary className="transcode-automation-section-summary"><span>{label}</span><strong className="transcode-preset-section-count">{rules.length}</strong></summary>
               <div className="compatibility-capability-section-body">
                 {rules.length ? rules.map((rule, index) => renderRuleSummary(rule, index)) : <p className="field-hint">—</p>}
               </div>
             </details>
           ))}
         </div>
-        {profile.description ? <p className="field-hint">{profile.description}</p> : null}
+        {preset.description ? <p className="field-hint">{preset.description}</p> : null}
       </div>
     );
   };
 
-  const renderProfileEditor = () => {
-    if (!profileDraft) return null;
+  const renderPresetEditor = () => {
+    if (!presetDraft) return null;
     return (
       <div className="compatibility-profile-details transcode-automation-details transcode-automation-editor">
         <div className="field-label-row">
-          <strong>{profileDraft.id ? t("transcoding.automation.editProfile") : t("transcoding.automation.newProfile")}</strong>
-          <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closeProfileEditor}><X aria-hidden="true" size={14} /></button>
+          <strong>{presetDraft.id ? t("transcoding.automation.editPreset") : t("transcoding.automation.newPreset")}</strong>
+          <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closePresetEditor}><X aria-hidden="true" size={14} /></button>
         </div>
         <div className="compatibility-profile-form-grid">
-          <label><span>{t("transcoding.automation.profileName")}</span><input className="settings-choice-input" value={profileDraft.name} onChange={(event) => setProfileDraft({ ...profileDraft, name: event.target.value })} /></label>
-          <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.profileDescription")}</span><textarea className="settings-choice-input" rows={3} value={profileDraft.description} onChange={(event) => setProfileDraft({ ...profileDraft, description: event.target.value })} /></label>
+          <label><span>{t("transcoding.automation.presetName")}</span><input className="settings-choice-input" value={presetDraft.name} onChange={(event) => setPresetDraft({ ...presetDraft, name: event.target.value })} /></label>
+          <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.presetDescription")}</span><textarea className="settings-choice-input" rows={3} value={presetDraft.description} onChange={(event) => setPresetDraft({ ...presetDraft, description: event.target.value })} /></label>
         </div>
-        <ProfileDefinitionEditor definition={profileDraft.definition} onChange={(definition) => setProfileDraft({ ...profileDraft, definition })} />
+        <PresetDefinitionEditor definition={presetDraft.definition} onChange={(definition) => setPresetDraft({ ...presetDraft, definition })} />
         <div className="compatibility-profile-card-actions transcode-automation-editor-actions">
-          <button type="button" className="transcode-action-button" onClick={() => void saveProfile()} disabled={busy || !profileDraft.name.trim()}><Save aria-hidden="true" />{t("common.save")}</button>
+          <button type="button" className="transcode-action-button" onClick={() => void savePreset()} disabled={busy || !presetDraft.name.trim()}><Save aria-hidden="true" />{t("common.save")}</button>
         </div>
       </div>
     );
@@ -1045,7 +1045,7 @@ export function TranscodeProfilesRulesPanel({
     return (
       <div className="compatibility-profile-details transcode-automation-details">
         <div className="compatibility-profile-form-grid transcode-automation-summary-form-grid">
-          <div><span>{t("transcoding.automation.profile")}</span><strong>{rule.profile_name} · v{rule.profile_version}</strong></div>
+          <div><span>{t("transcoding.automation.preset")}</span><strong>{rule.profile_name} · v{rule.profile_version}</strong></div>
           <div><span>{t("transcoding.automation.libraries")}</span><strong>{selectedLibraries || "—"}</strong></div>
           <div><span>{t("transcoding.outputMode")}</span><strong>{outputLabel}</strong></div>
           <div><span>{t("transcoding.automation.rulePriority")}</span><strong>{rule.priority}</strong></div>
@@ -1064,13 +1064,13 @@ export function TranscodeProfilesRulesPanel({
           <strong>{ruleDraft.id ? t("transcoding.automation.editRule") : t("transcoding.automation.newRule")}</strong>
           <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closeRuleEditor}><X aria-hidden="true" size={14} /></button>
         </div>
-        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.automation.ruleName")}</span><input className="settings-choice-input" value={ruleDraft.name} onChange={(event) => setRuleDraft({ ...ruleDraft, name: event.target.value })} /></label><label><span>{t("transcoding.automation.rulePriority")}</span><input className="settings-choice-input" type="number" min={0} value={ruleDraft.priority} onChange={(event) => setRuleDraft({ ...ruleDraft, priority: Math.max(0, Number(event.target.value) || 0) })} /></label><label><span>{t("transcoding.automation.profile")}</span><select className="settings-choice-input" value={ruleDraft.profile_id} onChange={(event) => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}</select></label></div>
+        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.automation.ruleName")}</span><input className="settings-choice-input" value={ruleDraft.name} onChange={(event) => setRuleDraft({ ...ruleDraft, name: event.target.value })} /></label><label><span>{t("transcoding.automation.rulePriority")}</span><input className="settings-choice-input" type="number" min={0} value={ruleDraft.priority} onChange={(event) => setRuleDraft({ ...ruleDraft, priority: Math.max(0, Number(event.target.value) || 0) })} /></label><label><span>{t("transcoding.automation.preset")}</span><select className="settings-choice-input" value={ruleDraft.profile_id} onChange={(event) => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>{presets.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}</select></label></div>
         <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.libraries")}</span><select className="settings-choice-input" multiple value={ruleDraft.library_ids.map(String)} onChange={(event) => setRuleDraft({ ...ruleDraft, library_ids: [...event.target.selectedOptions].map((option) => Number(option.value)) })}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
         <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.outputMode")}</span><select className="settings-choice-input" value={ruleDraft.output_mode} onChange={(event) => setRuleDraft({ ...ruleDraft, output_mode: event.target.value as RuleDraft["output_mode"], replacement_approved: false })}><option value="transcode_output">{t("transcoding.transcodeOutput")}</option><option value="same_directory">{t("transcoding.sameDirectory")}</option><option value="replace_original">{t("transcoding.replaceOriginal")}</option></select></label><label><span>{t("transcoding.automation.outputSubfolder")}</span><input className="settings-choice-input" value={ruleDraft.output_subfolder} disabled={ruleDraft.output_mode !== "transcode_output"} placeholder="anime/optimized" onChange={(event) => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} /></label></div>
         {ruleDraft.output_mode === "replace_original" ? <p className="field-hint">{t("transcoding.replacementWarning")}</p> : null}
         <label className="transcode-filename-option"><input type="checkbox" checked={ruleDraft.enabled} disabled={ruleDraft.output_mode === "replace_original" && !ruleDraft.replacement_approved} onChange={(event) => setRuleDraft({ ...ruleDraft, enabled: event.target.checked })} /><span>{t("transcoding.automation.enabled")}</span></label>
         {ruleDraft.conditions ? <ConditionGroupEditor group={ruleDraft.conditions} onChange={(conditions) => setRuleDraft({ ...ruleDraft, conditions })} /> : <button type="button" className="secondary small settings-panel-header-action" onClick={() => setRuleDraft({ ...ruleDraft, conditions: { type: "group", operator: "and", children: [blankCondition()] } })}><Plus aria-hidden="true" size={14} />{t("transcoding.automation.addCondition")}</button>}
-        {activeRuleProfile ? <p className="field-hint">{t("transcoding.automation.profileVersionHint", { version: activeRuleProfile.version })}</p> : null}
+        {activeRulePreset ? <p className="field-hint">{t("transcoding.automation.presetVersionHint", { version: activeRulePreset.version })}</p> : null}
         <div className="compatibility-profile-card-actions transcode-automation-editor-actions">
           <button type="button" className="transcode-action-button" onClick={() => void saveRule()} disabled={busy || !ruleDraft.name.trim() || !ruleDraft.profile_id || !ruleDraft.library_ids.length}><Save aria-hidden="true" />{t("common.save")}</button>
         </div>
@@ -1078,26 +1078,26 @@ export function TranscodeProfilesRulesPanel({
     );
   };
 
-  const renderProfileActions = (profile: TranscodeProfile) => (
+  const renderPresetActions = (preset: TranscodePreset) => (
     <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
       <button
         type="button"
         className="secondary icon-only-button compatibility-profile-quick-action"
-        aria-label={`${profile.is_builtin ? t("transcoding.automation.customize") : t("transcoding.automation.edit")} ${profile.name}`}
-        title={profile.is_builtin ? t("transcoding.automation.customizeBuiltIn") : t("transcoding.automation.edit")}
+        aria-label={`${preset.is_builtin ? t("transcoding.automation.customize") : t("transcoding.automation.edit")} ${preset.name}`}
+        title={preset.is_builtin ? t("transcoding.automation.customizeBuiltIn") : t("transcoding.automation.edit")}
         disabled={busy}
-        onClick={() => editProfile(profile)}
+        onClick={() => editPreset(preset)}
       >
         <SquarePenIcon aria-hidden="true" className="nav-icon" size={18} />
       </button>
-      {!profile.is_builtin ? (
+      {!preset.is_builtin ? (
         <button
           type="button"
           className="secondary icon-only-button compatibility-profile-quick-action"
-          aria-label={`${t("transcoding.automation.duplicate")} ${profile.name}`}
+          aria-label={`${t("transcoding.automation.duplicate")} ${preset.name}`}
           title={t("transcoding.automation.duplicate")}
           disabled={busy}
-          onClick={() => void duplicateProfile(profile)}
+          onClick={() => void duplicatePreset(preset)}
         >
           <CopyIcon aria-hidden="true" className="nav-icon" size={18} />
         </button>
@@ -1105,10 +1105,10 @@ export function TranscodeProfilesRulesPanel({
       <button
         type="button"
         className="secondary icon-only-button compatibility-profile-quick-action"
-        aria-label={`${t("transcoding.automation.delete")} ${profile.name}`}
-        title={profile.is_builtin ? t("transcoding.automation.builtInCannotDelete") : profile.used_by_rule_count ? t("transcoding.automation.profileInUse") : t("transcoding.automation.delete")}
-        disabled={profile.is_builtin || Boolean(profile.used_by_rule_count) || busy}
-        onClick={() => void removeProfile(profile)}
+        aria-label={`${t("transcoding.automation.delete")} ${preset.name}`}
+        title={preset.is_builtin ? t("transcoding.automation.builtInCannotDelete") : preset.used_by_rule_count ? t("transcoding.automation.presetInUse") : t("transcoding.automation.delete")}
+        disabled={preset.is_builtin || Boolean(preset.used_by_rule_count) || busy}
+        onClick={() => void removePreset(preset)}
       >
         <Trash2 aria-hidden="true" className="nav-icon" size={18} />
       </button>
@@ -1185,38 +1185,38 @@ export function TranscodeProfilesRulesPanel({
     );
   };
 
-  const renderProfileList = () => (
+  const renderPresetList = () => (
     <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list">
         {renderAutomationToggleRow(panelAction)}
-        {profiles.map((profile) => {
-        const expanded = expandedProfileId === profile.id;
-        const editing = expanded && profileEditorOpen && profileDraft?.id === profile.id;
+        {presets.map((preset) => {
+        const expanded = expandedPresetId === preset.id;
+        const editing = expanded && presetEditorOpen && presetDraft?.id === preset.id;
         return (
-          <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={profile.id}>
+          <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={preset.id}>
             <div className="compatibility-profile-list-row">
-              <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => toggleProfileRow(profile)}>
-                <span className="transcode-automation-list-copy"><strong>{profile.name}</strong></span>
+              <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => togglePresetRow(preset)}>
+                <span className="transcode-automation-list-copy"><strong>{preset.name}</strong></span>
                 <ChevronDown aria-hidden="true" />
               </button>
-              {renderProfileActions(profile)}
+              {renderPresetActions(preset)}
             </div>
-            {expanded ? (editing ? renderProfileEditor() : renderProfileSummary(profile)) : null}
+            {expanded ? (editing ? renderPresetEditor() : renderPresetSummary(preset)) : null}
           </article>
         );
       })}
-      {profileDraft?.id === null && profileEditorOpen ? (
+      {presetDraft?.id === null && presetEditorOpen ? (
         <article className="compatibility-profile-list-item is-expanded">
           <div className="compatibility-profile-list-row">
             <div className="compatibility-profile-list-trigger is-static">
-              <span className="transcode-automation-list-copy"><strong>{profileDraft.name || t("transcoding.automation.newProfile")}</strong><small>{t("transcoding.automation.newProfile")}</small></span>
+              <span className="transcode-automation-list-copy"><strong>{presetDraft.name || t("transcoding.automation.newPreset")}</strong><small>{t("transcoding.automation.newPreset")}</small></span>
               <ChevronDown aria-hidden="true" />
             </div>
           </div>
-          {renderProfileEditor()}
+          {renderPresetEditor()}
         </article>
       ) : null}
-        {!profiles.length && !(profileDraft?.id === null && profileEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+        {!presets.length && !(presetDraft?.id === null && presetEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
       </div>
     </section>
   );
@@ -1492,19 +1492,19 @@ export function TranscodeProfilesRulesPanel({
     </section>
   );
 
-  const panelAction = tab === "profiles" ? (
-    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewProfile} disabled={busy}>
-      <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newProfile")}
+  const panelAction = tab === "presets" ? (
+    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewPreset} disabled={busy}>
+      <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newPreset")}
     </button>
   ) : tab === "rules" ? (
-    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule} disabled={busy || !profiles.length || !libraries.length}>
+    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule} disabled={busy || !presets.length || !libraries.length}>
       <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newRule")}
     </button>
   ) : null;
 
-  const automationTooltip = tab === "profiles" ? (
+  const automationTooltip = tab === "presets" ? (
     <div className="transcode-automation-description-tooltip">
-      <p>{t("transcoding.automation.profilesDescription")}</p>
+      <p>{t("transcoding.automation.presetsDescription")}</p>
       <p>{t("transcoding.automation.securityHint")}</p>
     </div>
   ) : tab === "rules" ? (
@@ -1519,8 +1519,8 @@ export function TranscodeProfilesRulesPanel({
       <p>{t("transcoding.federation.directOnly")}</p>
     </div>
   );
-  const automationTooltipAriaLabel = tab === "profiles"
-    ? t("transcoding.automation.profilesHelpAria")
+  const automationTooltipAriaLabel = tab === "presets"
+    ? t("transcoding.automation.presetsHelpAria")
     : tab === "rules"
       ? t("transcoding.automation.rulesHelpAria")
       : tab === "accelerators"
@@ -1590,7 +1590,7 @@ export function TranscodeProfilesRulesPanel({
       ) : error ? <div className="alert">{error}</div> : (
         <div className="compatibility-profile-panel transcode-automation-content">
           {notice ? <div className="notice success" role="status">{notice}</div> : null}
-          {tab === "profiles" ? renderProfileList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix(renderAutomationToggleRow()) : renderMemberList()}
+          {tab === "presets" ? renderPresetList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix(renderAutomationToggleRow()) : renderMemberList()}
         </div>
       )}
     </section>

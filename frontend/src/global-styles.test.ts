@@ -310,6 +310,34 @@ describe("global theme styles", () => {
     );
   });
 
+  it("keeps stream counts pill-shaped and stream action controls aligned", () => {
+    const countBadge = componentStyles.match(/\.transcode-stream-tab-count\s*\{[^}]*\}/s)?.[0] ?? "";
+    const collapsedAction = componentStyles.match(/\.transcode-action-field\.is-collapsed\s*\{[^}]*\}/s)?.[0] ?? "";
+    const collapsedSelect = componentStyles.match(/\.transcode-action-field\.is-collapsed\s*>\s*\.transcode-action-select\s*\{[^}]*\}/s)?.[0] ?? "";
+    const collapsedIcon = componentStyles.match(/\.transcode-action-field\.is-collapsed\s+\.transcode-stream-action-icon\s*\{[^}]*\}/s)?.[0] ?? "";
+    const expandedSelect = componentStyles.match(/\.transcode-action-field\.is-expanded\s*>\s*\.transcode-action-select\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(countBadge).toMatch(/display:\s*inline-flex/);
+    expect(countBadge).toMatch(/min-width:\s*24px/);
+    expect(countBadge).toMatch(/height:\s*18px/);
+    expect(countBadge).toMatch(/border-radius:\s*999px/);
+
+    expect(collapsedAction).toMatch(/display:\s*grid/);
+    expect(collapsedAction).toMatch(/place-items:\s*center/);
+    expect(collapsedAction).toMatch(/width:\s*34px/);
+    expect(collapsedAction).toMatch(/height:\s*34px/);
+    expect(collapsedSelect).toMatch(/width:\s*34px/);
+    expect(collapsedSelect).toMatch(/height:\s*34px/);
+    expect(collapsedSelect).toMatch(/border-radius:\s*9px/);
+    expect(collapsedIcon).toMatch(/left:\s*50%/);
+    expect(collapsedIcon).toMatch(/transform:\s*translate\(-50%, -50%\)/);
+
+    expect(expandedSelect).toMatch(/padding:\s*5px 26px 5px 32px/);
+    expect(expandedSelect).toMatch(/background-size:\s*14px 14px/);
+    expect(componentStyles).not.toMatch(/\.transcode-stream-list-item:hover\s+\.transcode-action-field/);
+    expect(componentStyles).toMatch(/\.transcode-action-field\s*>\s*\.transcode-action-select:hover\s*\{[^}]*background-color:\s*transparent/s);
+  });
+
   it("keeps compact transcoding guidance small and aligned to the tab labels", () => {
     expect(componentStyles).toMatch(
       /\.transcode-automation-description-tooltip\s*\{[^}]*gap:\s*4px/s,

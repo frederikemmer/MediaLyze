@@ -450,8 +450,8 @@ def test_copy_profile_preserves_hdr_and_storage_profile_keeps_static_signaling(m
         video.color_primaries = "bt2020"
         video.color_transfer = "smpte2084"
         video.color_space = "bt2020nc"
-        compatibility = transcoding.initial_transcode_profiles(media_file, capabilities)["compatibility"]
-        storage = transcoding.initial_transcode_profiles(media_file, capabilities)["storage"]
+        compatibility = transcoding.initial_transcode_presets(media_file, capabilities)["compatibility"]
+        storage = transcoding.initial_transcode_presets(media_file, capabilities)["storage"]
         validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, storage)
 
     assert compatibility.dynamic_range == "preserve"

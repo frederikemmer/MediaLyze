@@ -1378,7 +1378,7 @@ export type TranscodePlan = {
   target_device_id?: string | null;
 };
 
-export type TranscodeProfileStreamRule = {
+export type TranscodePresetStreamRule = {
   match_codecs: string[];
   match_languages: string[];
   match_default: boolean | null;
@@ -1400,13 +1400,13 @@ export type TranscodeProfileStreamRule = {
   title?: string | null;
 };
 
-export type TranscodeProfileDefinition = {
+export type TranscodePresetDefinition = {
   version: 1;
   container: "source" | "mkv" | "mp4" | "webm";
-  video_rules: TranscodeProfileStreamRule[];
-  audio_rules: TranscodeProfileStreamRule[];
-  subtitle_rules: TranscodeProfileStreamRule[];
-  external_subtitle_rules: TranscodeProfileStreamRule[];
+  video_rules: TranscodePresetStreamRule[];
+  audio_rules: TranscodePresetStreamRule[];
+  subtitle_rules: TranscodePresetStreamRule[];
+  external_subtitle_rules: TranscodePresetStreamRule[];
   default_video_action: "copy" | "convert" | "remove";
   default_audio_action: "copy" | "convert" | "remove";
   default_subtitle_action: "copy" | "convert" | "remove";
@@ -1425,23 +1425,30 @@ export type TranscodeProfileDefinition = {
   execution_mode: "inherit" | "hardware_required" | "cpu_only";
 };
 
-export type TranscodeProfile = {
+export type TranscodePreset = {
   id: number;
   name: string;
   description: string;
   version: number;
   is_builtin: boolean;
   builtin_key: string | null;
-  definition: TranscodeProfileDefinition;
+  definition: TranscodePresetDefinition;
   used_by_rule_count: number;
   created_at: string;
   updated_at: string;
 };
 
-export type TranscodeProfilePlan = {
-  profile: TranscodeProfile;
+export type TranscodePresetPlan = {
+  preset?: TranscodePreset;
+  /** Legacy response property retained until older API payloads age out. */
+  profile?: TranscodePreset;
   plan: TranscodePlan;
 };
+
+export type TranscodeProfileStreamRule = TranscodePresetStreamRule;
+export type TranscodeProfileDefinition = TranscodePresetDefinition;
+export type TranscodeProfile = TranscodePreset;
+export type TranscodeProfilePlan = TranscodePresetPlan;
 
 export type TranscodeCondition = {
   type: "condition";
@@ -1842,8 +1849,12 @@ export type TranscodeVariant = {
 
 export type FileTranscode = {
   original: TranscodeFileSummary;
+  presets?: Record<"compatibility" | "storage" | "modern", TranscodePlan>;
+  /** Legacy built-in-plan field retained for existing servers and clients. */
   profiles: Record<"compatibility" | "storage" | "modern", TranscodePlan>;
-  saved_profiles?: TranscodeProfilePlan[];
+  saved_presets?: TranscodePresetPlan[];
+  /** Legacy saved-preset field returned during the API compatibility window. */
+  saved_profiles?: TranscodePresetPlan[];
   attachments: Array<{
     stream_index: number;
     codec?: string | null;
@@ -2811,24 +2822,48 @@ export const api = {
     ),
   excludeTranscodeFederationMember: (installationId: string) =>
     request<void>(`/transcoding/federation/members/${encodeURIComponent(installationId)}`, { method: "DELETE" }),
-  transcodeProfiles: () => request<TranscodeProfile[]>("/transcoding/profiles"),
+  transcodePresets: () => request<TranscodePreset[]>("/transcoding/presets"),
+  createTranscodePreset: (payload: {
+    name: string;
+    description?: string;
+    definition?: TranscodePresetDefinition;
+  }) => request<TranscodePreset>("/transcoding/presets", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }),
+  updateTranscodePreset: (id: number, payload: Partial<{
+    name: string;
+    description: string;
+    definition: TranscodePresetDefinition;
+  }>) => request<TranscodePreset>(`/transcoding/presets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }),
+  duplicateTranscodePreset: (id: number, name?: string) => request<TranscodePreset>(`/transcoding/presets/${id}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify(name ? { name } : {}),
+  }),
+  deleteTranscodePreset: (id: number) => request<void>(`/transcoding/presets/${id}`, { method: "DELETE" }),
+  // Deprecated client aliases intentionally continue to target the supported
+  // legacy routes for callers that still use the old method names.
+  transcodeProfiles: () => request<TranscodePreset[]>("/transcoding/profiles"),
   createTranscodeProfile: (payload: {
     name: string;
     description?: string;
-    definition?: TranscodeProfileDefinition;
-  }) => request<TranscodeProfile>("/transcoding/profiles", {
+    definition?: TranscodePresetDefinition;
+  }) => request<TranscodePreset>("/transcoding/profiles", {
     method: "POST",
     body: JSON.stringify(payload),
   }),
   updateTranscodeProfile: (id: number, payload: Partial<{
     name: string;
     description: string;
-    definition: TranscodeProfileDefinition;
-  }>) => request<TranscodeProfile>(`/transcoding/profiles/${id}`, {
+    definition: TranscodePresetDefinition;
+  }>) => request<TranscodePreset>(`/transcoding/profiles/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   }),
-  duplicateTranscodeProfile: (id: number, name?: string) => request<TranscodeProfile>(`/transcoding/profiles/${id}/duplicate`, {
+  duplicateTranscodeProfile: (id: number, name?: string) => request<TranscodePreset>(`/transcoding/profiles/${id}/duplicate`, {
     method: "POST",
     body: JSON.stringify(name ? { name } : {}),
   }),

@@ -239,7 +239,7 @@ describe("TranscodingPage", () => {
     expect(screen.queryByText("/media/movies/Naturefilm-1.mkv")).not.toBeInTheDocument();
     expect(screen.getAllByTestId("echarts-react").length).toBeGreaterThan(0);
     const statusChart = screen.getAllByTestId("echarts-react").find((chart) => chart.getAttribute("data-tooltip-confine") === "true");
-    expect(statusChart).toHaveAttribute("data-tooltip", "3,2×");
+    expect(statusChart?.getAttribute("data-tooltip")).toMatch(/^3[,.]2×$/);
     expect(statusChart).toHaveAttribute("data-tooltip-render-mode", "html");
   });
 

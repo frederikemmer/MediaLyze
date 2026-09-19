@@ -2,6 +2,7 @@ import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Co
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { createPortal } from "react-dom";
 
 import {
   api,
@@ -24,7 +25,7 @@ import { formatLanguageLabel, languageOptions, normalizeLanguageTag } from "../l
 import { parseTranscodeSpeed, TranscodeProgressSummary } from "./TranscodeProgressSummary";
 import { TooltipTrigger } from "./TooltipTrigger";
 
-const PROFILE_KEYS = ["compatibility", "storage", "modern"] as const;
+const PRESET_KEYS = ["compatibility", "storage", "modern"] as const;
 const STREAM_ACTIONS: TranscodeStreamAction[] = ["copy", "encode", "drop"];
 const STREAM_KINDS = ["video_streams", "audio_streams", "subtitle_streams"] as const;
 const TARGET_VIDEO_CODECS = ["h264", "hevc", "av1", "vp8", "vp9", "mpeg2video", "mjpeg"] as const;
@@ -1058,7 +1059,7 @@ function TranscodeJobHistory({ jobs }: { jobs: TranscodeJob[] }) {
             <span className="file-history-entry-chevron" aria-hidden="true">
               <ChevronRight className="nav-icon" />
             </span>
-            <strong>{t(`transcoding.profiles.${job.profile}`, { defaultValue: job.profile })}</strong>
+            <strong>{t(`transcoding.presets.${job.profile}`, { defaultValue: job.profile })}</strong>
             <span className={`badge transcode-status-${job.status}`}>{t(`transcoding.status.${job.status}`)}</span>
             <span>{job.output_relative_path}</span>
           </summary>
@@ -1114,14 +1115,21 @@ export function FileTranscodeHistory({ fileId }: { fileId: string | number }) {
   );
 }
 
-export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
+export function TranscodingPanel({
+  file,
+  presetHeaderTarget,
+}: {
+  file: MediaFileDetail;
+  presetHeaderTarget: HTMLElement | null;
+}) {
   const { t, i18n } = useTranslation();
   const federationAutoAppliedRef = useRef(false);
   const [data, setData] = useState<FileTranscode | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
   const [federation, setFederation] = useState<TranscodeFederation | null>(null);
   const [plan, setPlan] = useState<TranscodePlan | null>(null);
-  const [selectedSavedProfileId, setSelectedSavedProfileId] = useState<number | null>(null);
+  const [selectedSavedPresetId, setSelectedSavedPresetId] = useState<number | null>(null);
+  const [selectedPresetKey, setSelectedPresetKey] = useState("");
   const [validation, setValidation] = useState<TranscodeValidation | null>(null);
   const [job, setJob] = useState<TranscodeJob | null>(null);
   const [activeStreamTab, setActiveStreamTab] = useState<StreamKind>("video_streams");
@@ -1132,6 +1140,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   });
   const [openExternalSubtitles, setOpenExternalSubtitles] = useState(false);
   const [openFilenameSection, setOpenFilenameSection] = useState(true);
+  const [openMetadataSettings, setOpenMetadataSettings] = useState(true);
   const [metadataTokensOpen, setMetadataTokensOpen] = useState(false);
   const filenameTemplateInputRef = useRef<HTMLDivElement | null>(null);
   const filenameTemplateSelectionRef = useRef<{ start: number; end: number } | null>(null);
@@ -1148,7 +1157,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     ]);
     setData(nextData);
     setCapabilities(nextCapabilities);
-    setPlan((current) => current ?? defaultUnchangedPlan(nextData.profiles.compatibility));
+    setPlan((current) => current ?? defaultUnchangedPlan(nextData.presets?.compatibility ?? nextData.profiles.compatibility));
     setJob(nextData.jobs.find(jobIsActive) ?? null);
     setError(null);
   }, [file.id]);
@@ -1166,13 +1175,15 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     setCapabilities(null);
     setPlan(null);
     federationAutoAppliedRef.current = false;
-    setSelectedSavedProfileId(null);
+    setSelectedSavedPresetId(null);
+    setSelectedPresetKey("");
     setValidation(null);
     setJob(null);
     setActiveStreamTab("video_streams");
     setExpandedStreamRows({ video_streams: null, audio_streams: null, subtitle_streams: null });
     setOpenExternalSubtitles(false);
     setOpenFilenameSection(true);
+    setOpenMetadataSettings(true);
     setMetadataTokensOpen(false);
     filenameTemplateSelectionRef.current = null;
     speedHistoryRef.current = [];
@@ -1243,15 +1254,17 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     }));
   }, []);
 
-  const selectProfile = useCallback((profile: typeof PROFILE_KEYS[number]) => {
+  const selectPreset = useCallback((presetKey: typeof PRESET_KEYS[number]) => {
     if (!data) return;
-    setSelectedSavedProfileId(null);
-    setPlanKeepingTarget(clonePlan(data.profiles[profile]));
+    setSelectedSavedPresetId(null);
+    setSelectedPresetKey(presetKey);
+    setPlanKeepingTarget(clonePlan(data.presets?.[presetKey] ?? data.profiles[presetKey]));
     setValidation(null);
   }, [data, setPlanKeepingTarget]);
 
   const setExpertPlan = useCallback((next: TranscodePlan) => {
-    setSelectedSavedProfileId(null);
+    setSelectedSavedPresetId(null);
+    setSelectedPresetKey("expert");
     setPlan(next);
   }, []);
 
@@ -1372,6 +1385,7 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
   if (!data || !plan || !capabilities) return <p className="notice error">{error ?? t("transcoding.unavailable")}</p>;
 
   const activeJob = jobIsActive(job) ? job : null;
+  const savedPresets = data.saved_presets ?? data.saved_profiles ?? [];
   const transcodeControlClass = "settings-choice-input transcode-control";
   const dynamicRangeOptions: TranscodePlan["dynamic_range"][] = ["preserve", "sdr", "hdr10", "hlg"];
   if (
@@ -1384,13 +1398,55 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
     dynamicRangeOptions.push("dolby_vision");
   }
 
+  const presetSelect = (
+    <select
+      className={`${transcodeControlClass} transcode-preset-select`}
+      aria-label={t("transcoding.selectPreset")}
+      value={selectedSavedPresetId !== null && savedPresets.some((entry) => (entry.preset ?? entry.profile)?.id === selectedSavedPresetId)
+        ? `saved:${selectedSavedPresetId}`
+        : selectedPresetKey}
+      onChange={(event) => {
+        const value = event.target.value;
+        if (value.startsWith("saved:")) {
+          const savedPreset = savedPresets.find((entry) => `saved:${(entry.preset ?? entry.profile)?.id}` === value);
+          const preset = savedPreset?.preset ?? savedPreset?.profile;
+          if (savedPreset && preset) {
+            setSelectedSavedPresetId(preset.id);
+            setSelectedPresetKey(`saved:${preset.id}`);
+            setPlanKeepingTarget(clonePlan(savedPreset.plan));
+            setValidation(null);
+          }
+        } else if (value !== "expert") {
+          selectPreset(value as typeof PRESET_KEYS[number]);
+        } else {
+          setExpertPlan({ ...plan, profile: "expert" });
+          setValidation(null);
+        }
+      }}
+    >
+      <option value="" disabled>{t("transcoding.selectPreset")}</option>
+      {PRESET_KEYS.map((presetKey) => (
+        <option key={presetKey} value={presetKey}>{t(`transcoding.presets.${presetKey}`)}</option>
+      ))}
+      {savedPresets.map((entry) => {
+        const preset = entry.preset ?? entry.profile;
+        return preset ? (
+          <option key={`saved:${preset.id}`} value={`saved:${preset.id}`}>
+            {preset.name} · v{preset.version}
+          </option>
+        ) : null;
+      })}
+      <option value="expert">{t("transcoding.presets.expert")}</option>
+    </select>
+  );
+
   return (
     <div className="transcoding-panel">
+      {presetHeaderTarget ? createPortal(presetSelect, presetHeaderTarget) : null}
       {error ? <p className="notice error">{error}</p> : null}
       {!capabilities.ffmpeg_available ? <p className="notice error">{capabilities.error ?? t("transcoding.ffmpegUnavailable")}</p> : null}
 
-      <section className="transcode-original-card">
-        <div><Film aria-hidden="true" /><strong>{data.original.filename}</strong></div>
+      <section className="transcode-original-card" aria-label={t("transcoding.sourceSummary")}>
         <dl>
           <div><dt>{t("fileTable.size")}</dt><dd>{formatBytes(data.original.size_bytes ?? 0)}</dd></div>
           <div><dt>{t("fileTable.duration")}</dt><dd>{formatDuration(data.original.duration_seconds ?? 0)}</dd></div>
@@ -1401,33 +1457,6 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
       </section>
 
       <div className="transcode-configuration-grid">
-        <label>
-          <span>{t("transcoding.profile")}</span>
-          <select className={transcodeControlClass} value={selectedSavedProfileId !== null && data.saved_profiles?.some((entry) => entry.profile.id === selectedSavedProfileId) ? `saved:${selectedSavedProfileId}` : PROFILE_KEYS.includes(plan.profile as typeof PROFILE_KEYS[number]) ? plan.profile : "expert"} onChange={(event) => {
-            const profile = event.target.value;
-            if (profile.startsWith("saved:")) {
-              const savedProfile = data.saved_profiles?.find((entry) => `saved:${entry.profile.id}` === profile);
-              if (savedProfile) {
-                setSelectedSavedProfileId(savedProfile.profile.id);
-                setPlanKeepingTarget(clonePlan(savedProfile.plan));
-                setValidation(null);
-              }
-            } else if (profile !== "expert") {
-              selectProfile(profile as typeof PROFILE_KEYS[number]);
-            } else {
-              setExpertPlan({ ...plan, profile: "expert" });
-              setValidation(null);
-            }
-          }}>
-            {PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}
-            {data.saved_profiles?.map((entry) => (
-              <option key={`saved:${entry.profile.id}`} value={`saved:${entry.profile.id}`}>
-                {entry.profile.name} · v{entry.profile.version}
-              </option>
-            ))}
-            <option value="expert">{t("transcoding.profiles.expert")}</option>
-          </select>
-        </label>
         <label>
           <span>{t("transcoding.container")}</span>
           <select className={transcodeControlClass} value={plan.container} onChange={(event) => {
@@ -1728,15 +1757,6 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
         </section>
       ) : null}
 
-      <div className="transcode-global-options">
-        {(["chapters", "metadata", "cover", "attachments"] as const).map((option) => (
-          <label key={option}>
-            <input type="checkbox" checked={plan[option] === "keep"} onChange={(event) => setExpertPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" })} />
-            <span>{t(`transcoding.options.${option}`)}</span>
-          </label>
-        ))}
-      </div>
-
       {(() => {
         const displayedTemplate = displayedFilenameTemplate;
         const filenameCleanupPreset = plan.filename_cleanup_preset ?? "none";
@@ -1918,6 +1938,37 @@ export function TranscodingPanel({ file }: { file: MediaFileDetail }) {
           </section>
         );
       })()}
+
+      <section className={`media-card library-settings-card transcode-filename-section transcode-metadata-settings${openMetadataSettings ? " is-expanded" : " is-collapsed"}`}>
+        <header className="transcode-filename-header">
+          <button
+            type="button"
+            className="transcode-filename-toggle"
+            aria-expanded={openMetadataSettings}
+            aria-controls={`transcode-metadata-settings-${file.id}`}
+            onClick={() => setOpenMetadataSettings((current) => !current)}
+          >
+            <span className="transcode-filename-chevron" aria-hidden="true">
+              {openMetadataSettings ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
+            </span>
+            <span className="transcode-filename-heading">
+              <h3>{t("transcoding.metadataSettings")}</h3>
+            </span>
+          </button>
+        </header>
+        {openMetadataSettings ? (
+          <div className="transcode-filename-body" id={`transcode-metadata-settings-${file.id}`}>
+            <div className="transcode-global-options">
+              {(["chapters", "metadata", "cover", "attachments"] as const).map((option) => (
+                <label key={option}>
+                  <input type="checkbox" checked={plan[option] === "keep"} onChange={(event) => setExpertPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" })} />
+                  <span>{t(`transcoding.options.${option}`)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <div className="transcode-actions">
         <button type="button" className="secondary transcode-action-button" onClick={() => void validate()} disabled={validating || Boolean(activeJob)}>

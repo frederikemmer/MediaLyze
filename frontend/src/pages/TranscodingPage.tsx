@@ -44,12 +44,12 @@ import {
   type TranscodingColumnWidths,
 } from "../lib/transcoding-column-widths";
 
-const PROFILE_KEYS = ["compatibility", "storage", "modern"] as const;
-type ProfileKey = typeof PROFILE_KEYS[number];
+const PRESET_KEYS = ["compatibility", "storage", "modern"] as const;
+type PresetKey = typeof PRESET_KEYS[number];
 type JobStatus = TranscodeJob["status"];
 type CenterTab = "active" | "history";
 type StatusFilter = "all" | JobStatus;
-type TargetFilter = "all" | ProfileKey;
+type TargetFilter = "all" | PresetKey;
 type HardwareFilter = "all" | "hardware" | "cpu";
 type SortDirection = "asc" | "desc";
 type SortableTranscodingColumnKey = Exclude<TranscodingColumnKey, "actions">;
@@ -335,7 +335,7 @@ function JobRow({
           </span>
           <span className="transcoding-file-copy">
             <strong className="transcoding-file-name" title={job.source_path_snapshot}>{fileLabel}</strong>
-            <span className="transcoding-file-meta">{libraryName} · {t(`transcoding.profiles.${job.profile}`, { defaultValue: job.profile })}</span>
+            <span className="transcoding-file-meta">{libraryName} · {t(`transcoding.presets.${job.profile}`, { defaultValue: job.profile })}</span>
           </span>
         </td>
         <td className="transcoding-target-cell">
@@ -924,7 +924,7 @@ export function TranscodingPage() {
             {search ? <button type="button" className="transcoding-search-clear" aria-label={t("transcoding.center.clearSearch")} onClick={() => setSearch("")}><X aria-hidden="true" /></button> : null}
           </label>
           <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select className="settings-choice-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select className="settings-choice-input" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PROFILE_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.profiles.${profile}`)}</option>)}</select></label>
+          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select className="settings-choice-input" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PRESET_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.presets.${profile}`)}</option>)}</select></label>
           <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select className="settings-choice-input" value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select></label>
           <TooltipTrigger
             ariaLabel={t("transcoding.center.resetFilters")}

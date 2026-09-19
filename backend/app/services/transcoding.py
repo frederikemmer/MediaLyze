@@ -30,7 +30,7 @@ from backend.app.models.entities import (
     SubtitleStream,
     TranscodeFederationMember,
     TranscodeJob,
-    TranscodeProfile,
+    TranscodePreset,
     TranscodeVariant,
     TranscodeVariantGroup,
     VideoStream,
@@ -1546,7 +1546,7 @@ def _profile_plan(
     )
 
 
-def initial_transcode_profiles(
+def initial_transcode_presets(
     media_file: MediaFile,
     capabilities: TranscodeCapabilitiesRead,
     *,
@@ -3153,20 +3153,20 @@ def _serialize_variant(db: Session, variant: TranscodeVariant) -> TranscodeVaria
 def get_file_transcode(db: Session, settings: Settings, media_file: MediaFile) -> FileTranscodeRead:
     capabilities = get_transcode_capabilities(settings)
     app_settings = get_app_settings(db, settings)
-    from backend.app.services.transcode_automation import materialize_saved_profile_plan
+    from backend.app.services.transcode_automation import materialize_saved_preset_plan
 
-    saved_profiles = []
-    for profile in db.scalars(
-        select(TranscodeProfile).order_by(
-            TranscodeProfile.is_builtin.desc(), TranscodeProfile.name.collate("NOCASE"), TranscodeProfile.id
+    saved_presets = []
+    for preset in db.scalars(
+        select(TranscodePreset).order_by(
+            TranscodePreset.is_builtin.desc(), TranscodePreset.name.collate("NOCASE"), TranscodePreset.id
         )
     ).all():
         try:
-            saved_profiles.append(
-                materialize_saved_profile_plan(profile, media_file, capabilities, app_settings)
+            saved_presets.append(
+                materialize_saved_preset_plan(preset, media_file, capabilities, app_settings)
             )
         except ValueError:
-            # A malformed legacy custom profile should not make the file
+            # A malformed legacy custom preset should not make the file
             # detail page unusable.  The management endpoint reports it for
             # correction; the transient plans remain available here.
             continue
@@ -3200,15 +3200,18 @@ def get_file_transcode(db: Session, settings: Settings, media_file: MediaFile) -
     original = media_file
     if groups and groups[0].original_file_id:
         original = db.get(MediaFile, groups[0].original_file_id) or media_file
+    initial_presets = initial_transcode_presets(
+        media_file,
+        capabilities,
+        output_mode=app_settings.transcoding.default_output_mode,
+        execution_mode=app_settings.transcoding.execution_mode,
+    )
     return FileTranscodeRead(
         original=_file_summary(original),
-        profiles=initial_transcode_profiles(
-            media_file,
-            capabilities,
-            output_mode=app_settings.transcoding.default_output_mode,
-            execution_mode=app_settings.transcoding.execution_mode,
-        ),
-        saved_profiles=saved_profiles,
+        presets=initial_presets,
+        profiles=initial_presets,
+        saved_presets=saved_presets,
+        saved_profiles=saved_presets,
         attachments=_attachment_summaries(media_file),
         variants=[_serialize_variant(db, item) for item in variants],
         jobs=_serialize_transcode_jobs(db, jobs),
@@ -3247,3 +3250,7 @@ def list_transcode_jobs(
         .limit(limit)
     ).all()
     return TranscodeJobPageRead(items=_serialize_transcode_jobs(db, jobs), total=total)
+
+
+# Legacy service alias retained for integrations using the former name.
+initial_transcode_profiles = initial_transcode_presets

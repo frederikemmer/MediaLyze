@@ -13312,7 +13312,11 @@ html[data-theme="dark"] {
   background: var(--nested-surface);
 }
 
-.transcode-original-card > div,
+.transcode-original-card {
+  gap: 0.45rem;
+  padding: 0.65rem 0.85rem;
+}
+
 .transcode-validation h3,
 .transcode-progress > div,
 .transcode-job-links,
@@ -13331,10 +13335,19 @@ html[data-theme="dark"] {
   margin: 0;
 }
 
+.transcode-original-card dl {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem 0.9rem;
+}
+
 .transcode-original-card dl > div,
 .transcode-diff-grid > div {
   display: grid;
   gap: 0.2rem;
+}
+
+.transcode-original-card dl > div {
+  min-width: 0;
 }
 
 .transcode-original-card dt {
@@ -13345,6 +13358,18 @@ html[data-theme="dark"] {
 .transcode-original-card dd {
   margin: 0;
   font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.transcode-preset-header-slot {
+  flex: 0 1 270px;
+  min-width: 190px;
+  max-width: 100%;
+}
+
+.transcode-preset-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .transcode-configuration-grid,
@@ -13872,7 +13897,7 @@ html[data-theme="dark"] {
 }
 
 .transcode-automation-rule-sections,
-.transcode-profile-rule-section .compatibility-capability-section-body {
+.transcode-preset-rule-section .compatibility-capability-section-body {
   display: grid;
   gap: 10px;
 }
@@ -13884,7 +13909,7 @@ html[data-theme="dark"] {
   gap: 10px;
 }
 
-.transcode-profile-section-count {
+.transcode-preset-section-count {
   min-width: 1.35rem;
   padding: 0.12rem 0.35rem;
   border: 1px solid var(--border);
@@ -13896,33 +13921,33 @@ html[data-theme="dark"] {
   text-align: center;
 }
 
-.transcode-profile-rule-summary {
+.transcode-preset-rule-summary {
   gap: 10px;
 }
 
-.transcode-profile-rule-summary > strong {
+.transcode-preset-rule-summary > strong {
   color: var(--ink);
   font-size: 0.8rem;
 }
 
-.transcode-profile-rule-summary-grid {
+.transcode-preset-rule-summary-grid {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
 }
 
-.transcode-profile-rule-summary-grid > div {
+.transcode-preset-rule-summary-grid > div {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
-.transcode-profile-rule-summary-grid span {
+.transcode-preset-rule-summary-grid span {
   color: var(--muted);
   font-size: 0.75rem;
 }
 
-.transcode-profile-rule-summary-grid strong {
+.transcode-preset-rule-summary-grid strong {
   overflow-wrap: anywhere;
 }
 
@@ -13992,7 +14017,7 @@ html[data-theme="dark"] {
   flex: 0 0 auto;
 }
 
-.transcode-profile-rule {
+.transcode-preset-rule {
   display: grid;
   gap: 0.45rem;
   padding: 0.55rem;
@@ -14001,25 +14026,25 @@ html[data-theme="dark"] {
   background: color-mix(in srgb, var(--panel) 72%, transparent);
 }
 
-.transcode-profile-rule-field {
+.transcode-preset-rule-field {
   display: grid;
   min-width: 9rem;
   gap: 0.24rem;
 }
 
-.transcode-profile-rule-field > span {
+.transcode-preset-rule-field > span {
   color: var(--muted);
   font-size: 0.7rem;
   font-weight: 650;
 }
 
-.transcode-profile-rule-details {
+.transcode-preset-rule-details {
   align-items: end;
 }
 
 @media (max-width: 640px) {
   .transcode-condition-row > .field,
-  .transcode-profile-rule-field {
+  .transcode-preset-rule-field {
     min-width: min(100%, 14rem);
     flex-basis: 100%;
   }
@@ -14501,15 +14526,21 @@ html[data-theme="dark"] {
 
 .transcode-stream-tab-count {
   position: relative;
-  min-width: 1.25rem;
-  padding: 0.1rem 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 0.35rem;
   border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   border-radius: 999px;
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
   text-align: center;
+  white-space: nowrap;
   z-index: 2;
 }
 
@@ -14631,52 +14662,61 @@ html[data-theme="dark"] {
   position: relative;
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   min-width: 0;
   flex: 0 0 auto;
   gap: 0.25rem;
   justify-self: end;
   margin-left: auto;
-  padding-right: 0.5rem;
   border-radius: 8px;
-  transition: background 0.16s ease;
-}
-
-.transcode-stream-list-item:hover .transcode-action-field,
-.transcode-stream-list-item:focus-within .transcode-action-field {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  padding: 0;
 }
 
 .transcode-action-field.is-expanded {
   width: min(154px, 34%);
   min-width: 122px;
-  padding-top: 0.35rem;
-  padding-bottom: 0.35rem;
 }
 
 .transcode-action-field.is-collapsed {
-  width: 42px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 9px;
 }
 
 .transcode-action-field > .transcode-action-select {
   min-width: 0;
   width: 100%;
   flex: 1 1 auto;
+  background-color: transparent;
 }
 
 .transcode-action-field.is-expanded > .transcode-action-select {
-  padding-left: 2.1rem;
+  box-sizing: border-box;
+  padding: 5px 26px 5px 32px;
+  background-position: right 8px center;
+  background-size: 14px 14px;
 }
 
 .transcode-action-field.is-collapsed > .transcode-action-select {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
+  box-sizing: border-box;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
+  border-radius: 9px;
   appearance: none;
   background-image: none;
   color: transparent;
   cursor: pointer;
+}
+
+.transcode-action-field > .transcode-action-select:hover {
+  background-color: transparent;
 }
 
 .transcode-action-field.is-collapsed > .transcode-action-select option {
@@ -14685,16 +14725,19 @@ html[data-theme="dark"] {
 
 .transcode-stream-action-icon {
   position: absolute;
+  top: 50%;
   left: 0.8rem;
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
   pointer-events: none;
+  transform: translateY(-50%);
   z-index: 1;
 }
 
 .transcode-action-field.is-collapsed .transcode-stream-action-icon {
-  left: 0.65rem;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .transcode-action-field[data-action="copy"] .transcode-stream-action-icon {
@@ -14893,6 +14936,10 @@ html[data-theme="dark"] {
 
 .transcode-filename-section.is-collapsed {
   gap: 0;
+}
+
+.transcode-metadata-settings .transcode-global-options {
+  gap: 0.55rem;
 }
 
 .transcode-filename-header {
@@ -15315,6 +15362,15 @@ html[data-theme="dark"] {
 }
 
 @media (max-width: 760px) {
+  .transcode-original-card dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .transcode-preset-header-slot {
+    flex-basis: min(100%, 280px);
+    min-width: min(100%, 190px);
+  }
+
   .transcode-action-field.is-expanded {
     width: min(146px, 38%);
   }
@@ -16455,6 +16511,15 @@ html[data-theme="dark"] .transcoding-table-scroll::-webkit-scrollbar-thumb:hover
 }
 
 @media (max-width: 500px) {
+  .transcode-original-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .transcode-preset-header-slot {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
   .transcoding-center-heading {
     align-items: flex-start;
     flex-wrap: wrap;

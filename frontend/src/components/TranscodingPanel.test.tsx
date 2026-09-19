@@ -11,7 +11,7 @@ import {
   type TranscodeCapabilities,
   type TranscodeJob,
   type TranscodePlan,
-  type TranscodeProfilePlan,
+  type TranscodePresetPlan,
   type TranscodeValidation,
 } from "../lib/api";
 import { FileTranscodeHistory, TranscodingPanel } from "./TranscodingPanel";
@@ -41,6 +41,17 @@ const file = {
   external_subtitles: [{ id: 8, path: "Movie.en.srt", language: "en", format: "srt" }],
   raw_ffprobe_json: { format: { format_name: "matroska" } },
 } as unknown as MediaFileDetail;
+
+function renderTranscodingPanel(targetFile: MediaFileDetail = file) {
+  const presetHeaderTarget = document.createElement("div");
+  presetHeaderTarget.dataset.transcodePresetTarget = "";
+  document.body.append(presetHeaderTarget);
+  return render(
+    <MemoryRouter>
+      <TranscodingPanel file={targetFile} presetHeaderTarget={presetHeaderTarget} />
+    </MemoryRouter>,
+  );
+}
 
 const capabilities: TranscodeCapabilities = {
   ffmpeg_available: true,
@@ -88,6 +99,12 @@ function job(overrides: Partial<TranscodeJob> = {}): TranscodeJob {
   };
 }
 
+const builtInPresets = {
+  compatibility: compatibilityPlan,
+  storage: { ...compatibilityPlan, profile: "storage" as const, container: "mkv" as const },
+  modern: { ...compatibilityPlan, profile: "modern" as const, container: "mkv" as const },
+};
+
 const payload: FileTranscode = {
   original: {
     id: 1,
@@ -102,11 +119,8 @@ const payload: FileTranscode = {
     audio_codecs: ["aac"],
     audio_languages: ["en"],
   },
-  profiles: {
-    compatibility: compatibilityPlan,
-    storage: { ...compatibilityPlan, profile: "storage", container: "mkv" },
-    modern: { ...compatibilityPlan, profile: "modern", container: "mkv" },
-  },
+  presets: builtInPresets,
+  profiles: builtInPresets,
   attachments: [{ stream_index: 4, codec: "ttf", filename: "Poster Font.ttf", mimetype: "application/x-truetype-font", title: null }],
   variants: [{
     id: 7,
@@ -143,11 +157,11 @@ const validation: TranscodeValidation = {
   detected_hardware_encoders: ["h264_nvenc"],
 };
 
-const savedProfile: TranscodeProfilePlan = {
-  profile: {
+const savedPreset: TranscodePresetPlan = {
+  preset: {
     id: 9,
-    name: "Archive profile",
-    description: "A saved profile for archive files.",
+    name: "Archive preset",
+    description: "A saved preset for archive files.",
     version: 2,
     is_builtin: false,
     builtin_key: null,
@@ -191,17 +205,22 @@ describe("TranscodingPanel", () => {
 
   afterEach(() => {
     cleanup();
+    document.querySelectorAll<HTMLElement>("[data-transcode-preset-target]").forEach((target) => target.remove());
     vi.restoreAllMocks();
   });
 
   it("edits structured stream fields without rendering a separate variant section", async () => {
-    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
+    renderTranscodingPanel();
 
-    expect((await screen.findAllByText("Movie.mkv")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("region", { name: "Source summary" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Linked variants" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Transcoding history" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(3);
-    expect(screen.getByRole("tab", { name: /Video/ })).toHaveAttribute("aria-selected", "true");
+    const videoTab = screen.getByRole("tab", { name: /Video/ });
+    expect(videoTab).toHaveAttribute("aria-selected", "true");
+    expect(videoTab.querySelector(".transcode-stream-tab-count")?.textContent).toBe("1");
+    expect(screen.getByRole("tab", { name: /Audio/ }).querySelector(".transcode-stream-tab-count")?.textContent).toBe("1");
+    expect(screen.getByRole("tab", { name: /Subtitles/ }).querySelector(".transcode-stream-tab-count")?.textContent).toBe("1");
     fireEvent.click(screen.getByRole("tab", { name: /Audio/ }));
     expect(screen.getByRole("combobox", { name: "Action for stream 1" })).toHaveValue("copy");
     fireEvent.click(screen.getByRole("tab", { name: /Subtitles/ }));
@@ -260,8 +279,8 @@ describe("TranscodingPanel", () => {
   });
 
   it("starts a validated job, shows progress, and cancels it", async () => {
-    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
-    await screen.findAllByText("Movie.mkv");
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
     fireEvent.click(screen.getByRole("button", { name: "Start transcoding" }));
 
     expect(await screen.findByText("25%")).toBeInTheDocument();
@@ -271,8 +290,8 @@ describe("TranscodingPanel", () => {
   });
 
   it("previews the generated filename and supports metadata tokens with a custom divider", async () => {
-    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
-    await screen.findAllByText("Movie.mkv");
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
 
     expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
     expect(screen.queryByText("Type text directly or insert metadata tokens with Add metadata.")).not.toBeInTheDocument();
@@ -337,8 +356,8 @@ describe("TranscodingPanel", () => {
 
   it("keeps the embedded progress view compact and hides empty attachments and raw probe details", async () => {
     vi.mocked(api.fileTranscode).mockResolvedValue({ ...payload, attachments: [] });
-    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
-    await screen.findAllByText("Movie.mkv");
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
 
     expect(screen.queryByText("Raw ffprobe JSON")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Attachments" })).not.toBeInTheDocument();
@@ -354,8 +373,8 @@ describe("TranscodingPanel", () => {
 
   it("collapses filename controls and removes selected source-name sections", async () => {
     const filename = { ...file, filename: "Movie [1080p] (WEB-DL).mkv" } as MediaFileDetail;
-    render(<MemoryRouter><TranscodingPanel file={filename} /></MemoryRouter>);
-    await screen.findAllByText("Movie.mkv");
+    renderTranscodingPanel(filename);
+    await screen.findByRole("region", { name: "Source summary" });
 
     const toggle = screen.getByRole("button", { name: "Filename template" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -373,17 +392,47 @@ describe("TranscodingPanel", () => {
     expect(screen.getByText("Movie (WEB-DL) [3840x2160, HDR10, HEVC] [en].mp4")).toBeInTheDocument();
   });
 
-  it("applies a saved profile and switches back to expert editing", async () => {
-    vi.mocked(api.fileTranscode).mockResolvedValue({ ...payload, saved_profiles: [savedProfile] });
-    render(<MemoryRouter><TranscodingPanel file={file} /></MemoryRouter>);
-    await screen.findAllByText("Movie.mkv");
+  it("applies a saved preset and switches back to expert editing", async () => {
+    vi.mocked(api.fileTranscode).mockResolvedValue({ ...payload, saved_presets: [savedPreset] });
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
 
-    const profileSelect = screen.getByRole("combobox", { name: "Profile" });
-    fireEvent.change(profileSelect, { target: { value: "saved:9" } });
-    expect(profileSelect).toHaveValue("saved:9");
+    const presetSelect = screen.getByRole("combobox", { name: "Select preset" });
+    expect(presetSelect).toHaveValue("");
+    fireEvent.change(presetSelect, { target: { value: "saved:9" } });
+    expect(presetSelect).toHaveValue("saved:9");
     expect(screen.getByRole("combobox", { name: "Target container" })).toHaveValue("mkv");
 
     fireEvent.change(screen.getByRole("combobox", { name: "Target container" }), { target: { value: "mp4" } });
-    expect(profileSelect).toHaveValue("expert");
+    expect(presetSelect).toHaveValue("expert");
+  });
+
+  it("shows a compact source summary and groups metadata options below the filename template", async () => {
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
+
+    const summary = screen.getByRole("region", { name: "Source summary" });
+    expect(summary.querySelectorAll("dl > div")).toHaveLength(5);
+    expect(summary).toHaveTextContent("9.8 KB");
+    expect(summary).toHaveTextContent("2m");
+    expect(summary).toHaveTextContent("3840x2160");
+    expect(summary).toHaveTextContent("HEVC");
+    expect(summary).toHaveTextContent("HDR10");
+    expect(summary).not.toHaveTextContent("Movie.mkv");
+    const presetSelect = await screen.findByRole("combobox", { name: "Select preset" });
+    expect(presetSelect).toHaveValue("");
+
+    const filenameToggle = screen.getByRole("button", { name: "Filename template" });
+    const metadataToggle = screen.getByRole("button", { name: "Metadata settings" });
+    const filenameCard = filenameToggle.closest("section");
+    const metadataCard = metadataToggle.closest("section");
+    expect(filenameCard).not.toBeNull();
+    expect(metadataCard).not.toBeNull();
+    expect(filenameCard!.compareDocumentPosition(metadataCard!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(screen.getByRole("checkbox", { name: "Keep chapters" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Keep metadata" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Keep cover" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Keep attachments" })).toBeChecked();
   });
 });

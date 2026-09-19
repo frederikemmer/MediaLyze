@@ -97,7 +97,7 @@ class TranscodePlan(BaseModel):
     target_device_id: str | None = Field(default=None, max_length=128)
 
 
-class TranscodeProfileStreamRule(BaseModel):
+class TranscodePresetStreamRule(BaseModel):
     """An ordered, source-independent stream rule stored in a profile.
 
     A profile deliberately never stores a concrete stream index.  The index is
@@ -155,15 +155,15 @@ class TranscodeProfileStreamRule(BaseModel):
         return payload
 
 
-class TranscodeProfileDefinition(BaseModel):
+class TranscodePresetDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: Literal[1] = 1
     container: Literal["source", "mkv", "mp4", "webm"] = "source"
-    video_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
-    audio_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
-    subtitle_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
-    external_subtitle_rules: list[TranscodeProfileStreamRule] = Field(default_factory=list, max_length=128)
+    video_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
+    audio_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
+    subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
+    external_subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
     default_video_action: Literal["copy", "convert", "remove"] = "copy"
     default_audio_action: Literal["copy", "convert", "remove"] = "copy"
     default_subtitle_action: Literal["copy", "convert", "remove"] = "copy"
@@ -193,12 +193,12 @@ class TranscodeProfileDefinition(BaseModel):
     execution_mode: Literal["inherit", "hardware_required", "cpu_only"] = "inherit"
 
 
-class TranscodeProfileCreate(BaseModel):
+class TranscodePresetCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=2000)
-    definition: TranscodeProfileDefinition | None = None
+    definition: TranscodePresetDefinition | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -206,19 +206,19 @@ class TranscodeProfileCreate(BaseModel):
         if not isinstance(value, dict) or "definition" in value:
             return value
         payload = dict(value)
-        definition_keys = set(TranscodeProfileDefinition.model_fields)
+        definition_keys = set(TranscodePresetDefinition.model_fields)
         definition = {key: payload.pop(key) for key in list(payload) if key in definition_keys}
         if definition:
             payload["definition"] = definition
         return payload
 
 
-class TranscodeProfileUpdate(BaseModel):
+class TranscodePresetUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
-    definition: TranscodeProfileDefinition | None = None
+    definition: TranscodePresetDefinition | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -226,18 +226,18 @@ class TranscodeProfileUpdate(BaseModel):
         if not isinstance(value, dict) or "definition" in value:
             return value
         payload = dict(value)
-        definition_keys = set(TranscodeProfileDefinition.model_fields)
+        definition_keys = set(TranscodePresetDefinition.model_fields)
         definition = {key: payload.pop(key) for key in list(payload) if key in definition_keys}
         if definition:
             payload["definition"] = definition
         return payload
 
 
-class TranscodeProfileDuplicate(BaseModel):
+class TranscodePresetDuplicate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
-class TranscodeProfileRead(BaseModel):
+class TranscodePresetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -246,15 +246,29 @@ class TranscodeProfileRead(BaseModel):
     version: int
     is_builtin: bool
     builtin_key: str | None = None
-    definition: TranscodeProfileDefinition
+    definition: TranscodePresetDefinition
     used_by_rule_count: int = 0
     created_at: datetime
     updated_at: datetime
 
 
-class TranscodeProfilePlanRead(BaseModel):
-    profile: TranscodeProfileRead
+class TranscodePresetPlanRead(BaseModel):
+    preset: TranscodePresetRead
+    # `profile` is retained in responses for clients written against the old
+    # transcoding-profile API contract.
+    profile: TranscodePresetRead | None = None
     plan: TranscodePlan
+
+
+# Compatibility aliases for Python integrations that imported the former
+# schema names. The persisted/API rule identifiers below remain unchanged.
+TranscodeProfileStreamRule = TranscodePresetStreamRule
+TranscodeProfileDefinition = TranscodePresetDefinition
+TranscodeProfileCreate = TranscodePresetCreate
+TranscodeProfileUpdate = TranscodePresetUpdate
+TranscodeProfileDuplicate = TranscodePresetDuplicate
+TranscodeProfileRead = TranscodePresetRead
+TranscodeProfilePlanRead = TranscodePresetPlanRead
 
 
 class TranscodeCondition(BaseModel):
@@ -699,8 +713,12 @@ class TranscodeJobRead(BaseModel):
 
 class FileTranscodeRead(BaseModel):
     original: TranscodeFileSummary
+    presets: dict[str, TranscodePlan] = Field(default_factory=dict)
+    # Legacy response keys remain during the transition so older clients keep
+    # working while new clients consume the preset names.
     profiles: dict[str, TranscodePlan]
-    saved_profiles: list[TranscodeProfilePlanRead] = Field(default_factory=list)
+    saved_presets: list[TranscodePresetPlanRead] = Field(default_factory=list)
+    saved_profiles: list[TranscodePresetPlanRead] = Field(default_factory=list)
     attachments: list[TranscodeAttachmentSummary] = Field(default_factory=list)
     variants: list[TranscodeVariantRead] = Field(default_factory=list)
     jobs: list[TranscodeJobRead] = Field(default_factory=list)

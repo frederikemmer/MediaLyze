@@ -12,17 +12,21 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 - **A dedicated transcoding job center** — queue multiple files, monitor progress, see hardware usage, cancel or retry jobs, and review completed work.
 - **Trusted transcode federation** — pair MediaLyze installations, discover workers on the local network, exchange capabilities, and send jobs to a selected or automatically chosen worker.
 - **Per-device capability testing** — see which decode and encode paths are available and how much practical parallel hardware capacity each device provides.
-- **Reusable transcoding profiles and automation** — save stream rules for repeatable conversions and prepare optional library-specific automation.
+- **Reusable transcoding presets and automation** — save stream rules for repeatable conversions and prepare optional library-specific automation.
 - **Clearer transcoding and file-detail workflows** — use compact stream editing, filename templates, metadata tokens, source-name cleanup, and responsive synchronized preview comparison.
 - **More portable hardware support** — discover platform-specific media engines and wire supported Docker devices while keeping hardware-required execution explicit.
 
 ### ✨ Enhancements
 
+- **Clearer file-detail transcoding controls** — label the feature as beta, move preset selection into the heading, condense source details to five key values, and group metadata options below the filename template.
+- **Consistent preset terminology** — rename the transcoding profile manager, creation action, and file-detail selector to presets.
+- **Clearer transcode output destinations** — rename the separate output option to “Central Output Folder” across all shipped languages.
 - **Refined settings and compatibility profiles** — provide consistent responsive controls, searchable profile catalogs, and clearer capability and member views.
 - **Left-aligned connector headers** — keep provider names and server URLs anchored to the start of the accordion toggle.
 - **Preview completed transcodes in context** — keep the original preview visible above the synchronized variant comparison and link completed jobs from the transcoding center directly to that comparison.
 - **Predictable Federation endpoint routing** — keep a favored connection as the default, expose per-address test metrics, and fall back only when it is unreachable and another address is reachable; blocked addresses are excluded from routing.
 - **Refined library detail controls** — use borderless title actions, smaller rectangular chart toggles, and separate history controls with clear spacing.
+- **Refined transcode stream controls** — use compact count pills, consistent row hover surfaces, square centered icon actions, and enough room for longer action labels.
 - **Square icon toggle options** — keep symbol-only segmented controls square across dashboard, library, comparison, storage, and playback views.
 - **Connected rectangular comparison controls** — keep both metric selectors, axis swap, and renderer menu compactly grouped with clear focus states.
 - **Compact metadata search rows** — match field-specific search bars to the main file search control while preserving their field icons and clear actions.

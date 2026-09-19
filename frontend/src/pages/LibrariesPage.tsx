@@ -910,11 +910,11 @@ const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
     focus: "settings-panel-transcoding",
   },
   {
-    id: "transcoding-tab-profiles",
+    id: "transcoding-tab-presets",
     panel: "transcoding",
-    labelKey: "transcoding.automation.tabs.profiles",
-    aliases: ["transcoding profiles", "profile", "saved profiles"],
-    focus: "transcoding-tab-profiles",
+    labelKey: "transcoding.automation.tabs.presets",
+    aliases: ["transcoding presets", "preset", "saved presets", "transcoding profiles", "saved profiles"],
+    focus: "transcoding-tab-presets",
   },
   {
     id: "transcoding-tab-rules",

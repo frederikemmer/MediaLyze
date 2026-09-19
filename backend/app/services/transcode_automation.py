@@ -16,7 +16,7 @@ from backend.app.models.entities import (
     TranscodeAutomationRecord,
     TranscodeAutomationRun,
     TranscodeJob,
-    TranscodeProfile,
+    TranscodePreset,
     TranscodeRule,
 )
 from backend.app.schemas.transcoding import (
@@ -26,12 +26,12 @@ from backend.app.schemas.transcoding import (
     TranscodeAutomationScope,
     TranscodeCondition,
     TranscodeConditionGroup,
-    TranscodeProfileCreate,
-    TranscodeProfileDefinition,
-    TranscodeProfilePlanRead,
-    TranscodeProfileRead,
-    TranscodeProfileStreamRule,
-    TranscodeProfileUpdate,
+    TranscodePresetCreate,
+    TranscodePresetDefinition,
+    TranscodePresetPlanRead,
+    TranscodePresetRead,
+    TranscodePresetStreamRule,
+    TranscodePresetUpdate,
     TranscodeReplacementApproval,
     TranscodeRuleCreate,
     TranscodeRuleRead,
@@ -71,43 +71,43 @@ AUTOMATION_PAGE_SIZE = 50
 TERMINAL_AUTOMATION_STATUSES = {"completed", "failed", "canceled"}
 
 
-def _profile_definition(profile: TranscodeProfile) -> TranscodeProfileDefinition:
+def _preset_definition(preset: TranscodePreset) -> TranscodePresetDefinition:
     try:
-        return TranscodeProfileDefinition.model_validate(profile.definition or {})
+        return TranscodePresetDefinition.model_validate(preset.definition or {})
     except Exception as exc:
         raise TranscodeAutomationError(
-            f"Profile {profile.name!r} contains an invalid definition"
+            f"Preset {preset.name!r} contains an invalid definition"
         ) from exc
 
 
-def _profile_payload(profile: TranscodeProfile, rule_count: int = 0) -> TranscodeProfileRead:
-    return TranscodeProfileRead(
-        id=profile.id,
-        name=profile.name,
-        description=profile.description or "",
-        version=profile.version,
-        is_builtin=bool(profile.is_builtin),
-        builtin_key=profile.builtin_key,
-        definition=_profile_definition(profile),
+def _preset_payload(preset: TranscodePreset, rule_count: int = 0) -> TranscodePresetRead:
+    return TranscodePresetRead(
+        id=preset.id,
+        name=preset.name,
+        description=preset.description or "",
+        version=preset.version,
+        is_builtin=bool(preset.is_builtin),
+        builtin_key=preset.builtin_key,
+        definition=_preset_definition(preset),
         used_by_rule_count=rule_count,
-        created_at=profile.created_at,
-        updated_at=profile.updated_at,
+        created_at=preset.created_at,
+        updated_at=preset.updated_at,
     )
 
 
-def serialize_transcode_profile(db: Session, profile: TranscodeProfile) -> TranscodeProfileRead:
-    count = int(db.scalar(select(func.count(TranscodeRule.id)).where(TranscodeRule.profile_id == profile.id)) or 0)
-    return _profile_payload(profile, count)
+def serialize_transcode_preset(db: Session, preset: TranscodePreset) -> TranscodePresetRead:
+    count = int(db.scalar(select(func.count(TranscodeRule.id)).where(TranscodeRule.profile_id == preset.id)) or 0)
+    return _preset_payload(preset, count)
 
 
-def _profile_definition_for_builtin(key: str) -> TranscodeProfileDefinition:
+def _preset_definition_for_builtin(key: str) -> TranscodePresetDefinition:
     if key == "compatibility":
-        return TranscodeProfileDefinition(container="source")
+        return TranscodePresetDefinition(container="source")
     if key == "storage":
-        return TranscodeProfileDefinition(
+        return TranscodePresetDefinition(
             container="mkv",
             video_rules=[
-                TranscodeProfileStreamRule(
+                TranscodePresetStreamRule(
                     action="convert",
                     codec="hevc",
                     crf=22,
@@ -116,10 +116,10 @@ def _profile_definition_for_builtin(key: str) -> TranscodeProfileDefinition:
             ],
         )
     if key == "modern":
-        return TranscodeProfileDefinition(
+        return TranscodePresetDefinition(
             container="mkv",
             video_rules=[
-                TranscodeProfileStreamRule(
+                TranscodePresetStreamRule(
                     action="convert",
                     codec="av1",
                     crf=30,
@@ -127,46 +127,46 @@ def _profile_definition_for_builtin(key: str) -> TranscodeProfileDefinition:
                 )
             ],
         )
-    raise TranscodeAutomationError(f"Unknown built-in transcoding profile: {key}")
+    raise TranscodeAutomationError(f"Unknown built-in transcoding preset: {key}")
 
 
-BUILTIN_PROFILE_SPECS = (
+BUILTIN_PRESET_SPECS = (
     ("compatibility", "Compatibility", "Copy compatible streams without changing their codecs."),
     ("storage", "Storage saver", "Convert video to HEVC while keeping audio and subtitles."),
     ("modern", "Modern AV1", "Convert video to AV1 while keeping audio and subtitles."),
 )
 
 
-def ensure_builtin_transcode_profiles(db: Session) -> None:
+def ensure_builtin_transcode_presets(db: Session) -> None:
     """Seed immutable templates without overwriting user-edited database data."""
 
-    existing_names = {str(name).casefold() for name in db.scalars(select(TranscodeProfile.name)).all()}
+    existing_names = {str(name).casefold() for name in db.scalars(select(TranscodePreset.name)).all()}
     dirty = False
-    for key, name, description in BUILTIN_PROFILE_SPECS:
-        if db.scalar(select(TranscodeProfile).where(TranscodeProfile.builtin_key == key)) is not None:
+    for key, name, description in BUILTIN_PRESET_SPECS:
+        if db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == key)) is not None:
             continue
         actual_name = name
         if actual_name.casefold() in existing_names:
             actual_name = f"MediaLyze {name}"
-        profile = TranscodeProfile(
+        preset = TranscodePreset(
             name=actual_name,
             description=description,
             version=1,
             is_builtin=True,
             builtin_key=key,
-            definition=_profile_definition_for_builtin(key).model_dump(mode="json"),
+            definition=_preset_definition_for_builtin(key).model_dump(mode="json"),
         )
-        db.add(profile)
+        db.add(preset)
         existing_names.add(actual_name.casefold())
         dirty = True
     if dirty:
         db.flush()
 
 
-def list_transcode_profiles(db: Session) -> list[TranscodeProfileRead]:
-    profiles = db.scalars(
-        select(TranscodeProfile).order_by(
-            TranscodeProfile.is_builtin.desc(), TranscodeProfile.name.collate("NOCASE"), TranscodeProfile.id
+def list_transcode_presets(db: Session) -> list[TranscodePresetRead]:
+    presets = db.scalars(
+        select(TranscodePreset).order_by(
+            TranscodePreset.is_builtin.desc(), TranscodePreset.name.collate("NOCASE"), TranscodePreset.id
         )
     ).all()
     counts = {
@@ -175,130 +175,130 @@ def list_transcode_profiles(db: Session) -> list[TranscodeProfileRead]:
             select(TranscodeRule.profile_id, func.count(TranscodeRule.id)).group_by(TranscodeRule.profile_id)
         ).all()
     }
-    return [_profile_payload(profile, counts.get(profile.id, 0)) for profile in profiles]
+    return [_preset_payload(preset, counts.get(preset.id, 0)) for preset in presets]
 
 
-def get_transcode_profile(db: Session, profile_id: int) -> TranscodeProfile:
-    profile = db.get(TranscodeProfile, profile_id)
-    if profile is None:
-        raise TranscodeAutomationError("Transcoding profile not found")
-    return profile
+def get_transcode_preset(db: Session, preset_id: int) -> TranscodePreset:
+    preset = db.get(TranscodePreset, preset_id)
+    if preset is None:
+        raise TranscodeAutomationError("Transcoding preset not found")
+    return preset
 
 
-def _validate_profile_definition(definition: TranscodeProfileDefinition | None) -> TranscodeProfileDefinition:
+def _validate_preset_definition(definition: TranscodePresetDefinition | None) -> TranscodePresetDefinition:
     if definition is None:
-        return TranscodeProfileDefinition()
+        return TranscodePresetDefinition()
     # Pydantic's extra-forbid rule is the important guard here: stream_index,
-    # subtitle ids and other file-specific values cannot enter a saved profile.
-    return TranscodeProfileDefinition.model_validate(definition.model_dump(mode="json"))
+    # subtitle ids and other file-specific values cannot enter a saved preset.
+    return TranscodePresetDefinition.model_validate(definition.model_dump(mode="json"))
 
 
-def create_transcode_profile(db: Session, payload: TranscodeProfileCreate) -> TranscodeProfileRead:
-    definition = _validate_profile_definition(payload.definition)
+def create_transcode_preset(db: Session, payload: TranscodePresetCreate) -> TranscodePresetRead:
+    definition = _validate_preset_definition(payload.definition)
     name = payload.name.strip()
     if not name:
-        raise TranscodeAutomationError("The transcoding profile needs a name")
-    if db.scalar(select(TranscodeProfile).where(func.lower(TranscodeProfile.name) == name.casefold())):
-        raise TranscodeAutomationError("A transcoding profile with this name already exists")
-    profile = TranscodeProfile(
+        raise TranscodeAutomationError("The transcoding preset needs a name")
+    if db.scalar(select(TranscodePreset).where(func.lower(TranscodePreset.name) == name.casefold())):
+        raise TranscodeAutomationError("A transcoding preset with this name already exists")
+    preset = TranscodePreset(
         name=name,
         description=payload.description.strip(),
         version=1,
         is_builtin=False,
         definition=definition.model_dump(mode="json"),
     )
-    db.add(profile)
+    db.add(preset)
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise TranscodeAutomationError("A transcoding profile with this name already exists") from exc
-    db.refresh(profile)
-    return _profile_payload(profile)
+        raise TranscodeAutomationError("A transcoding preset with this name already exists") from exc
+    db.refresh(preset)
+    return _preset_payload(preset)
 
 
-def duplicate_transcode_profile(
+def duplicate_transcode_preset(
     db: Session,
-    profile_id: int,
+    preset_id: int,
     name: str | None = None,
-) -> TranscodeProfileRead:
-    source = get_transcode_profile(db, profile_id)
+) -> TranscodePresetRead:
+    source = get_transcode_preset(db, preset_id)
     candidate = (name or f"{source.name} copy").strip()
     if not candidate:
-        raise TranscodeAutomationError("The duplicated profile needs a name")
-    if db.scalar(select(TranscodeProfile).where(func.lower(TranscodeProfile.name) == candidate.casefold())):
-        raise TranscodeAutomationError("A transcoding profile with this name already exists")
-    profile = TranscodeProfile(
+        raise TranscodeAutomationError("The duplicated preset needs a name")
+    if db.scalar(select(TranscodePreset).where(func.lower(TranscodePreset.name) == candidate.casefold())):
+        raise TranscodeAutomationError("A transcoding preset with this name already exists")
+    preset = TranscodePreset(
         name=candidate,
         description=source.description or "",
         version=1,
         is_builtin=False,
-        definition=_profile_definition(source).model_dump(mode="json"),
+        definition=_preset_definition(source).model_dump(mode="json"),
     )
-    db.add(profile)
+    db.add(preset)
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise TranscodeAutomationError("A transcoding profile with this name already exists") from exc
-    db.refresh(profile)
-    return _profile_payload(profile)
+        raise TranscodeAutomationError("A transcoding preset with this name already exists") from exc
+    db.refresh(preset)
+    return _preset_payload(preset)
 
 
-def update_transcode_profile(
+def update_transcode_preset(
     db: Session,
-    profile_id: int,
-    payload: TranscodeProfileUpdate,
-) -> TranscodeProfileRead:
-    profile = get_transcode_profile(db, profile_id)
-    if profile.is_builtin:
-        raise TranscodeAutomationError("Built-in transcoding profiles are immutable; duplicate one to edit it")
+    preset_id: int,
+    payload: TranscodePresetUpdate,
+) -> TranscodePresetRead:
+    preset = get_transcode_preset(db, preset_id)
+    if preset.is_builtin:
+        raise TranscodeAutomationError("Built-in transcoding presets are immutable; duplicate one to edit it")
     changes = payload.model_dump(exclude_unset=True, mode="json")
     if not changes:
-        return _profile_payload(profile)
+        return _preset_payload(preset)
     if "name" in changes:
         name = str(changes["name"]).strip()
         if not name:
-            raise TranscodeAutomationError("The transcoding profile needs a name")
+            raise TranscodeAutomationError("The transcoding preset needs a name")
         duplicate = db.scalar(
-            select(TranscodeProfile).where(
-                func.lower(TranscodeProfile.name) == name.casefold(),
-                TranscodeProfile.id != profile.id,
+            select(TranscodePreset).where(
+                func.lower(TranscodePreset.name) == name.casefold(),
+                TranscodePreset.id != preset.id,
             )
         )
         if duplicate:
-            raise TranscodeAutomationError("A transcoding profile with this name already exists")
-        profile.name = name
+            raise TranscodeAutomationError("A transcoding preset with this name already exists")
+        preset.name = name
     if "description" in changes:
-        profile.description = str(changes["description"] or "").strip()
+        preset.description = str(changes["description"] or "").strip()
     if "definition" in changes:
-        definition = _validate_profile_definition(payload.definition)
-        profile.definition = definition.model_dump(mode="json")
+        definition = _validate_preset_definition(payload.definition)
+        preset.definition = definition.model_dump(mode="json")
     definition_changed = "definition" in changes
-    profile.version += 1
+    preset.version += 1
     if definition_changed:
         for rule in db.scalars(
             select(TranscodeRule).where(
-                TranscodeRule.profile_id == profile.id,
+                TranscodeRule.profile_id == preset.id,
                 TranscodeRule.output_mode == "replace_original",
             )
         ).all():
             rule.replacement_approved_version = None
             rule.enabled = False
     db.commit()
-    cancel_queued_automation_work(db, profile_id=profile.id, reason="The referenced profile changed")
-    db.refresh(profile)
-    return _profile_payload(profile)
+    cancel_queued_automation_work(db, profile_id=preset.id, reason="The referenced preset changed")
+    db.refresh(preset)
+    return _preset_payload(preset)
 
 
-def delete_transcode_profile(db: Session, profile_id: int) -> None:
-    profile = get_transcode_profile(db, profile_id)
-    if profile.is_builtin:
-        raise TranscodeAutomationError("Built-in transcoding profiles cannot be deleted")
-    used = int(db.scalar(select(func.count(TranscodeRule.id)).where(TranscodeRule.profile_id == profile.id)) or 0)
+def delete_transcode_preset(db: Session, preset_id: int) -> None:
+    preset = get_transcode_preset(db, preset_id)
+    if preset.is_builtin:
+        raise TranscodeAutomationError("Built-in transcoding presets cannot be deleted")
+    used = int(db.scalar(select(func.count(TranscodeRule.id)).where(TranscodeRule.profile_id == preset.id)) or 0)
     if used:
-        raise TranscodeAutomationError("The profile is still used by one or more rules")
-    db.delete(profile)
+        raise TranscodeAutomationError("The preset is still used by one or more rules")
+    db.delete(preset)
     db.commit()
 
 
@@ -331,7 +331,7 @@ def _rule_conditions(rule: TranscodeRule) -> TranscodeConditionGroup | None:
 
 
 def _rule_payload(db: Session, rule: TranscodeRule) -> TranscodeRuleRead:
-    profile = get_transcode_profile(db, rule.profile_id)
+    profile = get_transcode_preset(db, rule.profile_id)
     return TranscodeRuleRead(
         id=rule.id,
         name=rule.name,
@@ -397,7 +397,7 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         raise TranscodeAutomationError("The transcoding rule needs a name")
     if db.scalar(select(TranscodeRule).where(func.lower(TranscodeRule.name) == name.casefold())):
         raise TranscodeAutomationError("A transcoding rule with this name already exists")
-    profile = get_transcode_profile(db, payload.profile_id)
+    profile = get_transcode_preset(db, payload.profile_id)
     conditions = _rule_conditions(
         TranscodeRule(
             name=name,
@@ -462,7 +462,7 @@ def update_transcode_rule(
         rule.conditions = _conditions_payload(payload.conditions)
         _rule_conditions(rule)
     if "profile_id" in changes:
-        get_transcode_profile(db, int(payload.profile_id or 0))
+        get_transcode_preset(db, int(payload.profile_id or 0))
         rule.profile_id = int(payload.profile_id or 0)
     next_output_mode = str(changes.get("output_mode", rule.output_mode))
     next_output_subfolder = (
@@ -549,7 +549,7 @@ def approve_transcode_rule_replacement(
     return _rule_payload(db, rule)
 
 
-def _stream_matches(rule: TranscodeProfileStreamRule, stream: Any) -> bool:
+def _stream_matches(rule: TranscodePresetStreamRule, stream: Any) -> bool:
     codec = str(getattr(stream, "codec", None) or getattr(stream, "format", None) or "").lower()
     codecs = {str(value).strip().lower() for value in rule.match_codecs if str(value).strip()}
     if codecs and codec not in codecs:
@@ -632,7 +632,7 @@ def _select_encoder(
 
 def _materialize_stream(
     source: Any,
-    rule: TranscodeProfileStreamRule,
+    rule: TranscodePresetStreamRule,
     kind: str,
     container: str,
     capabilities,
@@ -675,23 +675,23 @@ def _materialize_stream(
 
 
 def _first_matching_stream_rule(
-    rules: list[TranscodeProfileStreamRule],
+    rules: list[TranscodePresetStreamRule],
     stream: Any,
-) -> TranscodeProfileStreamRule | None:
+) -> TranscodePresetStreamRule | None:
     return next((rule for rule in rules if _stream_matches(rule, stream)), None)
 
 
-def materialize_transcode_profile(
-    profile: TranscodeProfile,
+def materialize_transcode_preset(
+    profile: TranscodePreset,
     media_file: MediaFile,
     capabilities,
     app_settings,
     *,
     output_mode: str | None = None,
 ) -> Any:
-    """Turn an abstract saved profile into the existing concrete plan contract."""
+    """Turn an abstract saved preset into the existing concrete plan contract."""
 
-    definition = _profile_definition(profile)
+    definition = _preset_definition(profile)
     container = _source_container(media_file) if definition.container == "source" else definition.container
     execution_mode = (
         app_settings.transcoding.execution_mode
@@ -711,7 +711,7 @@ def materialize_transcode_profile(
         for stream in sorted(source, key=lambda item: item.stream_index):
             rule = _first_matching_stream_rule(rules, stream)
             if rule is None:
-                rule = TranscodeProfileStreamRule(action="copy")
+                rule = TranscodePresetStreamRule(action="copy")
             target.append(_materialize_stream(stream, rule, kind, container, capabilities, execution_mode))
     from backend.app.schemas.transcoding import ExternalSubtitlePlan, TranscodePlan
 
@@ -762,15 +762,16 @@ def materialize_transcode_profile(
     )
 
 
-def materialize_saved_profile_plan(
-    profile: TranscodeProfile,
+def materialize_saved_preset_plan(
+    profile: TranscodePreset,
     media_file: MediaFile,
     capabilities,
     app_settings,
-) -> TranscodeProfilePlanRead:
-    return TranscodeProfilePlanRead(
-        profile=_profile_payload(profile),
-        plan=materialize_transcode_profile(
+) -> TranscodePresetPlanRead:
+    return TranscodePresetPlanRead(
+        preset=_preset_payload(profile),
+        profile=_preset_payload(profile),
+        plan=materialize_transcode_preset(
             profile,
             media_file,
             capabilities,
@@ -1082,7 +1083,7 @@ def _existing_record(
     db: Session,
     media_file: MediaFile,
     rule: TranscodeRule,
-    profile: TranscodeProfile,
+    profile: TranscodePreset,
 ) -> TranscodeAutomationRecord | None:
     records = db.scalars(
         select(TranscodeAutomationRecord).where(
@@ -1133,7 +1134,7 @@ def _decision_for_file(
     rule = _winning_rule(media_file, rules, app_settings)
     if rule is None:
         return TranscodeAutomationDecisionRead(**base, status="unmatched")
-    profile = db.get(TranscodeProfile, rule.profile_id)
+    profile = db.get(TranscodePreset, rule.profile_id)
     if profile is None:
         return TranscodeAutomationDecisionRead(
             **base,
@@ -1164,7 +1165,7 @@ def _decision_for_file(
         if reason:
             return TranscodeAutomationDecisionRead(**base, **common, status="skipped", reason=reason)
     try:
-        plan = materialize_transcode_profile(profile, media_file, capabilities, app_settings, output_mode=rule.output_mode)
+        plan = materialize_transcode_preset(profile, media_file, capabilities, app_settings, output_mode=rule.output_mode)
         plan.replacement_confirmed = rule.replacement_approved_version == rule.version
         validation = validate_transcode_plan(
             db,
@@ -1453,7 +1454,7 @@ def cancel_queued_automation_run_work(
     return len(jobs) + len(records)
 
 
-def _rule_snapshot(rule: TranscodeRule, profile: TranscodeProfile) -> dict[str, Any]:
+def _rule_snapshot(rule: TranscodeRule, profile: TranscodePreset) -> dict[str, Any]:
     return {
         "rule": {
             "id": rule.id,
@@ -1488,7 +1489,7 @@ def _queue_decision(
         return decision.status
     media_file = db.get(MediaFile, decision.file_id)
     rule = db.get(TranscodeRule, decision.rule_id)
-    profile = db.get(TranscodeProfile, decision.profile_id)
+    profile = db.get(TranscodePreset, decision.profile_id)
     if media_file is None or rule is None or profile is None:
         return "blocked"
     # A management request may have changed the rule/profile after the page
@@ -1728,3 +1729,16 @@ def finalize_transcode_automation_record(db: Session, job: TranscodeJob) -> None
             else:
                 run.canceled += 1
     db.commit()
+
+
+# Keep old service imports working for integrations during the naming change.
+serialize_transcode_profile = serialize_transcode_preset
+ensure_builtin_transcode_profiles = ensure_builtin_transcode_presets
+list_transcode_profiles = list_transcode_presets
+get_transcode_profile = get_transcode_preset
+create_transcode_profile = create_transcode_preset
+duplicate_transcode_profile = duplicate_transcode_preset
+update_transcode_profile = update_transcode_preset
+delete_transcode_profile = delete_transcode_preset
+materialize_transcode_profile = materialize_transcode_preset
+materialize_saved_profile_plan = materialize_saved_preset_plan

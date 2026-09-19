@@ -1476,7 +1476,9 @@ class TranscodeVariant(TimestampMixin, Base):
     )
 
 
-class TranscodeProfile(TimestampMixin, Base):
+class TranscodePreset(TimestampMixin, Base):
+    # The legacy table name is intentionally retained to preserve existing
+    # SQLite databases while the application-facing concept is now a preset.
     __tablename__ = "transcode_profiles"
     __table_args__ = (
         UniqueConstraint("name", name="uq_transcode_profiles_name"),
@@ -1490,6 +1492,10 @@ class TranscodeProfile(TimestampMixin, Base):
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     builtin_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     definition: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+# Legacy ORM import retained for downstream integrations.
+TranscodeProfile = TranscodePreset
 
 
 class TranscodeRule(TimestampMixin, Base):

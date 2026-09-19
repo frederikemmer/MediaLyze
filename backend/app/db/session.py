@@ -1641,7 +1641,7 @@ def init_db(engine: Engine | None = None) -> None:
     from backend.app.services.duplicates import backfill_filename_pattern_signatures
     from backend.app.services.app_settings import get_app_settings
     from backend.app.services.quality_profiles import migrate_legacy_library_quality_profiles
-    from backend.app.services.transcode_automation import ensure_builtin_transcode_profiles
+    from backend.app.services.transcode_automation import ensure_builtin_transcode_presets
 
     active_engine = engine or ENGINE
     Base.metadata.create_all(active_engine)
@@ -1651,7 +1651,7 @@ def init_db(engine: Engine | None = None) -> None:
         app_settings = get_app_settings(db)
         backfill_filename_pattern_signatures(db, app_settings.pattern_recognition.duplicate_matching)
         migrate_legacy_library_quality_profiles(db, app_settings.resolution_categories)
-        ensure_builtin_transcode_profiles(db)
+        ensure_builtin_transcode_presets(db)
         db.commit()
     with active_engine.begin() as connection:
         connection.execute(text("PRAGMA optimize;"))

@@ -10,15 +10,15 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.base import Base
 from backend.app.models.entities import (
     TranscodeAutomationRecord,
-    TranscodeProfile,
+    TranscodePreset,
     TranscodeRule,
 )
 from backend.app.schemas.transcoding import (
     TranscodeCondition,
     TranscodeConditionGroup,
-    TranscodeProfileCreate,
-    TranscodeProfileDefinition,
-    TranscodeProfileStreamRule,
+    TranscodePresetCreate,
+    TranscodePresetDefinition,
+    TranscodePresetStreamRule,
     TranscodeRuleCreate,
     TranscodeRuleUpdate,
     TranscodeReplacementApproval,
@@ -36,12 +36,12 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-def _profile_definition(*, external: bool = False) -> TranscodeProfileDefinition:
-    return TranscodeProfileDefinition(
+def _profile_definition(*, external: bool = False) -> TranscodePresetDefinition:
+    return TranscodePresetDefinition(
         container="source",
         execution_mode="cpu_only",
         video_rules=[
-            TranscodeProfileStreamRule(
+            TranscodePresetStreamRule(
                 match_codecs=["hevc"],
                 action="convert",
                 codec="h264",
@@ -50,7 +50,7 @@ def _profile_definition(*, external: bool = False) -> TranscodeProfileDefinition
             )
         ],
         external_subtitle_rules=(
-            [TranscodeProfileStreamRule(match_languages=["en"], action="copy")]
+            [TranscodePresetStreamRule(match_languages=["en"], action="copy")]
             if external
             else []
         ),
@@ -63,9 +63,9 @@ def _condition_group(*children, operator: str = "and") -> TranscodeConditionGrou
 
 def test_saved_profile_schema_is_stream_index_free() -> None:
     with pytest.raises(ValidationError):
-        TranscodeProfileDefinition(video_rules=[{"stream_index": 0}])
+        TranscodePresetDefinition(video_rules=[{"stream_index": 0}])
 
-    rule = TranscodeProfileStreamRule.model_validate(
+    rule = TranscodePresetStreamRule.model_validate(
         {"match": {"codec": "hevc"}, "action": "encode", "target_codec": "h264"}
     )
     assert rule.match_codecs == ["hevc"]
@@ -77,18 +77,18 @@ def test_saved_profile_schema_is_stream_index_free() -> None:
 def test_builtin_profiles_are_seeded_and_immutable(tmp_path: Path) -> None:
     factory = _session_factory()
     with factory() as db:
-        automation.ensure_builtin_transcode_profiles(db)
+        automation.ensure_builtin_transcode_presets(db)
         db.commit()
-        profiles = automation.list_transcode_profiles(db)
+        profiles = automation.list_transcode_presets(db)
 
         assert {profile.builtin_key for profile in profiles} == {"compatibility", "storage", "modern"}
-        builtin = db.scalar(select(TranscodeProfile).where(TranscodeProfile.builtin_key == "storage"))
+        builtin = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "storage"))
         assert builtin is not None
         with pytest.raises(automation.TranscodeAutomationError, match="immutable"):
-            automation.update_transcode_profile(
+            automation.update_transcode_preset(
                 db,
                 builtin.id,
-                automation.TranscodeProfileUpdate(description="changed"),
+                automation.TranscodePresetUpdate(description="changed"),
             )
 
 
@@ -97,11 +97,11 @@ def test_profile_and_rule_versions_revoke_replace_approval(tmp_path: Path) -> No
     settings = _settings(tmp_path)
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        automation.ensure_builtin_transcode_profiles(db)
+        automation.ensure_builtin_transcode_presets(db)
         db.commit()
-        profile = automation.create_transcode_profile(
+        profile = automation.create_transcode_preset(
             db,
-            TranscodeProfileCreate(name="  Test profile  ", definition=_profile_definition()),
+            TranscodePresetCreate(name="  Test profile  ", definition=_profile_definition()),
         )
         assert profile.name == "Test profile"
 
@@ -142,14 +142,14 @@ def test_profile_and_rule_versions_revoke_replace_approval(tmp_path: Path) -> No
         automation.update_transcode_rule(db, created.id, TranscodeRuleUpdate(enabled=True))
         assert approved_again.replacement_approved is True
 
-        profile_model = db.get(TranscodeProfile, profile.id)
+        profile_model = db.get(TranscodePreset, profile.id)
         assert profile_model is not None
         next_definition = _profile_definition()
         next_definition.video_rules[0].crf = 24
-        updated_profile = automation.update_transcode_profile(
+        updated_profile = automation.update_transcode_preset(
             db,
             profile.id,
-            automation.TranscodeProfileUpdate(definition=next_definition),
+            automation.TranscodePresetUpdate(definition=next_definition),
         )
         assert updated_profile.version == profile.version + 1
         affected_rule = automation.serialize_transcode_rule(db, db.get(TranscodeRule, created.id))
@@ -199,9 +199,9 @@ def test_reordering_keeps_approved_replace_version(tmp_path: Path) -> None:
     factory = _session_factory()
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        automation.ensure_builtin_transcode_profiles(db)
+        automation.ensure_builtin_transcode_presets(db)
         db.commit()
-        profile = db.scalar(select(TranscodeProfile).where(TranscodeProfile.builtin_key == "compatibility"))
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
         assert profile is not None
         replace_rule = automation.create_transcode_rule(
             db,
@@ -239,7 +239,7 @@ def test_profile_materialization_copies_unmatched_internal_and_external_is_opt_i
     settings = _settings(tmp_path)
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        profile = TranscodeProfile(
+        profile = TranscodePreset(
             name="materialization",
             definition=_profile_definition().model_dump(mode="json"),
         )
@@ -247,7 +247,7 @@ def test_profile_materialization_copies_unmatched_internal_and_external_is_opt_i
         db.commit()
         app_settings = get_app_settings(db, settings)
 
-        plan = automation.materialize_transcode_profile(
+        plan = automation.materialize_transcode_preset(
             profile,
             media_file,
             _capabilities(),
@@ -262,7 +262,7 @@ def test_profile_materialization_copies_unmatched_internal_and_external_is_opt_i
         definition = _profile_definition(external=True)
         profile.definition = definition.model_dump(mode="json")
         db.commit()
-        plan_with_sidecar = automation.materialize_transcode_profile(
+        plan_with_sidecar = automation.materialize_transcode_preset(
             profile,
             media_file,
             _capabilities(),
@@ -279,7 +279,7 @@ def test_output_subfolder_is_relative_and_keeps_library_root_layout(monkeypatch,
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        plan = transcoding.initial_transcode_profiles(media_file, _capabilities())["compatibility"]
+        plan = transcoding.initial_transcode_presets(media_file, _capabilities())["compatibility"]
         validation = transcoding.validate_transcode_plan(
             db,
             settings,
@@ -303,9 +303,9 @@ def test_first_blocked_winner_does_not_fall_through(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        automation.ensure_builtin_transcode_profiles(db)
+        automation.ensure_builtin_transcode_presets(db)
         db.commit()
-        profile = db.scalar(select(TranscodeProfile).where(TranscodeProfile.builtin_key == "compatibility"))
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
         assert profile is not None
         first = automation.create_transcode_rule(
             db,
@@ -352,9 +352,9 @@ def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> No
     settings = _settings(tmp_path)
     with factory() as db:
         media_file = _media_file(db, tmp_path)
-        automation.ensure_builtin_transcode_profiles(db)
+        automation.ensure_builtin_transcode_presets(db)
         db.commit()
-        profile = db.scalar(select(TranscodeProfile).where(TranscodeProfile.builtin_key == "compatibility"))
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
         assert profile is not None
         rule = automation.create_transcode_rule(
             db,

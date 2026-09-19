@@ -116,10 +116,10 @@ from backend.app.schemas.transcoding import (
     TranscodeJobPageRead,
     TranscodeJobRead,
     TranscodePlan,
-    TranscodeProfileCreate,
-    TranscodeProfileDuplicate,
-    TranscodeProfileRead,
-    TranscodeProfileUpdate,
+    TranscodePresetCreate,
+    TranscodePresetDuplicate,
+    TranscodePresetRead,
+    TranscodePresetUpdate,
     TranscodeReplacementApproval,
     TranscodeRuleCreate,
     TranscodeRuleRead,
@@ -266,23 +266,23 @@ from backend.app.services.transcode_federation import (
 from backend.app.services.transcode_automation import (
     TranscodeAutomationError,
     approve_transcode_rule_replacement,
-    create_transcode_profile,
+    create_transcode_preset,
     create_transcode_rule,
-    delete_transcode_profile,
+    delete_transcode_preset,
     delete_transcode_rule,
-    duplicate_transcode_profile,
+    duplicate_transcode_preset,
     get_transcode_automation_run,
-    get_transcode_profile,
+    get_transcode_preset,
     get_transcode_rule,
     list_transcode_automation_runs,
-    list_transcode_profiles,
+    list_transcode_presets,
     list_transcode_rules,
     preview_transcode_automation,
     reorder_transcode_rules,
     serialize_transcode_automation_run,
-    serialize_transcode_profile,
+    serialize_transcode_preset,
     serialize_transcode_rule,
-    update_transcode_profile,
+    update_transcode_preset,
     update_transcode_rule,
 )
 from backend.app.services.transcode_matrix import (
@@ -2906,66 +2906,72 @@ def transcoding_capability_matrix_test(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get("/transcoding/profiles", response_model=list[TranscodeProfileRead])
-def transcoding_profiles_list(
+@router.get("/transcoding/presets", response_model=list[TranscodePresetRead])
+@router.get("/transcoding/profiles", response_model=list[TranscodePresetRead], include_in_schema=False, deprecated=True)
+def transcoding_presets_list(
     db: Session = Depends(get_db_session),
-) -> list[TranscodeProfileRead]:
-    return list_transcode_profiles(db)
+) -> list[TranscodePresetRead]:
+    return list_transcode_presets(db)
 
 
-@router.post("/transcoding/profiles", response_model=TranscodeProfileRead, status_code=201)
-def transcoding_profile_create(
-    payload: TranscodeProfileCreate,
+@router.post("/transcoding/presets", response_model=TranscodePresetRead, status_code=201)
+@router.post("/transcoding/profiles", response_model=TranscodePresetRead, status_code=201, include_in_schema=False, deprecated=True)
+def transcoding_preset_create(
+    payload: TranscodePresetCreate,
     db: Session = Depends(get_db_session),
-) -> TranscodeProfileRead:
+) -> TranscodePresetRead:
     try:
-        return create_transcode_profile(db, payload)
+        return create_transcode_preset(db, payload)
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
 
-@router.get("/transcoding/profiles/{profile_id}", response_model=TranscodeProfileRead)
-def transcoding_profile_detail(
-    profile_id: int,
+@router.get("/transcoding/presets/{preset_id}", response_model=TranscodePresetRead)
+@router.get("/transcoding/profiles/{preset_id}", response_model=TranscodePresetRead, include_in_schema=False, deprecated=True)
+def transcoding_preset_detail(
+    preset_id: int,
     db: Session = Depends(get_db_session),
-) -> TranscodeProfileRead:
+) -> TranscodePresetRead:
     try:
-        return serialize_transcode_profile(db, get_transcode_profile(db, profile_id))
+        return serialize_transcode_preset(db, get_transcode_preset(db, preset_id))
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
 
-@router.patch("/transcoding/profiles/{profile_id}", response_model=TranscodeProfileRead)
-def transcoding_profile_update(
-    profile_id: int,
-    payload: TranscodeProfileUpdate,
+@router.patch("/transcoding/presets/{preset_id}", response_model=TranscodePresetRead)
+@router.patch("/transcoding/profiles/{preset_id}", response_model=TranscodePresetRead, include_in_schema=False, deprecated=True)
+def transcoding_preset_update(
+    preset_id: int,
+    payload: TranscodePresetUpdate,
     db: Session = Depends(get_db_session),
-) -> TranscodeProfileRead:
+) -> TranscodePresetRead:
     try:
-        return update_transcode_profile(db, profile_id, payload)
+        return update_transcode_preset(db, preset_id, payload)
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
 
-@router.post("/transcoding/profiles/{profile_id}/duplicate", response_model=TranscodeProfileRead, status_code=201)
-def transcoding_profile_duplicate(
-    profile_id: int,
-    payload: TranscodeProfileDuplicate | None = None,
+@router.post("/transcoding/presets/{preset_id}/duplicate", response_model=TranscodePresetRead, status_code=201)
+@router.post("/transcoding/profiles/{preset_id}/duplicate", response_model=TranscodePresetRead, status_code=201, include_in_schema=False, deprecated=True)
+def transcoding_preset_duplicate(
+    preset_id: int,
+    payload: TranscodePresetDuplicate | None = None,
     db: Session = Depends(get_db_session),
-) -> TranscodeProfileRead:
+) -> TranscodePresetRead:
     try:
-        return duplicate_transcode_profile(db, profile_id, payload.name if payload else None)
+        return duplicate_transcode_preset(db, preset_id, payload.name if payload else None)
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
 
-@router.delete("/transcoding/profiles/{profile_id}", status_code=204)
-def transcoding_profile_delete(
-    profile_id: int,
+@router.delete("/transcoding/presets/{preset_id}", status_code=204)
+@router.delete("/transcoding/profiles/{preset_id}", status_code=204, include_in_schema=False, deprecated=True)
+def transcoding_preset_delete(
+    preset_id: int,
     db: Session = Depends(get_db_session),
 ) -> Response:
     try:
-        delete_transcode_profile(db, profile_id)
+        delete_transcode_preset(db, preset_id)
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
     return Response(status_code=204)
