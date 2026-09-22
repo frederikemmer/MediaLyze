@@ -237,6 +237,8 @@ export function TranscodingSettingsPanel({
   const [loadingCapabilities, setLoadingCapabilities] = useState(true);
   const [testingMatrix, setTestingMatrix] = useState(false);
   const [testingNetwork, setTestingNetwork] = useState(false);
+  const [automationRulesCollapsed, setAutomationRulesCollapsed] = useState(true);
+  const [acceleratorsCollapsed, setAcceleratorsCollapsed] = useState(true);
   const [matrixExpansionState, setMatrixExpansionState] = useState<TranscodingMatrixExpansionState>(
     getTranscodingMatrixExpansionState,
   );
@@ -527,6 +529,18 @@ export function TranscodingSettingsPanel({
     </section>
   );
 
+  const matrixTestAction = (
+    <button
+      type="button"
+      className="secondary small settings-panel-header-action"
+      onClick={() => void runMatrixTest()}
+      disabled={loadingCapabilities || testingMatrix || testingNetwork}
+    >
+      <FlaskConical className={testingMatrix ? "spin" : undefined} aria-hidden="true" size={16} />
+      {testingMatrix ? t("transcoding.matrixTesting") : t("transcoding.matrixStartTest")}
+    </button>
+  );
+
   return (
     <AsyncPanel
       title={t("transcoding.settingsTitle")}
@@ -539,32 +553,19 @@ export function TranscodingSettingsPanel({
           ?
         </TooltipTrigger>
       }
-      headerAddon={
-        <>
-          <button
-            type="button"
-            className="secondary small settings-panel-header-action"
-            onClick={() => void runMatrixTest()}
-            disabled={loadingCapabilities || testingMatrix || testingNetwork}
-          >
-            <FlaskConical className={testingMatrix ? "spin" : undefined} aria-hidden="true" size={16} />
-            {testingMatrix ? t("transcoding.matrixTesting") : t("transcoding.matrixStartTest")}
-          </button>
-          {canTestFederationNetwork ? (
-            <button
-              type="button"
-              className="secondary small settings-panel-header-action"
-              onClick={() => void runNetworkTest()}
-              disabled={testingMatrix || testingNetwork}
-            >
-              <Network className={testingNetwork ? "spin" : undefined} aria-hidden="true" size={16} />
-              {testingNetwork
-                ? t("transcoding.federationNetworkTesting")
-                : t("transcoding.federationNetworkTestStart")}
-            </button>
-          ) : null}
-        </>
-      }
+      headerAddon={canTestFederationNetwork ? (
+        <button
+          type="button"
+          className="secondary small settings-panel-header-action"
+          onClick={() => void runNetworkTest()}
+          disabled={testingMatrix || testingNetwork}
+        >
+          <Network className={testingNetwork ? "spin" : undefined} aria-hidden="true" size={16} />
+          {testingNetwork
+            ? t("transcoding.federationNetworkTesting")
+            : t("transcoding.federationNetworkTestStart")}
+        </button>
+      ) : undefined}
     >
       <div className="settings-sidebar-stack">
         {error ? <div className="notice error">{error}</div> : null}
@@ -711,9 +712,21 @@ export function TranscodingSettingsPanel({
         <TranscodePresetsRulesPanel
           capabilityMatrix={capabilityMatrix}
           acceleratorsTooltip={acceleratorsTooltip}
+          standaloneTab="accelerators"
+          standaloneCollapsed={acceleratorsCollapsed}
+          onStandaloneToggle={() => setAcceleratorsCollapsed((current) => !current)}
+          standaloneHeaderAction={matrixTestAction}
           federation={federation}
           onFederationData={setFederation}
           onAcceleratorMatrixFocus={setMatrixFocus}
+          searchFocus={searchFocus}
+        />
+        <TranscodePresetsRulesPanel
+          capabilityMatrix={() => null}
+          acceleratorsTooltip={null}
+          standaloneTab="rules"
+          standaloneCollapsed={automationRulesCollapsed}
+          onStandaloneToggle={() => setAutomationRulesCollapsed((current) => !current)}
           searchFocus={searchFocus}
         />
         <TranscodeFederationPanel onData={setFederation} />

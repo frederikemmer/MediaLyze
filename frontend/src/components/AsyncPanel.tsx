@@ -3,9 +3,12 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
+import { TooltipTrigger } from "./TooltipTrigger";
 
 type AsyncPanelProps = {
   title: string;
+  titleTooltip?: ReactNode;
+  titleTooltipAriaLabel?: string;
   subtitle?: string;
   subtitleAddon?: ReactNode;
   loading?: boolean;
@@ -29,6 +32,8 @@ type AsyncPanelProps = {
 
 export function AsyncPanel({
   title,
+  titleTooltip,
+  titleTooltipAriaLabel,
   subtitle,
   subtitleAddon,
   loading,
@@ -51,6 +56,20 @@ export function AsyncPanel({
   const collapseDisabled = collapseState?.disabled ?? false;
   const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
   const hasHeaderLead = Boolean(collapseState || title || titleAddon || subtitle || subtitleAddon);
+  const useTitleTooltipTrigger = Boolean(titleTooltip);
+  const titleToggleClassName = [
+    "async-panel-toggle",
+    collapseActions ? "has-collapse-actions" : "",
+    useTitleTooltipTrigger ? "async-panel-title-tooltip-trigger" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const titleToggleContent = (
+    <>
+      <span>{title}</span>
+      {!collapseActions && !collapseDisabled ? <ToggleIcon aria-hidden="true" className="nav-icon" /> : null}
+    </>
+  );
 
   return (
     <section className={`panel async-panel${isCollapsed ? " is-collapsed" : ""}${className ? ` ${className}` : ""}`}>
@@ -61,17 +80,42 @@ export function AsyncPanel({
               {collapseState ? (
                 <>
                   <h2 className="async-panel-toggle-heading">
-                    <button
-                      type="button"
-                      className={`async-panel-toggle${collapseActions ? " has-collapse-actions" : ""}`}
-                      aria-expanded={!isCollapsed}
-                      aria-controls={bodyId}
-                      disabled={collapseDisabled}
-                      onClick={collapseState.onToggle}
-                    >
-                      <span>{title}</span>
-                      {!collapseActions && !collapseDisabled ? <ToggleIcon aria-hidden="true" className="nav-icon" /> : null}
-                    </button>
+                    {useTitleTooltipTrigger ? (
+                      <TooltipTrigger
+                        as="span"
+                        ariaLabel={titleTooltipAriaLabel ?? title}
+                        ariaExpanded={!isCollapsed}
+                        ariaControls={bodyId}
+                        ariaDisabled
+                        className="async-panel-title-tooltip-wrapper"
+                        content={titleTooltip}
+                        pinOnClick={false}
+                      >
+                        <button
+                          type="button"
+                          className={titleToggleClassName}
+                          aria-expanded={!isCollapsed}
+                          aria-controls={bodyId}
+                          disabled
+                          title={typeof titleTooltip === "string" ? titleTooltip : undefined}
+                          onClick={collapseState.onToggle}
+                        >
+                          {titleToggleContent}
+                        </button>
+                      </TooltipTrigger>
+                    ) : (
+                      <button
+                        type="button"
+                        className={titleToggleClassName}
+                        aria-expanded={!isCollapsed}
+                        aria-controls={bodyId}
+                        disabled={collapseDisabled}
+                        title={typeof titleTooltip === "string" ? titleTooltip : undefined}
+                        onClick={collapseState.onToggle}
+                      >
+                        {titleToggleContent}
+                      </button>
+                    )}
                   </h2>
                   {collapseActions ? (
                     <div className="async-panel-toggle-actions">

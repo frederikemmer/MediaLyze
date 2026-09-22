@@ -32,6 +32,20 @@ export function normalizeResolutionCategories(categories: ResolutionCategory[] |
   );
 }
 
+export function classifyResolutionCategory(
+  width: number | null | undefined,
+  height: number | null | undefined,
+  categories: ResolutionCategory[] | null | undefined,
+): ResolutionCategory | null {
+  if (!width || !height) return null;
+  const maxEdge = Math.max(width, height);
+  const minEdge = Math.min(width, height);
+  const ordered = normalizeResolutionCategories(categories);
+  return ordered.find(
+    (category) => maxEdge >= category.min_width && minEdge >= category.min_height,
+  ) ?? ordered.at(-1) ?? null;
+}
+
 export function resolutionCategoryChangeSummary(
   previousCategories: ResolutionCategory[],
   nextCategories: ResolutionCategory[],

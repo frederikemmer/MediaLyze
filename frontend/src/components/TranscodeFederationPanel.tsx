@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronRight, History, LoaderCircle, X } from "luci
 import { api, type TranscodeFederation } from "../lib/api";
 import { CopyIcon } from "./CopyIcon";
 import { SquarePenIcon } from "./SquarePenIcon";
+import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
 
 type PendingAction = "save" | "reset" | string | null;
@@ -393,6 +394,13 @@ export function TranscodeFederationPanel({ onData }: TranscodeFederationPanelPro
             )) : <span className="field-hint">{t("transcoding.federation.noAddresses")}</span>}
           </div>
         </div>
+        <TranscodePresetsRulesPanel
+          capabilityMatrix={() => null}
+          acceleratorsTooltip={null}
+          standaloneTab="members"
+          federation={data}
+          onFederationData={publishData}
+        />
       </div> : null}
     </section>
   );

@@ -310,6 +310,9 @@ class FileConnectorSourceRead(BaseModel):
     original_title: str | None = None
     series_name: str | None = None
     season_name: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
+    episode_title: str | None = None
     date_created: UtcDateTime | None = None
     premiere_date: UtcDateTime | None = None
     production_year: int | None = None

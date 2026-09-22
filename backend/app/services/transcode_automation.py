@@ -54,6 +54,7 @@ from backend.app.services.transcoding import (
     _listed_encoder,
     _preferred_hardware_encoders,
     _source_container,
+    default_formatting_flags,
     _source_paths,
     get_transcode_capabilities,
     normalize_transcode_output_subfolder,
@@ -739,6 +740,7 @@ def materialize_transcode_preset(
             )
         )
     profile_key = profile.builtin_key if profile.builtin_key in {"compatibility", "storage", "modern"} else "expert"
+    filename_format_enabled, folder_format_enabled = default_formatting_flags(media_file)
     return TranscodePlan(
         profile=profile_key,
         container=container,
@@ -753,8 +755,13 @@ def materialize_transcode_preset(
         attachments="keep" if definition.attachments == "keep" else "drop",
         filename_template=definition.filename_template,
         filename_template_override=definition.filename_template_override,
+        filename_format_enabled=filename_format_enabled,
         include_subtitle_languages=definition.include_subtitle_languages,
+        folder_format_enabled=folder_format_enabled,
+        folder_template="{folderName}",
+        folder_template_override=False,
         filename_metadata_separator=definition.filename_metadata_separator,
+        filename_language_code_format=definition.filename_language_code_format,
         filename_cleanup_preset=definition.filename_cleanup_preset,
         filename_cleanup_regex=definition.filename_cleanup_regex,
         output_mode=output_mode,

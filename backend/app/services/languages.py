@@ -147,6 +147,16 @@ LANGUAGE_ALIASES = {
 
 _LANGUAGE_TAG_RE = re.compile(r"^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$")
 
+# ISO 639-2/B is the bibliographic/media convention used for filename codes.
+ISO_639_1_TO_2_B = {
+    "ar": "ara", "bg": "bul", "ca": "cat", "cs": "cze", "da": "dan", "de": "ger", "el": "gre",
+    "en": "eng", "es": "spa", "et": "est", "fa": "per", "fi": "fin", "fr": "fre", "he": "heb",
+    "hi": "hin", "hr": "hrv", "hu": "hun", "id": "ind", "is": "ice", "it": "ita", "ja": "jpn",
+    "ko": "kor", "lt": "lit", "lv": "lav", "ms": "may", "nl": "dut", "no": "nor", "pl": "pol",
+    "pt": "por", "ro": "rum", "ru": "rus", "sk": "slo", "sl": "slv", "sr": "srp", "sv": "swe",
+    "th": "tha", "tr": "tur", "uk": "ukr", "vi": "vie", "zh": "chi", "und": "und", "mul": "mul", "zxx": "zxx",
+}
+
 
 def _known_language_alias(value: str) -> str | None:
     candidate = value.strip().lower()
@@ -220,6 +230,17 @@ def normalize_language_tag(value: str | None) -> str | None:
         else:
             normalized.append(part.lower())
     return "-".join(normalized)
+
+
+def format_filename_language_code(value: str | None, format: str = "iso_639_1") -> str:
+    """Return a normalized filename language code in ISO 639-1 or ISO 639-2/B."""
+    normalized = normalize_language_tag(value)
+    if not normalized:
+        return ""
+    if format != "iso_639_2":
+        return normalized
+    primary, *rest = normalized.split("-")
+    return "-".join([ISO_639_1_TO_2_B.get(primary, primary), *rest])
 
 
 def normalize_language_hint(value: str | None) -> str | None:

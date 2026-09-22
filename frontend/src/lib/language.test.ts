@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLanguageLabel, languageOptions, normalizeLanguageTag } from "./language";
+import {
+  formatFilenameLanguageCode,
+  formatLanguageLabel,
+  languageOptions,
+  normalizeLanguageTag,
+} from "./language";
 
 describe("language helpers", () => {
   it("normalizes ISO aliases and retains BCP 47 regions", () => {
@@ -18,5 +23,12 @@ describe("language helpers", () => {
 
   it("includes observed languages in the standard option list", () => {
     expect(languageOptions(["pt-BR", "deu"], "en")).toEqual(expect.arrayContaining(["pt-BR", "de"]));
+  });
+
+  it("formats filename languages as ISO 639-1 or ISO 639-2/B", () => {
+    expect(formatFilenameLanguageCode("de", "iso_639_1")).toBe("de");
+    expect(formatFilenameLanguageCode("de-DE", "iso_639_2")).toBe("ger-DE");
+    expect(formatFilenameLanguageCode("eng", "iso_639_2")).toBe("eng");
+    expect(formatFilenameLanguageCode("xx-Qaaa", "iso_639_2")).toBe("xx-Qaaa");
   });
 });

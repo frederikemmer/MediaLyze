@@ -33,6 +33,12 @@ describe("global theme styles", () => {
     );
   });
 
+  it("keeps disabled async-panel tooltip titles at the normal heading size", () => {
+    expect(componentStyles).toMatch(
+      /\.async-panel-title-tooltip-wrapper\.tooltip-trigger\s*\{[^}]*font:\s*inherit[^}]*line-height:\s*inherit/s,
+    );
+  });
+
   it("keeps symbol-only segmented toggle options square", () => {
     const distributionModeButton = componentStyles.match(
       /\.distribution-chart-mode-button\s*\{[^}]*\}/s,
@@ -310,17 +316,58 @@ describe("global theme styles", () => {
     );
   });
 
-  it("keeps stream counts pill-shaped and stream action controls aligned", () => {
+  it("keeps stream counts pill-shaped and stream action controls evenly inset with a neutral filled default toggle", () => {
     const countBadge = componentStyles.match(/\.transcode-stream-tab-count\s*\{[^}]*\}/s)?.[0] ?? "";
+    const actionRow = componentStyles.match(/\.transcode-stream-row-actions\s*\{[^}]*\}/s)?.[0] ?? "";
+    const actionField = componentStyles.match(/\.transcode-action-field\s*\{[^}]*\}/s)?.[0] ?? "";
+    const defaultButton = componentStyles.match(/\.compatibility-profile-quick-action\.secondary\.icon-only-button\s*\{[^}]*\}/s)?.[0] ?? "";
     const collapsedAction = componentStyles.match(/\.transcode-action-field\.is-collapsed\s*\{[^}]*\}/s)?.[0] ?? "";
     const collapsedSelect = componentStyles.match(/\.transcode-action-field\.is-collapsed\s*>\s*\.transcode-action-select\s*\{[^}]*\}/s)?.[0] ?? "";
     const collapsedIcon = componentStyles.match(/\.transcode-action-field\.is-collapsed\s+\.transcode-stream-action-icon\s*\{[^}]*\}/s)?.[0] ?? "";
     const expandedSelect = componentStyles.match(/\.transcode-action-field\.is-expanded\s*>\s*\.transcode-action-select\s*\{[^}]*\}/s)?.[0] ?? "";
+    const copyDetails = componentStyles.match(/\.transcode-stream-copy-details\s*\{[^}]*\}/s)?.[0] ?? "";
+    const streamSearch = componentStyles.match(/\.transcode-stream-list\s*>\s*\.transcode-stream-search\s*\{[^}]*\}/s)?.[0] ?? "";
+    const streamCatalog = componentStyles.match(/\.transcode-stream-catalog\s*\{[^}]*\}/s)?.[0] ?? "";
+    const streamCatalogList = componentStyles.match(/\.transcode-stream-catalog\s+\.transcode-stream-list\s*\{[^}]*\}/s)?.[0] ?? "";
+    const automationToggleRow = componentStyles.match(/\.transcode-automation-toggle-row\s*\{[^}]*\}/s)?.[0] ?? "";
+    const streamTabs = componentStyles.match(/\.transcode-stream-tabs\s*\{[^}]*\}/s)?.[0] ?? "";
+    const favoriteButton = componentStyles.match(/\.compatibility-profile-quick-action\.secondary\.icon-only-button\.is-favorite\s*\{[^}]*\}/s)?.[0] ?? "";
+    const formattingHeader = componentStyles.match(/\.transcode-filename-header\s*\{[^}]*\}/s)?.[0] ?? "";
+    const formattingChevron = componentStyles.match(/\.transcode-filename-chevron-toggle\.secondary\.icon-only-button\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(countBadge).toMatch(/display:\s*inline-flex/);
     expect(countBadge).toMatch(/min-width:\s*24px/);
     expect(countBadge).toMatch(/height:\s*18px/);
     expect(countBadge).toMatch(/border-radius:\s*999px/);
+
+    expect(actionRow).toMatch(/display:\s*flex/);
+    expect(actionRow).toMatch(/gap:\s*2px/);
+    expect(actionRow).toMatch(/margin:\s*4px 4px 4px 0/);
+    expect(actionField).toMatch(/margin:\s*0/);
+    expect(defaultButton).toMatch(/width:\s*28px/);
+    expect(defaultButton).toMatch(/border:\s*0/);
+    expect(favoriteButton).toMatch(/background:\s*var\(--panel-strong\)/);
+    expect(favoriteButton).not.toMatch(/var\(--accent\)/);
+    expect(formattingHeader).toMatch(/gap:\s*8px/);
+    expect(formattingChevron).toMatch(/width:\s*26px/);
+    expect(formattingChevron).toMatch(/background:\s*transparent/);
+    expect(streamCatalog).toMatch(/min-width:\s*0/);
+    expect(streamCatalogList).toMatch(/border:\s*0/);
+    expect(streamCatalogList).toMatch(/border-radius:\s*0/);
+    expect(automationToggleRow).toMatch(/box-sizing:\s*border-box/);
+    expect(automationToggleRow).toMatch(/height:\s*40px/);
+    expect(automationToggleRow).toMatch(/min-height:\s*40px/);
+    expect(streamTabs).toMatch(/box-sizing:\s*border-box/);
+    expect(streamTabs).toMatch(/height:\s*40px/);
+    expect(streamTabs).toMatch(/min-height:\s*40px/);
+    expect(streamTabs).toMatch(/padding:\s*3px 10px 2px/);
+    expect(componentStyles).toMatch(/\.transcode-stream-list-item\.is-dropped\s*\{[^}]*opacity:\s*0\.62/s);
+    const languageFirst = componentStyles.match(/\.transcode-stream-row-copy\.is-language-first\s+\.transcode-language-badge\s*\{[^}]*\}/s)?.[0] ?? "";
+    const metadataList = componentStyles.match(/\.transcode-metadata-option-list\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(languageFirst).toMatch(/font-size:\s*0\.96rem/);
+    expect(metadataList).toMatch(/display:\s*grid/);
+    expect(metadataList).toMatch(/border-radius:\s*10px/);
+    expect(componentStyles).toMatch(/\.transcode-metadata-option-list \.transcode-global-option \+ \.transcode-global-option\s*\{[^}]*border-top:/s);
 
     expect(collapsedAction).toMatch(/display:\s*grid/);
     expect(collapsedAction).toMatch(/place-items:\s*center/);
@@ -334,6 +381,9 @@ describe("global theme styles", () => {
 
     expect(expandedSelect).toMatch(/padding:\s*5px 26px 5px 32px/);
     expect(expandedSelect).toMatch(/background-size:\s*14px 14px/);
+    expect(copyDetails).toMatch(/align-items:\s*center/);
+    expect(streamSearch).toMatch(/position:\s*sticky/);
+    expect(streamSearch).toMatch(/top:\s*0/);
     expect(componentStyles).not.toMatch(/\.transcode-stream-list-item:hover\s+\.transcode-action-field/);
     expect(componentStyles).toMatch(/\.transcode-action-field\s*>\s*\.transcode-action-select:hover\s*\{[^}]*background-color:\s*transparent/s);
   });
@@ -345,5 +395,23 @@ describe("global theme styles", () => {
     expect(componentStyles).toMatch(
       /\.transcode-automation-description-tooltip-portal-compact\s*\{[^}]*max-width:\s*300px[^}]*padding:\s*6px 8px[^}]*font-size:\s*0\.74rem/s,
     );
+  });
+
+  it("gives filename metadata tokens a structured, readable tooltip", () => {
+    const tokenPill = componentStyles.match(/\.transcode-filename-token-pill\s*\{[^}]*\}/s)?.[0] ?? "";
+    const tooltipPortal = componentStyles.match(/\.transcode-filename-token-tooltip-portal\s*\{[^}]*\}/s)?.[0] ?? "";
+    const tooltip = componentStyles.match(/\.transcode-filename-token-tooltip\s*\{[^}]*\}/s)?.[0] ?? "";
+    const heading = componentStyles.match(/\.transcode-filename-token-tooltip-heading\s*\{[^}]*\}/s)?.[0] ?? "";
+    const example = componentStyles.match(/\.transcode-filename-token-tooltip-example\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(tokenPill).toMatch(/width:\s*fit-content/);
+    expect(tokenPill).toMatch(/white-space:\s*nowrap/);
+    expect(tooltipPortal).toMatch(/padding:\s*12px 14px/);
+    expect(tooltip).toMatch(/display:\s*grid/);
+    expect(tooltip).toMatch(/gap:\s*8px/);
+    expect(heading).toMatch(/display:\s*flex/);
+    expect(heading).toMatch(/flex-wrap:\s*wrap/);
+    expect(example).toMatch(/border-top:/);
+    expect(example).toMatch(/padding-top:\s*7px/);
   });
 });

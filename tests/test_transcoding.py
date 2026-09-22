@@ -12,11 +12,15 @@ from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.models.entities import (
     AudioStream,
+    ConnectorItem,
+    ConnectorMediaMatch,
+    ConnectorConnection,
     ExternalSubtitle,
     JobStatus,
     Library,
     LibraryRoot,
     LibraryType,
+    MediaContentCategory,
     MediaFile,
     ScanJob,
     ScanTriggerSource,
@@ -36,6 +40,8 @@ from backend.app.schemas.transcoding import (
     TranscodeStreamAction,
     TranscodeStreamPlan,
 )
+from backend.app.schemas.app_settings import AppSettingsUpdate
+from backend.app.services.app_settings import update_app_settings
 from backend.app.services import transcoding
 from backend.app.services.history_retention import _prune_transcode_history
 from backend.app.services.scanner import queue_scan_job
@@ -207,7 +213,9 @@ def _compatibility_plan() -> TranscodePlan:
 
 
 def test_stream_plan_defaults_to_copy() -> None:
-    assert TranscodeStreamPlan(stream_index=0).action.value == "copy"
+    plan = TranscodeStreamPlan(stream_index=0)
+    assert plan.action.value == "copy"
+    assert plan.default_flag is None
 
 
 def test_plan_rejects_raw_or_unknown_ffmpeg_arguments() -> None:
@@ -239,6 +247,47 @@ def test_validation_builds_explicit_maps_and_clean_filename(monkeypatch, tmp_pat
     assert "libx264" in validation.ffmpeg_arguments
     assert validation.ffmpeg_arguments[0] == "ffmpeg-test"
     assert "shell" not in validation.ffmpeg_command.lower()
+
+
+def test_validation_normalizes_default_streams_and_moves_dropped_streams_last(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        db.add_all([
+            AudioStream(
+                media_file_id=media_file.id,
+                stream_index=3,
+                codec="aac",
+                channels=2,
+                language="de",
+                default_flag=False,
+            ),
+            AudioStream(
+                media_file_id=media_file.id,
+                stream_index=5,
+                codec="aac",
+                channels=2,
+                language="fr",
+                default_flag=False,
+            ),
+        ])
+        db.commit()
+        db.expire(media_file, ["audio_streams"])
+
+        plan = _compatibility_plan()
+        plan.audio_streams = [
+            TranscodeStreamPlan(stream_index=1, action="drop"),
+            TranscodeStreamPlan(stream_index=3, action="copy", default_flag=True),
+            TranscodeStreamPlan(stream_index=5, action="copy"),
+        ]
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert [stream.stream_index for stream in validation.normalized_plan.audio_streams] == [3, 5, 1]
+    assert [stream.default_flag for stream in validation.normalized_plan.audio_streams] == [True, False, False]
+    assert validation.ffmpeg_arguments[validation.ffmpeg_arguments.index("-disposition:a:0") + 1] == "default"
+    assert validation.ffmpeg_arguments[validation.ffmpeg_arguments.index("-disposition:a:1") + 1] == "0"
 
 
 def test_validation_inherits_global_hardware_and_output_defaults(monkeypatch, tmp_path) -> None:
@@ -309,6 +358,149 @@ def test_filename_template_can_include_selected_subtitle_languages(monkeypatch, 
     assert transcoding.render_output_filename(media_file, plan) == "Movie [1920x1080, HDR10, H264] [en] [de,en].mp4"
 
 
+def test_filename_language_tokens_support_iso_639_2_b_codes(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        plan = _compatibility_plan()
+        plan.filename_template_override = True
+        plan.filename_template = "[{audioLanguages}] [{subtitleLanguages}]"
+        plan.filename_language_code_format = "iso_639_2"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.output_filename == "Movie [eng] [ger].mp4"
+
+
+def test_filename_template_uses_preferred_connector_release_year(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        library = db.get(Library, media_file.library_id)
+        connection = ConnectorConnection(provider="jellyfin", name="Jellyfin", enabled=True)
+        db.add(connection)
+        db.flush()
+        library.preferred_connector_connection_id = connection.id
+        item = ConnectorItem(
+            connection_id=connection.id,
+            remote_id="movie-12",
+            item_type="Movie",
+            title="Movie",
+            production_year=2014,
+        )
+        db.add(item)
+        db.flush()
+        db.add(ConnectorMediaMatch(
+            connector_item_id=item.id,
+            media_file_id=media_file.id,
+            match_method="path",
+            status="matched",
+        ))
+        db.commit()
+
+        plan = _compatibility_plan()
+        plan.filename_template_override = True
+        plan.filename_template = "[{releaseYear}, {resolution}]"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.output_filename == "Movie [2014, 1920x1080].mp4"
+    assert validation.normalized_plan.filename_release_year == 2014
+
+
+def test_filename_template_uses_configured_resolution_category_label(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        settings = _settings(tmp_path)
+        update_app_settings(
+            db,
+            AppSettingsUpdate(
+                resolution_categories=[
+                    {"id": "4k", "label": "UHD", "min_width": 3648, "min_height": 1600},
+                    {"id": "1080p", "label": "Full HD", "min_width": 1824, "min_height": 760},
+                    {"id": "sd", "label": "SD", "min_width": 0, "min_height": 0},
+                ]
+            ),
+            settings,
+        )
+        plan = _compatibility_plan()
+        plan.filename_template_override = True
+        plan.filename_template = "[{resolutionCategory}]"
+        plan.folder_format_enabled = True
+        plan.folder_template_override = True
+        plan.folder_template = "{resolutionCategory}"
+        source_folder = Path(media_file.library.path) / "Season 1"
+        source_folder.mkdir(parents=True)
+        (source_folder / "Movie.mkv").write_bytes(b"source-video")
+        media_file.relative_path = "Season 1/Movie.mkv"
+        media_file.filename = "Movie.mkv"
+        db.commit()
+
+        validation = transcoding.validate_transcode_plan(db, settings, media_file, plan)
+
+    assert validation.valid is True
+    assert validation.output_filename == "Movie [Full HD].mp4"
+    assert validation.output_path.endswith("Full HD/Movie [Full HD].mp4")
+
+
+def test_filename_template_supports_stream_and_episode_metadata(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.content_category = MediaContentCategory.bonus
+        media_file.video_streams[0].frame_rate = 23.976
+        media_file.video_streams[0].bit_depth = 10
+        media_file.audio_streams[0].codec = "eac3"
+        media_file.audio_streams[0].profile = "Dolby Digital Plus"
+        media_file.audio_streams[0].spatial_audio_profile = "dolby_atmos"
+        media_file.audio_streams[0].channels = 6
+        media_file.audio_streams[0].channel_layout = "5.1"
+
+        connection = ConnectorConnection(provider="jellyfin", name="Jellyfin", enabled=True)
+        db.add(connection)
+        db.flush()
+        library = db.get(Library, media_file.library_id)
+        library.preferred_connector_connection_id = connection.id
+        item = ConnectorItem(
+            connection_id=connection.id,
+            remote_id="episode-23",
+            item_type="Episode",
+            title="Pilot",
+            series_name="Example Show",
+            parent_index_number=2,
+            index_number=3,
+        )
+        db.add(item)
+        db.flush()
+        db.add(ConnectorMediaMatch(
+            connector_item_id=item.id,
+            media_file_id=media_file.id,
+            match_method="path",
+            status="matched",
+        ))
+        db.commit()
+
+        plan = _compatibility_plan()
+        plan.container = "mkv"
+        plan.audio_streams[0].action = TranscodeStreamAction.copy
+        plan.subtitle_streams[0].action = TranscodeStreamAction.copy
+        plan.filename_template_override = True
+        plan.filename_template = "[{audioCodecs}, {audioProfiles}, {audioChannels}, {frameRate}, {bitDepth}, {subtitleFormats}, {seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}, {contentCategory}]"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.output_filename == "Movie [EAC3, Dolby Atmos, 5.1, 23.976 fps, 10-bit, SRT, Example Show, S2E3, Pilot, bonus].mkv"
+    assert validation.normalized_plan.filename_series_name == "Example Show"
+    assert validation.normalized_plan.filename_season_number == 2
+    assert validation.normalized_plan.filename_episode_number == 3
+    assert validation.normalized_plan.filename_episode_title == "Pilot"
+
+
 def test_custom_filename_template_requires_supported_tokens_only(tmp_path) -> None:
     factory = _session_factory()
     with factory() as db:
@@ -347,6 +539,50 @@ def test_filename_cleanup_removes_bracketed_source_sections_and_supports_custom_
             assert "Invalid filename cleanup regex" in str(exc)
         else:
             raise AssertionError("Invalid filename cleanup regex was accepted")
+
+
+def test_filename_and_direct_folder_formatting_can_be_enabled_independently(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        source_folder = Path(media_file.library.path) / "Shows" / "Season 1 [source]"
+        source_folder.mkdir(parents=True)
+        source_path = source_folder / "Movie.mkv"
+        source_path.write_bytes(b"source-video")
+        media_file.relative_path = "Shows/Season 1 [source]/Movie.mkv"
+        media_file.filename = "Movie.mkv"
+        db.commit()
+        db.refresh(media_file)
+
+        plan = _compatibility_plan()
+        plan.filename_format_enabled = False
+        plan.folder_format_enabled = True
+        plan.folder_template_override = True
+        plan.folder_template = "{folderName} [encoded]"
+        plan.folder_cleanup_preset = "square_brackets"
+        validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
+
+    assert validation.valid is True
+    assert validation.output_filename == "Movie.mp4"
+    assert validation.output_path.endswith("Shows/Season 1 [encoded]/Movie.mp4")
+    assert "/Shows/Season 1 [encoded]/" in validation.output_path
+    assert "/Shows/Season 1 [source]/" not in validation.output_path
+
+
+def test_formatting_defaults_follow_library_type(monkeypatch, tmp_path) -> None:
+    factory = _session_factory()
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        capabilities = _capabilities()
+        movie_plan = transcoding._profile_plan(media_file, "compatibility", capabilities)
+        media_file.library.type = LibraryType.series
+        series_plan = transcoding._profile_plan(media_file, "compatibility", capabilities)
+
+    assert movie_plan.filename_format_enabled is True
+    assert movie_plan.folder_format_enabled is False
+    assert series_plan.filename_format_enabled is False
+    assert series_plan.folder_format_enabled is True
 
 
 def test_validation_keeps_crf_and_hardware_cq_distinct(monkeypatch, tmp_path) -> None:

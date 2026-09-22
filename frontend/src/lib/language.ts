@@ -67,6 +67,33 @@ function languageDisplayTag(tag: string): string {
   return `${ISO_639_2_TO_1[primary] ?? primary}${rest.length ? `-${rest.join("-")}` : ""}`;
 }
 
+/** Filename language code conventions supported by the transcoding plan. */
+export type FilenameLanguageCodeFormat = "iso_639_1" | "iso_639_2";
+
+// ISO 639-2/B is the bibliographic/media convention used for three-letter
+// filename codes (for example ger/eng rather than deu/eng). Unknown primary
+// codes are kept unchanged so custom or future connector values remain visible.
+const ISO_639_1_TO_2_B: Record<string, string> = {
+  ar: "ara", bg: "bul", ca: "cat", cs: "cze", da: "dan", de: "ger", el: "gre",
+  en: "eng", es: "spa", et: "est", fa: "per", fi: "fin", fr: "fre", he: "heb",
+  hi: "hin", hr: "hrv", hu: "hun", id: "ind", is: "ice", it: "ita", ja: "jpn",
+  ko: "kor", lt: "lit", lv: "lav", ms: "may", nl: "dut", no: "nor", pl: "pol",
+  pt: "por", ro: "rum", ru: "rus", sk: "slo", sl: "slv", sr: "srp", sv: "swe",
+  th: "tha", tr: "tur", uk: "ukr", vi: "vie", zh: "chi", und: "und", mul: "mul", zxx: "zxx",
+};
+
+/** Format a language tag for a filename while retaining regional subtags. */
+export function formatFilenameLanguageCode(
+  value: string | null | undefined,
+  format: FilenameLanguageCodeFormat = "iso_639_1",
+): string {
+  const tag = normalizeLanguageTag(value);
+  if (!tag) return "";
+  if (format !== "iso_639_2") return tag;
+  const [primary, ...rest] = tag.split("-");
+  return [ISO_639_1_TO_2_B[primary] ?? primary, ...rest].join("-");
+}
+
 /** Return a localized language name while retaining the exact normalized code. */
 export function formatLanguageLabel(value: string | null | undefined, locale = "en"): string {
   const tag = normalizeLanguageTag(value) || "und";

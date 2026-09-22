@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Ban, Clock3, Gauge, ArrowDown, ArrowUp, ChevronDown, Plus, Power, RefreshCw, Save, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Ban, Clock3, Gauge, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Power, RefreshCw, Save, Search, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -46,14 +46,24 @@ type AutomationTab = "presets" | "rules" | "accelerators" | "members";
 const AUTOMATION_TABS: AutomationTab[] = ["presets", "rules", "accelerators", "members"];
 
 function automationTabFromSearchFocus(searchFocus: string | null | undefined): AutomationTab | null {
-  if (!searchFocus?.startsWith("transcoding-tab-")) return null;
-  const value = searchFocus.slice("transcoding-tab-".length);
-  return AUTOMATION_TABS.includes(value as AutomationTab) ? value as AutomationTab : null;
+  if (searchFocus?.startsWith("transcoding-tab-")) {
+    const value = searchFocus.slice("transcoding-tab-".length);
+    return AUTOMATION_TABS.includes(value as AutomationTab) ? value as AutomationTab : null;
+  }
+  if (searchFocus === "transcoding-automation-rules") return "rules";
+  if (searchFocus === "transcoding-accelerators") return "accelerators";
+  if (searchFocus === "transcoding-federation-members") return "members";
+  return null;
 }
 
 type TranscodePresetsRulesPanelProps = {
   capabilityMatrix: (tabControls: ReactNode) => ReactNode;
   acceleratorsTooltip: ReactNode;
+  standaloneTab?: AutomationTab;
+  standalonePresetTabs?: ReactNode;
+  standaloneCollapsed?: boolean;
+  onStandaloneToggle?: () => void;
+  standaloneHeaderAction?: ReactNode;
   federation?: TranscodeFederation | null;
   onFederationData?: (data: TranscodeFederation) => void;
   onAcceleratorMatrixFocus?: (focus: TranscodingMatrixFocus | null) => void;
@@ -132,6 +142,7 @@ function emptyPresetDefinition(): TranscodePresetDefinition {
     filename_template: "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
     filename_template_override: false,
     include_subtitle_languages: false,
+    filename_language_code_format: "iso_639_1",
     execution_mode: "inherit",
   };
 }
@@ -497,6 +508,7 @@ function PresetDefinitionEditor({
       <div className="transcode-global-options">
         <label><input type="checkbox" checked={definition.filename_template_override} onChange={(event) => onChange({ ...definition, filename_template_override: event.target.checked })} /><span>{t("transcoding.filenameTemplateOverride")}</span></label>
         <label><input type="checkbox" checked={definition.include_subtitle_languages} onChange={(event) => onChange({ ...definition, include_subtitle_languages: event.target.checked })} /><span>{t("transcoding.filenameIncludeSubtitleLanguages")}</span></label>
+        <label><span>{t("transcoding.languageCodeFormat")}</span><select className="settings-choice-input" value={definition.filename_language_code_format ?? "iso_639_1"} onChange={(event) => onChange({ ...definition, filename_language_code_format: event.target.value as "iso_639_1" | "iso_639_2" })}><option value="iso_639_1">{t("transcoding.languageCodeFormats.iso_639_1")}</option><option value="iso_639_2">{t("transcoding.languageCodeFormats.iso_639_2")}</option></select></label>
       </div>
       <label className="compatibility-profile-field-wide"><span>{t("transcoding.filenameTemplate")}</span><input className="settings-choice-input" disabled={!definition.filename_template_override} value={definition.filename_template} onChange={(event) => onChange({ ...definition, filename_template: event.target.value, filename_template_override: true })} /></label>
       <div className="transcode-global-options">
@@ -528,16 +540,22 @@ function PresetDefinitionEditor({
 export function TranscodePresetsRulesPanel({
   capabilityMatrix,
   acceleratorsTooltip,
+  standaloneTab,
+  standalonePresetTabs,
+  standaloneCollapsed,
+  onStandaloneToggle,
+  standaloneHeaderAction,
   federation = null,
   onFederationData,
   onAcceleratorMatrixFocus,
   searchFocus = null,
 }: TranscodePresetsRulesPanelProps) {
   const { t } = useTranslation();
+  const standaloneBodyId = useId();
   const [presets, setPresets] = useState<TranscodePreset[]>([]);
   const [rules, setRules] = useState<TranscodeRule[]>([]);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
-  const [tab, setTab] = useState<AutomationTab>(() => automationTabFromSearchFocus(searchFocus) ?? "presets");
+  const [tab, setTab] = useState<AutomationTab>(() => standaloneTab ?? automationTabFromSearchFocus(searchFocus) ?? "presets");
   const [expandedPresetId, setExpandedPresetId] = useState<number | null>(null);
   const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
@@ -546,6 +564,7 @@ export function TranscodePresetsRulesPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [presetDraft, setPresetDraft] = useState<PresetDraft | null>(null);
+  const [presetSearch, setPresetSearch] = useState("");
   const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
   const [presetEditorOpen, setPresetEditorOpen] = useState(false);
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
@@ -566,14 +585,20 @@ export function TranscodePresetsRulesPanel({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextPresets, nextRules, nextLibraries] = await Promise.all([
-        api.transcodePresets(),
-        api.transcodeRules(),
-        api.libraries(),
-      ]);
+      if (standaloneTab === "members" || standaloneTab === "accelerators") {
+        setLoaded(true);
+        return;
+      }
+      const nextPresets = await api.transcodePresets();
       setPresets(nextPresets);
-      setRules(nextRules);
-      setLibraries(nextLibraries);
+      if (standaloneTab !== "presets") {
+        const [nextRules, nextLibraries] = await Promise.all([
+          api.transcodeRules(),
+          api.libraries(),
+        ]);
+        setRules(nextRules);
+        setLibraries(nextLibraries);
+      }
       setError(null);
       setLoaded(true);
     } catch (reason) {
@@ -581,7 +606,7 @@ export function TranscodePresetsRulesPanel({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [standaloneTab]);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -752,6 +777,11 @@ export function TranscodePresetsRulesPanel({
   const libraryNames = useMemo(() => new Map(libraries.map((library) => [library.id, library.name])), [libraries]);
   const federationMembers = federation?.members ?? [];
   const activeRulePreset = useMemo(() => presets.find((preset) => preset.id === ruleDraft?.profile_id), [presets, ruleDraft?.profile_id]);
+  const filteredPresets = useMemo(() => {
+    const query = presetSearch.trim().toLocaleLowerCase();
+    if (!query) return presets;
+    return presets.filter((preset) => `${preset.name} ${preset.description}`.toLocaleLowerCase().includes(query));
+  }, [presetSearch, presets]);
 
   const closePresetEditor = () => {
     if (presetDraft?.id === null) setExpandedPresetId(null);
@@ -778,6 +808,10 @@ export function TranscodePresetsRulesPanel({
   };
 
   useEffect(() => {
+    if (standaloneTab) {
+      setTab(standaloneTab);
+      return;
+    }
     const nextTab = automationTabFromSearchFocus(searchFocus);
     if (!nextTab || nextTab === tab) return;
     setTab(nextTab);
@@ -789,7 +823,7 @@ export function TranscodePresetsRulesPanel({
     setExpandedRuleId(null);
     setExpandedMemberId(null);
     onAcceleratorMatrixFocus?.(null);
-  }, [onAcceleratorMatrixFocus, searchFocus, tab]);
+  }, [onAcceleratorMatrixFocus, searchFocus, standaloneTab, tab]);
 
   const togglePresetRow = (preset: TranscodePreset) => {
     if (expandedPresetId === preset.id) {
@@ -1185,46 +1219,80 @@ export function TranscodePresetsRulesPanel({
     );
   };
 
-  const renderPresetList = () => (
-    <section className="transcode-automation-tab-content">
-      <div className="compatibility-profile-list">
-        {renderAutomationToggleRow(panelAction)}
-        {presets.map((preset) => {
-        const expanded = expandedPresetId === preset.id;
-        const editing = expanded && presetEditorOpen && presetDraft?.id === preset.id;
-        return (
-          <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={preset.id}>
-            <div className="compatibility-profile-list-row">
-              <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => togglePresetRow(preset)}>
-                <span className="transcode-automation-list-copy"><strong>{preset.name}</strong></span>
-                <ChevronDown aria-hidden="true" />
-              </button>
-              {renderPresetActions(preset)}
-            </div>
-            {expanded ? (editing ? renderPresetEditor() : renderPresetSummary(preset)) : null}
-          </article>
-        );
-      })}
-      {presetDraft?.id === null && presetEditorOpen ? (
-        <article className="compatibility-profile-list-item is-expanded">
-          <div className="compatibility-profile-list-row">
-            <div className="compatibility-profile-list-trigger is-static">
-              <span className="transcode-automation-list-copy"><strong>{presetDraft.name || t("transcoding.automation.newPreset")}</strong><small>{t("transcoding.automation.newPreset")}</small></span>
-              <ChevronDown aria-hidden="true" />
-            </div>
-          </div>
-          {renderPresetEditor()}
-        </article>
-      ) : null}
-        {!presets.length && !(presetDraft?.id === null && presetEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+  const renderPresetSearch = () => {
+    if (standaloneTab !== "presets") return null;
+    return (
+      <div className="compatibility-profile-search">
+        <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+        <input
+          type="search"
+          value={presetSearch}
+          aria-label={t("transcoding.automation.searchPresets")}
+          placeholder={t("transcoding.automation.searchPresets")}
+          onChange={(event) => setPresetSearch(event.target.value)}
+        />
+        {presetSearch ? (
+          <button
+            type="button"
+            className="compatibility-profile-search-clear"
+            aria-label={t("transcoding.automation.clearSearch")}
+            onClick={() => setPresetSearch("")}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
-    </section>
-  );
+    );
+  };
+
+  const renderPresetList = () => {
+    const visiblePresets = standaloneTab === "presets" ? filteredPresets : presets;
+    const list = (
+      <div className={`compatibility-profile-list${standaloneTab === "presets" ? " compatibility-profile-catalog-list" : ""}`}>
+        {standalonePresetTabs ? (
+          <div className="settings-profile-toggle-row transcode-automation-toggle-row">
+            <div className="transcode-automation-tab-controls">{standalonePresetTabs}</div>
+            <div className="settings-profile-toggle-actions">{panelAction}</div>
+          </div>
+        ) : standaloneTab ? renderStandaloneHeader(panelAction) : renderAutomationToggleRow(panelAction)}
+        {renderPresetSearch()}
+        {visiblePresets.map((preset) => {
+          const expanded = expandedPresetId === preset.id;
+          const editing = expanded && presetEditorOpen && presetDraft?.id === preset.id;
+          return (
+            <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={preset.id}>
+              <div className="compatibility-profile-list-row quality-profile-list-row">
+                <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => togglePresetRow(preset)}>
+                  <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>{preset.name}</strong></span>
+                  <ChevronDown aria-hidden="true" />
+                </button>
+                {renderPresetActions(preset)}
+              </div>
+              {expanded ? (editing ? renderPresetEditor() : renderPresetSummary(preset)) : null}
+            </article>
+          );
+        })}
+        {presetDraft?.id === null && presetEditorOpen ? (
+          <article className="compatibility-profile-list-item is-expanded">
+            <div className="compatibility-profile-list-row quality-profile-list-row">
+              <div className="compatibility-profile-list-trigger is-static">
+                <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>{presetDraft.name || t("transcoding.automation.newPreset")}</strong><small>{t("transcoding.automation.newPreset")}</small></span>
+                <ChevronDown aria-hidden="true" />
+              </div>
+            </div>
+            {renderPresetEditor()}
+          </article>
+        ) : null}
+        {!visiblePresets.length && !(presetDraft?.id === null && presetEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+      </div>
+    );
+    return standalonePresetTabs ? list : <section className="transcode-automation-tab-content">{list}</section>;
+  };
 
   const renderRuleList = () => (
     <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list">
-        {renderAutomationToggleRow(panelAction)}
+        {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
         {rules.map((rule) => {
           const expanded = expandedRuleId === rule.id;
           const editing = expanded && ruleEditorOpen && ruleDraft?.id === rule.id;
@@ -1260,7 +1328,18 @@ export function TranscodePresetsRulesPanel({
   const renderMemberList = () => (
     <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list">
-        {renderAutomationToggleRow(
+        {standaloneTab ? renderStandaloneHeader(
+          <TooltipTrigger
+            ariaLabel={t("transcoding.federation.refreshDiscovery")}
+            content={t("transcoding.federation.refreshDiscovery")}
+            className="secondary icon-only-button compatibility-profile-quick-action transcode-federation-discovered-refresh"
+            disabled={busy || memberPending !== null}
+            pinOnClick={false}
+            onClick={() => void discoverMembers()}
+          >
+            <RefreshCw aria-hidden="true" className={memberPending === "discover" ? "is-spinning" : undefined} size={16} />
+          </TooltipTrigger>,
+        ) : renderAutomationToggleRow(
           <TooltipTrigger
             ariaLabel={t("transcoding.federation.refreshDiscovery")}
             content={t("transcoding.federation.refreshDiscovery")}
@@ -1502,6 +1581,10 @@ export function TranscodePresetsRulesPanel({
     </button>
   ) : null;
 
+  const hasStandaloneCollapse = (
+    standaloneTab === "rules" || standaloneTab === "accelerators"
+  ) && typeof standaloneCollapsed === "boolean" && Boolean(onStandaloneToggle);
+
   const automationTooltip = tab === "presets" ? (
     <div className="transcode-automation-description-tooltip">
       <p>{t("transcoding.automation.presetsDescription")}</p>
@@ -1529,6 +1612,55 @@ export function TranscodePresetsRulesPanel({
   const automationTooltipClassName = tab === "accelerators"
     ? "transcode-automation-description-tooltip-portal"
     : "transcode-automation-description-tooltip-portal transcode-automation-description-tooltip-portal-compact";
+
+  const renderStandaloneHeader = (trailingAction?: ReactNode) => {
+    const titleKey = tab === "presets"
+      ? "transcoding.automation.presetsTitle"
+      : tab === "rules"
+        ? "transcoding.automation.rulesTitle"
+        : tab === "accelerators"
+          ? "transcoding.automation.tabs.accelerators"
+          : "transcoding.automation.tabs.members";
+    const focusTarget = tab === "presets"
+      ? "transcoding-presets-tab-presets"
+      : tab === "rules"
+        ? "transcoding-automation-rules"
+        : tab === "accelerators"
+          ? "transcoding-accelerators"
+          : "transcoding-federation-members";
+    const title = t(titleKey);
+    return (
+      <div className="settings-profile-toggle-row transcode-automation-toggle-row transcode-automation-standalone-header" data-settings-search-target={focusTarget}>
+        {hasStandaloneCollapse ? (
+          <button
+            type="button"
+            className="transcode-automation-section-chevron"
+            aria-label={t(standaloneCollapsed ? "panel.expandAria" : "panel.collapseAria", { title })}
+            title={t(standaloneCollapsed ? "panel.expandAria" : "panel.collapseAria", { title })}
+            aria-expanded={!standaloneCollapsed}
+            aria-controls={standaloneBodyId}
+            onClick={onStandaloneToggle}
+          >
+            {standaloneCollapsed ? <ChevronRight aria-hidden="true" className="nav-icon" /> : <ChevronDown aria-hidden="true" className="nav-icon" />}
+          </button>
+        ) : null}
+        <div className="transcode-automation-standalone-heading">
+          <strong>{title}</strong>
+          <TooltipTrigger
+            ariaLabel={automationTooltipAriaLabel}
+            tooltipClassName={automationTooltipClassName}
+            maxWidth={tab === "accelerators" ? 460 : 300}
+            align={tab === "accelerators" ? "center" : "start"}
+            placement={tab === "accelerators" ? "auto" : "center"}
+            content={automationTooltip}
+          >
+            ?
+          </TooltipTrigger>
+        </div>
+        {trailingAction ? <div className="settings-profile-toggle-actions">{trailingAction}</div> : null}
+      </div>
+    );
+  };
 
   const renderTabControls = () => (
     <div className="transcode-automation-tab-controls">
@@ -1581,7 +1713,7 @@ export function TranscodePresetsRulesPanel({
   );
 
   return (
-    <section className="app-settings-section transcode-automation-section">
+    <section className={`app-settings-section transcode-automation-section${standaloneTab === "members" ? " transcode-federation-members" : ""}`}>
       {loading ? (
         <div className="panel-loader" role="status" aria-live="polite">
           <LoaderPinwheelIcon className="panel-loader-icon" size={24} />
@@ -1589,8 +1721,24 @@ export function TranscodePresetsRulesPanel({
         </div>
       ) : error ? <div className="alert">{error}</div> : (
         <div className="compatibility-profile-panel transcode-automation-content">
-          {notice ? <div className="notice success" role="status">{notice}</div> : null}
-          {tab === "presets" ? renderPresetList() : tab === "rules" ? renderRuleList() : tab === "accelerators" ? capabilityMatrix(renderAutomationToggleRow()) : renderMemberList()}
+          {hasStandaloneCollapse ? renderStandaloneHeader(standaloneTab === "accelerators" ? standaloneHeaderAction : panelAction) : null}
+          <div
+            id={hasStandaloneCollapse ? standaloneBodyId : undefined}
+            className={hasStandaloneCollapse ? "transcode-automation-panel-body" : undefined}
+            hidden={hasStandaloneCollapse ? standaloneCollapsed : undefined}
+          >
+            {notice ? <div className="notice success" role="status">{notice}</div> : null}
+            {tab === "presets"
+              ? renderPresetList()
+              : tab === "rules"
+                ? renderRuleList()
+                : tab === "accelerators"
+                  ? <>
+                      {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(standaloneHeaderAction) : null}
+                      {capabilityMatrix(standaloneTab ? null : renderAutomationToggleRow())}
+                    </>
+                  : renderMemberList()}
+          </div>
         </div>
       )}
     </section>

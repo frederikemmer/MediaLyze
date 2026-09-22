@@ -56,6 +56,7 @@ import {
   api,
   type ComparisonResponse,
   type DuplicateGroupPage,
+  type DuplicateDetectionMode,
   type GroupedMediaTableEntry,
   type GroupedMediaTablePage,
   type GroupedSeriesTableRow,
@@ -1706,6 +1707,10 @@ export function LibraryDetailPage() {
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
+  const duplicateDetectionMode: DuplicateDetectionMode = displayLibrary?.duplicate_detection_mode ?? "off";
+  const duplicateDetectionDisabled = Boolean(displayLibrary) && duplicateDetectionMode === "off";
+  const supportsHashDuplicateView = duplicateDetectionMode === "filehash" || duplicateDetectionMode === "both";
+  const supportsFilenameDuplicateView = duplicateDetectionMode === "filename" || duplicateDetectionMode === "both";
   const linkedJellyfinLibrary = displayLibrary?.linked_jellyfin_library ?? null;
   const hasPlaybackData = Boolean(linkedJellyfinLibrary);
   const activeLibraryType = displayLibrary?.type;
@@ -2050,6 +2055,15 @@ export function LibraryDetailPage() {
       ] as const,
     [t],
   );
+  const duplicateViewUnavailableTooltip = (key: DuplicatePanelViewMode): string | null => {
+    if (key === "filehash" && !supportsHashDuplicateView) {
+      return t("libraryDetail.duplicates.view.onlyHashUnavailable");
+    }
+    if (key === "filename" && !supportsFilenameDuplicateView) {
+      return t("libraryDetail.duplicates.view.onlyFilenameUnavailable");
+    }
+    return null;
+  };
   const duplicateViewFilteredGroups = useMemo(() => {
     if (!resolvedDuplicateGroups) {
       return [];
@@ -2091,7 +2105,6 @@ export function LibraryDetailPage() {
   const hasAnyDuplicateGroupsAvailable = Boolean(
     duplicateGroups && (duplicateGroups.total_groups > 0 || duplicateGroups.suppressed_group_count > 0),
   );
-  const hasDuplicateContentInCurrentView = duplicateViewFilteredGroups.length > 0;
   const fileQueryKey = useMemo(
     () => buildFileCacheKey(libraryId, debouncedAppliedSearchFilterKey, sortKey, sortDirection),
     [debouncedAppliedSearchFilterKey, libraryId, sortDirection, sortKey],
@@ -2787,12 +2800,6 @@ export function LibraryDetailPage() {
       isDuplicatesPanelCollapsed ? "true" : "false",
     );
   }, [isDuplicatesPanelCollapsed, libraryId]);
-
-  useEffect(() => {
-    if (!hasDuplicateContentInCurrentView && duplicateViewMode === "all" && duplicateSearchTokens.length === 0) {
-      setIsDuplicatesPanelCollapsed(true);
-    }
-  }, [duplicateSearchTokens.length, duplicateViewMode, hasDuplicateContentInCurrentView]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -3619,11 +3626,13 @@ export function LibraryDetailPage() {
             const duplicatePanelCanExpand =
               panel.definition.kind === "duplicates"
                 ? Boolean(
-                    duplicateGroupsError ||
-                      (isDuplicateGroupsLoading && !resolvedDuplicateGroups) ||
-                      hasAnyDuplicateGroupsAvailable ||
-                      duplicateSearchTokens.length > 0 ||
-                      duplicateViewMode !== "all",
+                    !duplicateDetectionDisabled &&
+                      (duplicateGroups ||
+                        duplicateGroupsError ||
+                        (isDuplicateGroupsLoading && !resolvedDuplicateGroups) ||
+                        hasAnyDuplicateGroupsAvailable ||
+                        duplicateSearchTokens.length > 0 ||
+                        duplicateViewMode !== "all"),
                   )
                 : true;
             const isDuplicatePanelCollapsed =
@@ -3838,6 +3847,16 @@ export function LibraryDetailPage() {
               content = (
                 <AsyncPanel
                   title={t("libraryDetail.duplicates.title")}
+                  titleTooltip={
+                    duplicateDetectionDisabled
+                      ? t("libraryDetail.duplicates.disabledTooltip")
+                      : undefined
+                  }
+                  titleTooltipAriaLabel={
+                    duplicateDetectionDisabled
+                      ? t("libraryDetail.duplicates.title")
+                      : undefined
+                  }
                   loading={isDuplicateGroupsLoading && !duplicateGroups && !duplicateGroupsError}
                   error={duplicateGroupsError}
                   bodyClassName="async-panel-body-scroll"
@@ -3851,31 +3870,56 @@ export function LibraryDetailPage() {
                           className="distribution-chart-mode-toggle duplicate-panel-view-toggle"
                           role="group"
                           aria-label={t("libraryDetail.duplicates.view.label")}
-                        >
-                          <SlidingTogglePill
-                            activeKey={duplicateViewMode}
-                            className="nav-active-pill distribution-chart-mode-pill"
-                          />
-                          {duplicateViewOptions.map(({ key, label, icon: Icon }) => (
-                            <button
-                              key={key}
-                              type="button"
-                              data-toggle-key={key}
-                              className={`distribution-chart-mode-button duplicate-panel-view-button${
-                                duplicateViewMode === key ? " active" : ""
-                              }`}
-                              aria-label={label}
-                              title={label}
-                              onClick={() => {
-                                setDuplicateViewMode(key);
-                                setIsDuplicatesPanelCollapsed(false);
-                              }}
-                            >
-                              <span className="distribution-chart-mode-button-content">
-                                <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
-                              </span>
-                            </button>
-                          ))}
+                          >
+                            <SlidingTogglePill
+                              activeKey={duplicateViewMode}
+                              className="nav-active-pill distribution-chart-mode-pill"
+                            />
+                          {duplicateViewOptions.map(({ key, label, icon: Icon }) => {
+                            const unavailableTooltip = duplicateViewUnavailableTooltip(key);
+                            const className = `distribution-chart-mode-button duplicate-panel-view-button${
+                              duplicateViewMode === key ? " active" : ""
+                            }`;
+                            const handleViewChange = () => {
+                              setDuplicateViewMode(key);
+                              setIsDuplicatesPanelCollapsed(false);
+                            };
+                            if (unavailableTooltip) {
+                              return (
+                                <TooltipTrigger
+                                  key={key}
+                                  ariaLabel={label}
+                                  ariaPressed={duplicateViewMode === key}
+                                  className={className}
+                                  content={unavailableTooltip}
+                                  dataToggleKey={key}
+                                  title={label}
+                                  pinOnClick={false}
+                                  onClick={handleViewChange}
+                                >
+                                  <span className="distribution-chart-mode-button-content">
+                                    <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                                  </span>
+                                </TooltipTrigger>
+                              );
+                            }
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                data-toggle-key={key}
+                                className={className}
+                                aria-label={label}
+                                title={label}
+                                aria-pressed={duplicateViewMode === key}
+                                onClick={handleViewChange}
+                              >
+                                <span className="distribution-chart-mode-button-content">
+                                  <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : null}
                       {duplicatePanelCanExpand && !duplicatePanelCollapsed ? (

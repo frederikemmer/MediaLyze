@@ -16,6 +16,7 @@ import {
   Plus,
   Proportions,
   Radio,
+  RefreshCw,
   Save,
   Search,
   Server,
@@ -40,6 +41,7 @@ import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TranscodeHistorySettingsPanel } from "../components/TranscodeHistorySettingsPanel";
 import { TranscodingSettingsPanel } from "../components/TranscodingSettingsPanel";
+import { TranscodingPresetsSettingsPanel } from "../components/TranscodingPresetsSettingsPanel";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { SUPPORTED_INTERFACE_LANGUAGES, type SupportedInterfaceLanguage } from "../i18n";
 import { useAppData } from "../lib/app-data";
@@ -808,6 +810,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
     items: [
       { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
       { id: "transcoding", labelKey: "transcoding.settingsTitle", icon: Cpu },
+      { id: "transcodingPresets", labelKey: "transcoding.presetsSettingsTitle", icon: Save },
     ],
   },
   {
@@ -910,32 +913,53 @@ const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
     focus: "settings-panel-transcoding",
   },
   {
+    id: "settings-panel-transcoding-presets",
+    panel: "transcodingPresets",
+    labelKey: "transcoding.presetsSettingsTitle",
+    aliases: ["transcoding presets", "preset management", "filename presets", "foldername presets", "presets"],
+    focus: "settings-panel-transcodingPresets",
+  },
+  {
     id: "transcoding-tab-presets",
-    panel: "transcoding",
+    panel: "transcodingPresets",
     labelKey: "transcoding.automation.tabs.presets",
     aliases: ["transcoding presets", "preset", "saved presets", "transcoding profiles", "saved profiles"],
-    focus: "transcoding-tab-presets",
+    focus: "transcoding-presets-tab-presets",
+  },
+  {
+    id: "transcoding-tab-filename-presets",
+    panel: "transcodingPresets",
+    labelKey: "transcoding.presetSettingsTabs.filename",
+    aliases: ["filename preset", "filename presets", "dateiname presets", "dateinamen presets"],
+    focus: "transcoding-presets-tab-filename",
+  },
+  {
+    id: "transcoding-tab-folder-presets",
+    panel: "transcodingPresets",
+    labelKey: "transcoding.presetSettingsTabs.folder",
+    aliases: ["foldername preset", "foldername presets", "folder presets", "ordnernamen presets"],
+    focus: "transcoding-presets-tab-folder",
   },
   {
     id: "transcoding-tab-rules",
     panel: "transcoding",
-    labelKey: "transcoding.automation.tabs.rules",
+    labelKey: "transcoding.automation.rulesTitle",
     aliases: ["transcoding rules", "automatic rules", "regeln", "automatische regeln"],
-    focus: "transcoding-tab-rules",
+    focus: "transcoding-automation-rules",
   },
   {
     id: "transcoding-tab-accelerators",
     panel: "transcoding",
     labelKey: "transcoding.automation.tabs.accelerators",
     aliases: ["hardware acceleration", "accelerator", "beschleuniger", "hardware diagnostics"],
-    focus: "transcoding-tab-accelerators",
+    focus: "transcoding-accelerators",
   },
   {
     id: "transcoding-tab-members",
     panel: "transcoding",
     labelKey: "transcoding.automation.tabs.members",
     aliases: ["federation members", "trusted members", "mitglieder", "verbundmitglieder"],
-    focus: "transcoding-tab-members",
+    focus: "transcoding-federation-members",
   },
   {
     id: "transcoding-federation",
@@ -1036,8 +1060,11 @@ export function LibrariesPage() {
   const [libraryIdentityPending, setLibraryIdentityPending] = useState<Record<number, boolean>>({});
   const [libraryRootAliasDrafts, setLibraryRootAliasDrafts] = useState<Record<string, string>>({});
   const [libraryRootAliasPending, setLibraryRootAliasPending] = useState<Record<string, boolean>>({});
+  const libraryRootAliasSaveTimers = useRef<Record<string, number>>({});
   const [selectedJellyfinLibraryId, setSelectedJellyfinLibraryId] = useState<number | null>(null);
   const [isRunningFullScanAll, setIsRunningFullScanAll] = useState(false);
+  const [isSyncingConnectors, setIsSyncingConnectors] = useState(false);
+  const [connectorSyncFeedback, setConnectorSyncFeedback] = useState<string | null>(null);
   const [isCreateLibraryDialogOpen, setIsCreateLibraryDialogOpen] = useState(false);
   const [libraryPendingDeletion, setLibraryPendingDeletion] = useState<LibrarySummary | null>(null);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
@@ -2136,6 +2163,9 @@ export function LibrariesPage() {
       for (const timer of Object.values(autoSaveTimers.current)) {
         window.clearTimeout(timer);
       }
+      for (const timer of Object.values(libraryRootAliasSaveTimers.current)) {
+        window.clearTimeout(timer);
+      }
       if (ignorePatternsSaveTimer.current) {
         window.clearTimeout(ignorePatternsSaveTimer.current);
       }
@@ -2530,6 +2560,36 @@ export function LibrariesPage() {
     }
   }
 
+  async function runConnectorSync() {
+    if (isSyncingConnectors) {
+      return;
+    }
+
+    setIsSyncingConnectors(true);
+    setConnectorSyncFeedback(null);
+    try {
+      const connections = await api.connectors();
+      const enabledConnections = connections.filter((connection) => connection.enabled);
+      if (!enabledConnections.length) {
+        setConnectorSyncFeedback(t("connectors.empty"));
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        enabledConnections.map((connection) => api.syncConnector(connection.id)),
+      );
+      const failedResult = results.find((result) => result.status === "rejected");
+      if (failedResult?.status === "rejected") {
+        throw failedResult.reason;
+      }
+      setConnectorSyncFeedback(t("connectors.syncQueued"));
+    } catch (reason) {
+      setConnectorSyncFeedback((reason as Error).message);
+    } finally {
+      setIsSyncingConnectors(false);
+    }
+  }
+
   async function toggleLibraryDashboardVisibility(library: LibrarySummary) {
     if (dashboardVisibilityPending[library.id]) {
       return;
@@ -2607,6 +2667,43 @@ export function LibrariesPage() {
         return next;
       });
     }
+  }
+
+  function flushLibraryRootAliasSave(library: LibrarySummary, rootId: number, displayName: string) {
+    const aliasKey = libraryRootAliasKey(library.id, rootId);
+    const existingTimer = libraryRootAliasSaveTimers.current[aliasKey];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete libraryRootAliasSaveTimers.current[aliasKey];
+    }
+
+    const normalized = displayName.trim();
+    const current = (library.roots ?? []).find((root) => root.id === rootId);
+    if (!normalized || !current || current.display_name === normalized) {
+      return;
+    }
+
+    void updateLibraryRootAlias(library, rootId, displayName);
+  }
+
+  function scheduleLibraryRootAliasSave(library: LibrarySummary, rootId: number, displayName: string) {
+    const aliasKey = libraryRootAliasKey(library.id, rootId);
+    const existingTimer = libraryRootAliasSaveTimers.current[aliasKey];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete libraryRootAliasSaveTimers.current[aliasKey];
+    }
+
+    const normalized = displayName.trim();
+    const current = (library.roots ?? []).find((root) => root.id === rootId);
+    if (!normalized || !current || current.display_name === normalized) {
+      return;
+    }
+
+    libraryRootAliasSaveTimers.current[aliasKey] = window.setTimeout(() => {
+      delete libraryRootAliasSaveTimers.current[aliasKey];
+      flushLibraryRootAliasSave(library, rootId, displayName);
+    }, 450);
   }
 
   async function updatePreferredConnector(library: LibrarySummary, connectionId: number | null) {
@@ -6057,6 +6154,7 @@ export function LibrariesPage() {
                 type="button"
                 className="secondary settings-navigation-quick-action"
                 aria-label={t("libraries.fullScan")}
+                aria-busy={isRunningFullScanAll}
                 disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
                 tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
                 title={t("libraries.fullScan")}
@@ -6067,6 +6165,22 @@ export function LibrariesPage() {
               >
                 <DatabaseSearch aria-hidden="true" className="nav-icon" />
                 <span>{t("libraries.fullScan")}</span>
+              </button>
+              <button
+                type="button"
+                className="secondary settings-navigation-quick-action"
+                aria-label={t("libraries.syncConnectors")}
+                aria-busy={isSyncingConnectors}
+                disabled={isSyncingConnectors}
+                tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
+                title={t("libraries.syncConnectors")}
+                onClick={() => {
+                  setIsSettingsMobileMenuOpen(false);
+                  void runConnectorSync();
+                }}
+              >
+                <RefreshCw aria-hidden="true" className={`nav-icon${isSyncingConnectors ? " is-spinning" : ""}`} />
+                <span>{t("libraries.syncConnectors")}</span>
               </button>
             </div>
           </div>
@@ -6152,6 +6266,7 @@ export function LibrariesPage() {
               type="button"
               className="secondary settings-navigation-quick-action"
               aria-label={t("libraries.fullScan")}
+              aria-busy={isRunningFullScanAll}
               disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
               title={t("libraries.fullScan")}
               onClick={() => void runFullScanForAllLibraries()}
@@ -6159,6 +6274,19 @@ export function LibrariesPage() {
               <DatabaseSearch aria-hidden="true" className="nav-icon" />
               {!isSettingsNavCollapsed ? <span>{t("libraries.fullScan")}</span> : null}
             </button>
+            <button
+              type="button"
+              className="secondary settings-navigation-quick-action"
+              aria-label={t("libraries.syncConnectors")}
+              aria-busy={isSyncingConnectors}
+              disabled={isSyncingConnectors}
+              title={connectorSyncFeedback ?? t("libraries.syncConnectors")}
+              onClick={() => void runConnectorSync()}
+            >
+              <RefreshCw aria-hidden="true" className={`nav-icon${isSyncingConnectors ? " is-spinning" : ""}`} />
+              {!isSettingsNavCollapsed ? <span>{t("libraries.syncConnectors")}</span> : null}
+            </button>
+            {connectorSyncFeedback ? <span className="sr-only" role="status">{connectorSyncFeedback}</span> : null}
           </div>
         </aside>
 
@@ -6168,10 +6296,22 @@ export function LibrariesPage() {
           {activeSettingsPanelId === "configuredLibraries" ? (
           <AsyncPanel
             title={t("libraries.settingsNavigationLibraries")}
+            className="libraries-settings-panel"
             loading={isLoadingLibraries}
             error={error}
             collapseActions={
               <>
+                <button
+                  type="button"
+                  className="small library-scan-button"
+                  aria-label={t("libraries.fullScan")}
+                  title={t("libraries.fullScan")}
+                  disabled={isLoadingLibraries || !libraries.length || isRunningFullScanAll}
+                  onClick={() => void runFullScanForAllLibraries()}
+                >
+                  <DatabaseSearch aria-hidden="true" className="nav-icon" />
+                  <span>{t("libraries.fullScan")}</span>
+                </button>
                 <button
                   type="button"
                   className="secondary small settings-panel-header-action"
@@ -6448,34 +6588,19 @@ export function LibrariesPage() {
                   ) : null}
                   {areLibrarySettingsExpanded ? (
                     <div className="library-settings-body" id={`library-settings-body-${library.id}`}>
-                      <section className="library-settings-section">
-                        <div className="library-settings-section-heading">
-                          <div className="library-settings-section-title">
-                            <h4>{t("connectors.libraryStatus.title")}</h4>
-                            <TooltipTrigger
-                              ariaLabel={t("connectors.libraryStatus.descriptionAria")}
-                              content={t("connectors.libraryStatus.description")}
-                            >
-                              ?
-                            </TooltipTrigger>
+                      <div className="library-connector-inline-list">
+                        {(library.connector_links ?? []).map((link) => (
+                          <div className="connector-library-status-row" key={`${link.connection_id}-${link.connector_library_id}`}>
+                            <div><strong>{link.connection_name}</strong><span>{link.provider} · {link.connector_library_name}</span></div>
+                            <span className="badge">{link.link_method}</span>
+                            <Link className="secondary small settings-panel-header-action connector-action-button" to={`/settings?section=jellyfin#connector-${link.connection_id}`}>{t("connectors.libraryStatus.openConnector")}<SquareArrowOutUpRight aria-hidden="true" size={16} /></Link>
                           </div>
-                        </div>
-                        <div className="library-settings-section-grid is-single-column">
-                          <div className="connector-library-status-list">
-                            {(library.connector_links ?? []).map((link) => (
-                              <div className="connector-library-status-row" key={`${link.connection_id}-${link.connector_library_id}`}>
-                                <div><strong>{link.connection_name}</strong><span>{link.provider} · {link.connector_library_name}</span></div>
-                                <span className="badge">{link.link_method}</span>
-                                <Link className="secondary small settings-panel-header-action connector-action-button" to={`/settings?section=jellyfin#connector-${link.connection_id}`}>{t("connectors.libraryStatus.openConnector")}<SquareArrowOutUpRight aria-hidden="true" size={16} /></Link>
-                              </div>
-                            ))}
-                            {!(library.connector_links?.length) ? <div className="notice">{t("connectors.libraryStatus.unassigned")}</div> : null}
-                          </div>
-                        </div>
-                      </section>
+                        ))}
+                        {!(library.connector_links?.length) ? <div className="notice">{t("connectors.libraryStatus.unassigned")}</div> : null}
+                      </div>
 
-                      <section className="library-settings-section">
-                        <div className="library-settings-section-heading">
+                      <section className="library-settings-section library-source-section">
+                        <div className="library-settings-section-heading library-source-section-heading">
                           <div className="library-settings-section-title">
                             <h4>{t("libraries.sections.source.title")}</h4>
                             <TooltipTrigger
@@ -6485,27 +6610,23 @@ export function LibrariesPage() {
                               ?
                             </TooltipTrigger>
                           </div>
+                          <button
+                            type="button"
+                            className="secondary small settings-panel-header-action library-change-path-button"
+                            disabled={isDeletingLibrary || Boolean(activeLibraryScanJob)}
+                            title={activeLibraryScanJob ? t("libraries.changePathActiveScanTooltip") : t("libraries.changePathTooltip")}
+                            onClick={() => openLibraryPathDialog(library)}
+                          >
+                            <SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />
+                            {t("libraries.changePath")}
+                          </button>
                         </div>
                         <div className="library-settings-section-grid is-single-column">
                           <div className="field library-source-field">
-                            <div className="field-label-row">
-                              <span>{t("libraries.mediaPaths")}</span>
-                              <button
-                                type="button"
-                                className="secondary small settings-panel-header-action library-change-path-button"
-                                disabled={isDeletingLibrary || Boolean(activeLibraryScanJob)}
-                                title={activeLibraryScanJob ? t("libraries.changePathActiveScanTooltip") : t("libraries.changePathTooltip")}
-                                onClick={() => openLibraryPathDialog(library)}
-                              >
-                                <Plus aria-hidden="true" />
-                                {t("libraries.changePath")}
-                              </button>
-                            </div>
                             <div className="library-source-paths">
                               {(library.roots?.length ? library.roots : [{ id: 0, path: library.path, display_name: "", path_key: library.path }]).map((root) => {
                                 const aliasKey = root.id ? libraryRootAliasKey(library.id, root.id) : "";
                                 const aliasValue = root.id ? (libraryRootAliasDrafts[aliasKey] ?? root.display_name) : "";
-                                const normalizedAlias = aliasValue.trim();
                                 const isAliasPending = root.id ? Boolean(libraryRootAliasPending[aliasKey]) : false;
                                 return (
                                   <div className="library-root-row" key={`${library.id}-${root.path}`}>
@@ -6516,10 +6637,17 @@ export function LibrariesPage() {
                                           <input
                                             className="library-root-alias-input"
                                             value={aliasValue}
-                                            onChange={(event) => setLibraryRootAliasDrafts((drafts) => ({
-                                              ...drafts,
-                                              [aliasKey]: event.target.value,
-                                            }))}
+                                            disabled={isDeletingLibrary || Boolean(activeLibraryScanJob) || isAliasPending}
+                                            aria-busy={isAliasPending || undefined}
+                                            onChange={(event) => {
+                                              const nextAlias = event.target.value;
+                                              setLibraryRootAliasDrafts((drafts) => ({
+                                                ...drafts,
+                                                [aliasKey]: nextAlias,
+                                              }));
+                                              scheduleLibraryRootAliasSave(library, root.id, nextAlias);
+                                            }}
+                                            onBlur={() => flushLibraryRootAliasSave(library, root.id, aliasValue)}
                                           />
                                         </label>
                                         <label className="library-root-path-field">
@@ -6531,22 +6659,6 @@ export function LibrariesPage() {
                                             aria-label={`${t("libraries.mediaPaths")}: ${root.path}`}
                                           />
                                         </label>
-                                        <button
-                                          type="button"
-                                          className="secondary icon-only-button library-root-alias-save-button"
-                                          aria-label={t("connectors.saveRootAlias")}
-                                          title={t("connectors.saveRootAlias")}
-                                          disabled={
-                                            isDeletingLibrary
-                                            || Boolean(activeLibraryScanJob)
-                                            || isAliasPending
-                                            || !normalizedAlias
-                                            || normalizedAlias === root.display_name
-                                          }
-                                          onClick={() => void updateLibraryRootAlias(library, root.id, aliasValue)}
-                                        >
-                                          <Save aria-hidden="true" />
-                                        </button>
                                       </div>
                                     ) : (
                                       <div className="library-root-path-only">
@@ -6569,8 +6681,15 @@ export function LibrariesPage() {
 
                       <section className="library-settings-section">
                         <div className="library-settings-section-heading">
-                          <h4>{t("libraries.sections.analysis.title")}</h4>
-                          <p>{t("libraries.sections.analysis.description")}</p>
+                          <div className="library-settings-section-title">
+                            <h4>{t("libraries.sections.analysis.title")}</h4>
+                            <TooltipTrigger
+                              ariaLabel={t("libraries.sections.analysis.descriptionAria")}
+                              content={t("libraries.sections.analysis.description")}
+                            >
+                              ?
+                            </TooltipTrigger>
+                          </div>
                         </div>
                         <div className="library-settings-form">
                     <div className="field">
@@ -6791,6 +6910,9 @@ export function LibrariesPage() {
               onUpdated={applyUpdatedAppSettingsState}
               searchFocus={focusedSettingsSearchTarget}
             />
+          ) : null}
+          {activeSettingsPanelId === "transcodingPresets" ? (
+            <TranscodingPresetsSettingsPanel searchFocus={focusedSettingsSearchTarget} />
           ) : null}
 
           {activeSettingsPanelId === "resolutionCategories" ? (

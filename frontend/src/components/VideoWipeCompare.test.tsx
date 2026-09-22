@@ -8,7 +8,7 @@ import { VideoWipeCompare } from "./VideoWipeCompare";
 afterEach(cleanup);
 
 describe("VideoWipeCompare", () => {
-  it("keeps seek, volume, and the draggable wipe control synchronized", () => {
+  it("keeps seek, volume, audio mix, and the draggable wipe control synchronized", () => {
     const { container } = render(
       <VideoWipeCompare
         first={{ src: "/api/files/1/media", label: "Original" }}
@@ -28,8 +28,14 @@ describe("VideoWipeCompare", () => {
     expect(second.currentTime).toBe(42);
 
     fireEvent.change(screen.getByRole("slider", { name: "Volume for both videos" }), { target: { value: "0.35" } });
-    expect(first.volume).toBe(0.35);
-    expect(second.volume).toBe(0.35);
+    expect(first.volume).toBeCloseTo(0.175);
+    expect(second.volume).toBeCloseTo(0.175);
+
+    const audioMix = screen.getByRole("slider", { name: "Audio mix between both videos" });
+    fireEvent.change(audioMix, { target: { value: "5" } });
+    expect(first.volume).toBeCloseTo(0.3325);
+    expect(second.volume).toBeCloseTo(0.0175);
+    expect(screen.getByText("95% first / 5% second")).toBeInTheDocument();
 
     const wipeHandle = screen.getByRole("slider", { name: "Visible share of the second video" });
     expect(container.querySelector("label input[type=\"range\"]")).toBeNull();

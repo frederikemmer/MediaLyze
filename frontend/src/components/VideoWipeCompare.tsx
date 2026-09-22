@@ -7,6 +7,12 @@ type VideoWipeSource = {
   label: string;
 };
 
+type AudioMixGraph = {
+  context: AudioContext;
+  firstGain: GainNode;
+  secondGain: GainNode;
+};
+
 export function VideoWipeCompare({
   first,
   second,
@@ -25,8 +31,10 @@ export function VideoWipeCompare({
   const [duration, setDuration] = useState(0);
   const [secondDuration, setSecondDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [audioMix, setAudioMix] = useState(50);
   const [muted, setMuted] = useState(false);
   const [unsupported, setUnsupported] = useState(false);
+  const audioMixGraphRef = useRef<AudioMixGraph | null>(null);
 
   const synchronize = useCallback(() => {
     const firstVideo = firstRef.current;
@@ -36,28 +44,6 @@ export function VideoWipeCompare({
       secondVideo.currentTime = firstVideo.currentTime;
     }
   }, []);
-
-  const togglePlayback = useCallback(async () => {
-    const firstVideo = firstRef.current;
-    const secondVideo = secondRef.current;
-    if (!firstVideo || !secondVideo) return;
-    if (!firstVideo.paused) {
-      firstVideo.pause();
-      secondVideo.pause();
-      setPlaying(false);
-      return;
-    }
-    synchronize();
-    try {
-      await Promise.all([firstVideo.play(), secondVideo.play()]);
-      setPlaying(true);
-    } catch {
-      firstVideo.pause();
-      secondVideo.pause();
-      setPlaying(false);
-      setUnsupported(true);
-    }
-  }, [synchronize]);
 
   const seek = useCallback((nextTime: number) => {
     setCurrentTime(nextTime);
@@ -111,15 +97,112 @@ export function VideoWipeCompare({
     setWipePosition(nextWipe);
   }, [setWipePosition, wipe]);
 
-  useEffect(() => {
-    for (const video of [firstRef.current, secondRef.current]) {
-      if (!video) continue;
-      video.volume = volume;
-      video.muted = muted;
+  const applyAudioMix = useCallback(() => {
+    const firstVideo = firstRef.current;
+    const secondVideo = secondRef.current;
+    if (!firstVideo || !secondVideo) return;
+
+    const secondShare = Math.min(100, Math.max(0, audioMix)) / 100;
+    const masterVolume = muted ? 0 : volume;
+    const firstLevel = masterVolume * (1 - secondShare);
+    const secondLevel = masterVolume * secondShare;
+    const graph = audioMixGraphRef.current;
+
+    if (graph) {
+      graph.firstGain.gain.value = firstLevel;
+      graph.secondGain.gain.value = secondLevel;
+      // The Web Audio graph owns the output volume once it is connected.
+      firstVideo.volume = 1;
+      secondVideo.volume = 1;
+      firstVideo.muted = false;
+      secondVideo.muted = false;
+      return;
     }
-  }, [muted, volume]);
+
+    // The fallback keeps the feature useful in browsers without Web Audio.
+    firstVideo.volume = firstLevel;
+    secondVideo.volume = secondLevel;
+    firstVideo.muted = muted;
+    secondVideo.muted = muted;
+  }, [audioMix, muted, volume]);
+
+  const ensureAudioMixGraph = useCallback((): AudioMixGraph | null => {
+    const existingGraph = audioMixGraphRef.current;
+    if (existingGraph) return existingGraph;
+
+    const firstVideo = firstRef.current;
+    const secondVideo = secondRef.current;
+    if (!firstVideo || !secondVideo || typeof window === "undefined") return null;
+
+    const audioContextConstructor =
+      window.AudioContext ??
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!audioContextConstructor) return null;
+
+    let context: AudioContext | null = null;
+    try {
+      context = new audioContextConstructor();
+      const firstGain = context.createGain();
+      const secondGain = context.createGain();
+      context.createMediaElementSource(firstVideo).connect(firstGain).connect(context.destination);
+      context.createMediaElementSource(secondVideo).connect(secondGain).connect(context.destination);
+
+      const graph = { context, firstGain, secondGain };
+      audioMixGraphRef.current = graph;
+      applyAudioMix();
+      return graph;
+    } catch {
+      if (context) void context.close();
+      // Direct HTMLMediaElement volume mixing remains available as a fallback.
+      return null;
+    }
+  }, [applyAudioMix]);
+
+  const togglePlayback = useCallback(async () => {
+    const firstVideo = firstRef.current;
+    const secondVideo = secondRef.current;
+    if (!firstVideo || !secondVideo) return;
+    if (!firstVideo.paused) {
+      firstVideo.pause();
+      secondVideo.pause();
+      setPlaying(false);
+      return;
+    }
+    synchronize();
+    const audioMixGraph = ensureAudioMixGraph();
+    try {
+      if (audioMixGraph?.context.state === "suspended") {
+        await audioMixGraph.context.resume();
+      }
+      await Promise.all([firstVideo.play(), secondVideo.play()]);
+      setPlaying(true);
+    } catch {
+      firstVideo.pause();
+      secondVideo.pause();
+      setPlaying(false);
+      setUnsupported(true);
+    }
+  }, [ensureAudioMixGraph, synchronize]);
+
+  useEffect(() => {
+    applyAudioMix();
+  }, [applyAudioMix]);
+
+  useEffect(() => {
+    return () => {
+      const graph = audioMixGraphRef.current;
+      if (!graph) return;
+      graph.firstGain.disconnect();
+      graph.secondGain.disconnect();
+      void graph.context.close();
+      audioMixGraphRef.current = null;
+    };
+  }, []);
 
   const durationsDiffer = duration > 0 && secondDuration > 0 && Math.abs(duration - secondDuration) > 0.5;
+  const firstAudioShare = 100 - Math.round(audioMix);
+  const secondAudioShare = Math.round(audioMix);
+  const audioMixValue = t("videoWipe.audioMixValue", { first: firstAudioShare, second: secondAudioShare });
 
   return (
     <div className="video-wipe-compare">
@@ -189,6 +272,20 @@ export function VideoWipeCompare({
           aria-label={t("videoWipe.seek")}
           disabled={!duration}
         />
+        <div className="video-wipe-audio-mix">
+          <span className="video-wipe-audio-mix-label">{t("videoWipe.audioMix")}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={audioMix}
+            onChange={(event) => setAudioMix(Number(event.target.value))}
+            aria-label={t("videoWipe.audioMix")}
+            aria-valuetext={audioMixValue}
+          />
+          <output className="video-wipe-audio-mix-value" aria-label={t("videoWipe.audioMix")} aria-live="polite">{audioMixValue}</output>
+        </div>
         <button type="button" className="secondary icon-only-button" onClick={() => setMuted((current) => !current)} aria-label={muted ? t("videoWipe.unmute") : t("videoWipe.mute")}>
           {muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
         </button>

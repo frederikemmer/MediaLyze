@@ -23,8 +23,11 @@ from backend.app.core.config import Settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import (
     AudioStream,
+    ConnectorItem,
+    ConnectorMediaMatch,
     ExternalSubtitle,
     JobStatus,
+    Library,
     LibraryRoot,
     MediaFile,
     SubtitleStream,
@@ -52,7 +55,9 @@ from backend.app.schemas.transcoding import (
     TranscodeVariantRead,
 )
 from backend.app.services.app_settings import get_app_settings
-from backend.app.services.languages import normalize_language_tag
+from backend.app.services.languages import format_filename_language_code, normalize_language_tag
+from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.spatial_audio import format_spatial_audio_profile
 from backend.app.utils.processes import get_hidden_subprocess_kwargs
 from backend.app.utils.time import utc_now
 
@@ -216,15 +221,30 @@ CONTAINER_COMPATIBILITY = {
     },
 }
 DEFAULT_FILENAME_TEMPLATE = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]"
+DEFAULT_FOLDER_TEMPLATE = "{folderName}"
 FILENAME_TOKENS = {
+    "releaseYear",
     "resolution",
+    "resolutionCategory",
     "dynRange",
     "codec",
     "audioLanguages",
+    "audioCodecs",
+    "audioProfiles",
+    "audioChannels",
+    "frameRate",
+    "bitDepth",
     "subtitleLanguages",
+    "subtitleFormats",
+    "seriesName",
+    "seasonNumber",
+    "episodeNumber",
+    "episodeTitle",
+    "contentCategory",
     "container",
     "videoBitrate",
 }
+FOLDER_TOKENS = FILENAME_TOKENS | {"folderName"}
 FILENAME_CLEANUP_PATTERNS = {
     "square_brackets": r"\[[^\[\]]*\]",
     "round_brackets": r"\([^()]*\)",
@@ -315,6 +335,16 @@ def _source_paths(media_file: MediaFile) -> SourcePaths:
     root = Path(media_file.library_root.path if media_file.library_root else media_file.library.path)
     source = _safe_path_below(root, media_file.relative_path)
     return SourcePaths(root=root.resolve(), source=source)
+
+
+def default_formatting_flags(media_file: MediaFile) -> tuple[bool, bool]:
+    """Return the safe filename/folder formatting defaults for one asset."""
+
+    library = getattr(media_file, "library", None)
+    library_type = getattr(getattr(library, "type", None), "value", None)
+    library_type = str(library_type or getattr(library, "type", ""))
+    is_series = library_type.casefold() == "series"
+    return (not is_series, is_series)
 
 
 def _is_hardware_encoder(name: str) -> bool:
@@ -1452,19 +1482,32 @@ def _profile_plan(
     output_mode: str | None = None,
     execution_mode: str | None = None,
 ) -> TranscodePlan:
+    filename_format_enabled, folder_format_enabled = default_formatting_flags(media_file)
     dynamic_range = "preserve"
     if profile == "compatibility":
         container = _source_container(media_file)
         video_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy")
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+            )
             for stream in media_file.video_streams
         ]
         audio_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy")
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+            )
             for stream in media_file.audio_streams
         ]
         subtitle_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy")
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+            )
             for stream in media_file.subtitle_streams
         ]
     elif profile == "storage":
@@ -1484,6 +1527,7 @@ def _profile_plan(
             TranscodeStreamPlan(
                 stream_index=stream.stream_index,
                 action="encode",
+                default_flag=getattr(stream, "default_flag", False),
                 codec="hevc",
                 encoder=video_encoder,
                 crf=22,
@@ -1492,11 +1536,21 @@ def _profile_plan(
             for stream in media_file.video_streams
         ]
         audio_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy", language=stream.language)
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+                language=stream.language,
+            )
             for stream in media_file.audio_streams
         ]
         subtitle_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy", language=stream.language)
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+                language=stream.language,
+            )
             for stream in media_file.subtitle_streams
         ]
     else:
@@ -1516,6 +1570,7 @@ def _profile_plan(
             TranscodeStreamPlan(
                 stream_index=stream.stream_index,
                 action="encode",
+                default_flag=getattr(stream, "default_flag", False),
                 codec="av1",
                 encoder=video_encoder,
                 crf=30,
@@ -1524,11 +1579,21 @@ def _profile_plan(
             for stream in media_file.video_streams
         ]
         audio_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy", language=stream.language)
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+                language=stream.language,
+            )
             for stream in media_file.audio_streams
         ]
         subtitle_plans = [
-            TranscodeStreamPlan(stream_index=stream.stream_index, action="copy", language=stream.language)
+            TranscodeStreamPlan(
+                stream_index=stream.stream_index,
+                action="copy",
+                default_flag=getattr(stream, "default_flag", False),
+                language=stream.language,
+            )
             for stream in media_file.subtitle_streams
         ]
     return TranscodePlan(
@@ -1540,7 +1605,12 @@ def _profile_plan(
         dynamic_range=dynamic_range,
         filename_template=DEFAULT_FILENAME_TEMPLATE,
         filename_template_override=False,
+        filename_format_enabled=filename_format_enabled,
         include_subtitle_languages=False,
+        filename_language_code_format="iso_639_1",
+        folder_format_enabled=folder_format_enabled,
+        folder_template=DEFAULT_FOLDER_TEMPLATE,
+        folder_template_override=False,
         output_mode=output_mode,
         execution_mode=execution_mode,
     )
@@ -1589,21 +1659,173 @@ def _canonical_transcode_codec(codec: str | None) -> str | None:
     return TRANSCODE_CODEC_ALIASES.get(value, value)
 
 
-def _sanitize_filename(value: str, *, suffix: str) -> str:
+def _sanitize_name_segment(value: str, *, suffix: str, fallback: str | None) -> str:
     candidate = re.sub(r"[<>:\"/\\|?*\x00-\x1f]", "_", value)
     candidate = re.sub(r"\s+", " ", candidate).strip(" .")
     if not candidate:
-        candidate = "transcoded"
+        if fallback is None:
+            raise ValueError("Formatting produced an empty path segment")
+        candidate = fallback
     reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
     if candidate.upper() in reserved:
         candidate = f"_{candidate}"
     max_stem = max(32, 240 - len(suffix))
-    return candidate[:max_stem].rstrip(" .") or "transcoded"
+    candidate = candidate[:max_stem].rstrip(" .")
+    if not candidate:
+        if fallback is None:
+            raise ValueError("Formatting produced an empty path segment")
+        return fallback
+    return candidate
 
 
-def _token_values(media_file: MediaFile, plan: TranscodePlan) -> dict[str, str]:
+def _sanitize_filename(value: str, *, suffix: str) -> str:
+    return _sanitize_name_segment(value, suffix=suffix, fallback="transcoded")
+
+
+def _connector_filename_metadata(db: Session, media_file: MediaFile) -> dict[str, str | int | None]:
+    """Return deterministic filename metadata from matched connector items."""
+
+    preferred_connection_id = db.scalar(
+        select(Library.preferred_connector_connection_id).where(Library.id == media_file.library_id)
+    )
+    items = list(
+        db.scalars(
+            select(ConnectorItem)
+            .join(ConnectorMediaMatch, ConnectorMediaMatch.connector_item_id == ConnectorItem.id)
+            .where(
+                ConnectorMediaMatch.media_file_id == media_file.id,
+                ConnectorMediaMatch.status == "matched",
+            )
+        ).all()
+    )
+    items.sort(
+        key=lambda item: (
+            0 if preferred_connection_id is not None and item.connection_id == preferred_connection_id else 1,
+            item.connection_id,
+            item.id,
+        )
+    )
+
+    result: dict[str, str | int | None] = {
+        "release_year": None,
+        "series_name": None,
+        "season_number": None,
+        "episode_number": None,
+        "episode_title": None,
+    }
+    for item in items:
+        if result["release_year"] is None:
+            if item.production_year is not None:
+                result["release_year"] = int(item.production_year)
+            elif item.premiere_date is not None:
+                result["release_year"] = int(item.premiere_date.year)
+        if result["series_name"] is None and item.series_name:
+            result["series_name"] = item.series_name.strip() or None
+        if result["season_number"] is None and item.parent_index_number is not None:
+            result["season_number"] = int(item.parent_index_number)
+        if result["episode_number"] is None and item.index_number is not None:
+            result["episode_number"] = int(item.index_number)
+        if result["episode_title"] is None and item.item_type.strip().lower() == "episode" and item.title:
+            result["episode_title"] = item.title.strip() or None
+
+    return result
+
+
+def _local_filename_metadata(media_file: MediaFile) -> dict[str, str | int | None]:
+    series = getattr(media_file, "series", None)
+    season = getattr(media_file, "season", None)
+    series_name = getattr(series, "title", None) or getattr(media_file, "series_name", None)
+    season_number = getattr(season, "season_number", None)
+    if season_number is None:
+        season_number = getattr(media_file, "season_number", None)
+    return {
+        "series_name": series_name,
+        "season_number": season_number,
+        "episode_number": getattr(media_file, "episode_number", None),
+        "episode_title": getattr(media_file, "episode_title", None),
+    }
+
+
+def _filename_codec(value: str | None) -> str:
+    aliases = {
+        "libfdk_aac": "aac",
+        "libmp3lame": "mp3",
+        "libopus": "opus",
+        "libvorbis": "vorbis",
+    }
+    normalized = str(value or "").strip().lower()
+    normalized = aliases.get(normalized, _canonical_transcode_codec(normalized) or normalized)
+    return normalized.upper()
+
+
+def _filename_audio_channels(channel_layout: str | None, channels: int | None) -> str:
+    normalized = str(channel_layout or "").strip().lower()
+    known_layouts = {
+        "mono": "1.0",
+        "1.0": "1.0",
+        "stereo": "2.0",
+        "2.0": "2.0",
+        "2.1": "2.1",
+        "5.1": "5.1",
+        "5.1(side)": "5.1",
+        "5.1(back)": "5.1",
+        "6.1": "5.1",
+        "7.1": "7.1",
+        "7.1(wide)": "7.1",
+        "7.1(wide-side)": "7.1",
+    }
+    if normalized in known_layouts:
+        return known_layouts[normalized]
+    if channels and channels > 0:
+        return f"{channels}.0"
+    return ""
+
+
+def _filename_subtitle_format(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    normalized = _canonical_transcode_codec(normalized) or normalized
+    labels = {
+        "subrip": "SRT",
+        "ass": "ASS",
+        "ssa": "ASS",
+        "hdmv_pgs_subtitle": "PGS",
+        "dvd_subtitle": "VOBSUB",
+        "dvb_subtitle": "DVB",
+        "mov_text": "MOV_TEXT",
+        "webvtt": "WEBVTT",
+        "xsub": "XSUB",
+    }
+    return labels.get(normalized, normalized.upper())
+
+
+def _filename_frame_rate(value: float | None) -> str:
+    if value is None or value <= 0:
+        return ""
+    return f"{value:.3f}".rstrip("0").rstrip(".") + " fps"
+
+
+def _direct_folder_name(media_file: MediaFile) -> str:
+    relative_path = Path(str(media_file.relative_path).replace("\\", "/"))
+    parent = relative_path.parent
+    return "" if parent == Path(".") else parent.name
+
+
+def _token_values(
+    media_file: MediaFile,
+    plan: TranscodePlan,
+    *,
+    metadata_separator: str | None = None,
+    resolution_categories=None,
+) -> dict[str, str]:
     primary_video = next((item for item in plan.video_streams if item.action != TranscodeStreamAction.drop), None)
-    source_video = media_file.video_streams[0] if media_file.video_streams else None
+    source_video = next(
+        (
+            item
+            for item in media_file.video_streams
+            if primary_video is not None and item.stream_index == primary_video.stream_index
+        ),
+        None,
+    ) or (media_file.video_streams[0] if media_file.video_streams else None)
     width = primary_video.width if primary_video and primary_video.width else (source_video.width if source_video else None)
     height = primary_video.height if primary_video and primary_video.height else (source_video.height if source_video else None)
     codec = (
@@ -1622,8 +1844,22 @@ def _token_values(media_file: MediaFile, plan: TranscodePlan) -> dict[str, str]:
             source = next((item for item in sources if item.stream_index == decision.stream_index), None)
             language = (decision.language or (source.language if source else None) or "").strip()
             if language:
-                values.add(language)
+                values.add(format_filename_language_code(language, plan.filename_language_code_format))
         return values
+
+    def selected_streams(
+        decisions: list[TranscodeStreamPlan],
+        sources: list[AudioStream | SubtitleStream],
+    ) -> list[tuple[TranscodeStreamPlan, AudioStream | SubtitleStream]]:
+        source_by_index = {item.stream_index: item for item in sources}
+        return [
+            (decision, source_by_index[decision.stream_index])
+            for decision in decisions
+            if decision.action != TranscodeStreamAction.drop and decision.stream_index in source_by_index
+        ]
+
+    selected_audio = selected_streams(plan.audio_streams, media_file.audio_streams)
+    selected_subtitles = selected_streams(plan.subtitle_streams, media_file.subtitle_streams)
 
     audio_languages = selected_languages(plan.audio_streams, media_file.audio_streams)
     subtitle_languages = selected_languages(plan.subtitle_streams, media_file.subtitle_streams)
@@ -1634,17 +1870,77 @@ def _token_values(media_file: MediaFile, plan: TranscodePlan) -> dict[str, str]:
         row = external_rows.get(decision.subtitle_id)
         language = (decision.language or (row.language if row else None) or "").strip()
         if language:
-            subtitle_languages.add(language)
-    metadata_separator = plan.filename_metadata_separator
+            subtitle_languages.add(format_filename_language_code(language, plan.filename_language_code_format))
+    metadata_separator = plan.filename_metadata_separator if metadata_separator is None else metadata_separator
     bitrate = primary_video.bitrate if primary_video else None
+    audio_codecs = {
+        _filename_codec(
+            decision.codec or decision.encoder
+            if decision.action == TranscodeStreamAction.encode
+            else source.codec
+        )
+        for decision, source in selected_audio
+    }
+    audio_profiles = {
+        format_spatial_audio_profile(source.spatial_audio_profile)
+        or decision.profile
+        or source.profile
+        or ""
+        for decision, source in selected_audio
+    }
+    audio_channels = {
+        _filename_audio_channels(source.channel_layout, source.channels)
+        for _decision, source in selected_audio
+    }
+    subtitle_formats = {
+        _filename_subtitle_format(
+            decision.codec or decision.encoder
+            if decision.action == TranscodeStreamAction.encode
+            else source.codec
+        )
+        for decision, source in selected_subtitles
+    }
+    for decision in plan.external_subtitles:
+        if decision.action == "drop":
+            continue
+        row = external_rows.get(decision.subtitle_id)
+        subtitle_formats.add(
+            _filename_subtitle_format(
+                decision.codec or row.format if decision.action == "encode" and row else (row.format if row else None)
+            )
+        )
+    local_metadata = _local_filename_metadata(media_file)
+    series_name = plan.filename_series_name or local_metadata["series_name"]
+    season_number = plan.filename_season_number if plan.filename_season_number is not None else local_metadata["season_number"]
+    episode_number = plan.filename_episode_number if plan.filename_episode_number is not None else local_metadata["episode_number"]
+    episode_title = plan.filename_episode_title or local_metadata["episode_title"]
+    content_category = getattr(media_file, "content_category", "main")
+    content_category = getattr(content_category, "value", content_category) or "main"
+    frame_rate = primary_video.frame_rate if primary_video and primary_video.frame_rate else (source_video.frame_rate if source_video else None)
+    bit_depth = source_video.bit_depth if source_video else None
+    resolution_category = classify_resolution_category(width, height, resolution_categories)
     return {
+        "releaseYear": "" if plan.filename_release_year is None else str(plan.filename_release_year),
         "resolution": f"{width}x{height}" if width and height else "",
+        "resolutionCategory": resolution_category.label if resolution_category else "",
         "dynRange": plan.dynamic_range if plan.dynamic_range != "preserve" else (media_file.primary_video_hdr_type or ""),
         "codec": (codec or "").upper(),
         "audioLanguages": metadata_separator.join(sorted(audio_languages)),
+        "audioCodecs": metadata_separator.join(sorted(value for value in audio_codecs if value)),
+        "audioProfiles": metadata_separator.join(sorted(value for value in audio_profiles if value)),
+        "audioChannels": metadata_separator.join(sorted(value for value in audio_channels if value)),
+        "frameRate": _filename_frame_rate(frame_rate),
+        "bitDepth": f"{bit_depth}-bit" if bit_depth else "",
         "subtitleLanguages": metadata_separator.join(sorted(subtitle_languages)),
+        "subtitleFormats": metadata_separator.join(sorted(value for value in subtitle_formats if value)),
+        "seriesName": str(series_name or ""),
+        "seasonNumber": "" if season_number is None else str(season_number),
+        "episodeNumber": "" if episode_number is None else str(episode_number),
+        "episodeTitle": str(episode_title or ""),
+        "contentCategory": str(content_category),
         "container": plan.container.upper(),
         "videoBitrate": f"{round(bitrate / 1_000_000, 1):g}Mbps" if bitrate else "",
+        "folderName": _direct_folder_name(media_file),
     }
 
 
@@ -1657,37 +1953,104 @@ def _effective_filename_template(plan: TranscodePlan) -> str:
     return plan.filename_template
 
 
-def _clean_filename_stem(stem: str, plan: TranscodePlan) -> str:
-    preset = plan.filename_cleanup_preset
+def _clean_name_value(
+    value: str,
+    preset: str,
+    regex: str | None,
+    *,
+    error_label: str,
+) -> str:
     if preset == "none":
-        return stem
-    pattern = plan.filename_cleanup_regex if preset == "custom" else FILENAME_CLEANUP_PATTERNS.get(preset)
+        return value
+    pattern = regex if preset == "custom" else FILENAME_CLEANUP_PATTERNS.get(preset)
     if not pattern:
-        return stem
+        return value
     try:
-        cleaned = re.sub(pattern, "", stem)
+        cleaned = re.sub(pattern, "", value)
     except re.error as exc:
-        raise ValueError(f"Invalid filename cleanup regex: {exc}") from exc
+        raise ValueError(f"Invalid {error_label} cleanup regex: {exc}") from exc
     return re.sub(r"\s+", " ", cleaned).strip(" ._-")
 
 
-def render_output_filename(media_file: MediaFile, plan: TranscodePlan) -> str:
-    template = _effective_filename_template(plan)
-    unknown_tokens = set(re.findall(r"\{([^{}]+)\}", template)) - FILENAME_TOKENS
+def _clean_filename_stem(stem: str, plan: TranscodePlan) -> str:
+    return _clean_name_value(
+        stem,
+        plan.filename_cleanup_preset,
+        plan.filename_cleanup_regex,
+        error_label="filename",
+    )
+
+
+def _effective_folder_template(plan: TranscodePlan) -> str:
+    if plan.folder_template_override is False:
+        return DEFAULT_FOLDER_TEMPLATE
+    return plan.folder_template
+
+
+def _render_metadata_template(
+    template: str,
+    values: dict[str, str],
+    allowed_tokens: set[str],
+    *,
+    label: str,
+) -> str:
+    unknown_tokens = set(re.findall(r"\{([^{}]+)\}", template)) - allowed_tokens
     if unknown_tokens:
-        raise ValueError(f"Unsupported filename token(s): {', '.join(sorted(unknown_tokens))}")
+        raise ValueError(f"Unsupported {label} token(s): {', '.join(sorted(unknown_tokens))}")
     rendered = template
-    for token, value in _token_values(media_file, plan).items():
+    for token, value in values.items():
         rendered = rendered.replace(f"{{{token}}}", value)
     rendered = re.sub(r"\[\s*[,;|+\-]*\s*\]", "", rendered)
     rendered = re.sub(r"([\[,;|+])\s*([,;|+])", r"\1", rendered)
     rendered = re.sub(r"\s*,\s*(?=\])", "", rendered)
     rendered = re.sub(r"\[\s*,\s*", "[", rendered)
-    rendered = re.sub(r"\s+", " ", rendered).strip(" ,;|+-")
+    return re.sub(r"\s+", " ", rendered).strip(" ,;|+-")
+
+
+def render_output_filename(media_file: MediaFile, plan: TranscodePlan, *, resolution_categories=None) -> str:
     suffix = f".{plan.container}"
-    source_stem = _clean_filename_stem(Path(media_file.filename).stem, plan)
+    source_stem = Path(media_file.filename).stem
+    if not plan.filename_format_enabled:
+        return f"{_sanitize_filename(source_stem, suffix=suffix)}{suffix}"
+    template = _effective_filename_template(plan)
+    rendered = _render_metadata_template(
+        template,
+        _token_values(media_file, plan, resolution_categories=resolution_categories),
+        FILENAME_TOKENS,
+        label="filename",
+    )
+    source_stem = _clean_filename_stem(source_stem, plan)
     stem = _sanitize_filename(f"{source_stem} {rendered}".strip(), suffix=suffix)
     return f"{stem}{suffix}"
+
+
+def render_output_folder_name(media_file: MediaFile, plan: TranscodePlan, *, resolution_categories=None) -> str | None:
+    """Render only the asset's direct parent folder, never an ancestor."""
+
+    source_folder = _direct_folder_name(media_file)
+    if not plan.folder_format_enabled or not source_folder:
+        return None
+    values = _token_values(
+        media_file,
+        plan,
+        metadata_separator=plan.folder_metadata_separator,
+        resolution_categories=resolution_categories,
+    )
+    values["folderName"] = _clean_name_value(
+        source_folder,
+        plan.folder_cleanup_preset,
+        plan.folder_cleanup_regex,
+        error_label="folder",
+    )
+    rendered = _render_metadata_template(
+        _effective_folder_template(plan),
+        values,
+        FOLDER_TOKENS,
+        label="folder",
+    )
+    if not rendered:
+        raise ValueError("Folder formatting produced an empty folder name")
+    return _sanitize_name_segment(rendered, suffix="", fallback=None)
 
 
 def _dynamic_range_filter(dynamic_range: str) -> str | None:
@@ -1736,6 +2099,48 @@ def _normalize_plan_languages(plan: TranscodePlan) -> tuple[TranscodePlan, list[
         else:
             decision.language = normalized
     return normalized_plan, errors
+
+
+def _normalize_plan_stream_defaults(media_file: MediaFile, plan: TranscodePlan) -> TranscodePlan:
+    """Keep one active default per stream kind and put it first in the plan.
+
+    The UI sends an explicit ``default_flag`` when the user chooses a stream.
+    Older clients omit it, so validation first falls back to the source
+    disposition and finally to the first active stream. Dropped streams are
+    kept in the plan for the diff preview, but always move to its end.
+    """
+    normalized_plan = plan.model_copy(deep=True)
+    groups = (
+        ("video_streams", media_file.video_streams),
+        ("audio_streams", media_file.audio_streams),
+        ("subtitle_streams", media_file.subtitle_streams),
+    )
+    for attribute, source_streams in groups:
+        decisions = list(getattr(normalized_plan, attribute))
+        source_by_index = {stream.stream_index: stream for stream in source_streams}
+        source_order = {stream.stream_index: index for index, stream in enumerate(source_streams)}
+        active = [
+            decision
+            for decision in decisions
+            if decision.action != TranscodeStreamAction.drop and decision.stream_index in source_by_index
+        ]
+        selected = next((decision for decision in active if decision.default_flag is True), None)
+        selected = selected or next(
+            (decision for decision in active if getattr(source_by_index[decision.stream_index], "default_flag", False)),
+            None,
+        )
+        selected = selected or (active[0] if active else None)
+        default_index = selected.stream_index if selected is not None else None
+        for decision in decisions:
+            decision.default_flag = default_index is not None and decision.stream_index == default_index
+        decisions.sort(key=lambda decision: (
+            decision.action == TranscodeStreamAction.drop,
+            decision.default_flag is not True,
+            source_order.get(decision.stream_index, len(source_order)),
+            decision.stream_index,
+        ))
+        setattr(normalized_plan, attribute, decisions)
+    return normalized_plan
 
 
 def _validate_video_scale(source: VideoStream, decision: TranscodeStreamPlan) -> str | None:
@@ -1864,7 +2269,12 @@ def _append_stream_options(
     if decision.title:
         arguments.extend([f"-metadata:s:{specifier}", f"title={decision.title}"])
     disposition: list[str] = []
-    if getattr(source, "default_flag", False):
+    effective_default = (
+        decision.default_flag
+        if decision.default_flag is not None
+        else bool(getattr(source, "default_flag", False))
+    )
+    if effective_default:
         disposition.append("default")
     if getattr(source, "forced_flag", False):
         disposition.append("forced")
@@ -2172,6 +2582,7 @@ def validate_transcode_plan(
     capabilities = capabilities_override or get_transcode_capabilities(settings)
     app_settings = get_app_settings(db, settings)
     plan, language_errors = _normalize_plan_languages(plan)
+    plan = _normalize_plan_stream_defaults(media_file, plan)
     output_mode = _effective_output_mode(plan, app_settings)
     if plan.output_mode is None:
         plan.output_mode = output_mode
@@ -2187,6 +2598,18 @@ def validate_transcode_plan(
     errors: list[str] = []
     errors.extend(language_errors)
     errors.extend(encoder_errors)
+    connector_metadata = _connector_filename_metadata(db, media_file)
+    local_metadata = _local_filename_metadata(media_file)
+    # A local validation refreshes the connector value. A remote federation
+    # worker has no connector catalog, so it preserves the value already
+    # resolved into the plan by the origin worker.
+    if connector_metadata["release_year"] is not None or plan.filename_release_year is None:
+        plan.filename_release_year = connector_metadata["release_year"]  # type: ignore[assignment]
+    for field in ("series_name", "season_number", "episode_number", "episode_title"):
+        connector_value = connector_metadata[field]
+        local_value = local_metadata[field]
+        if connector_value is not None or getattr(plan, f"filename_{field}") is None:
+            setattr(plan, f"filename_{field}", connector_value if connector_value is not None else local_value)
     warnings: list[str] = []
     kept: list[str] = []
     changed: list[str] = []
@@ -2205,13 +2628,29 @@ def validate_transcode_plan(
         errors.append(capabilities.error or "FFmpeg is unavailable")
 
     try:
-        output_filename = render_output_filename(media_file, plan)
+        output_filename = render_output_filename(
+            media_file,
+            plan,
+            resolution_categories=app_settings.resolution_categories,
+        )
     except ValueError as exc:
         output_filename = f"{Path(media_file.filename).stem}.transcoded.{plan.container}"
         errors.append(str(exc))
+    formatted_folder_name: str | None = None
+    if plan.folder_format_enabled:
+        try:
+            formatted_folder_name = render_output_folder_name(
+                media_file,
+                plan,
+                resolution_categories=app_settings.resolution_categories,
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
     if output_mode == "replace_original":
         if normalized_output_subfolder:
             errors.append("Replace-original rules cannot use an output subfolder")
+        if plan.folder_format_enabled:
+            errors.append("Replace-original rules cannot use folder formatting")
         output_filename = paths.source.name
         output_root = paths.root
         output_path = output_path_override or paths.source
@@ -2226,6 +2665,8 @@ def validate_transcode_plan(
             or (Path(settings.config_path) / "Transcode_Output")
         ).resolve()
         relative_parent = Path(media_file.relative_path).parent
+        if formatted_folder_name and relative_parent != Path("."):
+            relative_parent = relative_parent.parent / formatted_folder_name
         output_relative = Path(f"library-{media_file.library_id}") / f"root-{media_file.library_root_id or 0}"
         if normalized_output_subfolder:
             output_relative = Path(normalized_output_subfolder) / output_relative
@@ -2235,7 +2676,10 @@ def validate_transcode_plan(
         if normalized_output_subfolder:
             errors.append("Same-directory rules cannot use an output subfolder")
         output_root = paths.root
-        output_path = output_path_override or (paths.source.parent / output_filename)
+        output_parent = paths.source.parent
+        if formatted_folder_name and output_parent != paths.root:
+            output_parent = output_parent.parent / formatted_folder_name
+        output_path = output_path_override or (output_parent / output_filename)
     validation_output_root = output_root_override or output_root
     try:
         output_path.resolve().relative_to(validation_output_root.resolve())
@@ -3060,10 +3504,12 @@ def reconcile_transcode_variants(db: Session, library_id: int) -> int:
 
 
 def _file_summary(media_file: MediaFile) -> TranscodeFileSummary:
+    library_type = getattr(getattr(media_file.library, "type", None), "value", None)
     return TranscodeFileSummary(
         id=media_file.id,
         filename=media_file.filename,
         relative_path=media_file.relative_path,
+        library_type=str(library_type or getattr(media_file.library, "type", "")) or None,
         size_bytes=media_file.size_bytes,
         duration_seconds=media_file.duration_seconds,
         width=media_file.primary_video_width,

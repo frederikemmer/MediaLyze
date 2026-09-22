@@ -2122,7 +2122,14 @@ export function FileDetailPage() {
       headerAddon: (
         <div className="transcode-preset-header-slot" ref={setTranscodePresetHeaderTarget} />
       ),
-      body: file ? <TranscodingPanel file={file} presetHeaderTarget={transcodePresetHeaderTarget} /> : null,
+      body: file ? (
+        <TranscodingPanel
+          file={file}
+          presetHeaderTarget={transcodePresetHeaderTarget}
+          connectorSources={connectorSources ?? []}
+          resolutionCategories={appSettings.resolution_categories}
+        />
+      ) : null,
     },
     qualityBreakdown: {
       title: t("fileDetail.qualityBreakdown"),

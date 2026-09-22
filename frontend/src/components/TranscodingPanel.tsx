@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
+import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, RefreshCw, Search, Square, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import {
   api,
   type FileTranscode,
+  type FileConnectorSource,
   type FilenameCleanupPreset,
   type MediaFileDetail,
   type TranscodeCapabilities,
@@ -16,13 +17,16 @@ import {
   type TranscodePlan,
   type TranscodeStreamAction,
   type AudioStream,
+  type ResolutionCategory,
   type SubtitleStream,
   type VideoStream,
   type TranscodeValidation,
 } from "../lib/api";
-import { formatBytes, formatCodecLabel, formatDuration } from "../lib/format";
-import { formatLanguageLabel, languageOptions, normalizeLanguageTag } from "../lib/language";
+import { formatBytes, formatCodecLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
+import { formatFilenameLanguageCode, formatLanguageLabel, languageOptions, normalizeLanguageTag, type FilenameLanguageCodeFormat } from "../lib/language";
+import { classifyResolutionCategory } from "../lib/resolution-categories";
 import { parseTranscodeSpeed, TranscodeProgressSummary } from "./TranscodeProgressSummary";
+import { SparklesIcon } from "./SparklesIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
 
 const PRESET_KEYS = ["compatibility", "storage", "modern"] as const;
@@ -46,20 +50,113 @@ const FILENAME_CLEANUP_PATTERNS: Partial<Record<Exclude<FilenameCleanupPreset, "
   all_brackets: "\\[[^\\[\\]]*\\]|\\([^()]*\\)|\\{[^{}]*\\}",
 };
 const FILENAME_METADATA_TOKENS = [
-  { token: "resolution", labelKey: "resolution" },
-  { token: "dynRange", labelKey: "dynRange" },
-  { token: "codec", labelKey: "codec" },
-  { token: "audioLanguages", labelKey: "audioLanguages" },
-  { token: "subtitleLanguages", labelKey: "subtitleLanguages" },
-  { token: "container", labelKey: "container" },
-  { token: "videoBitrate", labelKey: "videoBitrate" },
+  { token: "releaseYear", labelKey: "releaseYear", connectorOnly: true },
+  { token: "resolution", labelKey: "resolution", connectorOnly: false },
+  { token: "resolutionCategory", labelKey: "resolutionCategory", connectorOnly: false },
+  { token: "dynRange", labelKey: "dynRange", connectorOnly: false },
+  { token: "codec", labelKey: "codec", connectorOnly: false },
+  { token: "audioLanguages", labelKey: "audioLanguages", connectorOnly: false },
+  { token: "audioCodecs", labelKey: "audioCodecs", connectorOnly: false },
+  { token: "audioProfiles", labelKey: "audioProfiles", connectorOnly: false },
+  { token: "audioChannels", labelKey: "audioChannels", connectorOnly: false },
+  { token: "frameRate", labelKey: "frameRate", connectorOnly: false },
+  { token: "bitDepth", labelKey: "bitDepth", connectorOnly: false },
+  { token: "subtitleLanguages", labelKey: "subtitleLanguages", connectorOnly: false },
+  { token: "subtitleFormats", labelKey: "subtitleFormats", connectorOnly: false },
+  { token: "seriesName", labelKey: "seriesName", connectorOnly: false },
+  { token: "seasonNumber", labelKey: "seasonNumber", connectorOnly: false },
+  { token: "episodeNumber", labelKey: "episodeNumber", connectorOnly: false },
+  { token: "episodeTitle", labelKey: "episodeTitle", connectorOnly: false },
+  { token: "contentCategory", labelKey: "contentCategory", connectorOnly: false },
+  { token: "container", labelKey: "container", connectorOnly: false },
+  { token: "videoBitrate", labelKey: "videoBitrate", connectorOnly: false },
+  { token: "folderName", labelKey: "folderName", connectorOnly: false },
 ] as const;
 type FilenameMetadataToken = typeof FILENAME_METADATA_TOKENS[number]["token"];
 type FilenameTemplatePart =
   | { type: "text"; value: string }
   | { type: "token"; token: FilenameMetadataToken };
 
-const FILENAME_METADATA_TOKEN_PATTERN = /\{(resolution|dynRange|codec|audioLanguages|subtitleLanguages|container|videoBitrate)\}/g;
+const FILENAME_METADATA_TOKEN_PATTERN = /\{(releaseYear|resolution|resolutionCategory|dynRange|codec|audioLanguages|audioCodecs|audioProfiles|audioChannels|frameRate|bitDepth|subtitleLanguages|subtitleFormats|seriesName|seasonNumber|episodeNumber|episodeTitle|contentCategory|container|videoBitrate|folderName)\}/g;
+
+function connectorReleaseYear(sources: FileConnectorSource[]): string {
+  const source = sources.find((entry) => entry.preferred && (entry.production_year !== null || entry.premiere_date))
+    ?? sources.find((entry) => entry.production_year !== null || entry.premiere_date);
+  if (!source) return "";
+  if (source.production_year !== null) return String(source.production_year);
+  const timestamp = Date.parse(source.premiere_date ?? "");
+  return Number.isFinite(timestamp) ? String(new Date(timestamp).getUTCFullYear()) : "";
+}
+
+function firstConnectorValue<T>(sources: FileConnectorSource[], read: (source: FileConnectorSource) => T | null | undefined): T | null {
+  const ordered = [...sources].sort((left, right) => Number(right.preferred) - Number(left.preferred));
+  for (const source of ordered) {
+    const value = read(source);
+    if (typeof value === "string") {
+      if (value.trim()) return value.trim() as T;
+    } else if (value !== null && value !== undefined) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function filenameDistinct(values: string[], separator: string): string {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort().join(separator);
+}
+
+function filenameCodecValue(value: string | null | undefined): string {
+  const aliases: Record<string, string> = {
+    libfdk_aac: "aac",
+    libmp3lame: "mp3",
+    libopus: "opus",
+    libvorbis: "vorbis",
+  };
+  const normalized = (value ?? "").trim().toLowerCase();
+  return (aliases[normalized] ?? normalized).toUpperCase();
+}
+
+function filenameAudioChannelValue(channelLayout: string | null | undefined, channels: number | null | undefined): string {
+  const knownLayouts: Record<string, string> = {
+    mono: "1.0",
+    "1.0": "1.0",
+    stereo: "2.0",
+    "2.0": "2.0",
+    "2.1": "2.1",
+    "5.1": "5.1",
+    "5.1(side)": "5.1",
+    "5.1(back)": "5.1",
+    "6.1": "5.1",
+    "7.1": "7.1",
+    "7.1(wide)": "7.1",
+    "7.1(wide-side)": "7.1",
+  };
+  const normalized = (channelLayout ?? "").trim().toLowerCase();
+  return knownLayouts[normalized] ?? (channels && channels > 0 ? `${channels}.0` : "");
+}
+
+function filenameSubtitleFormatValue(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    subrip: "SRT",
+    srt: "SRT",
+    ass: "ASS",
+    ssa: "ASS",
+    hdmv_pgs_subtitle: "PGS",
+    pgs: "PGS",
+    dvd_subtitle: "VOBSUB",
+    dvb_subtitle: "DVB",
+    mov_text: "MOV_TEXT",
+    webvtt: "WEBVTT",
+    xsub: "XSUB",
+  };
+  return labels[normalized] ?? normalized.toUpperCase();
+}
+
+function filenameFrameRateValue(value: number | null | undefined): string {
+  if (!value || !Number.isFinite(value) || value <= 0) return "";
+  return `${Number.isInteger(value) ? value : value.toFixed(3).replace(/\.?0+$/, "")} fps`;
+}
 
 function filenameTemplateParts(template: string): FilenameTemplatePart[] {
   const parts: FilenameTemplatePart[] = [];
@@ -304,6 +401,7 @@ const AUDIO_BITRATES: Record<string, number[]> = {
 
 const DEFAULT_AUDIO_BITRATES = AUDIO_BITRATES.aac;
 const DEFAULT_FILENAME_TEMPLATE = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]";
+const DEFAULT_FOLDER_TEMPLATE = "{folderName}";
 
 function filenameTemplateForSubtitleOption(includeSubtitleLanguages: boolean): string {
   return includeSubtitleLanguages
@@ -318,13 +416,14 @@ function isKnownDefaultFilenameTemplate(template: string): boolean {
 function filenameLanguageSet(
   decisions: TranscodePlan["audio_streams"] | TranscodePlan["subtitle_streams"],
   sources: AudioStream[] | SubtitleStream[],
+  format: FilenameLanguageCodeFormat,
 ): string[] {
   return [...new Set(
     decisions
       .filter((decision) => decision.action !== "drop")
       .map((decision) => {
         const source = sources.find((entry) => entry.stream_index === decision.stream_index);
-        return normalizeLanguageTag(decision.language ?? source?.language) ?? (decision.language ?? source?.language ?? "").trim();
+        return formatFilenameLanguageCode(decision.language ?? source?.language, format);
       })
       .filter(Boolean),
   )].sort();
@@ -348,13 +447,37 @@ function filenameCleanupError(plan: TranscodePlan): string | null {
   }
 }
 
+function folderCleanupPattern(plan: TranscodePlan): string | null {
+  const preset = plan.folder_cleanup_preset ?? "none";
+  if (preset === "none") return null;
+  if (preset === "custom") return plan.folder_cleanup_regex?.trim() || null;
+  return FILENAME_CLEANUP_PATTERNS[preset] ?? null;
+}
+
+function folderCleanupError(plan: TranscodePlan): string | null {
+  const pattern = folderCleanupPattern(plan);
+  if (!pattern) return null;
+  try {
+    new RegExp(pattern);
+    return null;
+  } catch {
+    return "invalid";
+  }
+}
+
 function cleanFilenameStem(stem: string, plan: TranscodePlan): string {
   const pattern = filenameCleanupPattern(plan);
   if (!pattern || filenameCleanupError(plan)) return stem;
   return stem.replace(new RegExp(pattern, "g"), "").replace(/\s+/g, " ").trim().replace(/^[ ._-]+|[ ._-]+$/g, "");
 }
 
-function filenamePreviewValues(file: MediaFileDetail, data: FileTranscode, plan: TranscodePlan): Record<string, string> {
+function filenamePreviewValues(
+  file: MediaFileDetail,
+  data: FileTranscode,
+  plan: TranscodePlan,
+  connectorSources: FileConnectorSource[],
+  resolutionCategories: ResolutionCategory[] | null | undefined,
+): Record<string, string> {
   const primaryPlan = plan.video_streams.find((stream) => stream.action !== "drop");
   const sourceVideo = file.video_streams.find((stream) => stream.stream_index === primaryPlan?.stream_index) ?? file.video_streams[0];
   const width = primaryPlan?.width ?? sourceVideo?.width ?? data.original.width;
@@ -362,36 +485,118 @@ function filenamePreviewValues(file: MediaFileDetail, data: FileTranscode, plan:
   const codec = primaryPlan?.action === "encode"
     ? primaryPlan.codec ?? primaryPlan.encoder
     : sourceVideo?.codec ?? data.original.video_codec;
-  const audioLanguages = filenameLanguageSet(plan.audio_streams, file.audio_streams);
-  const subtitleLanguages = filenameLanguageSet(plan.subtitle_streams, file.subtitle_streams);
+  const languageCodeFormat = plan.filename_language_code_format ?? "iso_639_1";
+  const audioLanguages = filenameLanguageSet(plan.audio_streams, file.audio_streams, languageCodeFormat);
+  const subtitleLanguages = filenameLanguageSet(plan.subtitle_streams, file.subtitle_streams, languageCodeFormat);
   const externalLanguages = plan.external_subtitles
     .filter((entry) => entry.action !== "drop")
     .map((entry) => {
       const source = file.external_subtitles.find((subtitle) => subtitle.id === entry.subtitle_id);
-      return normalizeLanguageTag(entry.language ?? source?.language) ?? (entry.language ?? source?.language ?? "").trim();
+      return formatFilenameLanguageCode(entry.language ?? source?.language, languageCodeFormat);
     })
     .filter(Boolean);
   const allSubtitleLanguages = [...new Set([...subtitleLanguages, ...externalLanguages])].sort();
   const metadataSeparator = plan.filename_metadata_separator ?? ", ";
   const bitrate = primaryPlan?.bitrate ?? sourceVideo?.bit_rate;
+  const audioByIndex = new Map(file.audio_streams.map((stream) => [stream.stream_index, stream]));
+  const selectedAudio = plan.audio_streams.flatMap((decision) => {
+    const source = audioByIndex.get(decision.stream_index);
+    return decision.action !== "drop" && source ? [{ decision, source }] : [];
+  });
+  const subtitleByIndex = new Map(file.subtitle_streams.map((stream) => [stream.stream_index, stream]));
+  const selectedSubtitles = plan.subtitle_streams.flatMap((decision) => {
+    const source = subtitleByIndex.get(decision.stream_index);
+    return decision.action !== "drop" && source ? [{ decision, source }] : [];
+  });
+  const audioCodecs = filenameDistinct(
+    selectedAudio.map(({ decision, source }) => filenameCodecValue(
+      decision.action === "encode" ? decision.codec ?? decision.encoder : source.codec,
+    )),
+    metadataSeparator,
+  );
+  const audioProfiles = filenameDistinct(
+    selectedAudio.map(({ decision, source }) => decision.profile
+      ?? (source.spatial_audio_profile ? formatSpatialAudioProfileLabel(source.spatial_audio_profile) : null)
+      ?? source.profile
+      ?? ""),
+    metadataSeparator,
+  );
+  const audioChannels = filenameDistinct(
+    selectedAudio.map(({ source }) => filenameAudioChannelValue(source.channel_layout, source.channels)),
+    metadataSeparator,
+  );
+  const subtitleFormats = filenameDistinct(
+    [
+      ...selectedSubtitles.map(({ decision, source }) => filenameSubtitleFormatValue(
+        decision.action === "encode" ? decision.codec ?? decision.encoder : source.codec,
+      )),
+      ...plan.external_subtitles
+        .filter((entry) => entry.action !== "drop")
+        .map((entry) => {
+          const source = file.external_subtitles.find((subtitle) => subtitle.id === entry.subtitle_id);
+          return filenameSubtitleFormatValue(entry.action === "encode" ? entry.codec ?? source?.format : source?.format);
+        }),
+    ],
+    metadataSeparator,
+  );
+  const connectorSeriesName = firstConnectorValue(connectorSources, (source) => source.series_name);
+  const connectorSeasonNumber = firstConnectorValue(connectorSources, (source) => source.season_number);
+  const connectorEpisodeNumber = firstConnectorValue(connectorSources, (source) => source.episode_number);
+  const connectorEpisodeTitle = firstConnectorValue(
+    connectorSources,
+    (source) => source.episode_title
+      ?? (source.item_type.trim().toLowerCase() === "episode" ? source.title : null),
+  );
+  const seriesName = connectorSeriesName ?? file.series_title ?? file.jellyfin_series_name ?? "";
+  const seasonNumber = connectorSeasonNumber ?? file.season_number;
+  const episodeNumber = connectorEpisodeNumber ?? file.episode_number;
+  const episodeTitle = connectorEpisodeTitle ?? file.episode_title ?? "";
+  const frameRate = primaryPlan?.frame_rate ?? sourceVideo?.frame_rate;
+  const bitDepth = sourceVideo?.bit_depth;
+  const resolutionCategory = classifyResolutionCategory(width, height, resolutionCategories);
+  const pathParts = data.original.relative_path.replaceAll("\\", "/").split("/").filter(Boolean);
   return {
+    releaseYear: plan.filename_release_year !== null && plan.filename_release_year !== undefined
+      ? String(plan.filename_release_year)
+      : connectorReleaseYear(connectorSources),
     resolution: width && height ? `${width}x${height}` : "",
+    resolutionCategory: resolutionCategory?.label ?? "",
     dynRange: plan.dynamic_range === "preserve"
       ? data.original.dynamic_range ?? file.hdr_type ?? ""
       : plan.dynamic_range,
     codec: (codec ?? "").toUpperCase(),
     audioLanguages: audioLanguages.join(metadataSeparator),
+    audioCodecs,
+    audioProfiles,
+    audioChannels,
+    frameRate: filenameFrameRateValue(frameRate),
+    bitDepth: bitDepth ? `${bitDepth}-bit` : "",
     subtitleLanguages: allSubtitleLanguages.join(metadataSeparator),
+    subtitleFormats,
+    seriesName,
+    seasonNumber: seasonNumber === null || seasonNumber === undefined ? "" : String(seasonNumber),
+    episodeNumber: episodeNumber === null || episodeNumber === undefined ? "" : String(episodeNumber),
+    episodeTitle,
+    contentCategory: file.content_category ?? "main",
     container: plan.container.toUpperCase(),
     videoBitrate: bitrate ? `${(bitrate / 1_000_000).toFixed(1).replace(/\.0$/, "")}Mbps` : "",
+    folderName: pathParts.length > 1 ? pathParts[pathParts.length - 2] : "",
   };
 }
 
-function renderFilenamePreview(file: MediaFileDetail, data: FileTranscode, plan: TranscodePlan): string {
+function renderFilenamePreview(
+  file: MediaFileDetail,
+  data: FileTranscode,
+  plan: TranscodePlan,
+  connectorSources: FileConnectorSource[],
+  resolutionCategories: ResolutionCategory[] | null | undefined,
+): string {
+  const sourceStem = file.filename.replace(/\.[^./\\]+$/, "");
+  if (plan.filename_format_enabled === false) return `${sourceStem}.${plan.container}`;
   const includeSubtitleLanguages = plan.include_subtitle_languages ?? plan.filename_template.includes("{subtitleLanguages}");
   const override = plan.filename_template_override ?? !isKnownDefaultFilenameTemplate(plan.filename_template);
   const template = override ? plan.filename_template : filenameTemplateForSubtitleOption(includeSubtitleLanguages);
-  const values = filenamePreviewValues(file, data, plan);
+  const values = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories);
   let rendered = template;
   for (const [token, value] of Object.entries(values)) {
     rendered = rendered.replaceAll(`{${token}}`, value);
@@ -404,7 +609,7 @@ function renderFilenamePreview(file: MediaFileDetail, data: FileTranscode, plan:
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
-  const stem = cleanFilenameStem(file.filename.replace(/\.[^./\\]+$/, ""), plan);
+  const stem = cleanFilenameStem(sourceStem, plan);
   return `${`${stem} ${rendered}`.trim() || "transcoded"}.${plan.container}`;
 }
 
@@ -555,6 +760,63 @@ function sourceForStream(
     : kind === "audio_streams"
       ? file.audio_streams.find((entry) => entry.stream_index === streamIndex)
       : file.subtitle_streams.find((entry) => entry.stream_index === streamIndex);
+}
+
+function canonicalTargetCodec(value: string | null | undefined): string {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return ({
+    avc: "h264",
+    h265: "hevc",
+    vvc: "vvc",
+  } as Record<string, string>)[normalized] ?? normalized;
+}
+
+function targetCodecForSource(source: VideoStream | AudioStream | SubtitleStream | undefined, options: string[]): string {
+  const sourceCodec = canonicalTargetCodec(source?.codec);
+  return options.includes(sourceCodec) ? sourceCodec : options[0] ?? sourceCodec;
+}
+
+function hasEncodeSettings(stream: TranscodePlan[StreamKind][number]): boolean {
+  return [
+    stream.codec,
+    stream.encoder,
+    stream.bitrate,
+    stream.crf,
+    stream.cq,
+    stream.width,
+    stream.height,
+    stream.frame_rate,
+    stream.pixel_format,
+    stream.profile,
+    stream.level,
+    stream.preset,
+    stream.gop_size,
+  ].some((value) => value !== null && value !== undefined);
+}
+
+function streamSearchText(
+  kind: StreamKind,
+  stream: TranscodePlan[StreamKind][number],
+  source: VideoStream | AudioStream | SubtitleStream | undefined,
+  action: string,
+  actionLabel: string,
+  languageLabel: string,
+): string {
+  const codecKind = streamKindLabel(kind);
+  return [
+    kind,
+    stream.stream_index,
+    action,
+    actionLabel,
+    languageLabel,
+    formatCodecLabel(source?.codec, codecKind),
+    ...(source ? Object.values(source) : []),
+    ...Object.values(stream),
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => String(value))
+    .join(" ")
+    .toLocaleLowerCase();
 }
 
 function selectedQuality(stream: TranscodePlan[StreamKind][number], spec: QualitySpec): number {
@@ -1005,12 +1267,49 @@ function clonePlan(plan: TranscodePlan): TranscodePlan {
   return clone;
 }
 
-function defaultUnchangedPlan(plan: TranscodePlan): TranscodePlan {
+function sourceHasDefaultFlag(source: VideoStream | AudioStream | SubtitleStream | undefined): boolean {
+  return Boolean(source && "default_flag" in source && source.default_flag);
+}
+
+function normalizePlanStreamOrder(plan: TranscodePlan, file: MediaFileDetail): TranscodePlan {
+  const clone = clonePlan(plan);
+  const sourceStreamsByKind = {
+    video_streams: file.video_streams,
+    audio_streams: file.audio_streams,
+    subtitle_streams: file.subtitle_streams,
+  };
+  for (const kind of STREAM_KINDS) {
+    const sourceStreams = sourceStreamsByKind[kind];
+    const sourceByIndex = new Map(sourceStreams.map((stream) => [stream.stream_index, stream]));
+    const sourceOrder = new Map(sourceStreams.map((stream, index) => [stream.stream_index, index]));
+    const activeStreams = clone[kind].filter((stream) => stream.action !== "drop" && sourceByIndex.has(stream.stream_index));
+    const selectedDefault = activeStreams.find((stream) => stream.default_flag === true)
+      ?? activeStreams.find((stream) => sourceHasDefaultFlag(sourceByIndex.get(stream.stream_index)))
+      ?? activeStreams[0];
+    const defaultIndex = selectedDefault?.stream_index ?? null;
+    clone[kind] = clone[kind]
+      .map((stream) => ({ ...stream, default_flag: defaultIndex !== null && stream.stream_index === defaultIndex }))
+      .sort((left, right) => {
+        const leftDropped = left.action === "drop" ? 1 : 0;
+        const rightDropped = right.action === "drop" ? 1 : 0;
+        if (leftDropped !== rightDropped) return leftDropped - rightDropped;
+        const leftDefault = left.default_flag === true ? 0 : 1;
+        const rightDefault = right.default_flag === true ? 0 : 1;
+        if (leftDefault !== rightDefault) return leftDefault - rightDefault;
+        return (sourceOrder.get(left.stream_index) ?? Number.MAX_SAFE_INTEGER)
+          - (sourceOrder.get(right.stream_index) ?? Number.MAX_SAFE_INTEGER)
+          || left.stream_index - right.stream_index;
+      });
+  }
+  return clone;
+}
+
+function defaultUnchangedPlan(plan: TranscodePlan, file: MediaFileDetail): TranscodePlan {
   const clone = clonePlan(plan);
   for (const kind of STREAM_KINDS) {
     clone[kind] = clone[kind].map((stream) => ({ ...stream, ...COPY_STREAM_PATCH }) as typeof stream);
   }
-  return clone;
+  return normalizePlanStreamOrder(clone, file);
 }
 
 function automaticEncoderPlan(plan: TranscodePlan): TranscodePlan {
@@ -1118,12 +1417,17 @@ export function FileTranscodeHistory({ fileId }: { fileId: string | number }) {
 export function TranscodingPanel({
   file,
   presetHeaderTarget,
+  connectorSources = [],
+  resolutionCategories = [],
 }: {
   file: MediaFileDetail;
   presetHeaderTarget: HTMLElement | null;
+  connectorSources?: FileConnectorSource[];
+  resolutionCategories?: ResolutionCategory[];
 }) {
   const { t, i18n } = useTranslation();
   const federationAutoAppliedRef = useRef(false);
+  const formattingSectionsInitializedRef = useRef(false);
   const [data, setData] = useState<FileTranscode | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
   const [federation, setFederation] = useState<TranscodeFederation | null>(null);
@@ -1138,12 +1442,21 @@ export function TranscodingPanel({
     audio_streams: null,
     subtitle_streams: null,
   });
+  const [streamSearchQueries, setStreamSearchQueries] = useState<Record<StreamKind, string>>({
+    video_streams: "",
+    audio_streams: "",
+    subtitle_streams: "",
+  });
   const [openExternalSubtitles, setOpenExternalSubtitles] = useState(false);
   const [openFilenameSection, setOpenFilenameSection] = useState(true);
-  const [openMetadataSettings, setOpenMetadataSettings] = useState(true);
+  const [openFolderSection, setOpenFolderSection] = useState(true);
+  const [openMetadataSettings, setOpenMetadataSettings] = useState(false);
   const [metadataTokensOpen, setMetadataTokensOpen] = useState(false);
+  const [folderMetadataTokensOpen, setFolderMetadataTokensOpen] = useState(false);
   const filenameTemplateInputRef = useRef<HTMLDivElement | null>(null);
   const filenameTemplateSelectionRef = useRef<{ start: number; end: number } | null>(null);
+  const folderTemplateInputRef = useRef<HTMLDivElement | null>(null);
+  const folderTemplateSelectionRef = useRef<{ start: number; end: number } | null>(null);
   const speedHistoryRef = useRef<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
@@ -1157,10 +1470,10 @@ export function TranscodingPanel({
     ]);
     setData(nextData);
     setCapabilities(nextCapabilities);
-    setPlan((current) => current ?? defaultUnchangedPlan(nextData.presets?.compatibility ?? nextData.profiles.compatibility));
+    setPlan((current) => current ?? defaultUnchangedPlan(nextData.presets?.compatibility ?? nextData.profiles.compatibility, file));
     setJob(nextData.jobs.find(jobIsActive) ?? null);
     setError(null);
-  }, [file.id]);
+  }, [file]);
 
   useEffect(() => {
     let disposed = false;
@@ -1175,22 +1488,35 @@ export function TranscodingPanel({
     setCapabilities(null);
     setPlan(null);
     federationAutoAppliedRef.current = false;
+    formattingSectionsInitializedRef.current = false;
     setSelectedSavedPresetId(null);
     setSelectedPresetKey("");
     setValidation(null);
     setJob(null);
     setActiveStreamTab("video_streams");
     setExpandedStreamRows({ video_streams: null, audio_streams: null, subtitle_streams: null });
+    setStreamSearchQueries({ video_streams: "", audio_streams: "", subtitle_streams: "" });
     setOpenExternalSubtitles(false);
     setOpenFilenameSection(true);
-    setOpenMetadataSettings(true);
+    setOpenFolderSection(true);
+    setOpenMetadataSettings(false);
     setMetadataTokensOpen(false);
+    setFolderMetadataTokensOpen(false);
     filenameTemplateSelectionRef.current = null;
+    folderTemplateSelectionRef.current = null;
     speedHistoryRef.current = [];
     setError(null);
     setLoading(true);
     void refresh().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
   }, [refresh]);
+
+  useEffect(() => {
+    if (!data || !plan || formattingSectionsInitializedRef.current) return;
+    const isSeries = data.original.library_type === "series";
+    setOpenFilenameSection(plan.filename_format_enabled ?? !isSeries);
+    setOpenFolderSection(plan.folder_format_enabled ?? isSeries);
+    formattingSectionsInitializedRef.current = true;
+  }, [data, plan]);
 
   useEffect(() => {
     if (!federation?.settings.enabled || !plan || federationAutoAppliedRef.current || plan.target_mode !== "local") return;
@@ -1246,13 +1572,14 @@ export function TranscodingPanel({
   );
 
   const setPlanKeepingTarget = useCallback((nextPlan: TranscodePlan) => {
+    const normalizedPlan = normalizePlanStreamOrder(nextPlan, file);
     setPlan((current) => ({
-      ...nextPlan,
-      target_mode: current?.target_mode ?? nextPlan.target_mode ?? "local",
-      target_member_id: current?.target_member_id ?? nextPlan.target_member_id ?? null,
-      target_device_id: current?.target_device_id ?? nextPlan.target_device_id ?? null,
+      ...normalizedPlan,
+      target_mode: current?.target_mode ?? normalizedPlan.target_mode ?? "local",
+      target_member_id: current?.target_member_id ?? normalizedPlan.target_member_id ?? null,
+      target_device_id: current?.target_device_id ?? normalizedPlan.target_device_id ?? null,
     }));
-  }, []);
+  }, [file]);
 
   const selectPreset = useCallback((presetKey: typeof PRESET_KEYS[number]) => {
     if (!data) return;
@@ -1308,6 +1635,44 @@ export function TranscodingPanel({
     setValidation(null);
   }, [plan, setExpertPlan]);
 
+  const insertFolderToken = useCallback((token: string) => {
+    if (!plan) return;
+    const currentTemplate = plan.folder_template_override === false
+      ? DEFAULT_FOLDER_TEMPLATE
+      : plan.folder_template ?? DEFAULT_FOLDER_TEMPLATE;
+    const insertion = `{${token}}`;
+    const selection = folderTemplateSelectionRef.current;
+    const start = selection ? Math.min(selection.start, currentTemplate.length) : currentTemplate.length;
+    const end = selection ? Math.min(selection.end, currentTemplate.length) : start;
+    const nextTemplate = `${currentTemplate.slice(0, start)}${insertion}${currentTemplate.slice(end)}`;
+    setExpertPlan({
+      ...plan,
+      profile: "expert",
+      folder_template: nextTemplate,
+      folder_template_override: true,
+    });
+    setFolderMetadataTokensOpen(false);
+    setValidation(null);
+    window.setTimeout(() => {
+      const nextInput = folderTemplateInputRef.current;
+      if (!nextInput) return;
+      const nextPosition = start + insertion.length;
+      restoreFilenameTemplateCaret(nextInput, nextPosition);
+      folderTemplateSelectionRef.current = { start: nextPosition, end: nextPosition };
+    }, 0);
+  }, [plan, setExpertPlan]);
+
+  const updateFolderTemplate = useCallback((nextTemplate: string) => {
+    if (!plan) return;
+    setExpertPlan({
+      ...plan,
+      profile: "expert",
+      folder_template: nextTemplate,
+      folder_template_override: true,
+    });
+    setValidation(null);
+  }, [plan, setExpertPlan]);
+
   const handleFilenameTemplateKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Backspace" && event.key !== "Delete") return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1334,6 +1699,33 @@ export function TranscodingPanel({
       if (nextEditor) restoreFilenameTemplateCaret(nextEditor, start);
     }, 0);
   }, [updateFilenameTemplate]);
+
+  const handleFolderTemplateKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Backspace" && event.key !== "Delete") return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const editor = event.currentTarget;
+    const selection = filenameTemplateSelectionFromEditor(editor);
+    if (!selection || selection.start !== selection.end) return;
+
+    const currentTemplate = filenameTemplateFromEditor(editor);
+    const tokenText = FILENAME_METADATA_TOKENS
+      .map(({ token }) => `{${token}}`)
+      .find((candidate) => event.key === "Backspace"
+        ? currentTemplate.slice(0, selection.start).endsWith(candidate)
+        : currentTemplate.slice(selection.start).startsWith(candidate));
+    if (!tokenText) return;
+
+    event.preventDefault();
+    const start = event.key === "Backspace" ? selection.start - tokenText.length : selection.start;
+    const end = event.key === "Backspace" ? selection.start : selection.start + tokenText.length;
+    const nextTemplate = `${currentTemplate.slice(0, start)}${currentTemplate.slice(end)}`;
+    folderTemplateSelectionRef.current = { start, end: start };
+    updateFolderTemplate(nextTemplate);
+    window.setTimeout(() => {
+      const nextEditor = folderTemplateInputRef.current;
+      if (nextEditor) restoreFilenameTemplateCaret(nextEditor, start);
+    }, 0);
+  }, [updateFolderTemplate]);
 
   const validate = useCallback(async (): Promise<TranscodeValidation | null> => {
     if (!plan) return null;
@@ -1373,6 +1765,11 @@ export function TranscodingPanel({
       ? filenameTemplateForSubtitleOption(plan.include_subtitle_languages ?? plan.filename_template.includes("{subtitleLanguages}"))
       : plan.filename_template
     : "";
+  const displayedFolderTemplate = plan
+    ? plan.folder_template_override === false
+      ? DEFAULT_FOLDER_TEMPLATE
+      : plan.folder_template ?? DEFAULT_FOLDER_TEMPLATE
+    : "";
 
   useLayoutEffect(() => {
     const editor = filenameTemplateInputRef.current;
@@ -1380,6 +1777,13 @@ export function TranscodingPanel({
     if (!editor || !selection || document.activeElement !== editor) return;
     restoreFilenameTemplateCaret(editor, selection.end);
   }, [displayedFilenameTemplate]);
+
+  useLayoutEffect(() => {
+    const editor = folderTemplateInputRef.current;
+    const selection = folderTemplateSelectionRef.current;
+    if (!editor || !selection || document.activeElement !== editor) return;
+    restoreFilenameTemplateCaret(editor, selection.end);
+  }, [displayedFolderTemplate]);
 
   if (loading) return <div className="panel-loader"><LoaderCircle className="spin" aria-hidden="true" />{t("panel.loading")}</div>;
   if (!data || !plan || !capabilities) return <p className="notice error">{error ?? t("transcoding.unavailable")}</p>;
@@ -1439,6 +1843,66 @@ export function TranscodingPanel({
       <option value="expert">{t("transcoding.presets.expert")}</option>
     </select>
   );
+
+  const activeStreamSearchQuery = streamSearchQueries[activeStreamTab];
+  const activeStreamSearchTerms = activeStreamSearchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const filteredActiveStreams = plan[activeStreamTab].filter((stream) => {
+    if (!activeStreamSearchTerms.length) return true;
+    const source = sourceForStream(file, activeStreamTab, stream.stream_index);
+    const sourceLanguage = source && "language" in source ? source.language : null;
+    const languageLabel = formatLanguageLabel(sourceLanguage ?? "und", i18n.language);
+    const action = stream.action === "keep" ? "copy" : stream.action;
+    const searchable = streamSearchText(
+      activeStreamTab,
+      stream,
+      source,
+      action,
+      t(`transcoding.actions.${action}`),
+      languageLabel,
+    );
+    return activeStreamSearchTerms.every((term) => searchable.includes(term));
+  });
+
+  const renderFilenameMetadataToken = (
+    { token, labelKey }: (typeof FILENAME_METADATA_TOKENS)[number],
+    metadataValues: Record<string, string>,
+    onInsert: (token: string) => void,
+  ) => {
+    const label = t(`transcoding.filenameMetadataTokenOptions.${labelKey}`);
+    const exampleValue = metadataValues[token]?.trim() || t("transcoding.filenameMetadataTooltipUnavailable");
+    const description = t("transcoding.filenameMetadataTooltipDescription", { token: `{${token}}`, label })
+      .replaceAll("{token}", `{${token}}`)
+      .replaceAll("{label}", label);
+    return (
+      <TooltipTrigger
+        key={token}
+        className="secondary small transcode-filename-token-pill"
+        ariaLabel={label}
+        tooltipClassName="transcode-filename-token-tooltip-portal"
+        align="start"
+        placement="auto"
+        maxWidth={360}
+        pinOnClick={false}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => onInsert(token)}
+        content={(
+          <div className="transcode-filename-token-tooltip">
+            <div className="transcode-filename-token-tooltip-heading">
+              <code>{`{${token}}`}</code>
+              <strong>{label}</strong>
+            </div>
+            <p>{description}</p>
+            <div className="transcode-filename-token-tooltip-example">
+              <span>{t("transcoding.filenameMetadataTooltipExample")}</span>
+              <code>{`{${token}} → ${exampleValue}`}</code>
+            </div>
+          </div>
+        )}
+      >
+        {`{${token}}`}
+      </TooltipTrigger>
+    );
+  };
 
   return (
     <div className="transcoding-panel">
@@ -1544,123 +2008,205 @@ export function TranscodingPanel({
       ) : null}
 
       <section className="transcode-streams">
-        <div className="transcode-automation-tab-controls transcode-stream-tabs">
-          <div className="transcode-automation-tab-list" role="tablist" aria-label={t("transcoding.streamTabs.ariaLabel")} aria-orientation="horizontal">
-            {STREAM_KINDS.map((kind, index) => {
-              const tabKey = streamTabLabelKey(kind);
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  id={`transcode-stream-tab-${tabKey}`}
-                  role="tab"
-                  className={`transcode-automation-tab-button transcode-stream-tab${activeStreamTab === kind ? " active" : ""}`}
-                  aria-selected={activeStreamTab === kind}
-                  aria-controls={`transcode-stream-panel-${tabKey}`}
-                  tabIndex={activeStreamTab === kind ? 0 : -1}
-                  onClick={() => setActiveStreamTab(kind)}
-                  onKeyDown={(event) => {
-                    let nextIndex: number | null = null;
-                    if (event.key === "ArrowRight") nextIndex = (index + 1) % STREAM_KINDS.length;
-                    if (event.key === "ArrowLeft") nextIndex = (index - 1 + STREAM_KINDS.length) % STREAM_KINDS.length;
-                    if (event.key === "Home") nextIndex = 0;
-                    if (event.key === "End") nextIndex = STREAM_KINDS.length - 1;
-                    if (nextIndex === null) return;
-                    event.preventDefault();
-                    const nextKind = STREAM_KINDS[nextIndex];
-                    setActiveStreamTab(nextKind);
-                    window.requestAnimationFrame(() => document.getElementById(`transcode-stream-tab-${streamTabLabelKey(nextKind)}`)?.focus());
-                  }}
-                >
-                  <StreamKindIcon kind={kind} />
-                  <span className="transcode-automation-tab-label">{t(`transcoding.streamTabs.${tabKey}`)}</span>
-                  <span className="transcode-stream-tab-count">{plan[kind].length}</span>
-                </button>
-              );
-            })}
+        <div className="compatibility-profile-list transcode-stream-catalog">
+          <div className="transcode-automation-tab-controls transcode-stream-tabs">
+            <div className="transcode-automation-tab-list" role="tablist" aria-label={t("transcoding.streamTabs.ariaLabel")} aria-orientation="horizontal">
+              {STREAM_KINDS.map((kind, index) => {
+                const tabKey = streamTabLabelKey(kind);
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    id={`transcode-stream-tab-${tabKey}`}
+                    role="tab"
+                    className={`transcode-automation-tab-button transcode-stream-tab${activeStreamTab === kind ? " active" : ""}`}
+                    aria-selected={activeStreamTab === kind}
+                    aria-controls={`transcode-stream-panel-${tabKey}`}
+                    tabIndex={activeStreamTab === kind ? 0 : -1}
+                    onClick={() => setActiveStreamTab(kind)}
+                    onKeyDown={(event) => {
+                      let nextIndex: number | null = null;
+                      if (event.key === "ArrowRight") nextIndex = (index + 1) % STREAM_KINDS.length;
+                      if (event.key === "ArrowLeft") nextIndex = (index - 1 + STREAM_KINDS.length) % STREAM_KINDS.length;
+                      if (event.key === "Home") nextIndex = 0;
+                      if (event.key === "End") nextIndex = STREAM_KINDS.length - 1;
+                      if (nextIndex === null) return;
+                      event.preventDefault();
+                      const nextKind = STREAM_KINDS[nextIndex];
+                      setActiveStreamTab(nextKind);
+                      window.requestAnimationFrame(() => document.getElementById(`transcode-stream-tab-${streamTabLabelKey(nextKind)}`)?.focus());
+                    }}
+                  >
+                    <StreamKindIcon kind={kind} />
+                    <span className="transcode-automation-tab-label">{t(`transcoding.streamTabs.${tabKey}`)}</span>
+                    <span className="transcode-stream-tab-count">{plan[kind].length}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-        <div
-          id={`transcode-stream-panel-${streamTabLabelKey(activeStreamTab)}`}
-          className="transcode-stream-tabpanel"
-          role="tabpanel"
-          aria-labelledby={`transcode-stream-tab-${streamTabLabelKey(activeStreamTab)}`}
-          tabIndex={0}
-        >
-          <div className="transcode-stream-list">
-            {plan[activeStreamTab].length ? plan[activeStreamTab].map((stream) => {
+          <div
+            id={`transcode-stream-panel-${streamTabLabelKey(activeStreamTab)}`}
+            className="transcode-stream-tabpanel"
+            role="tabpanel"
+            aria-labelledby={`transcode-stream-tab-${streamTabLabelKey(activeStreamTab)}`}
+            tabIndex={0}
+          >
+            <div className="transcode-stream-list">
+            <div className="compatibility-profile-search transcode-stream-search">
+              <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
+              <input
+                type="search"
+                value={activeStreamSearchQuery}
+                aria-label={t("transcoding.streamSearchAria", { kind: t(`transcoding.streamTabs.${streamTabLabelKey(activeStreamTab)}`) })}
+                placeholder={t("transcoding.streamSearchPlaceholder", { kind: t(`transcoding.streamTabs.${streamTabLabelKey(activeStreamTab)}`) })}
+                onChange={(event) => setStreamSearchQueries((current) => ({
+                  ...current,
+                  [activeStreamTab]: event.target.value,
+                }))}
+              />
+              {activeStreamSearchQuery ? (
+                <button
+                  type="button"
+                  className="compatibility-profile-search-clear"
+                  aria-label={t("transcoding.clearStreamSearch")}
+                  onClick={() => setStreamSearchQueries((current) => ({ ...current, [activeStreamTab]: "" }))}
+                >
+                  <X size={15} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+            {filteredActiveStreams.length ? filteredActiveStreams.map((stream) => {
               const kind = activeStreamTab;
               const source = sourceForStream(file, kind, stream.stream_index);
               const language = source && "language" in source ? source.language : null;
               const languageLabel = formatLanguageLabel(language ?? "und", i18n.language);
               const streamAction = stream.action === "keep" ? "copy" : stream.action;
               const codecKind = streamKindLabel(kind);
+              const streamFormatLabel = formatCodecLabel(source?.codec, codecKind);
+              const languageFirst = kind !== "video_streams";
               const streamEncoders = kind === "video_streams" ? availableVideoEncoders : kind === "audio_streams" ? availableAudioEncoders : availableSubtitleEncoders;
               const streamCodecs = targetCodecOptions(kind, plan.container);
-              const selectedCodec = stream.codec && streamCodecs.includes(stream.codec)
-                ? stream.codec
-                : streamCodecs[0] ?? source?.codec ?? "";
+              const normalizedStreamCodec = canonicalTargetCodec(stream.codec);
+              const selectedCodec = stream.codec && streamCodecs.includes(normalizedStreamCodec)
+                ? normalizedStreamCodec
+                : streamCodecs[0] ?? canonicalTargetCodec(source?.codec) ?? "";
               const selectedEncoder = streamEncoders.find((encoder) => encoder.codec === selectedCodec)
                 ?? pickEncoder(kind, selectedCodec, plan.container, streamEncoders);
               const isExpanded = expandedStreamRows[kind] === stream.stream_index;
+              const isDefault = stream.default_flag === true;
               const detailsId = `transcode-stream-details-${kind}-${stream.stream_index}`;
-              const resetToCopy = () => {
-                setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, COPY_STREAM_PATCH));
+              const commitStreamPlan = (nextPlan: TranscodePlan, action: TranscodeStreamAction) => {
+                setExpertPlan(normalizePlanStreamOrder(nextPlan, file));
+                setExpandedStreamRows((current) => ({ ...current, [kind]: action === "encode" ? stream.stream_index : null }));
                 setValidation(null);
               };
               const setAction = (action: TranscodeStreamAction) => {
                 if (action === "copy") {
-                  resetToCopy();
+                  commitStreamPlan(updateStreamPlan(plan, kind, stream.stream_index, COPY_STREAM_PATCH), action);
                   return;
                 }
                 if (action === "drop") {
-                  setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, { action }));
-                  setValidation(null);
+                  commitStreamPlan(updateStreamPlan(plan, kind, stream.stream_index, { action }), action);
                   return;
                 }
-                const targetCodec = selectedCodec || selectedEncoder?.codec || source?.codec || "";
-                const quality = encoderQualitySpec(selectedEncoder);
+                const preserveExistingEncodeSettings = streamAction === "drop" && hasEncodeSettings(stream);
+                const sourceTargetCodec = targetCodecForSource(source, streamCodecs);
+                const targetCodec = preserveExistingEncodeSettings
+                  ? selectedCodec || selectedEncoder?.codec || sourceTargetCodec
+                  : sourceTargetCodec || selectedCodec || selectedEncoder?.codec || "";
+                const targetEncoder = streamEncoders.find((encoder) => encoder.codec === targetCodec)
+                  ?? pickEncoder(kind, targetCodec, plan.container, streamEncoders);
+                const quality = encoderQualitySpec(targetEncoder);
+                const existingQuality = stream.crf ?? stream.cq;
+                const initialQuality = preserveExistingEncodeSettings && existingQuality !== null && existingQuality !== undefined
+                  ? clampQuality(existingQuality, quality)
+                  : quality.default;
                 const sourceLanguage = source && "language" in source ? normalizeLanguageTag(source.language) : "und";
-                setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, {
+                const sourceTitle = source && "title" in source ? source.title : null;
+                const sourceVideo = kind === "video_streams" ? source as VideoStream | undefined : undefined;
+                commitStreamPlan(updateStreamPlan(plan, kind, stream.stream_index, {
                   action: "encode",
                   encoder: null,
                   codec: targetCodec || null,
-                  crf: kind === "video_streams" && quality.mode === "crf" ? quality.default : null,
-                  cq: kind === "video_streams" && quality.mode !== "crf" ? quality.default : null,
-                  preset: null,
-                  bitrate: kind === "audio_streams" ? defaultAudioBitrate(source as AudioStream | undefined, targetCodec || "aac") || null : null,
+                  crf: kind === "video_streams" && quality.mode === "crf" ? initialQuality : null,
+                  cq: kind === "video_streams" && quality.mode !== "crf" ? initialQuality : null,
+                  preset: preserveExistingEncodeSettings ? stream.preset ?? null : null,
+                  bitrate: kind === "audio_streams"
+                    ? (preserveExistingEncodeSettings ? stream.bitrate : defaultAudioBitrate(source as AudioStream | undefined, targetCodec || "aac")) || null
+                    : null,
                   language: kind !== "video_streams" ? sourceLanguage || "und" : null,
-                  width: null,
-                  height: null,
-                }));
+                  title: kind !== "video_streams" ? sourceTitle ?? null : null,
+                  width: kind === "video_streams" ? sourceVideo?.width ?? null : null,
+                  height: kind === "video_streams" ? sourceVideo?.height ?? null : null,
+                  frame_rate: kind === "video_streams" ? sourceVideo?.frame_rate ?? null : null,
+                  pixel_format: kind === "video_streams" ? sourceVideo?.pix_fmt ?? null : null,
+                  profile: kind === "video_streams" && canonicalTargetCodec(sourceVideo?.codec) === targetCodec
+                    ? sourceVideo?.profile ?? null
+                    : preserveExistingEncodeSettings ? stream.profile ?? null : null,
+                  level: preserveExistingEncodeSettings ? stream.level ?? null : null,
+                  gop_size: preserveExistingEncodeSettings ? stream.gop_size ?? null : null,
+                }), action);
+              };
+              const setDefault = () => {
+                if (isDefault || streamAction === "drop") return;
+                setExpertPlan(normalizePlanStreamOrder({
+                  ...plan,
+                  profile: "expert",
+                  [kind]: plan[kind].map((item) => ({
+                    ...item,
+                    default_flag: item.stream_index === stream.stream_index,
+                  })),
+                }, file));
                 setValidation(null);
               };
               return (
-                <article key={stream.stream_index} className={`transcode-stream-list-item${isExpanded ? " is-expanded" : ""}`}>
+                <article key={stream.stream_index} className={`transcode-stream-list-item${isExpanded ? " is-expanded" : ""}${streamAction === "drop" ? " is-dropped" : ""}`}>
                   <div className="transcode-stream-list-row">
                     <button
                       type="button"
                       className="transcode-stream-row-trigger"
-                      aria-label={`${t(`transcoding.streamKinds.${codecKind}`)} ${stream.stream_index}: ${formatCodecLabel(source?.codec, codecKind)} · ${languageLabel}`}
+                      aria-label={`${t(`transcoding.streamKinds.${codecKind}`)} ${stream.stream_index}: ${languageFirst ? `${languageLabel} · ${streamFormatLabel}` : `${streamFormatLabel} · ${languageLabel}`}`}
                       aria-expanded={isExpanded}
                       aria-controls={isExpanded ? detailsId : undefined}
                       onClick={() => setExpandedStreamRows((current) => ({ ...current, [kind]: isExpanded ? null : stream.stream_index }))}
                     >
-                      <span className="transcode-stream-row-copy">
+                      <span className={`transcode-stream-row-copy${languageFirst ? " is-language-first" : ""}`}>
                         <strong>#{stream.stream_index}</strong>
-                        <span>{formatCodecLabel(source?.codec, codecKind)}</span>
-                        <span className="transcode-language-badge">{languageLabel}</span>
+                        {languageFirst ? (
+                          <>
+                            <span className="transcode-language-badge">{languageLabel}</span>
+                            <span className="transcode-stream-format">{streamFormatLabel}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="transcode-stream-format">{streamFormatLabel}</span>
+                            <span className="transcode-language-badge">{languageLabel}</span>
+                          </>
+                        )}
                       </span>
                       <ChevronDown aria-hidden="true" />
                     </button>
-                    <StreamActionField
-                      streamIndex={stream.stream_index}
-                      value={streamAction}
-                      controlClass={transcodeControlClass}
-                      t={t}
-                      expanded={isExpanded}
-                      onChange={setAction}
-                    />
+                    <div className="transcode-stream-row-actions">
+                      <button
+                        type="button"
+                        className={`secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button${isDefault ? " is-favorite" : ""}`}
+                        aria-label={t(isDefault ? "transcoding.defaultStream" : "transcoding.setDefaultStream")}
+                        aria-pressed={isDefault}
+                        title={t(isDefault ? "transcoding.defaultStream" : "transcoding.setDefaultStream")}
+                        onClick={setDefault}
+                      >
+                        <SparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+                      </button>
+                      <StreamActionField
+                        streamIndex={stream.stream_index}
+                        value={streamAction}
+                        controlClass={transcodeControlClass}
+                        t={t}
+                        expanded={isExpanded}
+                        onChange={setAction}
+                      />
+                    </div>
                   </div>
                   {isExpanded ? (
                     <div id={detailsId} className="transcode-stream-details">
@@ -1706,7 +2252,8 @@ export function TranscodingPanel({
                   ) : null}
                 </article>
               );
-            }) : <p className="field-hint transcode-stream-empty">{t("transcoding.noStreams")}</p>}
+            }) : <p className="field-hint transcode-stream-empty">{activeStreamSearchTerms.length ? t("transcoding.streamSearchEmpty") : t("transcoding.noStreams")}</p>}
+            </div>
           </div>
         </div>
         {file.external_subtitles.length ? (
@@ -1759,32 +2306,71 @@ export function TranscodingPanel({
 
       {(() => {
         const displayedTemplate = displayedFilenameTemplate;
+        const filenameFormattingEnabled = plan.filename_format_enabled ?? data.original.library_type !== "series";
+        const filenameSectionExpanded = openFilenameSection && filenameFormattingEnabled;
         const filenameCleanupPreset = plan.filename_cleanup_preset ?? "none";
         const cleanupError = filenameCleanupError(plan);
-        const preview = renderFilenamePreview(file, data, plan);
+        const preview = renderFilenamePreview(file, data, plan, connectorSources, resolutionCategories);
+        const filenameMetadataValues = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories);
+        const availableFilenameMetadataTokens = FILENAME_METADATA_TOKENS.filter(
+          (entry) => entry.token !== "folderName" && (!entry.connectorOnly || Boolean(connectorReleaseYear(connectorSources))),
+        );
         return (
-          <section className={`media-card library-settings-card transcode-filename-section${openFilenameSection ? " is-expanded" : " is-collapsed"}`}>
+          <section className={`media-card library-settings-card transcode-filename-section${filenameSectionExpanded ? " is-expanded" : " is-collapsed"}${filenameFormattingEnabled ? "" : " is-disabled"}`}>
             <header className="transcode-filename-header">
               <button
                 type="button"
-                className="transcode-filename-toggle"
-                aria-expanded={openFilenameSection}
+                className="secondary icon-only-button transcode-filename-chevron-toggle"
+                aria-label={t(filenameSectionExpanded ? "panel.collapseAria" : "panel.expandAria", { title: t("transcoding.filenameFormatting") })}
+                aria-expanded={filenameSectionExpanded}
                 aria-controls={`transcode-filename-${file.id}`}
                 onClick={() => setOpenFilenameSection((current) => !current)}
               >
                 <span className="transcode-filename-chevron" aria-hidden="true">
-                  {openFilenameSection ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
+                  {filenameSectionExpanded ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
                 </span>
+              </button>
+              <label className="toggle-switch transcode-formatting-toggle">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label={t("transcoding.filenameFormattingToggle")}
+                  checked={filenameFormattingEnabled}
+                  onChange={(event) => {
+                    setExpertPlan({ ...plan, profile: "expert", filename_format_enabled: event.target.checked });
+                    if (event.target.checked) setOpenFilenameSection(true);
+                    setValidation(null);
+                  }}
+                />
+                <span className="toggle-switch-track"><span className="toggle-switch-thumb" /></span>
+              </label>
+              <button
+                type="button"
+                className="transcode-filename-toggle"
+                aria-expanded={filenameSectionExpanded}
+                aria-controls={`transcode-filename-${file.id}`}
+                onClick={() => setOpenFilenameSection((current) => !current)}
+              >
                 <span className="transcode-filename-heading">
-                  <h3>{t("transcoding.filenameTemplate")}</h3>
+                  <h3>{t("transcoding.filenameFormatting")}</h3>
                 </span>
               </button>
               <TooltipTrigger
-                ariaLabel={t("transcoding.filenameTemplateHelpAria")}
-                content={t("transcoding.filenameTemplateHelp")}
+                className="transcode-filename-header-tooltip"
+                ariaLabel={t("transcoding.filenameFormattingHelpAria")}
+                content={t("transcoding.filenameFormattingHelp")}
               />
+              <select
+                className={`${transcodeControlClass} transcode-formatting-preset-select`}
+                aria-label={t("transcoding.filenameFormattingPreset")}
+                title={t("transcoding.filenameFormattingPresetEmpty")}
+                defaultValue=""
+                disabled
+              >
+                <option value="">{t("transcoding.filenameFormattingPresetEmpty")}</option>
+              </select>
             </header>
-            {openFilenameSection ? (
+            {openFilenameSection && filenameFormattingEnabled ? (
               <div className="transcode-filename-body" id={`transcode-filename-${file.id}`}>
                 <div
                   ref={filenameTemplateInputRef}
@@ -1829,7 +2415,7 @@ export function TranscodingPanel({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => setMetadataTokensOpen((current) => !current)}
                   >
-                    <Plus aria-hidden="true" size={14} />
+                    {metadataTokensOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
                     {t("transcoding.filenameAddMetadata")}
                   </button>
                   {metadataTokensOpen ? (
@@ -1839,19 +2425,7 @@ export function TranscodingPanel({
                       role="group"
                       aria-label={t("transcoding.filenameMetadataTokens")}
                     >
-                      {FILENAME_METADATA_TOKENS.map(({ token, labelKey }) => (
-                        <button
-                          key={token}
-                          type="button"
-                          className="secondary small transcode-filename-token-pill"
-                          aria-label={t(`transcoding.filenameMetadataTokenOptions.${labelKey}`)}
-                          title={t(`transcoding.filenameMetadataTokenOptions.${labelKey}`)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => insertFilenameToken(token)}
-                        >
-                          {`{${token}}`}
-                        </button>
-                      ))}
+                      {availableFilenameMetadataTokens.map((entry) => renderFilenameMetadataToken(entry, filenameMetadataValues, insertFilenameToken))}
                     </div>
                   ) : null}
                 </div>
@@ -1880,11 +2454,13 @@ export function TranscodingPanel({
                   </label>
                   <div className="transcode-filename-cleanup">
                     <div className="transcode-filename-cleanup-heading">
-                      <h4>{t("transcoding.filenameCleanup")}</h4>
-                      <TooltipTrigger
-                        ariaLabel={t("transcoding.filenameCleanupHelpAria")}
-                        content={t("transcoding.filenameCleanupHelp")}
-                      />
+                      <span className="transcode-field-label">
+                        <span>{t("transcoding.filenameCleanup")}</span>
+                        <TooltipTrigger
+                          ariaLabel={t("transcoding.filenameCleanupHelpAria")}
+                          content={t("transcoding.filenameCleanupHelp")}
+                        />
+                      </span>
                     </div>
                     <label className="transcode-filename-field transcode-filename-cleanup-control">
                       <span className="sr-only">{t("transcoding.filenameCleanupPreset")}</span>
@@ -1939,6 +2515,203 @@ export function TranscodingPanel({
         );
       })()}
 
+      {(() => {
+        const folderFormattingEnabled = plan.folder_format_enabled ?? data.original.library_type === "series";
+        const folderSectionExpanded = openFolderSection && folderFormattingEnabled;
+        const folderCleanupPreset = plan.folder_cleanup_preset ?? "none";
+        const cleanupError = folderCleanupError(plan);
+        const folderMetadataValues = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories);
+        const availableFolderMetadataTokens = FILENAME_METADATA_TOKENS.filter(
+          (entry) => !entry.connectorOnly || Boolean(connectorReleaseYear(connectorSources)),
+        );
+        return (
+          <section className={`media-card library-settings-card transcode-filename-section transcode-folder-section${folderSectionExpanded ? " is-expanded" : " is-collapsed"}${folderFormattingEnabled ? "" : " is-disabled"}`}>
+            <header className="transcode-filename-header">
+              <button
+                type="button"
+                className="secondary icon-only-button transcode-filename-chevron-toggle"
+                aria-label={t(folderSectionExpanded ? "panel.collapseAria" : "panel.expandAria", { title: t("transcoding.folderFormatting") })}
+                aria-expanded={folderSectionExpanded}
+                aria-controls={`transcode-folder-${file.id}`}
+                onClick={() => setOpenFolderSection((current) => !current)}
+              >
+                <span className="transcode-filename-chevron" aria-hidden="true">
+                  {folderSectionExpanded ? <ChevronDown className="nav-icon" /> : <ChevronRight className="nav-icon" />}
+                </span>
+              </button>
+              <label className="toggle-switch transcode-formatting-toggle">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label={t("transcoding.folderFormattingToggle")}
+                  checked={folderFormattingEnabled}
+                  onChange={(event) => {
+                    setExpertPlan({
+                      ...plan,
+                      profile: "expert",
+                      folder_format_enabled: event.target.checked,
+                    });
+                    if (event.target.checked) setOpenFolderSection(true);
+                    setValidation(null);
+                  }}
+                />
+                <span className="toggle-switch-track"><span className="toggle-switch-thumb" /></span>
+              </label>
+              <button
+                type="button"
+                className="transcode-filename-toggle"
+                aria-expanded={folderSectionExpanded}
+                aria-controls={`transcode-folder-${file.id}`}
+                onClick={() => setOpenFolderSection((current) => !current)}
+              >
+                <span className="transcode-filename-heading">
+                  <h3>{t("transcoding.folderFormatting")}</h3>
+                </span>
+              </button>
+              <TooltipTrigger
+                className="transcode-filename-header-tooltip"
+                ariaLabel={t("transcoding.folderFormattingHelpAria")}
+                content={t("transcoding.folderFormattingHelp")}
+              />
+              <select
+                className={`${transcodeControlClass} transcode-formatting-preset-select`}
+                aria-label={t("transcoding.folderFormattingPreset")}
+                title={t("transcoding.folderFormattingPresetEmpty")}
+                defaultValue=""
+                disabled
+              >
+                <option value="">{t("transcoding.folderFormattingPresetEmpty")}</option>
+              </select>
+            </header>
+            {openFolderSection && folderFormattingEnabled ? (
+              <div className="transcode-filename-body" id={`transcode-folder-${file.id}`}>
+                <div
+                  ref={folderTemplateInputRef}
+                  className={`${transcodeControlClass} transcode-filename-template-input transcode-filename-template-editor`}
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-label={t("transcoding.folderTemplate")}
+                  aria-multiline="false"
+                  aria-valuetext={displayedFolderTemplate}
+                  onInput={(event) => {
+                    const nextTemplate = filenameTemplateFromEditor(event.currentTarget);
+                    const selection = filenameTemplateSelectionFromEditor(event.currentTarget);
+                    if (selection) folderTemplateSelectionRef.current = selection;
+                    updateFolderTemplate(nextTemplate);
+                  }}
+                  onKeyDown={handleFolderTemplateKeyDown}
+                  onSelect={(event) => {
+                    const selection = filenameTemplateSelectionFromEditor(event.currentTarget);
+                    if (selection) folderTemplateSelectionRef.current = selection;
+                  }}
+                  onKeyUp={(event) => {
+                    const selection = filenameTemplateSelectionFromEditor(event.currentTarget);
+                    if (selection) folderTemplateSelectionRef.current = selection;
+                  }}
+                  onMouseUp={(event) => {
+                    const selection = filenameTemplateSelectionFromEditor(event.currentTarget);
+                    if (selection) folderTemplateSelectionRef.current = selection;
+                  }}
+                  onBlur={(event) => {
+                    const selection = filenameTemplateSelectionFromEditor(event.currentTarget);
+                    if (selection) folderTemplateSelectionRef.current = selection;
+                  }}
+                  dangerouslySetInnerHTML={{ __html: filenameTemplateEditorMarkup(displayedFolderTemplate) }}
+                />
+                <div className="transcode-filename-metadata-tools">
+                  <button
+                    type="button"
+                    className="secondary small settings-panel-header-action transcode-filename-metadata-toggle"
+                    aria-expanded={folderMetadataTokensOpen}
+                    aria-controls={`transcode-folder-metadata-${file.id}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setFolderMetadataTokensOpen((current) => !current)}
+                  >
+                    {folderMetadataTokensOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
+                    {t("transcoding.folderAddMetadata")}
+                  </button>
+                  {folderMetadataTokensOpen ? (
+                    <div
+                      className="transcode-filename-token-list"
+                      id={`transcode-folder-metadata-${file.id}`}
+                      role="group"
+                      aria-label={t("transcoding.folderMetadataTokens")}
+                    >
+                      {availableFolderMetadataTokens.map((entry) => renderFilenameMetadataToken(entry, folderMetadataValues, insertFolderToken))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="transcode-filename-options-row">
+                  <label className="transcode-filename-field transcode-filename-divider-field">
+                    <span className="transcode-field-label">
+                      <span>{t("transcoding.folderMetadataSeparator")}</span>
+                      <TooltipTrigger
+                        ariaLabel={t("transcoding.folderMetadataSeparatorHelpAria")}
+                        content={t("transcoding.folderMetadataSeparatorHelp")}
+                      />
+                    </span>
+                    <input
+                      className={transcodeControlClass}
+                      aria-label={t("transcoding.folderMetadataSeparator")}
+                      value={plan.folder_metadata_separator ?? ", "}
+                      onChange={(event) => {
+                        setExpertPlan({ ...plan, profile: "expert", folder_metadata_separator: event.target.value });
+                        setValidation(null);
+                      }}
+                    />
+                  </label>
+                  <div className="transcode-filename-cleanup">
+                    <div className="transcode-filename-cleanup-heading">
+                      <span className="transcode-field-label">
+                        <span>{t("transcoding.folderCleanup")}</span>
+                        <TooltipTrigger
+                          ariaLabel={t("transcoding.folderCleanupHelpAria")}
+                          content={t("transcoding.folderCleanupHelp")}
+                        />
+                      </span>
+                    </div>
+                    <label className="transcode-filename-field transcode-filename-cleanup-control">
+                      <span className="sr-only">{t("transcoding.folderCleanupPreset")}</span>
+                      <select
+                        className={transcodeControlClass}
+                        aria-label={t("transcoding.folderCleanupPreset")}
+                        value={folderCleanupPreset}
+                        onChange={(event) => {
+                          setExpertPlan({ ...plan, profile: "expert", folder_cleanup_preset: event.target.value as FilenameCleanupPreset });
+                          setValidation(null);
+                        }}
+                      >
+                        {FILENAME_CLEANUP_OPTIONS.map(({ value, labelKey }) => (
+                          <option key={value} value={value}>{t(`transcoding.folderCleanupOptions.${labelKey}`)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {folderCleanupPreset === "custom" ? (
+                      <label className="transcode-filename-field transcode-filename-cleanup-control">
+                        <span className="sr-only">{t("transcoding.folderCleanupRegex")}</span>
+                        <input
+                          className={transcodeControlClass}
+                          aria-label={t("transcoding.folderCleanupRegex")}
+                          placeholder={t("transcoding.folderCleanupRegexPlaceholder")}
+                          value={plan.folder_cleanup_regex ?? ""}
+                          onChange={(event) => {
+                            setExpertPlan({ ...plan, profile: "expert", folder_cleanup_preset: "custom", folder_cleanup_regex: event.target.value });
+                            setValidation(null);
+                          }}
+                        />
+                      </label>
+                    ) : null}
+                    {cleanupError ? <p className="notice compact error" role="alert">{t("transcoding.folderCleanupInvalid")}</p> : null}
+                  </div>
+                </div>
+                <p className="field-hint transcode-folder-scope-hint">{t("transcoding.folderFormattingScope")}</p>
+              </div>
+            ) : null}
+          </section>
+        );
+      })()}
+
       <section className={`media-card library-settings-card transcode-filename-section transcode-metadata-settings${openMetadataSettings ? " is-expanded" : " is-collapsed"}`}>
         <header className="transcode-filename-header">
           <button
@@ -1958,13 +2731,46 @@ export function TranscodingPanel({
         </header>
         {openMetadataSettings ? (
           <div className="transcode-filename-body" id={`transcode-metadata-settings-${file.id}`}>
-            <div className="transcode-global-options">
+            <div className="transcode-global-options transcode-metadata-option-list" role="group" aria-label={t("transcoding.metadataSettings")}>
               {(["chapters", "metadata", "cover", "attachments"] as const).map((option) => (
-                <label key={option}>
-                  <input type="checkbox" checked={plan[option] === "keep"} onChange={(event) => setExpertPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" })} />
-                  <span>{t(`transcoding.options.${option}`)}</span>
+                <label key={option} className="transcode-global-option">
+                  <input type="checkbox" aria-label={t(`transcoding.options.${option}`)} checked={plan[option] === "keep"} onChange={(event) => {
+                    setExpertPlan({ ...plan, profile: "expert", [option]: event.target.checked ? "keep" : "drop" });
+                    setValidation(null);
+                  }} />
+                  <span className="transcode-global-option-label">{t(`transcoding.options.${option}`)}</span>
+                  <TooltipTrigger
+                    ariaLabel={t(`transcoding.optionHelpAria.${option}`)}
+                    content={t(`transcoding.optionHelp.${option}`)}
+                    pinOnClick={false}
+                  />
                 </label>
               ))}
+              <div className="transcode-global-option transcode-global-option-select">
+                <span className="transcode-global-option-label">{t("transcoding.languageCodeFormat")}</span>
+                <TooltipTrigger
+                  ariaLabel={t("transcoding.languageCodeFormatHelpAria")}
+                  content={t("transcoding.languageCodeFormatHelp")}
+                  pinOnClick={false}
+                  maxWidth={420}
+                />
+                <select
+                  className="settings-choice-input transcode-control"
+                  aria-label={t("transcoding.languageCodeFormat")}
+                  value={plan.filename_language_code_format ?? "iso_639_1"}
+                  onChange={(event) => {
+                    setExpertPlan({
+                      ...plan,
+                      profile: "expert",
+                      filename_language_code_format: event.target.value as FilenameLanguageCodeFormat,
+                    });
+                    setValidation(null);
+                  }}
+                >
+                  <option value="iso_639_1">{t("transcoding.languageCodeFormats.iso_639_1")}</option>
+                  <option value="iso_639_2">{t("transcoding.languageCodeFormats.iso_639_2")}</option>
+                </select>
+              </div>
             </div>
           </div>
         ) : null}

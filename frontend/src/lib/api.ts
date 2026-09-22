@@ -453,6 +453,9 @@ export type FileConnectorSource = {
   original_title: string | null;
   series_name: string | null;
   season_name: string | null;
+  season_number?: number | null;
+  episode_number?: number | null;
+  episode_title?: string | null;
   date_created: string | null;
   premiere_date: string | null;
   production_year: number | null;
@@ -1320,6 +1323,7 @@ export type TranscodeStreamAction = "keep" | "drop" | "copy" | "encode";
 export type TranscodeStreamPlan = {
   stream_index: number;
   action: TranscodeStreamAction;
+  default_flag?: boolean | null;
   codec?: string | null;
   encoder?: string | null;
   bitrate?: number | null;
@@ -1366,10 +1370,23 @@ export type TranscodePlan = {
   attachments: "keep" | "drop";
   filename_template: string;
   filename_template_override?: boolean | null;
+  filename_format_enabled?: boolean;
   include_subtitle_languages?: boolean;
   filename_metadata_separator?: string | null;
+  filename_language_code_format?: "iso_639_1" | "iso_639_2" | null;
+  filename_release_year?: number | null;
+  filename_series_name?: string | null;
+  filename_season_number?: number | null;
+  filename_episode_number?: number | null;
+  filename_episode_title?: string | null;
   filename_cleanup_preset?: FilenameCleanupPreset | null;
   filename_cleanup_regex?: string | null;
+  folder_format_enabled?: boolean;
+  folder_template?: string;
+  folder_template_override?: boolean | null;
+  folder_metadata_separator?: string | null;
+  folder_cleanup_preset?: FilenameCleanupPreset | null;
+  folder_cleanup_regex?: string | null;
   output_mode?: "transcode_output" | "same_directory" | "replace_original" | null;
   execution_mode?: "hardware_required" | "cpu_only" | null;
   replacement_confirmed?: boolean;
@@ -1420,6 +1437,7 @@ export type TranscodePresetDefinition = {
   filename_template_override: boolean;
   include_subtitle_languages: boolean;
   filename_metadata_separator?: string | null;
+  filename_language_code_format?: "iso_639_1" | "iso_639_2" | null;
   filename_cleanup_preset?: FilenameCleanupPreset | null;
   filename_cleanup_regex?: string | null;
   execution_mode: "inherit" | "hardware_required" | "cpu_only";
@@ -1754,6 +1772,7 @@ export type TranscodeFileSummary = {
   id: number | null;
   filename: string;
   relative_path: string;
+  library_type?: LibraryType | string | null;
   size_bytes: number | null;
   duration_seconds: number | null;
   width: number | null;

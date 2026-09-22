@@ -49,7 +49,7 @@ function createLibrarySummary(id: number, overrides: Partial<LibrarySummary> = {
     type: "movies",
     last_scan_at: "2026-03-12T09:00:00Z",
     scan_mode: "manual",
-    duplicate_detection_mode: "off",
+    duplicate_detection_mode: "both",
     scan_config: {},
     created_at: "2026-03-12T08:00:00Z",
     updated_at: "2026-03-12T08:30:00Z",
@@ -1158,6 +1158,57 @@ describe("LibraryDetailPage", () => {
     expect(statisticGrid!.contains(analyzedFilesSection!)).toBe(true);
   });
 
+  it("explains that the duplicate panel needs duplicate detection enabled", async () => {
+    const libraryId = 1261;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
+    vi.spyOn(api, "librarySummary").mockResolvedValue(
+      createLibrarySummary(libraryId, { duplicate_detection_mode: "off" }),
+    );
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    await screen.findByRole("button", { name: "Duplications" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Duplications" }).closest(".async-panel-title-tooltip-wrapper")).not.toBeNull();
+    });
+    const tooltipAnchor = screen.getByRole("button", { name: "Duplications" }).closest(".async-panel-title-tooltip-wrapper");
+    fireEvent.focus(tooltipAnchor!);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Duplicate detection is disabled for this library",
+    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Settings → Libraries → Scanning and analysis → Duplicate detection",
+    );
+  });
+
+  it.each([
+    ["filename", "Show only hash duplicate groups", "Hash duplicate detection is not enabled for this library"],
+    ["filehash", "Show only filename duplicate groups", "Filename duplicate detection is not enabled for this library"],
+  ] as const)("explains when the %s duplicate view is unavailable", async (mode, buttonName, expectedText) => {
+    const libraryId = mode === "filename" ? 1262 : 1263;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
+    vi.spyOn(api, "librarySummary").mockResolvedValue(
+      createLibrarySummary(libraryId, { duplicate_detection_mode: mode }),
+    );
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    const viewButton = await screen.findByRole("button", { name: buttonName });
+    fireEvent.focus(viewButton);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(expectedText);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Settings → Libraries → Scanning and analysis → Duplicate detection",
+    );
+  });
+
   it("loads library history independently from duplicates and files", async () => {
     const libraryId = 127;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -1857,6 +1908,29 @@ describe("LibraryDetailPage", () => {
     expect(duplicatesToggle.closest(".statistic-layout-panel-shell")).not.toHaveClass("is-collapsed-panel");
   });
 
+  it("keeps the duplicate panel expandable and shows an empty state when no groups are found", async () => {
+    const libraryId = 1264;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId, { duplicate_detection_mode: "both" }));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(
+      createDuplicateGroupPage({ total_groups: 0, duplicate_file_count: 0, suppressed_group_count: 0, items: [] }),
+    );
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+
+    renderPage(libraryId);
+
+    await screen.findByRole("button", { name: "Duplications" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Duplications" })).not.toBeDisabled());
+    const duplicatesToggle = screen.getByRole("button", { name: "Duplications" });
+    fireEvent.click(duplicatesToggle);
+
+    const emptyState = await screen.findByText("No duplicate groups found yet.");
+    expect(emptyState.closest(".duplicate-panel-empty-state")).not.toBeNull();
+    expect(duplicatesToggle).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("renders a compact animated empty state when the selected duplicate view has no groups", async () => {
     const libraryId = 127;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -2271,6 +2345,7 @@ describe("LibraryDetailPage", () => {
   it("reloads duplicate groups after an active scan finishes", async () => {
     const libraryId = 203;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "libraries").mockResolvedValue([]);
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
     const libraryDuplicatesSpy = vi
@@ -2301,16 +2376,15 @@ describe("LibraryDetailPage", () => {
     renderPage(libraryId);
 
     const duplicatesToggle = await screen.findByRole("button", { name: "Duplications" });
-    expect(duplicatesToggle).toBeDisabled();
-    expect(screen.queryByText("No duplicate groups found yet.")).not.toBeInTheDocument();
-    expect(screen.queryByRole("searchbox", { name: "Search duplicates" })).not.toBeInTheDocument();
+    await waitFor(() => expect(duplicatesToggle).not.toBeDisabled());
+    fireEvent.click(duplicatesToggle);
+    expect(await screen.findByText("No duplicate groups found yet.")).toBeInTheDocument();
     await waitFor(() => expect(api.activeScanJobs).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(libraryDuplicatesSpy).toHaveBeenCalledTimes(1));
 
     fireEvent.focus(window);
 
     await waitFor(() => expect(libraryDuplicatesSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
-    fireEvent.click(screen.getByRole("button", { name: "Duplications" }));
     expect((await screen.findAllByText("episode-01-copy.mkv")).length).toBeGreaterThan(0);
   });
 

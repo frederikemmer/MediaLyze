@@ -19,6 +19,9 @@ class TranscodeStreamPlan(BaseModel):
 
     stream_index: int = Field(ge=0)
     action: TranscodeStreamAction = TranscodeStreamAction.copy
+    # ``None`` inherits the source disposition until validation chooses one
+    # default stream per media type.
+    default_flag: bool | None = None
     codec: str | None = Field(default=None, max_length=64)
     # Optional for requests: the target worker resolves the concrete encoder
     # from the requested codec and its own capability probe.
@@ -73,8 +76,18 @@ class TranscodePlan(BaseModel):
     # standard template remains the source of truth even when a locale/UI
     # changes its display string.
     filename_template_override: bool | None = None
+    filename_format_enabled: bool = True
     include_subtitle_languages: bool = False
+    filename_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
     filename_metadata_separator: str = Field(default=", ", max_length=32)
+    # Resolved from matched connector metadata during validation. Keeping the
+    # value in the normalized plan lets remote federation workers render the
+    # same filename even when they do not have the connector catalog locally.
+    filename_release_year: int | None = Field(default=None, ge=0, le=9999)
+    filename_series_name: str | None = Field(default=None, max_length=1024)
+    filename_season_number: int | None = Field(default=None, ge=0)
+    filename_episode_number: int | None = Field(default=None, ge=0)
+    filename_episode_title: str | None = Field(default=None, max_length=512)
     filename_cleanup_preset: Literal[
         "none",
         "square_brackets",
@@ -84,6 +97,19 @@ class TranscodePlan(BaseModel):
         "custom",
     ] = "none"
     filename_cleanup_regex: str | None = Field(default=None, max_length=256)
+    folder_format_enabled: bool = False
+    folder_template: str = Field(default="{folderName}", min_length=1, max_length=512)
+    folder_template_override: bool | None = None
+    folder_metadata_separator: str = Field(default=", ", max_length=32)
+    folder_cleanup_preset: Literal[
+        "none",
+        "square_brackets",
+        "round_brackets",
+        "square_and_round_brackets",
+        "all_brackets",
+        "custom",
+    ] = "none"
+    folder_cleanup_regex: str | None = Field(default=None, max_length=256)
     # ``None`` inherits the persisted global runtime settings. This keeps the
     # request contract backwards-compatible while preserving the global
     # hardware-required default for older API clients.
@@ -180,6 +206,7 @@ class TranscodePresetDefinition(BaseModel):
     )
     filename_template_override: bool = False
     include_subtitle_languages: bool = False
+    filename_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
     filename_metadata_separator: str = Field(default=", ", max_length=32)
     filename_cleanup_preset: Literal[
         "none",
@@ -606,6 +633,7 @@ class TranscodeFileSummary(BaseModel):
     id: int | None = None
     filename: str
     relative_path: str
+    library_type: str | None = None
     size_bytes: int | None = None
     duration_seconds: float | None = None
     width: int | None = None

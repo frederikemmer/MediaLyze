@@ -10,6 +10,7 @@ import {
   DEFAULT_QUALITY_PROFILE,
   type AppSettings,
   type BrowseResponse,
+  type ConnectorConnection,
   type HistoryReconstructionStatus,
   type DashboardResponse,
   type HistoryReconstructionResult,
@@ -253,6 +254,32 @@ function createLibrarySummary(overrides: Partial<LibrarySummary> = {}): LibraryS
   };
 }
 
+function createConnectorConnection(overrides: Partial<ConnectorConnection> = {}): ConnectorConnection {
+  return {
+    id: 1,
+    provider: "jellyfin",
+    name: "Jellyfin",
+    base_url: "http://jellyfin:8096",
+    config: {},
+    capabilities: {},
+    enabled: true,
+    sync_interval_minutes: 60,
+    path_mapping_mode: "automatic",
+    library_mapping_mode: "automatic",
+    server_name: "Jellyfin",
+    server_version: "10.10",
+    last_status: "success",
+    last_error: null,
+    last_sync_started_at: null,
+    last_sync_finished_at: null,
+    last_successful_sync_at: null,
+    has_secret: true,
+    created_at: "2026-03-15T12:00:00Z",
+    updated_at: "2026-03-15T12:00:00Z",
+    ...overrides,
+  };
+}
+
 function createJellyfinLibrary(overrides: Partial<JellyfinLibrary> = {}): JellyfinLibrary {
   return {
     id: 7,
@@ -475,6 +502,7 @@ async function expandLibrarySettings() {
 
 beforeEach(() => {
   vi.spyOn(api, "libraries").mockResolvedValue([]);
+  vi.spyOn(api, "connectors").mockResolvedValue([]);
   vi.spyOn(api, "jellyfinLibraries").mockResolvedValue([]);
   vi.spyOn(api, "jellyfinPathMappings").mockResolvedValue([]);
   vi.spyOn(api, "updateJellyfinPathMappingsBatch").mockResolvedValue([]);
@@ -623,7 +651,20 @@ describe("LibrariesPage settings navigation", () => {
   });
 
   it("opens a linked library at the central connector status", async () => {
-    const library = createLibrarySummary({ id: 3, name: "Movies" });
+    const library = createLibrarySummary({
+      id: 3,
+      name: "Movies",
+      connector_links: [
+        {
+          connection_id: 7,
+          connection_name: "Jellyfin",
+          provider: "jellyfin",
+          connector_library_id: 1,
+          connector_library_name: "Movies",
+          link_method: "path",
+        },
+      ],
+    });
     const jellyfinLibrary = createJellyfinLibrary({
       linked_library_id: 3,
       linked_library_name: "Movies",
@@ -636,7 +677,8 @@ describe("LibrariesPage settings navigation", () => {
       initialEntry: "/settings?section=libraries&library=3&focus=path-mapping",
     });
 
-    expect(await screen.findByRole("heading", { name: "Connectors" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open connector" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Connectors" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Path mapping (optional)" })).not.toBeInTheDocument();
   });
 });
@@ -1953,7 +1995,7 @@ describe("LibrariesPage Jellyfin library assignments", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     await expandLibrarySettings();
-    expect(await screen.findByRole("heading", { name: "Connectors" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Connectors" })).not.toBeInTheDocument();
     const openConnectorLink = await screen.findByRole("link", { name: "Open connector" });
     expect(openConnectorLink).toHaveClass(
       "secondary",
@@ -1963,6 +2005,8 @@ describe("LibrariesPage Jellyfin library assignments", () => {
     );
     expect(openConnectorLink.querySelector("svg")).toHaveAttribute("width", "16");
     expect(openConnectorLink.querySelector("svg")).toHaveAttribute("height", "16");
+    expect(openConnectorLink.closest(".library-connector-inline-list")).not.toBeNull();
+    expect(openConnectorLink.closest(".library-settings-section")).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Associated Jellyfin library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Path mapping (optional)" })).not.toBeInTheDocument();
   });
@@ -2090,6 +2134,23 @@ describe("LibrariesPage settings panels", () => {
     expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
   });
 
+  it("opens the separate transcoding presets submenu with future filename and foldername tabs", async () => {
+    vi.spyOn(api, "transcodePresets").mockResolvedValue([]);
+    renderPage({ activePanel: "appSettings" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Transcoding Presets" }));
+
+    expect(await screen.findByRole("heading", { name: "Transcoding Presets" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Presets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Filename presets" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Foldername presets" })).toHaveAttribute("aria-selected", "false");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Filename presets" }));
+    expect(await screen.findByText("No filename presets are configured yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Foldername presets" }));
+    expect(await screen.findByText("No foldername presets are configured yet.")).toBeInTheDocument();
+  });
+
   it("collapses and restores the settings navigation", async () => {
     renderPage({ activePanel: "appSettings" });
 
@@ -2119,6 +2180,7 @@ describe("LibrariesPage settings panels", () => {
     expect(menu).toHaveAttribute("aria-hidden", "false");
     expect(within(menu as HTMLElement).getByRole("searchbox", { name: "Search settings" })).toBeInTheDocument();
     expect(within(menu as HTMLElement).getByRole("button", { name: "full scan" })).toBeInTheDocument();
+    expect(within(menu as HTMLElement).getByRole("button", { name: "Sync connectors" })).toBeInTheDocument();
 
     fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));
 
@@ -2423,7 +2485,7 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.getByRole("button", { name: /^libraries$/i })).not.toHaveAttribute("aria-expanded");
   });
 
-  it("queues a full scan for all configured libraries from the quick action", async () => {
+  it("queues a full scan for all configured libraries from the Libraries header", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([
       createLibrarySummary(),
       createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
@@ -2435,15 +2497,74 @@ describe("LibrariesPage settings panels", () => {
 
     renderPage();
 
-    const settingsMenu = await screen.findByLabelText("Settings menu");
-    const desktopQuickActions = settingsMenu.querySelector(".settings-navigation-quick-actions") as HTMLElement | null;
-    expect(desktopQuickActions).not.toBeNull();
-    expect(within(desktopQuickActions as HTMLElement).getByText("Quickactions")).toBeInTheDocument();
-    fireEvent.click(within(desktopQuickActions as HTMLElement).getByRole("button", { name: /^full scan$/i }));
+    const headerActions = document.querySelector(
+      ".libraries-settings-panel .async-panel-toggle-actions",
+    ) as HTMLElement | null;
+    expect(headerActions).not.toBeNull();
+    expect(within(headerActions as HTMLElement).getByRole("button", { name: /^full scan$/i })).toHaveClass(
+      "library-scan-button",
+    );
+    expect(within(headerActions as HTMLElement).getByRole("button", { name: "Add library" })).toBeInTheDocument();
+    expect(
+      Array.from((headerActions as HTMLElement).querySelectorAll("button")).map((button) => button.textContent?.trim()),
+    ).toEqual(["full scan", "Add library"]);
+    expect(document.querySelector(".settings-navigation-quick-actions")?.textContent).toContain("full scan");
+    const fullScanButton = within(headerActions as HTMLElement).getByRole("button", { name: /^full scan$/i });
+    await waitFor(() => expect(fullScanButton).toBeEnabled());
+    fireEvent.click(fullScanButton);
 
     await waitFor(() => {
       expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
       expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
+    });
+  });
+
+  it("queues a full scan for all configured libraries from the Settings quick action", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([
+      createLibrarySummary(),
+      createLibrarySummary({ id: 2, name: "Series", path: "/media/series", type: "series" }),
+    ]);
+    const scanSpy = vi
+      .spyOn(api, "scanLibrary")
+      .mockResolvedValueOnce(createScanJob({ id: 41, library_id: 1, library_name: "Movies", job_type: "full" }))
+      .mockResolvedValueOnce(createScanJob({ id: 42, library_id: 2, library_name: "Series", job_type: "full" }));
+
+    renderPage();
+
+    const quickActions = document.querySelector(".settings-navigation-quick-actions") as HTMLElement | null;
+    expect(quickActions).not.toBeNull();
+    const fullScanButton = within(quickActions as HTMLElement).getByRole("button", { name: /^full scan$/i });
+    await waitFor(() => expect(fullScanButton).toBeEnabled());
+    fireEvent.click(fullScanButton);
+
+    await waitFor(() => {
+      expect(scanSpy).toHaveBeenNthCalledWith(1, 1, "full");
+      expect(scanSpy).toHaveBeenNthCalledWith(2, 2, "full");
+    });
+  });
+
+  it("queues synchronization for every enabled connector from the quick action", async () => {
+    vi.mocked(api.connectors).mockResolvedValue([
+      createConnectorConnection({ id: 7 }),
+      createConnectorConnection({ id: 8, enabled: false }),
+      createConnectorConnection({ id: 9, enabled: true }),
+    ]);
+    const syncSpy = vi.spyOn(api, "syncConnector").mockResolvedValue({
+      job_id: 41,
+      status: "queued",
+      trigger_source: "manual",
+      accepted: true,
+    });
+
+    renderPage();
+
+    const settingsMenu = await screen.findByLabelText("Settings menu");
+    fireEvent.click(within(settingsMenu).getByRole("button", { name: "Sync connectors" }));
+
+    await waitFor(() => {
+      expect(syncSpy).toHaveBeenNthCalledWith(1, 7);
+      expect(syncSpy).toHaveBeenNthCalledWith(2, 9);
+      expect(syncSpy).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -2469,12 +2590,19 @@ describe("LibrariesPage settings panels", () => {
     expect(await screen.findByRole("textbox", { name: "MediaLyze paths: /media/movies" })).toBeInTheDocument();
     const changePathButton = screen.getByRole("button", { name: "Change path" });
     expect(changePathButton).toHaveClass("secondary", "small", "settings-panel-header-action", "library-change-path-button");
+    const sourceHeading = changePathButton.closest(".library-source-section-heading");
+    expect(sourceHeading).not.toBeNull();
+    expect(sourceHeading).not.toHaveTextContent("MediaLyze paths");
+    expect(changePathButton.querySelector("svg")).not.toBeNull();
     expect(screen.getByRole("textbox", { name: "Root alias" })).toHaveClass("library-root-alias-input");
     expect(screen.getByRole("textbox", { name: "MediaLyze paths: /media/movies" })).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Save root alias" })).toBeDisabled();
-    expect(screen.getByRole("heading", { name: "Connectors" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Explain connector assignments" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save root alias" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Connectors" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Explain connector assignments" })).not.toBeInTheDocument();
+    expect(screen.getByText("No connector library is currently assigned.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Explain the media source settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain the scanning and analysis settings" })).toBeInTheDocument();
+    expect(screen.queryByText("Configure scan scheduling, duplicate detection, historical dates, and the quality profile used for this library.")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Associated Jellyfin library" })).not.toBeInTheDocument();
 
     const detailsButton = await screen.findByRole("button", { name: "Show library details for Movies" });
@@ -2493,7 +2621,7 @@ describe("LibrariesPage settings panels", () => {
     await waitFor(() => expect(screen.getByText("0 files")).toBeInTheDocument());
   });
 
-  it("saves a changed root alias while keeping the MediaLyze path read-only", async () => {
+  it("saves a changed root alias automatically while keeping the MediaLyze path read-only", async () => {
     const library = createLibrarySummary({
       roots: [{ id: 1, path: "/media/movies", display_name: "Movies", path_key: "/media/movies" }],
     });
@@ -2511,12 +2639,12 @@ describe("LibrariesPage settings panels", () => {
     const pathInput = screen.getByRole("textbox", { name: "MediaLyze paths: /media/movies" });
     fireEvent.change(aliasInput, { target: { value: "Films" } });
     expect(pathInput).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Save root alias" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save root alias" }));
 
-    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, {
-      roots: [{ id: 1, path: "/media/movies", display_name: "Films" }],
-    }));
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(1, {
+        roots: [{ id: 1, path: "/media/movies", display_name: "Films" }],
+      });
+    }, { timeout: 2000 });
   });
 
   it("toggles dashboard visibility from the library action button and refreshes dashboard data", async () => {

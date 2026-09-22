@@ -213,6 +213,30 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(screen.queryByRole("button", { name: "Start inventory" })).not.toBeInTheDocument();
   });
 
+  it("uses the profile catalog layout and filters standalone presets", async () => {
+    const { container } = render(
+      <TranscodePresetsRulesPanel
+        capabilityMatrix={() => null}
+        acceleratorsTooltip={null}
+        standaloneTab="presets"
+        standalonePresetTabs={(
+          <div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories">
+            <button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true">Presets</button>
+          </div>
+        )}
+      />,
+    );
+
+    const search = await screen.findByRole("searchbox", { name: "Search presets" });
+    expect(container.querySelector(".compatibility-profile-list.compatibility-profile-catalog-list")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "New preset" }).closest(".settings-profile-toggle-row")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Customize Compatibility" })).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "custom" } });
+    expect(screen.getByRole("button", { name: "Edit My preset" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Customize Compatibility" })).not.toBeInTheDocument();
+  });
+
   it("lists paired members before discovered peers and marks new pairing entries with plus icons", async () => {
     const { container } = render(
       <TranscodePresetsRulesPanel

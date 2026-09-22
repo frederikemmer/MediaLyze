@@ -325,14 +325,23 @@ describe("TranscodingSettingsPanel", () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
     expect(await screen.findByRole("heading", { name: "Transcoding" })).toBeInTheDocument();
-    await screen.findByRole("button", { name: "Test Hardware" });
+    const testHardwareButton = await screen.findByRole("button", { name: "Test Hardware" });
+    expect(testHardwareButton.closest(".async-panel-header-status")).toBeNull();
+    expect(testHardwareButton.closest("section.transcode-automation-section")).not.toBeNull();
     expect(screen.queryByRole("combobox", { name: "Hardware device" })).not.toBeInTheDocument();
     expect(screen.queryByText("Hardware device")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("GPU jobs per device")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Retries")).not.toBeInTheDocument();
-    const profileList = document.querySelector(".compatibility-profile-list");
-    expect(profileList?.querySelector(".transcode-automation-toggle-row")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "New preset" }).closest(".transcode-automation-toggle-row")).not.toBeNull();
+    expect(screen.getByText("Automation Rules")).toBeInTheDocument();
+    expect(screen.getByText("Accelerators")).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Transcoding presets and rules" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New preset" })).not.toBeInTheDocument();
+
+    const automationSections = Array.from(document.querySelectorAll(".settings-sidebar-stack > section.transcode-automation-section"));
+    expect(automationSections[0]).toHaveTextContent("Accelerators");
+    expect(automationSections[1]).toHaveTextContent("Automation Rules");
+    expect(screen.getByRole("button", { name: "Expand Accelerators" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand Automation Rules" })).toBeInTheDocument();
 
     const executionMode = screen.getByRole("combobox", { name: "Execution mode" });
     const removePartialOutput = screen.getByRole("combobox", { name: "Partial output" });
@@ -368,12 +377,12 @@ describe("TranscodingSettingsPanel", () => {
   it("shows a neutral empty state until the first capability matrix test", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Accelerators" }));
-
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Accelerators" }));
     const emptyState = await screen.findByText("No capability matrix data yet. Run the hardware test to populate this matrix.");
     expect(emptyState.closest(".panel-empty-state")).not.toBeNull();
     expect(emptyState.closest(".compatibility-profile-list")).not.toBeNull();
-    expect(emptyState.closest(".compatibility-profile-list")?.querySelector(".transcode-automation-toggle-row")).not.toBeNull();
+    expect(emptyState.closest(".compatibility-profile-panel")?.querySelector(".transcode-automation-standalone-header")).not.toBeNull();
+    expect(screen.queryByRole("tablist", { name: "Transcoding presets and rules" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -408,11 +417,13 @@ describe("TranscodingSettingsPanel", () => {
 
     expect(await screen.findByRole("heading", { name: "Federation" })).toBeInTheDocument();
     expect(screen.queryByText("Pair trusted MediaLyze installations directly and let compatible workers execute structured transcode plans without exposing library paths.")).not.toBeInTheDocument();
-    const automationSection = document.querySelector("section.transcode-automation-section");
+    const automationSections = Array.from(document.querySelectorAll(".settings-sidebar-stack > section.transcode-automation-section"));
     const federationPanel = document.querySelector("section.transcode-federation-panel");
-    expect(automationSection).not.toBeNull();
+    expect(automationSections).toHaveLength(2);
     expect(federationPanel).not.toBeNull();
-    expect(federationPanel?.previousElementSibling).toBe(automationSection);
+    expect(automationSections[0]).toHaveTextContent("Accelerators");
+    expect(automationSections[1]).toHaveTextContent("Automation Rules");
+    expect(federationPanel?.previousElementSibling).toBe(automationSections[1]);
 
     const federationToggle = screen.getByRole("switch", { name: "Enable direct federation for this installation" });
     expect(federationToggle).not.toBeChecked();
@@ -479,7 +490,6 @@ describe("TranscodingSettingsPanel", () => {
     fireEvent.click(copyButton);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("123456"));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("tab", { name: "Members" }));
     const connectButtons = screen.getAllByRole("button", { name: "Connect" });
     expect(connectButtons).toHaveLength(2);
     for (const connectButton of connectButtons) {
@@ -505,7 +515,7 @@ describe("TranscodingSettingsPanel", () => {
     const discoveredPeer = document.querySelector(".transcode-federation-peer");
     expect(discoveredPeer).toHaveClass("compatibility-profile-list-item");
     expect(discoveredPeer?.closest(".compatibility-profile-list")).not.toBeNull();
-    expect(discoveredPeer?.closest(".transcode-federation-panel")).toBeNull();
+    expect(discoveredPeer?.closest(".transcode-federation-panel")).not.toBeNull();
     expect(document.querySelector(".transcode-federation-discovered")).toBeNull();
     const refreshDiscoveryButton = screen.getByRole("button", { name: "Refresh discovery" });
     expect(refreshDiscoveryButton).toHaveClass("tooltip-trigger", "icon-only-button", "compatibility-profile-quick-action", "transcode-federation-discovered-refresh");
@@ -567,10 +577,10 @@ describe("TranscodingSettingsPanel", () => {
   it("starts the matrix test and renders directed hardware, software, and unavailable cells", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Accelerators" }));
     fireEvent.click(await screen.findByRole("button", { name: "Test Hardware" }));
 
     await waitFor(() => expect(api.testTranscodeCapabilityMatrix).toHaveBeenCalledTimes(1));
-    fireEvent.click(await screen.findByRole("tab", { name: "Accelerators" }));
     const matrices = await screen.findAllByRole("table");
     const matrix = matrices[0];
     expect(within(matrix).getByLabelText(/H\.265 \/ HEVC → AV1: HW · 3×/)).toBeInTheDocument();
@@ -669,10 +679,9 @@ describe("TranscodingSettingsPanel", () => {
   it("remembers the expanded accelerator devices", async () => {
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Accelerators" }));
     fireEvent.click(await screen.findByRole("button", { name: "Test Hardware" }));
     await waitFor(() => expect(api.testTranscodeCapabilityMatrix).toHaveBeenCalledTimes(1));
-    fireEvent.click(await screen.findByRole("tab", { name: "Accelerators" }));
-
     const initialMatrices = await screen.findAllByRole("table");
     expect(initialMatrices).toHaveLength(2);
     const initialDeviceEntries = document.querySelectorAll("details.transcode-device-matrix");
@@ -687,8 +696,10 @@ describe("TranscodingSettingsPanel", () => {
       [buildTranscodingMatrixEntryKey(null, "render:/dev/dri/renderD128")]: true,
     }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Presets" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Accelerators" }));
+    cleanup();
+    vi.mocked(api.transcodeCapabilityMatrix).mockResolvedValueOnce(completedMatrix);
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Accelerators" }));
     await screen.findAllByRole("table");
 
     const restoredDeviceEntries = document.querySelectorAll("details.transcode-device-matrix");
@@ -701,8 +712,7 @@ describe("TranscodingSettingsPanel", () => {
     vi.mocked(api.transcodeCapabilityMatrix).mockResolvedValueOnce(completedMatrix);
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Accelerators" }));
-
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Accelerators" }));
     const matrices = await screen.findAllByRole("table");
     expect(matrices).toHaveLength(3);
     const memberPill = document.querySelector(".transcode-federation-member-pill:not(.transcode-federation-local-pill)");
@@ -723,23 +733,22 @@ describe("TranscodingSettingsPanel", () => {
     expect(screen.queryByText(/Hardware capability matrix/)).not.toBeInTheDocument();
   });
 
-  it("shows federation member connections in the shared automation toggle", async () => {
+  it("shows federation member connections below the Federation addresses", async () => {
     vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMember);
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Members" }));
-
-    expect(await screen.findByText("Federick-PC")).toBeInTheDocument();
+    const memberNames = await screen.findAllByText("Federick-PC");
+    expect(memberNames.length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByRole("searchbox", { name: "Search federation members" })).not.toBeInTheDocument();
-    const memberList = document.querySelector(".compatibility-profile-list");
-    expect(memberList?.querySelector('[role="tablist"]')).not.toBeNull();
-    expect(memberList?.querySelector(".transcode-automation-toggle-row")).not.toBeNull();
+    const memberPanel = document.querySelector(".transcode-federation-members");
+    expect(memberPanel).not.toBeNull();
+    expect(memberPanel?.querySelector('[role="tablist"]')).toBeNull();
+    expect(memberPanel?.querySelector(".transcode-automation-standalone-header")).not.toBeNull();
     expect(screen.getByText("16 CPU · 125 GB free · 0 active jobs · v0.18.0-dev042")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sync Federick-PC" })).toHaveClass("compatibility-profile-quick-action");
     expect(screen.getByRole("button", { name: "Disconnect Federick-PC" })).toHaveClass("compatibility-profile-quick-action");
-    expect(document.querySelector(".transcode-federation-members")).toBeNull();
 
-    fireEvent.click(screen.getByText("Federick-PC"));
+    fireEvent.click(memberPanel?.querySelector(".transcode-federation-member-name") as HTMLElement);
     expect(await screen.findByText("Available connections")).toBeInTheDocument();
     expect(screen.getByText("http://federick-pc:8091")).toBeInTheDocument();
     expect(document.querySelector(".transcode-federation-member-endpoint-metrics")).toHaveTextContent(/4[.,]2 ms/);
@@ -754,11 +763,17 @@ describe("TranscodingSettingsPanel", () => {
     vi.mocked(api.transcodeFederation).mockResolvedValueOnce(federationWithMemberCapabilities);
     render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Members" }));
-    fireEvent.click(await screen.findByText("Federick-PC"));
+    const memberName = await waitFor(() => {
+      const target = document.querySelector<HTMLElement>(".transcode-federation-member-name");
+      if (!target) throw new Error("Federation member has not rendered yet");
+      return target;
+    });
+    fireEvent.click(memberName);
 
     expect(await screen.findByText("Available connections")).toBeInTheDocument();
-    expect(screen.queryByText("NVIDIA GeForce RTX 3080")).not.toBeInTheDocument();
-    expect(screen.queryByText("Available accelerators")).not.toBeInTheDocument();
+    const memberPanel = document.querySelector(".transcode-federation-members");
+    expect(memberPanel).not.toBeNull();
+    expect(within(memberPanel as HTMLElement).queryByText("NVIDIA GeForce RTX 3080")).not.toBeInTheDocument();
+    expect(within(memberPanel as HTMLElement).queryByText("Available accelerators")).not.toBeInTheDocument();
   });
 });
