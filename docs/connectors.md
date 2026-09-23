@@ -87,6 +87,8 @@ To keep the boundary real, normalize provider-specific media types, identifiers,
 
 ## Credentials
 
+Jellyfin requests send the API key using `Authorization: MediaBrowser Token="..."`. This works with Jellyfin 12's legacy authentication disabled; existing server URLs and API keys do not need to change.
+
 Each connection may own exactly one opaque secret payload in `connector_credentials`. API serializers expose only `has_secret`; they never return the payload. Secret-like configuration keys are rejected in favor of the dedicated credential field. Adapter payloads are scrubbed before persistence, normal catalog/file responses omit raw item payloads, and the explicit provider-payload diagnostic route recursively removes secret-like fields. Exceptions are sanitized before persistence, API responses, or logging.
 
 Secrets currently remain local to MediaLyze's SQLite database and therefore inherit the protection of `CONFIG_PATH`. Restrict that directory to the service account. `JELLYFIN_API_KEY_FILE` remains a compatibility-only override for the migrated standard Jellyfin connection named `Jellyfin`; it does not supply credentials to additional connections.

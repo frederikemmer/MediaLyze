@@ -450,22 +450,27 @@ def test_client_rejects_malformed_url() -> None:
         JellyfinClient("jellyfin.local:8096", "secret")
 
 
-def test_client_sends_api_key_and_timeout() -> None:
+@pytest.mark.parametrize("base_path", ["", "/jellyfin"])
+def test_client_sends_api_key_and_timeout(base_path: str) -> None:
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.update(url=str(request.url), headers=request.headers)
+        if request.headers.get("Authorization") != 'MediaBrowser Token="secret"':
+            return httpx.Response(401)
         return httpx.Response(200, json={"ServerName": "Test"})
 
-    client = JellyfinClient(
-        "http://jellyfin:8096",
+    with JellyfinClient(
+        f"http://jellyfin:8096{base_path}",
         "secret",
         timeout_seconds=7,
         transport=httpx.MockTransport(handler),
-    )
-    client.get_system_info()
-    assert captured["headers"]["X-Emby-Token"] == "secret"
-    assert client._client.timeout.read == 7
+    ) as client:
+        assert client.get_system_info() == {"ServerName": "Test"}
+        assert client._client.timeout.read == 7
+    assert captured["headers"]["Authorization"] == 'MediaBrowser Token="secret"'
+    assert "X-Emby-Token" not in captured["headers"]
+    assert captured["url"] == f"http://jellyfin:8096{base_path}/System/Info"
 
 
 def test_client_paginates_items() -> None:
@@ -664,7 +669,7 @@ def test_client_rejects_cross_origin_redirect_without_forwarding_key() -> None:
         client.get_system_info()
 
     assert len(requests) == 1
-    assert requests[0].headers["X-Emby-Token"] == "secret"
+    assert requests[0].headers["Authorization"] == 'MediaBrowser Token="secret"'
     assert requests[0].url.host == "jellyfin.example"
 
 
@@ -685,6 +690,10 @@ def test_client_follows_only_same_origin_redirects() -> None:
 
     assert result["Version"] == "10.11"
     assert [request.url.host for request in requests] == ["jellyfin.example", "jellyfin.example"]
+    assert all(
+        request.headers["Authorization"] == 'MediaBrowser Token="secret"'
+        for request in requests
+    )
 
 
 @pytest.mark.parametrize(
