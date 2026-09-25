@@ -114,6 +114,7 @@ jobs:
       - name: Stamp Electron package version
         run: npm version "${BUILD_VERSION}" --no-git-tag-version --allow-same-version
         working-directory: desktop
+        shell: bash
 
       - name: Run desktop packaging regression tests
         run: npm test
