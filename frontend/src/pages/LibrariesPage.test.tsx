@@ -2134,8 +2134,9 @@ describe("LibrariesPage settings panels", () => {
     expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
   });
 
-  it("opens the separate transcoding presets submenu with future filename and foldername tabs", async () => {
+  it("opens the separate transcoding presets submenu with filename and foldername management", async () => {
     vi.spyOn(api, "transcodePresets").mockResolvedValue([]);
+    vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([]);
     renderPage({ activePanel: "appSettings" });
 
     fireEvent.click(await screen.findByRole("button", { name: "Transcoding Presets" }));
@@ -2147,6 +2148,7 @@ describe("LibrariesPage settings panels", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Filename presets" }));
     expect(await screen.findByText("No filename presets are configured yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New preset" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Foldername presets" }));
     expect(await screen.findByText("No foldername presets are configured yet.")).toBeInTheDocument();
   });

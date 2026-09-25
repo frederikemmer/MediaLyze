@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AsyncPanel } from "./AsyncPanel";
-import { PanelEmptyState } from "./PanelEmptyState";
 import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
+import { TranscodeFormattingPresetsPanel } from "./TranscodeFormattingPresetsPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
 
 type PresetSettingsTab = "presets" | "filename" | "folder";
@@ -66,12 +66,6 @@ export function TranscodingPresetsSettingsPanel({ searchFocus = null }: Transcod
     </div>
   );
 
-  const renderPresetTabRow = () => (
-    <div className="settings-profile-toggle-row transcode-automation-toggle-row">
-      <div className="transcode-automation-tab-controls">{renderPresetTabs()}</div>
-    </div>
-  );
-
   return (
     <AsyncPanel
       title={t("transcoding.presetsSettingsTitle")}
@@ -94,16 +88,7 @@ export function TranscodingPresetsSettingsPanel({ searchFocus = null }: Transcod
             standalonePresetTabs={renderPresetTabs()}
             searchFocus={searchFocus}
           />
-        ) : (
-          <div className="compatibility-profile-list compatibility-profile-catalog-list transcode-preset-placeholder" data-settings-search-target={tabs.find((entry) => entry.id === tab)?.focus}>
-            {renderPresetTabRow()}
-            <div className="transcode-preset-placeholder-body">
-              <PanelEmptyState
-                message={tab === "filename" ? t("transcoding.presetSettingsTabs.filenameEmpty") : t("transcoding.presetSettingsTabs.folderEmpty")}
-              />
-            </div>
-          </div>
-        )}
+        ) : <TranscodeFormattingPresetsPanel kind={tab} tabs={renderPresetTabs()} />}
       </div>
     </AsyncPanel>
   );

@@ -180,6 +180,8 @@ describe("StorageMapPage", () => {
       </MemoryRouter>,
     );
 
+    expect(document.querySelector(".storage-map-header-cards")).not.toBeInTheDocument();
+
     const selects = [
       screen.getByRole("combobox", { name: "Library" }),
       screen.getByRole("combobox", { name: "Color" }),

@@ -13,6 +13,7 @@ import {
   type TranscodeCapabilities,
   type TranscodeJob,
   type TranscodePlan,
+  type TranscodeFormattingPreset,
   type TranscodePresetPlan,
   type TranscodeValidation,
 } from "../lib/api";
@@ -237,6 +238,7 @@ describe("TranscodingPanel", () => {
   beforeEach(() => {
     vi.spyOn(api, "fileTranscode").mockResolvedValue(payload);
     vi.spyOn(api, "transcodeCapabilities").mockResolvedValue(capabilities);
+    vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([]);
     vi.spyOn(api, "validateFileTranscode").mockResolvedValue(validation);
     vi.spyOn(api, "startFileTranscode").mockResolvedValue(job());
     vi.spyOn(api, "cancelTranscodeJob").mockResolvedValue(job({ status: "canceled", finished_at: "2026-09-01T10:01:00Z" }));
@@ -584,14 +586,14 @@ describe("TranscodingPanel", () => {
     expect(filenameHeader?.children[1]).toHaveClass("transcode-formatting-toggle");
     expect(filenameHeader?.children[2]).toHaveClass("transcode-filename-toggle");
     expect(filenameHeader?.children[3]).toHaveClass("transcode-filename-header-tooltip");
-    expect(filenameHeader?.children[4]).toHaveClass("transcode-formatting-preset-select");
+    expect(filenameHeader?.children[4]).toHaveClass("transcode-formatting-preset-controls");
     expect(folderHeader?.children[0]).toHaveClass("transcode-filename-chevron-toggle");
     expect(folderHeader?.children[1]).toHaveClass("transcode-formatting-toggle");
     expect(folderHeader?.children[2]).toHaveClass("transcode-filename-toggle");
     expect(folderHeader?.children[3]).toHaveClass("transcode-filename-header-tooltip");
-    expect(folderHeader?.children[4]).toHaveClass("transcode-formatting-preset-select");
-    expect(screen.getByRole("combobox", { name: "Filename formatting preset" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Folder name formatting preset" })).toBeDisabled();
+    expect(folderHeader?.children[4]).toHaveClass("transcode-formatting-preset-controls");
+    expect(screen.getByRole("combobox", { name: "Filename formatting preset" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Folder name formatting preset" })).toBeEnabled();
     expect(screen.queryByRole("textbox", { name: "Filename formatting" })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Folder name template" })).toBeInTheDocument();
 
@@ -599,6 +601,53 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("textbox", { name: "Filename formatting" })).toBeInTheDocument();
     fireEvent.click(folderSwitch);
     expect(screen.queryByRole("textbox", { name: "Folder name template" })).not.toBeInTheDocument();
+  });
+
+  it("saves current filename and folder formatting beside each dropdown and selects the saved preset", async () => {
+    const created: TranscodeFormattingPreset[] = [];
+    vi.spyOn(api, "createTranscodeFormattingPreset").mockImplementation(async (input) => {
+      const preset = { ...input, id: created.length + 1, is_default: false };
+      created.push(preset);
+      return preset;
+    });
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save current Filename presets settings as preset" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("textbox", { name: "Preset name" }), { target: { value: "Movie name" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Filename formatting preset" })).toHaveValue("1"));
+    expect(created[0].definition.template).toContain("{resolution}");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save current Foldername presets settings as preset" }));
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("textbox", { name: "Preset name" }), { target: { value: "Folder name" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Folder name formatting preset" })).toHaveValue("2"));
+    expect(created[1].definition.template).toBe("{folderName}");
+  });
+
+  it("applies the default formatting preset when a transcode plan first opens", async () => {
+    vi.mocked(api.transcodeFormattingPresets).mockResolvedValue([{
+      id: 17,
+      kind: "filename",
+      name: "Default name",
+      is_default: true,
+      definition: {
+        enabled: true,
+        template: "[{codec}]",
+        metadata_separator: "; ",
+        cleanup_preset: "none",
+        cleanup_regex: null,
+        include_subtitle_languages: false,
+        language_code_format: "iso_639_1",
+      },
+    }]);
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
+    expect(screen.getByRole("combobox", { name: "Filename formatting preset" })).toHaveValue("17");
+    expect(screen.getByRole("textbox", { name: "Filename formatting" })).toHaveTextContent("{codec}");
+    expect(screen.getByRole("textbox", { name: "Metadata divider" })).toHaveValue("; ");
   });
 
   it("keeps the transcode history in the combined file history section", async () => {

@@ -1494,6 +1494,17 @@ class TranscodePreset(TimestampMixin, Base):
     definition: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
 
+class TranscodeFormattingPreset(TimestampMixin, Base):
+    __tablename__ = "transcode_formatting_presets"
+    __table_args__ = (UniqueConstraint("kind", "name", name="uq_transcode_formatting_presets_kind_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    definition: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
 # Legacy ORM import retained for downstream integrations.
 TranscodeProfile = TranscodePreset
 

@@ -1747,9 +1747,10 @@
   },
   "transcoding": {
     "presetsSettingsTitle": "Presets de transcodificación",
-    "presetsSettingsDescription": "Gestiona planes de transcodificación reutilizables y prepara presets de nombres de archivo y carpeta para el detalle del archivo.",
+    "presetsSettingsDescription": "Gestiona planes de transcodificación reutilizables y presets de formato para nombres de archivo y carpeta.",
     "presetsSettingsDescriptionAria": "Explicar los presets de transcodificación",
     "presetSettingsTabs": { "ariaLabel": "Categorías de presets de transcodificación", "filename": "Presets de nombres de archivo", "folder": "Presets de nombres de carpeta", "filenameEmpty": "Todavía no hay presets de nombres de archivo configurados.", "folderEmpty": "Todavía no hay presets de nombres de carpeta configurados." },
+    "formattingPresets": { "new": "Nuevo preajuste", "edit": "Editar preajuste", "name": "Nombre del preajuste", "default": "Preajuste predeterminado", "makeDefault": "Establecer {{name}} como predeterminado", "removeDefault": "Quitar {{name}} como predeterminado", "saveCurrent": "Guardar configuración actual de {{kind}} como preajuste", "saveTitle": "Guardar {{kind}}", "custom": "Configuración personalizada" },
     "center": {
       "title": "Transcodificación",
       "running": "en curso",

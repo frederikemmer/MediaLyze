@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, RefreshCw, Search, Square, Trash2, X } from "lucide-react";
+import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, Plus, RefreshCw, Save, Search, Square, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -15,6 +15,7 @@ import {
   type TranscodeEncoderCapability,
   type TranscodeJob,
   type TranscodePlan,
+  type TranscodeFormattingPreset,
   type TranscodeStreamAction,
   type AudioStream,
   type ResolutionCategory,
@@ -25,6 +26,7 @@ import {
 import { formatBytes, formatCodecLabel, formatDuration, formatSpatialAudioProfileLabel } from "../lib/format";
 import { formatFilenameLanguageCode, formatLanguageLabel, languageOptions, normalizeLanguageTag, type FilenameLanguageCodeFormat } from "../lib/language";
 import { classifyResolutionCategory } from "../lib/resolution-categories";
+import { applyFormattingPreset, formattingDefinitionFromPlan, matchingFormattingPresetId, type FormattingKind } from "../lib/transcode-formatting-presets";
 import { parseTranscodeSpeed, TranscodeProgressSummary } from "./TranscodeProgressSummary";
 import { SparklesIcon } from "./SparklesIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -1428,10 +1430,17 @@ export function TranscodingPanel({
   const { t, i18n } = useTranslation();
   const federationAutoAppliedRef = useRef(false);
   const formattingSectionsInitializedRef = useRef(false);
+  const initialPlanLoadedRef = useRef(false);
   const [data, setData] = useState<FileTranscode | null>(null);
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
   const [federation, setFederation] = useState<TranscodeFederation | null>(null);
   const [plan, setPlan] = useState<TranscodePlan | null>(null);
+  const [formattingPresets, setFormattingPresets] = useState<TranscodeFormattingPreset[]>([]);
+  const [selectedFormattingIds, setSelectedFormattingIds] = useState<Record<FormattingKind, number | null>>({ filename: null, folder: null });
+  const [saveFormattingKind, setSaveFormattingKind] = useState<FormattingKind | null>(null);
+  const [formattingName, setFormattingName] = useState("");
+  const [formattingBusy, setFormattingBusy] = useState(false);
+  const [formattingError, setFormattingError] = useState<string | null>(null);
   const [selectedSavedPresetId, setSelectedSavedPresetId] = useState<number | null>(null);
   const [selectedPresetKey, setSelectedPresetKey] = useState("");
   const [validation, setValidation] = useState<TranscodeValidation | null>(null);
@@ -1464,13 +1473,27 @@ export function TranscodingPanel({
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [nextData, nextCapabilities] = await Promise.all([
-    api.fileTranscode(file.id),
+    const [nextData, nextCapabilities, nextFormattingPresets] = await Promise.all([
+      api.fileTranscode(file.id),
       api.transcodeCapabilities(),
+      api.transcodeFormattingPresets(),
     ]);
     setData(nextData);
     setCapabilities(nextCapabilities);
-    setPlan((current) => current ?? defaultUnchangedPlan(nextData.presets?.compatibility ?? nextData.profiles.compatibility, file));
+    setFormattingPresets(nextFormattingPresets);
+    if (!initialPlanLoadedRef.current) {
+      initialPlanLoadedRef.current = true;
+      const defaults = nextFormattingPresets.filter((preset) => preset.is_default);
+      const nextPlan = defaults.reduce(
+        (current, preset) => applyFormattingPreset(current, preset),
+        defaultUnchangedPlan(nextData.presets?.compatibility ?? nextData.profiles.compatibility, file),
+      );
+      setPlan((current) => current ?? nextPlan);
+      setSelectedFormattingIds({
+        filename: defaults.find((preset) => preset.kind === "filename")?.id ?? null,
+        folder: defaults.find((preset) => preset.kind === "folder")?.id ?? null,
+      });
+    }
     setJob(nextData.jobs.find(jobIsActive) ?? null);
     setError(null);
   }, [file]);
@@ -1487,6 +1510,10 @@ export function TranscodingPanel({
     setData(null);
     setCapabilities(null);
     setPlan(null);
+    initialPlanLoadedRef.current = false;
+    setFormattingPresets([]);
+    setSelectedFormattingIds({ filename: null, folder: null });
+    setSaveFormattingKind(null);
     federationAutoAppliedRef.current = false;
     formattingSectionsInitializedRef.current = false;
     setSelectedSavedPresetId(null);
@@ -1594,6 +1621,45 @@ export function TranscodingPanel({
     setSelectedPresetKey("expert");
     setPlan(next);
   }, []);
+
+  const chooseFormattingPreset = (kind: FormattingKind, id: number | null) => {
+    if (!plan || id === null) {
+      setSelectedFormattingIds((current) => ({ ...current, [kind]: null }));
+      return;
+    }
+    const preset = formattingPresets.find((item) => item.kind === kind && item.id === id);
+    if (!preset) return;
+    setExpertPlan(applyFormattingPreset(plan, preset));
+    setSelectedFormattingIds((current) => ({ ...current, [kind]: id }));
+    if (kind === "filename" && preset.definition.enabled) setOpenFilenameSection(true);
+    if (kind === "folder" && preset.definition.enabled) setOpenFolderSection(true);
+    setValidation(null);
+  };
+
+  const saveFormattingPreset = async () => {
+    if (!plan || !saveFormattingKind || !formattingName.trim()) return;
+    setFormattingBusy(true);
+    setFormattingError(null);
+    try {
+      const saved = await api.createTranscodeFormattingPreset({
+        kind: saveFormattingKind,
+        name: formattingName.trim(),
+        definition: {
+          ...formattingDefinitionFromPlan(plan, saveFormattingKind),
+          template: saveFormattingKind === "filename" ? displayedFilenameTemplate : displayedFolderTemplate,
+        },
+      });
+      setFormattingPresets((current) => [...current, saved]);
+      setExpertPlan(applyFormattingPreset(plan, saved));
+      setSelectedFormattingIds((current) => ({ ...current, [saved.kind]: saved.id }));
+      setSaveFormattingKind(null);
+      setFormattingName("");
+    } catch (reason) {
+      setFormattingError((reason as Error).message);
+    } finally {
+      setFormattingBusy(false);
+    }
+  };
 
   const insertFilenameToken = useCallback((token: string) => {
     if (!plan) return;
@@ -1791,6 +1857,29 @@ export function TranscodingPanel({
   const activeJob = jobIsActive(job) ? job : null;
   const savedPresets = data.saved_presets ?? data.saved_profiles ?? [];
   const transcodeControlClass = "settings-choice-input transcode-control";
+  const renderFormattingPresetControls = (kind: FormattingKind) => {
+    const options = formattingPresets.filter((preset) => preset.kind === kind);
+    const selectedId = matchingFormattingPresetId(plan, formattingPresets, kind, selectedFormattingIds[kind]);
+    const selectLabel = t(kind === "filename" ? "transcoding.filenameFormattingPreset" : "transcoding.folderFormattingPreset");
+    return <div className="transcode-formatting-preset-controls">
+      <button
+        type="button"
+        className="secondary icon-only-button transcode-formatting-preset-add"
+        aria-label={t("transcoding.formattingPresets.saveCurrent", { kind: t(kind === "filename" ? "transcoding.presetSettingsTabs.filename" : "transcoding.presetSettingsTabs.folder") })}
+        title={t("transcoding.formattingPresets.saveCurrent", { kind: t(kind === "filename" ? "transcoding.presetSettingsTabs.filename" : "transcoding.presetSettingsTabs.folder") })}
+        onClick={() => { setSaveFormattingKind(kind); setFormattingName(""); setFormattingError(null); }}
+      ><Plus size={17} aria-hidden="true" /></button>
+      <select
+        className={`${transcodeControlClass} transcode-formatting-preset-select`}
+        aria-label={selectLabel}
+        value={selectedId === null ? "" : String(selectedId)}
+        onChange={(event) => chooseFormattingPreset(kind, event.target.value ? Number(event.target.value) : null)}
+      >
+        <option value="">{t(options.length ? "transcoding.formattingPresets.custom" : kind === "filename" ? "transcoding.filenameFormattingPresetEmpty" : "transcoding.folderFormattingPresetEmpty")}</option>
+        {options.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}{preset.is_default ? ` ★` : ""}</option>)}
+      </select>
+    </div>;
+  };
   const dynamicRangeOptions: TranscodePlan["dynamic_range"][] = ["preserve", "sdr", "hdr10", "hlg"];
   if (
     capabilities.dolby_vision_passthrough
@@ -2360,15 +2449,7 @@ export function TranscodingPanel({
                 ariaLabel={t("transcoding.filenameFormattingHelpAria")}
                 content={t("transcoding.filenameFormattingHelp")}
               />
-              <select
-                className={`${transcodeControlClass} transcode-formatting-preset-select`}
-                aria-label={t("transcoding.filenameFormattingPreset")}
-                title={t("transcoding.filenameFormattingPresetEmpty")}
-                defaultValue=""
-                disabled
-              >
-                <option value="">{t("transcoding.filenameFormattingPresetEmpty")}</option>
-              </select>
+              {renderFormattingPresetControls("filename")}
             </header>
             {openFilenameSection && filenameFormattingEnabled ? (
               <div className="transcode-filename-body" id={`transcode-filename-${file.id}`}>
@@ -2573,15 +2654,7 @@ export function TranscodingPanel({
                 ariaLabel={t("transcoding.folderFormattingHelpAria")}
                 content={t("transcoding.folderFormattingHelp")}
               />
-              <select
-                className={`${transcodeControlClass} transcode-formatting-preset-select`}
-                aria-label={t("transcoding.folderFormattingPreset")}
-                title={t("transcoding.folderFormattingPresetEmpty")}
-                defaultValue=""
-                disabled
-              >
-                <option value="">{t("transcoding.folderFormattingPresetEmpty")}</option>
-              </select>
+              {renderFormattingPresetControls("folder")}
             </header>
             {openFolderSection && folderFormattingEnabled ? (
               <div className="transcode-filename-body" id={`transcode-folder-${file.id}`}>
@@ -2814,6 +2887,19 @@ export function TranscodingPanel({
             <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then(setJob)}><Square aria-hidden="true" />{t("common.cancel")}</button>
           </div>
         </section>
+      ) : null}
+
+      {saveFormattingKind ? createPortal(
+        <div className="settings-create-library-backdrop" role="presentation" onMouseDown={() => { if (!formattingBusy) setSaveFormattingKind(null); }}>
+          <section className="settings-create-library-dialog transcode-formatting-save-dialog" role="dialog" aria-modal="true" aria-labelledby={`formatting-save-title-${file.id}`} onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape" && !formattingBusy) setSaveFormattingKind(null); }}>
+            <div className="settings-create-library-dialog-header"><div><h2 id={`formatting-save-title-${file.id}`}>{t("transcoding.formattingPresets.saveTitle", { kind: t(saveFormattingKind === "filename" ? "transcoding.presetSettingsTabs.filename" : "transcoding.presetSettingsTabs.folder") })}</h2></div><button type="button" className="secondary icon-only-button" aria-label={t("common.close")} disabled={formattingBusy} onClick={() => setSaveFormattingKind(null)}><X aria-hidden="true" /></button></div>
+            <form onSubmit={(event) => { event.preventDefault(); void saveFormattingPreset(); }}>
+              <label><span>{t("transcoding.formattingPresets.name")}</span><input className="settings-choice-input" autoFocus maxLength={255} value={formattingName} onChange={(event) => setFormattingName(event.target.value)} /></label>
+              {formattingError ? <p className="notice error" role="alert">{formattingError}</p> : null}
+              <div className="jellyfin-actions"><button type="submit" disabled={formattingBusy || !formattingName.trim()}><Save size={16} aria-hidden="true" />{t("common.save")}</button><button type="button" className="secondary" disabled={formattingBusy} onClick={() => setSaveFormattingKind(null)}>{t("common.cancel")}</button></div>
+            </form>
+          </section>
+        </div>, document.body,
       ) : null}
 
     </div>

@@ -141,6 +141,15 @@ describe("global theme styles", () => {
     expect(analyzedFilesCount).toMatch(/line-height:\s*1/);
   });
 
+  it("keeps the Storage Map treemap inset from the panel edge", () => {
+    const storageMapStage = componentStyles.match(
+      /\.storage-map-stage\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(storageMapStage).toMatch(/margin:\s*0 16px 16px/);
+    expect(componentStyles).not.toContain(".storage-map-header-cards");
+  });
+
   it("distinguishes bordered and borderless icon-button surfaces", () => {
     expect(componentStyles).toMatch(
       /button\.icon-button\s*\{[^}]*width:\s*32px[^}]*height:\s*32px[^}]*min-width:\s*32px[^}]*min-height:\s*32px[^}]*border-radius:\s*9px/s,
@@ -347,6 +356,7 @@ describe("global theme styles", () => {
     expect(defaultButton).toMatch(/width:\s*28px/);
     expect(defaultButton).toMatch(/border:\s*0/);
     expect(favoriteButton).toMatch(/background:\s*var\(--panel-strong\)/);
+    expect(favoriteButton).toMatch(/border:\s*0/);
     expect(favoriteButton).not.toMatch(/var\(--accent\)/);
     expect(formattingHeader).toMatch(/gap:\s*8px/);
     expect(formattingChevron).toMatch(/width:\s*26px/);

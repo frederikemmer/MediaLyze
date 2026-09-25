@@ -21,7 +21,6 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { JellyfinIcon } from "../components/JellyfinIcon";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
-import { StatCard } from "../components/StatCard";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { api, type LibraryStorageMap, type StorageMapNode } from "../lib/api";
@@ -655,26 +654,14 @@ export function StorageMapPage() {
   return (
     <div className="storage-map-page">
       <section className="panel storage-map-panel">
-        <div className="storage-map-header">
+        <header className="storage-map-header">
           <div className="storage-map-title-block">
-            <h2>{t("storageMap.title")}</h2>
-            <p className="subtitle">{t("storageMap.subtitle")}</p>
-          </div>
-          {data ? (
-            <div className="card-grid grid storage-map-header-cards">
-              <StatCard
-                label={t("dashboard.storage")}
-                value={formatBytes(data.total_size_bytes)}
-                tone="blue"
-              />
-              <StatCard
-                label={t("dashboard.files")}
-                value={String(data.file_count)}
-                tone="teal"
-              />
+            <div className="storage-map-title-row">
+              <MapIcon aria-hidden="true" className="storage-map-title-icon" />
+              <h2>{t("storageMap.title")}</h2>
             </div>
-          ) : null}
-        </div>
+          </div>
+        </header>
 
         {librariesLoaded && libraries.length === 0 ? (
           <div className="storage-map-empty">

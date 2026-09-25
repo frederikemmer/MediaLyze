@@ -123,6 +123,35 @@ class TranscodePlan(BaseModel):
     target_device_id: str | None = Field(default=None, max_length=128)
 
 
+class TranscodeFormattingDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    template: str = Field(min_length=1, max_length=512)
+    metadata_separator: str = Field(default=", ", max_length=32)
+    cleanup_preset: Literal["none", "square_brackets", "round_brackets", "square_and_round_brackets", "all_brackets", "custom"] = "none"
+    cleanup_regex: str | None = Field(default=None, max_length=256)
+    include_subtitle_languages: bool = False
+    language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
+
+
+class TranscodeFormattingPresetCreate(BaseModel):
+    kind: Literal["filename", "folder"]
+    name: str = Field(min_length=1, max_length=255)
+    definition: TranscodeFormattingDefinition
+
+
+class TranscodeFormattingPresetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    definition: TranscodeFormattingDefinition | None = None
+    is_default: bool | None = None
+
+
+class TranscodeFormattingPresetRead(TranscodeFormattingPresetCreate):
+    id: int
+    is_default: bool
+
+
 class TranscodePresetStreamRule(BaseModel):
     """An ordered, source-independent stream rule stored in a profile.
 

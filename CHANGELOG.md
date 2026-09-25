@@ -18,6 +18,8 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 
 ### ✨ Enhancements
 
+- **More compact Storage Map framing** — remove the redundant summary cards and subtitle, match the Transcoding page's icon heading, move the filters closer to the title, and keep the treemap evenly inset from the panel edges.
+- **Filename and foldername formatting presets** — save the current transcode formatting from each section, manage presets in Settings, and choose a default for each category.
 - **Language-aware stream and filename metadata controls** — show audio/subtitle languages first, support ISO 639-1 and ISO 639-2/B filename language codes, and explain metadata preservation options in a list.
 
 - **Connector-aware filename metadata** — replace the filename metadata add icon with a disclosure chevron and offer a `{releaseYear}` token when matched connector metadata provides a production or premiere year.
@@ -30,7 +32,7 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 - **Searchable stream catalogs** — search each video, audio, or subtitle list by source metadata such as language, codec, profile, bitrate, channel layout, resolution, and subtitle type while retaining the per-tab stream counts; switching from copy/remove to encode now seeds the controls from the source stream.
 - **Connected stream catalog layout** — keep the stream tabs, search row, and stream list in one Settings-style container without a gap between the tabs and search.
 - **Fixed stream catalog row height** — keep the Video/Audio/Subtitles tabs at the same 40px height as the Settings profile row across the transcoding UI.
-- **Refined stream plan editing** — rename the validation result, keep metadata settings collapsed initially, expand only encoded streams, move removed streams to the end, and choose the active default stream with a neutral filled profile-style control.
+- **Refined stream plan editing** — rename the validation result, keep metadata settings collapsed initially, expand only encoded streams, move removed streams to the end, and choose the active default stream with a neutral filled, borderless profile-style control.
 - **Clearer file-detail transcoding controls** — label the feature as beta, move preset selection into the heading, condense source details to five key values, and group metadata options below the filename template.
 - **Compact formatting preset slots** — place filename and folder-name help tooltips beside their headings and reserve the right side for compact, future filename/foldername preset selectors.
 - **Consistent preset terminology** — rename the transcoding profile manager, creation action, and file-detail selector to presets.

@@ -1349,6 +1349,24 @@ export type FilenameCleanupPreset =
   | "all_brackets"
   | "custom";
 
+export type TranscodeFormattingDefinition = {
+  enabled: boolean;
+  template: string;
+  metadata_separator: string;
+  cleanup_preset: FilenameCleanupPreset;
+  cleanup_regex: string | null;
+  include_subtitle_languages: boolean;
+  language_code_format: "iso_639_1" | "iso_639_2";
+};
+
+export type TranscodeFormattingPreset = {
+  id: number;
+  kind: "filename" | "folder";
+  name: string;
+  definition: TranscodeFormattingDefinition;
+  is_default: boolean;
+};
+
 export type TranscodePlan = {
   version: 1;
   profile: "compatibility" | "storage" | "modern" | "expert";
@@ -2841,6 +2859,13 @@ export const api = {
     ),
   excludeTranscodeFederationMember: (installationId: string) =>
     request<void>(`/transcoding/federation/members/${encodeURIComponent(installationId)}`, { method: "DELETE" }),
+  transcodeFormattingPresets: () => request<TranscodeFormattingPreset[]>("/transcoding/formatting-presets"),
+  createTranscodeFormattingPreset: (payload: Pick<TranscodeFormattingPreset, "kind" | "name" | "definition">) =>
+    request<TranscodeFormattingPreset>("/transcoding/formatting-presets", { method: "POST", body: JSON.stringify(payload) }),
+  updateTranscodeFormattingPreset: (id: number, payload: Partial<Pick<TranscodeFormattingPreset, "name" | "definition" | "is_default">>) =>
+    request<TranscodeFormattingPreset>(`/transcoding/formatting-presets/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteTranscodeFormattingPreset: (id: number) =>
+    request<void>(`/transcoding/formatting-presets/${id}`, { method: "DELETE" }),
   transcodePresets: () => request<TranscodePreset[]>("/transcoding/presets"),
   createTranscodePreset: (payload: {
     name: string;

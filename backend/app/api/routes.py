@@ -107,6 +107,9 @@ from backend.app.schemas.scan import (
 )
 from backend.app.schemas.storage_map import LibraryStorageMapRead
 from backend.app.schemas.transcoding import (
+    TranscodeFormattingPresetCreate,
+    TranscodeFormattingPresetRead,
+    TranscodeFormattingPresetUpdate,
     FileTranscodeRead,
     TranscodeAutomationPreviewRead,
     TranscodeAutomationRunRead,
@@ -126,6 +129,13 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleReorder,
     TranscodeRuleUpdate,
     TranscodeValidationRead,
+)
+from backend.app.services.transcode_formatting_presets import (
+    FormattingPresetError,
+    create_formatting_preset,
+    delete_formatting_preset,
+    list_formatting_presets,
+    update_formatting_preset,
 )
 from backend.app.schemas.update_status import (
     DesktopUpdateReminderMark,
@@ -2904,6 +2914,43 @@ def transcoding_capability_matrix_test(
         return run_transcode_matrix_test(settings)
     except TranscodeMatrixBusyError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/transcoding/formatting-presets", response_model=list[TranscodeFormattingPresetRead])
+def transcoding_formatting_presets_list(db: Session = Depends(get_db_session)) -> list[TranscodeFormattingPresetRead]:
+    return list_formatting_presets(db)
+
+
+@router.post("/transcoding/formatting-presets", response_model=TranscodeFormattingPresetRead, status_code=201)
+def transcoding_formatting_preset_create(
+    payload: TranscodeFormattingPresetCreate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeFormattingPresetRead:
+    try:
+        return create_formatting_preset(db, payload)
+    except FormattingPresetError as exc:
+        raise HTTPException(status_code=409 if "already exists" in str(exc) else 400, detail=str(exc)) from exc
+
+
+@router.patch("/transcoding/formatting-presets/{preset_id}", response_model=TranscodeFormattingPresetRead)
+def transcoding_formatting_preset_update(
+    preset_id: int,
+    payload: TranscodeFormattingPresetUpdate,
+    db: Session = Depends(get_db_session),
+) -> TranscodeFormattingPresetRead:
+    try:
+        return update_formatting_preset(db, preset_id, payload)
+    except FormattingPresetError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc) else 409 if "already exists" in str(exc) else 400, detail=str(exc)) from exc
+
+
+@router.delete("/transcoding/formatting-presets/{preset_id}", status_code=204)
+def transcoding_formatting_preset_delete(preset_id: int, db: Session = Depends(get_db_session)) -> Response:
+    try:
+        delete_formatting_preset(db, preset_id)
+    except FormattingPresetError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)
 
 
 @router.get("/transcoding/presets", response_model=list[TranscodePresetRead])
