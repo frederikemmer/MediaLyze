@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🐛 Bug fixes
+
+- use supported Jellyfin authentication when legacy authentication is disabled, including Jellyfin 12 ([#181](https://github.com/frederikemmer/MediaLyze/issues/181))
+
 ## v0.18.0
 
 >2026-08-24
