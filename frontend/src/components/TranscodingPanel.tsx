@@ -52,34 +52,36 @@ const FILENAME_CLEANUP_PATTERNS: Partial<Record<Exclude<FilenameCleanupPreset, "
   all_brackets: "\\[[^\\[\\]]*\\]|\\([^()]*\\)|\\{[^{}]*\\}",
 };
 const FILENAME_METADATA_TOKENS = [
-  { token: "releaseYear", labelKey: "releaseYear", connectorOnly: true },
-  { token: "resolution", labelKey: "resolution", connectorOnly: false },
-  { token: "resolutionCategory", labelKey: "resolutionCategory", connectorOnly: false },
-  { token: "dynRange", labelKey: "dynRange", connectorOnly: false },
-  { token: "codec", labelKey: "codec", connectorOnly: false },
-  { token: "audioLanguages", labelKey: "audioLanguages", connectorOnly: false },
-  { token: "audioCodecs", labelKey: "audioCodecs", connectorOnly: false },
-  { token: "audioProfiles", labelKey: "audioProfiles", connectorOnly: false },
-  { token: "audioChannels", labelKey: "audioChannels", connectorOnly: false },
-  { token: "frameRate", labelKey: "frameRate", connectorOnly: false },
-  { token: "bitDepth", labelKey: "bitDepth", connectorOnly: false },
-  { token: "subtitleLanguages", labelKey: "subtitleLanguages", connectorOnly: false },
-  { token: "subtitleFormats", labelKey: "subtitleFormats", connectorOnly: false },
-  { token: "seriesName", labelKey: "seriesName", connectorOnly: false },
-  { token: "seasonNumber", labelKey: "seasonNumber", connectorOnly: false },
-  { token: "episodeNumber", labelKey: "episodeNumber", connectorOnly: false },
-  { token: "episodeTitle", labelKey: "episodeTitle", connectorOnly: false },
-  { token: "contentCategory", labelKey: "contentCategory", connectorOnly: false },
-  { token: "container", labelKey: "container", connectorOnly: false },
-  { token: "videoBitrate", labelKey: "videoBitrate", connectorOnly: false },
-  { token: "folderName", labelKey: "folderName", connectorOnly: false },
+  { token: "sourceName", labelKey: "sourceName" },
+  { token: "movieTitle", labelKey: "movieTitle" },
+  { token: "releaseYear", labelKey: "releaseYear" },
+  { token: "resolution", labelKey: "resolution" },
+  { token: "resolutionCategory", labelKey: "resolutionCategory" },
+  { token: "dynRange", labelKey: "dynRange" },
+  { token: "codec", labelKey: "codec" },
+  { token: "audioLanguages", labelKey: "audioLanguages" },
+  { token: "audioCodecs", labelKey: "audioCodecs" },
+  { token: "audioProfiles", labelKey: "audioProfiles" },
+  { token: "audioChannels", labelKey: "audioChannels" },
+  { token: "frameRate", labelKey: "frameRate" },
+  { token: "bitDepth", labelKey: "bitDepth" },
+  { token: "subtitleLanguages", labelKey: "subtitleLanguages" },
+  { token: "subtitleFormats", labelKey: "subtitleFormats" },
+  { token: "seriesName", labelKey: "seriesName" },
+  { token: "seasonNumber", labelKey: "seasonNumber" },
+  { token: "episodeNumber", labelKey: "episodeNumber" },
+  { token: "episodeTitle", labelKey: "episodeTitle" },
+  { token: "contentCategory", labelKey: "contentCategory" },
+  { token: "container", labelKey: "container" },
+  { token: "videoBitrate", labelKey: "videoBitrate" },
+  { token: "folderName", labelKey: "folderName" },
 ] as const;
 type FilenameMetadataToken = typeof FILENAME_METADATA_TOKENS[number]["token"];
 type FilenameTemplatePart =
   | { type: "text"; value: string }
   | { type: "token"; token: FilenameMetadataToken };
 
-const FILENAME_METADATA_TOKEN_PATTERN = /\{(releaseYear|resolution|resolutionCategory|dynRange|codec|audioLanguages|audioCodecs|audioProfiles|audioChannels|frameRate|bitDepth|subtitleLanguages|subtitleFormats|seriesName|seasonNumber|episodeNumber|episodeTitle|contentCategory|container|videoBitrate|folderName)\}/g;
+const FILENAME_METADATA_TOKEN_PATTERN = /\{(sourceName|movieTitle|releaseYear|resolution|resolutionCategory|dynRange|codec|audioLanguages|audioCodecs|audioProfiles|audioChannels|frameRate|bitDepth|subtitleLanguages|subtitleFormats|seriesName|seasonNumber|episodeNumber|episodeTitle|contentCategory|container|videoBitrate|folderName)\}/g;
 
 function connectorReleaseYear(sources: FileConnectorSource[]): string {
   const source = sources.find((entry) => entry.preferred && (entry.production_year !== null || entry.premiere_date))
@@ -101,6 +103,42 @@ function firstConnectorValue<T>(sources: FileConnectorSource[], read: (source: F
     }
   }
   return null;
+}
+
+function connectorSourceForToken(token: FilenameMetadataToken, sources: FileConnectorSource[]): FileConnectorSource | null {
+  const ordered = [...sources].sort((left, right) => Number(right.preferred) - Number(left.preferred));
+  return ordered.find((source) => {
+    switch (token) {
+      case "movieTitle": return source.item_type.trim().toLowerCase() === "movie" && Boolean(source.title.trim());
+      case "releaseYear": return source.production_year !== null || Boolean(source.premiere_date);
+      case "seriesName": return source.item_type.trim().toLowerCase() === "episode" && Boolean(source.series_name?.trim());
+      case "seasonNumber": return source.item_type.trim().toLowerCase() === "episode" && source.season_number !== null && source.season_number !== undefined;
+      case "episodeNumber": return source.item_type.trim().toLowerCase() === "episode" && source.episode_number !== null && source.episode_number !== undefined;
+      case "episodeTitle": return source.item_type.trim().toLowerCase() === "episode" && (Boolean(source.episode_title?.trim()) || Boolean(source.title.trim()));
+      default: return false;
+    }
+  }) ?? null;
+}
+
+function metadataTokenGroups(
+  entries: readonly (typeof FILENAME_METADATA_TOKENS)[number][],
+  sources: FileConnectorSource[],
+): Array<{ name: string; entries: (typeof FILENAME_METADATA_TOKENS)[number][] }> {
+  const groups: Array<{ name: string; entries: (typeof FILENAME_METADATA_TOKENS)[number][] }> = [{ name: "MediaLyze", entries: [] }];
+  for (const entry of entries) {
+    const source = connectorSourceForToken(entry.token, sources)
+      ?? (["movieTitle", "releaseYear"].includes(entry.token) ? sources.find((item) => item.preferred) ?? sources[0] : null);
+    const provider = source?.provider.trim();
+    const name = provider ? provider.charAt(0).toUpperCase() + provider.slice(1)
+      : ["movieTitle", "releaseYear"].includes(entry.token) ? "Connector" : "MediaLyze";
+    let group = groups.find((item) => item.name === name);
+    if (!group) {
+      group = { name, entries: [] };
+      groups.push(group);
+    }
+    group.entries.push(entry);
+  }
+  return groups.filter((group) => group.entries.length);
 }
 
 function filenameDistinct(values: string[], separator: string): string {
@@ -402,7 +440,7 @@ const AUDIO_BITRATES: Record<string, number[]> = {
 };
 
 const DEFAULT_AUDIO_BITRATES = AUDIO_BITRATES.aac;
-const DEFAULT_FILENAME_TEMPLATE = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]";
+const DEFAULT_FILENAME_TEMPLATE = "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]";
 const DEFAULT_FOLDER_TEMPLATE = "{folderName}";
 
 function filenameTemplateForSubtitleOption(includeSubtitleLanguages: boolean): string {
@@ -413,6 +451,12 @@ function filenameTemplateForSubtitleOption(includeSubtitleLanguages: boolean): s
 
 function isKnownDefaultFilenameTemplate(template: string): boolean {
   return template === DEFAULT_FILENAME_TEMPLATE || template === filenameTemplateForSubtitleOption(true);
+}
+
+function visibleFilenameTemplate(template: string, plan: TranscodePlan): string {
+  return !plan.filename_template_explicit_source && !template.includes("{sourceName}")
+    ? `{sourceName} ${template}`
+    : template;
 }
 
 function filenameLanguageSet(
@@ -479,6 +523,7 @@ function filenamePreviewValues(
   plan: TranscodePlan,
   connectorSources: FileConnectorSource[],
   resolutionCategories: ResolutionCategory[] | null | undefined,
+  kind: FormattingKind = "filename",
 ): Record<string, string> {
   const primaryPlan = plan.video_streams.find((stream) => stream.action !== "drop");
   const sourceVideo = file.video_streams.find((stream) => stream.stream_index === primaryPlan?.stream_index) ?? file.video_streams[0];
@@ -487,7 +532,7 @@ function filenamePreviewValues(
   const codec = primaryPlan?.action === "encode"
     ? primaryPlan.codec ?? primaryPlan.encoder
     : sourceVideo?.codec ?? data.original.video_codec;
-  const languageCodeFormat = plan.filename_language_code_format ?? "iso_639_1";
+  const languageCodeFormat = (kind === "folder" ? plan.folder_language_code_format : plan.filename_language_code_format) ?? "iso_639_1";
   const audioLanguages = filenameLanguageSet(plan.audio_streams, file.audio_streams, languageCodeFormat);
   const subtitleLanguages = filenameLanguageSet(plan.subtitle_streams, file.subtitle_streams, languageCodeFormat);
   const externalLanguages = plan.external_subtitles
@@ -541,23 +586,27 @@ function filenamePreviewValues(
     ],
     metadataSeparator,
   );
-  const connectorSeriesName = firstConnectorValue(connectorSources, (source) => source.series_name);
-  const connectorSeasonNumber = firstConnectorValue(connectorSources, (source) => source.season_number);
-  const connectorEpisodeNumber = firstConnectorValue(connectorSources, (source) => source.episode_number);
+  const episodeSources = connectorSources.filter((source) => source.item_type.trim().toLowerCase() === "episode");
+  const movieTitle = firstConnectorValue(connectorSources.filter((source) => source.item_type.trim().toLowerCase() === "movie"), (source) => source.title) ?? plan.filename_movie_title ?? "";
+  const connectorSeriesName = firstConnectorValue(episodeSources, (source) => source.series_name);
+  const connectorSeasonNumber = firstConnectorValue(episodeSources, (source) => source.season_number);
+  const connectorEpisodeNumber = firstConnectorValue(episodeSources, (source) => source.episode_number);
   const connectorEpisodeTitle = firstConnectorValue(
-    connectorSources,
+    episodeSources,
     (source) => source.episode_title
       ?? (source.item_type.trim().toLowerCase() === "episode" ? source.title : null),
   );
-  const seriesName = connectorSeriesName ?? file.series_title ?? file.jellyfin_series_name ?? "";
-  const seasonNumber = connectorSeasonNumber ?? file.season_number;
-  const episodeNumber = connectorEpisodeNumber ?? file.episode_number;
-  const episodeTitle = connectorEpisodeTitle ?? file.episode_title ?? "";
+  const seriesName = movieTitle ? "" : connectorSeriesName ?? file.series_title ?? file.jellyfin_series_name ?? "";
+  const seasonNumber = movieTitle ? null : connectorSeasonNumber ?? file.season_number;
+  const episodeNumber = movieTitle ? null : connectorEpisodeNumber ?? file.episode_number;
+  const episodeTitle = movieTitle ? "" : connectorEpisodeTitle ?? file.episode_title ?? "";
   const frameRate = primaryPlan?.frame_rate ?? sourceVideo?.frame_rate;
   const bitDepth = sourceVideo?.bit_depth;
   const resolutionCategory = classifyResolutionCategory(width, height, resolutionCategories);
   const pathParts = data.original.relative_path.replaceAll("\\", "/").split("/").filter(Boolean);
   return {
+    sourceName: cleanFilenameStem(file.filename.replace(/\.[^./\\]+$/, ""), plan),
+    movieTitle,
     releaseYear: plan.filename_release_year !== null && plan.filename_release_year !== undefined
       ? String(plan.filename_release_year)
       : connectorReleaseYear(connectorSources),
@@ -611,8 +660,10 @@ function renderFilenamePreview(
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
-  const stem = cleanFilenameStem(sourceStem, plan);
-  return `${`${stem} ${rendered}`.trim() || "transcoded"}.${plan.container}`;
+  if (!plan.filename_template_explicit_source && !template.includes("{sourceName}")) {
+    rendered = `${values.sourceName} ${rendered}`.trim();
+  }
+  return `${rendered || "transcoded"}.${plan.container}`;
 }
 
 function encoderQualitySpec(encoder: TranscodeEncoderCapability | undefined): QualitySpec {
@@ -1647,6 +1698,7 @@ export function TranscodingPanel({
         definition: {
           ...formattingDefinitionFromPlan(plan, saveFormattingKind),
           template: saveFormattingKind === "filename" ? displayedFilenameTemplate : displayedFolderTemplate,
+          source_name_explicit: saveFormattingKind === "filename",
         },
       });
       setFormattingPresets((current) => [...current, saved]);
@@ -1663,9 +1715,9 @@ export function TranscodingPanel({
 
   const insertFilenameToken = useCallback((token: string) => {
     if (!plan) return;
-    const currentTemplate = plan.filename_template_override === false
+    const currentTemplate = visibleFilenameTemplate(plan.filename_template_override === false
       ? filenameTemplateForSubtitleOption(plan.include_subtitle_languages ?? plan.filename_template.includes("{subtitleLanguages}"))
-      : plan.filename_template;
+      : plan.filename_template, plan);
     const insertion = `{${token}}`;
     const selection = filenameTemplateSelectionRef.current;
     const start = selection ? Math.min(selection.start, currentTemplate.length) : currentTemplate.length;
@@ -1676,6 +1728,7 @@ export function TranscodingPanel({
       profile: "expert",
       filename_template: nextTemplate,
       filename_template_override: true,
+      filename_template_explicit_source: true,
       include_subtitle_languages: nextTemplate.includes("{subtitleLanguages}"),
     });
     setMetadataTokensOpen(false);
@@ -1696,6 +1749,7 @@ export function TranscodingPanel({
       profile: "expert",
       filename_template: nextTemplate,
       filename_template_override: true,
+      filename_template_explicit_source: true,
       include_subtitle_languages: nextTemplate.includes("{subtitleLanguages}"),
     });
     setValidation(null);
@@ -1827,9 +1881,9 @@ export function TranscodingPanel({
   }, [file.id, plan, validate]);
 
   const displayedFilenameTemplate = plan
-    ? plan.filename_template_override === false
+    ? visibleFilenameTemplate(plan.filename_template_override === false
       ? filenameTemplateForSubtitleOption(plan.include_subtitle_languages ?? plan.filename_template.includes("{subtitleLanguages}"))
-      : plan.filename_template
+      : plan.filename_template, plan)
     : "";
   const displayedFolderTemplate = plan
     ? plan.folder_template_override === false
@@ -1958,7 +2012,8 @@ export function TranscodingPanel({
     onInsert: (token: string) => void,
   ) => {
     const label = t(`transcoding.filenameMetadataTokenOptions.${labelKey}`);
-    const exampleValue = metadataValues[token]?.trim() || t("transcoding.filenameMetadataTooltipUnavailable");
+    const value = metadataValues[token]?.trim();
+    const exampleValue = value || t("transcoding.filenameMetadataTooltipUnavailable");
     const description = t("transcoding.filenameMetadataTooltipDescription", { token: `{${token}}`, label })
       .replaceAll("{token}", `{${token}}`)
       .replaceAll("{label}", label);
@@ -1967,13 +2022,14 @@ export function TranscodingPanel({
         key={token}
         className="secondary small transcode-filename-token-pill"
         ariaLabel={label}
+        ariaDisabled={!value}
         tooltipClassName="transcode-filename-token-tooltip-portal"
         align="start"
         placement="auto"
         maxWidth={360}
         pinOnClick={false}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onInsert(token)}
+        onClick={() => { if (value) onInsert(token); }}
         content={(
           <div className="transcode-filename-token-tooltip">
             <div className="transcode-filename-token-tooltip-heading">
@@ -1992,6 +2048,45 @@ export function TranscodingPanel({
       </TooltipTrigger>
     );
   };
+
+  const renderMetadataTokenGroups = (
+    entries: readonly (typeof FILENAME_METADATA_TOKENS)[number][],
+    values: Record<string, string>,
+    onInsert: (token: string) => void,
+  ) => metadataTokenGroups(entries, connectorSources).map((group) => (
+    <div className="transcode-filename-token-group" key={group.name}>
+      <strong>{group.name}</strong>
+      <div className="transcode-filename-token-group-items">
+        {group.entries.map((entry) => renderFilenameMetadataToken(entry, values, onInsert))}
+      </div>
+    </div>
+  ));
+
+  const renderLanguageCodeFormatControl = (kind: FormattingKind) => (
+    <label className="transcode-filename-field transcode-language-code-field">
+      <span className="transcode-field-label">
+        <span>{t("transcoding.languageCodeFormat")}</span>
+        <TooltipTrigger
+          ariaLabel={t("transcoding.languageCodeFormatHelpAria")}
+          content={t("transcoding.languageCodeFormatHelp")}
+          pinOnClick={false}
+          maxWidth={420}
+        />
+      </span>
+      <select
+        className={transcodeControlClass}
+        aria-label={`${t("transcoding.languageCodeFormat")} (${t(kind === "filename" ? "transcoding.filenameFormatting" : "transcoding.folderFormatting")})`}
+        value={(kind === "filename" ? plan.filename_language_code_format : plan.folder_language_code_format) ?? "iso_639_1"}
+        onChange={(event) => {
+          setExpertPlan({ ...plan, profile: "expert", [kind === "filename" ? "filename_language_code_format" : "folder_language_code_format"]: event.target.value as FilenameLanguageCodeFormat });
+          setValidation(null);
+        }}
+      >
+        <option value="iso_639_1">{t("transcoding.languageCodeFormats.iso_639_1")}</option>
+        <option value="iso_639_2">{t("transcoding.languageCodeFormats.iso_639_2")}</option>
+      </select>
+    </label>
+  );
 
   return (
     <div className="transcoding-panel">
@@ -2285,7 +2380,7 @@ export function TranscodingPanel({
                         title={t(isDefault ? "transcoding.defaultStream" : "transcoding.setDefaultStream")}
                         onClick={setDefault}
                       >
-                        <SparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+                        <SparklesIcon size={18} active={isDefault} aria-hidden="true" className="nav-icon" />
                       </button>
                       <StreamActionField
                         streamIndex={stream.stream_index}
@@ -2401,9 +2496,7 @@ export function TranscodingPanel({
         const cleanupError = filenameCleanupError(plan);
         const preview = renderFilenamePreview(file, data, plan, connectorSources, resolutionCategories);
         const filenameMetadataValues = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories);
-        const availableFilenameMetadataTokens = FILENAME_METADATA_TOKENS.filter(
-          (entry) => entry.token !== "folderName" && (!entry.connectorOnly || Boolean(connectorReleaseYear(connectorSources))),
-        );
+        const availableFilenameMetadataTokens = FILENAME_METADATA_TOKENS.filter((entry) => entry.token !== "folderName");
         return (
           <section className={`media-card library-settings-card transcode-filename-section${filenameSectionExpanded ? " is-expanded" : " is-collapsed"}${filenameFormattingEnabled ? "" : " is-disabled"}`}>
             <header className="transcode-filename-header">
@@ -2506,7 +2599,7 @@ export function TranscodingPanel({
                       role="group"
                       aria-label={t("transcoding.filenameMetadataTokens")}
                     >
-                      {availableFilenameMetadataTokens.map((entry) => renderFilenameMetadataToken(entry, filenameMetadataValues, insertFilenameToken))}
+                      {renderMetadataTokenGroups(availableFilenameMetadataTokens, filenameMetadataValues, insertFilenameToken)}
                     </div>
                   ) : null}
                 </div>
@@ -2585,6 +2678,7 @@ export function TranscodingPanel({
                     ) : null}
                     {cleanupError ? <p className="notice compact error" role="alert">{t("transcoding.filenameCleanupInvalid")}</p> : null}
                   </div>
+                  {renderLanguageCodeFormatControl("filename")}
                 </div>
                 <div className="transcode-filename-preview is-prominent">
                   <span>{t("transcoding.filenamePreview")}</span>
@@ -2601,10 +2695,8 @@ export function TranscodingPanel({
         const folderSectionExpanded = openFolderSection && folderFormattingEnabled;
         const folderCleanupPreset = plan.folder_cleanup_preset ?? "none";
         const cleanupError = folderCleanupError(plan);
-        const folderMetadataValues = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories);
-        const availableFolderMetadataTokens = FILENAME_METADATA_TOKENS.filter(
-          (entry) => !entry.connectorOnly || Boolean(connectorReleaseYear(connectorSources)),
-        );
+        const folderMetadataValues = filenamePreviewValues(file, data, plan, connectorSources, resolutionCategories, "folder");
+        const availableFolderMetadataTokens = FILENAME_METADATA_TOKENS;
         return (
           <section className={`media-card library-settings-card transcode-filename-section transcode-folder-section${folderSectionExpanded ? " is-expanded" : " is-collapsed"}${folderFormattingEnabled ? "" : " is-disabled"}`}>
             <header className="transcode-filename-header">
@@ -2711,7 +2803,7 @@ export function TranscodingPanel({
                       role="group"
                       aria-label={t("transcoding.folderMetadataTokens")}
                     >
-                      {availableFolderMetadataTokens.map((entry) => renderFilenameMetadataToken(entry, folderMetadataValues, insertFolderToken))}
+                      {renderMetadataTokenGroups(availableFolderMetadataTokens, folderMetadataValues, insertFolderToken)}
                     </div>
                   ) : null}
                 </div>
@@ -2777,6 +2869,7 @@ export function TranscodingPanel({
                     ) : null}
                     {cleanupError ? <p className="notice compact error" role="alert">{t("transcoding.folderCleanupInvalid")}</p> : null}
                   </div>
+                  {renderLanguageCodeFormatControl("folder")}
                 </div>
                 <p className="field-hint transcode-folder-scope-hint">{t("transcoding.folderFormattingScope")}</p>
               </div>
@@ -2819,31 +2912,6 @@ export function TranscodingPanel({
                   />
                 </label>
               ))}
-              <div className="transcode-global-option transcode-global-option-select">
-                <span className="transcode-global-option-label">{t("transcoding.languageCodeFormat")}</span>
-                <TooltipTrigger
-                  ariaLabel={t("transcoding.languageCodeFormatHelpAria")}
-                  content={t("transcoding.languageCodeFormatHelp")}
-                  pinOnClick={false}
-                  maxWidth={420}
-                />
-                <select
-                  className="settings-choice-input transcode-control"
-                  aria-label={t("transcoding.languageCodeFormat")}
-                  value={plan.filename_language_code_format ?? "iso_639_1"}
-                  onChange={(event) => {
-                    setExpertPlan({
-                      ...plan,
-                      profile: "expert",
-                      filename_language_code_format: event.target.value as FilenameLanguageCodeFormat,
-                    });
-                    setValidation(null);
-                  }}
-                >
-                  <option value="iso_639_1">{t("transcoding.languageCodeFormats.iso_639_1")}</option>
-                  <option value="iso_639_2">{t("transcoding.languageCodeFormats.iso_639_2")}</option>
-                </select>
-              </div>
             </div>
           </div>
         ) : null}

@@ -2494,7 +2494,6 @@ export function FileDetailPage() {
               aria-hidden="true"
               collapsed={isNavCollapsed}
               className="settings-navigation-toggle-icon"
-              size={24}
             />
           </button>
         </div>

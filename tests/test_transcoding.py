@@ -365,7 +365,7 @@ def test_filename_language_tokens_support_iso_639_2_b_codes(monkeypatch, tmp_pat
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
         plan.filename_template_override = True
-        plan.filename_template = "[{audioLanguages}] [{subtitleLanguages}]"
+        plan.filename_template = "{sourceName} [{audioLanguages}] [{subtitleLanguages}]"
         plan.filename_language_code_format = "iso_639_2"
         validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
 
@@ -402,12 +402,15 @@ def test_filename_template_uses_preferred_connector_release_year(monkeypatch, tm
 
         plan = _compatibility_plan()
         plan.filename_template_override = True
-        plan.filename_template = "[{releaseYear}, {resolution}]"
+        plan.filename_template = "{sourceName} [{releaseYear}, {resolution}]"
         validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
 
     assert validation.valid is True
     assert validation.output_filename == "Movie [2014, 1920x1080].mp4"
     assert validation.normalized_plan.filename_release_year == 2014
+    assert validation.normalized_plan.filename_movie_title == "Movie"
+    plan.filename_template = "{movieTitle} ({releaseYear}) - {sourceName}"
+    assert transcoding.render_output_filename(media_file, validation.normalized_plan.model_copy(update={"filename_template": plan.filename_template})) == "Movie (2014) - Movie.mp4"
 
 
 def test_filename_template_uses_configured_resolution_category_label(monkeypatch, tmp_path) -> None:
@@ -429,7 +432,7 @@ def test_filename_template_uses_configured_resolution_category_label(monkeypatch
         )
         plan = _compatibility_plan()
         plan.filename_template_override = True
-        plan.filename_template = "[{resolutionCategory}]"
+        plan.filename_template = "{sourceName} [{resolutionCategory}]"
         plan.folder_format_enabled = True
         plan.folder_template_override = True
         plan.folder_template = "{resolutionCategory}"
@@ -444,7 +447,7 @@ def test_filename_template_uses_configured_resolution_category_label(monkeypatch
 
     assert validation.valid is True
     assert validation.output_filename == "Movie [Full HD].mp4"
-    assert validation.output_path.endswith("Full HD/Movie [Full HD].mp4")
+    assert Path(validation.output_path).parts[-2:] == ("Full HD", "Movie [Full HD].mp4")
 
 
 def test_filename_template_supports_stream_and_episode_metadata(monkeypatch, tmp_path) -> None:
@@ -490,7 +493,7 @@ def test_filename_template_supports_stream_and_episode_metadata(monkeypatch, tmp
         plan.audio_streams[0].action = TranscodeStreamAction.copy
         plan.subtitle_streams[0].action = TranscodeStreamAction.copy
         plan.filename_template_override = True
-        plan.filename_template = "[{audioCodecs}, {audioProfiles}, {audioChannels}, {frameRate}, {bitDepth}, {subtitleFormats}, {seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}, {contentCategory}]"
+        plan.filename_template = "{sourceName} [{audioCodecs}, {audioProfiles}, {audioChannels}, {frameRate}, {bitDepth}, {subtitleFormats}, {seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}, {contentCategory}]"
         validation = transcoding.validate_transcode_plan(db, _settings(tmp_path), media_file, plan)
 
     assert validation.valid is True
@@ -507,8 +510,16 @@ def test_custom_filename_template_requires_supported_tokens_only(tmp_path) -> No
         media_file = _media_file(db, tmp_path)
         plan = _compatibility_plan()
         plan.filename_template_override = True
-        plan.filename_template = "[{codec}] [{subtitleLanguages}]"
+        plan.filename_template = "{sourceName} [{codec}] [{subtitleLanguages}]"
         assert transcoding.render_output_filename(media_file, plan) == "Movie [H264] [de].mp4"
+
+        plan.filename_template = "[{codec}] {sourceName}"
+        assert transcoding.render_output_filename(media_file, plan) == "[H264] Movie.mp4"
+        plan.filename_template_explicit_source = True
+        plan.filename_template = "[{codec}]"
+        assert transcoding.render_output_filename(media_file, plan) == "[H264].mp4"
+        plan.filename_template_explicit_source = False
+        assert transcoding.render_output_filename(media_file, plan) == "Movie [H264].mp4"
 
         plan.filename_template = "[{unknown}]"
         try:
@@ -565,9 +576,15 @@ def test_filename_and_direct_folder_formatting_can_be_enabled_independently(monk
 
     assert validation.valid is True
     assert validation.output_filename == "Movie.mp4"
-    assert validation.output_path.endswith("Shows/Season 1 [encoded]/Movie.mp4")
-    assert "/Shows/Season 1 [encoded]/" in validation.output_path
-    assert "/Shows/Season 1 [source]/" not in validation.output_path
+    assert Path(validation.output_path).parts[-3:] == ("Shows", "Season 1 [encoded]", "Movie.mp4")
+    assert "Season 1 [source]" not in Path(validation.output_path).parts
+
+    plan.folder_template = "{folderName} [{audioLanguages}]"
+    plan.filename_language_code_format = "iso_639_2"
+    plan.folder_language_code_format = "iso_639_1"
+    assert transcoding.render_output_folder_name(media_file, plan) == "Season 1 [en]"
+    plan.folder_language_code_format = "iso_639_2"
+    assert transcoding.render_output_folder_name(media_file, plan) == "Season 1 [eng]"
 
 
 def test_formatting_defaults_follow_library_type(monkeypatch, tmp_path) -> None:

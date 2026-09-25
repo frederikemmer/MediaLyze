@@ -11,6 +11,7 @@ import {
   Film,
   Funnel,
   Gauge,
+  GitCompare,
   Info,
   Layers,
   Library,
@@ -1029,9 +1030,9 @@ export function FileComparePage() {
     <div className="file-compare-page">
       <section className="panel file-compare-panel">
         <div className="panel-title-row panel-title-row-with-actions">
-          <div className="file-compare-title-block">
+          <div className="page-heading-row">
+            <GitCompare aria-hidden="true" className="page-heading-icon" />
             <h2>{t("fileCompare.title")}</h2>
-            <p className="subtitle">{t("fileCompare.subtitle")}</p>
           </div>
           <div className="file-compare-title-actions">
             <ColumnCountPicker value={columnCount} onChange={setColumnCount} />

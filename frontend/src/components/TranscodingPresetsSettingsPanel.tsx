@@ -29,7 +29,7 @@ export function TranscodingPresetsSettingsPanel({ searchFocus = null }: Transcod
   }, [searchFocus]);
 
   const tabs: Array<{ id: PresetSettingsTab; label: string; focus: string }> = [
-    { id: "presets", label: t("transcoding.automation.tabs.presets"), focus: "transcoding-presets-tab-presets" },
+    { id: "presets", label: t("transcoding.presetsSettingsTitle"), focus: "transcoding-presets-tab-presets" },
     { id: "filename", label: t("transcoding.presetSettingsTabs.filename"), focus: "transcoding-presets-tab-filename" },
     { id: "folder", label: t("transcoding.presetSettingsTabs.folder"), focus: "transcoding-presets-tab-folder" },
   ];

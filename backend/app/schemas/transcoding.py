@@ -67,7 +67,7 @@ class TranscodePlan(BaseModel):
     cover: Literal["keep", "drop"] = "keep"
     attachments: Literal["keep", "drop"] = "keep"
     filename_template: str = Field(
-        default="[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
+        default="{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
         min_length=1,
         max_length=512,
     )
@@ -76,14 +76,17 @@ class TranscodePlan(BaseModel):
     # standard template remains the source of truth even when a locale/UI
     # changes its display string.
     filename_template_override: bool | None = None
+    filename_template_explicit_source: bool = False
     filename_format_enabled: bool = True
     include_subtitle_languages: bool = False
     filename_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
+    folder_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
     filename_metadata_separator: str = Field(default=", ", max_length=32)
     # Resolved from matched connector metadata during validation. Keeping the
     # value in the normalized plan lets remote federation workers render the
     # same filename even when they do not have the connector catalog locally.
     filename_release_year: int | None = Field(default=None, ge=0, le=9999)
+    filename_movie_title: str | None = Field(default=None, max_length=1024)
     filename_series_name: str | None = Field(default=None, max_length=1024)
     filename_season_number: int | None = Field(default=None, ge=0)
     filename_episode_number: int | None = Field(default=None, ge=0)
@@ -128,6 +131,7 @@ class TranscodeFormattingDefinition(BaseModel):
 
     enabled: bool = True
     template: str = Field(min_length=1, max_length=512)
+    source_name_explicit: bool = False
     metadata_separator: str = Field(default=", ", max_length=32)
     cleanup_preset: Literal["none", "square_brackets", "round_brackets", "square_and_round_brackets", "all_brackets", "custom"] = "none"
     cleanup_regex: str | None = Field(default=None, max_length=256)
@@ -229,13 +233,15 @@ class TranscodePresetDefinition(BaseModel):
     cover: Literal["keep", "drop"] = "keep"
     attachments: Literal["keep", "drop"] = "keep"
     filename_template: str = Field(
-        default="[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
+        default="{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
         min_length=1,
         max_length=512,
     )
     filename_template_override: bool = False
+    filename_template_explicit_source: bool = False
     include_subtitle_languages: bool = False
     filename_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
+    folder_language_code_format: Literal["iso_639_1", "iso_639_2"] = "iso_639_1"
     filename_metadata_separator: str = Field(default=", ", max_length=32)
     filename_cleanup_preset: Literal[
         "none",

@@ -192,7 +192,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev server proxies `/api` to `http://127.0.0.1:8080`.
+The Vite dev server proxies `/api` to the backend on port 8080 by default. The combined scripts also pass a custom `BACKEND_HOST` and `BACKEND_PORT` to Vite.
 
 ### Combined startup scripts
 
@@ -215,6 +215,7 @@ Both scripts expect:
 - a valid `MEDIA_ROOT` directory, defaulting to your Desktop if not overridden
 
 They start the backend with reload enabled, wait for `/api/health`, then launch the Vite dev server in the foreground.
+Both services listen on all IPv4 interfaces by default. Once both are ready, the scripts print app URLs for the machine's IP addresses and hostnames. Open a LAN address or resolvable hostname from another device on the same network. Terminal support determines whether the printed URLs are clickable. Set `BACKEND_HOST` or `FRONTEND_HOST` to `127.0.0.1` to restrict either service to the local machine; `BACKEND_PORT` and `FRONTEND_PORT` override the default ports. The machine's firewall must allow incoming connections to the chosen ports.
 
 ### Desktop
 

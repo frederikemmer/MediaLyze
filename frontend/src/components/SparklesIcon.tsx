@@ -1,6 +1,6 @@
 import { motion, useAnimation, type Variants } from "motion/react";
 import type { HTMLAttributes, MouseEvent } from "react";
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 
 export type SparklesIconHandle = {
   startAnimation: () => void;
@@ -9,12 +9,17 @@ export type SparklesIconHandle = {
 
 type SparklesIconProps = HTMLAttributes<HTMLSpanElement> & {
   size?: number;
+  active?: boolean;
 };
 
 const SPARKLE_VARIANTS: Variants = {
   initial: {
     y: 0,
     fill: "none",
+  },
+  active: {
+    y: 0,
+    fill: "currentColor",
   },
   hover: {
     y: [0, -1, 0, 0],
@@ -45,10 +50,14 @@ const STAR_VARIANTS: Variants = {
 };
 
 export const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 20, ...props }, ref) => {
+  ({ onMouseEnter, onMouseLeave, className, size = 20, active = false, ...props }, ref) => {
     const starControls = useAnimation();
     const sparkleControls = useAnimation();
     const isControlledRef = useRef(false);
+
+    useEffect(() => {
+      void sparkleControls.start(active ? "active" : "initial");
+    }, [active, sparkleControls]);
 
     useImperativeHandle(ref, () => {
       isControlledRef.current = true;
@@ -58,7 +67,7 @@ export const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
           void starControls.start("blink", { delay: 1 });
         },
         stopAnimation: () => {
-          void sparkleControls.start("initial");
+          void sparkleControls.start(active ? "active" : "initial");
           void starControls.start("initial");
         },
       };
@@ -82,10 +91,10 @@ export const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
           onMouseLeave?.(event);
           return;
         }
-        void sparkleControls.start("initial");
+        void sparkleControls.start(active ? "active" : "initial");
         void starControls.start("initial");
       },
-      [onMouseLeave, sparkleControls, starControls],
+      [active, onMouseLeave, sparkleControls, starControls],
     );
 
     return (
@@ -109,7 +118,7 @@ export const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
           <motion.path
             animate={sparkleControls}
             d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-            initial="initial"
+            initial={active ? "active" : "initial"}
             variants={SPARKLE_VARIANTS}
           />
           <motion.path animate={starControls} d="M20 3v4" initial="initial" variants={STAR_VARIANTS} />

@@ -5416,7 +5416,7 @@ export function LibrariesPage() {
     const pathInputId = `${idPrefix}-path`;
 
     return (
-      <form className="form-grid" onSubmit={handleSubmit}>
+      <form className="form-grid settings-create-library-form" onSubmit={handleSubmit}>
         {jellyfinLibraries.filter((library) => library.linked_library_id === null).length ? (
           <section className="jellyfin-create-library-options field-span-full" aria-labelledby={`${idPrefix}-jellyfin-libraries-title`}>
             <div>
@@ -5444,9 +5444,6 @@ export function LibrariesPage() {
             ) : null}
           </section>
         ) : null}
-        <p className="field-hint field-span-full">
-          {desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
-        </p>
         <div className="field">
           <label htmlFor={nameInputId}>{t("libraries.name")}</label>
           <input
@@ -5550,26 +5547,28 @@ export function LibrariesPage() {
             </div>
           </div>
         ) : (
-          <PathBrowser
-            value={form.path}
-            selectedPaths={form.paths}
-            onChange={(path) => setForm((current) => ({ ...current, path }))}
-            onAddPath={(path) =>
-              setForm((current) => ({
-                ...current,
-                path,
-                paths: appendSelectedLibraryPaths(current.paths, [path]),
-              }))
-            }
-            onRemovePath={(path) =>
-              setForm((current) => ({
-                ...current,
-                paths: current.paths.filter((candidate) => candidate !== path),
-              }))
-            }
-          />
+          <div className="field-span-full">
+            <PathBrowser
+              value={form.path}
+              selectedPaths={form.paths}
+              onChange={(path) => setForm((current) => ({ ...current, path }))}
+              onAddPath={(path) =>
+                setForm((current) => ({
+                  ...current,
+                  path,
+                  paths: appendSelectedLibraryPaths(current.paths, [path]),
+                }))
+              }
+              onRemovePath={(path) =>
+                setForm((current) => ({
+                  ...current,
+                  paths: current.paths.filter((candidate) => candidate !== path),
+                }))
+              }
+            />
+          </div>
         )}
-        <button type="submit" className="history-retention-primary-button" disabled={submitting}>
+        <button type="submit" className="history-retention-primary-button field-span-full" disabled={submitting || form.paths.length === 0}>
           {submitting ? t("libraries.creating") : t("libraries.createButton")}
         </button>
       </form>
@@ -6206,7 +6205,6 @@ export function LibrariesPage() {
                 aria-hidden="true"
                 collapsed={isSettingsNavCollapsed}
                 className="settings-navigation-toggle-icon"
-                size={24}
               />
             </button>
           </div>
@@ -7965,7 +7963,15 @@ export function LibrariesPage() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="settings-create-library-dialog-header">
-              <h2 id="settings-create-library-dialog-title">{t("libraries.createTitle")}</h2>
+              <div className="settings-create-library-title-row">
+                <h2 id="settings-create-library-dialog-title">{t("libraries.createTitle")}</h2>
+                <TooltipTrigger
+                  ariaLabel={desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
+                  content={desktopApp ? t("libraries.createSubtitleDesktop") : t("libraries.createSubtitle")}
+                >
+                  ?
+                </TooltipTrigger>
+              </div>
               <button
                 type="button"
                 className="secondary icon-only-button settings-create-library-dialog-close"

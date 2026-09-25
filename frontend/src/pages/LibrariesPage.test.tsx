@@ -1962,7 +1962,11 @@ describe("LibrariesPage media type selection", () => {
     fireEvent.change(mediaTypeSelect, { target: { value: "audiobooks" } });
     const createForm = mediaTypeSelect.closest("form");
     expect(createForm).not.toBeNull();
-    fireEvent.click(within(createForm as HTMLFormElement).getByRole("button", { name: "Create library" }));
+    const createButton = within(createForm as HTMLFormElement).getByRole("button", { name: "Create library" });
+    expect(createButton).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Add current folder" }));
+    expect(createButton).toBeEnabled();
+    fireEvent.click(createButton);
 
     await waitFor(() =>
       expect(createSpy).toHaveBeenCalledWith(
@@ -2025,7 +2029,9 @@ describe("LibrariesPage desktop mode", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add library" }));
     expect(await screen.findByRole("button", { name: "Choose folder" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Up" })).not.toBeInTheDocument();
-    expect(screen.getByText("Select a local folder, mounted network share, or UNC path to analyze.")).toBeInTheDocument();
+    const pathHelp = screen.getByRole("button", { name: "Select a local folder, mounted network share, or UNC path to analyze." });
+    fireEvent.focus(pathHelp);
+    expect(await screen.findByText("Select a local folder, mounted network share, or UNC path to analyze.")).toBeInTheDocument();
   });
 
   it("falls back to scheduled scans when watch is selected for a network path", async () => {
@@ -2142,7 +2148,7 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Transcoding Presets" }));
 
     expect(await screen.findByRole("heading", { name: "Transcoding Presets" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Presets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Transcoding Presets" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Filename presets" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Foldername presets" })).toHaveAttribute("aria-selected", "false");
 

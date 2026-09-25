@@ -220,9 +220,11 @@ CONTAINER_COMPATIBILITY = {
         "subtitle": {"webvtt"},
     },
 }
-DEFAULT_FILENAME_TEMPLATE = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]"
+DEFAULT_FILENAME_TEMPLATE = "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]"
 DEFAULT_FOLDER_TEMPLATE = "{folderName}"
 FILENAME_TOKENS = {
+    "sourceName",
+    "movieTitle",
     "releaseYear",
     "resolution",
     "resolutionCategory",
@@ -1707,6 +1709,7 @@ def _connector_filename_metadata(db: Session, media_file: MediaFile) -> dict[str
     )
 
     result: dict[str, str | int | None] = {
+        "movie_title": None,
         "release_year": None,
         "series_name": None,
         "season_number": None,
@@ -1714,11 +1717,15 @@ def _connector_filename_metadata(db: Session, media_file: MediaFile) -> dict[str
         "episode_title": None,
     }
     for item in items:
+        if result["movie_title"] is None and item.item_type.strip().lower() == "movie" and item.title:
+            result["movie_title"] = item.title.strip() or None
         if result["release_year"] is None:
             if item.production_year is not None:
                 result["release_year"] = int(item.production_year)
             elif item.premiere_date is not None:
                 result["release_year"] = int(item.premiere_date.year)
+        if item.item_type.strip().lower() != "episode":
+            continue
         if result["series_name"] is None and item.series_name:
             result["series_name"] = item.series_name.strip() or None
         if result["season_number"] is None and item.parent_index_number is not None:
@@ -1815,6 +1822,7 @@ def _token_values(
     plan: TranscodePlan,
     *,
     metadata_separator: str | None = None,
+    language_code_format: str | None = None,
     resolution_categories=None,
 ) -> dict[str, str]:
     primary_video = next((item for item in plan.video_streams if item.action != TranscodeStreamAction.drop), None)
@@ -1844,7 +1852,7 @@ def _token_values(
             source = next((item for item in sources if item.stream_index == decision.stream_index), None)
             language = (decision.language or (source.language if source else None) or "").strip()
             if language:
-                values.add(format_filename_language_code(language, plan.filename_language_code_format))
+                values.add(format_filename_language_code(language, language_code_format or plan.filename_language_code_format))
         return values
 
     def selected_streams(
@@ -1870,7 +1878,7 @@ def _token_values(
         row = external_rows.get(decision.subtitle_id)
         language = (decision.language or (row.language if row else None) or "").strip()
         if language:
-            subtitle_languages.add(format_filename_language_code(language, plan.filename_language_code_format))
+            subtitle_languages.add(format_filename_language_code(language, language_code_format or plan.filename_language_code_format))
     metadata_separator = plan.filename_metadata_separator if metadata_separator is None else metadata_separator
     bitrate = primary_video.bitrate if primary_video else None
     audio_codecs = {
@@ -1910,16 +1918,19 @@ def _token_values(
             )
         )
     local_metadata = _local_filename_metadata(media_file)
-    series_name = plan.filename_series_name or local_metadata["series_name"]
-    season_number = plan.filename_season_number if plan.filename_season_number is not None else local_metadata["season_number"]
-    episode_number = plan.filename_episode_number if plan.filename_episode_number is not None else local_metadata["episode_number"]
-    episode_title = plan.filename_episode_title or local_metadata["episode_title"]
+    is_movie = bool(plan.filename_movie_title)
+    series_name = "" if is_movie else plan.filename_series_name or local_metadata["series_name"]
+    season_number = None if is_movie else plan.filename_season_number if plan.filename_season_number is not None else local_metadata["season_number"]
+    episode_number = None if is_movie else plan.filename_episode_number if plan.filename_episode_number is not None else local_metadata["episode_number"]
+    episode_title = "" if is_movie else plan.filename_episode_title or local_metadata["episode_title"]
     content_category = getattr(media_file, "content_category", "main")
     content_category = getattr(content_category, "value", content_category) or "main"
     frame_rate = primary_video.frame_rate if primary_video and primary_video.frame_rate else (source_video.frame_rate if source_video else None)
     bit_depth = source_video.bit_depth if source_video else None
     resolution_category = classify_resolution_category(width, height, resolution_categories)
     return {
+        "sourceName": _clean_filename_stem(Path(media_file.filename).stem, plan),
+        "movieTitle": str(plan.filename_movie_title or ""),
         "releaseYear": "" if plan.filename_release_year is None else str(plan.filename_release_year),
         "resolution": f"{width}x{height}" if width and height else "",
         "resolutionCategory": resolution_category.label if resolution_category else "",
@@ -2019,8 +2030,9 @@ def render_output_filename(media_file: MediaFile, plan: TranscodePlan, *, resolu
         FILENAME_TOKENS,
         label="filename",
     )
-    source_stem = _clean_filename_stem(source_stem, plan)
-    stem = _sanitize_filename(f"{source_stem} {rendered}".strip(), suffix=suffix)
+    if not plan.filename_template_explicit_source and "{sourceName}" not in template:
+        rendered = f"{_clean_filename_stem(source_stem, plan)} {rendered}".strip()
+    stem = _sanitize_filename(rendered, suffix=suffix)
     return f"{stem}{suffix}"
 
 
@@ -2034,6 +2046,7 @@ def render_output_folder_name(media_file: MediaFile, plan: TranscodePlan, *, res
         media_file,
         plan,
         metadata_separator=plan.folder_metadata_separator,
+        language_code_format=plan.folder_language_code_format,
         resolution_categories=resolution_categories,
     )
     values["folderName"] = _clean_name_value(
@@ -2605,6 +2618,8 @@ def validate_transcode_plan(
     # resolved into the plan by the origin worker.
     if connector_metadata["release_year"] is not None or plan.filename_release_year is None:
         plan.filename_release_year = connector_metadata["release_year"]  # type: ignore[assignment]
+    if connector_metadata["movie_title"] is not None or plan.filename_movie_title is None:
+        plan.filename_movie_title = connector_metadata["movie_title"]  # type: ignore[assignment]
     for field in ("series_name", "season_number", "episode_number", "episode_title"):
         connector_value = connector_metadata[field]
         local_value = local_metadata[field]

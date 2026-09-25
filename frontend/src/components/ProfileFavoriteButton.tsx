@@ -22,7 +22,7 @@ export function ProfileFavoriteButton({
       title={label}
       onClick={onClick}
     >
-      <SparklesIcon size={18} aria-hidden="true" className="nav-icon" />
+      <SparklesIcon size={18} active={favorite} aria-hidden="true" className="nav-icon" />
     </button>
   );
 }

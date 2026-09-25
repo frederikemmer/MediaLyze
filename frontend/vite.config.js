@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react-swc";
 import { fileURLToPath } from "node:url";
 const appVersion = process.env.VITE_APP_VERSION ?? process.env.APP_VERSION ?? "dev";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const backendHost = process.env.BACKEND_HOST ?? "127.0.0.1";
+const proxyHost = backendHost === "0.0.0.0" ? "127.0.0.1" : backendHost;
+const backendPort = process.env.BACKEND_PORT ?? "8080";
 export default defineConfig({
     plugins: [
         react(),
@@ -26,7 +29,7 @@ export default defineConfig({
             allow: [repoRoot],
         },
         proxy: {
-            "/api": "http://127.0.0.1:8080",
+            "/api": `http://${proxyHost}:${backendPort}`,
         },
     },
     build: {

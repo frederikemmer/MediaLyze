@@ -27,7 +27,7 @@ export function PanelLeftToggleIcon({
   collapsed,
   onMouseEnter,
   onMouseLeave,
-  size = 24,
+  size = 18,
   ...props
 }: PanelLeftToggleIconProps) {
   const controls = useAnimation();

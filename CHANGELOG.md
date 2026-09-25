@@ -18,8 +18,14 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 
 ### ✨ Enhancements
 
+- **LAN access for local development** — the combined startup scripts bind the backend and Vite to all IPv4 interfaces, print app URLs for IP addresses and hostnames once ready, and honor custom ports.
+- **Clearer favorite controls** — favorite and default actions fill their icons when active, and the Settings navigation toggle matches the other navigation icon sizes.
+- **Compact library creation** — name and media type sit side by side, path guidance moves to the title tooltip, the create action waits for a folder selection, and dialog close icons use a flat, larger symbol.
+- **Shorter federation guidance** — remove the redundant relay sentence from the Members tooltip.
 - **More compact Storage Map framing** — remove the redundant summary cards and subtitle, match the Transcoding page's icon heading, move the filters closer to the title, and keep the treemap evenly inset from the panel edges.
-- **Filename and foldername formatting presets** — save the current transcode formatting from each section, manage presets in Settings, and choose a default for each category.
+- **Filename and foldername formatting presets** — save the current transcode formatting from each section, manage both categories beside the Transcoding Presets tab in Settings, and choose a default for each category.
+- **Flexible filename tokens** — place or remove the original filename through `{sourceName}`, use connector movie titles through `{movieTitle}`, and group available metadata by MediaLyze and connector; unavailable values remain visible but cannot be inserted. Existing saved templates keep their original-name behavior until edited.
+- **Formatting-specific language codes** — choose the language code format beside filename and foldername cleanup independently.
 - **Language-aware stream and filename metadata controls** — show audio/subtitle languages first, support ISO 639-1 and ISO 639-2/B filename language codes, and explain metadata preservation options in a list.
 
 - **Connector-aware filename metadata** — replace the filename metadata add icon with a disclosure chevron and offer a `{releaseYear}` token when matched connector metadata provides a production or premiere year.
@@ -135,6 +141,10 @@ This release adds a read-only Jellyfin integration with catalog synchronization,
 - accelerate Docker and desktop publishing with native parallel AMD64/ARM64 image builds, persistent dependency and image-layer caches, and consolidated manually selectable dev/release workflows
 
 ### 🐛 Fixed
+
+- **Reliable local restarts on Windows** — stop orphaned reload workers so stale API and federation sockets cannot survive a restart; align runtime settings with custom development ports.
+- **Full-width profile hover** — highlight the complete profile catalog row, including its actions, in light and dark themes.
+- **Consistent page headings** — Dashboard and Compare files share the Transcoding and Storage Map heading sizes and icon treatment; remove the comparison subtitle and tighten vertical spacing around library media sources.
 
 - restore comfortable responsive search-field widths in the library Analyzed files panel and wrap the search toolbar before adjacent header controls collide
 - open every file detail view on Overview instead of carrying the previously selected subsection across files

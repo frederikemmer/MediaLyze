@@ -1352,6 +1352,7 @@ export type FilenameCleanupPreset =
 export type TranscodeFormattingDefinition = {
   enabled: boolean;
   template: string;
+  source_name_explicit?: boolean;
   metadata_separator: string;
   cleanup_preset: FilenameCleanupPreset;
   cleanup_regex: string | null;
@@ -1388,11 +1389,14 @@ export type TranscodePlan = {
   attachments: "keep" | "drop";
   filename_template: string;
   filename_template_override?: boolean | null;
+  filename_template_explicit_source?: boolean;
   filename_format_enabled?: boolean;
   include_subtitle_languages?: boolean;
   filename_metadata_separator?: string | null;
   filename_language_code_format?: "iso_639_1" | "iso_639_2" | null;
+  folder_language_code_format?: "iso_639_1" | "iso_639_2" | null;
   filename_release_year?: number | null;
+  filename_movie_title?: string | null;
   filename_series_name?: string | null;
   filename_season_number?: number | null;
   filename_episode_number?: number | null;
@@ -1453,9 +1457,11 @@ export type TranscodePresetDefinition = {
   attachments: "keep" | "drop";
   filename_template: string;
   filename_template_override: boolean;
+  filename_template_explicit_source?: boolean;
   include_subtitle_languages: boolean;
   filename_metadata_separator?: string | null;
   filename_language_code_format?: "iso_639_1" | "iso_639_2" | null;
+  folder_language_code_format?: "iso_639_1" | "iso_639_2" | null;
   filename_cleanup_preset?: FilenameCleanupPreset | null;
   filename_cleanup_regex?: string | null;
   execution_mode: "inherit" | "hardware_required" | "cpu_only";

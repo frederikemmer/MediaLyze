@@ -577,6 +577,38 @@ Frontend design decision history:
 * Each entry should include the decision, rationale, canonical implementation and catalog references, deprecated selectors or patterns, migration scope, status, and remaining intentional exceptions.
 * Update the entry when the canonical pattern or migration status changes. The history must not keep legacy CSS alive; after migration, retain only identifiers needed to explain intentional exceptions.
 
+### 2026-09-25 — Place filename source as an editable token
+
+* Decision: new filename templates include `{sourceName}` explicitly; users may move or remove it. Existing stored templates without this token retain their implicit source name until edited. `{movieTitle}` uses matched connector film metadata, and unavailable tokens remain visible but inactive.
+* Canonical references: `TranscodingPanel`, `render_output_filename`, the formatting preset model, and `/ui-elements` filename token groups.
+* Token groups identify MediaLyze and the matching connector provider. Filename and foldername language code formats live beside their respective cleanup controls and are independent.
+* Migration: filename and foldername formatting UI, plan and preset schemas, frontend preview, backend rendering, and catalog fixture. Status: active.
+
+### 2026-09-25 — Align page headings and profile hover surfaces
+
+* Decision: Dashboard, Compare files, Storage Map, and Transcoding share the responsive heading size, 10px icon gap, and 24px accent icon. Compare files has no introductory subtitle.
+* Canonical references: `.page-heading-row`, `.page-heading-icon`, the grouped Storage Map/Transcoding heading selectors, and `/ui-elements` heading examples.
+* Profile catalogs highlight the entire header row on hover or keyboard focus, including quick actions, through `.compatibility-profile-catalog-list`; expanded details keep their own surface.
+* Migration: the four named page headings and shared profile catalogs. Removed `.file-compare-title-block`; other page-specific headings remain intentional. Status: active.
+
+### 2026-09-25 — Fill favorite and default icons when active
+
+* Decision: favorite and default quick actions show their active state by filling the Sparkles or Star symbol. The Settings and File Detail navigation toggle uses the same 18px icon size as navigation items.
+* Rationale: an active symbol stays clear without adding an active button surface or emphasizing the whole row.
+* Canonical references: `ProfileFavoriteButton`, `SparklesIcon`, `PanelLeftToggleIcon`, the shared `compatibility-profile-quick-action` CSS, and the corresponding `/ui-elements` fixtures.
+* Deprecated pattern: active favorite/default button backgrounds and favorite endpoint row highlighting.
+* Migration: compatibility favorites, default streams, formatting presets, federation endpoints, and Settings/File Detail navigation examples; existing active Star icons were already filled. No intentional exceptions.
+* Status: active.
+
+### 2026-09-25 — Use flat close actions in dialogs
+
+* Decision: modal dialog headers use a borderless icon button with a 22px X; hover and keyboard focus remain visible. The Create library dialog keeps name and media type side by side on wide screens and stacks them on narrow screens.
+* Rationale: a single compact close treatment avoids outlined controls competing with dialog titles.
+* Canonical references: `.settings-create-library-dialog-header > button.secondary.icon-only-button` and `.release-notes-close` in `frontend/src/medialyze.css`, plus the dialog fixtures in `/ui-elements`.
+* Deprecated pattern: outlined dialog close buttons with a smaller X.
+* Migration: library, connector, formatting-preset, and release-notes dialogs. No intentional modal exceptions.
+* Status: active.
+
 ### 2026-09-03 — Reuse accepted UI patterns and retire rejected variants
 
 * Decision: new frontend areas reuse current shared components, visual tokens, neighboring page patterns, and `/ui-elements`; legacy variants are not default choices.

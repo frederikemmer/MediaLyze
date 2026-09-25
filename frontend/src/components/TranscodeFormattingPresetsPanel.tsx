@@ -14,13 +14,21 @@ const cleanupKeys = ["none", "squareBrackets", "roundBrackets", "squareAndRoundB
 function emptyDefinition(kind: FormattingKind): TranscodeFormattingDefinition {
   return {
     enabled: kind === "filename",
-    template: kind === "filename" ? "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]" : "{folderName}",
+    template: kind === "filename" ? "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]" : "{folderName}",
+    source_name_explicit: kind === "filename",
     metadata_separator: ", ",
     cleanup_preset: "none",
     cleanup_regex: null,
     include_subtitle_languages: false,
     language_code_format: "iso_639_1",
   };
+}
+
+function visibleTemplate(preset: TranscodeFormattingPreset): string {
+  const template = preset.definition.template;
+  return preset.kind === "filename" && !preset.definition.source_name_explicit && !template.includes("{sourceName}")
+    ? `{sourceName} ${template}`
+    : template;
 }
 
 export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: FormattingKind; tabs: ReactNode }) {
@@ -54,7 +62,7 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
     setExpandedId(preset.id);
     setDraftId(preset.id);
     setName(preset.name);
-    setDefinition({ ...preset.definition });
+    setDefinition({ ...preset.definition, template: visibleTemplate(preset), source_name_explicit: kind === "filename" });
     setError(null);
   }
 
@@ -111,7 +119,7 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
       <div className="field-label-row"><strong>{draftId === null ? t("transcoding.formattingPresets.new") : t("transcoding.formattingPresets.edit")}</strong><button type="button" className="secondary icon-only-button" aria-label={t("common.close")} onClick={() => setDraftId(undefined)}><X size={14} aria-hidden="true" /></button></div>
       <div className="compatibility-profile-form-grid">
         <label><span>{t("transcoding.formattingPresets.name")}</span><input className="settings-choice-input" maxLength={255} value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label className="compatibility-profile-field-wide"><span>{t(kind === "filename" ? "transcoding.filenameTemplate" : "transcoding.folderTemplate")}</span><input className="settings-choice-input" maxLength={512} value={definition.template} onChange={(event) => setDefinition({ ...definition, template: event.target.value })} /></label>
+        <label className="compatibility-profile-field-wide"><span>{t(kind === "filename" ? "transcoding.filenameTemplate" : "transcoding.folderTemplate")}</span><input className="settings-choice-input" maxLength={512} value={definition.template} onChange={(event) => setDefinition({ ...definition, template: event.target.value, source_name_explicit: kind === "filename" })} /></label>
         <label><span>{t(kind === "filename" ? "transcoding.filenameMetadataSeparator" : "transcoding.folderMetadataSeparator")}</span><input className="settings-choice-input" maxLength={32} value={definition.metadata_separator} onChange={(event) => setDefinition({ ...definition, metadata_separator: event.target.value })} /></label>
         <label><span>{t(kind === "filename" ? "transcoding.filenameCleanupPreset" : "transcoding.folderCleanupPreset")}</span><select className="settings-choice-input" value={definition.cleanup_preset} onChange={(event) => setDefinition({ ...definition, cleanup_preset: event.target.value as TranscodeFormattingDefinition["cleanup_preset"] })}>{cleanupValues.map((value, index) => <option key={value} value={value}>{t(`transcoding.filenameCleanupOptions.${cleanupKeys[index]}`)}</option>)}</select></label>
         {definition.cleanup_preset === "custom" ? <label className="compatibility-profile-field-wide"><span>{t(kind === "filename" ? "transcoding.filenameCleanupRegex" : "transcoding.folderCleanupRegex")}</span><input className="settings-choice-input" maxLength={256} value={definition.cleanup_regex ?? ""} onChange={(event) => setDefinition({ ...definition, cleanup_regex: event.target.value })} /></label> : null}
@@ -138,7 +146,7 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
           <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label={`${t("transcoding.automation.delete")} ${preset.name}`} disabled={busy} onClick={() => void remove(preset)}><Trash2 size={18} aria-hidden="true" /></button>
         </div>
       </div>
-      {expandedId === preset.id ? draftId === preset.id ? editor : <div className="compatibility-profile-details transcode-automation-details"><div className="compatibility-profile-form-grid"><label className="compatibility-profile-field-wide"><span>{title}</span><input className="settings-choice-input" readOnly value={preset.definition.template} /></label><label><span>{t(kind === "filename" ? "transcoding.filenameMetadataSeparator" : "transcoding.folderMetadataSeparator")}</span><input className="settings-choice-input" readOnly value={preset.definition.metadata_separator} /></label><label><span>{t(kind === "filename" ? "transcoding.filenameCleanupPreset" : "transcoding.folderCleanupPreset")}</span><input className="settings-choice-input" readOnly value={t(`transcoding.filenameCleanupOptions.${cleanupKeys[cleanupValues.indexOf(preset.definition.cleanup_preset)]}`)} /></label></div></div> : null}
+      {expandedId === preset.id ? draftId === preset.id ? editor : <div className="compatibility-profile-details transcode-automation-details"><div className="compatibility-profile-form-grid"><label className="compatibility-profile-field-wide"><span>{title}</span><input className="settings-choice-input" readOnly value={visibleTemplate(preset)} /></label><label><span>{t(kind === "filename" ? "transcoding.filenameMetadataSeparator" : "transcoding.folderMetadataSeparator")}</span><input className="settings-choice-input" readOnly value={preset.definition.metadata_separator} /></label><label><span>{t(kind === "filename" ? "transcoding.filenameCleanupPreset" : "transcoding.folderCleanupPreset")}</span><input className="settings-choice-input" readOnly value={t(`transcoding.filenameCleanupOptions.${cleanupKeys[cleanupValues.indexOf(preset.definition.cleanup_preset)]}`)} /></label></div></div> : null}
     </article>)}
     {draftId === null ? <article className="compatibility-profile-list-item is-expanded"><div className="compatibility-profile-list-row quality-profile-list-row"><div className="compatibility-profile-list-trigger is-static"><span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>{name || t("transcoding.formattingPresets.new")}</strong></span></div></div>{editor}</article> : null}
     {!presets.length && draftId === undefined ? <div className="transcode-preset-placeholder-body"><PanelEmptyState message={t(kind === "filename" ? "transcoding.presetSettingsTabs.filenameEmpty" : "transcoding.presetSettingsTabs.folderEmpty")} /></div> : null}

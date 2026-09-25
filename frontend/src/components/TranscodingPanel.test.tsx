@@ -32,7 +32,7 @@ const compatibilityPlan: TranscodePlan = {
   metadata: "keep",
   cover: "keep",
   attachments: "keep",
-  filename_template: "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
+  filename_template: "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
 };
 
 const file = {
@@ -421,7 +421,8 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("button", { name: "Explain source filename cleanup" })).toBeInTheDocument();
     const templateInput = screen.getByRole("textbox", { name: "Filename formatting" });
     expect(templateInput).not.toBeDisabled();
-    expect(templateInput.textContent).toBe("[{resolution}, {dynRange}, {codec}] [{audioLanguages}]");
+    expect(templateInput.textContent).toBe("{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]");
+    expect(templateInput.querySelector('[data-filename-token="sourceName"]')).toBeInTheDocument();
     expect(templateInput.querySelector('[data-filename-token="resolution"]')).toBeInTheDocument();
 
     const audioToken = templateInput.querySelector('[data-filename-token="audioLanguages"]');
@@ -439,9 +440,9 @@ describe("TranscodingPanel", () => {
     fireEvent.click(addMetadata);
     expect(addMetadata).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(screen.getByRole("button", { name: "Subtitle languages" }));
-    expect(templateInput.textContent).toBe("[{resolution}, {dynRange}, {codec}] [{audioLanguages}{subtitleLanguages}]");
+    expect(templateInput.textContent).toBe("{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}{subtitleLanguages}]");
 
-    templateInput.textContent = "[{resolution}, {dynRange}, {codec}] [{audioLanguages}] [{subtitleLanguages}]";
+    templateInput.textContent = "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}] [{subtitleLanguages}]";
     fireEvent.input(templateInput);
     expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en] [de].mp4")).toBeInTheDocument();
 
@@ -452,7 +453,7 @@ describe("TranscodingPanel", () => {
     fireEvent.change(dividerInput, { target: { value: "," } });
     expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en] [de,en].mp4")).toBeInTheDocument();
 
-    templateInput.textContent = "[{codec}] [{subtitleLanguages}]";
+    templateInput.textContent = "{sourceName} [{codec}] [{subtitleLanguages}]";
     fireEvent.input(templateInput);
     expect(screen.getByText("Movie [HEVC] [de,en].mp4")).toBeInTheDocument();
 
@@ -466,7 +467,7 @@ describe("TranscodingPanel", () => {
     browserSelection?.removeAllRanges();
     browserSelection?.addRange(selection);
     fireEvent.keyDown(templateInput, { key: "Backspace" });
-    await waitFor(() => expect(templateInput.textContent).toBe("[{codec}] []"));
+    await waitFor(() => expect(templateInput.textContent).toBe("{sourceName} [{codec}] []"));
   });
 
   it("previews technical, episode, and content-category metadata tokens", async () => {
@@ -503,10 +504,10 @@ describe("TranscodingPanel", () => {
     }
 
     const templateInput = screen.getByRole("textbox", { name: "Filename formatting" });
-    templateInput.textContent = "[{resolutionCategory}]";
+    templateInput.textContent = "{sourceName} [{resolutionCategory}]";
     fireEvent.input(templateInput);
     expect(screen.getByText("Movie [UHD].mp4")).toBeInTheDocument();
-    templateInput.textContent = "[{audioCodecs}, {audioProfiles}, {audioChannels}, {frameRate}, {bitDepth}, {subtitleFormats}, {seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}, {contentCategory}]";
+    templateInput.textContent = "{sourceName} [{audioCodecs}, {audioProfiles}, {audioChannels}, {frameRate}, {bitDepth}, {subtitleFormats}, {seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}, {contentCategory}]";
     fireEvent.input(templateInput);
     expect(screen.getByText("Movie [AAC, Dolby Atmos, 5.1, 23.976 fps, 10-bit, SRT, Example Show, S2E3, Pilot, bonus].mp4")).toBeInTheDocument();
   });
@@ -540,6 +541,9 @@ describe("TranscodingPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add metadata" }));
     expect(screen.getByRole("button", { name: "Release year" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Movie title" })).toHaveAttribute("aria-disabled", "false");
+    expect(screen.getByRole("button", { name: "Episode title" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("group", { name: "Metadata tokens" })).toHaveTextContent("Jellyfin");
     const templateInput = screen.getByRole("textbox", { name: "Filename formatting" });
     templateInput.focus();
     const selection = document.createRange();
@@ -554,9 +558,9 @@ describe("TranscodingPanel", () => {
     expect(templateInput.textContent).toContain("{releaseYear}");
     expect(screen.getByText("Movie [3840x2160, HDR10, HEVC] [en]2014.mp4")).toBeInTheDocument();
 
-    templateInput.textContent = "[{seriesName}, S{seasonNumber}E{episodeNumber}, {episodeTitle}]";
+    templateInput.textContent = "{movieTitle} ({releaseYear}) - {sourceName}";
     fireEvent.input(templateInput);
-    expect(screen.getByText("Movie [Connector Show, S4E5, Connector Pilot].mp4")).toBeInTheDocument();
+    expect(screen.getByText("Movie (2014) - Movie.mp4")).toBeInTheDocument();
   });
 
   it("uses series-aware independent filename and direct-folder formatting switches", async () => {
@@ -601,6 +605,31 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("textbox", { name: "Filename formatting" })).toBeInTheDocument();
     fireEvent.click(folderSwitch);
     expect(screen.queryByRole("textbox", { name: "Folder name template" })).not.toBeInTheDocument();
+  });
+
+  it("moves or removes the original filename token in the preview", async () => {
+    renderTranscodingPanel();
+    await screen.findByRole("region", { name: "Source summary" });
+    const template = screen.getByRole("textbox", { name: "Filename formatting" });
+    template.textContent = "[{codec}] {sourceName}";
+    fireEvent.input(template);
+    expect(screen.getByText("[HEVC] Movie.mp4")).toBeInTheDocument();
+    template.textContent = "[{codec}]";
+    fireEvent.input(template);
+    expect(screen.getByText("[HEVC].mp4")).toBeInTheDocument();
+  });
+
+  it("keeps unavailable tokens visible but prevents inserting them", async () => {
+    renderTranscodingPanel({ ...file, series_title: null, season_number: null, episode_number: null, episode_title: null });
+    await screen.findByRole("region", { name: "Source summary" });
+    fireEvent.click(screen.getByRole("button", { name: "Add metadata" }));
+    const movieTitle = screen.getByRole("button", { name: "Movie title" });
+    const episodeTitle = screen.getByRole("button", { name: "Episode title" });
+    expect(movieTitle).toHaveAttribute("aria-disabled", "true");
+    expect(episodeTitle).toHaveAttribute("aria-disabled", "true");
+    const template = screen.getByRole("textbox", { name: "Filename formatting" });
+    fireEvent.click(movieTitle);
+    expect(template).not.toHaveTextContent("{movieTitle}");
   });
 
   it("saves current filename and folder formatting beside each dropdown and selects the saved preset", async () => {
@@ -746,9 +775,15 @@ describe("TranscodingPanel", () => {
     expect(screen.getByRole("button", { name: "Explain keeping metadata" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Explain keeping the cover" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Explain keeping attachments" })).toBeInTheDocument();
-    const languageCodeFormat = screen.getByRole("combobox", { name: "Filename language code format" });
+    const languageCodeFormat = screen.getByRole("combobox", { name: "Language code format (Filename formatting)" });
     expect(languageCodeFormat).toHaveValue("iso_639_1");
     fireEvent.change(languageCodeFormat, { target: { value: "iso_639_2" } });
+    expect(languageCodeFormat).toHaveValue("iso_639_2");
+    fireEvent.click(screen.getByRole("switch", { name: "Enable folder name formatting" }));
+    const folderLanguageCodeFormat = screen.getByRole("combobox", { name: "Language code format (Folder name formatting)" });
+    expect(folderLanguageCodeFormat).toHaveValue("iso_639_1");
+    fireEvent.change(folderLanguageCodeFormat, { target: { value: "iso_639_2" } });
+    expect(folderLanguageCodeFormat).toHaveValue("iso_639_2");
     expect(languageCodeFormat).toHaveValue("iso_639_2");
     expect(screen.getByText(/\[eng\]/)).toBeInTheDocument();
   });

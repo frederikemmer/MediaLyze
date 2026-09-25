@@ -139,7 +139,7 @@ function emptyPresetDefinition(): TranscodePresetDefinition {
     metadata: "keep",
     cover: "keep",
     attachments: "keep",
-    filename_template: "[{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
+    filename_template: "{sourceName} [{resolution}, {dynRange}, {codec}] [{audioLanguages}]",
     filename_template_override: false,
     include_subtitle_languages: false,
     filename_language_code_format: "iso_639_1",
@@ -1599,7 +1599,6 @@ export function TranscodePresetsRulesPanel({
   ) : tab === "accelerators" ? acceleratorsTooltip : (
     <div className="transcode-automation-description-tooltip">
       <p>{t("transcoding.automation.membersDescription")}</p>
-      <p>{t("transcoding.federation.directOnly")}</p>
     </div>
   );
   const automationTooltipAriaLabel = tab === "presets"

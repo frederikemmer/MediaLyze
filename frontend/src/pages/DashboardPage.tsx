@@ -1,4 +1,5 @@
 import {
+  House,
   PanelBottomClose,
   PanelLeftClose,
   PanelRightClose,
@@ -623,7 +624,10 @@ export function DashboardPage() {
     <>
       <section className="panel stack statistic-layout-header-panel">
         <div className="panel-title-row panel-title-row-with-actions">
-          <h2>{t("nav.dashboard")}</h2>
+          <div className="page-heading-row">
+            <House aria-hidden="true" className="page-heading-icon" />
+            <h2>{t("nav.dashboard")}</h2>
+          </div>
           <StatisticPanelLayoutControls
             availableDefinitions={availablePanelDefinitions}
             isEditing={isEditingLayout}
