@@ -537,8 +537,12 @@
   padding-left: 12px;
   border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
 }
-.file-detail-jellyfin-overview { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(31, 28, 22, 0.12); }
 .jellyfin-streaming-panel { gap: 14px; }
+.file-detail-streaming-metadata-body {
+  display: grid;
+  gap: 12px;
+  padding-left: 18px;
+}
 .playback-history { display: grid; gap: 14px; min-width: 0; }
 .playback-history-controls {
   display: flex;
@@ -2910,6 +2914,10 @@
   gap: 12px;
 }
 
+.file-detail-active-panel .panel-title-row {
+  align-items: flex-start;
+}
+
 .file-detail-preview-stack {
   display: grid;
   gap: 16px;
@@ -3014,40 +3022,6 @@
   background: transparent;
 }
 
-.file-detail-preview-supported-formats {
-  width: 100%;
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.file-detail-preview-supported-formats p {
-  max-width: 68ch;
-  margin: 0;
-}
-
-.file-detail-preview-supported-formats p + p {
-  margin-top: 6px;
-}
-
-.file-detail-preview-report {
-  display: grid;
-  grid-template-columns: minmax(0, 68ch) auto;
-  gap: 8px 10px;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
-}
-
-.file-detail-preview-report p {
-  max-width: none;
-}
-
-.file-detail-preview-report-button.file-detail-cover-button.secondary.small {
-  justify-self: end;
-}
-
 .file-detail-preview-player {
   display: block;
   width: 100%;
@@ -3070,6 +3044,37 @@
   height: 20px;
   min-height: 20px;
   color: var(--muted);
+}
+
+.file-detail-preview-help-tooltip {
+  display: grid;
+  gap: 7px;
+  min-width: min(280px, calc(100vw - 64px));
+}
+
+.file-detail-preview-help-tooltip p {
+  margin: 0;
+  color: rgba(243, 239, 232, 0.82);
+}
+
+.file-detail-preview-help-tooltip a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.file-detail-preview-help-tooltip a:hover,
+.file-detail-preview-help-tooltip a:focus-visible {
+  color: #ffd2c5;
+}
+
+.file-detail-preview-help-tooltip a > div {
+  display: inline-flex;
+  line-height: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

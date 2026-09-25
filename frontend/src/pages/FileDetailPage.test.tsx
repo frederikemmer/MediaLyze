@@ -476,7 +476,7 @@ afterEach(() => {
 });
 
 describe("FileDetailPage", () => {
-  it("places matched Jellyfin metadata in overview, streaming, and cover while hiding it without a match", async () => {
+  it("places matched Jellyfin metadata in overview badges, streaming, and cover while hiding it without a match", async () => {
     const file = createFileDetail();
     const overlay: JellyfinFileOverlay = {
       match: {
@@ -547,16 +547,23 @@ describe("FileDetailPage", () => {
 
     const { container } = renderPage(file.id);
 
-    expect(await screen.findByText("Jellyfin overview text.")).toBeInTheDocument();
-    expect(screen.getByText("Production year")).toBeInTheDocument();
+    expect(await screen.findByText(file.filename)).toBeInTheDocument();
+    expect(screen.queryByText("Jellyfin overview text.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Production year")).not.toBeInTheDocument();
     const topBadges = container.querySelector(".file-detail-overview-badges");
     expect(topBadges).not.toBeNull();
     expect(within(topBadges as HTMLElement).getByText("Jellyfin")).toBeInTheDocument();
     expect(within(topBadges as HTMLElement).getByText("Movie")).toBeInTheDocument();
-    expect(container.querySelector(".file-detail-jellyfin-overview .badge")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Jellyfin metadata" })).not.toBeInTheDocument();
+    expect(container.querySelector(".file-detail-jellyfin-overview")).not.toBeInTheDocument();
 
     await selectFileDetailPanel("Streaming");
+    const metadataDisclosure = screen.getByText("Jellyfin metadata").closest("details");
+    expect(metadataDisclosure).not.toBeNull();
+    expect(metadataDisclosure).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Jellyfin metadata"));
+    expect(metadataDisclosure).toHaveAttribute("open");
+    expect(within(metadataDisclosure as HTMLElement).getByText("Production year")).toBeInTheDocument();
+    expect(within(metadataDisclosure as HTMLElement).getByText("Jellyfin overview text.")).toBeInTheDocument();
     expect(screen.getAllByText("Frederik")).not.toHaveLength(0);
     expect(screen.getByRole("group", { name: "History range" })).toBeInTheDocument();
     const playbackTable = screen.getByRole("table");
@@ -861,6 +868,21 @@ describe("FileDetailPage", () => {
     const { container } = renderPage(file.id);
 
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    const navigationLabels = Array.from(
+      container.querySelectorAll(".settings-navigation-list > .settings-navigation-item"),
+    ).map((item) => item.getAttribute("aria-label"));
+    expect(navigationLabels.slice(0, 6)).toEqual([
+      "Overview",
+      "Video streams",
+      "Audio streams",
+      "Subtitles",
+      "Chapters",
+      "Transcode",
+    ]);
+    const compatibilityIndex = navigationLabels.indexOf("Compatibility");
+    if (compatibilityIndex >= 0) {
+      expect(compatibilityIndex).toBeGreaterThan(navigationLabels.indexOf("Transcode"));
+    }
     expect(screen.getByRole("button", { name: "Transcode" })).toBeInTheDocument();
     expect(screen.getByText("UHD")).toBeInTheDocument();
     expect(screen.getByText("10.0 GB")).toBeInTheDocument();
@@ -991,6 +1013,8 @@ describe("FileDetailPage", () => {
     await selectFileDetailPanel("Chapters");
     expect(await screen.findByText("Opening")).toBeInTheDocument();
     expect(screen.getByText("Chapter 2")).toBeInTheDocument();
+    expect(screen.getByText("00:00–01:30")).toBeInTheDocument();
+    expect(screen.getByText("01:30–03:00")).toBeInTheDocument();
     expect(screen.getAllByText("1m").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search chapters" }), { target: { value: "opening" } });
@@ -1058,7 +1082,7 @@ describe("FileDetailPage", () => {
     expect(anchorClick).toHaveBeenCalled();
   });
 
-  it("renders a preview panel for video files with playback and download warnings", async () => {
+  it("renders a preview panel for video files with compact help in the tooltip", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
     vi.spyOn(api, "file").mockResolvedValue(file);
@@ -1070,25 +1094,17 @@ describe("FileDetailPage", () => {
     expect(screen.getByRole("button", { name: "Transcode" })).toBeInTheDocument();
     await selectFileDetailPanel("Preview");
     expect(await screen.findByRole("heading", { name: "Preview" })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Browser playback currently works best with MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio. Codec support may vary by browser.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "If a media file does not play correctly, please report it or upload a sample so the preview feature can be improved.",
-      ),
-    ).toBeInTheDocument();
-    const reportLink = screen.getByRole("link", { name: "Report file" });
+    expect(screen.queryByText("Best browser support: MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio; codecs vary by browser.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Report file" })).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByRole("button", { name: "Show playback warning" }));
+    const helpTooltip = await screen.findByRole("tooltip");
+    expect(helpTooltip).toHaveTextContent("Preview playback is best effort and may start slowly or stutter.");
+    expect(helpTooltip).toHaveTextContent("Best browser support: MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio; codecs vary by browser.");
+    expect(helpTooltip).toHaveTextContent("Playback issue? Report the file or upload a sample.");
+    const reportLink = within(helpTooltip).getByRole("link", { name: "Report file" });
     expect(reportLink).toHaveAttribute("href", "https://www.medialyze.app/report?source=file_detail_page");
     expect(reportLink).toHaveAttribute("target", "_blank");
-    expect(reportLink).toHaveClass("file-detail-cover-button");
-    expect(screen.queryByText("Playback is not optimized yet and may take a while to start or may not run smoothly.")).not.toBeInTheDocument();
-    fireEvent.focus(screen.getByRole("button", { name: "Show playback warning" }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "Playback is not optimized yet and may take a while to start or may not run smoothly.",
-    );
+    expect(reportLink).not.toHaveClass("file-detail-cover-button");
     expect(screen.queryByRole("link", { name: "Download media" })).not.toBeInTheDocument();
     const player = container.querySelector(".file-detail-preview-player") as HTMLVideoElement | null;
     expect(player?.tagName).toBe("VIDEO");

@@ -30,7 +30,7 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router";
 
 import { AsyncPanel } from "../components/AsyncPanel";
-import { ArrowUpRightIcon, type ArrowUpRightIconHandle } from "../components/ArrowUpRightIcon";
+import { ArrowUpRightIcon } from "../components/ArrowUpRightIcon";
 import { AudioStreamPrimaryToggle, type AudioStreamPrimaryMode } from "../components/AudioStreamPrimaryToggle";
 import { CopyIcon } from "../components/CopyIcon";
 import { DownloadIcon, type DownloadIconHandle } from "../components/DownloadIcon";
@@ -112,16 +112,16 @@ const PREVIEW_REPORT_URL = "https://www.medialyze.app/report?source=file_detail_
 
 const FILE_DETAIL_NAV_ITEMS: FileDetailNavItem[] = [
   { id: "overview", labelKey: "fileDetail.navigation.overview", icon: Info },
-  { id: "preview", labelKey: "fileDetail.preview", icon: Play },
-  { id: "transcoding", labelKey: "transcoding.title", icon: Clapperboard },
-  { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
-  { id: "compatibility", labelKey: "fileDetail.compatibility.title", icon: Cpu },
-  { id: "jellyfin", labelKey: "jellyfin.streaming", icon: Radio },
   { id: "videoStreams", labelKey: "fileDetail.videoStreams", icon: Film },
   { id: "audioStreams", labelKey: "fileDetail.audioStreams", icon: AudioLines },
   { id: "subtitles", labelKey: "fileDetail.subtitles", icon: Captions },
-  { id: "cover", labelKey: "fileDetail.cover", icon: ImageIcon },
   { id: "chapters", labelKey: "fileDetail.chapters", icon: ListVideo },
+  { id: "transcoding", labelKey: "transcoding.title", icon: Clapperboard },
+  { id: "compatibility", labelKey: "fileDetail.compatibility.title", icon: Cpu },
+  { id: "preview", labelKey: "fileDetail.preview", icon: Play },
+  { id: "qualityBreakdown", labelKey: "fileDetail.qualityBreakdown", icon: Gauge },
+  { id: "jellyfin", labelKey: "jellyfin.streaming", icon: Radio },
+  { id: "cover", labelKey: "fileDetail.cover", icon: ImageIcon },
   { id: "fileHistory", labelKey: "fileDetail.history.title", icon: FileClock },
   { id: "rawJson", labelKey: "fileDetail.rawJson", icon: FileJson },
 ];
@@ -393,8 +393,28 @@ function QualityBreakdownCategoryList({
   );
 }
 
-function formatChapterTime(value: number | null | undefined): string {
-  return value === null || value === undefined ? "n/a" : formatDuration(value);
+function formatChapterTimecode(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "n/a";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor(value));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const minutePart = String(minutes).padStart(2, "0");
+  const secondPart = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${minutePart}:${secondPart}` : `${minutePart}:${secondPart}`;
+}
+
+function formatChapterTimeRange(
+  start: number | null | undefined,
+  end: number | null | undefined,
+): string {
+  const startLabel = formatChapterTimecode(start);
+  return end === null || end === undefined
+    ? startLabel
+    : `${startLabel}–${formatChapterTimecode(end)}`;
 }
 
 function ChaptersList({
@@ -467,12 +487,11 @@ function ChaptersList({
             <div className="stream-tooltip-inline">
               <strong>{chapter.title?.trim() || t("fileDetail.untitledChapter", { number: index + 1 })}</strong>
               <div className="stream-tooltip-meta">
-                <span className="stream-tooltip-pill">{formatChapterTime(chapter.start_time)}</span>
-                {chapter.end_time !== null && chapter.end_time !== undefined ? (
-                  <span className="stream-tooltip-pill">{formatChapterTime(chapter.end_time)}</span>
-                ) : null}
+                <span className="stream-tooltip-pill">
+                  {formatChapterTimeRange(chapter.start_time, chapter.end_time)}
+                </span>
                 {chapter.duration !== null && chapter.duration !== undefined ? (
-                  <span className="stream-tooltip-pill">{formatChapterTime(chapter.duration)}</span>
+                  <span className="stream-tooltip-pill">{formatDuration(chapter.duration)}</span>
                 ) : null}
               </div>
             </div>
@@ -1298,11 +1317,6 @@ function OverviewPanel({
           <span>{file.analysis_failure_reason}</span>
         </div>
       ) : null}
-      {jellyfinItem ? (
-        <div className="file-detail-jellyfin-overview">
-          <JellyfinOverviewDetails item={jellyfinItem} showBadges={false} showTitle={false} t={t} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1780,8 +1794,6 @@ export function FileDetailPage() {
   }>(() => ({ fileId, status: "idle", error: null }));
   const [rawJsonCopied, setRawJsonCopied] = useState(false);
   const rawJsonCopyResetTimeoutRef = useRef<number | null>(null);
-  const previewReportIconRef = useRef<ArrowUpRightIconHandle>(null);
-
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [fileId]);
@@ -2053,7 +2065,6 @@ export function FileDetailPage() {
       loading: boolean;
       error: string | null;
       titleAddon?: ReactNode;
-      subtitleAddon?: ReactNode;
       headerAddon?: ReactNode;
       actions?: ReactNode;
       body: ReactNode;
@@ -2073,31 +2084,20 @@ export function FileDetailPage() {
         <TooltipTrigger
           ariaLabel={t("fileDetail.previewPlaybackWarningAria")}
           className="file-detail-preview-warning-tooltip"
-          content={t("fileDetail.previewPlaybackWarning")}
+          content={(
+            <div className="file-detail-preview-help-tooltip">
+              <p>{t("fileDetail.previewPlaybackWarning")}</p>
+              <p>{t("fileDetail.previewSupportedFormats")}</p>
+              <p>{t("fileDetail.previewReportPrompt")}</p>
+              <a href={PREVIEW_REPORT_URL} rel="noreferrer" target="_blank">
+                <ArrowUpRightIcon size={14} aria-hidden="true" />
+                {t("fileDetail.previewReportLink")}
+              </a>
+            </div>
+          )}
         >
           <Info size={14} aria-hidden="true" />
         </TooltipTrigger>
-      ),
-      subtitleAddon: (
-        <div className="file-detail-preview-supported-formats">
-          <p>{t("fileDetail.previewSupportedFormats")}</p>
-          <div className="file-detail-preview-report">
-            <p>{t("fileDetail.previewReportPrompt")}</p>
-            <a
-              className="secondary small file-detail-cover-button file-detail-preview-report-button"
-              href={PREVIEW_REPORT_URL}
-              onBlur={() => previewReportIconRef.current?.stopAnimation()}
-              onFocus={() => previewReportIconRef.current?.startAnimation()}
-              onMouseEnter={() => previewReportIconRef.current?.startAnimation()}
-              onMouseLeave={() => previewReportIconRef.current?.stopAnimation()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <ArrowUpRightIcon ref={previewReportIconRef} size={16} aria-hidden="true" />
-              {t("fileDetail.previewReportLink")}
-            </a>
-          </div>
-        </div>
       ),
       body: (
         <PreviewDetailsPanel
@@ -2195,7 +2195,7 @@ export function FileDetailPage() {
       ),
     },
     jellyfin: {
-      title: t("connectors.externalSources"),
+      title: t("jellyfin.streaming"),
       loading: (!connectorSources && !connectorSourcesError) || (!connectorPlayback && !connectorPlaybackError),
       error: jellyfinError,
       titleAddon: (
@@ -2208,6 +2208,19 @@ export function FileDetailPage() {
       ),
       body: (
         <div className="file-external-sources">
+          {jellyfinOverlay?.item ? (
+            <details className="stream-detail-entry file-detail-streaming-metadata">
+              <summary className="stream-detail-entry-head file-detail-streaming-metadata-summary">
+                <span className="stream-detail-entry-chevron" aria-hidden="true">
+                  <ChevronRight className="nav-icon" />
+                </span>
+                <strong>{t("jellyfin.filePanel")}</strong>
+              </summary>
+              <div className="file-detail-streaming-metadata-body">
+                <JellyfinOverviewDetails item={jellyfinOverlay.item} showBadges={false} showTitle={false} t={t} />
+              </div>
+            </details>
+          ) : null}
           <div className="file-external-source-list">
             {connectorSourcesError ? <p className="notice error">{connectorSourcesError}</p> : null}
             {connectorPlaybackError ? <p className="notice error">{connectorPlaybackError}</p> : null}
@@ -2495,10 +2508,9 @@ export function FileDetailPage() {
           title={activePanel.title}
           loading={activePanel.loading}
           error={activePanel.error}
-          className="file-detail-active-panel"
-          titleAddon={activePanel.titleAddon}
-          subtitleAddon={activePanel.subtitleAddon}
-          headerAddon={activePanel.headerAddon}
+           className={`file-detail-active-panel file-detail-panel-${normalizedActivePanelId}`}
+           titleAddon={activePanel.titleAddon}
+           headerAddon={activePanel.headerAddon}
           collapseActions={activePanel.actions}
         >
           {activePanel.body}

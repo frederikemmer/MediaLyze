@@ -14,13 +14,13 @@ import {
   Clock3,
   CircleStop,
   CircleX,
+  Clapperboard,
   ChevronDown,
   ChevronRight,
   Columns3,
   Columns3Cog,
   Copy,
   Cpu,
-  Database,
   DatabaseSearch,
   Diff,
   Download,
@@ -43,11 +43,13 @@ import {
   Hash,
   History,
   HardDrive,
+  ImageIcon,
   House,
   KeyRound,
   Info,
   Layers,
   LayoutPanelTop,
+  ListVideo,
   ListFilter,
   Lock,
   Map,
@@ -61,6 +63,7 @@ import {
   Plus,
   PlugZap,
   RefreshCw,
+  Radio,
   RotateCcw,
   Save,
   SaveOff,
@@ -984,12 +987,23 @@ function FileDetailNavigationFixture() {
                 <span>Overview</span>
               </span>
             </button>
-            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="streams" data-toggle-key="streams" tabIndex={-1}>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="videoStreams" data-toggle-key="videoStreams" tabIndex={-1}>
               <span className="settings-navigation-item-content">
-                <Database className="nav-icon" aria-hidden="true" />
-                <span>Streams</span>
+                <Film className="nav-icon" aria-hidden="true" />
+                <span>Video streams</span>
               </span>
             </button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="audioStreams" data-toggle-key="audioStreams" tabIndex={-1}><span className="settings-navigation-item-content"><AudioLines className="nav-icon" aria-hidden="true" /><span>Audio streams</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="subtitles" data-toggle-key="subtitles" tabIndex={-1}><span className="settings-navigation-item-content"><Captions className="nav-icon" aria-hidden="true" /><span>Subtitles</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="chapters" data-toggle-key="chapters" tabIndex={-1}><span className="settings-navigation-item-content"><ListVideo className="nav-icon" aria-hidden="true" /><span>Chapters</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="transcoding" data-toggle-key="transcoding" tabIndex={-1}><span className="settings-navigation-item-content"><Clapperboard className="nav-icon" aria-hidden="true" /><span>Transcode</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="compatibility" data-toggle-key="compatibility" tabIndex={-1}><span className="settings-navigation-item-content"><Cpu className="nav-icon" aria-hidden="true" /><span>Compatibility</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="preview" data-toggle-key="preview" tabIndex={-1}><span className="settings-navigation-item-content"><Play className="nav-icon" aria-hidden="true" /><span>Preview</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="qualityBreakdown" data-toggle-key="qualityBreakdown" tabIndex={-1}><span className="settings-navigation-item-content"><Gauge className="nav-icon" aria-hidden="true" /><span>Quality breakdown</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="jellyfin" data-toggle-key="jellyfin" tabIndex={-1}><span className="settings-navigation-item-content"><Radio className="nav-icon" aria-hidden="true" /><span>Streaming</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="cover" data-toggle-key="cover" tabIndex={-1}><span className="settings-navigation-item-content"><ImageIcon className="nav-icon" aria-hidden="true" /><span>Cover</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="fileHistory" data-toggle-key="fileHistory" tabIndex={-1}><span className="settings-navigation-item-content"><History className="nav-icon" aria-hidden="true" /><span>File history</span></span></button>
+            <button type="button" className="settings-navigation-item settings-mobile-navigation-item" data-file-detail-panel-id="rawJson" data-toggle-key="rawJson" tabIndex={-1}><span className="settings-navigation-item-content"><FileText className="nav-icon" aria-hidden="true" /><span>Raw ffprobe JSON</span></span></button>
           </nav>
         </div>
         <div className="settings-navigation-quick-actions file-detail-navigation-actions">
@@ -1012,12 +1026,23 @@ function FileDetailNavigationFixture() {
               <span>Overview</span>
             </span>
           </button>
-          <button type="button" className="settings-navigation-item" aria-label="Streams" data-file-detail-panel-id="streams" data-toggle-key="streams">
+          <button type="button" className="settings-navigation-item" aria-label="Video streams" data-file-detail-panel-id="videoStreams" data-toggle-key="videoStreams">
             <span className="settings-navigation-item-content">
-              <Database className="nav-icon" aria-hidden="true" />
-              <span>Streams</span>
+              <Film className="nav-icon" aria-hidden="true" />
+              <span>Video streams</span>
             </span>
           </button>
+          <button type="button" className="settings-navigation-item" aria-label="Audio streams" data-file-detail-panel-id="audioStreams" data-toggle-key="audioStreams"><span className="settings-navigation-item-content"><AudioLines className="nav-icon" aria-hidden="true" /><span>Audio streams</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Subtitles" data-file-detail-panel-id="subtitles" data-toggle-key="subtitles"><span className="settings-navigation-item-content"><Captions className="nav-icon" aria-hidden="true" /><span>Subtitles</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Chapters" data-file-detail-panel-id="chapters" data-toggle-key="chapters"><span className="settings-navigation-item-content"><ListVideo className="nav-icon" aria-hidden="true" /><span>Chapters</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Transcode" data-file-detail-panel-id="transcoding" data-toggle-key="transcoding"><span className="settings-navigation-item-content"><Clapperboard className="nav-icon" aria-hidden="true" /><span>Transcode</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Compatibility" data-file-detail-panel-id="compatibility" data-toggle-key="compatibility"><span className="settings-navigation-item-content"><Cpu className="nav-icon" aria-hidden="true" /><span>Compatibility</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Preview" data-file-detail-panel-id="preview" data-toggle-key="preview"><span className="settings-navigation-item-content"><Play className="nav-icon" aria-hidden="true" /><span>Preview</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Quality breakdown" data-file-detail-panel-id="qualityBreakdown" data-toggle-key="qualityBreakdown"><span className="settings-navigation-item-content"><Gauge className="nav-icon" aria-hidden="true" /><span>Quality breakdown</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Streaming" data-file-detail-panel-id="jellyfin" data-toggle-key="jellyfin"><span className="settings-navigation-item-content"><Radio className="nav-icon" aria-hidden="true" /><span>Streaming</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Cover" data-file-detail-panel-id="cover" data-toggle-key="cover"><span className="settings-navigation-item-content"><ImageIcon className="nav-icon" aria-hidden="true" /><span>Cover</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="File history" data-file-detail-panel-id="fileHistory" data-toggle-key="fileHistory"><span className="settings-navigation-item-content"><History className="nav-icon" aria-hidden="true" /><span>File history</span></span></button>
+          <button type="button" className="settings-navigation-item" aria-label="Raw ffprobe JSON" data-file-detail-panel-id="rawJson" data-toggle-key="rawJson"><span className="settings-navigation-item-content"><FileText className="nav-icon" aria-hidden="true" /><span>Raw ffprobe JSON</span></span></button>
         </nav>
       </aside>
       <section className="panel file-detail-active-panel">
@@ -1044,15 +1069,25 @@ function FileDetailNavigationFixture() {
 function PreviewFixture() {
   return (
     <div className="file-detail-preview-panel">
+      <div className="panel-title-row">
+        <h2>Preview</h2>
+        <TooltipTrigger
+          ariaLabel="Show preview playback help"
+          className="file-detail-preview-warning-tooltip"
+          content={(
+            <div className="file-detail-preview-help-tooltip">
+              <p>Preview playback is best effort and may start slowly or stutter.</p>
+              <p>Best browser support: MP4/WebM video and MP3, M4A, WAV, OGG, or FLAC audio; codecs vary by browser.</p>
+              <p>Playback issue? Report the file or upload a sample.</p>
+              <a href="https://www.medialyze.app/report?source=file_detail_page" rel="noreferrer" target="_blank"><ArrowUpRight size={14} aria-hidden="true" />Report file</a>
+            </div>
+          )}
+        >
+          <Info size={14} aria-hidden="true" />
+        </TooltipTrigger>
+      </div>
       <div className="file-detail-preview-player-shell">
         <video className="file-detail-preview-player" controls aria-label="Preview player" />
-      </div>
-      <div className="file-detail-preview-report">
-        <p>Browser playback is a best-effort preview and may not support every codec.</p>
-        <button type="button" className="file-detail-preview-report-button file-detail-cover-button secondary small">
-          <Download className="nav-icon" aria-hidden="true" />
-          Download file
-        </button>
       </div>
     </div>
   );
@@ -2511,7 +2546,7 @@ export function UiElementsPage() {
               <VariantCard title="Path segment trail" source={`${fileDetail} > Overview / Analyzed files`} classes={["path-segment-trail", "path-segment", "path-segment-leaf"]}>
                 <PathSegmentTrail value="/media/Movies/Arrival/Arrival.2016.UHD.mkv" />
               </VariantCard>
-              <VariantCard title="Preview and download warning" source={`${fileDetail} > Preview`} classes={["file-detail-preview-panel", "file-detail-preview-player", "file-detail-preview-report"]}>
+              <VariantCard title="Preview help tooltip" source={`${fileDetail} > Preview`} classes={["file-detail-preview-panel", "file-detail-preview-player", "file-detail-preview-warning-tooltip", "file-detail-preview-help-tooltip"]}>
                 <PreviewFixture />
               </VariantCard>
               <VariantCard title="Stream details list" source={`${fileDetail} > Streams / Table tooltips`} classes={["stream-details-list", "stream-detail-entry", "stream-detail-entry-chevron", "stream-detail-entry-summary-value"]}>
@@ -2540,7 +2575,7 @@ export function UiElementsPage() {
                   </details>
                 </div>
               </VariantCard>
-              <VariantCard title="File detail panel header actions" source={`${fileDetail} > Quality breakdown / Chapters`} classes={["async-panel-toggle-actions", "settings-panel-header-action", "file-detail-quality-export-button", "file-detail-chapter-summary", "file-detail-chapter-export-button"]}>
+              <VariantCard title="File detail panel header actions" source={`${fileDetail} > Quality breakdown / Chapters`} classes={["async-panel-toggle-actions", "settings-panel-header-action", "file-detail-quality-export-button", "file-detail-chapter-summary", "file-detail-chapter-export-button", "stream-tooltip-row", "stream-tooltip-head", "stream-tooltip-inline", "stream-tooltip-meta", "stream-tooltip-pill"]}>
                 <div className="stack">
                   <div className="panel-title-row">
                     <h2>Quality breakdown</h2>
@@ -2554,15 +2589,20 @@ export function UiElementsPage() {
                       <button type="button" className="secondary small settings-panel-header-action file-detail-chapter-export-button">Export chapters</button>
                     </div>
                     <div className="file-detail-chapter-tools"><input type="search" aria-label="Search chapters" placeholder="Search chapter titles" /></div>
+                    <div className="stream-tooltip-row">
+                      <div className="stream-tooltip-head">
+                        <div className="stream-tooltip-inline"><strong>Chapter 1</strong><div className="stream-tooltip-meta"><span className="stream-tooltip-pill">00:00–01:30</span><span className="stream-tooltip-pill">1m 30s</span></div></div>
+                        <span>#1</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Multi-source connector playback in file details" source={`${fileDetail} > Overview / Streaming / Cover`} classes={["file-detail-overview", "format-details-content", "jellyfin-streaming-panel", "file-detail-streaming-availability-tooltip", "library-history-range-toggle", "library-history-range-custom-shell", "playback-history-display-control", "playback-history-display-heading", "playback-history-data-summary", "playback-history-timeline-axis", "playback-history-availability-boundary", "playback-history-availability-note", "playback-history-search", "playback-history-timestamp", "playback-history-undated", "playback-history-undated-list", "playback-history-display-toggle", "playback-history-display-button", "playback-history-export-button", "file-detail-cover-comparison"]} wide>
+              <VariantCard title="Multi-source connector playback in file details" source={`${fileDetail} > Overview / Streaming / Cover`} classes={["file-detail-overview", "format-details-content", "file-detail-streaming-metadata", "file-detail-streaming-metadata-body", "stream-detail-entry", "stream-detail-entry-head", "stream-detail-entry-chevron", "jellyfin-streaming-panel", "file-detail-streaming-availability-tooltip", "library-history-range-toggle", "library-history-range-custom-shell", "playback-history-display-control", "playback-history-display-heading", "playback-history-data-summary", "playback-history-timeline-axis", "playback-history-availability-boundary", "playback-history-availability-note", "playback-history-search", "playback-history-timestamp", "playback-history-undated", "playback-history-undated-list", "playback-history-display-toggle", "playback-history-display-button", "playback-history-export-button", "file-detail-cover-comparison"]} wide>
                 <div className="file-detail-overview">
                   <div className="file-detail-title-row"><h3 className="file-detail-title">Arrival.2016.mkv</h3></div>
                   <div className="meta-tags file-detail-overview-badges"><span className="badge">HEVC</span><span className="badge">UHD</span><div className="jellyfin-overview-badge-group is-separated"><span className="badge"><Server aria-hidden="true" />Jellyfin</span><span className="badge">Movie</span></div></div>
                   <div className="stream-tooltip-content stream-tooltip-content-panel format-details-content"><div className="stream-tooltip-row"><div className="stream-tooltip-head format-details-row"><span className="format-details-label">Container</span><strong className="format-details-value">Matroska</strong></div></div><div className="stream-tooltip-row"><div className="stream-tooltip-head format-details-row"><span className="format-details-label">Size</span><strong className="format-details-value">10.7 GB</strong></div></div></div>
-                  <div className="file-detail-jellyfin-overview"><div className="jellyfin-overview-details"><div className="stream-tooltip-content stream-tooltip-content-panel format-details-content"><div className="stream-tooltip-row"><div className="stream-tooltip-head format-details-row"><span className="format-details-label">Production year</span><strong className="format-details-value">2016</strong></div></div></div><p className="jellyfin-overview">Jellyfin catalog metadata is shown alongside the technical analysis.</p></div></div>
                   <div className="panel-title-row">
                     <h2>Streaming</h2>
                     <TooltipTrigger
@@ -2572,6 +2612,10 @@ export function UiElementsPage() {
                     />
                   </div>
                   <div className="jellyfin-file-panel jellyfin-streaming-panel">
+                    <details className="stream-detail-entry file-detail-streaming-metadata">
+                      <summary className="stream-detail-entry-head file-detail-streaming-metadata-summary"><span className="stream-detail-entry-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span><strong>Jellyfin metadata</strong></summary>
+                      <div className="file-detail-streaming-metadata-body"><div className="jellyfin-overview-details"><div className="stream-tooltip-content stream-tooltip-content-panel format-details-content"><div className="stream-tooltip-row"><div className="stream-tooltip-head format-details-row"><span className="format-details-label">Production year</span><strong className="format-details-value">2016</strong></div></div></div><p className="jellyfin-overview">Jellyfin catalog metadata is available here.</p></div></div>
+                    </details>
                     <ConnectorStreamingDetails
                       durationSeconds={7198}
                       sources={[

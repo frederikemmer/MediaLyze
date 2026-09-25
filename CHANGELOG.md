@@ -59,6 +59,7 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 - **Refined library path settings** — move path editing into the Media source heading, remove the redundant path label and save action, auto-save editable root aliases, and make the folder-selection dialog denser and scroll-safe.
 - **Compact expanded library settings** — show connector assignments as inline rows, move scanning help into a heading tooltip, and align source and analysis controls with the tighter Pattern recognition field spacing.
 - **Consistent file-detail disclosures and exports** — align detail chevrons with Settings, move chapter export into its heading, add a quality-breakdown CSV report, square the audio-stream toggle, and separate overview rows subtly.
+- **Refined file-detail navigation and streaming details** — prioritize stream and chapter sections, group connector sources and matched catalog metadata under Streaming, move preview guidance into its tooltip, and show chapter timecode ranges with their durations.
 
 ### 🔒 Security
 
