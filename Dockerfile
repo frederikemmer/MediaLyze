@@ -18,7 +18,7 @@ COPY backend ./backend
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
 
 FROM python:3.12-slim-bookworm AS runtime
-ARG APP_VERSION=0.18.0
+ARG APP_VERSION=0.18.1
 ARG TARGETARCH
 ARG FFMPEG_PACKAGE_VERSION=7:5.1.9-0+deb12u1
 ARG FFMPEG_PACKAGE_SHA256_AMD64=2ba8ead87657c123ce6de2de5ecdbc1fb4ead9a4b317b85b8ec41e16c890fe01

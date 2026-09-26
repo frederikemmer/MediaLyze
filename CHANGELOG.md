@@ -85,6 +85,15 @@ The next release focuses on hardware-aware transcoding, trusted worker federatio
 
 [@MadsThy](https://github.com/MadsThy) in [#180](https://github.com/frederikemmer/MediaLyze/pull/180)
 
+## v0.18.1
+
+>2026-09-25
+
+### 🐛 Bug fixes
+
+- use supported Jellyfin authentication when legacy authentication is disabled, including Jellyfin 12 ([#181](https://github.com/frederikemmer/MediaLyze/issues/181), thanks [@dmncklnr](https://github.com/dmncklnr) for opening the backport PR)
+- fix Windows desktop release packaging so the Windows installer can be published alongside the Linux and macOS builds
+
 ## v0.18.0
 
 >2026-08-24
