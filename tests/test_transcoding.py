@@ -1888,7 +1888,8 @@ def test_transcode_trigger_queues_follow_up_when_scan_is_already_running(tmp_pat
         assert follow_up.trigger_source == ScanTriggerSource.transcode
 
 
-def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("retention_mode", ["age", "storage"])
+def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(monkeypatch, tmp_path, retention_mode) -> None:
     factory = _session_factory()
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
     with factory() as db:
@@ -1913,7 +1914,10 @@ def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(mon
         variant_id = variant.id
         media_file_id = media_file.id
 
-        assert _prune_transcode_history(db, days=90, storage_limit_bytes=0) == 1
+        assert _prune_transcode_history(
+            db, days=90 if retention_mode == "age" else 0,
+            storage_limit_bytes=0 if retention_mode == "age" else 1,
+        ) == 1
         assert db.get(TranscodeJob, job.id) is None
         retained_variant = db.get(TranscodeVariant, variant_id)
         assert retained_variant is not None

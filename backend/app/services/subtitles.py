@@ -54,5 +54,9 @@ def detect_external_subtitles(
     video_path: Path,
     allowed_extensions: tuple[str, ...],
 ) -> list[dict[str, str | None]]:
-    sibling_names = [entry.name for entry in video_path.parent.iterdir() if entry.is_file()]
-    return _detect_external_subtitles_from_names(video_path, sibling_names, allowed_extensions)
+    # Inspect only matching sidecars. An unreadable, unrelated media file in the
+    # same directory must not turn every neighboring file into an analysis failure.
+    candidates = _detect_external_subtitles_from_names(
+        video_path, (entry.name for entry in video_path.parent.iterdir()), allowed_extensions,
+    )
+    return [item for item in candidates if (video_path.parent / str(item["path"])).is_file()]

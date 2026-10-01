@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import platform
+import gc
+import os
 import sqlite3
 import statistics
 import sys
+import tracemalloc
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
@@ -18,6 +22,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+# Service imports construct default settings. Keep benchmark runtime paths
+# temporary instead of depending on container-only /config and /media paths.
+_runtime_directory = tempfile.TemporaryDirectory(prefix="medialyze-benchmark-runtime-")
+os.environ.setdefault("CONFIG_PATH", str(Path(_runtime_directory.name) / "config"))
+os.environ.setdefault("MEDIA_ROOT", str(Path(_runtime_directory.name) / "media"))
+
 from backend.app.db.base import Base
 
 
@@ -29,6 +39,8 @@ def create_benchmark_database(database_path: Path) -> tuple[Engine, sessionmaker
     def _enable_foreign_keys(connection, _record) -> None:
         cursor = connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
     Base.metadata.create_all(engine)
@@ -64,3 +76,17 @@ def environment_metadata() -> dict[str, str]:
         "sqlite": sqlite3.sqlite_version,
         "platform": platform.platform(),
     }
+
+
+def measure_memory(action: Callable) -> tuple[dict, object]:
+    """Measure Python allocations during work, excluding fixture construction."""
+    gc.collect()
+    tracemalloc.start()
+    started = perf_counter()
+    try:
+        result = action()
+        elapsed = perf_counter() - started
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    return {"elapsed_seconds": round(elapsed, 4), "peak_python_mib": round(peak / 1024**2, 3)}, result

@@ -66,6 +66,12 @@ Library types control discovery and some UI behavior:
 
 ffprobe failures are recorded per file and the scan continues with the remaining files. Each probe has a 120-second execution limit, a 16 MiB JSON output limit, and a 1 MiB diagnostic output limit. Exceeding a limit terminates and reaps the probe and records an analysis failure; partial metadata is not accepted. Stored raw payloads are loaded lazily during scans, and persisted analysis payloads and stream data are released as files finish processing.
 
+Scans retain a compact identity/change/rename index and load full stored file records in batches. Filesystem inspection errors are recorded in the existing failure samples without aborting unrelated file analysis. Unavailable roots and unreadable directories are not evidence of deletion: existing records in those locations are preserved. Matching subtitle sidecars are inspected independently of unrelated neighboring media files.
+
+Startup signature migration reads only file IDs and filenames and commits completed batches so an interrupted upgrade can resume. History storage pruning decodes one record at a time, preserves the existing canonical byte estimates and oldest-first rules, and never prunes active jobs. Quality recomputation uses bounded file batches and releases raw metadata after history persistence; unchanged history fingerprints do not reload raw metadata. These measures remove catalog-wide raw-JSON retention, but do not impose an absolute process memory cap.
+
+Manual history reconstruction also loads raw metadata only when creating a file snapshot and releases it after persistence. Its prepared aggregate values still scale with the number of files needed to reconstruct daily library statistics.
+
 If the backend/container restarts during a scan, startup marks the interrupted job as canceled. This does not imply a user cancellation. For Docker, inspect `docker inspect medialyze --format '{{json .State}}'` and `docker inspect medialyze --format '{{.RestartCount}}'`, plus host kernel logs such as `journalctl -k --since '1 hour ago'`, to check for OOM kills or other restart causes. An ffprobe error immediately before startup messages alone does not establish why the backend exited. Output/time limits do not cap ffprobe's internal memory use or total container memory.
 
 ## 3) Persisted Metadata
@@ -337,3 +343,11 @@ When adding a new media type, check whether it needs:
 10. translations and mixed-library visibility rules
 
 The tables above should be extended whenever a new media kind becomes first-class.
+
+### Resource-aware scan execution
+
+The configured scan-worker count remains the maximum. A process-wide admission gate also checks available host RAM and, on Linux, standard cgroup v1/v2 memory limits and usage. It reserves 64 MiB for backend work and budgets 128 MiB per admitted analysis worker; at least one worker can proceed. Queued work remains bounded, and waiting workers recheck memory and cancellation. Under memory pressure scans may run more slowly. These budgets are conservative scheduling estimates, not hard limits on ffprobe allocations or a guarantee against OOM. Transcoding and connector execution keep their independent scheduling.
+
+Canceling a scan signals active analysis workers. Running ffprobe processes are killed and reaped, output pipes are closed, and file hashing checks cancellation between chunks. Cancellation is not reported as a broken file. OS filesystem calls can still take time on an unresponsive mount.
+
+Database initialization and orphaned-job recovery still finish before startup readiness. History pruning is queued on the existing single-worker maintenance executor; the API can become available before pruning finishes, so expired history may briefly remain visible. Background retention failures are logged. Quality recomputation reuses the effective profile for each media type for the job, while reconstructed full history snapshots are inserted directly in the existing transaction and their source payloads are released per file.

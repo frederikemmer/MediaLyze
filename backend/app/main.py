@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from backend.app.services.runtime import ScanRuntimeManager
 
 HTML_CACHE_CONTROL = "no-cache"
 ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+logger = logging.getLogger("uvicorn.error")
 
 
 class JsonGZipResponder(GZipResponder):
@@ -80,7 +82,9 @@ def create_app(settings=None) -> FastAPI:
         init_db()
         runtime = ScanRuntimeManager(active_settings)
         _app.state.scan_runtime = runtime
+        logger.info("Application startup: starting runtime and history maintenance")
         runtime.start()
+        logger.info("Application startup: runtime ready")
         yield
         runtime.stop()
 

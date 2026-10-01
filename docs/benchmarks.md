@@ -27,6 +27,7 @@ On Linux or macOS, use `.venv/bin/python` and forward slashes in the paths. Star
 | `benchmark_library_statistics.py` | Selected library distributions and numeric charts with the application statistics cache missed and hit. | “Cache miss” clears MediaLyze's in-process cache; SQLite and operating-system page caches may still be warm. |
 | `benchmark_scan_pipeline.py` | Initial indexing, unchanged incremental scans, an incremental scan with additions/changes/deletions, and full reanalysis. | Uses small synthetic files and a fixed `ffprobe` response. It measures scanning, normalization, and persistence, not real media probing or decoding. |
 | `benchmark_duplicate_detection.py` | Filename signatures, SHA-256 hashing, and filename/hash duplicate-group queries. | Uses synthetic files (4 KiB each by default); hashing results depend on storage and worker count. Repeated passes may benefit from the operating-system file cache. |
+| `benchmark_startup_memory.py` | Signature backfill, upgrade/repeated database startup, file-history storage pruning, and initial/repeated quality recomputation with large stored JSON; `--reconstruct-only` measures manual history reconstruction. | Temporary synthetic catalog; measures Python allocations with `tracemalloc`, not container RSS or real ffprobe memory. |
 
 The new query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
 
@@ -40,4 +41,16 @@ The new query, statistics, and duplicate scripts report individual samples and t
 
 Benchmark setup and measured work are reported separately when useful. Compare runs on the same machine, with the same SQLite/Python versions, item count, batch size, worker count, and search-index mode. A single runtime is not a portable performance guarantee; use the samples to compare changes under a controlled setup. These scripts are not absolute-time CI gates.
 
+The scan and startup-memory scripts report peak Python allocations as well as elapsed time. Allocation tracing adds runtime overhead. Benchmark databases use WAL and NORMAL synchronization, matching the production SQLite configuration; default import-time runtime paths are temporary so the scripts also run outside Docker. Run, for example:
+
+```bash
+.venv/bin/python docs/benchmarks/benchmark_startup_memory.py --items 1000 --payload-bytes 65536
+.venv/bin/python docs/benchmarks/benchmark_scan_pipeline.py --items 1000
+.venv/bin/python docs/benchmarks/benchmark_startup_memory.py --items 1000 --payload-bytes 65536 --reconstruct-only
+```
+
 The transcoding capability matrix measures tested hardware paths and practical parallel capacity separately. These database and filesystem scripts do not estimate real CPU/GPU transcoding speed.
+
+The [Issue #184 resilience comparison](benchmarks/issue-184-resilience.md) records measured before/after memory and runtime samples, result parity checks, and the limits of native testing without a running Docker daemon.
+
+[Cancellation, RAM scheduling and maintenance follow-up](benchmarks/issue-184-followup.md) includes separate before/after timing, final Linux Docker tests and UX consequences.

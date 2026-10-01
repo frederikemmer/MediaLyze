@@ -193,14 +193,19 @@ Actual implementation:
 * jobs are queued and deduplicated per library
 * execution is backed by a `ThreadPoolExecutor`
 * file discovery stays single-threaded, while worker threads are used for per-file analysis and duplicate processing only
+* scan workers share a process-wide RAM admission gate (host availability and Linux cgroup v1/v2 limits); configured parallelism remains an upper bound, with at least one worker admitted for progress. Cancellation interrupts active ffprobe processes, reaps them, and stops hashing between chunks without recording cancellation as a file failure
 * scans defer stored raw ffprobe payloads and release persisted per-file analysis data during processing; ffprobe has a 120-second timeout and bounded output (16 MiB metadata, 1 MiB diagnostics), with limit failures recorded per file
+* scans retain a compact identity/change/rename index and load full file records in bounded batches; inaccessible roots, directories, and files are reported in existing failure samples while their stored records are protected from stale-file deletion
+* startup signature backfill reads only IDs and filenames in committed, resumable batches; history storage pruning streams one JSON record at a time with unchanged canonical byte estimates and oldest-first rules, and quality recomputation loads at most 200 file records at a time while releasing each persisted raw payload
+* unchanged history fingerprints avoid loading raw probe data; database initialization and startup history maintenance emit phase logs through Uvicorn's logger, and orphaned scan recovery updates statuses without decoding stored summaries
+* manual history reconstruction defers raw probe data and releases each persisted raw payload and stream graph instead of retaining them for the entire reconstructed library; snapshots are inserted directly without per-file ORM flushes, and quality jobs reuse their effective profile per media type
 * APScheduler manages scheduled work
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
 * quality recomputation runs as a distinct runtime-managed job type
 * startup no longer auto-queues quality-recompute backfill jobs; recomputation is queued only from explicit follow-up actions such as library profile updates
 * old `queued` and `running` jobs from previous processes are canceled during startup instead of being resumed
-* startup also runs one history-retention maintenance pass, APScheduler registers a daily history-retention maintenance job, and deferred SQLite compaction is retried automatically once scans are idle
+* startup queues one history-retention maintenance pass on the dedicated maintenance executor so readiness does not wait for pruning; APScheduler registers a daily history-retention maintenance job, and deferred SQLite compaction is retried automatically once scans are idle
 * transcoding jobs use a dedicated executor with separate CPU-budget and per-device GPU slots; scan discovery and analysis workers remain independent
 * hardware-required transcoding never silently falls back to CPU; encoders and devices are exposed only after a real FFmpeg one-frame probe
 * same-directory transcoding variants are flagged as non-primary and excluded from library lists, statistics, duplicates, exports, telemetry/storage aggregates, and later scans; separate `Transcode_Output` variants remain external to primary library counts

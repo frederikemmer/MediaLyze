@@ -10,7 +10,7 @@ from pathlib import Path
 from time import perf_counter
 from unittest.mock import patch
 
-from _support import create_benchmark_database, environment_metadata
+from _support import create_benchmark_database, environment_metadata, measure_memory
 from sqlalchemy import func, select
 
 from backend.app.core.config import Settings
@@ -53,14 +53,12 @@ def _write_initial_media(root: Path, item_count: int) -> list[Path]:
 
 def _scan(factory, settings: Settings, library_id: int, scan_type: str) -> dict:
     with factory() as db:
-        started = perf_counter()
-        job = scanner.run_scan(db, settings, library_id, scan_type)
-        elapsed = perf_counter() - started
+        resources, job = measure_memory(lambda: scanner.run_scan(db, settings, library_id, scan_type))
         if job.errors:
             raise RuntimeError(f"Synthetic {scan_type} scan reported {job.errors} errors")
         changes = (job.scan_summary or {}).get("changes", {})
         return {
-            "elapsed_seconds": round(elapsed, 4),
+            **resources,
             "discovered_files": job.discovered_files,
             "files_scanned": job.files_scanned,
             "unchanged_files": job.unchanged_files,

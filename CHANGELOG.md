@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug fixes
 
+- Interrupt running ffprobe/hash workers when canceling a scan, adapt analysis concurrency to available host/container RAM, queue startup history pruning in the background, and reduce profile queries and ORM overhead in maintenance jobs without adding UI controls ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
+
+- Prevent large stored metadata from exhausting memory during startup signature migration, history storage pruning/reconstruction, and quality recomputation. Use a compact scan index, resume committed startup batches, and recover interrupted scan jobs without loading their summaries. Preserve catalog records when roots or directories are unavailable, continue past individual filesystem errors, and isolate subtitle detection from unreadable neighboring media files ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
+
 - Collapse transcode validation by default, highlight the existing Transcoding navigation control after starting a job, and compare linked output versions below Preview with left/right version selectors, including separate Transcode_Output files.
 
 - Release resource reservations for finished or startup-canceled transcodes immediately, preventing stale GPU reservations from leaving subsequent jobs queued after a development reload or process restart.

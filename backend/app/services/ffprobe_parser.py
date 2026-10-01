@@ -7,6 +7,9 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Thread
+from time import monotonic
+
+from backend.app.utils.cancellation import check_canceled
 from typing import Any
 
 from backend.app.services.languages import normalize_language_code, normalize_language_tag
@@ -20,6 +23,7 @@ FFPROBE_STDERR_LIMIT_BYTES = 1024 * 1024
 def _run_bounded_ffprobe(command: list[str]) -> str:
     # Drain both pipes concurrently; communicate()/capture_output would retain
     # unlimited output from malformed media in the backend process.
+    check_canceled()
     with subprocess.Popen(
         command,
         stdin=subprocess.DEVNULL,
@@ -48,9 +52,17 @@ def _run_bounded_ffprobe(command: list[str]) -> str:
             reader.start()
         timed_out = False
         try:
-            process.wait(timeout=FFPROBE_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+            deadline = monotonic() + FFPROBE_TIMEOUT_SECONDS
+            while process.poll() is None:
+                check_canceled()
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                try:
+                    process.wait(timeout=min(0.1, remaining))
+                except subprocess.TimeoutExpired:
+                    pass
         finally:
             if process.poll() is None:
                 process.kill()

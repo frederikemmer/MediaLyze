@@ -683,3 +683,34 @@ def test_ffprobe_input_path_adds_extended_prefix_for_windows_drive_paths(monkeyp
     monkeypatch.setattr(ffprobe_parser, "os", SimpleNamespace(name="nt"))
 
     assert _ffprobe_input_path(Path(r"C:\media\movie.mkv")) == r"\\?\C:\media\movie.mkv"
+
+
+def test_probe_cancellation_reaps_process_and_closes_pipes(monkeypatch):
+    from threading import Event, Timer
+    from time import monotonic
+    from backend.app.utils.cancellation import WorkCanceled, cancellation_scope
+
+    processes = []
+    real_popen = subprocess.Popen
+
+    def record_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(ffprobe_parser.subprocess, "Popen", record_process)
+    event = Event()
+    timer = Timer(0.2, event.set)
+    timer.start()
+    started = monotonic()
+    try:
+        with cancellation_scope(event), pytest.raises(WorkCanceled):
+            ffprobe_parser._run_bounded_ffprobe([sys.executable, '-c', 'import time; time.sleep(30)'])
+    finally:
+        timer.cancel()
+        timer.join()
+    assert monotonic() - started < 3
+    assert processes[0].poll() is not None
+    assert processes[0].stdout.closed and processes[0].stderr.closed
+    # The cancellation scope must not leak into later unrelated probes.
+    assert ffprobe_parser._run_bounded_ffprobe([sys.executable, '-c', 'print("ok")']).strip() == 'ok'

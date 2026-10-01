@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -56,6 +57,73 @@ def _storage_limit_bytes(limit_gb: float) -> int:
     return int(limit_gb * GIGABYTE_BYTES)
 
 
+HISTORY_RETENTION_BATCH_SIZE = 500
+
+
+def _history_size_batches(db: Session, model, timestamp, fields, estimate: Callable, filters, ceiling: int):
+    """Decode one JSON row at a time; close readers before deleting/committing.
+
+    Keep the existing canonical byte estimates (including unicode/JSON spacing)
+    instead of changing storage budgets to SQLite's raw serialized lengths.
+    """
+    last_time = None
+    last_id = None
+    while True:
+        query = select(model.id, timestamp.label("retention_time"), *fields).where(
+            model.id <= ceiling, *filters,
+        )
+        if last_id is not None:
+            if last_time is None:
+                query = query.where(or_(
+                    timestamp.is_not(None), and_(timestamp.is_(None), model.id > last_id),
+                ))
+            else:
+                query = query.where(or_(
+                    timestamp > last_time, and_(timestamp == last_time, model.id > last_id),
+                ))
+        query = query.order_by(timestamp.asc(), model.id.asc()).limit(HISTORY_RETENTION_BATCH_SIZE)
+        sizes = []
+        with db.execute(query.execution_options(yield_per=1)) as rows:
+            for row in rows:
+                sizes.append((row.id, estimate(row)))
+                last_time, last_id = row.retention_time, row.id
+        if not sizes:
+            return
+        yield sizes
+
+
+def _prune_storage_budget(
+    db: Session, model, timestamp, fields, estimate: Callable, storage_limit_bytes: int,
+    *, filters=(), unlink_variants: bool = False,
+) -> int:
+    ceiling = db.scalar(select(func.max(model.id)).where(*filters))
+    if ceiling is None:
+        return 0
+    total_bytes = sum(
+        size for batch in _history_size_batches(db, model, timestamp, fields, estimate, filters, ceiling)
+        for _id, size in batch
+    )
+    deleted = 0
+    if total_bytes <= storage_limit_bytes:
+        return deleted
+    for batch in _history_size_batches(db, model, timestamp, fields, estimate, filters, ceiling):
+        ids = []
+        for row_id, size in batch:
+            if total_bytes <= storage_limit_bytes:
+                break
+            total_bytes -= size
+            ids.append(row_id)
+        if ids:
+            eligible = select(model.id).where(model.id.in_(ids), *filters)
+            if unlink_variants:
+                db.execute(update(TranscodeVariant).where(TranscodeVariant.job_id.in_(eligible)).values(job_id=None))
+            deleted += db.execute(delete(model).where(model.id.in_(ids), *filters)).rowcount or 0
+            db.commit()
+        if total_bytes <= storage_limit_bytes:
+            break
+    return deleted
+
+
 def _prune_media_file_history(db: Session, *, days: int, storage_limit_bytes: int) -> int:
     deleted_entries = 0
     if days > 0:
@@ -68,34 +136,13 @@ def _prune_media_file_history(db: Session, *, days: int, storage_limit_bytes: in
     if storage_limit_bytes <= 0:
         return deleted_entries
 
-    rows = db.execute(
-        select(
-            MediaFileHistory.id,
-            MediaFileHistory.relative_path,
-            MediaFileHistory.filename,
-            MediaFileHistory.snapshot_hash,
-            MediaFileHistory.snapshot,
-        ).order_by(MediaFileHistory.captured_at.asc(), MediaFileHistory.id.asc())
-    ).all()
-    total_bytes = sum(
-        _text_length(relative_path) + _text_length(filename) + _text_length(snapshot_hash) + _json_length(snapshot)
-        for _id, relative_path, filename, snapshot_hash, snapshot in rows
+    return deleted_entries + _prune_storage_budget(
+        db, MediaFileHistory, MediaFileHistory.captured_at,
+        (MediaFileHistory.relative_path, MediaFileHistory.filename, MediaFileHistory.snapshot_hash, MediaFileHistory.snapshot),
+        lambda row: _text_length(row.relative_path) + _text_length(row.filename)
+        + _text_length(row.snapshot_hash) + _json_length(row.snapshot),
+        storage_limit_bytes,
     )
-    ids_to_delete: list[int] = []
-    for row_id, relative_path, filename, snapshot_hash, snapshot in rows:
-        if total_bytes <= storage_limit_bytes:
-            break
-        total_bytes -= (
-            _text_length(relative_path)
-            + _text_length(filename)
-            + _text_length(snapshot_hash)
-            + _json_length(snapshot)
-        )
-        ids_to_delete.append(row_id)
-    if ids_to_delete:
-        deleted_entries += db.execute(delete(MediaFileHistory).where(MediaFileHistory.id.in_(ids_to_delete))).rowcount or 0
-        db.commit()
-    return deleted_entries
 
 
 def _prune_library_history(db: Session, *, days: int, storage_limit_bytes: int) -> int:
@@ -110,20 +157,10 @@ def _prune_library_history(db: Session, *, days: int, storage_limit_bytes: int) 
     if storage_limit_bytes <= 0:
         return deleted_entries
 
-    rows = db.execute(
-        select(LibraryHistory.id, LibraryHistory.snapshot).order_by(LibraryHistory.captured_at.asc(), LibraryHistory.id.asc())
-    ).all()
-    total_bytes = sum(_json_length(snapshot) for _id, snapshot in rows)
-    ids_to_delete: list[int] = []
-    for row_id, snapshot in rows:
-        if total_bytes <= storage_limit_bytes:
-            break
-        total_bytes -= _json_length(snapshot)
-        ids_to_delete.append(row_id)
-    if ids_to_delete:
-        deleted_entries += db.execute(delete(LibraryHistory).where(LibraryHistory.id.in_(ids_to_delete))).rowcount or 0
-        db.commit()
-    return deleted_entries
+    return deleted_entries + _prune_storage_budget(
+        db, LibraryHistory, LibraryHistory.captured_at, (LibraryHistory.snapshot,),
+        lambda row: _json_length(row.snapshot), storage_limit_bytes,
+    )
 
 
 def _prune_scan_history(db: Session, *, days: int, storage_limit_bytes: int) -> int:
@@ -143,42 +180,13 @@ def _prune_scan_history(db: Session, *, days: int, storage_limit_bytes: int) -> 
     if storage_limit_bytes <= 0:
         return deleted_entries
 
-    rows = db.execute(
-        select(
-            ScanJob.id,
-            ScanJob.job_type,
-            ScanJob.status,
-            ScanJob.trigger_source,
-            ScanJob.trigger_details,
-            ScanJob.scan_summary,
-        )
-        .where(ScanJob.status.in_(TERMINAL_SCAN_JOB_STATUSES))
-        .order_by(ScanJob.finished_at.asc(), ScanJob.id.asc())
-    ).all()
-    total_bytes = sum(
-        _text_length(job_type)
-        + _text_length(status.value if hasattr(status, "value") else str(status))
-        + _text_length(trigger_source.value if hasattr(trigger_source, "value") else str(trigger_source))
-        + _json_length(trigger_details)
-        + _json_length(scan_summary)
-        for _id, job_type, status, trigger_source, trigger_details, scan_summary in rows
+    return deleted_entries + _prune_storage_budget(
+        db, ScanJob, ScanJob.finished_at,
+        (ScanJob.job_type, ScanJob.status, ScanJob.trigger_source, ScanJob.trigger_details, ScanJob.scan_summary),
+        lambda row: _text_length(row.job_type) + _text_length(row.status.value)
+        + _text_length(row.trigger_source.value) + _json_length(row.trigger_details) + _json_length(row.scan_summary),
+        storage_limit_bytes, filters=(ScanJob.status.in_(TERMINAL_SCAN_JOB_STATUSES),),
     )
-    ids_to_delete: list[int] = []
-    for row_id, job_type, status, trigger_source, trigger_details, scan_summary in rows:
-        if total_bytes <= storage_limit_bytes:
-            break
-        total_bytes -= (
-            _text_length(job_type)
-            + _text_length(status.value if hasattr(status, "value") else str(status))
-            + _text_length(trigger_source.value if hasattr(trigger_source, "value") else str(trigger_source))
-            + _json_length(trigger_details)
-            + _json_length(scan_summary)
-        )
-        ids_to_delete.append(row_id)
-    if ids_to_delete:
-        deleted_entries += db.execute(delete(ScanJob).where(ScanJob.id.in_(ids_to_delete))).rowcount or 0
-        db.commit()
-    return deleted_entries
 
 
 def _transcode_job_estimated_bytes(job: TranscodeJob) -> int:
@@ -232,29 +240,14 @@ def _prune_transcode_history(db: Session, *, days: int, storage_limit_bytes: int
         db.commit()
     if storage_limit_bytes <= 0:
         return deleted_entries
-    jobs = db.scalars(
-        select(TranscodeJob)
-        .where(TranscodeJob.status.in_(terminal_statuses))
-        .order_by(TranscodeJob.finished_at.asc(), TranscodeJob.id.asc())
-    ).all()
-    total_bytes = sum(_transcode_job_estimated_bytes(job) for job in jobs)
-    ids_to_delete: list[int] = []
-    for job in jobs:
-        if total_bytes <= storage_limit_bytes:
-            break
-        total_bytes -= _transcode_job_estimated_bytes(job)
-        ids_to_delete.append(job.id)
-    if ids_to_delete:
-        db.execute(
-            update(TranscodeVariant)
-            .where(TranscodeVariant.job_id.in_(ids_to_delete))
-            .values(job_id=None)
-        )
-        deleted_entries += db.execute(
-            delete(TranscodeJob).where(TranscodeJob.id.in_(ids_to_delete))
-        ).rowcount or 0
-        db.commit()
-    return deleted_entries
+    return deleted_entries + _prune_storage_budget(
+        db, TranscodeJob, TranscodeJob.finished_at,
+        (TranscodeJob.profile, TranscodeJob.plan, TranscodeJob.ffmpeg_arguments, TranscodeJob.ffmpeg_command,
+         TranscodeJob.warnings, TranscodeJob.source_path_snapshot, TranscodeJob.output_path_snapshot,
+         TranscodeJob.error, TranscodeJob.rule_snapshot, TranscodeJob.automation_trigger),
+        _transcode_job_estimated_bytes, storage_limit_bytes,
+        filters=(TranscodeJob.status.in_(terminal_statuses),), unlink_variants=True,
+    )
 
 
 def _prune_transcode_automation_runs(db: Session, *, days: int, storage_limit_bytes: int) -> int:
@@ -272,24 +265,13 @@ def _prune_transcode_automation_runs(db: Session, *, days: int, storage_limit_by
         db.commit()
     if storage_limit_bytes <= 0:
         return deleted_entries
-    runs = db.scalars(
-        select(TranscodeAutomationRun)
-        .where(TranscodeAutomationRun.status.in_(terminal_statuses))
-        .order_by(TranscodeAutomationRun.finished_at.asc(), TranscodeAutomationRun.id.asc())
-    ).all()
-    total_bytes = sum(_transcode_automation_run_estimated_bytes(run) for run in runs)
-    ids_to_delete: list[int] = []
-    for run in runs:
-        if total_bytes <= storage_limit_bytes:
-            break
-        total_bytes -= _transcode_automation_run_estimated_bytes(run)
-        ids_to_delete.append(run.id)
-    if ids_to_delete:
-        deleted_entries += db.execute(
-            delete(TranscodeAutomationRun).where(TranscodeAutomationRun.id.in_(ids_to_delete))
-        ).rowcount or 0
-        db.commit()
-    return deleted_entries
+    return deleted_entries + _prune_storage_budget(
+        db, TranscodeAutomationRun, TranscodeAutomationRun.finished_at,
+        (TranscodeAutomationRun.trigger_source, TranscodeAutomationRun.rule_ids, TranscodeAutomationRun.library_ids,
+         TranscodeAutomationRun.source_file_ids, TranscodeAutomationRun.summary, TranscodeAutomationRun.error),
+        _transcode_automation_run_estimated_bytes, storage_limit_bytes,
+        filters=(TranscodeAutomationRun.status.in_(terminal_statuses),),
+    )
 
 
 def _compact_database(db: Session, *, allow_vacuum: bool) -> bool:

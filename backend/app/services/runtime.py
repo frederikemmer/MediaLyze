@@ -11,7 +11,7 @@ from threading import BoundedSemaphore, Lock, Timer
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from tzlocal import get_localzone
 from watchdog.events import FileMovedEvent, FileSystemEvent, FileSystemEventHandler
@@ -259,7 +259,7 @@ class ScanRuntimeManager:
         self._recover_orphaned_transcode_automation_runs()
         self.request_update_check()
         self.sync_all_libraries()
-        self.run_history_retention()
+        self.maintenance_executor.submit(self.run_history_retention)
         self.request_initial_telemetry_send()
         self.request_telemetry_send()
         self.request_update_telemetry_send()
@@ -2097,20 +2097,13 @@ class ScanRuntimeManager:
     def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            orphaned_jobs = db.scalars(
-                select(ScanJob)
+            # Recovery only needs status/timestamps, not potentially large
+            # summaries left by interrupted scans.
+            db.execute(
+                update(ScanJob)
                 .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
-                .order_by(ScanJob.id.asc())
-            ).all()
-
-            if not orphaned_jobs:
-                return
-
-            finished_at = utc_now()
-            for job in orphaned_jobs:
-                job.status = JobStatus.canceled
-                job.finished_at = finished_at
-
+                .values(status=JobStatus.canceled, finished_at=utc_now())
+            )
             db.commit()
         finally:
             db.close()
@@ -2204,7 +2197,12 @@ class ScanRuntimeManager:
     def run_history_retention(self) -> HistoryRetentionResult:
         db = SessionLocal()
         try:
+            logging.getLogger("uvicorn.error").info("History retention: checking age and storage budgets")
             result = apply_history_retention(db, self.settings)
+            logging.getLogger("uvicorn.error").info("History retention complete: %s entries removed", result.deleted_entries)
+        except Exception:
+            logging.getLogger("uvicorn.error").exception("History retention failed")
+            raise
         finally:
             db.close()
 

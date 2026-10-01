@@ -9,10 +9,16 @@ from fnmatch import fnmatchcase
 import logging
 import os
 from pathlib import Path
+from stat import S_ISDIR
 import re
 import traceback
+from threading import Event
+from time import monotonic
 
-from sqlalchemy import delete, or_, select
+from backend.app.utils.cancellation import WorkCanceled, cancellation_scope, cancel_workers_on_exit
+from backend.app.services.scan_capacity import analysis_slot, memory_worker_limit
+
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, defer, selectinload
 
@@ -56,7 +62,7 @@ from backend.app.services.quality import (
     build_quality_score_input_from_media_file,
     calculate_quality_score,
 )
-from backend.app.services.quality_profiles import effective_quality_profile_for_media_file, ensure_default_quality_profiles
+from backend.app.services.quality_profiles import effective_quality_profile_for_media_file, ensure_default_quality_profiles, media_type_for_media_file
 from backend.app.services.pattern_recognition import (
     PathRecognition,
     matches_bonus_path,
@@ -171,6 +177,31 @@ class QueuedMediaWork:
     relative_root: Path
     needs_analysis: bool
     needs_duplicate_processing: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ScanFileIndexEntry:
+    id: int
+    library_root_id: int | None
+    relative_path: str
+    size_bytes: int
+    mtime: float
+    is_transcode_variant: bool
+    content_hash: str | None
+    content_hash_algorithm: str | None
+
+
+def _scan_file_index(db: Session, library_id: int) -> dict:
+    # Retain only identity/change/rename data across discovery, not full ORM
+    # records, long metadata fields, subtitle objects or relationship graphs.
+    with db.execute(
+        select(MediaFile.id, MediaFile.library_root_id, MediaFile.relative_path,
+               MediaFile.size_bytes, MediaFile.mtime, MediaFile.is_transcode_variant,
+               MediaFile.content_hash, MediaFile.content_hash_algorithm)
+        .where(MediaFile.library_id == library_id)
+        .execution_options(yield_per=500)
+    ) as rows:
+        return {(row.library_root_id, row.relative_path): ScanFileIndexEntry(*row) for row in rows}
 
 
 def _library_root(library: Library) -> Path:
@@ -392,11 +423,24 @@ def _stream_media_files(
     pattern_recognition_settings=None,
     skip_relative_paths: set[str] | None = None,
     should_cancel: Callable[[], bool] | None = None,
+    on_error: Callable[[OSError], None] | None = None,
 ):
     suffixes = {extension.lower() for extension in allowed_extensions}
     effective_relative_root = relative_root or root
 
-    for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+    def _walk_error(exc: OSError) -> None:
+        if on_error is None:
+            raise exc
+        on_error(exc)
+
+    def _skip_symlink(path: Path) -> bool:
+        try:
+            return path.is_symlink()
+        except OSError as exc:
+            _walk_error(exc)
+            return True
+
+    for current_root, dirnames, filenames in os.walk(root, topdown=True, followlinks=False, onerror=_walk_error):
         if should_cancel and should_cancel():
             raise ScanCanceled()
 
@@ -404,7 +448,7 @@ def _stream_media_files(
         visible_dirnames: list[str] = []
         for dirname in dirnames:
             candidate = current_root_path / dirname
-            if candidate.is_symlink():
+            if _skip_symlink(candidate):
                 continue
             relative_path = candidate.relative_to(effective_relative_root).as_posix()
             matches = _matching_ignore_patterns(relative_path, ignore_patterns, is_dir=True)
@@ -431,7 +475,7 @@ def _stream_media_files(
 
         for filename in sorted_filenames:
             file_path = current_root_path / filename
-            if file_path.is_symlink():
+            if _skip_symlink(file_path):
                 continue
             relative_path = file_path.relative_to(effective_relative_root).as_posix()
             matches = _matching_ignore_patterns(relative_path, ignore_patterns)
@@ -1187,23 +1231,44 @@ def run_scan(
         db.commit()
         db.refresh(job)
 
-    def _should_cancel() -> bool:
-        return _scan_job_is_canceled(db, job.id) or bool(is_cancel_requested and is_cancel_requested(job.id))
+    cancel_event = Event()
+    last_cancel_poll = float("-inf")
 
-    existing_by_path = {
-        (media_file.library_root_id, media_file.relative_path): media_file
-        for media_file in db.scalars(
-            select(MediaFile)
-            .where(MediaFile.library_id == library_id)
-            .options(
-                defer(MediaFile.raw_ffprobe_json),
-                defer(MediaFile.quality_score_breakdown),
-                defer(MediaFile.analysis_failure_detail),
-                selectinload(MediaFile.external_subtitles),
-                selectinload(MediaFile.library_root),
-            )
-        ).all()
-    }
+    def _should_cancel() -> bool:
+        nonlocal last_cancel_poll
+        if cancel_event.is_set():
+            return True
+        # Runtime cancellation is immediately available in memory. Poll SQLite
+        # at most every 100 ms for callers that change only the persisted status.
+        if is_cancel_requested and is_cancel_requested(job.id):
+            cancel_event.set()
+        else:
+            now = monotonic()
+            if now - last_cancel_poll >= 0.1:
+                last_cancel_poll = now
+                if _scan_job_is_canceled(db, job.id):
+                    cancel_event.set()
+        return cancel_event.is_set()
+
+    existing_by_path = _scan_file_index(db, library_id)
+    file_cache: dict[int, MediaFile] = {}
+
+    def _load_scan_file(file_id: int) -> MediaFile:
+        if file_id not in file_cache:
+            db.flush()
+            file_cache.clear()
+            file_cache.update((item.id, item) for item in db.scalars(
+                select(MediaFile)
+                .where(MediaFile.library_id == library_id, MediaFile.id >= file_id)
+                .order_by(MediaFile.id).limit(100)
+                .options(
+                    defer(MediaFile.raw_ffprobe_json), defer(MediaFile.quality_score_breakdown),
+                    defer(MediaFile.analysis_failure_detail),
+                    selectinload(MediaFile.external_subtitles), selectinload(MediaFile.library_root),
+                )
+            ).all())
+        return file_cache[file_id]
+
     same_directory_variant_paths = {
         (variant.library_root_id, variant.output_relative_path)
         for variant in db.scalars(
@@ -1240,17 +1305,27 @@ def run_scan(
     recognized_series_ids: set[int] = set()
     recognized_season_ids: set[int] = set()
 
-    def _missing_rename_candidates(library_root_id: int | None, relative_root: Path) -> list[MediaFile]:
+    def _missing_rename_candidates(library_root_id: int | None, relative_root: Path) -> list[ScanFileIndexEntry]:
+        def definitely_missing(relative_path: str) -> bool:
+            try:
+                (relative_root / relative_path).stat()
+            except FileNotFoundError:
+                return True
+            except OSError:
+                # A permissions or I/O error is not evidence of a rename.
+                return False
+            return False
+
         return [
             candidate
             for candidate_key, candidate in existing_by_path.items()
             if candidate_key[0] == library_root_id
             and candidate_key not in seen_relative_paths
             and not candidate.is_transcode_variant
-            and not (relative_root / candidate.relative_path).exists()
+            and definitely_missing(candidate.relative_path)
         ]
 
-    def _log_rename_candidate(candidate: MediaFile, relative_path: str, reason: str) -> MediaFile:
+    def _log_rename_candidate(candidate: ScanFileIndexEntry, relative_path: str, reason: str) -> ScanFileIndexEntry:
         logger.info(
             "Detected media rename in library %s via %s: %s -> %s",
             library.id,
@@ -1263,8 +1338,8 @@ def run_scan(
     def _find_hash_rename_candidate(
         relative_path: str,
         relative_root: Path,
-        candidates: list[MediaFile],
-    ) -> MediaFile | None:
+        candidates: list[ScanFileIndexEntry],
+    ) -> ScanFileIndexEntry | None:
         hash_candidates = [
             candidate
             for candidate in candidates
@@ -1292,8 +1367,8 @@ def run_scan(
     def _find_similar_rename_candidate(
         relative_path: str,
         size_bytes: int,
-        candidates: list[MediaFile],
-    ) -> MediaFile | None:
+        candidates: list[ScanFileIndexEntry],
+    ) -> ScanFileIndexEntry | None:
         scored_candidates = sorted(
             (
                 (
@@ -1339,7 +1414,7 @@ def run_scan(
         relative_root: Path,
         size_bytes: int,
         mtime: float,
-    ) -> MediaFile | None:
+    ) -> ScanFileIndexEntry | None:
         candidates = _missing_rename_candidates(library_root_id, relative_root)
         exact_candidates = [
             candidate
@@ -1441,6 +1516,34 @@ def run_scan(
 
     discovery = DiscoveryResult(files=[], collect_files=False)
     seen_relative_paths: set[tuple[int | None, str]] = set()
+    unreadable_directories: set[tuple[int | None, str]] = set()
+
+    def _record_discovery_error(exc: OSError, scan_root: ScanRoot) -> None:
+        failed_path = Path(exc.filename) if exc.filename else scan_root.path
+        try:
+            prefix = failed_path.relative_to(scan_root.relative_root).as_posix()
+        except ValueError:
+            prefix = ""
+        if prefix == ".":
+            prefix = ""
+        unreadable_directories.add((scan_root.library_root_id, prefix))
+        reason, detail = _error_details(exc)
+        job.errors += 1
+        failed_files.add(prefix or str(scan_root.path), reason, detail)
+        logger.warning("Unable to discover library directory %s: %s", failed_path, reason)
+
+    def _is_stale(relative_key: tuple[int | None, str], item: ScanFileIndexEntry) -> bool:
+        if relative_key in seen_relative_paths or item.is_transcode_variant:
+            return False
+        # Check ancestors with set lookups, rather than comparing every file
+        # against every failed path when a large tree loses permissions.
+        prefix = relative_key[1]
+        while True:
+            if (relative_key[0], prefix) in unreadable_directories:
+                return False
+            if not prefix:
+                return True
+            prefix = prefix.rpartition("/")[0]
     queued_work_total = 0
     queued_for_analysis = 0
     queued_for_duplicate_processing = 0
@@ -1489,7 +1592,7 @@ def run_scan(
     job.scan_summary = _build_current_scan_summary(include_duplicate_counts=False)
     db.commit()
 
-    def _safe_process_work(
+    def _process_work(
         work: QueuedMediaWork,
     ) -> tuple[
         str,
@@ -1513,6 +1616,8 @@ def run_scan(
         if work.needs_analysis:
             try:
                 payload, subtitles = _analyze_path(work.path, work.relative_root, settings, ignore_patterns)
+            except WorkCanceled:
+                raise
             except Exception as exc:
                 logger.exception("Media analysis failed for %s", relative_path)
                 analysis_error, analysis_error_detail = _error_details(exc)
@@ -1520,6 +1625,8 @@ def run_scan(
         if work.needs_duplicate_processing:
             try:
                 duplicate_payload = duplicate_strategy.build_payload(work.path)
+            except WorkCanceled:
+                raise
             except Exception as exc:
                 logger.exception("Duplicate processing failed for %s", relative_path)
                 duplicate_error, duplicate_error_detail = _error_details(exc)
@@ -1535,11 +1642,18 @@ def run_scan(
             duplicate_error_detail,
         )
 
-    scan_worker_count = max(1, app_settings.scan_performance.scan_worker_count)
+    def _safe_process_work(work):
+        try:
+            with analysis_slot(cancel_event), cancellation_scope(cancel_event):
+                return _process_work(work)
+        except WorkCanceled:
+            raise ScanCanceled() from None
+
+    scan_worker_count = min(max(1, app_settings.scan_performance.scan_worker_count), memory_worker_limit())
     discovery_progress_interval = max(1, min(settings.scan_discovery_batch_size, 25))
 
     try:
-        with ThreadPoolExecutor(max_workers=scan_worker_count) as executor:
+        with ThreadPoolExecutor(max_workers=scan_worker_count) as executor, cancel_workers_on_exit(cancel_event):
             pending: dict[Future, QueuedMediaWork] = {}
             max_in_flight = max(1, scan_worker_count * 2)
 
@@ -1554,9 +1668,15 @@ def run_scan(
 
                 done, _ = wait(
                     pending.keys(),
-                    timeout=None if wait_for_completion else 0,
+                    timeout=0.1 if wait_for_completion else 0,
                     return_when=FIRST_COMPLETED,
                 )
+                # Discovery already checks cancellation at progress boundaries.
+                # Poll storage only when blocking for workers, not for every file.
+                if cancel_event.is_set() or (wait_for_completion and _should_cancel()):
+                    for future in pending:
+                        future.cancel()
+                    raise ScanCanceled()
                 if not done:
                     return 0
 
@@ -1663,7 +1783,11 @@ def run_scan(
                 pending[executor.submit(_safe_process_work, work)] = work
 
             for scan_root in scan_roots:
-                if not scan_root.path.exists() or not scan_root.path.is_dir():
+                try:
+                    if not S_ISDIR(scan_root.path.stat().st_mode):
+                        raise NotADirectoryError(20, "Library root is not a directory", str(scan_root.path))
+                except OSError as exc:
+                    _record_discovery_error(exc, scan_root)
                     continue
                 for discovered_media_file in _stream_media_files(
                     scan_root.path,
@@ -1678,14 +1802,25 @@ def run_scan(
                         if root_id == scan_root.library_root_id
                     },
                     should_cancel=_should_cancel,
+                    on_error=lambda exc: _record_discovery_error(exc, scan_root),
                 ):
                     file_path = discovered_media_file.path
                     relative_path = file_path.relative_to(scan_root.relative_root).as_posix()
                     relative_key = (scan_root.library_root_id, relative_path)
                     seen_relative_paths.add(relative_key)
                     discovery_progress_counter += 1
-                    stat = file_path.stat()
-                    media_file = existing_by_path.get(relative_key)
+                    try:
+                        stat = file_path.stat()
+                    except OSError as exc:
+                        reason, detail = _error_details(exc)
+                        job.errors += 1
+                        failed_files.add(relative_path, reason, detail)
+                        logger.warning("Unable to inspect media file %s: %s", file_path, reason)
+                        # Keep an existing record when a file disappears or loses
+                        # permissions during discovery; continue with other files.
+                        continue
+                    index_entry = existing_by_path.get(relative_key)
+                    media_file = _load_scan_file(index_entry.id) if index_entry is not None else None
 
                     if media_file is None:
                         rename_candidate = _find_rename_candidate(
@@ -1714,7 +1849,7 @@ def run_scan(
                             new_files.add(relative_path)
                         else:
                             existing_by_path.pop((rename_candidate.library_root_id, rename_candidate.relative_path), None)
-                            media_file = rename_candidate
+                            media_file = _load_scan_file(rename_candidate.id)
                             media_file.library_root_id = scan_root.library_root_id
                             media_file.relative_path = relative_path
                             media_file.filename = file_path.name
@@ -1805,14 +1940,14 @@ def run_scan(
             stale_ids = [
                 media_file.id
                 for relative_key, media_file in existing_by_path.items()
-                if relative_key not in seen_relative_paths
-                and not media_file.is_transcode_variant
+                if _is_stale(relative_key, media_file)
             ]
             for relative_key, media_file in existing_by_path.items():
-                if relative_key not in seen_relative_paths and not media_file.is_transcode_variant:
+                if _is_stale(relative_key, media_file):
                     deleted_files.add(media_file.relative_path)
             if stale_ids:
-                db.execute(delete(MediaFile).where(MediaFile.id.in_(stale_ids)))
+                for start in range(0, len(stale_ids), 500):
+                    db.execute(delete(MediaFile).where(MediaFile.id.in_(stale_ids[start:start + 500])))
             _cleanup_empty_series_entries(db, library.id)
 
             _commit_live_progress(discovery_complete_override=True)
@@ -1890,57 +2025,70 @@ def run_quality_recompute(
     resolution_categories = get_app_settings(db).resolution_categories
     ensure_default_quality_profiles(db, resolution_categories)
 
-    media_files = db.scalars(
-        select(MediaFile)
-        .where(
-            MediaFile.library_id == library_id,
-            MediaFile.last_analyzed_at.is_not(None),
-            MediaFile.raw_ffprobe_json.is_not(None),
-            MediaFile.scan_status == ScanStatus.ready,
-            MediaFile.is_transcode_variant.is_(False),
-        )
-        .options(
-            selectinload(MediaFile.media_format),
-            selectinload(MediaFile.video_streams),
-            selectinload(MediaFile.audio_streams),
-            selectinload(MediaFile.chapters),
-            selectinload(MediaFile.subtitle_streams),
-            selectinload(MediaFile.external_subtitles),
-        )
-        .order_by(MediaFile.id.asc())
-    ).all()
-
-    job.files_total = len(media_files)
+    eligible = (
+        MediaFile.library_id == library_id,
+        MediaFile.last_analyzed_at.is_not(None),
+        MediaFile.raw_ffprobe_json.is_not(None),
+        MediaFile.scan_status == ScanStatus.ready,
+        MediaFile.is_transcode_variant.is_(False),
+    )
+    total, ceiling = db.execute(select(func.count(MediaFile.id), func.max(MediaFile.id)).where(*eligible)).one()
+    job.files_total = total
     job.files_scanned = 0
-    job.discovered_files = len(media_files)
+    job.discovered_files = total
     job.unchanged_files = 0
     job.discovery_complete = True
     db.commit()
 
-    batch_counter = 0
-    for media_file in media_files:
+    profiles_by_media_type = {}
+    last_id = 0
+    while ceiling is not None:
         if _should_cancel():
             raise ScanCanceled()
-        breakdown = calculate_quality_score(
-            build_quality_score_input_from_media_file(media_file),
-            effective_quality_profile_for_media_file(db, media_file, resolution_categories),
-            resolution_categories,
-        )
-        _persist_quality_breakdown(media_file, breakdown)
-        create_media_file_history_entry_if_changed(
-            db,
-            media_file,
-            MediaFileHistoryCaptureReason.quality_recompute,
-            resolution_categories,
-        )
-        job.files_scanned += 1
-        batch_counter += 1
-        if batch_counter >= 200:
-            db.commit()
-            batch_counter = 0
-
-    if batch_counter:
+        media_files = db.scalars(
+            select(MediaFile)
+            .where(*eligible, MediaFile.id > last_id, MediaFile.id <= ceiling)
+            .options(
+                defer(MediaFile.raw_ffprobe_json),
+                selectinload(MediaFile.media_format),
+                selectinload(MediaFile.video_streams),
+                selectinload(MediaFile.audio_streams),
+                selectinload(MediaFile.chapters),
+                selectinload(MediaFile.subtitle_streams),
+                selectinload(MediaFile.external_subtitles),
+                selectinload(MediaFile.library_root),
+            )
+            .order_by(MediaFile.id.asc()).limit(200)
+        ).all()
+        if not media_files:
+            break
+        last_id = media_files[-1].id
+        for media_file in media_files:
+            if _should_cancel():
+                raise ScanCanceled()
+            media_type = media_type_for_media_file(media_file)
+            if media_type not in profiles_by_media_type:
+                profiles_by_media_type[media_type] = effective_quality_profile_for_media_file(
+                    db, media_file, resolution_categories,
+                )
+            breakdown = calculate_quality_score(
+                build_quality_score_input_from_media_file(media_file),
+                profiles_by_media_type[media_type],
+                resolution_categories,
+            )
+            _persist_quality_breakdown(media_file, breakdown)
+            create_media_file_history_entry_if_changed(
+                db, media_file, MediaFileHistoryCaptureReason.quality_recompute, resolution_categories,
+            )
+            db.flush()
+            # History still contains the full raw payload, but it is loaded for
+            # only this file and released after its snapshot is persisted.
+            db.expire(media_file, ["raw_ffprobe_json", "quality_score_breakdown",
+                                  "media_format", "video_streams", "audio_streams", "chapters",
+                                  "subtitle_streams", "external_subtitles"])
+            job.files_scanned += 1
         db.commit()
+        del media_files
 
     if _should_cancel():
         raise ScanCanceled()
