@@ -1,5 +1,7 @@
 # Discovery, Folder Recognition, And Pattern Rules
 
+[Documentation home](README.md)
+
 This is the central reference for:
 
 - which folders are visible in the path browser
@@ -73,11 +75,12 @@ Legacy libraries created with `scan_config.selected_paths` are migrated to `libr
 |---|---|
 | `movies` | `.mkv`, `.mp4`, `.avi`, `.mov`, `.m4v`, `.ts`, `.m2ts`, `.wmv` |
 | `series` | `.mkv`, `.mp4`, `.avi`, `.mov`, `.m4v`, `.ts`, `.m2ts`, `.wmv` |
-| `music` | `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, `.wma` |
+| `music` | `.mp3`, `.flac`, `.m4b`, `.m4a`, `.aac`, `.aa`, `.aax`, `.ogg`, `.oga`, `.opus`, `.wav`, `.wma`, `.aiff`, `.aif`, `.alac`, `.mka`, `.ape` |
+| `audiobooks` | the same audio extensions as `music`; includes chapter and audiobook-tag analysis |
 | `mixed` | all video + all audio extensions above |
 | `other` | all video + all audio extensions above |
 
-Files with non-matching extensions are skipped during discovery and never become media rows.
+Files with non-matching extensions are skipped during discovery and never become media rows. The current sets come from `backend/app/core/config.py`; the legacy `ALLOWED_MEDIA_EXTENSIONS` setting does not replace the type-aware sets. Recognition of `.aa`/`.aax` does not provide DRM decryption: protected files can fail analysis with an actionable diagnostic.
 
 ## 4) Pattern Systems At A Glance
 

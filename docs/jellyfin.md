@@ -1,5 +1,7 @@
 # Jellyfin integration
 
+[Documentation home](README.md)
+
 Jellyfin is the first adapter for MediaLyze's [provider-neutral connector architecture](connectors.md). MediaLyze reads Jellyfin catalogs and never changes Jellyfin items. Multiple Jellyfin connections are supported for catalog import, matching, users, and playback history.
 
 ## Connection and permissions

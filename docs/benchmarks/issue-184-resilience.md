@@ -1,5 +1,7 @@
 # Issue #184: startup and scan resilience comparison
 
+[Documentation home](../README.md)
+
 Measured on 2026-10-01. Baseline: `66101d702b76dbe6e8042950d3d9fb4c8cce3bfd` (the existing dev implementation before these fixes). After: the first resilience implementation, before the [follow-up scheduling and maintenance optimizations](issue-184-followup.md). This compares source code, not published release images; the follow-up Docker validation below uses the same local Linux image for both source versions.
 
 Three fresh, alternating before/after runs per workload, executed sequentially. The startup/maintenance fixture contains 1,000 media records and 1,000 history entries with 64 KiB of JSON padding each. The scan fixture contains 1,000 small files and stubs ffprobe with a fixed valid payload. Fixture construction and garbage collection are outside measured intervals; allocation tracing is enabled for both versions. SQLite uses WAL/NORMAL in both versions.

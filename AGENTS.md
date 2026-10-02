@@ -17,17 +17,18 @@ Current baseline:
 * primary development branch: `dev`
 * stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Electron**, **Docker**, **GHCR**
 
-Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
+Current `dev` includes the shipped feature set plus ongoing work beyond the latest stable release. The latest release verified on 2026-10-02 is `v0.19.0`; check GitHub release metadata rather than assuming this dated snapshot remains latest. Implemented areas include:
 
 * a provider-neutral multi-connection catalog layer with Jellyfin migration, deterministic location-to-root bindings, generic staged synchronization, Shadow Mode comparison, and legacy Jellyfin compatibility
-* basic audio-file support with Music library type, type-aware file discovery, and music metadata extraction (title, artist, album, etc.)
+* music and audiobook library types with type-aware audio discovery, music/book tags, chapters, and embedded-cover metadata
 * path-browser filtering for placeholder directories such as `cdrom`, `floppy`, and `usb` when they are only container-exposed shadow directories
 * broader HDR10+ detection from additional ffprobe side-data metadata variants
 
 Important documentation rule:
 
 * prefer the actual repository code and GitHub release metadata over `CHANGELOG.md` when they disagree
-* `CHANGELOG.md` is currently incomplete on `dev` and does **not** fully reflect the already published `v0.2.0` release
+* `CHANGELOG.md` records release notes and `vUnreleased` work; GitHub release metadata is authoritative for publication dates and latest-release status
+* [docs/README.md](docs/README.md) is the main documentation entry point for users and agents; follow its topic/source map before consulting individual references
 * `main` is the primary stable / release branch, while `dev` is the primary ongoing development branch
 * when changing user-visible behavior, fixes, migrations, or release-relevant internals, add a concise entry under `CHANGELOG.md` `vUnreleased` before finishing the task
 
@@ -42,11 +43,11 @@ It focuses on file analysis, scan orchestration, metadata normalization, and lib
 
 MediaLyze currently implements:
 
-* library creation, update, rename, and deletion with library types (movies, series, music, mixed, other) and type-aware media discovery
+* library creation, update, rename, and deletion with library types (movies, series, music, audiobooks, mixed, other) and type-aware media discovery
 * basic audio-file support including extraction of music metadata (title, artist, album, etc.) from audio streams
 * per-library dashboard visibility toggles that can exclude selected libraries from dashboard statistics and comparison panels
 * stable multi-root library identity through `library_root_id + relative_path`, editable root aliases, and root-aware file history
-* multiple read-only external connector connections, with Jellyfin as the first adapter, many-to-many library links, root bindings, manual matches, and preferred metadata connections
+* multiple read-only external connector connections, with Jellyfin as the first adapter, many-to-many library links, automatic/manual root bindings, exact-path matching, and preferred metadata connections; individual-file manual matching has been removed
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
 * full and incremental scans
@@ -71,7 +72,7 @@ MediaLyze currently implements:
 
 MediaLyze does **not** currently:
 
-* play media
+* act as a full media player; experimental in-browser previews and direct downloads are available for inspection
 * scrape movie or TV metadata
 * connect to external metadata APIs
 * modify or rename media files implicitly; explicit transcoding may write to `Transcode_Output`, create a same-directory linked variant, or replace the original only after server-side confirmation and without a byte-for-byte backup
@@ -81,7 +82,7 @@ MediaLyze does **not** currently:
 
 Open or clearly future-facing work includes:
 
-* improved broken-file reporting and diagnostics
+* further broken-file diagnostics beyond the implemented classified scan/file reasons and copyable technical details
 * additional future analysis and recommendation workflows
 * a Plex adapter; the connector core and shared accordion UI are implemented and Plex appears as a disabled `Soon™` option, but Plex transport, DTO normalization, descriptor registration, and provider-specific tests are not
 * generalization of provider image behavior beyond the preferred/standard Jellyfin connection
@@ -119,13 +120,14 @@ Supported library types:
 movies
 series
 music
+audiobooks
 mixed
 other
 ```
 
 Important correction:
 
-* the current code preserves the library type enum but does **not** implement special series-specific parsing that should be documented as an active feature
+* series/mixed video paths support folder-depth or regex show/season recognition and episode-number extraction; see `docs/patterns.md` for the implemented rules
 
 ## 3.2 Path Browsing Safety
 
@@ -141,11 +143,12 @@ Current behavior includes:
 
 ## 3.3 Scan Modes
 
-Libraries support three active scan modes:
+Libraries support four active scan modes:
 
 ```text
 manual
 scheduled
+scheduled_daily
 watch
 ```
 
@@ -153,6 +156,7 @@ Behavior:
 
 * `manual`: scans run only when requested
 * `scheduled`: APScheduler creates interval-based scan jobs
+* `scheduled_daily`: APScheduler creates daily jobs at `scheduled_time` in the configured scheduler timezone
 * `watch`: watchdog observers debounce filesystem events and queue scans
 * desktop network paths fall back to `scheduled`; watch observers are only created for local desktop paths
 
@@ -301,6 +305,7 @@ Current normalized audio stream fields include:
 **Music-specific metadata fields** (extracted from audio file tags):
 
 * title
+* track number
 * artist
 * album
 * album_artist
@@ -309,7 +314,7 @@ Current normalized audio stream fields include:
 * disc
 * composer
 
-All music-specific fields are optional and extracted from ffprobe tag metadata.
+All music-specific fields are optional and extracted from ffprobe tag metadata. Audiobook analysis also extracts narrator, author, publisher, series/part, description, copyright, language, abridged status, ASIN and ISBN; `MediaChapter` persists chapter timing and titles. Embedded covers are recorded separately from regular video streams. The current extension and UI support matrix is `docs/supported_metadata.md`.
 
 ## 4.4 Subtitle Streams
 
@@ -360,7 +365,7 @@ both
 Current behavior:
 
 * `off` disables duplicate detection for the library and duplicate-group queries return an empty result
-* `filename` stores a normalized filename signature based on the lowercase stem with whitespace, dot, dash, and underscore runs collapsed to a single space
+* `filename` stores normalized filename/title-core signatures, applies configured suffix cleanup, and groups only known runtimes within the configured tolerance; see `docs/patterns.md`
 * `filehash` stores a full-file `sha256` content hash plus its algorithm label
 * `both` stores both the normalized filename signature and the `sha256` content hash, and duplicate-group responses expose which method each returned group came from
 * new libraries default to `off`
@@ -400,6 +405,8 @@ Ignore rules are applied during discovery against normalized library-relative pa
 The original static example score table is outdated and should not be used as the current description.
 
 MediaLyze now implements a **configurable quality-profile system** per library.
+
+Libraries may reference shared named quality profiles (`quality_profile_id`) for `video`, `music`, or `audiobook`, with existing per-library profile payloads retained. Music/audiobook profiles add tag and chapter categories; see `backend/app/schemas/quality.py`.
 
 ## 6.1 Quality Profile Categories
 
@@ -524,6 +531,11 @@ Current route model:
 * `/settings` libraries page plus app settings
 * `/libraries/:libraryId` library detail
 * `/files/:fileId` file detail
+* `/files/:fileId/preview` preview and linked variant comparison
+* `/files/compare` metadata comparison
+* `/storage-map` storage explorer
+* `/transcoding` active jobs and history
+* `/ui-elements` development-only visual catalog
 
 ## 8.2 Current UX Features
 
@@ -545,6 +557,7 @@ Implemented UI behavior includes:
 * reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, duration, file size, bitrate, and audio bitrate
 * reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
+* audiobook chapter/book-tag filters, statistics, chapter search/CSV export, and embedded-cover inspection
 * clickable numeric histogram bins in the library detail view that apply matching analyzed-files range filters
 * curated default statistic-panel layouts for first-time dashboard and library views plus inline reset-to-default controls on both statistic-layout pages
 * user-resizable analyzed-files table columns with persisted widths in browser storage
@@ -554,7 +567,7 @@ Implemented UI behavior includes:
 * a file-detail `Preview` panel that can attempt in-browser playback for video and audio files, plus a direct file download action with explicit warnings that playback and download performance are not optimized yet
 * persistent app theme preference
 * persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
-* shared Connector Settings accordions for multiple Jellyfin connections, with lazy connection details, a collapsed searchable `Analyzed users` selector, generic lifecycle controls, capability-gated playback-user selection, active-job polling, and a disabled Plex `Soon™` add option; central bindings and item diagnostics remain deferred
+* shared Connector Settings accordions for multiple Jellyfin connections, with lazy connection details, a collapsed searchable `Analyzed users` selector, generic lifecycle controls, capability-gated playback-user selection, active-job polling, and a disabled Plex `Soon™` add option; central library/path-binding UI is implemented; focused item diagnostics remain deferred
 * file-detail External sources that return all matched provider items while retaining Jellyfin compatibility fields
 * a file-detail playback timeline that combines all matched capable connections without cross-server deduplication and labels events by connection when multiple sources contribute
 
@@ -800,18 +813,23 @@ Theme behavior:
 
 Current app feature flags include:
 
+* `hide_automatic_update_reminders`
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
 * `show_music_quality_score`
 * `unlimited_panel_size`
 * `in_depth_dolby_vision_profiles`
+* `show_all_playbacks_when_unstacked`
 
 These flags currently control:
 
+* whether automatic update reminders are hidden
+* whether unstacked playback timelines include all playback events
+
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
-* whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* `hide_quality_score_meter` is retained only for stored/API configuration compatibility; tables always use a colored numerator and neutral `/10`, with no meter or UI toggle
 * whether music-only library contexts show quality-score metrics and columns
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 * whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
@@ -869,11 +887,12 @@ Important current payload concepts:
 * `feature_flags.unlimited_panel_size`
 * `feature_flags.in_depth_dolby_vision_profiles`
 
-`history_retention` currently applies to three buckets:
+`history_retention` currently applies to four buckets:
 
 * `file_history`: persisted per-file analyzed snapshots, default `90` days and `0` GB unlimited
 * `library_history`: one compact per-library UTC-day snapshot, default `365` days and `0` GB unlimited
 * `scan_history`: terminal `scan_jobs` records, default `30` days and `0` GB unlimited
+* `transcode_history`: terminal transcode jobs, default `90` days and `0` GB unlimited; media and variant groups are retained
 
 `0` means unlimited for both days and storage.
 Age and storage limits are both active at the same time, with oldest-first pruning until both limits are satisfied.
@@ -984,6 +1003,7 @@ Supported trigger sources currently include:
 ```text
 manual
 scheduled
+scheduled_daily
 watchdog
 ```
 
@@ -1266,7 +1286,7 @@ Do not treat lockfiles as incidental churn during a version bump:
 Important current nuance:
 
 * version files on `dev` are **not** the authoritative source for the latest public release history
-* GitHub release data currently shows `v0.2.0` as latest public release even though the local `CHANGELOG.md` on `dev` is incomplete
+* `v0.19.0` was the latest GitHub release verified on 2026-10-02; resolve current publication status from GitHub before release work
 
 ---
 

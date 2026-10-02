@@ -1,6 +1,8 @@
 # Performance implementation plan
 
-Status: implemented and regression-tested; final results in [the report](benchmarks/performance-report.md). Baseline: current `dev` plus the pre-existing local changes on 2026-10-01. No commits, pushes or publication are part of this work.
+[Documentation home](README.md)
+
+Status: historical implementation plan completed on 2026-10-01; measured results in [the report](benchmarks/performance-report.md). Baseline: the `dev` worktree and pre-existing local changes at the start of that measurement. This is not an open work queue or a claim about the current publication state.
 
 Each step must preserve response semantics and pass the relevant regression tests before moving on. Benchmark databases are temporary, install production indexes and use WAL/NORMAL. Timing comparisons run sequentially on the same host; cache misses do not imply a cold OS cache. Full backend/frontend suites and a production build close the work. Findings and actual outcomes are recorded in `docs/benchmarks/performance-report.md`.
 

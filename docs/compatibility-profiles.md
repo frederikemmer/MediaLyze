@@ -1,5 +1,7 @@
 # Compatibility profiles
 
+[Documentation home](README.md)
+
 MediaLyze compatibility profiles describe whether an analyzed media file can be
 played by a specific hardware and software/client combination. Profiles are JSON
 documents validated by the Pydantic models in
@@ -148,7 +150,7 @@ Profile values should normally use ffprobe identifiers:
 
 ## Hardware profile
 
-Required hardware-specific fields:
+Hardware-specific fields (portable files require the capability maps; `year` is optional):
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -313,8 +315,7 @@ Supported condition kinds:
 | `tested_only` | Documentation only confirms a limited tested case. |
 
 Any capability or matching rule with conditions evaluates as `conditional`.
-MediaLyze emits one `playback_condition_unverified` finding per condition. It
-does not currently resolve conditions from runtime client information.
+Container, video, and subtitle evaluation emit `playback_condition_unverified` findings for individual conditions. Audio selection reports the reason for the selected conditional path rather than every condition of every stream. MediaLyze does not currently resolve conditions from runtime client information.
 
 Example:
 
@@ -641,7 +642,4 @@ individual `profile_version` revisions.
 | 2026-06-10 | `1` | Initial hardware, software/player, and local combination profiles with versioned metadata, sources, video limits, hardware support levels, and `direct`/`transcode`/`unsupported` software modes. |
 | 2026-06-15 | `1` | Added explicit `direct_stream`, `video_transcode`, and `conditional` modes; capability conditions; codec-profile and audio-channel limits; ordered combined rules; subtitle actions; `server_fallback`; per-scope evaluation statuses; and seven official Jellyfin client profiles. Legacy `transcode` remains compatible. |
 
-These changes remain schema version `1` because the compatibility-profile
-feature and catalog are unreleased and existing version-1 documents remain
-loadable. After the first public release of this contract, incompatible changes
-must use a new `schema_version` and migration path.
+These additive changes retained schema version `1` and existing version-1 documents remain loadable. The profiles and catalog are part of the current application; this table records their historical introduction, not an unreleased-feature status. Incompatible changes must use a new `schema_version` and migration path.

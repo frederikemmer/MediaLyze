@@ -1,6 +1,8 @@
 # MediaLyze: Performance-Report vom 01.10.2026
 
-Die ausgewählten Verbesserungen in den zehn Bereichen des [Arbeitsplans](../performance-plan.md) sind umgesetzt und geprüft; die bewusst zurückgestellten Erweiterungen sind unten benannt. Die größten gemessenen Gewinne betreffen Vergleichsdiagramme, Speicherverbrauch und unnötige Hintergrundabfragen. Alle Änderungen liegen lokal; es wurde nichts committet, gepusht oder auf GitHub veröffentlicht. Bereits vorhandene lokale Änderungen wurden beibehalten.
+[Documentation home](../README.md)
+
+Die ausgewählten Verbesserungen in den zehn Bereichen des [Arbeitsplans](../performance-plan.md) sind umgesetzt und geprüft; die bewusst zurückgestellten Erweiterungen sind unten benannt. Die größten gemessenen Gewinne betreffen Vergleichsdiagramme, Speicherverbrauch und unnötige Hintergrundabfragen. Zum Zeitpunkt der Messung lagen die Änderungen lokal und bereits vorhandene Änderungen wurden beibehalten. Der Bericht beschreibt den Stand vom 2026-10-01; er trifft keine Aussage zum heutigen Commit-, Veröffentlichungs- oder Teststatus.
 
 ## Messverfahren
 
@@ -64,7 +66,7 @@ Unter FFmpeg-Last ist der untersuchte Endpunkt damit etwa **92,1 % schneller im 
 - Vorher- und Nachher-Produktions-Build erfolgreich; `git diff --check` ohne Fehler.
 - Scan-, ffprobe-, Cancellation-, Maintenance-, Connector-, API-, Cache- und Transcoding-Regressionsprüfungen sind Bestandteil der vollständigen Backend-Suite. Plattformzweige der Prozesspriorität werden einschließlich Windows-Idle/Below-normal-Priorität getestet; native Windows-Ausführung wurde nicht durchgeführt.
 - Browserprüfung: Heatmap/Scatter/Balken und die echte Library-History-Linie in Light/Dark bei 1280/375 px; Verteilungschart und SVG-Geschwindigkeitslinie mit nichtleeren Renderern. Sprachwechsel En/De/Es/Uk laden genau den benötigten zusätzlichen Sprach-Chunk. [Browserdaten](results/performance-2026-10-01/browser-charts.json), [History-Daten](results/performance-2026-10-01/browser-history.json), [Sprachdaten](results/performance-2026-10-01/browser-languages.json).
-- Screenshots wurden geprüft: [Diagramm hell, 375 px](../../output/playwright/performance-charts-375-light.png), [Diagramm dunkel, 375 px](../../output/playwright/performance-charts-375-dark.png), [Diagramm hell, 1280 px](../../output/playwright/performance-charts-1280-light.png), [History, 375 px](../../output/playwright/performance-history-375.png). Der Produktbrowser konnte zunächst DOM/Interaktionen prüfen, scheiterte bei Screenshots und verlor anschließend die Verbindung. Nach seiner expliziten Unverfügbarkeitsmeldung wurde die Prüfung mit Playwright abgeschlossen.
+- Bei der damaligen Browserprüfung wurden lokale Screenshots in Light/Dark und bei 375/1280 px geprüft. Diese Dateien lagen unter dem nicht versionierten `output/playwright/` und sind keine veröffentlichten Bericht-Artefakte; die versionierten Browser-JSON-Daten oben dokumentieren den Messlauf. Der Produktbrowser konnte zunächst DOM/Interaktionen prüfen, scheiterte bei Screenshots und verlor anschließend die Verbindung. Nach seiner expliziten Unverfügbarkeitsmeldung wurde die Prüfung mit Playwright abgeschlossen.
 - Ein zusätzlicher temporärer Browser-Katalog enthält drei echte WAV-Dateien; ihr ffprobe-Scan schloss erfolgreich ab. Die History-Prüfung wählt die passende Files-Metrik, da Audiodateien keine Auflösungswerte besitzen.
 
 ## Diagnose und Reproduktion

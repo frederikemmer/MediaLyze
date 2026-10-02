@@ -1,5 +1,7 @@
 # Connector UI roadmap
 
+[Documentation home](README.md)
+
 This document is the living list of connector workflows that are not yet part of the shared Connector Settings UI. The provider-neutral backend is authoritative for catalog data, inferred bindings, exact-path matching, and synchronization.
 
 ## Reintroduced

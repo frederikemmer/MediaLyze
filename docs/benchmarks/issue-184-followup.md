@@ -1,5 +1,7 @@
 # Issue #184: cancellation, memory admission and maintenance follow-up
 
+[Documentation home](../README.md)
+
 Measured on 2026-10-01. This compares the first resilience fixes from [the initial report](issue-184-resilience.md) with the subsequent cancellation, RAM scheduling and maintenance changes. It does not use the original release baseline as the "before" version. The before source was copied to an isolated temporary directory before editing; source hashes and all samples are recorded in [the raw results](results/issue-184-followup.json).
 
 ## Maintenance comparison

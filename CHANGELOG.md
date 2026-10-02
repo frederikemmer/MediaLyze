@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🔒 Security
+
+- Update Electron, undici, brace-expansion and fast-uri to patched versions, resolving desktop and frontend dependency security alerts.
+
 ### ✨ Enhancements
+
+- Add a central documentation guide for users and agents; refresh setup, metadata/audiobook support, telemetry, transcoding, and development references, and correct the pinned macOS ARM64 FFmpeg version metadata.
 
 - Replace table quality-score bars with colored score numbers and align series/season labels to the left at the file-name size.
 

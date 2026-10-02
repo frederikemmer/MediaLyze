@@ -1,5 +1,7 @@
 # Performance benchmarks
 
+[Documentation home](README.md)
+
 The scripts in `docs/benchmarks/` measure selected database and filesystem workloads with synthetic data. They are developer tools; the application does not run them during normal startup or library scans. Each script creates its own temporary SQLite database, and the scan and duplicate benchmarks create temporary media-like files. The temporary data is removed when the script exits.
 
 Run commands from the repository root with the project virtual environment. On Windows:
@@ -28,8 +30,13 @@ On Linux or macOS, use `.venv/bin/python` and forward slashes in the paths. Star
 | `benchmark_scan_pipeline.py` | Initial indexing, unchanged incremental scans, an incremental scan with additions/changes/deletions, and full reanalysis. | Uses small synthetic files and a fixed `ffprobe` response. It measures scanning, normalization, and persistence, not real media probing or decoding. |
 | `benchmark_duplicate_detection.py` | Filename signatures, SHA-256 hashing, and filename/hash duplicate-group queries. | Uses synthetic files (4 KiB each by default); hashing results depend on storage and worker count. Repeated passes may benefit from the operating-system file cache. |
 | `benchmark_startup_memory.py` | Signature backfill, upgrade/repeated database startup, file-history storage pruning, and initial/repeated quality recomputation with large stored JSON; `--reconstruct-only` measures manual history reconstruction. | Temporary synthetic catalog; measures Python allocations with `tracemalloc`, not container RSS or real ffprobe memory. |
+| `benchmark_application_performance.py` | Transcode history, comparisons, Storage Map, cache behavior and Python allocation peaks. | Synthetic 100k catalog; service/serialization timings, not end-to-end UI latency. |
+| `benchmark_mixed_performance.py` | Concurrent scans, FFmpeg and API response latency in an isolated workload. | Requires FFmpeg and runtime dependencies; CPU/RAM limits and priority affect results. |
+| `benchmark_frontend_cache.mjs` | Result-cache retention under a deterministic query workload. | Reports cached row counts, not browser heap memory; run with Node.js. |
 
-The new query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
+The query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
+
+The [2026-10-01 performance report](benchmarks/performance-report.md) documents these workloads, raw results, resource limits, and opt-in observations.
 
 ## Options and interpretation
 
@@ -51,6 +58,6 @@ The scan and startup-memory scripts report peak Python allocations as well as el
 
 The transcoding capability matrix measures tested hardware paths and practical parallel capacity separately. These database and filesystem scripts do not estimate real CPU/GPU transcoding speed.
 
-The [Issue #184 resilience comparison](benchmarks/issue-184-resilience.md) records measured before/after memory and runtime samples, result parity checks, and the limits of native testing without a running Docker daemon.
+The [Issue #184 resilience comparison](benchmarks/issue-184-resilience.md) records before/after memory and runtime samples, result parity, native tests, and subsequent memory-limited Docker validation. All report timings and test counts are historical snapshots, not current CI results.
 
 [Cancellation, RAM scheduling and maintenance follow-up](benchmarks/issue-184-followup.md) includes separate before/after timing, final Linux Docker tests and UX consequences.
