@@ -299,6 +299,7 @@ Fresh installations seed these defaults unless `DISABLE_DEFAULT_IGNORE_PATTERNS=
 *.part
 *.tmp
 *.temp
+*_temp.mp4
 *thumbs.db
 ```
 

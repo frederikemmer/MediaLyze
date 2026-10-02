@@ -1,0 +1,344 @@
+{
+  "before": {
+    "files": {
+      "FileDetailPage-CEfKp8A3.js": {
+        "raw_bytes": 122933,
+        "gzip_bytes": 31390
+      },
+      "DistributionChart-C9V-Hrti.js": {
+        "raw_bytes": 3322,
+        "gzip_bytes": 1659
+      },
+      "VideoWipeCompare-Df4ZguEc.js": {
+        "raw_bytes": 5694,
+        "gzip_bytes": 1998
+      },
+      "TableViewSettingsEditor-aROkYQHG.js": {
+        "raw_bytes": 4133,
+        "gzip_bytes": 1494
+      },
+      "SeriesDetailPage-CyNPZHjj.js": {
+        "raw_bytes": 3327,
+        "gzip_bytes": 1301
+      },
+      "i18n-iIwRtLRZ.js": {
+        "raw_bytes": 44932,
+        "gzip_bytes": 14225
+      },
+      "zrender-CSN2zOiE.js": {
+        "raw_bytes": 224099,
+        "gzip_bytes": 76690
+      },
+      "TranscodeProgressSummary-Dc58eakx.js": {
+        "raw_bytes": 4047,
+        "gzip_bytes": 1613
+      },
+      "StreamDetailsList-WXwDb4Kw.js": {
+        "raw_bytes": 10837,
+        "gzip_bytes": 3196
+      },
+      "clipboard-bXEM2vKF.js": {
+        "raw_bytes": 1020,
+        "gzip_bytes": 532
+      },
+      "LibraryHistoryPanel-CwomzwYs.js": {
+        "raw_bytes": 28186,
+        "gzip_bytes": 7715
+      },
+      "echarts-CdyyDYJ3.js": {
+        "raw_bytes": 927072,
+        "gzip_bytes": 308084
+      },
+      "AnimatedConnectIcon-C9hve95r.js": {
+        "raw_bytes": 8112,
+        "gzip_bytes": 2383
+      },
+      "TranscodingPage-DPwxzfjn.js": {
+        "raw_bytes": 27747,
+        "gzip_bytes": 7728
+      },
+      "UiElementsPage-C7R1HVRi.js": {
+        "raw_bytes": 287630,
+        "gzip_bytes": 43108
+      },
+      "settings-panel-state-gpGUlexB.js": {
+        "raw_bytes": 6870,
+        "gzip_bytes": 2584
+      },
+      "ChevronsRightLeftIcon-D-8OMElo.js": {
+        "raw_bytes": 1156,
+        "gzip_bytes": 619
+      },
+      "StatisticPanelLayoutMigrationNotice-kG9m0q5g.js": {
+        "raw_bytes": 49898,
+        "gzip_bytes": 11895
+      },
+      "icons-CceC_0nL.js": {
+        "raw_bytes": 62464,
+        "gzip_bytes": 12888
+      },
+      "LoaderPinwheelIcon-BLWjqSWV.js": {
+        "raw_bytes": 756,
+        "gzip_bytes": 469
+      },
+      "format-DPEfOQha.js": {
+        "raw_bytes": 2533,
+        "gzip_bytes": 1208
+      },
+      "FileComparePage-BKDSb7yU.js": {
+        "raw_bytes": 23473,
+        "gzip_bytes": 6946
+      },
+      "lru-cache-DoS4TpQj.js": {
+        "raw_bytes": 906,
+        "gzip_bytes": 428
+      },
+      "react-vendor-2qJdlVAw.js": {
+        "raw_bytes": 238568,
+        "gzip_bytes": 75598
+      },
+      "TooltipTrigger-BRc2Z5A5.js": {
+        "raw_bytes": 4685,
+        "gzip_bytes": 1870
+      },
+      "LanguageCodeFormatField-BsnUm1ox.js": {
+        "raw_bytes": 18616,
+        "gzip_bytes": 6309
+      },
+      "motion-BtFqIgE9.js": {
+        "raw_bytes": 126545,
+        "gzip_bytes": 41550
+      },
+      "hdr-DqHcUEwU.js": {
+        "raw_bytes": 471,
+        "gzip_bytes": 296
+      },
+      "StorageMapPage-BRdQoE9b.js": {
+        "raw_bytes": 15773,
+        "gzip_bytes": 5014
+      },
+      "DeleteIcon-ASZ09YIH.js": {
+        "raw_bytes": 1503,
+        "gzip_bytes": 729
+      },
+      "DashboardPage-i-7AFoXr.js": {
+        "raw_bytes": 13332,
+        "gzip_bytes": 4516
+      },
+      "JellyfinMetadataDetails-hvDbsAAz.js": {
+        "raw_bytes": 27916,
+        "gzip_bytes": 7501
+      },
+      "index-dzp4tZLP.js": {
+        "raw_bytes": 679523,
+        "gzip_bytes": 195295
+      },
+      "LibrariesPage-5BEntjld.js": {
+        "raw_bytes": 320910,
+        "gzip_bytes": 69570
+      },
+      "AsyncPanel-CKZT4Z50.js": {
+        "raw_bytes": 3042,
+        "gzip_bytes": 1103
+      },
+      "LibraryDetailPage-Cg8SZb8a.js": {
+        "raw_bytes": 99423,
+        "gzip_bytes": 27213
+      },
+      "PanelEmptyState-C9FopAoC.js": {
+        "raw_bytes": 1741,
+        "gzip_bytes": 896
+      },
+      "StatCard-BbA381KD.js": {
+        "raw_bytes": 279,
+        "gzip_bytes": 218
+      }
+    },
+    "total_gzip_bytes": 977831,
+    "entry": {
+      "raw_bytes": 679523,
+      "gzip_bytes": 195295
+    },
+    "echarts": {
+      "raw_bytes": 927072,
+      "gzip_bytes": 308084
+    }
+  },
+  "after": {
+    "files": {
+      "JellyfinMetadataDetails-Ls4CBqlX.js": {
+        "raw_bytes": 27916,
+        "gzip_bytes": 7499
+      },
+      "StatCard-BaQ5FGJp.js": {
+        "raw_bytes": 279,
+        "gzip_bytes": 217
+      },
+      "StreamDetailsList-YngzANyg.js": {
+        "raw_bytes": 10837,
+        "gzip_bytes": 3196
+      },
+      "i18n-iIwRtLRZ.js": {
+        "raw_bytes": 44932,
+        "gzip_bytes": 14225
+      },
+      "DashboardPage-BoBxYl37.js": {
+        "raw_bytes": 13332,
+        "gzip_bytes": 4512
+      },
+      "FileDetailPage-jgg3MdGe.js": {
+        "raw_bytes": 122933,
+        "gzip_bytes": 31388
+      },
+      "lru-cache-Bj8lNtVF.js": {
+        "raw_bytes": 1203,
+        "gzip_bytes": 566
+      },
+      "ChevronsRightLeftIcon-D8rMziAq.js": {
+        "raw_bytes": 1156,
+        "gzip_bytes": 618
+      },
+      "DistributionChart-BnlN6yP6.js": {
+        "raw_bytes": 3322,
+        "gzip_bytes": 1653
+      },
+      "TranscodingPage-COIraY24.js": {
+        "raw_bytes": 27926,
+        "gzip_bytes": 7819
+      },
+      "clipboard-bXEM2vKF.js": {
+        "raw_bytes": 1020,
+        "gzip_bytes": 532
+      },
+      "StorageMapPage-CoikkqoO.js": {
+        "raw_bytes": 15773,
+        "gzip_bytes": 5013
+      },
+      "SeriesDetailPage-DxvVhTqv.js": {
+        "raw_bytes": 3327,
+        "gzip_bytes": 1300
+      },
+      "AsyncPanel-CCaMhqIj.js": {
+        "raw_bytes": 3042,
+        "gzip_bytes": 1100
+      },
+      "UiElementsPage-C6WOMBqD.js": {
+        "raw_bytes": 288086,
+        "gzip_bytes": 43299
+      },
+      "common-B3Idn5ka.js": {
+        "raw_bytes": 178417,
+        "gzip_bytes": 44420
+      },
+      "index-CTm0C9w5.js": {
+        "raw_bytes": 245877,
+        "gzip_bytes": 74385
+      },
+      "TableViewSettingsEditor-BSM-CWpg.js": {
+        "raw_bytes": 4133,
+        "gzip_bytes": 1492
+      },
+      "zrender-D7wOWofz.js": {
+        "raw_bytes": 201900,
+        "gzip_bytes": 68345
+      },
+      "DeleteIcon-DPE5Exnf.js": {
+        "raw_bytes": 1503,
+        "gzip_bytes": 728
+      },
+      "TranscodeProgressSummary-CJ9ZvH8O.js": {
+        "raw_bytes": 4107,
+        "gzip_bytes": 1649
+      },
+      "motion-CpgAaVBd.js": {
+        "raw_bytes": 126545,
+        "gzip_bytes": 41550
+      },
+      "react-vendor-BcnPwY3k.js": {
+        "raw_bytes": 239073,
+        "gzip_bytes": 75724
+      },
+      "format-DPEfOQha.js": {
+        "raw_bytes": 2533,
+        "gzip_bytes": 1208
+      },
+      "LanguageCodeFormatField-C2N-3vAB.js": {
+        "raw_bytes": 18616,
+        "gzip_bytes": 6307
+      },
+      "TooltipTrigger-D7lU_fgD.js": {
+        "raw_bytes": 4685,
+        "gzip_bytes": 1870
+      },
+      "common-BIkQSeqp.js": {
+        "raw_bytes": 128406,
+        "gzip_bytes": 39788
+      },
+      "LibrariesPage-Fy6DLOuy.js": {
+        "raw_bytes": 320910,
+        "gzip_bytes": 69565
+      },
+      "hdr-DqHcUEwU.js": {
+        "raw_bytes": 471,
+        "gzip_bytes": 296
+      },
+      "LibraryHistoryPanel-CgoWjLxj.js": {
+        "raw_bytes": 28186,
+        "gzip_bytes": 7716
+      },
+      "LoaderPinwheelIcon-CV0d3sqw.js": {
+        "raw_bytes": 756,
+        "gzip_bytes": 468
+      },
+      "PanelEmptyState-COxl-7T3.js": {
+        "raw_bytes": 1741,
+        "gzip_bytes": 895
+      },
+      "FileComparePage-DZva4bna.js": {
+        "raw_bytes": 23473,
+        "gzip_bytes": 6943
+      },
+      "echarts-C6zpxGke.js": {
+        "raw_bytes": 443500,
+        "gzip_bytes": 150176
+      },
+      "StatisticPanelLayoutMigrationNotice-BnGUzrpp.js": {
+        "raw_bytes": 50313,
+        "gzip_bytes": 12076
+      },
+      "settings-panel-state-BQtp3QnM.js": {
+        "raw_bytes": 6870,
+        "gzip_bytes": 2584
+      },
+      "common-DY1CbdZ5.js": {
+        "raw_bytes": 129314,
+        "gzip_bytes": 38793
+      },
+      "LibraryDetailPage-4Q6G8GDK.js": {
+        "raw_bytes": 99499,
+        "gzip_bytes": 27232
+      },
+      "icons-DfZlPtXl.js": {
+        "raw_bytes": 62464,
+        "gzip_bytes": 12888
+      },
+      "AnimatedConnectIcon-CSYjmJOB.js": {
+        "raw_bytes": 8112,
+        "gzip_bytes": 2382
+      },
+      "VideoWipeCompare-Cu0T8k6h.js": {
+        "raw_bytes": 5694,
+        "gzip_bytes": 1997
+      }
+    },
+    "total_gzip_bytes": 814414,
+    "entry": {
+      "raw_bytes": 245877,
+      "gzip_bytes": 74385
+    },
+    "echarts": {
+      "raw_bytes": 443500,
+      "gzip_bytes": 150176
+    }
+  }
+}

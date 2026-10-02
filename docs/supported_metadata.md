@@ -274,7 +274,9 @@ The file detail page currently has a shared panel set for all analyzed files:
 |---|---|
 | File extension is not allowed for the library type | skipped during discovery |
 | File is ignored by an ignore pattern | skipped and included in scan ignore summaries |
+| Filename ends in `_temp.mp4` | skipped when the built-in default ignore rules are active |
 | ffprobe fails | file is marked failed and appears in scan failure samples |
+| Analysis failure diagnostics | classified as empty file, missing MP4 metadata, invalid container/media, unavailable file, permission/I/O error, probe timeout/output limit, unrecognized stream, probable Audible DRM, internal processing error, or other ffprobe error; technical details are retained |
 | Numeric metadata cannot be parsed | stored as `null` where parsing fails |
 | `bits_per_sample=0` for lossy audio | treated as unknown bit depth |
 | Unsupported sidecar subtitle extension | ignored |

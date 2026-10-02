@@ -1941,6 +1941,26 @@ def test_transcode_job_listing_includes_source_video_metadata(monkeypatch, tmp_p
     assert page.items[0].source_dynamic_range == "HDR10"
 
 
+def test_transcode_listing_does_not_decode_unrelated_source_probe_json(monkeypatch, tmp_path) -> None:
+    from sqlalchemy import text
+
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        transcoding.queue_transcode_job(db, _settings(tmp_path), media_file, _compatibility_plan())
+        # A list needs codec/HDR only. Even unrelated malformed stored probe data
+        # must not be decoded, retained, or prevent a status response.
+        db.execute(text("UPDATE media_files SET raw_ffprobe_json = 'invalid-json'"))
+        db.commit()
+        db.expunge_all()
+        page = transcoding.list_transcode_jobs(db, active_only=True)
+        assert page.total == 1
+        assert page.items[0].source_video_codec == "hevc"
+        assert page.items[0].source_dynamic_range == "HDR10"
+        assert not any(isinstance(item, MediaFile) for item in db.identity_map.values())
+
+
 def _selection_capabilities():
     return TranscodeCapabilitiesRead(
         ffmpeg_available=True, ffmpeg_path="ffmpeg", platform="linux",

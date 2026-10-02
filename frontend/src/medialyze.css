@@ -4314,6 +4314,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -4324,6 +4325,7 @@
 
 .distribution-chart-canvas {
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -4436,6 +4438,7 @@
 
 .comparison-chart-content {
   min-height: 0;
+  min-width: 0;
   height: 100%;
   gap: 0;
 }
@@ -6315,6 +6318,32 @@ select.settings-choice-input[multiple] {
   flex: 0 1 auto;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+.scan-log-card .scan-log-summary-head {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.scan-log-card .scan-log-summary {
+  justify-content: stretch;
+}
+
+.scan-log-card .scan-log-summary-copy {
+  display: flex;
+  align-items: baseline;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.scan-log-card .scan-log-summary-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.scan-log-card .scan-log-summary-head .meta-tags {
+  justify-content: flex-start;
 }
 
 .scan-log-outcome.badge-successful {
@@ -12560,7 +12589,6 @@ html[data-theme="dark"] {
     color: #3ec5b8;
   }
 
-  .statistic-layout-action-button,
   .statistic-layout-size-button {
     background: linear-gradient(180deg, rgba(58, 54, 50, 0.98), rgba(44, 41, 37, 0.96));
     border-color: rgba(240, 236, 228, 0.1);
@@ -12570,8 +12598,6 @@ html[data-theme="dark"] {
       0 12px 24px rgba(0, 0, 0, 0.24);
   }
 
-  .statistic-layout-action-button:hover:not(:disabled),
-  .statistic-layout-action-button:focus-visible:not(:disabled),
   .statistic-layout-size-button:hover,
   .statistic-layout-size-button:focus-visible {
     color: rgba(255, 250, 243, 0.98);
@@ -12581,16 +12607,14 @@ html[data-theme="dark"] {
       0 16px 28px rgba(0, 0, 0, 0.28);
   }
 
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless),
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless):hover:not(:disabled),
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless):focus-visible:not(:disabled),
-  .analyzed-files-title-addon .statistic-layout-action-button,
-  .analyzed-files-title-addon .statistic-layout-action-button:hover:not(:disabled),
-  .analyzed-files-title-addon .statistic-layout-action-button:focus-visible:not(:disabled) {
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    transform: none;
+  /* Layout actions are bare icons; only the resize overlay has a surface. */
+  .statistic-layout-action-button {
+    color: rgba(240, 236, 228, 0.78);
+  }
+
+  .statistic-layout-action-button:hover:not(:disabled),
+  .statistic-layout-action-button:focus-visible:not(:disabled) {
+    color: rgba(255, 250, 243, 0.98);
   }
 
   .settings-navigation-panel {

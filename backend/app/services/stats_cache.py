@@ -7,6 +7,7 @@ from threading import Event, Lock
 from time import monotonic
 from typing import Generic, TypeVar
 
+from backend.app.services.performance import performance_metrics
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonRendererId, ComparisonResponse
 from backend.app.schemas.library import LibraryStatistics, LibrarySummary
 from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
@@ -33,10 +34,16 @@ class _CacheEntry(Generic[CacheValue]):
 def _get_cached(cache: OrderedDict, key):
     entry = cache.get(key)
     if entry is None:
+        if performance_metrics.enabled:
+            performance_metrics.increment("cache.lookup.miss")
         return None
     if entry.expires_at <= monotonic():
         cache.pop(key, None)
+        if performance_metrics.enabled:
+            performance_metrics.increment("cache.lookup.expired")
         return None
+    if performance_metrics.enabled:
+        performance_metrics.increment("cache.lookup.hit")
     cache.move_to_end(key)
     return entry.value
 
@@ -208,7 +215,7 @@ class StatsCache:
             key=cache_key,
             limit=self._DASHBOARD_HISTORY_LIMIT,
             ttl_seconds=self._HISTORY_TTL_SECONDS,
-            epoch_key=cache_key,
+            epoch_key=f"{cache_key}:connectors",
             compute=compute,
         )
 
@@ -293,7 +300,7 @@ class StatsCache:
             key=(cache_key, library_id),
             limit=self._LIBRARY_HISTORY_LIMIT,
             ttl_seconds=self._HISTORY_TTL_SECONDS,
-            epoch_key=cache_key,
+            epoch_key=f"{cache_key}:connectors",
             compute=compute,
         )
 
@@ -335,7 +342,7 @@ class StatsCache:
             key=(cache_key, library_id, panel_key),
             limit=self._LIBRARY_STATISTICS_LIMIT,
             ttl_seconds=self._DASHBOARD_TTL_SECONDS,
-            epoch_key=cache_key,
+            epoch_key=(f"{cache_key}:connectors" if panel_key is None or "user_plays" in panel_key else cache_key),
             compute=compute,
         )
 
@@ -401,13 +408,31 @@ class StatsCache:
             key=(cache_key, library_id, path),
             limit=self._STORAGE_MAP_LIMIT,
             ttl_seconds=self._STORAGE_MAP_TTL_SECONDS,
-            epoch_key=cache_key,
+            epoch_key=f"{cache_key}:connectors",
             compute=compute,
         )
+
+    def invalidate_connectors(self, cache_key: str) -> None:
+        """Drop connector/playback views while preserving technical aggregates."""
+        with self._lock:
+            domain = f"{cache_key}:connectors"
+            self._epochs[domain] = self._epochs.get(domain, 0) + 1
+            self._libraries.pop(cache_key, None)
+            self._dashboard_history.pop(cache_key, None)
+            for cache in (self._library_summaries, self._library_history, self._library_file_counts, self._storage_maps):
+                _delete_matching(cache, lambda key: key[0] == cache_key)
+            _delete_matching(
+                self._library_statistics,
+                lambda key: key[0] == cache_key and (key[2] is None or "user_plays" in key[2]),
+            )
+            for cache in (self._dashboard_comparisons, self._library_comparisons):
+                _delete_matching(cache, lambda key: key[0] == cache_key and bool(set(key) & {"play_count", "users_played"}))
 
     def invalidate(self, cache_key: str, library_id: int | None = None) -> None:
         with self._lock:
             self._epochs[cache_key] = self._epochs.get(cache_key, 0) + 1
+            domain = f"{cache_key}:connectors"
+            self._epochs[domain] = self._epochs.get(domain, 0) + 1
             _delete_matching(self._dashboard, lambda key: key[0] == cache_key)
             self._dashboard_history.pop(cache_key, None)
             _delete_matching(self._dashboard_comparisons, lambda key: key[0] == cache_key)

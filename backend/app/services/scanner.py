@@ -53,6 +53,7 @@ from backend.app.services.duplicates import (
 )
 from backend.app.services.app_settings import get_app_settings
 from backend.app.services.ffprobe_parser import normalize_ffprobe_payload, run_ffprobe
+from backend.app.services.analysis_failures import classify_analysis_failure
 from backend.app.services.history_snapshots import (
     create_media_file_history_entry_if_changed,
     upsert_library_history_snapshot,
@@ -157,9 +158,9 @@ class FailedFileSamples:
     items: list[dict[str, str | None]] = field(default_factory=list)
     truncated_count: int = 0
 
-    def add(self, path: str, reason: str, detail: str | None = None) -> None:
+    def add(self, path: str, reason: str, detail: str | None = None, *, kind: str | None = None) -> None:
         if len(self.items) < MAX_FAILED_FILE_SAMPLE_SIZE:
-            self.items.append({"path": path, "reason": reason, "detail": detail})
+            self.items.append({"path": path, "reason": reason, "detail": detail, "kind": kind})
         else:
             self.truncated_count += 1
 
@@ -361,35 +362,16 @@ def _error_details(exc: Exception) -> tuple[str, str]:
     return _short_error_reason(exc), _detailed_error_reason(exc)
 
 
-def _classify_analysis_failure(relative_path: str, reason: str, detail: str) -> tuple[str, str, str]:
-    combined = f"{reason}\n{detail}".lower()
-    extension = Path(relative_path).suffix.lower()
-    if extension in {".aa", ".aax"} and any(
-        token in combined
-        for token in (
-            "invalid data",
-            "could not find codec parameters",
-            "unsupported",
-            "encrypted",
-            "decryption",
-            "activation",
-            "audible",
-            "drm",
-        )
-    ):
-        return (
-            "audible_drm_or_unreadable",
-            "Probably DRM-protected or unreadable by ffprobe.",
-            detail,
-        )
-    return ("ffprobe_error", reason, detail)
-
-
-def _set_analysis_failure(media_file: MediaFile, relative_path: str, reason: str, detail: str) -> None:
-    kind, display_reason, display_detail = _classify_analysis_failure(relative_path, reason, detail)
+def _set_analysis_failure(
+    media_file: MediaFile, relative_path: str, reason: str, detail: str, *, internal: bool = False,
+) -> tuple[str, str, str]:
+    kind, display_reason, display_detail = classify_analysis_failure(
+        relative_path, reason, detail, file_size=media_file.size_bytes, internal=internal,
+    )
     media_file.analysis_failure_kind = kind
     media_file.analysis_failure_reason = display_reason
     media_file.analysis_failure_detail = display_detail[:MAX_FAILURE_DETAIL_LENGTH]
+    return kind, display_reason, media_file.analysis_failure_detail
 
 
 def _iter_media_files(
@@ -1529,7 +1511,8 @@ def run_scan(
         unreadable_directories.add((scan_root.library_root_id, prefix))
         reason, detail = _error_details(exc)
         job.errors += 1
-        failed_files.add(prefix or str(scan_root.path), reason, detail)
+        kind, display_reason, detail = classify_analysis_failure(prefix, reason, detail)
+        failed_files.add(prefix or str(scan_root.path), display_reason, detail, kind=kind)
         logger.warning("Unable to discover library directory %s: %s", failed_path, reason)
 
     def _is_stale(relative_key: tuple[int | None, str], item: ScanFileIndexEntry) -> bool:
@@ -1719,18 +1702,21 @@ def run_scan(
                                 work.media_file.scan_status = ScanStatus.failed
                                 job.errors += 1
                                 reason, detail = _error_details(exc)
-                                _set_analysis_failure(work.media_file, relative_path, reason, detail)
-                                failed_files.add(relative_path, reason, detail)
+                                kind, reason, detail = _set_analysis_failure(
+                                    work.media_file, relative_path, reason, detail, internal=True,
+                                )
+                                failed_files.add(relative_path, reason, detail, kind=kind)
                         else:
                             work.media_file.scan_status = ScanStatus.failed
                             job.errors += 1
                             reason = analysis_error or "Unknown analysis failure"
                             detail = analysis_error_detail or analysis_error or "Unknown analysis failure"
-                            _set_analysis_failure(work.media_file, relative_path, reason, detail)
+                            kind, reason, detail = _set_analysis_failure(work.media_file, relative_path, reason, detail)
                             failed_files.add(
                                 relative_path,
                                 reason,
                                 detail,
+                                kind=kind,
                             )
 
                     if work.needs_duplicate_processing:
@@ -1814,7 +1800,8 @@ def run_scan(
                     except OSError as exc:
                         reason, detail = _error_details(exc)
                         job.errors += 1
-                        failed_files.add(relative_path, reason, detail)
+                        kind, reason, detail = classify_analysis_failure(relative_path, reason, detail)
+                        failed_files.add(relative_path, reason, detail, kind=kind)
                         logger.warning("Unable to inspect media file %s: %s", file_path, reason)
                         # Keep an existing record when a file disappears or loses
                         # permissions during discovery; continue with other files.

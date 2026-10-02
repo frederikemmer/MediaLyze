@@ -1,0 +1,153 @@
+{
+  "items": 100000,
+  "repeats": 3,
+  "environment": {
+    "python": "3.12.13",
+    "sqlite": "3.51.2",
+    "platform": "macOS-27.0-arm64-arm-64bit"
+  },
+  "cases": {
+    "statistics": {
+      "miss": {
+        "samples_seconds": [
+          2.428038,
+          2.443057,
+          2.404449
+        ],
+        "median_seconds": 2.428038,
+        "min_seconds": 2.404449,
+        "max_seconds": 2.443057
+      },
+      "hit": {
+        "samples_seconds": [
+          6.8e-05,
+          3.6e-05,
+          3.1e-05
+        ],
+        "median_seconds": 3.6e-05,
+        "min_seconds": 3.1e-05,
+        "max_seconds": 6.8e-05
+      },
+      "memory": {
+        "elapsed_seconds": 4.3156,
+        "peak_python_mib": 45.131
+      },
+      "response_bytes": 4296,
+      "response_sha256": "72c76f061cc4589c865333afd6dc9e2e1119576196beb2c4603470ac4e245bd0"
+    },
+    "storage_map_root": {
+      "miss": {
+        "samples_seconds": [
+          2.398693,
+          2.401591,
+          2.437632
+        ],
+        "median_seconds": 2.401591,
+        "min_seconds": 2.398693,
+        "max_seconds": 2.437632
+      },
+      "hit": {
+        "samples_seconds": [
+          0.003332,
+          0.00306,
+          0.003006
+        ],
+        "median_seconds": 0.00306,
+        "min_seconds": 0.003006,
+        "max_seconds": 0.003332
+      },
+      "memory": {
+        "elapsed_seconds": 63.0363,
+        "peak_python_mib": 25.375
+      },
+      "response_bytes": 364126,
+      "response_sha256": "03149c336cd5cdcd43bdc8019694fbf95e1d9f17fe5f5e18c0be86a59e942b34"
+    },
+    "size_duration_heatmap": {
+      "miss": {
+        "samples_seconds": [
+          0.096987,
+          0.097302,
+          0.09635
+        ],
+        "median_seconds": 0.096987,
+        "min_seconds": 0.09635,
+        "max_seconds": 0.097302
+      },
+      "hit": {
+        "samples_seconds": [
+          2.6e-05,
+          1.5e-05,
+          1.4e-05
+        ],
+        "median_seconds": 1.5e-05,
+        "min_seconds": 1.4e-05,
+        "max_seconds": 2.6e-05
+      },
+      "memory": {
+        "elapsed_seconds": 0.102,
+        "peak_python_mib": 0.122
+      },
+      "response_bytes": 2721,
+      "response_sha256": "986f960a5c6d0806bd56e94053e873e9bebb19f7bcc84800751c0ac0c277e289"
+    },
+    "size_duration_scatter": {
+      "miss": {
+        "samples_seconds": [
+          0.217009,
+          0.244638,
+          0.229303
+        ],
+        "median_seconds": 0.229303,
+        "min_seconds": 0.217009,
+        "max_seconds": 0.244638
+      },
+      "hit": {
+        "samples_seconds": [
+          0.001841,
+          0.00181,
+          0.001814
+        ],
+        "median_seconds": 0.001814,
+        "min_seconds": 0.00181,
+        "max_seconds": 0.001841
+      },
+      "memory": {
+        "elapsed_seconds": 0.5274,
+        "peak_python_mib": 5.066
+      },
+      "response_bytes": 490286,
+      "response_sha256": "4041306d8770cf5c928606f9425112c84f18c676ce5c9dfed4bfd4ddfbfd02f4"
+    },
+    "statistics_after_connector_change": {
+      "timing": {
+        "samples_seconds": [
+          0.000106,
+          4.3e-05,
+          5.5e-05
+        ],
+        "median_seconds": 5.5e-05,
+        "min_seconds": 4.3e-05,
+        "max_seconds": 0.000106
+      },
+      "response_sha256": "72c76f061cc4589c865333afd6dc9e2e1119576196beb2c4603470ac4e245bd0"
+    },
+    "transcode_history_200": {
+      "timing": {
+        "samples_seconds": [
+          0.021532,
+          0.017297,
+          0.017113
+        ],
+        "median_seconds": 0.017297,
+        "min_seconds": 0.017113,
+        "max_seconds": 0.021532
+      },
+      "memory": {
+        "elapsed_seconds": 0.0552,
+        "peak_python_mib": 2.071
+      },
+      "response_sha256": "e290c6c064f9f1716c7ac9a961b268277da15f46ca9d317ceeaa5f7a1c0baf74"
+    }
+  }
+}

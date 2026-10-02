@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Final
+from collections.abc import Iterator
 
-from sqlalchemy import Float, case, cast, func, select
+from sqlalchemy import Float, Integer, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
@@ -239,13 +241,13 @@ def _numeric_axis_buckets(field_id: ComparisonFieldId) -> list[ComparisonBucket]
     ]
 
 
-def _comparison_source_rows(
+def _comparison_source_query(
     db: Session,
     *,
     x_field: ComparisonFieldId,
     y_field: ComparisonFieldId,
     library_id: int | None = None,
-) -> list[ComparisonSourceRow]:
+):
     requested_fields = {x_field, y_field}
     selected_columns = [
         MediaFile.id.label("media_file_id"),
@@ -342,8 +344,12 @@ def _comparison_source_rows(
             MediaFile.is_transcode_variant.is_(False),
         )
 
-    rows = []
-    for result in db.execute(query).all():
+    return query
+
+
+def _comparison_source_rows(db: Session, **kwargs) -> Iterator[ComparisonSourceRow]:
+    query = _comparison_source_query(db, **kwargs)
+    for result in db.execute(query.execution_options(yield_per=500)):
         values = dict(result._mapping)
         media_file_id = values["media_file_id"]
         values["asset_name"] = values.get("asset_name") or str(media_file_id)
@@ -351,8 +357,7 @@ def _comparison_source_rows(
             values["audio_year"] = (values.pop("audio_date") or "")[:4] or None
         if "embedded_cover" in values:
             values["embedded_cover"] = bool(values["embedded_cover"])
-        rows.append(ComparisonSourceRow(**values))
-    return rows
+        yield ComparisonSourceRow(**values)
 
 
 def _numeric_value(row: ComparisonSourceRow, field_id: ComparisonFieldId) -> float | None:
@@ -469,6 +474,92 @@ def _sample_scatter_points(
     return [points[index] for index in sorted(indices)], True
 
 
+def _sql_numeric_comparison(db, *, x_field, y_field, library_id, renderer, sample_limit):
+    source = _comparison_source_query(db, x_field=x_field, y_field=y_field, library_id=library_id).order_by(None).subquery()
+    def axis(field):
+        if field == "resolution_mp":
+            value = cast(source.c.width * source.c.height, Float) / 1_000_000.0
+            valid = (source.c.width > 0) & (source.c.height > 0)
+        else:
+            value = source.c[field]
+            if field == "chapter_count":
+                value = func.coalesce(value, 0)
+                valid = value.is_not(None)
+            elif field == "size":
+                valid = value >= 0
+            elif field == "quality_score":
+                valid = value >= 1
+            else:
+                valid = value > 0
+        bucket = case(*[
+            ((value >= lower if lower is not None else value.is_not(None)) &
+             (value < upper if upper is not None else value.is_not(None)), _bucket_key(lower, upper))
+            for lower, upper in _numeric_bins(field)
+        ], else_=None)
+        return value, valid, bucket
+    x_value, x_valid, x_bucket = axis(x_field)
+    y_value, y_valid, y_bucket = axis(y_field)
+    total = int(db.scalar(select(func.count()).select_from(source)) or 0)
+    groups = db.execute(
+        select(x_bucket.label("x"), y_bucket.label("y"), func.count().label("count"), func.sum(y_value).label("total"))
+        .select_from(source).where(x_valid, y_valid).group_by(x_bucket, y_bucket)
+    ).all()
+    included = sum(row.count for row in groups)
+    eligible = sum(row.count for row in groups if row.x is not None and row.y is not None)
+    build_heatmap = renderer in {None, "heatmap"}
+    build_scatter = renderer in {None, "scatter"}
+    build_bar = renderer in {None, "bar"}
+    bar_totals = {}
+    for row in groups:
+        if row.x is not None and row.y is not None:
+            total_value, count = bar_totals.get(row.x, (0.0, 0))
+            bar_totals[row.x] = (total_value + row.total, count + row.count)
+    points = None
+    sampled = False
+    if build_scatter:
+        sampled = eligible > sample_limit
+        if sampled:
+            if sample_limit <= 1:
+                indices = {1}
+            else:
+                step = (eligible - 1) / (sample_limit - 1)
+                indices = {min(eligible - 1, round(index * step)) + 1 for index in range(sample_limit)}
+            ranked = select(
+                source.c.media_file_id, source.c.asset_name,
+                x_value.label("x_value"), y_value.label("y_value"),
+                func.row_number().over(order_by=source.c.media_file_id).label("position"),
+            ).where(x_valid, y_valid, x_bucket.is_not(None), y_bucket.is_not(None)).subquery()
+            # One JSON parameter also supports configured limits above SQLite's
+            # bind-variable ceiling without rerunning the ranking query.
+            positions = func.json_each(json.dumps(sorted(indices))).table_valued("value")
+            query = select(ranked).where(
+                ranked.c.position.in_(select(cast(positions.c.value, Integer)))
+            ).order_by(ranked.c.position)
+        else:
+            query = select(
+                source.c.media_file_id, source.c.asset_name,
+                x_value.label("x_value"), y_value.label("y_value"),
+            ).where(x_valid, y_valid, x_bucket.is_not(None), y_bucket.is_not(None)).order_by(source.c.media_file_id)
+        points = [ComparisonScatterPoint(
+            media_file_id=row.media_file_id, asset_name=row.asset_name or str(row.media_file_id),
+            x_value=row.x_value, y_value=row.y_value,
+        ) for row in db.execute(query)]
+    return ComparisonResponse(
+        x_field=x_field, y_field=y_field, x_field_kind="numeric", y_field_kind="numeric",
+        available_renderers=_available_renderers("numeric", "numeric"), total_files=total,
+        included_files=included, excluded_files=total-included, sampled_points=sampled,
+        sample_limit=sample_limit, x_buckets=_numeric_axis_buckets(x_field), y_buckets=_numeric_axis_buckets(y_field),
+        heatmap_cells=[ComparisonHeatmapCell(x_key=row.x, y_key=row.y, count=row.count)
+                       for row in sorted(groups, key=lambda row: (row.x or "", row.y or ""))
+                       if row.x is not None and row.y is not None] if build_heatmap else [],
+        scatter_points=points,
+        bar_entries=[ComparisonBarEntry(
+            x_key=bucket.key, x_label=bucket.label,
+            value=bar_totals[bucket.key][0] / bar_totals[bucket.key][1], count=bar_totals[bucket.key][1],
+        ) for bucket in _numeric_axis_buckets(x_field) if bucket.key in bar_totals] if build_bar else None,
+    )
+
+
 def _build_comparison(
     db: Session,
     *,
@@ -488,37 +579,29 @@ def _build_comparison(
     build_heatmap = include_all_renderers or requested_renderer == "heatmap"
     build_scatter = (include_all_renderers or requested_renderer == "scatter") and "scatter" in available_renderers
     build_bar = (include_all_renderers or requested_renderer == "bar") and "bar" in available_renderers
-    rows = _comparison_source_rows(
-        db,
-        x_field=x_field,
-        y_field=y_field,
-        library_id=library_id,
-    )
-    total_files = len(rows)
-
-    included_rows: list[tuple[int, str, float | CategoryValue, float | CategoryValue]] = []
-    for row in rows:
-        x_value = (
-            _numeric_value(row, x_field)
-            if x_definition.kind == "numeric"
-            else _category_value(row, x_field, resolution_categories=resolution_categories)
+    if x_definition.kind == y_definition.kind == "numeric":
+        return _sql_numeric_comparison(
+            db, x_field=x_field, y_field=y_field, library_id=library_id,
+            renderer=None if include_all_renderers else requested_renderer, sample_limit=sample_limit,
         )
-        y_value = (
-            _numeric_value(row, y_field)
-            if y_definition.kind == "numeric"
-            else _category_value(row, y_field, resolution_categories=resolution_categories)
-        )
-        if x_value is None or y_value is None:
-            continue
-        included_rows.append((row.media_file_id, row.asset_name, x_value, y_value))
-
+    total_files = 0
+    included_files = 0
     x_category_counts: dict[str, tuple[str, int]] = {}
     y_category_counts: dict[str, tuple[str, int]] = {}
     heatmap_counts: dict[tuple[str, str], int] = {}
     bar_totals: dict[str, tuple[str, float, int]] = {}
     scatter_points: list[ComparisonScatterPoint] = []
 
-    for _media_file_id, asset_name, x_value, y_value in included_rows:
+    for row in _comparison_source_rows(db, x_field=x_field, y_field=y_field, library_id=library_id):
+        total_files += 1
+        x_value = (_numeric_value(row, x_field) if x_definition.kind == "numeric"
+                   else _category_value(row, x_field, resolution_categories=resolution_categories))
+        y_value = (_numeric_value(row, y_field) if y_definition.kind == "numeric"
+                   else _category_value(row, y_field, resolution_categories=resolution_categories))
+        if x_value is None or y_value is None:
+            continue
+        included_files += 1
+        _media_file_id, asset_name = row.media_file_id, row.asset_name
         if x_definition.kind == "numeric":
             x_bucket = _numeric_bucket(x_field, float(x_value))
             if x_bucket is None:
@@ -601,8 +684,8 @@ def _build_comparison(
         y_field_kind=y_definition.kind,
         available_renderers=available_renderers,
         total_files=total_files,
-        included_files=len(included_rows),
-        excluded_files=max(0, total_files - len(included_rows)),
+        included_files=included_files,
+        excluded_files=max(0, total_files - included_files),
         sampled_points=sampled_points,
         sample_limit=sample_limit,
         x_buckets=x_buckets,

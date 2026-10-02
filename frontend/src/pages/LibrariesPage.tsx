@@ -7493,8 +7493,8 @@ export function LibrariesPage() {
                           >
                             <div className="scan-log-summary-head">
                               <div className="scan-log-summary-copy">
-                                <strong>{scanLogTitle(job)}</strong>
-                                <span>{job.library_name ?? t("scanLogs.unknownLibrary")}</span>
+                                <strong>{job.library_name ?? t("scanLogs.unknownLibrary")}</strong>
+                                <span>{scanLogTitle(job)}</span>
                               </div>
                               <div className="meta-tags">
                                 <span className={`badge scan-log-outcome badge-${job.outcome}`}>

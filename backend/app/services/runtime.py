@@ -94,6 +94,7 @@ from backend.app.services.scanner import (
     queue_scan_job,
 )
 from backend.app.services.stats_cache import stats_cache
+from backend.app.services.performance import observe_executor
 from backend.app.services.telemetry import (
     send_current_telemetry_snapshot,
     send_initial_telemetry_snapshot,
@@ -187,7 +188,7 @@ class ScanRuntimeManager:
         self.scheduler = BackgroundScheduler(timezone=resolve_scheduler_timezone())
         self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
         self.executor = self._build_executor(self.executor_max_workers)
-        self.connector_executor_max_workers = self.executor_max_workers
+        self.connector_executor_max_workers = 2
         self.connector_executor = self._build_connector_executor(
             self.connector_executor_max_workers
         )
@@ -332,10 +333,7 @@ class ScanRuntimeManager:
         previous_executor: ThreadPoolExecutor | None = None
         previous_transcode_executor: ThreadPoolExecutor | None = None
         with self.lock:
-            scan_workers_changed = (
-                next_workers != self.executor_max_workers
-                or next_workers != self.connector_executor_max_workers
-            )
+            scan_workers_changed = next_workers != self.executor_max_workers
             transcode_workers_changed = next_transcode_workers != self.transcode_executor_max_workers
             transcode_capacity_changed = next_transcode_capacity_signature != self.transcode_capacity_signature
             if not scan_workers_changed and not transcode_workers_changed and not transcode_capacity_changed:
@@ -344,11 +342,6 @@ class ScanRuntimeManager:
                 previous_executor = self.executor
                 self.executor = self._build_executor(next_workers)
                 self.executor_max_workers = next_workers
-                previous_connector_executor = self.connector_executor
-                self.connector_executor = self._build_connector_executor(next_workers)
-                self.connector_executor_max_workers = next_workers
-            else:
-                previous_connector_executor = None
             self.transcode_executor_max_workers = next_transcode_workers
             self.transcode_cpu_parallel_jobs = int(capacity["cpu_parallel_jobs"])
             self.transcode_gpu_parallel_jobs_per_device = persisted.transcoding.gpu_parallel_jobs_per_device
@@ -361,8 +354,6 @@ class ScanRuntimeManager:
 
         if previous_executor is not None:
             self._shutdown_executor(previous_executor, cancel_futures=False)
-        if previous_connector_executor is not None:
-            self._shutdown_executor(previous_connector_executor, cancel_futures=False)
         if previous_transcode_executor is not None:
             self._shutdown_executor(previous_transcode_executor, cancel_futures=False)
         return True
@@ -1429,7 +1420,7 @@ class ScanRuntimeManager:
             try:
                 refresh_jellyfin_mapping_state(db)
                 recompute_jellyfin_matches(db, commit_batch_size=250)
-                stats_cache.invalidate(str(id(db.get_bind())))
+                stats_cache.invalidate_connectors(str(id(db.get_bind())))
             except Exception as exc:
                 db.rollback()
                 error = str(exc)[:2048]
@@ -2388,35 +2379,35 @@ class ScanRuntimeManager:
 
     @staticmethod
     def _build_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-runtime",
-        )
+        ), "scan")
 
     @staticmethod
     def _build_maintenance_executor() -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="medialyze-maintenance",
-        )
+        ), "maintenance")
 
     @staticmethod
     def _build_automation_executor() -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="medialyze-transcode-automation",
-        )
+        ), "automation")
 
     @staticmethod
     def _build_connector_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-connector",
-        )
+        ), "connector")
 
     @staticmethod
     def _build_transcode_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-transcode",
-        )
+        ), "transcode")

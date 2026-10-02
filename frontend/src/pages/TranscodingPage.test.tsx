@@ -1,6 +1,6 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
@@ -377,4 +377,38 @@ describe("TranscodingPage", () => {
     await waitFor(() => expect(cancel).toHaveBeenCalledWith(1));
   });
 
+});
+
+it("polls live jobs frequently, refreshes history on completion, and pauses in hidden tabs", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  try {
+    renderPage();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    const initialHistory = vi.mocked(api.transcodeJobs).mock.calls.length;
+    const initialActive = vi.mocked(api.activeTranscodeJobs).mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(api.activeTranscodeJobs).toHaveBeenCalledTimes(initialActive + 4);
+    expect(api.transcodeJobs).toHaveBeenCalledTimes(initialHistory);
+    vi.mocked(api.activeTranscodeJobs).mockResolvedValue({ items: [], total: 0 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    expect(vi.mocked(api.transcodeJobs).mock.calls.length).toBeGreaterThan(initialHistory);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    const hiddenActive = vi.mocked(api.activeTranscodeJobs).mock.calls.length;
+    const hiddenHistory = vi.mocked(api.transcodeJobs).mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(120000); });
+    expect(api.activeTranscodeJobs).toHaveBeenCalledTimes(hiddenActive);
+    expect(api.transcodeJobs).toHaveBeenCalledTimes(hiddenHistory);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    expect(api.activeTranscodeJobs).toHaveBeenCalledTimes(hiddenActive + 1);
+    expect(api.transcodeJobs).toHaveBeenCalledTimes(hiddenHistory + 1);
+    // An externally started and completed short job is found by the idle check.
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(vi.mocked(api.transcodeJobs).mock.calls.length).toBeGreaterThan(hiddenHistory + 1);
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
 });

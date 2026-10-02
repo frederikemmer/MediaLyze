@@ -4,7 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### ✨ Enhancements
+
+- Reduce memory and latency for transcoding job lists, numeric comparison charts and Storage Map aggregation; preserve technical statistics caches across connector updates.
+- Load modular chart renderers and interface languages on demand, defer offscreen chart rendering, bound file-table result caches, and batch/adapt job polling with hidden-tab suspension.
+- Separate connector concurrency from scan limits, lower executing FFmpeg process priority, and add optional bounded API/SQL/cache/queue performance observations through `MEDIALYZE_PERFORMANCE_METRICS`.
+
 ### 🐛 Bug fixes
+
+- Keep dashboard and library layout action icons transparent in dark mode; reserve the shaded surface for layout resize controls.
+
+- Include `*_temp.mp4` in the built-in scan ignore rules and classify analysis failures with actionable reasons in scan logs and file details while retaining technical diagnostics.
+
+- Show the library name as the primary scan-log heading, place the scan time beside it, and left-align scan status labels.
 
 - Interrupt running ffprobe/hash workers when canceling a scan, adapt analysis concurrency to available host/container RAM, queue startup history pruning in the background, and reduce profile queries and ORM overhead in maintenance jobs without adding UI controls ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
 

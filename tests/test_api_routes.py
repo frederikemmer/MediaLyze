@@ -2680,3 +2680,59 @@ def test_transcode_variant_media_serves_output_and_rejects_escaping_path(tmp_pat
         (tmp_path / "outside.mp4").write_bytes(b"outside")
         db.commit()
         assert client.get(f"/api/transcode-variants/{variant.id}/media").status_code == 404
+
+
+def test_batched_connector_status_preserves_active_jobs_and_hides_connection_config() -> None:
+    from sqlalchemy import event
+    from backend.app.models.entities import ConnectorConnection, ConnectorSyncJob
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        connections = [ConnectorConnection(provider="jellyfin", name=f"Server {i}", config={"custom": "private"}) for i in range(4)]
+        db.add_all(connections)
+        db.flush()
+        db.add_all([
+            ConnectorSyncJob(connection_id=connection.id, status=status)
+            for connection, status in zip(connections, [JobStatus.running, JobStatus.queued, JobStatus.completed, JobStatus.failed])
+        ])
+        db.commit()
+        statements = []
+        def record(_conn, _cursor, statement, *_args):
+            statements.append(statement)
+        event.listen(engine, "before_cursor_execute", record)
+        response = _build_test_app(db).get("/api/connector-jobs/active")
+        event.remove(engine, "before_cursor_execute", record)
+        assert response.status_code == 200
+        payload = response.json()
+        assert [entry["job"]["status"] for entry in payload] == ["running", "queued"]
+        assert all(set(entry["connection"]) == {"id", "name", "provider"} for entry in payload)
+        assert len([statement for statement in statements if statement.lstrip().upper().startswith("SELECT")]) == 3
+    engine.dispose()
+
+
+def test_batched_connector_status_matches_legacy_status_precedence():
+    from backend.app.models.entities import ConnectorConnection, ConnectorSyncJob, JellyfinSyncJob
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as db:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        connection = ConnectorConnection(provider="jellyfin", name="Legacy", config={"legacy_default": True})
+        db.add(connection)
+        db.flush()
+        generic = ConnectorSyncJob(connection_id=connection.id, status=JobStatus.completed, queued_at=now)
+        legacy = JellyfinSyncJob(status=JobStatus.running, queued_at=now - timedelta(seconds=1))
+        db.add_all([generic, legacy])
+        db.commit()
+        client = _build_test_app(db)
+        assert client.get("/api/connector-jobs/active").json() == []
+        legacy.queued_at = now + timedelta(seconds=1)
+        db.commit()
+        active = client.get("/api/connector-jobs/active").json()
+        assert len(active) == 1
+        assert active[0]["job"] == client.get(f"/api/connectors/{connection.id}/sync/status").json()
+        generic.status = JobStatus.queued
+        db.commit()
+        active = client.get("/api/connector-jobs/active").json()
+        assert active[0]["job"] == client.get(f"/api/connectors/{connection.id}/sync/status").json()
+    engine.dispose()

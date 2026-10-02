@@ -38,6 +38,9 @@ def create_engine_for_settings(settings: Settings) -> Engine:
         cursor.execute(f"PRAGMA busy_timeout = {busy_timeout_ms};")
         cursor.close()
 
+    if settings.performance_metrics:
+        from backend.app.services.performance import install_sql_observations
+        install_sql_observations(engine)
     return engine
 
 

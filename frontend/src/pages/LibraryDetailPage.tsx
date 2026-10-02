@@ -328,8 +328,8 @@ const libraryStatisticsCache = new LruCache<string, LibraryStatistics>(16, { ttl
 const libraryHistoryCache = new LruCache<string, LibraryHistoryResponse>(16, { ttlMs: 5 * 60 * 1000 });
 const libraryComparisonCache = new LruCache<string, ComparisonResponse>(48, { ttlMs: 5 * 60 * 1000 });
 const libraryDuplicateGroupsCache = new LruCache<string, DuplicateGroupPage>(16, { ttlMs: 2 * 60 * 1000 });
-const libraryFileListCache = new LruCache<string, CachedFileList>(12, { ttlMs: 2 * 60 * 1000 });
-const libraryGroupedFileListCache = new LruCache<string, CachedGroupedFileList>(12, { ttlMs: 2 * 60 * 1000 });
+const libraryFileListCache = new LruCache<string, CachedFileList>(12, { ttlMs: 2 * 60 * 1000, maxWeight: 5000, weigh: (value) => value.items.length });
+const libraryGroupedFileListCache = new LruCache<string, CachedGroupedFileList>(12, { ttlMs: 2 * 60 * 1000, maxWeight: 5000, weigh: (value) => value.items.length });
 const librarySeriesGroupedDetailCache = new LruCache<string, MediaSeriesGroupedDetail>(32, { ttlMs: 2 * 60 * 1000 });
 const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryLayoutPanelDefinition>([
   ...LIBRARY_STATISTIC_DEFINITIONS.map(

@@ -133,6 +133,7 @@ class Settings(BaseSettings):
     runtime_mode: RuntimeMode = Field(default=RuntimeMode.server, validation_alias="MEDIALYZE_RUNTIME")
     app_host: str | None = None
     app_port: int = 8080
+    performance_metrics: bool = Field(default=False, validation_alias="MEDIALYZE_PERFORMANCE_METRICS")
     api_prefix: str = "/api"
     config_path: Path | None = None
     media_root: Path | None = None

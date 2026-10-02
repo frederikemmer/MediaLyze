@@ -97,3 +97,42 @@ def test_cache_entries_expire_without_explicit_invalidation(monkeypatch) -> None
 
     clock[0] += cache._DASHBOARD_TTL_SECONDS + 1
     assert cache.get_dashboard("engine", ("container",)) is None
+
+
+def test_connector_invalidation_preserves_technical_panels_and_drops_playback_views():
+    cache = StatsCache()
+    technical, playback, summary, comparison = object(), object(), object(), object()
+    cache.set_dashboard("engine", technical, ("container",))
+    cache.set_library_statistics("engine", 1, technical, ("container",))
+    cache.set_library_statistics("engine", 1, playback, ("user_plays",))
+    cache.set_library_summary("engine", 1, summary)
+    cache.set_library_comparison("engine", 1, "size", "duration", comparison)
+    cache.set_library_comparison("engine", 1, "size", "play_count", playback)
+    cache.invalidate_connectors("engine")
+    assert cache.get_dashboard("engine", ("container",)) is technical
+    assert cache.get_library_statistics("engine", 1, ("container",)) is technical
+    assert cache.get_library_statistics("engine", 1, ("user_plays",)) is None
+    assert cache.get_library_summary("engine", 1) is None
+    assert cache.get_library_comparison("engine", 1, "size", "duration") is comparison
+    assert cache.get_library_comparison("engine", 1, "size", "play_count") is None
+    cache.invalidate("engine", 1)
+    assert cache.get_dashboard("engine", ("container",)) is None
+    assert cache.get_library_statistics("engine", 1, ("container",)) is None
+
+
+def test_connector_invalidation_does_not_discard_an_inflight_technical_result():
+    from threading import Event
+    cache = StatsCache()
+    entered, release = Event(), Event()
+    payload = object()
+    def compute():
+        entered.set()
+        assert release.wait(2)
+        return payload
+    thread = Thread(target=lambda: cache.get_or_compute_library_statistics("engine", 1, ("container",), compute))
+    thread.start()
+    assert entered.wait(2)
+    cache.invalidate_connectors("engine")
+    release.set()
+    thread.join(2)
+    assert cache.get_library_statistics("engine", 1, ("container",)) is payload

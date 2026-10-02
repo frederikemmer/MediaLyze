@@ -20,6 +20,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
+import { getIdlePollInterval, usePageVisibility } from "../lib/page-visibility";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import {
   phaseForTranscodeJob,
@@ -696,6 +697,10 @@ export function TranscodingPage() {
   const [, setSpeedRevision] = useState(0);
   const speedHistoryRef = useRef<Map<number, number[]>>(new Map());
   const refreshInFlightRef = useRef(false);
+  const isPageVisible = usePageVisibility();
+  const previousActiveIdsRef = useRef<Set<number>>(new Set());
+  const historyLoadedRef = useRef(false);
+  const historyCheckedAtRef = useRef(0);
   const headerCellRefs = useRef<Partial<Record<TranscodingColumnKey, HTMLTableCellElement | null>>>({});
   const resizeStateRef = useRef<{
     columnKey: TranscodingColumnKey;
@@ -705,32 +710,44 @@ export function TranscodingPage() {
     maxPx: number;
   } | null>(null);
 
-  const refreshJobs = useCallback(async () => {
+  const refreshJobs = useCallback(async (forceHistory = false) => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
-    const [activeResult, historyResult] = await Promise.allSettled([
-      api.activeTranscodeJobs(),
-      api.transcodeJobs({ limit: 200 }),
-    ]);
     const failures: string[] = [];
-    if (activeResult.status === "fulfilled") setActiveJobs(activeResult.value.items);
-    else failures.push(activeResult.reason instanceof Error ? activeResult.reason.message : String(activeResult.reason));
-    if (historyResult.status === "fulfilled") setHistoryJobs(historyResult.value.items);
-    else failures.push(historyResult.reason instanceof Error ? historyResult.reason.message : String(historyResult.reason));
-    setError(failures.length > 0 ? failures.join(" · ") : null);
-    refreshInFlightRef.current = false;
+    try {
+      const active = await api.activeTranscodeJobs();
+      setActiveJobs(active.items);
+      const ids = new Set(active.items.map((job) => job.id));
+      const finished = [...previousActiveIdsRef.current].some((id) => !ids.has(id));
+      previousActiveIdsRef.current = ids;
+      // A slow history refresh also catches short jobs started from another tab.
+      if (forceHistory || finished || !historyLoadedRef.current || Date.now() - historyCheckedAtRef.current >= 30000) {
+        const history = await api.transcodeJobs({ limit: 200 });
+        setHistoryJobs(history.items);
+        historyLoadedRef.current = true;
+        historyCheckedAtRef.current = Date.now();
+      }
+    } catch (reason) {
+      failures.push(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setError(failures.length > 0 ? failures.join(" · ") : null);
+      refreshInFlightRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
-    void refreshJobs();
-    const timer = window.setInterval(() => void refreshJobs(), 2500);
-    const onFocus = () => void refreshJobs();
+    if (!isPageVisible) return;
+    void refreshJobs(true);
+    const timer = window.setInterval(
+      () => void refreshJobs(), activeJobs.length > 0 ? 2500 : getIdlePollInterval(),
+    );
+    const onFocus = () => void refreshJobs(true);
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [refreshJobs]);
+  }, [refreshJobs, isPageVisible, activeJobs.length > 0]);
 
   useEffect(() => {
     let disposed = false;
@@ -879,7 +896,7 @@ export function TranscodingPage() {
       await api.deleteTranscodeJob(job.id);
       setHistoryJobs((current) => current.filter((item) => item.id !== job.id));
       setExpandedJobId((current) => current === job.id ? null : current);
-      await refreshJobs();
+      await refreshJobs(true);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -892,7 +909,7 @@ export function TranscodingPage() {
     setNotice(null);
     try {
       await api.cancelTranscodeJob(job.id);
-      await refreshJobs();
+      await refreshJobs(true);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -911,7 +928,7 @@ export function TranscodingPage() {
     try {
       await api.startFileTranscode(job.source_file_id, job.plan);
       setNotice(t("transcoding.center.retryStarted"));
-      await refreshJobs();
+      await refreshJobs(true);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : String(reason));
     } finally {

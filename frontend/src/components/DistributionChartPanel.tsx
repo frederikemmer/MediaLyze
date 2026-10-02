@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Hash, Percent } from "lucide-react";
 
+import { useChartVisibility } from "../lib/chart-visibility";
 import type { NumericDistribution, NumericDistributionBin, NumericDistributionMetricId } from "../lib/api";
 import { type NumericDistributionDisplayMode } from "../lib/numeric-distributions";
 import { AsyncPanel } from "./AsyncPanel";
@@ -47,6 +48,7 @@ export function DistributionChartPanel({
 }: DistributionChartPanelProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<NumericDistributionDisplayMode>("count");
+  const chartVisibility = useChartVisibility();
   const showTotalCopy = !METRICS_WITHOUT_TOTAL_COPY.has(metricId);
 
   return (
@@ -99,6 +101,8 @@ export function DistributionChartPanel({
         <PanelEmptyState />
       ) : (
         <div
+          ref={chartVisibility.ref}
+          aria-busy={!chartVisibility.ready}
           className={`distribution-chart-panel-content${showTotalCopy ? "" : " distribution-chart-panel-content-compact"}`}
         >
           {showTotalCopy ? (
@@ -110,7 +114,7 @@ export function DistributionChartPanel({
             </span>
           ) : null}
           <div className="distribution-chart-canvas">
-            <Suspense fallback={<div className="notice">{t("distributionChart.loading")}</div>}>
+            {chartVisibility.ready ? <Suspense fallback={<div className="notice">{t("distributionChart.loading")}</div>}>
               <LazyDistributionChart
                 key={resizeToken ? `${metricId}-${resizeToken}` : metricId}
                 distribution={distribution}
@@ -119,7 +123,7 @@ export function DistributionChartPanel({
                 interactive={interactive}
                 onSelectBin={onSelectBin}
               />
-            </Suspense>
+            </Suspense> : null}
           </div>
         </div>
       )}

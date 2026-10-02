@@ -93,6 +93,15 @@ def create_app(settings=None) -> FastAPI:
         version=active_settings.app_version,
         lifespan=lifespan,
     )
+    if active_settings.performance_metrics:
+        from backend.app.services.performance import PerformanceMiddleware, performance_metrics
+        performance_metrics.enabled = True
+        app.add_middleware(PerformanceMiddleware)
+
+        @app.get(f"{active_settings.api_prefix}/performance", include_in_schema=False)
+        def performance_snapshot():
+            return performance_metrics.snapshot()
+
     app.add_middleware(JsonGZipMiddleware, minimum_size=1024, compresslevel=5)
     if not active_settings.is_desktop:
         app.add_middleware(

@@ -164,6 +164,18 @@ describe("global theme styles", () => {
     expect(componentStyles).toContain(".icon-button-animated");
   });
 
+  it("keeps dark layout action icons free of the resize overlay surface", () => {
+    const actionRules = [...componentStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) => selector.includes(".statistic-layout-action-button"));
+    const actionSurfaces = actionRules.flatMap(([, , declarations]) =>
+      [...declarations.matchAll(/(?:background|box-shadow)\s*:\s*([^;]+);/g)].map(([, value]) => value.trim()),
+    );
+
+    expect(actionSurfaces.length).toBeGreaterThan(0);
+    expect(actionSurfaces.every((value) => value === "transparent" || value === "none")).toBe(true);
+    expect(componentStyles).toMatch(/\.statistic-layout-size-button\s*\{[^}]*background:\s*linear-gradient/s);
+  });
+
   it("uses the compact control baseline and removes the legacy oversized baseline", () => {
     const compactControlSelector = ':where(input:not([type="checkbox"]):not([type="range"]):not([type="hidden"]), select, textarea)';
 

@@ -60,7 +60,7 @@ from backend.app.services.app_settings import get_app_settings
 from backend.app.services.languages import format_filename_language_code, format_stream_language_code, normalize_language_tag
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
-from backend.app.utils.processes import get_hidden_subprocess_kwargs
+from backend.app.utils.processes import get_hidden_subprocess_kwargs, lower_background_process_priority
 from backend.app.utils.time import utc_now
 
 
@@ -3473,6 +3473,7 @@ def execute_transcode_job(
             shell=False,
             **get_hidden_subprocess_kwargs(),
         )
+        lower_background_process_priority(process)
         job.processing_phase = "transcoding"
         job.phase_detail = "FFmpeg is processing the source file"
         db.commit()
@@ -3732,7 +3733,15 @@ def _attachment_summaries(media_file: MediaFile) -> list[TranscodeAttachmentSumm
     return attachments
 
 
-def serialize_transcode_job(job: TranscodeJob, source_file: MediaFile | None = None) -> TranscodeJobRead:
+@dataclass(frozen=True, slots=True)
+class TranscodeSourceMetadata:
+    primary_video_codec: str | None
+    primary_video_hdr_type: str | None
+
+
+def serialize_transcode_job(
+    job: TranscodeJob, source_file: MediaFile | TranscodeSourceMetadata | None = None,
+) -> TranscodeJobRead:
     payload = TranscodeJobRead.model_validate(job)
     payload.status = job.status.value if hasattr(job.status, "value") else str(job.status)
     if source_file is not None:
@@ -3741,13 +3750,16 @@ def serialize_transcode_job(job: TranscodeJob, source_file: MediaFile | None = N
     return payload
 
 
-def _source_files_for_jobs(db: Session, jobs: list[TranscodeJob]) -> dict[int, MediaFile]:
+def _source_files_for_jobs(db: Session, jobs: list[TranscodeJob]) -> dict[int, TranscodeSourceMetadata]:
     source_ids = {job.source_file_id for job in jobs if job.source_file_id is not None}
     if not source_ids:
         return {}
     return {
-        media_file.id: media_file
-        for media_file in db.scalars(select(MediaFile).where(MediaFile.id.in_(source_ids))).all()
+        row.id: TranscodeSourceMetadata(row.primary_video_codec, row.primary_video_hdr_type)
+        for row in db.execute(
+            select(MediaFile.id, MediaFile.primary_video_codec, MediaFile.primary_video_hdr_type)
+            .where(MediaFile.id.in_(source_ids))
+        )
     }
 
 

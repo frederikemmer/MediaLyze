@@ -2251,6 +2251,7 @@ export type ScanFileIssue = {
   path: string;
   reason: string;
   detail?: string | null;
+  kind?: string | null;
 };
 
 export type ScanPatternHit = {
@@ -3077,6 +3078,7 @@ export const api = {
       `/connectors/${id}/sync/cancel${jobId ? `?job_id=${jobId}` : ""}`,
       { method: "POST" },
     ),
+  activeConnectorJobs: () => request<Array<{ connection: Pick<ConnectorConnection, "id" | "name" | "provider">; job: ConnectorSyncJob }>>("/connector-jobs/active"),
   connectorSyncStatus: (id: number) =>
     request<ConnectorSyncJob | null>(`/connectors/${id}/sync/status`),
   connectorUsers: (id: number) => request<ConnectorUser[]>(`/connectors/${id}/users`),

@@ -53,6 +53,7 @@ def test_real_ffprobe_corrupt_mp4_does_not_interrupt_scan(tmp_path: Path) -> Non
     media_dir.mkdir()
     # A recognizable MP4 header without its required moov atom, as in #184.
     (media_dir / "broken.mp4").write_bytes(bytes.fromhex("000000186674797069736f6d0000020069736f6d69736f32"))
+    (media_dir / "empty.mp4").write_bytes(b"")
     with wave.open(str(media_dir / "healthy.wav"), "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
@@ -67,13 +68,20 @@ def test_real_ffprobe_corrupt_mp4_does_not_interrupt_scan(tmp_path: Path) -> Non
         db.commit()
         job = run_scan(db, settings, library.id, "full")
         assert job.status == JobStatus.completed
-        assert job.files_scanned == 2
-        assert job.errors == 1
+        assert job.files_scanned == 3
+        assert job.errors == 2
         files = db.scalars(select(MediaFile).order_by(MediaFile.filename)).all()
         assert files[0].scan_status == ScanStatus.failed
-        assert "moov atom not found" in files[0].analysis_failure_reason
-        assert files[1].scan_status == ScanStatus.ready
-        assert len(files[1].audio_streams) == 1
+        assert files[0].analysis_failure_kind == "mp4_metadata_missing"
+        assert "Required MP4 metadata" in files[0].analysis_failure_reason
+        assert "moov atom not found" in files[0].analysis_failure_detail
+        assert files[1].analysis_failure_kind == "empty_file"
+        samples = {entry["path"]: entry for entry in job.scan_summary["analysis"]["failed_files"]}
+        assert samples["broken.mp4"]["kind"] == files[0].analysis_failure_kind
+        assert samples["broken.mp4"]["reason"] == files[0].analysis_failure_reason
+        assert samples["empty.mp4"]["kind"] == "empty_file"
+        assert files[2].scan_status == ScanStatus.ready
+        assert len(files[2].audio_streams) == 1
 
 
 def test_full_scan_releases_persisted_analysis_data(tmp_path: Path, monkeypatch) -> None:
@@ -2045,7 +2053,8 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
     assert history_rows[0].snapshot["trend_metrics"]["total_files"] == 1
     assert history_rows[0].snapshot["scan_delta"]["new_files"] == 2
     assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
-    assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "bad payload"
+    assert job.scan_summary["analysis"]["failed_files"][0]["kind"] == "internal_processing_error"
+    assert "Internal MediaLyze error" in job.scan_summary["analysis"]["failed_files"][0]["reason"]
     assert "ValueError: bad payload" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
 
 

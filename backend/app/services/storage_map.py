@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import PurePosixPath
 
 from sqlalchemy import and_, func, select
@@ -371,12 +372,15 @@ def _build_library_storage_map(
                 .replace("_", "\\_")
             )
             query = query.where(MediaFile.relative_path.like(f"{escaped_prefix}/%", escape="\\"))
-    rows = db.execute(query).all()
+    rows = db.execute(query.execution_options(yield_per=500))
 
     folders: dict[str, _FolderAggregate] = {}
     files: list[StorageMapNodeRead] = []
     matching_file_count = 0
     matching_size_bytes = 0
+    @lru_cache(maxsize=512)
+    def resolution_for_dimensions(width, height):
+        return classify_resolution_category(width, height, resolution_categories)
 
     for row in rows:
         relative_parts = PurePosixPath(row.relative_path).parts
@@ -392,11 +396,7 @@ def _build_library_storage_map(
             if row.primary_video_width and row.primary_video_height
             else None
         )
-        resolution_category = classify_resolution_category(
-            row.primary_video_width,
-            row.primary_video_height,
-            resolution_categories,
-        )
+        resolution_category = resolution_for_dimensions(row.primary_video_width, row.primary_video_height)
         category_pair = (
             (resolution_category.id, resolution_category.label)
             if resolution_category is not None
@@ -427,10 +427,10 @@ def _build_library_storage_map(
 
         child_path = "/".join((*current_parts, remaining[0]))
         if len(remaining) > 1:
-            folder = folders.setdefault(
-                remaining[0],
-                _FolderAggregate(name=remaining[0], path=child_path),
-            )
+            folder = folders.get(remaining[0])
+            if folder is None:
+                folder = _FolderAggregate(name=remaining[0], path=child_path)
+                folders[remaining[0]] = folder
             folder.add(
                 size_bytes=row.size_bytes,
                 quality_score=row.quality_score,

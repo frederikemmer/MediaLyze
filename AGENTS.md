@@ -62,7 +62,7 @@ MediaLyze currently implements:
 * dashboard and per-library statistics
 * dashboard and per-library metric-comparison panels with selectable X/Y dimensions and heatmap, scatter, or bar renderers where supported
 * theme selection and feature flags
-* English, German, Spanish, and Ukrainian UI translations
+* English, German, Spanish, and Ukrainian UI translations; English fallback is bundled, other languages load on demand before initial rendering
 * Docker-first deployment and GHCR image publishing
 * native desktop packaging for Windows, macOS, and Linux with a local backend sidecar
 * safe FFmpeg transcoding for regular video files with editable structured plans, real hardware capability probes, explicit hardware-required/CPU-only execution, separate output policy, linked analyzed variants, Wipe comparison, job history, cancellation, and independent retention
@@ -209,7 +209,8 @@ Actual implementation:
 * transcoding jobs use a dedicated executor with separate CPU-budget and per-device GPU slots; scan discovery and analysis workers remain independent
 * hardware-required transcoding never silently falls back to CPU; encoders and devices are exposed only after a real FFmpeg one-frame probe
 * same-directory transcoding variants are flagged as non-primary and excluded from library lists, statistics, duplicates, exports, telemetry/storage aggregates, and later scans; separate `Transcode_Output` variants remain external to primary library counts
-* connector sync and binding-recompute jobs are persisted and single-flight per connection; different connections run concurrently on a dedicated connector executor without occupying scan or maintenance workers
+* connector sync and binding-recompute jobs are persisted and single-flight per connection; different connections run on a dedicated two-worker connector executor, independent of scan concurrency and without occupying scan or maintenance workers
+* executing FFmpeg processes request background priority on POSIX and Windows, preserving an already lower priority; unsupported priority changes are best effort and do not fail jobs
 * connector sync uses connection/run-scoped staging and an atomic successful promote, while cancellation or failure preserves the last live snapshot; queued jobs are claimed atomically
 * startup cancels orphaned connector jobs and removes abandoned connector staging rows; scan changes compare pre/post root locators so additions, modifications, deletions, ignores, and renames trigger targeted connector rematching across connections
 * the migrated standard Jellyfin connection keeps the legacy users/playback/image sync active and mirrors its catalog into the provider-neutral tables with Shadow Mode counters
@@ -218,7 +219,7 @@ Actual implementation:
 
 Scan-job tracking now includes:
 
-* active-job polling
+* active-job polling; connector banners use one batched endpoint, visible idle tabs poll at 30–60 seconds and hidden tabs pause; active-job intervals remain unchanged
 * recent completed/failed/canceled scan history
 * trigger source tracking
 * trigger details
@@ -228,6 +229,7 @@ Scan-job tracking now includes:
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file
+* analysis failure reasons distinguish empty files, missing MP4 metadata, invalid containers/media, access and I/O problems, probe limits, unidentified streams, and internal processing/history errors; scan samples and file details share the classification and retain technical diagnostics
 * duplicate-processing summaries including mode, failure samples, and grouped duplicate counts
 * retention cleanup for terminal scan-job history based on the app-level `history_retention.scan_history` settings, while queued or running jobs are never pruned
 
@@ -386,6 +388,7 @@ Built-in default patterns currently target common temporary, system, and NAS-gen
 * `*.part`
 * `*.tmp`
 * `*.temp`
+* `*_temp.mp4`
 * `*thumbs.db`
 
 Ignore rules are applied during discovery against normalized library-relative paths.
@@ -468,7 +471,7 @@ The project currently uses in-process stats caching via `backend/app/services/st
 * library statistics
 * library comparison payloads keyed by library id plus selected X/Y fields
 
-Cache invalidation is tied to library changes and scan activity.
+Cache invalidation is tied to library changes and scan activity. Connector/playback mutations use a separate invalidation domain, retaining technical panel and comparison caches while expiring connector-dependent history, labels, summaries and playback statistics. Numeric comparisons aggregate exact heatmap bins in SQLite and rank only the deterministic scatter sample; other comparison rows and Storage Map source rows stream in 500-row batches.
 
 ## 7.3 File Table Search And Filtering
 
@@ -533,7 +536,7 @@ Implemented UI behavior includes:
 * collapsible settings panels
 * recent scan-log browsing and detailed scan summaries
 * duplicate-group browsing per library
-* virtualized library file table for larger datasets
+* virtualized library file table for larger datasets; ordinary and grouped result caches each retain at most 5,000 rows, without truncating the currently displayed table
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * table-column visibility and per-column tooltip customization in the settings page's `Table View` section
@@ -1175,6 +1178,7 @@ Current documented runtime configuration includes:
 * `HOST_PORT`
 * `TZ`
 * `FFPROBE_PATH`
+* `MEDIALYZE_PERFORMANCE_METRICS` (default `false`)
 * `DISABLE_DEFAULT_IGNORE_PATTERNS`
 * `PUID`
 * `PGID`
@@ -1184,6 +1188,7 @@ Additional behavior:
 * the backend defaults to serving on port `8080`
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
+* `MEDIALYZE_PERFORMANCE_METRICS=true` enables bounded in-process route/SQL/cache/queue observations at `/api/performance`; route templates are recorded without SQL text, media paths or request parameters. Each route/queue retains at most 256 samples and each metric family at most 64 labels. Response bytes represent application payloads before compression; cache counters count internal lookups, not whole-request hit rates.
 * scan concurrency is configured through the UI under App Settings and persisted in `app_settings`, including both per-scan analysis workers and parallel-library job limits
 * history retention and storage budgets are configured through the UI under App Settings and persisted in `app_settings.history_retention`
 * `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage

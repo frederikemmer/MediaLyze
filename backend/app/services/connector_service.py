@@ -276,7 +276,7 @@ def delete_connector_connection(
     refresh_preferred_connections(db)
     if commit:
         db.commit()
-        stats_cache.invalidate(str(id(db.get_bind())))
+        stats_cache.invalidate_connectors(str(id(db.get_bind())))
 
 
 def list_connector_libraries(db: Session, connection_id: int) -> list[ConnectorLibraryRead]:
@@ -556,7 +556,7 @@ def replace_connector_library_links(
     db.commit()
     refresh_preferred_connections(db)
     db.commit()
-    stats_cache.invalidate(str(id(db.get_bind())))
+    stats_cache.invalidate_connectors(str(id(db.get_bind())))
     return list_connector_libraries(db, connection_id)
 
 

@@ -18,3 +18,20 @@ def get_hidden_subprocess_kwargs() -> dict[str, Any]:
         "creationflags": subprocess.CREATE_NO_WINDOW,
         "startupinfo": startupinfo,
     }
+
+
+def lower_background_process_priority(process) -> None:
+    """Lower only the executing FFmpeg process, without unsafe fork hooks."""
+    import psutil
+
+    try:
+        target = psutil.Process(process.pid)
+        if os.name == "nt":
+            if target.nice() not in {psutil.IDLE_PRIORITY_CLASS, psutil.BELOW_NORMAL_PRIORITY_CLASS}:
+                target.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            target.nice(max(10, target.nice()))
+    except (AttributeError, OSError, psutil.Error):
+        # Restricted containers and short-lived processes may not permit it.
+        # Priority is best effort; it must never fail an otherwise valid job.
+        pass

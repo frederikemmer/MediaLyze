@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as LucideIcons from "lucide-react";
-import ReactECharts from "echarts-for-react";
+import ReactECharts from "echarts-for-react/lib/core";
 import * as echarts from "echarts/core";
 import { BarChart, HeatmapChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent, VisualMapComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
+import { useChartVisibility } from "../lib/chart-visibility";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -109,6 +110,7 @@ function ComparisonChartPanelComponent({
   availableFields = COMPARISON_FIELD_DEFINITIONS,
 }: ComparisonChartPanelProps) {
   const { t } = useTranslation();
+  const chartVisibility = useChartVisibility();
   const [menuOpen, setMenuOpen] = useState(false);
   const rendererMenuRef = useRef<HTMLDivElement | null>(null);
   const availableRenderers = comparison?.available_renderers ?? getAvailableComparisonRenderers(selection.xField, selection.yField);
@@ -564,8 +566,8 @@ function ComparisonChartPanelComponent({
       {!comparison || comparison.included_files <= 0 ? (
         <PanelEmptyState />
       ) : (
-        <div className="comparison-chart-content">
-          {option ? (
+        <div className="comparison-chart-content" ref={chartVisibility.ref} aria-busy={!chartVisibility.ready}>
+          {option ? (chartVisibility.ready ? (
             <ReactECharts
               key={resizeToken ?? "comparison-chart"}
               echarts={echarts}
@@ -579,7 +581,7 @@ function ComparisonChartPanelComponent({
                 cursor: chartCursor,
               }}
             />
-          ) : (
+          ) : null) : (
             <PanelEmptyState />
           )}
         </div>

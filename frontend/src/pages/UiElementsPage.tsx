@@ -923,11 +923,12 @@ function ScanLogFixture() {
         <div className="scan-log-summary-head">
           <div className="scan-log-summary-copy">
             <strong>Movies archive</strong>
-            <span>Incremental scan - manual trigger</span>
+            <span>Oct 1, 2026, 2:02 AM</span>
           </div>
           <div className="meta-tags">
             <span className="badge scan-log-outcome badge-completed_with_issues">Completed with issues</span>
-            <span className="scan-badge badge">incremental</span>
+            <span className="scan-badge badge">Scheduled</span>
+            <ChevronRight aria-hidden="true" className="nav-icon" />
           </div>
         </div>
         <div className="scan-log-summary-meta">
@@ -1966,7 +1967,7 @@ export function UiElementsPage() {
                           <button type="button" data-toggle-key="file" className="distribution-chart-mode-button analyzed-file-name-source-button active" aria-label="Show file names" aria-pressed="true"><span className="distribution-chart-mode-button-content"><FileText aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
                           <button type="button" data-toggle-key="jellyfin" className="distribution-chart-mode-button analyzed-file-name-source-button" aria-label="Show Jellyfin names" aria-pressed="false"><span className="distribution-chart-mode-button-content"><JellyfinIcon aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
                         </div>
-                        <button type="button" className="secondary icon-only-button statistic-layout-action-button" aria-label="Edit table view"><Settings aria-hidden="true" /></button>
+                        <button type="button" className="statistic-layout-action-button" aria-label="Edit table view"><Settings aria-hidden="true" /></button>
                         <span className="analyzed-files-count" aria-label="4 indexed entries">4</span>
                       </div>
                     </div>
@@ -2070,6 +2071,15 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard title="Statistic layout actions" source={`${dashboard} / ${libraryDetail}`} classes={["statistic-layout-controls", "statistic-layout-action-button", "statistic-layout-menu"]}>
                 <div className="page-heading-row"><House aria-hidden="true" className="page-heading-icon" /><h2>Dashboard</h2></div>
+                <StatisticPanelLayoutControls
+                  availableDefinitions={availablePanelDefinitions}
+                  isEditing={false}
+                  onStartEditing={() => undefined}
+                  onCancelEditing={() => undefined}
+                  onRestoreDefault={() => undefined}
+                  onSaveEditing={() => undefined}
+                  onAddPanel={() => undefined}
+                />
                 <StatisticPanelLayoutControls
                   availableDefinitions={availablePanelDefinitions}
                   isEditing
@@ -2288,7 +2298,7 @@ export function UiElementsPage() {
                   />
                 </AsyncPanel>
               </VariantCard>
-              <VariantCard title="Distribution chart panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
+              <VariantCard title="Distribution chart panel" status="The shared modular chart mounts within 300px of the viewport; its existing panel and controls remain visible while deferred; min-width: 0 allows the mounted canvas to shrink with the panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
                 <DistributionChartPanel title="Quality score" distribution={numericDistribution} metricId="quality_score" />
               </VariantCard>
               <VariantCard title="Connected library history controls · separate groups" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "distribution-chart-mode-pill", "library-history-toolbar", "library-history-picker-button"]} wide>
@@ -2321,7 +2331,7 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Comparison chart panel with connected rectangular controls" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
+              <VariantCard title="Comparison chart panel with connected rectangular controls" status="Heatmap, scatter and bar use modular ECharts and mount within 300px of the viewport; existing controls remain available; min-width: 0 keeps canvas resizing responsive" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
                 <ComparisonChartFixture />
               </VariantCard>
             </VariantGroup>
@@ -2351,7 +2361,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
                 <div className="transcoding-center-panel">
                   <div className="transcoding-center-header">
                     <div className="transcoding-center-heading">

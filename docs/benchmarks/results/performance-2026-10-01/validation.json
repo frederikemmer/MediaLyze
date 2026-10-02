@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "backend_passed": 723,
+    "frontend_passed": 515
+  },
+  "after": {
+    "native_backend_passed": 739,
+    "native_backend_warnings": 3,
+    "frontend_passed": 520,
+    "frontend_files": 49,
+    "docker_backend_passed": 739,
+    "docker_backend_warnings": 2,
+    "docker_memory_bytes": 536870912,
+    "docker_swap": false,
+    "responsive_targeted_passed": 30,
+    "production_build": "passed",
+    "diff_check": "passed",
+    "browser_chart_combinations": 12,
+    "browser_history_combinations": 4
+  },
+  "notes": [
+    "Full native suites ran before the final three min-width CSS additions; targeted frontend checks and the production build passed afterward.",
+    "Full Linux Docker backend suite ran after all source changes.",
+    "Timing benchmarks were sequential and separate from tests/builds."
+  ]
+}

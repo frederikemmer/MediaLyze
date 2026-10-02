@@ -1,0 +1,45 @@
+[
+  {
+    "language": "de",
+    "localeChunks": [
+      "common-BIkQSeqp.js"
+    ],
+    "title": "UI-Elemente"
+  },
+  {
+    "language": "es",
+    "localeChunks": [
+      "common-DY1CbdZ5.js"
+    ],
+    "title": "Elementos de interfaz"
+  },
+  {
+    "language": "uk",
+    "localeChunks": [
+      "common-B3Idn5ka.js"
+    ],
+    "title": "UI-\u0435\u043b\u0435\u043c\u0435\u043d\u0442\u0438"
+  },
+  {
+    "language": "en",
+    "localeChunks": [],
+    "title": "UI elements"
+  },
+  {
+    "distribution": [
+      {
+        "width": 246,
+        "height": 100
+      }
+    ]
+  },
+  {
+    "speed": [
+      {
+        "width": "327",
+        "height": "30",
+        "paths": 3
+      }
+    ]
+  }
+]

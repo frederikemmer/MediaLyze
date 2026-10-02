@@ -1,0 +1,54 @@
+[
+  {
+    "theme": "light",
+    "width": 1280,
+    "chart_width": 1190,
+    "panel_width": 1190,
+    "canvases": [
+      {
+        "width": 1190,
+        "height": 400,
+        "painted": true
+      }
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "chart_width": 1190,
+    "panel_width": 1190,
+    "canvases": [
+      {
+        "width": 1190,
+        "height": 400,
+        "painted": true
+      }
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "chart_width": 313.5,
+    "panel_width": 313.5,
+    "canvases": [
+      {
+        "width": 314,
+        "height": 390,
+        "painted": true
+      }
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "chart_width": 313.5,
+    "panel_width": 313.5,
+    "canvases": [
+      {
+        "width": 314,
+        "height": 390,
+        "painted": true
+      }
+    ]
+  }
+]
