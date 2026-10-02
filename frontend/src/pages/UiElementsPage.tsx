@@ -1,3 +1,4 @@
+import { TableQualityScore } from "../components/TableQualityScore";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { releaseVisibility } from "../lib/release-visibility";
@@ -406,20 +407,6 @@ function Badge({ children, className = "badge" }: { children: ReactNode; classNa
   return <span className={className}>{children}</span>;
 }
 
-function ScoreMeter({ value }: { value: number }) {
-  return (
-    <div className="score-cell">
-      <strong>{value}</strong>
-      <span className="score-meter">
-        <span
-          className={`score-meter-fill ${value >= 85 ? "score-meter-fill-high" : value >= 65 ? "score-meter-fill-medium" : "score-meter-fill-low"}`}
-          style={{ width: `${value}%` }}
-        />
-      </span>
-    </div>
-  );
-}
-
 function AnalyzedFilesTable() {
   const rows = [
     { file: "Movies/Arrival.2016.mkv", container: "mkv", codec: "HEVC", quality: 91, size: "18.4 GB" },
@@ -451,7 +438,7 @@ function AnalyzedFilesTable() {
               <div className="media-data-cell">{row.container}</div>
               <div className="media-data-cell">{row.codec}</div>
               <div className="media-data-cell">
-                <ScoreMeter value={row.quality} />
+                <TableQualityScore score={row.quality / 10} />
               </div>
               <div className="media-data-cell">{row.size}</div>
             </div>
@@ -2170,7 +2157,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[6]}>
             <VariantGroup title="Table surfaces">
-              <VariantCard title="Analyzed files virtual table" source={`${libraryDetail} > Analyzed files`} classes={["data-table-shell", "media-data-table", "score-meter"]} wide>
+              <VariantCard title="Analyzed files virtual table" source={`${libraryDetail} > Analyzed files`} classes={["data-table-shell", "media-data-table", "score-cell", "table-quality-score-value"]} wide>
                 <div className="data-table-tools">
                   <div className="column-picker">
                     <button type="button" className="column-toggle is-active"><Columns3 className="nav-icon" /> Container</button>
@@ -2180,6 +2167,18 @@ export function UiElementsPage() {
                   </div>
                 </div>
                 <AnalyzedFilesTable />
+              </VariantCard>
+              <VariantCard title="Grouped series and season labels" source={`${libraryDetail} > grouped analyzed files`} classes={["media-tree-cell-button", "media-tree-title", "table-quality-score-value"]} wide>
+                <div className="data-table-shell"><div className="media-data-table" role="table" aria-label="Grouped series example">
+                  {[{ title: "Example series with a long name", level: 0 }, { title: "Season 01", level: 1 }, { title: "Episode 01.mkv", level: 2 }].map(({ title, level }) => (
+                    <div key={title} className={`media-data-row media-data-body-row is-static-row${level < 2 ? " is-group-row" : ""}`} role="row" style={{ gridTemplateColumns: "minmax(0, 1fr) 120px" }}>
+                      <div className={`media-data-cell is-sticky${level < 2 ? " is-group-cell" : ""}`} role="cell">
+                        {level < 2 ? <button type="button" className="media-tree-cell-button" aria-expanded="true"><span className={`media-tree-indent media-tree-indent-${level}`} /><ChevronDown className="nav-icon" /><span className="media-tree-copy"><strong className="media-tree-title">{title}</strong></span></button> : <span className="file-link">{title}</span>}
+                      </div>
+                      <div className="media-data-cell" role="cell"><TableQualityScore score={level === 0 ? 3 : level === 1 ? 6 : 8} /></div>
+                    </div>
+                  ))}
+                </div></div>
               </VariantCard>
               <VariantCard
                 title="Resolution category title actions"

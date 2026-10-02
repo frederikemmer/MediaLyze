@@ -49,6 +49,7 @@ import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPane
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
+import { TableQualityScore } from "../components/TableQualityScore";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { shouldShowField } from "../lib/media-fields-catalog";
@@ -670,16 +671,6 @@ function formatGroupedQualityScore(score: number | null, t: (key: string, option
   return Number.isInteger(rounded) ? `${rounded.toFixed(0)}/10` : `${rounded.toFixed(1)}/10`;
 }
 
-function scoreMeterLabel(score: number): string {
-  if (score <= 3) {
-    return "low";
-  }
-  if (score <= 6) {
-    return "medium";
-  }
-  return "high";
-}
-
 function sortIndicator(direction: SortDirection): string {
   return direction === "asc" ? "↑" : "↓";
 }
@@ -816,7 +807,7 @@ export function buildFileColumns(
   loadQualityDetail: (fileId: number) => void,
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
-  hideQualityScoreMeter: boolean,
+  _hideQualityScoreMeter: boolean,
   libraryType?: string | null,
   inDepthDolbyVisionProfiles = false,
   fileNameSource: AnalyzedFileNameSource = "file",
@@ -1313,32 +1304,12 @@ export function buildFileColumns(
             content={buildQualityTooltipContent(qualityDetailCache[row.id], Boolean(qualityDetailLoading[row.id]), t)}
             onOpen={() => loadQualityDetail(row.id)}
           >
-            <div className="score-cell">
-              <strong>{row.quality_score}/10</strong>
-              {hideQualityScoreMeter ? null : (
-                <div className="score-meter" aria-hidden="true">
-                  <span
-                    className={`score-meter-fill score-meter-fill-${scoreMeterLabel(row.quality_score)}`}
-                    style={{ width: `${Math.max(0, Math.min(10, row.quality_score)) * 10}%` }}
-                  />
-                </div>
-              )}
-            </div>
+            <TableQualityScore score={row.quality_score} />
           </TooltipTrigger>
         ) : isGroupedAnalyzedFilesRow(row) ? (
-          <strong>{formatGroupedQualityScore(row.metrics.quality_score, t)}</strong>
+          <TableQualityScore score={row.metrics.quality_score} emptyLabel={t("fileTable.na")} />
         ) : (
-          <div className="score-cell">
-            <strong>{row.quality_score}/10</strong>
-            {hideQualityScoreMeter ? null : (
-              <div className="score-meter" aria-hidden="true">
-                <span
-                  className={`score-meter-fill score-meter-fill-${scoreMeterLabel(row.quality_score)}`}
-                  style={{ width: `${Math.max(0, Math.min(10, row.quality_score)) * 10}%` }}
-                />
-              </div>
-            )}
-          </div>
+          <TableQualityScore score={row.quality_score} />
         )
       ),
     },

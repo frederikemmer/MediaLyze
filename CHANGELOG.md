@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- Replace table quality-score bars with colored score numbers and align series/season labels to the left at the file-name size.
+
 - Reduce memory and latency for transcoding job lists, numeric comparison charts and Storage Map aggregation; preserve technical statistics caches across connector updates.
 - Load modular chart renderers and interface languages on demand, defer offscreen chart rendering, bound file-table result caches, and batch/adapt job polling with hidden-tab suspension.
 - Separate connector concurrency from scan limits, lower executing FFmpeg process priority, and add optional bounded API/SQL/cache/queue performance observations through `MEDIALYZE_PERFORMANCE_METRICS`.

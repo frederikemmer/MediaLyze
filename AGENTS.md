@@ -586,6 +586,11 @@ Frontend design decision history:
 * Each entry should include the decision, rationale, canonical implementation and catalog references, deprecated selectors or patterns, migration scope, status, and remaining intentional exceptions.
 * Update the entry when the canonical pattern or migration status changes. The history must not keep legacy CSS alive; after migration, retain only identifiers needed to explain intentional exceptions.
 
+### 2026-10-02 — Compact table scores and left-aligned media groups
+
+* Decision: table quality scores show a colored numerator with a neutral `/10`, without a meter or a user-facing meter toggle. Series and season buttons align left, inherit file-name font size, and center labels vertically beside the chevron.
+* Canonical references: `TableQualityScore.tsx`, `.media-tree-cell-button`, and the analyzed-files/grouped-series catalog entries in `UiElementsPage.tsx`. Migration: ordinary and grouped library rows, file-comparison scores, and catalog fixtures; meter selectors retired. The stored `hide_quality_score_meter` flag remains for configuration compatibility. Status: active.
+
 ### 2026-09-30 — Overlay transcoding metrics on the speed graph
 
 * Decision: progress, time remaining, and speed share the 30px graph area instead of adding a separate metrics row. The phase overlays the progress bar in the same small muted type as metric labels, with a white backdrop that interrupts the thin 6px bar behind the centered label, keeping the summary near the density of adjacent target columns.
