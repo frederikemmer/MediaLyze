@@ -15,7 +15,8 @@ import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
 import { DistributionList } from "../components/DistributionList";
-import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
+import { historyQuery } from "../lib/history-query";
+import { LibraryHistoryPanel, readHistoryRangeSelection } from "../components/LibraryHistoryPanel";
 import { StatCard } from "../components/StatCard";
 import { StatisticPanelLayoutControls } from "../components/StatisticPanelLayoutControls";
 import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPanelLayoutMigrationNotice";
@@ -228,12 +229,14 @@ export function DashboardPage() {
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
     readDashboardHistoryPanelCollapsedPreference(),
   );
+  const [historyRange, setHistoryRange] = useState(() => readHistoryRangeSelection(DASHBOARD_HISTORY_RANGE_STORAGE_KEY));
   const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
     readDashboardHistoryMetricPreference(),
   );
   const { hasActiveJobs } = useScanJobs();
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
+  const historyQueryRef = useRef<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
   const activeLayout = isEditingLayout ? draftLayout : savedLayout;
   const visiblePanels = useMemo(
@@ -318,10 +321,17 @@ export function DashboardPage() {
     } else {
       setIsHistoryRefreshing(true);
     }
+    const queryKey = JSON.stringify(historyQuery(selectedHistoryMetric, historyRange));
+    if (historyQueryRef.current !== queryKey) {
+      setDashboardHistory(null);
+      setIsHistoryLoading(true);
+    }
+    historyQueryRef.current = queryKey;
     setHistoryError(null);
 
     try {
-      const payload = await api.dashboardHistory(controller.signal);
+      const payload = await api.dashboardHistory(controller.signal, historyQuery(selectedHistoryMetric, historyRange));
+      if (controller.signal.aborted) return;
       setDashboardHistory(payload);
       writeDashboardHistoryCache(payload);
       setHistoryError(null);
@@ -333,11 +343,8 @@ export function DashboardPage() {
     } finally {
       if (historyAbortRef.current === controller) {
         historyAbortRef.current = null;
-        if (showLoading) {
-          setIsHistoryLoading(false);
-        } else {
-          setIsHistoryRefreshing(false);
-        }
+        setIsHistoryLoading(false);
+        setIsHistoryRefreshing(false);
       }
     }
   });
@@ -346,7 +353,7 @@ export function DashboardPage() {
     const hasCachedHistory = dashboardHistory !== null;
     setIsHistoryLoading(!hasCachedHistory);
     void loadDashboardHistory(!hasCachedHistory);
-  }, []);
+  }, [selectedHistoryMetric, historyRange]);
 
   useEffect(() => {
     const nextLayoutResult = getStatisticPanelLayoutReadResult("dashboard", DASHBOARD_LAYOUT_KEY, layoutOptions);
@@ -716,6 +723,7 @@ export function DashboardPage() {
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
                   title={t("dashboard.history.title")}
                   emptyMessage={t("dashboard.history.empty")}
+                  onRangeChange={setHistoryRange}
                   rangeStorageKey={DASHBOARD_HISTORY_RANGE_STORAGE_KEY}
                   bodyId="dashboard-history-panel-body"
                   inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}

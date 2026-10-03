@@ -87,8 +87,11 @@ def _count_distinct_normalized_languages(
     fallback: str = "und",
 ) -> list[tuple[str, int]]:
     values_by_file: dict[int, set[str]] = {}
+    normalized_values: dict[str | None, str] = {}
     for media_file_id, raw_value in rows:
-        values_by_file.setdefault(media_file_id, set()).add(normalize_language_code(raw_value) or fallback)
+        if raw_value not in normalized_values:
+            normalized_values[raw_value] = normalize_language_code(raw_value) or fallback
+        values_by_file.setdefault(media_file_id, set()).add(normalized_values[raw_value])
 
     counts: dict[str, int] = {}
     for values in values_by_file.values():
@@ -155,6 +158,21 @@ def build_dashboard(
             complete = stats_cache.get_dashboard(cache_key)
             if complete is not None:
                 return _dashboard_panel_view(complete, panel_filter)
+        if panel_key is not None and len(panel_key) > 1:
+            # Singleton panel keys reuse work across overlapping saved layouts.
+            def assemble():
+                base = build_dashboard(db, [])
+                updates = {}
+                numeric = {}
+                for panel in panel_key:
+                    part = build_dashboard(db, [panel])
+                    if panel in _DISTRIBUTION_FIELD_BY_PANEL:
+                        field = _DISTRIBUTION_FIELD_BY_PANEL[panel]
+                        updates[field] = getattr(part, field)
+                    numeric.update(part.numeric_distributions)
+                updates["numeric_distributions"] = numeric
+                return base.model_copy(update=updates)
+            return stats_cache.get_or_compute_dashboard(cache_key, panel_key, assemble)
         return stats_cache.get_or_compute_dashboard(
             cache_key,
             panel_key,
@@ -171,7 +189,8 @@ def build_dashboard(
     )
     app_settings = get_app_settings(db)
     dashboard_library_ids = select(Library.id).where(Library.show_on_dashboard.is_(True))
-    totals = {
+    cached_base = stats_cache.get_dashboard(cache_key, ()) if panel_key else None
+    totals = cached_base.totals if cached_base else {
         "libraries": db.scalar(select(func.count(Library.id)).where(Library.show_on_dashboard.is_(True))) or 0,
         "files": db.scalar(select(func.count(MediaFile.id)).where(MediaFile.library_id.in_(dashboard_library_ids), MediaFile.is_transcode_variant.is_(False))) or 0,
         "storage_bytes": (

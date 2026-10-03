@@ -220,7 +220,7 @@ from backend.app.services.duplicates import (
 )
 from backend.app.services.history_storage import get_cached_history_storage
 from backend.app.services.history_retention import has_active_scan_jobs
-from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+from backend.app.services.library_history_service import HISTORY_METRICS, get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -513,9 +513,26 @@ def dashboard(
     return build_dashboard(db, requested_panels=_normalize_panel_query(panels))
 
 
+def _history_query(metric, start, end, days):
+    from datetime import date
+    if metric is not None and metric not in HISTORY_METRICS:
+        raise HTTPException(status_code=422, detail="Unknown history metric")
+    try:
+        for value in (start, end):
+            if value is not None and date.fromisoformat(value).isoformat() != value:
+                raise ValueError()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="History dates must use YYYY-MM-DD")
+    if (start and end and start > end) or (days is not None and (start or end)):
+        raise HTTPException(status_code=422, detail="Invalid history range")
+    return dict(metric=metric, start=start, end=end, days=days)
+
+
 @router.get("/dashboard/history", response_model=DashboardHistoryResponse)
-def dashboard_history(db: Session = Depends(get_db_session)) -> DashboardHistoryResponse:
-    return get_dashboard_history(db)
+def dashboard_history(db: Session = Depends(get_db_session), metric: str | None = None,
+                      start: str | None = None, end: str | None = None,
+                      days: int | None = Query(default=None, ge=1, le=36500)) -> DashboardHistoryResponse:
+    return get_dashboard_history(db, **_history_query(metric, start, end, days))
 
 
 @router.get("/dashboard/comparison", response_model=ComparisonResponse)
@@ -2144,8 +2161,10 @@ def library_duplicate_suppression_delete(
 
 
 @router.get("/libraries/{library_id}/history", response_model=LibraryHistoryResponse)
-def library_history(library_id: int, db: Session = Depends(get_db_session)) -> LibraryHistoryResponse:
-    payload = get_library_history(db, library_id)
+def library_history(library_id: int, db: Session = Depends(get_db_session), metric: str | None = None,
+                    start: str | None = None, end: str | None = None,
+                    days: int | None = Query(default=None, ge=1, le=36500)) -> LibraryHistoryResponse:
+    payload = get_library_history(db, library_id, **_history_query(metric, start, end, days))
     if payload is None:
         raise HTTPException(status_code=404, detail="Library not found")
     return payload

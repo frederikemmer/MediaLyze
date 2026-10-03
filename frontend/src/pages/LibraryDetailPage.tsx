@@ -39,7 +39,8 @@ import { EyeOffIcon } from "../components/EyeOffIcon";
 import { FolderInputIcon } from "../components/FolderInputIcon";
 import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
-import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
+import { historyQuery } from "../lib/history-query";
+import { LibraryHistoryPanel, readHistoryRangeSelection } from "../components/LibraryHistoryPanel";
 import { JellyfinIcon } from "../components/JellyfinIcon";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -1663,6 +1664,7 @@ export function LibraryDetailPage() {
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
     readHistoryPanelCollapsedPreference(libraryId),
   );
+  const [historyRange, setHistoryRange] = useState(() => readHistoryRangeSelection(HISTORY_RANGE_STORAGE_KEY));
   const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
     readHistoryMetricPreference(),
   );
@@ -2101,6 +2103,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const historyQueryRef = useRef<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
@@ -2334,10 +2337,17 @@ export function LibraryDetailPage() {
     } else {
       setIsHistoryRefreshing(true);
     }
+    const queryKey = JSON.stringify([libraryId, historyQuery(selectedHistoryMetric, historyRange)]);
+    if (historyQueryRef.current !== queryKey) {
+      setLibraryHistory(null);
+      setIsHistoryLoading(true);
+    }
+    historyQueryRef.current = queryKey;
     setHistoryError(null);
 
     try {
-      const payload = await api.libraryHistory(libraryId, controller.signal);
+      const payload = await api.libraryHistory(libraryId, controller.signal, historyQuery(selectedHistoryMetric, historyRange));
+      if (controller.signal.aborted) return;
       libraryHistoryCache.set(libraryId, payload);
       writeLibrarySessionCache("history", libraryId, payload);
       setLibraryHistory(payload);
@@ -2350,11 +2360,8 @@ export function LibraryDetailPage() {
     } finally {
       if (historyAbortRef.current === controller) {
         historyAbortRef.current = null;
-        if (showLoading) {
-          setIsHistoryLoading(false);
-        } else {
-          setIsHistoryRefreshing(false);
-        }
+        setIsHistoryLoading(false);
+        setIsHistoryRefreshing(false);
       }
     }
   });
@@ -2958,8 +2965,11 @@ export function LibraryDetailPage() {
     setIsHistoryRefreshing(false);
 
     void loadLibrarySummary(cachedSummary === null);
-    void loadLibraryHistory(cachedHistory === null);
   }, [libraryId]);
+
+  useEffect(() => {
+    void loadLibraryHistory(true);
+  }, [libraryId, selectedHistoryMetric, historyRange]);
 
   useEffect(() => {
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, includeSuppressedDuplicateGroups);
@@ -3799,6 +3809,7 @@ export function LibraryDetailPage() {
                   collapsed={isHistoryPanelCollapsed}
                   onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  onRangeChange={setHistoryRange}
                   rangeStorageKey={HISTORY_RANGE_STORAGE_KEY}
                   bodyId={`library-history-panel-body-${panel.item.instanceId}`}
                   inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}

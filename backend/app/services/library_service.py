@@ -283,8 +283,11 @@ def _count_distinct_normalized_languages(
     fallback: str = "und",
 ) -> list[tuple[str, int]]:
     values_by_file: dict[int, set[str]] = defaultdict(set)
+    normalized_values: dict[str | None, str] = {}
     for media_file_id, raw_value in rows:
-        values_by_file[media_file_id].add(normalize_language_code(raw_value) or fallback)
+        if raw_value not in normalized_values:
+            normalized_values[raw_value] = normalize_language_code(raw_value) or fallback
+        values_by_file[media_file_id].add(normalized_values[raw_value])
 
     counts: dict[str, int] = defaultdict(int)
     for values in values_by_file.values():
@@ -812,6 +815,22 @@ def get_library_statistics(
             complete = stats_cache.get_library_statistics(cache_key, library_id)
             if complete is not None:
                 return _statistics_panel_view(complete, panel_filter, hidden_panel_ids)
+        if panel_key is not None and len(panel_key) > 1:
+            def assemble():
+                base = get_library_statistics(db, library_id, [])
+                if base is None:
+                    return None
+                updates = {}
+                numeric = {}
+                for panel in panel_key:
+                    part = get_library_statistics(db, library_id, [panel])
+                    if panel in _DISTRIBUTION_FIELD_BY_PANEL:
+                        field = _DISTRIBUTION_FIELD_BY_PANEL[panel]
+                        updates[field] = getattr(part, field)
+                    numeric.update(part.numeric_distributions)
+                updates["numeric_distributions"] = numeric
+                return base.model_copy(update=updates)
+            return stats_cache.get_or_compute_library_statistics(cache_key, library_id, panel_key, assemble)
         return stats_cache.get_or_compute_library_statistics(
             cache_key,
             library_id,

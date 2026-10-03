@@ -480,6 +480,14 @@ The project currently uses in-process stats caching via `backend/app/services/st
 
 Cache invalidation is tied to library changes and scan activity. Connector/playback mutations use a separate invalidation domain, retaining technical panel and comparison caches while expiring connector-dependent history, labels, summaries and playback statistics. Numeric comparisons aggregate exact heatmap bins in SQLite and rank only the deterministic scatter sample; other comparison rows and Storage Map source rows stream in 500-row batches.
 
+Additional performance contracts:
+
+* Dashboard/library history accepts optional `metric`, `days` (relative to the newest usable snapshot), or ISO `start`/`end`; no parameters retain the complete timeline contract. Query keys include every selection and range, and range-picker bounds describe the complete usable timeline. SQLite projects unrequested histogram/category keys and snapshots stream in bounded batches; request-local bounded pools share identical numeric distributions.
+* Overlapping dashboard/library panel selections reuse singleton panel caches; connector-dependent panels retain their separate invalidation domain. Cache namespaces have an estimated 8 MiB model-graph weight budget in addition to entry/TTL bounds; oversized values are returned but not retained.
+* Collapsed grouped series use normalized SQL aggregates and a matched-file playback sum; only loose files and explicitly expanded children load table rows.
+* `media_file_history.snapshot` retains its dict/API contract through `CompressedHistoryJSON`, with versioned, integrity-checked Zlib/base64 envelopes for compressible snapshots. Library history stays ordinary JSON for SQLite projection. Minute maintenance admits at most 200 records per pass with a time budget checked between records, pauses during scan/transcode work, and commits a resumable ID cursor in `app_settings`; hashes, timestamps, IDs and logical retention estimates remain unchanged. Old binaries need the documented offline JSON restore helper before downgrade. Conversion frees reusable SQLite pages without forcing a database-wide VACUUM.
+* Vite compresses final written JS/CSS assets with Brotli/Gzip after chunk rewriting. The backend negotiates encodings, retains MIME types and immutable caching, varies by `Accept-Encoding`, and preserves original range responses. Build verification decompresses every sidecar and compares exact source bytes.
+
 ## 7.3 File Table Search And Filtering
 
 Library file browsing now supports structured search and field-specific filtering.

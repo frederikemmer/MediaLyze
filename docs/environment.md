@@ -70,7 +70,7 @@ services:
 | `DISABLE_DEFAULT_IGNORE_PATTERNS` | `false` | When `true`, do not seed the built-in ignore patterns on a new installation. |
 | `TELEMETRY_TIMEOUT_SECONDS` | `2` | Timeout for the optional telemetry request. |
 | `ALLOWED_MEDIA_EXTENSIONS` | built-in video extensions | Legacy/general settings allow-list. Current type-aware scans use the `VIDEO_EXTENSIONS` and `AUDIO_EXTENSIONS` constants via `get_allowed_media_extensions`; this variable does not override those per-type sets. See [discovery rules](patterns.md). |
-| `MEDIALYZE_PERFORMANCE_METRICS` | `false` | Enables bounded, in-process API/SQL/cache/queue measurements and `/api/performance`. This is local diagnostic data, separate from opt-in telemetry. See [performance observations](benchmarks/performance-report.md#diagnose-und-reproduktion). |
+| `MEDIALYZE_PERFORMANCE_METRICS` | `false` | Enables bounded, in-process API/SQL/cache/queue measurements and `/api/performance`. This is local diagnostic data, separate from opt-in telemetry. |
 | `SUBTITLE_EXTENSIONS` | `.srt`, `.ass`, `.ssa`, `.sub`, `.idx` | Advanced JSON array override for recognized sidecar subtitle extensions. |
 | `TZ` | image/host timezone | Process and scheduler timezone, for example `Europe/Berlin`. |
 

@@ -36,8 +36,6 @@ On Linux or macOS, use `.venv/bin/python` and forward slashes in the paths. Star
 
 The query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
 
-The [2026-10-01 performance report](benchmarks/performance-report.md) documents these workloads, raw results, resource limits, and opt-in observations.
-
 ## Options and interpretation
 
 - `--items` controls the synthetic catalog or file count. The file-query and statistics benchmarks default to 100,000 entries; the scan benchmark defaults to 2,000 files; the duplicate benchmark defaults to 10,000 files.
@@ -58,6 +56,4 @@ The scan and startup-memory scripts report peak Python allocations as well as el
 
 The transcoding capability matrix measures tested hardware paths and practical parallel capacity separately. These database and filesystem scripts do not estimate real CPU/GPU transcoding speed.
 
-The [Issue #184 resilience comparison](benchmarks/issue-184-resilience.md) records before/after memory and runtime samples, result parity, native tests, and subsequent memory-limited Docker validation. All report timings and test counts are historical snapshots, not current CI results.
-
-[Cancellation, RAM scheduling and maintenance follow-up](benchmarks/issue-184-followup.md) includes separate before/after timing, final Linux Docker tests and UX consequences.
+The six backend/asset follow-up optimizations have raw comparison results in [the results directory](benchmarks/results/). Reproduce with `.venv/bin/python docs/benchmarks/benchmark_nas_followup.py --output /tmp/followup.json` and, after `cd frontend && npm run build`, run `node docs/benchmarks/verify_static_assets.mjs` from the repository root. These workloads use temporary synthetic databases and do not open NAS data.

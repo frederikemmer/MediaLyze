@@ -1,5 +1,8 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import mimetypes
+import stat as file_stat
+from starlette.concurrency import run_in_threadpool
 import logging
 
 from fastapi import FastAPI
@@ -64,7 +67,28 @@ class JsonGZipMiddleware:
 
 class ImmutableAssetStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
+        # Resolve through StaticFiles first, retaining its traversal/symlink checks.
         response = await super().get_response(path, scope)
+        if response.status_code in (200, 304) and path.endswith((".js", ".css")) and not Headers(scope=scope).get("range"):
+            qualities = {}
+            for token in Headers(scope=scope).get("accept-encoding", "").lower().split(","):
+                parts = token.strip().split(";")
+                try:
+                    qualities[parts[0]] = float(next((p.strip()[2:] for p in parts[1:] if p.strip().startswith("q=")), "1"))
+                except ValueError:
+                    qualities[parts[0]] = 0
+            for encoding, suffix in sorted((("br", ".br"), ("gzip", ".gz")),
+                                            key=lambda item: qualities.get(item[0], qualities.get("*", 0)), reverse=True):
+                if qualities.get(encoding, qualities.get("*", 0)) <= 0:
+                    continue
+                full_path, stat = await run_in_threadpool(self.lookup_path, path + suffix)
+                if stat is not None and file_stat.S_ISREG(stat.st_mode):
+                    response = self.file_response(full_path, stat, scope)
+                    response.headers["Content-Encoding"] = encoding
+                    response.headers["Content-Type"] = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                    break
+        if path.endswith((".js", ".css")):
+            response.headers["Vary"] = "Accept-Encoding"
         response.headers["Cache-Control"] = ASSET_CACHE_CONTROL
         return response
 

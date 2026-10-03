@@ -7,7 +7,7 @@ from sqlalchemy import JSON, Boolean, Enum as SqlEnum, Float, ForeignKey, Index,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
-from backend.app.db.types import UTCDateTime
+from backend.app.db.types import UTCDateTime, CompressedHistoryJSON
 from backend.app.services.quality import default_quality_profile
 from backend.app.utils.time import utc_now
 
@@ -1807,7 +1807,7 @@ class MediaFileHistory(Base):
         nullable=False,
     )
     snapshot_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    snapshot: Mapped[dict] = mapped_column(CompressedHistoryJSON(), default=dict, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="media_file_history_entries")
 

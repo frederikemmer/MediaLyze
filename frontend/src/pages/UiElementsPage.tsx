@@ -90,6 +90,7 @@ import {
 import { AnimatedConnectIcon } from "../components/AnimatedConnectIcon";
 import { AnimatedSearchIcon } from "../components/AnimatedSearchIcon";
 import { TranscodeProgressSummary } from "../components/TranscodeProgressSummary";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
@@ -2139,6 +2140,9 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard title="Statistic layout edit overlay" source={`${dashboard} > Layout editor`} classes={["statistic-layout-grid", "statistic-layout-overlay", "statistic-layout-size-button"]} wide>
                 <StatisticLayoutFixture />
+              </VariantCard>
+              <VariantCard title="History metric and range loading" source="components/LibraryHistoryPanel.tsx / lib/history-query.ts" status="Changing metric or range fetches only that history slice; background refresh retains the chart." classes={["library-history-panel", "panel-loader"]} wide>
+                <LibraryHistoryPanel history={null} loading selectedMetric="resolution_mix" onChangeMetric={() => {}} collapsed={false} onToggleCollapsed={() => {}} currentResolutionCategoryIds={["1080p"]} rangeStorageKey="medialyze-catalog-history-range" />
               </VariantCard>
               <VariantCard title="Migration notice" source={`${dashboard} / ${libraryDetail} > Saved layouts`} classes={["statistic-layout-migration-notice", "notice"]}>
                 <StatisticPanelLayoutMigrationNotice

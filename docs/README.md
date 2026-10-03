@@ -53,10 +53,7 @@ These documents have a different status from current user instructions:
 - [Connector UI roadmap](connector-ui-deferred.md): remaining diagnostics and provider work; distinguishes already restored assignment/mapping UI from backlog. Plex is still disabled.
 - [Unreleased transcoding notes](internal/unreleased-transcoding.md): retained automation-rule and Federation implementations hidden by the frontend release switches. UI visibility does not disable backend APIs; Federation also requires persisted opt-in and its process gate.
 - [Performance implementation plan](performance-plan.md): completed plan from 2026-10-01, including deliberately deferred extensions.
-- [Performance report](benchmarks/performance-report.md): historical measurements, validation scope, raw-result links, and opt-in `/api/performance` observations.
-- [Issue #184 resilience report](benchmarks/issue-184-resilience.md): initial memory/scan fixes and Docker follow-up.
-- [Issue #184 follow-up](benchmarks/issue-184-followup.md): cancellation, RAM admission, startup retention, and maintenance measurements.
-- [Raw benchmark results](benchmarks/results/): JSON evidence tied to the reports and their recorded source/environment snapshots. Old test counts are not current-suite claims.
+- [Raw benchmark results](benchmarks/results/): Historical JSON measurements with recorded environment metadata where available. Old test counts are not current-suite claims.
 - [Changelog](../CHANGELOG.md): release notes and accumulated `vUnreleased` work. Consult GitHub releases for publication chronology.
 
 ## Machine-readable contracts and assets

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from threading import Event, Lock
 from time import monotonic
 from typing import Generic, TypeVar
+from sys import getsizeof
+from pydantic import BaseModel
 
 from backend.app.services.performance import performance_metrics
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonRendererId, ComparisonResponse
@@ -16,6 +18,7 @@ from backend.app.schemas.storage_map import LibraryStorageMapRead
 
 CacheValue = TypeVar("CacheValue")
 PanelCacheKey = tuple[str, ...] | None
+HistoryQueryKey = tuple[str | None, str | None, str | None, int | None] | None
 
 
 @dataclass
@@ -29,6 +32,29 @@ class _InFlight(Generic[CacheValue]):
 class _CacheEntry(Generic[CacheValue]):
     value: CacheValue
     expires_at: float
+    weight: int
+
+
+# Upper bound per namespace, in addition to its entry limit. Count the model
+# graph, not just encoded JSON, so huge history/scatter values cannot dominate RAM.
+CACHE_NAMESPACE_BYTES = 8 * 1024 * 1024
+
+
+def _payload_weight(value, seen=None):
+    seen = set() if seen is None else seen
+    if id(value) in seen:
+        return 0
+    seen.add(id(value))
+    size = getsizeof(value)
+    if isinstance(value, BaseModel):
+        size += _payload_weight(value.__dict__, seen)
+    elif isinstance(value, (dict, list, tuple, set)):
+        children = (part for item in value.items() for part in item) if isinstance(value, dict) else value
+        for child in children:
+            size += _payload_weight(child, seen)
+            if size > CACHE_NAMESPACE_BYTES:
+                break
+    return size
 
 
 def _get_cached(cache: OrderedDict, key):
@@ -48,14 +74,18 @@ def _get_cached(cache: OrderedDict, key):
     return entry.value
 
 
-def _set_cached(cache: OrderedDict, key, value, *, limit: int, ttl_seconds: float) -> None:
+def _set_cached(cache: OrderedDict, key, value, *, limit: int, ttl_seconds: float, weight: int | None = None) -> None:
     now = monotonic()
     for expired_key, entry in list(cache.items()):
         if entry.expires_at <= now:
             cache.pop(expired_key, None)
-    cache[key] = _CacheEntry(value=value, expires_at=now + ttl_seconds)
+    weight = _payload_weight(value) if weight is None else weight
+    if weight > CACHE_NAMESPACE_BYTES:
+        cache.pop(key, None)
+        return
+    cache[key] = _CacheEntry(value=value, expires_at=now + ttl_seconds, weight=weight)
     cache.move_to_end(key)
-    while len(cache) > limit:
+    while len(cache) > limit or sum(entry.weight for entry in cache.values()) > CACHE_NAMESPACE_BYTES:
         cache.popitem(last=False)
 
 
@@ -87,14 +117,14 @@ class StatsCache:
     def __init__(self) -> None:
         self._lock = Lock()
         self._dashboard: OrderedDict[tuple[str, PanelCacheKey], DashboardResponse] = OrderedDict()
-        self._dashboard_history: OrderedDict[str, DashboardHistoryResponse] = OrderedDict()
+        self._dashboard_history: OrderedDict[tuple[str, HistoryQueryKey], DashboardHistoryResponse] = OrderedDict()
         self._dashboard_comparisons: OrderedDict[
             tuple[str, ComparisonFieldId, ComparisonFieldId, ComparisonRendererId | None],
             ComparisonResponse,
         ] = OrderedDict()
         self._libraries: OrderedDict[str, list[LibrarySummary]] = OrderedDict()
         self._library_summaries: OrderedDict[tuple[str, int], LibrarySummary] = OrderedDict()
-        self._library_history: OrderedDict[tuple[str, int], LibraryHistoryResponse] = OrderedDict()
+        self._library_history: OrderedDict[tuple[str, int, HistoryQueryKey], LibraryHistoryResponse] = OrderedDict()
         self._library_statistics: OrderedDict[tuple[str, int, PanelCacheKey], LibraryStatistics] = OrderedDict()
         self._library_comparisons: OrderedDict[
             tuple[str, int, ComparisonFieldId, ComparisonFieldId, ComparisonRendererId | None],
@@ -136,6 +166,7 @@ class StatsCache:
 
         try:
             result = compute()
+            weight = _payload_weight(result)
         except BaseException as exc:
             with self._lock:
                 state.error = exc
@@ -145,7 +176,7 @@ class StatsCache:
 
         with self._lock:
             if self._epochs.get(epoch_key, 0) == epoch:
-                _set_cached(cache, key, result, limit=limit, ttl_seconds=ttl_seconds)
+                _set_cached(cache, key, result, limit=limit, ttl_seconds=ttl_seconds, weight=weight)
             state.result = result
             self._inflight.pop(inflight_key, None)
             state.event.set()
@@ -190,15 +221,15 @@ class StatsCache:
             compute=compute,
         )
 
-    def get_dashboard_history(self, cache_key: str) -> DashboardHistoryResponse | None:
+    def get_dashboard_history(self, cache_key: str, *, query_key: HistoryQueryKey = None) -> DashboardHistoryResponse | None:
         with self._lock:
-            return _get_cached(self._dashboard_history, cache_key)
+            return _get_cached(self._dashboard_history, (cache_key, query_key))
 
     def set_dashboard_history(self, cache_key: str, payload: DashboardHistoryResponse) -> None:
         with self._lock:
             _set_cached(
                 self._dashboard_history,
-                cache_key,
+                (cache_key, None),
                 payload,
                 limit=self._DASHBOARD_HISTORY_LIMIT,
                 ttl_seconds=self._HISTORY_TTL_SECONDS,
@@ -208,11 +239,12 @@ class StatsCache:
         self,
         cache_key: str,
         compute: Callable[[], DashboardHistoryResponse],
+        *, query_key: HistoryQueryKey = None,
     ) -> DashboardHistoryResponse:
         return self._get_or_compute(
             namespace="dashboard_history",
             cache=self._dashboard_history,
-            key=cache_key,
+            key=(cache_key, query_key),
             limit=self._DASHBOARD_HISTORY_LIMIT,
             ttl_seconds=self._HISTORY_TTL_SECONDS,
             epoch_key=f"{cache_key}:connectors",
@@ -264,9 +296,9 @@ class StatsCache:
         with self._lock:
             return _get_cached(self._library_summaries, (cache_key, library_id))
 
-    def get_library_history(self, cache_key: str, library_id: int) -> LibraryHistoryResponse | None:
+    def get_library_history(self, cache_key: str, library_id: int, *, query_key: HistoryQueryKey = None) -> LibraryHistoryResponse | None:
         with self._lock:
-            return _get_cached(self._library_history, (cache_key, library_id))
+            return _get_cached(self._library_history, (cache_key, library_id, query_key))
 
     def set_library_summary(self, cache_key: str, library_id: int, payload: LibrarySummary) -> None:
         with self._lock:
@@ -282,7 +314,7 @@ class StatsCache:
         with self._lock:
             _set_cached(
                 self._library_history,
-                (cache_key, library_id),
+                (cache_key, library_id, None),
                 payload,
                 limit=self._LIBRARY_HISTORY_LIMIT,
                 ttl_seconds=self._HISTORY_TTL_SECONDS,
@@ -293,11 +325,12 @@ class StatsCache:
         cache_key: str,
         library_id: int,
         compute: Callable[[], LibraryHistoryResponse],
+        *, query_key: HistoryQueryKey = None,
     ) -> LibraryHistoryResponse:
         return self._get_or_compute(
             namespace="library_history",
             cache=self._library_history,
-            key=(cache_key, library_id),
+            key=(cache_key, library_id, query_key),
             limit=self._LIBRARY_HISTORY_LIMIT,
             ttl_seconds=self._HISTORY_TTL_SECONDS,
             epoch_key=f"{cache_key}:connectors",
@@ -418,7 +451,7 @@ class StatsCache:
             domain = f"{cache_key}:connectors"
             self._epochs[domain] = self._epochs.get(domain, 0) + 1
             self._libraries.pop(cache_key, None)
-            self._dashboard_history.pop(cache_key, None)
+            _delete_matching(self._dashboard_history, lambda key: key[0] == cache_key)
             for cache in (self._library_summaries, self._library_history, self._library_file_counts, self._storage_maps):
                 _delete_matching(cache, lambda key: key[0] == cache_key)
             _delete_matching(
@@ -434,7 +467,7 @@ class StatsCache:
             domain = f"{cache_key}:connectors"
             self._epochs[domain] = self._epochs.get(domain, 0) + 1
             _delete_matching(self._dashboard, lambda key: key[0] == cache_key)
-            self._dashboard_history.pop(cache_key, None)
+            _delete_matching(self._dashboard_history, lambda key: key[0] == cache_key)
             _delete_matching(self._dashboard_comparisons, lambda key: key[0] == cache_key)
             self._libraries.pop(cache_key, None)
             if library_id is None:
@@ -449,7 +482,7 @@ class StatsCache:
                     self._library_summaries,
                     lambda key: key[0] == cache_key and key[1] == library_id,
                 )
-                self._library_history.pop((cache_key, library_id), None)
+                _delete_matching(self._library_history, lambda key: key[0] == cache_key and key[1] == library_id)
                 _delete_matching(
                     self._library_statistics,
                     lambda key: key[0] == cache_key and key[1] == library_id,

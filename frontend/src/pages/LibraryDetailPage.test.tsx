@@ -1321,7 +1321,7 @@ describe("LibraryDetailPage", () => {
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
-    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    const historySpy = vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
     renderPage(libraryId);
@@ -1329,7 +1329,11 @@ describe("LibraryDetailPage", () => {
     fireEvent.click(await screen.findByLabelText("Select history metric"));
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average bitrate" }));
 
-    const chart = (await screen.findAllByTestId("echarts-react")).find(
+    await waitFor(() => expect(historySpy).toHaveBeenLastCalledWith(String(libraryId), expect.any(AbortSignal), { metric: "average_bitrate", days: 30 }));
+    await waitFor(() => expect(screen.getAllByTestId("echarts-react").some(
+      (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
+    )).toBe(true));
+    const chart = screen.getAllByTestId("echarts-react").find(
       (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
     );
     expect(chart).toBeDefined();

@@ -1,0 +1,254 @@
+[
+  {
+    "file": "AnimatedConnectIcon-CR3fLAsG.js",
+    "bytes": 8112,
+    "gz": 2380,
+    "br": 2228
+  },
+  {
+    "file": "AsyncPanel-CCaMhqIj.js",
+    "bytes": 3042,
+    "gz": 1100,
+    "br": 1042
+  },
+  {
+    "file": "ChevronsRightLeftIcon-D8rMziAq.js",
+    "bytes": 1156,
+    "gz": 618,
+    "br": 566
+  },
+  {
+    "file": "DashboardPage-Dg1sdpNM.js",
+    "bytes": 13572,
+    "gz": 4610,
+    "br": 4428
+  },
+  {
+    "file": "DeleteIcon-DPE5Exnf.js",
+    "bytes": 1503,
+    "gz": 728,
+    "br": 667
+  },
+  {
+    "file": "DistributionChart-e6QJZixg.js",
+    "bytes": 3322,
+    "gz": 1654,
+    "br": 1568
+  },
+  {
+    "file": "FileComparePage-cQYnsazr.js",
+    "bytes": 23576,
+    "gz": 6975,
+    "br": 6620
+  },
+  {
+    "file": "FileDetailPage-zRBkJmuX.js",
+    "bytes": 122933,
+    "gz": 31387,
+    "br": 29363
+  },
+  {
+    "file": "JellyfinMetadataDetails-CgHh95gp.js",
+    "bytes": 27916,
+    "gz": 7498,
+    "br": 7151
+  },
+  {
+    "file": "LanguageCodeFormatField-C2N-3vAB.js",
+    "bytes": 18616,
+    "gz": 6307,
+    "br": 5500
+  },
+  {
+    "file": "LibrariesPage--H5ecHPU.js",
+    "bytes": 320163,
+    "gz": 69477,
+    "br": 62386
+  },
+  {
+    "file": "LibraryDetailPage-BiB1YDLi.js",
+    "bytes": 99191,
+    "gz": 27282,
+    "br": 25918
+  },
+  {
+    "file": "LibraryHistoryPanel-DyUzDzuI.js",
+    "bytes": 28228,
+    "gz": 7733,
+    "br": 7365
+  },
+  {
+    "file": "LoaderPinwheelIcon-CV0d3sqw.js",
+    "bytes": 756
+  },
+  {
+    "file": "PanelEmptyState-COxl-7T3.js",
+    "bytes": 1741,
+    "gz": 895,
+    "br": 807
+  },
+  {
+    "file": "SeriesDetailPage-BL4iyTDC.js",
+    "bytes": 3327,
+    "gz": 1299,
+    "br": 1208
+  },
+  {
+    "file": "StatCard-BaQ5FGJp.js",
+    "bytes": 279
+  },
+  {
+    "file": "StatisticPanelLayoutMigrationNotice-I53o0Fb7.js",
+    "bytes": 50313,
+    "gz": 12076,
+    "br": 11357
+  },
+  {
+    "file": "StorageMapPage-D840CiUj.js",
+    "bytes": 15773,
+    "gz": 5011,
+    "br": 4814
+  },
+  {
+    "file": "StreamDetailsList-YngzANyg.js",
+    "bytes": 10837,
+    "gz": 3196,
+    "br": 3016
+  },
+  {
+    "file": "TableQualityScore-DltP6GFT.js",
+    "bytes": 394
+  },
+  {
+    "file": "TableViewSettingsEditor-Ctlsf7AM.js",
+    "bytes": 4133,
+    "gz": 1493,
+    "br": 1406
+  },
+  {
+    "file": "TooltipTrigger-D7lU_fgD.js",
+    "bytes": 4685,
+    "gz": 1870,
+    "br": 1752
+  },
+  {
+    "file": "TranscodeProgressSummary-CJ9ZvH8O.js",
+    "bytes": 4107,
+    "gz": 1649,
+    "br": 1522
+  },
+  {
+    "file": "TranscodingPage-BT6SDG0p.js",
+    "bytes": 27926,
+    "gz": 7818,
+    "br": 7522
+  },
+  {
+    "file": "UiElementsPage-BKqqH8gu.js",
+    "bytes": 289611,
+    "gz": 43782,
+    "br": 37560
+  },
+  {
+    "file": "VideoWipeCompare-Cu0T8k6h.js",
+    "bytes": 5694,
+    "gz": 1997,
+    "br": 1864
+  },
+  {
+    "file": "clipboard-bXEM2vKF.js",
+    "bytes": 1020
+  },
+  {
+    "file": "common-B3Idn5ka.js",
+    "bytes": 178417,
+    "gz": 44420,
+    "br": 39101
+  },
+  {
+    "file": "common-BIkQSeqp.js",
+    "bytes": 128406,
+    "gz": 39788,
+    "br": 37261
+  },
+  {
+    "file": "common-DY1CbdZ5.js",
+    "bytes": 129314,
+    "gz": 38793,
+    "br": 36175
+  },
+  {
+    "file": "echarts-C6zpxGke.js",
+    "bytes": 443500,
+    "gz": 150176,
+    "br": 139063
+  },
+  {
+    "file": "format-DPEfOQha.js",
+    "bytes": 2533,
+    "gz": 1208,
+    "br": 1154
+  },
+  {
+    "file": "hdr-DqHcUEwU.js",
+    "bytes": 471
+  },
+  {
+    "file": "history-query-ClZD9QQP.js",
+    "bytes": 247
+  },
+  {
+    "file": "i18n-iIwRtLRZ.js",
+    "bytes": 44932,
+    "gz": 14225,
+    "br": 13852
+  },
+  {
+    "file": "icons-DfZlPtXl.js",
+    "bytes": 62464,
+    "gz": 12888,
+    "br": 12140
+  },
+  {
+    "file": "index-6OORPtPu.css",
+    "bytes": 339940,
+    "gz": 52576,
+    "br": 44349
+  },
+  {
+    "file": "index-Bj1lvlod.js",
+    "bytes": 247076,
+    "gz": 74799,
+    "br": 68975
+  },
+  {
+    "file": "lru-cache-Bj8lNtVF.js",
+    "bytes": 1203,
+    "gz": 566,
+    "br": 524
+  },
+  {
+    "file": "motion-CpgAaVBd.js",
+    "bytes": 126545,
+    "gz": 41550,
+    "br": 39946
+  },
+  {
+    "file": "react-vendor-BcnPwY3k.js",
+    "bytes": 239073,
+    "gz": 75724,
+    "br": 70980
+  },
+  {
+    "file": "settings-panel-state-BQtp3QnM.js",
+    "bytes": 6870,
+    "gz": 2584,
+    "br": 2367
+  },
+  {
+    "file": "zrender-D7wOWofz.js",
+    "bytes": 201900,
+    "gz": 68345,
+    "br": 64489
+  }
+]

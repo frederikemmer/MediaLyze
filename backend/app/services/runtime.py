@@ -61,6 +61,7 @@ from backend.app.services.history_reconstruction import reconstruct_history_from
 from backend.app.services.history_retention import (
     HistoryRetentionResult,
     apply_history_retention,
+    has_active_scan_jobs,
     run_pending_history_compaction,
 )
 from backend.app.services.history_storage import get_history_storage
@@ -237,6 +238,7 @@ class ScanRuntimeManager:
         self.jellyfin_match_recompute_rerun = False
         self.jellyfin_match_recompute_status = "idle"
         self.jellyfin_match_recompute_last_error: str | None = None
+        self.history_compression_submitted = False
         self.started = False
 
     def start(self) -> None:
@@ -2029,6 +2031,12 @@ class ScanRuntimeManager:
             max_instances=1,
             coalesce=True,
         )
+        self.scheduler.add_job(
+            self.request_history_compression,
+            trigger="interval", minutes=1,
+            id="history-compression-maintenance", replace_existing=True,
+            max_instances=1, coalesce=True,
+        )
 
     def _ensure_telemetry_job(self) -> None:
         self.scheduler.add_job(
@@ -2201,6 +2209,35 @@ class ScanRuntimeManager:
             self.history_compaction_pending = result.compaction_deferred
         self.request_history_storage_refresh()
         return result
+
+    def request_history_compression(self) -> bool:
+        with self.lock:
+            if not self.started or self.history_compression_submitted:
+                return False
+            self.history_compression_submitted = True
+        try:
+            self.maintenance_executor.submit(self._run_history_compression)
+        except RuntimeError:
+            with self.lock:
+                self.history_compression_submitted = False
+            return False
+        return True
+
+    def _run_history_compression(self) -> None:
+        from backend.app.services.history_compression import compress_file_history_batch
+        db = SessionLocal()
+        try:
+            def idle():
+                return self.started and not has_active_scan_jobs(db)
+            if idle():
+                compress_file_history_batch(db, should_continue=idle)
+        except Exception:
+            db.rollback()
+            logging.getLogger("uvicorn.error").exception("File-history compression failed")
+        finally:
+            db.close()
+            with self.lock:
+                self.history_compression_submitted = False
 
     def request_history_storage_refresh(self) -> bool:
         with self.lock:

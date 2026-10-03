@@ -39,6 +39,7 @@ type LibraryHistoryPanelProps = {
   emptyMessage?: string;
   metricLabel?: string;
   rangeStorageKey?: string;
+  onRangeChange?: (selection: HistoryRangeSelection) => void;
   bodyId?: string;
   inDepthDolbyVisionProfiles?: boolean;
   showLibraryMix?: boolean;
@@ -63,7 +64,7 @@ function isHistoryRangeMode(value: unknown): value is HistoryRangeMode {
   return value === "7d" || value === "30d" || value === "1y" || value === "all" || value === "custom";
 }
 
-function readHistoryRangeSelection(storageKey: string): HistoryRangeSelection {
+export function readHistoryRangeSelection(storageKey: string): HistoryRangeSelection {
   if (typeof window === "undefined") {
     return DEFAULT_HISTORY_RANGE_SELECTION;
   }
@@ -492,6 +493,7 @@ export function LibraryHistoryPanel({
   emptyMessage,
   metricLabel,
   rangeStorageKey = DEFAULT_HISTORY_RANGE_STORAGE_KEY,
+  onRangeChange,
   bodyId = "library-history-panel-body",
   inDepthDolbyVisionProfiles = false,
   showLibraryMix = false,
@@ -547,6 +549,7 @@ export function LibraryHistoryPanel({
   function updateRangeSelection(nextSelection: HistoryRangeSelection) {
     setRangeSelection(nextSelection);
     saveHistoryRangeSelection(rangeStorageKey, nextSelection);
+    onRangeChange?.(nextSelection);
   }
 
   useEffect(() => {
