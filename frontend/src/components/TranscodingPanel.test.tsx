@@ -335,7 +335,7 @@ describe("TranscodingPanel", () => {
     const streamAction = screen.getByRole("combobox", { name: "Action for stream 0" });
     expect(streamAction).toHaveValue("copy");
     expect(streamAction).toHaveClass("settings-choice-input", "transcode-control", "transcode-action-select");
-    expect(streamAction).toHaveAttribute("title", "Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output.");
+    expect(streamAction).toHaveAttribute("title", "Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output.");
     expect(streamAction.closest(".transcode-action-field")).toHaveClass("is-collapsed");
     expect(screen.queryByRole("combobox", { name: "video 0 dynamic range" })).not.toBeInTheDocument();
     fireEvent.change(streamAction, { target: { value: "encode" } });
@@ -438,6 +438,37 @@ describe("TranscodingPanel", () => {
     expect(screen.queryByRole("combobox", { name: "Action for stream 5" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear stream search" }));
     expect(screen.getByRole("combobox", { name: "Action for stream 1" })).toBeInTheDocument();
+  });
+
+  it("edits copied stream languages and retains them across action changes", async () => {
+    renderTranscodingPanel({
+      ...file,
+      audio_streams: file.audio_streams.map((stream) => ({ ...stream, language: "und" })),
+    });
+    await screen.findByRole("region", { name: "Source summary" });
+
+    for (const [tab, kind, index] of [["Video", "video", 0], ["Audio", "audio", 1], ["Subtitles", "subtitle", 2]] as const) {
+      fireEvent.click(screen.getByRole("tab", { name: new RegExp(tab) }));
+      const action = screen.getByRole("combobox", { name: `Action for stream ${index}` });
+      expect(action).toHaveValue("copy");
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`${kind} ${index}:`) }));
+      const language = screen.getByRole("combobox", { name: `${kind} ${index} language` });
+      expect(language).not.toBeDisabled();
+      if (kind === "audio") expect(language).toHaveValue("und");
+      fireEvent.change(language, { target: { value: "en" } });
+      expect(screen.getByRole("button", { name: new RegExp(`${kind} ${index}:.*English`) })).toBeInTheDocument();
+      fireEvent.change(action, { target: { value: "encode" } });
+      expect(screen.getByRole("combobox", { name: `${kind} ${index} language` })).toHaveValue("en");
+      fireEvent.change(action, { target: { value: "copy" } });
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`${kind} ${index}:`) }));
+      expect(screen.getByRole("combobox", { name: `${kind} ${index} language` })).toHaveValue("en");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Validate plan" }));
+    await waitFor(() => expect(api.validateFileTranscode).toHaveBeenCalled());
+    const sentPlan = vi.mocked(api.validateFileTranscode).mock.calls.at(-1)![1];
+    for (const streams of [sentPlan.video_streams, sentPlan.audio_streams, sentPlan.subtitle_streams]) {
+      expect(streams[0]).toMatchObject({ action: "copy", language: "en", codec: null, encoder: null });
+    }
   });
 
   it("seeds encode controls from the source stream when leaving copy or remove", async () => {

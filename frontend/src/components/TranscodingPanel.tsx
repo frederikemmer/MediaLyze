@@ -853,7 +853,7 @@ type StreamControlFieldsProps = {
 type StreamLanguageFieldProps = {
   kind: StreamKind;
   stream: TranscodePlan[StreamKind][number];
-  source: VideoStream | AudioStream | SubtitleStream | undefined;
+  source: Pick<VideoStream, "language"> | undefined;
   languageTags: string[];
   languageLocale: string;
   controlClass: string;
@@ -897,7 +897,7 @@ function StreamActionField({
   );
 }
 
-function StreamLanguageField({
+export function StreamLanguageField({
   kind,
   stream,
   source,
@@ -1195,7 +1195,6 @@ const COPY_STREAM_PATCH: Record<string, unknown> = {
   level: null,
   preset: null,
   gop_size: null,
-  language: null,
   title: null,
 };
 
@@ -2156,7 +2155,7 @@ export function TranscodingPanel({
             {filteredActiveStreams.length ? filteredActiveStreams.map((stream) => {
               const kind = activeStreamTab;
               const source = sourceForStream(file, kind, stream.stream_index);
-              const language = source && "language" in source ? source.language : null;
+              const language = stream.language ?? (source && "language" in source ? source.language : null);
               const languageLabel = formatLanguageLabel(language ?? "und", i18n.language);
               const streamAction = stream.action === "keep" ? "copy" : stream.action;
               const codecKind = streamKindLabel(kind);
@@ -2212,7 +2211,7 @@ export function TranscodingPanel({
                   bitrate: kind === "audio_streams"
                     ? (preserveExistingEncodeSettings ? stream.bitrate : defaultAudioBitrate(source as AudioStream | undefined, targetCodec || "aac")) || null
                     : null,
-                  language: sourceLanguage || "und",
+                  language: stream.language ?? (sourceLanguage || "und"),
                   title: kind !== "video_streams" ? sourceTitle ?? null : null,
                   width: kind === "video_streams" ? sourceVideo?.width ?? null : null,
                   height: kind === "video_streams" ? sourceVideo?.height ?? null : null,
@@ -2319,7 +2318,10 @@ export function TranscodingPanel({
                             languageLocale={i18n.language}
                             controlClass={transcodeControlClass}
                             t={t}
-                            disabled
+                            onPatch={(patch) => {
+                              setExpertPlan(updateStreamPlan(plan, kind, stream.stream_index, patch));
+                              setValidation(null);
+                            }}
                           />
                         </div>
                       ) : <p className="field-hint transcode-stream-drop-note">{t("transcoding.dropNote")}</p>}

@@ -348,6 +348,18 @@ def test_command_translates_source_profile_for_encoder(encoder, profile, expecte
     assert decision.profile == profile
 
 
+@pytest.mark.parametrize("kind,source_type", [("v", VideoStream), ("a", AudioStream), ("s", SubtitleStream)])
+@pytest.mark.parametrize("container", ["mp4", "mkv"])
+def test_copy_stream_can_override_unknown_language(kind, source_type, container) -> None:
+    arguments = []
+    source = source_type(language="und")
+    decision = TranscodeStreamPlan(stream_index=0, action="copy", language="en")
+    transcoding._append_stream_options(arguments, kind, 0, decision, source, "preserve", container=container)
+    assert arguments[arguments.index(f"-c:{kind}:0") + 1] == "copy"
+    assert arguments[arguments.index(f"-metadata:s:{kind}:0") + 1] == "language=eng"
+    assert source.language == "und"
+
+
 def test_copy_stream_does_not_emit_encoder_profile() -> None:
     arguments = []
     decision = TranscodeStreamPlan(stream_index=0, action="copy", profile="Main")

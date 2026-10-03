@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Enhancements
 
+- Allow stream-language metadata changes in File Detail copy mode without re-encoding, retaining selected languages when switching between copy and encode.
+
 - Fetch history by selected metric and date range, stream and reuse identical histogram values, reuse statistics across panel layouts with cache weight limits, and aggregate collapsed series rows without loading every episode.
 - Memoize stream-language normalization, compress file-history snapshots losslessly with resumable background conversion and an offline rollback helper, and serve byte-verified precompressed Brotli/Gzip JavaScript and CSS.
 
