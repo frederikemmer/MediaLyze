@@ -598,6 +598,8 @@ export function buildPyInstallerArgs(pythonInvocation, platform = process.platfo
     "certifi",
     "--add-data",
     `${path.join(repoRoot, "backend", "app", "profile_catalog")}${addDataSeparator}backend/app/profile_catalog`,
+    "--add-data",
+    `${path.join(repoRoot, "backend", "app", "services", "language_registry.json")}${addDataSeparator}backend/app/services`,
   ];
 
   if (platform === "win32") {

@@ -208,6 +208,23 @@ jobs:
         env:
           MEDIALYZE_FFPROBE_DIR: ${{ github.workspace }}/dist/ffprobe-bundle
 
+      - name: Verify packaged backend language registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry="$(find dist/desktop-backend/medialyze-backend -type f -path '*/backend/app/services/language_registry.json' -print)"
+          if [[ -z "${registry}" ]]; then
+            echo "Packaged backend language registry is missing from dist/desktop-backend/medialyze-backend." >&2
+            find dist/desktop-backend -type f -print >&2 || true
+            exit 1
+          fi
+          echo "Verified packaged backend resource: ${registry}"
+
+      - name: Smoke-test packaged Windows backend startup
+        if: matrix.os == 'windows-latest'
+        run: node ./scripts/smoke-test-backend.mjs
+        working-directory: desktop
+
       - name: Smoke-test bundled FFmpeg capability
         shell: bash
         run: |

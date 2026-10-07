@@ -252,6 +252,23 @@ test("desktop backend packaging includes the compatibility profile catalog", () 
   assert.match(args[addDataIndex + 1], /:backend[\\/]app[\\/]profile_catalog$/);
 });
 
+test("desktop backend packaging includes the language registry on every platform", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const registryPath = path.join(repoRoot, "backend", "app", "services", "language_registry.json");
+
+  for (const [platform, separator] of [["linux", ":"], ["win32", ";"]]) {
+    const args = buildPyInstallerArgs({ command: "python", args: [] }, platform);
+    const dataArguments = args.flatMap((value, index) =>
+      value === "--add-data" ? [args[index + 1]] : []
+    );
+
+    assert.ok(
+      dataArguments.includes(`${registryPath}${separator}backend/app/services`),
+      `language registry should be added for ${platform}`
+    );
+  }
+});
+
 test("parseOtoolDependencies extracts linked library paths", () => {
   const dependencies = parseOtoolDependencies(`/tmp/ffprobe:
 \t/opt/homebrew/Cellar/ffmpeg/8.1/lib/libavdevice.62.dylib (compatibility version 62.0.0, current version 62.3.100)

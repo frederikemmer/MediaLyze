@@ -4,56 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.19.1
+
+This patch release fixes the Windows desktop startup failure and improves reliability when scanning large libraries and transcoding. It also adds history filters, reduces history storage, and updates vulnerable dependencies.
+
 ### 🔒 Security
 
-- Update Electron, undici, brace-expansion and fast-uri to patched versions, resolving desktop and frontend dependency security alerts.
+- Update Electron, undici, brace-expansion, and fast-uri to patched versions.
 
 ### ✨ Enhancements
 
-- Allow stream-language metadata changes in File Detail copy mode without re-encoding, retaining selected languages when switching between copy and encode.
-
-- Fetch history by selected metric and date range, stream and reuse identical histogram values, reuse statistics across panel layouts with cache weight limits, and aggregate collapsed series rows without loading every episode.
-- Memoize stream-language normalization, compress file-history snapshots losslessly with resumable background conversion and an offline rollback helper, and serve byte-verified precompressed Brotli/Gzip JavaScript and CSS.
-
-- Add a central documentation guide for users and agents; refresh setup, metadata/audiobook support, telemetry, transcoding, and development references, and correct the pinned macOS ARM64 FFmpeg version metadata.
-
-- Replace table quality-score bars with colored score numbers and align series/season labels to the left at the file-name size.
-
-- Reduce memory and latency for transcoding job lists, numeric comparison charts and Storage Map aggregation; preserve technical statistics caches across connector updates.
-- Load modular chart renderers and interface languages on demand, defer offscreen chart rendering, bound file-table result caches, and batch/adapt job polling with hidden-tab suspension.
-- Separate connector concurrency from scan limits, lower executing FFmpeg process priority, and add optional bounded API/SQL/cache/queue performance observations through `MEDIALYZE_PERFORMANCE_METRICS`.
+- Filter dashboard and library history by metric or date range, and improve responsiveness across statistics and large-library views.
+- Reduce file-history storage; follow the [offline downgrade instructions](docs/architecture.md) before downgrading to an older version.
+- Change stream-language metadata during copy-mode transcoding without re-encoding.
 
 ### 🐛 Bug fixes
 
-- Keep dashboard and library layout action icons transparent in dark mode; reserve the shaded surface for layout resize controls.
-
-- Include `*_temp.mp4` in the built-in scan ignore rules and classify analysis failures with actionable reasons in scan logs and file details while retaining technical diagnostics.
-
-- Show the library name as the primary scan-log heading, place the scan time beside it, and left-align scan status labels.
-
-- Interrupt running ffprobe/hash workers when canceling a scan, adapt analysis concurrency to available host/container RAM, queue startup history pruning in the background, and reduce profile queries and ORM overhead in maintenance jobs without adding UI controls ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
-
-- Prevent large stored metadata from exhausting memory during startup signature migration, history storage pruning/reconstruction, and quality recomputation. Use a compact scan index, resume committed startup batches, and recover interrupted scan jobs without loading their summaries. Preserve catalog records when roots or directories are unavailable, continue past individual filesystem errors, and isolate subtitle detection from unreadable neighboring media files ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
-
-- Collapse transcode validation by default, highlight the existing Transcoding navigation control after starting a job, and compare linked output versions below Preview with left/right version selectors, including separate Transcode_Output files.
-
-- Release resource reservations for finished or startup-canceled transcodes immediately, preventing stale GPU reservations from leaving subsequent jobs queued after a development reload or process restart.
-
-- Distinguish installed software codec support from unavailable hardware encoders, explain CPU-only AV1 support, and omit generated commands when encoder resolution fails instead of treating codec names as encoders.
-
-- Add compact action buttons, halve transcoding column-header height, provide a borderless filter reset in Active and History, and deletion of terminal transcoding runs from history while retaining source files, output files, and linked variants.
-
-- Select a jointly compatible, probed hardware device for all encoded video streams, honor NVIDIA NVENC preferences, and use current codec-pair benchmark measurements to refine automatic device selection. Validate explicit device choices against encoder probes.
-
-- Keep transcoding progress, estimated speed and time remaining updating from video frame counts when FFmpeg reports unavailable output timestamps, and overlay progress metrics on the compact speed graph. Center the phase label on the thin progress bar with a white gap behind its text.
-- Translate inherited H.264/HEVC profile names such as `Main`, `High` and `Main 10` into encoder-compatible FFmpeg values, fixing VideoToolbox transcoding failures.
-- Move stream language-code formatting into compact Metadata settings rows in File Detail and transcoding presets, with one choice for video, audio and subtitles, Container default as the initial value, and automatic container-compatible fallback when applying presets.
-- Reduce scan memory usage by loading stored raw metadata only when needed and releasing persisted analysis payloads and stream data during scans. Bound ffprobe output and execution time so excessive output or stalled probes fail per file instead of exhausting backend memory or blocking scan workers ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
-- Persist newly replaced streams and subtitle sidecars before capturing file history, avoiding false analysis failures from missing database IDs.
+- Fix the Windows startup failure by packaging the language registry required by the desktop backend.
+- Improve scan reliability for large libraries and inaccessible files ([#184](https://github.com/frederikemmer/MediaLyze/issues/184)).
+- Fix transcoding issues with codec/device selection and progress reporting, and preserve stream and subtitle updates in file history.
 
 ## v0.19.0
 
->2026-09-29
+>2026-09-30
 
 This release brings ffmpeg transcoding to MediaLyze!
 
