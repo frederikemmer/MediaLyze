@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+import json
 from collections import OrderedDict
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, func, JSON, type_coerce
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import Library, LibraryHistory
@@ -245,14 +247,21 @@ def _coerce_numeric_distribution(value) -> NumericDistribution | None:
     return NumericDistribution(total=total, bins=bins)
 
 
-def _coerce_numeric_distributions(value) -> dict[str, NumericDistribution]:
+def _coerce_numeric_distributions(value, cache=None) -> dict[str, NumericDistribution]:
     if not isinstance(value, dict):
         return {}
     distributions: dict[str, NumericDistribution] = {}
     for raw_metric_id, raw_distribution in value.items():
         if not isinstance(raw_metric_id, str) or not raw_metric_id:
             continue
-        distribution = _coerce_numeric_distribution(raw_distribution)
+        key = json.dumps(raw_distribution, sort_keys=True, separators=(",", ":")) if cache is not None else None
+        distribution = cache.get(key) if cache is not None else None
+        if distribution is None:
+            distribution = _coerce_numeric_distribution(raw_distribution)
+            if distribution is not None and cache is not None:
+                cache[key] = distribution
+                if len(cache) > 128:
+                    cache.popitem(last=False)
         if distribution is not None:
             distributions[raw_metric_id] = distribution
     return distributions
@@ -267,6 +276,7 @@ def _parse_history_metrics(
     snapshot: dict,
     *,
     resolution_categories: OrderedDict[str, str],
+    distribution_cache=None,
 ) -> LibraryHistoryTrendMetricsRead | None:
     raw_metrics = snapshot.get("trend_metrics")
     if not isinstance(raw_metrics, dict):
@@ -349,19 +359,114 @@ def _parse_history_metrics(
         totals=totals,
         numeric_summaries=numeric_summaries,
         category_counts=category_counts,
-        numeric_distributions=_coerce_numeric_distributions(raw_metrics.get("numeric_distributions")),
+        numeric_distributions=_coerce_numeric_distributions(raw_metrics.get("numeric_distributions"), distribution_cache),
     )
+
+
+HISTORY_METRICS = {
+    "file_count", "total_size_bytes", "total_duration_seconds", "average_size_bytes",
+    "average_duration_seconds", "average_bitrate", "average_audio_bitrate", "average_quality_score",
+    "average_resolution_mp", "library_mix", "resolution_mix", "container_mix", "video_codec_mix",
+    "hdr_type_mix", "audio_codecs_mix", "audio_spatial_profiles_mix", "audio_languages_mix",
+    "subtitle_languages_mix", "subtitle_codecs_mix", "subtitle_sources_mix", "scan_status_mix",
+    "resolution_distribution", "quality_score_distribution", "duration_distribution",
+    "size_distribution", "bitrate_distribution", "audio_bitrate_distribution", "resolution_mp_distribution",
+}
+
+
+def _project_snapshot(snapshot: dict, metric: str | None) -> dict:
+    if metric is None or not isinstance(snapshot.get("trend_metrics"), dict):
+        return snapshot
+    raw = dict(snapshot["trend_metrics"])
+    category = metric.removesuffix("_mix") if metric.endswith("_mix") else None
+    distribution = metric.removesuffix("_distribution") if metric.endswith("_distribution") else None
+    # Resolution distribution is the historical category series, not numeric bins.
+    if metric == "resolution_distribution":
+        category, distribution = "resolution", None
+    categories = raw.get("category_counts")
+    raw["category_counts"] = {k: v for k, v in categories.items() if k == category} if isinstance(categories, dict) else {}
+    distributions = raw.get("numeric_distributions")
+    raw["numeric_distributions"] = {k: v for k, v in distributions.items() if k == distribution} if isinstance(distributions, dict) else {}
+    return {**snapshot, "trend_metrics": raw}
+
+
+def _project_metrics(metrics: LibraryHistoryTrendMetricsRead, metric: str | None):
+    if metric is None:
+        return metrics
+    category = metric.removesuffix("_mix") if metric.endswith("_mix") else None
+    distribution = metric.removesuffix("_distribution") if metric.endswith("_distribution") else None
+    if metric == "resolution_distribution":
+        category, distribution = "resolution", None
+    summary = metric in {"file_count", "total_size_bytes", "total_duration_seconds"} or metric.startswith("average_")
+    updates = {
+        "category_counts": {k:v for k,v in metrics.category_counts.items() if k == category},
+        "numeric_distributions": {k:v for k,v in metrics.numeric_distributions.items() if k == distribution},
+    }
+    if not summary:
+        updates.update(totals={}, numeric_summaries={}, average_bitrate=None,
+                       average_audio_bitrate=None, average_duration_seconds=None, average_quality_score=None)
+    if category != "resolution":
+        updates["resolution_counts"] = {}
+    return metrics.model_copy(update=updates)
+
+
+def _snapshot_column(metric):
+    if metric is None:
+        return LibraryHistory.snapshot
+    category = metric.removesuffix("_mix") if metric.endswith("_mix") else None
+    distribution = metric.removesuffix("_distribution") if metric.endswith("_distribution") else None
+    if metric == "resolution_distribution":
+        category, distribution = "resolution", None
+    categories = ("library", "resolution", "container", "video_codec", "hdr_type", "audio_codecs",
+                  "audio_spatial_profiles", "audio_languages", "subtitle_languages", "subtitle_codecs",
+                  "subtitle_sources", "scan_status")
+    numeric = ("size", "duration", "bitrate", "audio_bitrate", "quality_score", "resolution_mp")
+    paths = [f"$.trend_metrics.category_counts.{key}" for key in categories if key != category]
+    paths += [f"$.trend_metrics.numeric_distributions.{key}" for key in numeric if key != distribution]
+    return type_coerce(func.json_remove(LibraryHistory.snapshot, *paths), JSON).label("snapshot")
+
+
+def _history_rows(db, query, *, metric, start, end, days):
+    # Bounds refer to usable chart points, as in the legacy full endpoint.
+    # Stream from either indexed edge until a valid snapshot is found, without
+    # decoding the entire timeline just to populate the range picker.
+    def edge(descending):
+        edge_query = query.with_only_columns(LibraryHistory.id, LibraryHistory.snapshot_day).order_by(None)
+        edge_query = edge_query.order_by(LibraryHistory.snapshot_day.desc() if descending else LibraryHistory.snapshot_day.asc(), LibraryHistory.id)
+        with db.execute(edge_query.execution_options(yield_per=1)) as rows:
+            for row in rows:
+                snapshot = db.scalar(select(_snapshot_column(metric)).where(LibraryHistory.id == row.id))
+                snapshot = snapshot if isinstance(snapshot, dict) else {}
+                if _parse_history_metrics(_project_snapshot(snapshot, metric), resolution_categories=OrderedDict()) is not None:
+                    return row.snapshot_day
+        return None
+    oldest, newest = edge(False), edge(True)
+    if days is not None and newest:
+        start = date.fromordinal(max(1, date.fromisoformat(newest).toordinal() - (days - 1))).isoformat()
+        end = newest
+    if start:
+        query = query.where(LibraryHistory.snapshot_day >= start)
+    if end:
+        query = query.where(LibraryHistory.snapshot_day <= end)
+    return query.execution_options(yield_per=100), oldest, newest
 
 
 def get_library_history(
     db: Session,
     library_id: int,
     *,
+    metric: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    days: int | None = None,
     _coalesced: bool = False,
 ) -> LibraryHistoryResponse | None:
+    if metric is not None and metric not in HISTORY_METRICS:
+        raise ValueError("Unknown history metric")
+    query_key = (metric, start, end, days) if any(value is not None for value in (metric, start, end, days)) else None
     cache_key = str(id(db.get_bind()))
     if not _coalesced:
-        cached = stats_cache.get_library_history(cache_key, library_id)
+        cached = stats_cache.get_library_history(cache_key, library_id, query_key=query_key)
         if cached is not None:
             return cached
 
@@ -372,39 +477,42 @@ def get_library_history(
         return stats_cache.get_or_compute_library_history(
             cache_key,
             library_id,
-            lambda: get_library_history(db, library_id, _coalesced=True),
+            lambda: get_library_history(db, library_id, metric=metric, start=start, end=end, days=days, _coalesced=True),
+            query_key=query_key,
         )
 
     resolution_categories = _resolution_categories(db)
     points: list[LibraryHistoryPointRead] = []
 
-    rows = db.execute(
+    query = (
         select(
             LibraryHistory.library_id,
             LibraryHistory.snapshot_day,
-            LibraryHistory.snapshot,
+            _snapshot_column(metric),
         )
         .where(LibraryHistory.library_id == library_id)
         .order_by(LibraryHistory.snapshot_day.asc(), LibraryHistory.id.asc())
-    ).all()
-    for row in rows:
+    )
+    query, oldest, newest = _history_rows(db, query, metric=metric, start=start, end=end, days=days)
+    distribution_cache = OrderedDict()
+    for row in db.execute(query):
         snapshot = row.snapshot if isinstance(row.snapshot, dict) else {}
-        metrics = _parse_history_metrics(snapshot, resolution_categories=resolution_categories)
+        metrics = _parse_history_metrics(_project_snapshot(snapshot, metric), resolution_categories=resolution_categories, distribution_cache=distribution_cache)
         if metrics is None:
             continue
 
         points.append(
             LibraryHistoryPointRead(
                 snapshot_day=row.snapshot_day,
-                trend_metrics=metrics,
+                trend_metrics=_project_metrics(metrics, metric),
             )
         )
 
     payload = LibraryHistoryResponse(
         generated_at=utc_now(),
         library_id=library_id,
-        oldest_snapshot_day=points[0].snapshot_day if points else None,
-        newest_snapshot_day=points[-1].snapshot_day if points else None,
+        oldest_snapshot_day=oldest,
+        newest_snapshot_day=newest,
         resolution_categories=[
             LibraryHistoryResolutionCategoryRead(id=category_id, label=label)
             for category_id, label in resolution_categories.items()
@@ -474,9 +582,14 @@ def _add_numeric_distribution(
 
 def _finalize_numeric_distributions(
     values: dict[str, dict[tuple[float | None, float | None], int]],
+    cache=None,
 ) -> dict[str, NumericDistribution]:
     distributions: dict[str, NumericDistribution] = {}
     for metric_id, bins in values.items():
+        key = (metric_id, frozenset(bins.items()))
+        if cache is not None and key in cache:
+            distributions[metric_id] = cache[key]
+            continue
         total = sum(bins.values())
         distributions[metric_id] = NumericDistribution(
             total=total,
@@ -496,22 +609,34 @@ def _finalize_numeric_distributions(
                 )
             ],
         )
+        if cache is not None:
+            cache[key] = distributions[metric_id]
+            if len(cache) > 128:
+                cache.popitem(last=False)
     return distributions
 
 
 def get_dashboard_history(
     db: Session,
     *,
+    metric: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    days: int | None = None,
     _coalesced: bool = False,
 ) -> DashboardHistoryResponse:
+    if metric is not None and metric not in HISTORY_METRICS:
+        raise ValueError("Unknown history metric")
+    query_key = (metric, start, end, days) if any(value is not None for value in (metric, start, end, days)) else None
     cache_key = str(id(db.get_bind()))
     if not _coalesced:
-        cached = stats_cache.get_dashboard_history(cache_key)
+        cached = stats_cache.get_dashboard_history(cache_key, query_key=query_key)
         if cached is not None:
             return cached
         return stats_cache.get_or_compute_dashboard_history(
             cache_key,
-            lambda: get_dashboard_history(db, _coalesced=True),
+            lambda: get_dashboard_history(db, metric=metric, start=start, end=end, days=days, _coalesced=True),
+            query_key=query_key,
         )
 
     resolution_categories = _resolution_categories(db)
@@ -523,19 +648,21 @@ def get_dashboard_history(
     visible_library_ids = [int(row.id) for row in visible_libraries]
     points_by_day: OrderedDict[str, dict] = OrderedDict()
 
-    rows = db.execute(
+    query = (
         select(
             LibraryHistory.library_id,
             LibraryHistory.snapshot_day,
-            LibraryHistory.snapshot,
+            _snapshot_column(metric),
         )
         .join(Library, Library.id == LibraryHistory.library_id)
         .where(Library.show_on_dashboard.is_(True))
         .order_by(LibraryHistory.snapshot_day.asc(), LibraryHistory.library_id.asc(), LibraryHistory.id.asc())
-    ).all()
-    for row in rows:
+    )
+    query, oldest, newest = _history_rows(db, query, metric=metric, start=start, end=end, days=days)
+    distribution_cache = OrderedDict()
+    for row in db.execute(query):
         snapshot = row.snapshot if isinstance(row.snapshot, dict) else {}
-        metrics = _parse_history_metrics(snapshot, resolution_categories=resolution_categories)
+        metrics = _parse_history_metrics(_project_snapshot(snapshot, metric), resolution_categories=resolution_categories, distribution_cache=distribution_cache)
         if metrics is None:
             continue
 
@@ -569,13 +696,14 @@ def get_dashboard_history(
             _add_numeric_distribution(aggregate["numeric_distributions"], metric_id, distribution)
 
     points: list[LibraryHistoryPointRead] = []
+    finalized_distribution_cache = OrderedDict()
     for snapshot_day, metrics in points_by_day.items():
         numeric_summaries = _finalize_numeric_summaries(metrics["numeric_summaries"])
-        numeric_distributions = _finalize_numeric_distributions(metrics["numeric_distributions"])
+        numeric_distributions = _finalize_numeric_distributions(metrics["numeric_distributions"], finalized_distribution_cache)
         points.append(
             LibraryHistoryPointRead(
                 snapshot_day=snapshot_day,
-                trend_metrics=LibraryHistoryTrendMetricsRead(
+                trend_metrics=_project_metrics(LibraryHistoryTrendMetricsRead(
                     schema_version=2,
                     total_files=metrics["total_files"],
                     resolution_counts=metrics["resolution_counts"],
@@ -587,14 +715,14 @@ def get_dashboard_history(
                     numeric_summaries=numeric_summaries,
                     category_counts=metrics["category_counts"],
                     numeric_distributions=numeric_distributions,
-                ),
+                ), metric),
             )
         )
 
     payload = DashboardHistoryResponse(
         generated_at=utc_now(),
-        oldest_snapshot_day=points[0].snapshot_day if points else None,
-        newest_snapshot_day=points[-1].snapshot_day if points else None,
+        oldest_snapshot_day=oldest,
+        newest_snapshot_day=newest,
         resolution_categories=[
             LibraryHistoryResolutionCategoryRead(id=category_id, label=label)
             for category_id, label in resolution_categories.items()

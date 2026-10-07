@@ -1,4 +1,7 @@
 import { defineConfig } from "vitest/config";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { gzipSync, brotliCompressSync, constants } from "node:zlib";
 import react from "@vitejs/plugin-react-swc";
 import { fileURLToPath } from "node:url";
 
@@ -7,10 +10,30 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const backendHost = process.env.BACKEND_HOST ?? "127.0.0.1";
 const proxyHost = backendHost === "0.0.0.0" ? "127.0.0.1" : backendHost;
 const backendPort = process.env.BACKEND_PORT ?? "8080";
+let assetOutputDirectory = "";
 
 export default defineConfig({
   plugins: [
     react(),
+    {
+      name: "medialyze-precompressed-assets",
+      apply: "build",
+      configResolved(config) {
+        assetOutputDirectory = resolve(config.root, config.build.outDir, "assets");
+      },
+      closeBundle() {
+        // Vite rewrites preload references in generateBundle. Compress only the
+        // final bytes on disk, after every chunk transformation has finished.
+        for (const fileName of readdirSync(assetOutputDirectory)) {
+          if (!/\.(js|css)$/.test(fileName)) continue;
+          const path = resolve(assetOutputDirectory, fileName);
+          const bytes = readFileSync(path);
+          if (bytes.length < 1024) continue;
+          writeFileSync(`${path}.gz`, gzipSync(bytes, { level: 9 }));
+          writeFileSync(`${path}.br`, brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 9 } }));
+        }
+      },
+    },
     {
       name: "medialyze-build-version",
       generateBundle() {

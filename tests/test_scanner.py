@@ -6,7 +6,7 @@ from concurrent.futures import Future
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import create_engine, inspect, insert, select
 from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault("CONFIG_PATH", tempfile.mkdtemp(prefix="medialyze-config-"))
@@ -53,6 +53,7 @@ def test_real_ffprobe_corrupt_mp4_does_not_interrupt_scan(tmp_path: Path) -> Non
     media_dir.mkdir()
     # A recognizable MP4 header without its required moov atom, as in #184.
     (media_dir / "broken.mp4").write_bytes(bytes.fromhex("000000186674797069736f6d0000020069736f6d69736f32"))
+    (media_dir / "empty.mp4").write_bytes(b"")
     with wave.open(str(media_dir / "healthy.wav"), "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
@@ -67,13 +68,20 @@ def test_real_ffprobe_corrupt_mp4_does_not_interrupt_scan(tmp_path: Path) -> Non
         db.commit()
         job = run_scan(db, settings, library.id, "full")
         assert job.status == JobStatus.completed
-        assert job.files_scanned == 2
-        assert job.errors == 1
+        assert job.files_scanned == 3
+        assert job.errors == 2
         files = db.scalars(select(MediaFile).order_by(MediaFile.filename)).all()
         assert files[0].scan_status == ScanStatus.failed
-        assert "moov atom not found" in files[0].analysis_failure_reason
-        assert files[1].scan_status == ScanStatus.ready
-        assert len(files[1].audio_streams) == 1
+        assert files[0].analysis_failure_kind == "mp4_metadata_missing"
+        assert "Required MP4 metadata" in files[0].analysis_failure_reason
+        assert "moov atom not found" in files[0].analysis_failure_detail
+        assert files[1].analysis_failure_kind == "empty_file"
+        samples = {entry["path"]: entry for entry in job.scan_summary["analysis"]["failed_files"]}
+        assert samples["broken.mp4"]["kind"] == files[0].analysis_failure_kind
+        assert samples["broken.mp4"]["reason"] == files[0].analysis_failure_reason
+        assert samples["empty.mp4"]["kind"] == "empty_file"
+        assert files[2].scan_status == ScanStatus.ready
+        assert len(files[2].audio_streams) == 1
 
 
 def test_full_scan_releases_persisted_analysis_data(tmp_path: Path, monkeypatch) -> None:
@@ -259,7 +267,8 @@ def test_execute_scan_job_uses_in_memory_cancel_request(tmp_path: Path, monkeypa
     assert job.finished_at is not None
 
 
-def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("memory_budget,expected_workers", [(20, 5), (2, 2), (1, 1)])
+def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch, memory_budget, expected_workers) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
     (media_dir / "movie.mkv").write_text("video")
@@ -306,6 +315,7 @@ def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch
             return future
 
     monkeypatch.setattr(scanner_service, "ThreadPoolExecutor", ExecutorStub)
+    monkeypatch.setattr(scanner_service, "memory_worker_limit", lambda: memory_budget)
     monkeypatch.setattr("backend.app.services.scanner.run_ffprobe", lambda file_path, ffprobe_path: payload)
     monkeypatch.setattr("backend.app.services.scanner.detect_external_subtitles", lambda file_path, extensions: [])
 
@@ -341,7 +351,7 @@ def test_run_scan_uses_app_setting_scan_worker_count(tmp_path: Path, monkeypatch
 
         run_scan(db, settings, library.id, "incremental")
 
-    assert created_executor_sizes == [5]
+    assert created_executor_sizes == [expected_workers]
 
 
 def test_run_scan_limits_discovery_to_selected_paths_and_keeps_directory_in_relative_path(
@@ -1186,7 +1196,7 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
 
         first_job = run_scan(db, settings, library.id, "incremental")
         first_files_total = first_job.files_total
-        indexed_before = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
+        indexed_before = db.scalars(select(MediaFile.relative_path).order_by(MediaFile.relative_path)).all()
 
         setting = db.get(AppSetting, "global")
         if setting is None:
@@ -1201,7 +1211,7 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
         indexed_after = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
 
     assert first_files_total == 1
-    assert [media_file.relative_path for media_file in indexed_before] == ["movie.mkv"]
+    assert indexed_before == ["movie.mkv"]
     assert second_files_total == 0
     assert second_files_scanned == 0
     assert indexed_after == []
@@ -2043,7 +2053,8 @@ def test_scan_continues_when_normalization_of_one_file_raises(tmp_path: Path, mo
     assert history_rows[0].snapshot["trend_metrics"]["total_files"] == 1
     assert history_rows[0].snapshot["scan_delta"]["new_files"] == 2
     assert job.scan_summary["analysis"]["failed_files"][0]["path"] == "broken.mkv"
-    assert job.scan_summary["analysis"]["failed_files"][0]["reason"] == "bad payload"
+    assert job.scan_summary["analysis"]["failed_files"][0]["kind"] == "internal_processing_error"
+    assert "Internal MediaLyze error" in job.scan_summary["analysis"]["failed_files"][0]["reason"]
     assert "ValueError: bad payload" in job.scan_summary["analysis"]["failed_files"][0]["detail"]
 
 
@@ -2462,3 +2473,191 @@ def test_incremental_scan_removes_deleted_files_from_active_index_but_keeps_hist
     assert indexed_files == []
     assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 1
     assert [row.relative_path for row in history_rows] == ["movie.mkv"]
+
+
+@pytest.fixture
+def resilience_catalog(tmp_path, monkeypatch):
+    media = tmp_path / "media"
+    (media / "blocked").mkdir(parents=True)
+    (media / "healthy.mkv").write_bytes(b"healthy")
+    (media / "blocked" / "one.mkv").write_bytes(b"one")
+    (media / "blocked" / "two.mkv").write_bytes(b"two")
+    payload = {"format": {"format_name": "matroska", "duration": "60"},
+               "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720}]}
+    monkeypatch.setattr(scanner_service, "run_ffprobe", lambda *_args: payload)
+    settings = Settings(config_path=tmp_path / "config", media_root=tmp_path)
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as db:
+        library = Library(name="Resilience", path=str(media), type=LibraryType.movies)
+        db.add(library)
+        db.commit()
+        library_id = library.id
+        assert run_scan(db, settings, library_id, "full").errors == 0
+    yield factory, settings, library_id, media
+    engine.dispose()
+
+
+def test_unavailable_library_root_does_not_delete_catalog(resilience_catalog, tmp_path):
+    factory, settings, library_id, media = resilience_catalog
+    media.rename(tmp_path / "offline")
+    with factory() as db:
+        before = db.scalars(select(MediaFile.id).order_by(MediaFile.id)).all()
+        job = run_scan(db, settings, library_id)
+        assert job.errors == 1
+        assert job.scan_summary["changes"]["deleted_files"]["count"] == 0
+        assert db.scalars(select(MediaFile.id).order_by(MediaFile.id)).all() == before
+
+
+def test_unreadable_directory_preserves_records_and_continues_scan(resilience_catalog, monkeypatch):
+    factory, settings, library_id, media = resilience_catalog
+    real_walk = os.walk
+
+    def walk_with_error(root, **kwargs):
+        for current, dirs, files in real_walk(root, **kwargs):
+            if Path(current) == media / "blocked":
+                kwargs["onerror"](PermissionError(13, "Access denied", current))
+                dirs[:] = []
+                continue
+            yield current, dirs, files
+
+    monkeypatch.setattr(scanner_service.os, "walk", walk_with_error)
+    with factory() as db:
+        job = run_scan(db, settings, library_id, "full")
+        assert job.errors == 1
+        assert job.files_scanned == 1
+        assert job.scan_summary["changes"]["deleted_files"]["count"] == 0
+        assert len(db.scalars(select(MediaFile.id)).all()) == 3
+        assert "Access denied" in job.scan_summary["analysis"]["failed_files"][0]["reason"]
+
+
+def test_unreadable_file_does_not_abort_other_files(resilience_catalog, monkeypatch):
+    factory, settings, library_id, media = resilience_catalog
+    real_stat = Path.stat
+
+    def stat_with_error(path, *args, **kwargs):
+        if path == media / "blocked" / "one.mkv":
+            raise PermissionError(13, "Access denied", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_with_error)
+    with factory() as db:
+        job = run_scan(db, settings, library_id, "full")
+        assert job.status == JobStatus.completed
+        assert job.errors == 1
+        assert job.files_scanned == 2
+        assert len(db.scalars(select(MediaFile.id)).all()) == 3
+        assert job.scan_summary["changes"]["deleted_files"]["count"] == 0
+
+
+def test_scan_file_index_does_not_retain_full_media_records():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine)() as db:
+        library = Library(name="Index", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        db.execute(insert(MediaFile), [{
+            "library_id": library.id, "filename": f"{i}.mkv", "relative_path": f"{i}.mkv",
+            "extension": "mkv", "size_bytes": 1, "mtime": 1,
+            "raw_ffprobe_json": {"padding": "x" * 10000}, "audiobook_description": "x" * 4000,
+        } for i in range(1000)])
+        db.commit()
+        index = scanner_service._scan_file_index(db, library.id)
+        assert len(index) == 1000
+        assert not any(isinstance(item, MediaFile) for item in db.identity_map.values())
+        assert all(isinstance(item, scanner_service.ScanFileIndexEntry) for item in index.values())
+    engine.dispose()
+
+
+def test_quality_recompute_bounds_loaded_raw_data_and_preserves_snapshots(monkeypatch, tmp_path):
+    from backend.app.db.session import create_engine_for_settings
+    # Cancellation polling uses its own connection. Match the production WAL
+    # database instead of sharing one in-memory DBAPI connection across sessions.
+    engine = create_engine_for_settings(Settings(config_path=tmp_path, media_root=tmp_path))
+    Base.metadata.create_all(engine)
+    payload = {"padding": "x" * 10000}
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as db:
+        library = Library(name="Quality", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        db.execute(insert(MediaFile), [{
+            "library_id": library.id, "filename": f"{i}.mkv", "relative_path": f"{i}.mkv",
+            "extension": "mkv", "size_bytes": 1, "mtime": 1, "raw_ffprobe_json": payload,
+            "last_analyzed_at": utc_now(), "scan_status": ScanStatus.ready,
+            "is_transcode_variant": i == 204,
+        } for i in range(205)])
+        db.commit()
+        library_id = library.id
+    original_profile = scanner_service.effective_quality_profile_for_media_file
+    profile_calls = []
+
+    def counted_profile(db, media_file, categories):
+        profile_calls.append(media_file.id)
+        return original_profile(db, media_file, categories)
+
+    monkeypatch.setattr(scanner_service, "effective_quality_profile_for_media_file", counted_profile)
+    capture = scanner_service.create_media_file_history_entry_if_changed
+    retained = []
+
+    def checked_capture(db, *args, **kwargs):
+        files = [item for item in db.identity_map.values() if isinstance(item, MediaFile)]
+        retained.append(sum("raw_ffprobe_json" not in inspect(item).unloaded for item in files))
+        return capture(db, *args, **kwargs)
+
+    monkeypatch.setattr(scanner_service, "create_media_file_history_entry_if_changed", checked_capture)
+    with factory() as db:
+        job = run_quality_recompute(db, library_id)
+        assert job.files_total == job.files_scanned == 204
+        assert job.status == JobStatus.completed
+        snapshots = db.scalars(select(MediaFileHistory.snapshot)).all()
+        assert len(snapshots) == 204
+        assert all(snapshot["raw_ffprobe_json"] == payload for snapshot in snapshots)
+    assert retained == [0] * 204
+    assert len(profile_calls) == 1
+    engine.dispose()
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Uses an executable Python shebang')
+@pytest.mark.parametrize("cancel_mode", ["runtime", "database"])
+def test_cancel_scan_interrupts_running_probe_without_file_failure(tmp_path, cancel_mode):
+    import sys
+    from time import monotonic
+    marker = tmp_path / 'started'
+    probe = tmp_path / 'probe'
+    probe.write_text(f'#!{sys.executable}\nfrom pathlib import Path\nimport time\nPath({str(marker)!r}).touch()\ntime.sleep(30)\n')
+    probe.chmod(0o755)
+    media = tmp_path / 'library'
+    media.mkdir()
+    (media / 'movie.mkv').write_bytes(b'x')
+    engine = create_engine(f"sqlite:///{tmp_path / 'cancel.db'}")
+    Base.metadata.create_all(engine)
+    settings = Settings(config_path=tmp_path / 'config', media_root=tmp_path, ffprobe_path=str(probe))
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    def request_cancel(job_id):
+        if not marker.exists():
+            return False
+        if cancel_mode == "runtime":
+            return True
+        # Exercise persisted-status cancellation without signaling the runtime.
+        from sqlalchemy import update
+        with factory() as cancel_db:
+            cancel_db.execute(update(ScanJob).where(ScanJob.id == job_id).values(status=JobStatus.canceled))
+            cancel_db.commit()
+        return False
+
+    with factory() as db:
+        library = Library(name='Cancel', path=str(media), type=LibraryType.movies)
+        db.add(library)
+        db.commit()
+        started = monotonic()
+        with pytest.raises(ScanCanceled):
+            run_scan(db, settings, library.id, 'full', is_cancel_requested=request_cancel)
+        assert marker.exists()
+        assert monotonic() - started < 3
+        assert db.scalar(select(ScanJob.errors)) == 0
+        assert db.scalar(select(MediaFile.scan_status)) != ScanStatus.failed
+    engine.dispose()

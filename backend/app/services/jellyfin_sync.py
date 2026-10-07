@@ -664,7 +664,7 @@ def run_jellyfin_sync(db: Session, *, job_id: int | None = None) -> dict[str, in
         connection.last_sync_finished_at = finished_at
         connection.last_successful_sync_at = finished_at
         db.commit()
-        stats_cache.invalidate(str(id(db.get_bind())))
+        stats_cache.invalidate_connectors(str(id(db.get_bind())))
         return {
             "status": "success",
             "libraries_synced": library_count,

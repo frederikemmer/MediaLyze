@@ -1802,7 +1802,7 @@ def list_grouped_library_files(
         func.coalesce(func.sum(filtered_media_files.c.size_bytes), 0).label("total_size_bytes"),
         func.coalesce(func.sum(filtered_media_files.c.duration_seconds), 0.0).label("total_duration_seconds"),
         func.avg(cast(filtered_media_files.c.quality_score, Float)).label("quality_score_average"),
-        func.avg(cast(filtered_media_files.c.bitrate, Float)).label("bitrate_average"),
+        func.avg(cast(func.coalesce(func.nullif(filtered_media_files.c.bitrate, 0), filtered_media_files.c.audio_bitrate), Float)).label("bitrate_average"),
         func.avg(cast(filtered_media_files.c.audio_bitrate, Float)).label("audio_bitrate_average"),
         literal(None).label("file_id"),
     ).select_from(filtered_media_files).join(MediaSeries, MediaSeries.id == filtered_media_files.c.series_id).group_by(
@@ -1887,38 +1887,32 @@ def list_grouped_library_files(
     )
     _add_jellyfin_metadata(db, loose_file_rows)
     loose_files = {row.id: row for row in loose_file_rows}
-    series_metrics_by_id: dict[int, dict[str, float | int | None]] = {}
+    # Aggregate only matched playback values. Unmatched series retain None;
+    # matched files without enabled user data contribute zero, as in table rows.
+    play_counts_by_series: dict[int, int] = {}
     if series_ids:
-        visible_series_file_ids = list(
-            db.scalars(
-                select(MediaFile.id)
-                .join(filtered_ids, filtered_ids.c.id == MediaFile.id)
-                .where(MediaFile.series_id.in_(series_ids))
-                .order_by(MediaFile.relative_path.asc())
-            ).all()
+        playback = (
+            select(JellyfinUserItemData.jellyfin_item_id.label("item_id"),
+                   func.sum(JellyfinUserItemData.play_count).label("play_count"))
+            .join(JellyfinUser, JellyfinUser.jellyfin_user_id == JellyfinUserItemData.jellyfin_user_id)
+            .where(JellyfinUser.enabled_for_sync.is_(True))
+            .group_by(JellyfinUserItemData.jellyfin_item_id).subquery()
         )
-        visible_series_rows = _load_compact_table_rows(
-            db,
-            visible_series_file_ids,
-            resolution_categories,
-        )
-        _add_jellyfin_metadata(db, visible_series_rows)
-        for series_id in series_ids:
-            series_rows = [row for row in visible_series_rows if row.series_id == series_id]
-            play_counts = [row.jellyfin_play_count for row in series_rows if row.jellyfin_play_count is not None]
-            series_metrics_by_id[series_id] = {
-                "total_size_bytes": sum(row.size_bytes for row in series_rows),
-                "total_duration_seconds": sum(row.duration or 0 for row in series_rows),
-                "quality_score_average": _average_present([row.quality_score for row in series_rows]),
-                "bitrate_average": _average_present([row.bitrate for row in series_rows]),
-                "audio_bitrate_average": _average_present([row.audio_bitrate for row in series_rows]),
-                "play_count_total": sum(play_counts) if play_counts else None,
-            }
+        play_counts_by_series = dict(db.execute(
+            select(MediaFile.series_id, func.sum(func.coalesce(playback.c.play_count, 0)))
+            .join(filtered_ids, filtered_ids.c.id == MediaFile.id)
+            .join(JellyfinMediaMatch, JellyfinMediaMatch.media_file_id == MediaFile.id)
+            .join(JellyfinItem, JellyfinItem.id == JellyfinMediaMatch.jellyfin_item_id)
+            .outerjoin(playback, playback.c.item_id == JellyfinItem.id)
+            .where(MediaFile.series_id.in_(series_ids), JellyfinMediaMatch.status == "matched")
+            .group_by(MediaFile.series_id)
+        ).all())
     items = []
     for row in page_rows:
         if row["kind"] == "series":
             series_id = int(row["series_id"])
-            metrics = series_metrics_by_id.get(series_id, {})
+            metrics = dict(row)
+            metrics["play_count_total"] = play_counts_by_series.get(series_id)
             items.append(
                 GroupedSeriesTableRowRead(
                     kind="series",

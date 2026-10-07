@@ -1,5 +1,7 @@
 # Design QA: current reference
 
+[Documentation home](README.md)
+
 This page consolidates the former root `design-qa.md` and this file. It describes the current implementation rather than preserving a sequence of completed visual reviews. The hidden `/ui-elements` route is the canonical visual inventory; the frontend source and tests are authoritative for behavior. The design decisions in `AGENTS.md` record the wider migration history.
 
 The earlier QA reports referred to local browser captures, `prototypes/` images, and machine-specific ImageGen paths that are not available in this repository. Their historical pass counts and "no findings" conclusions are not claims about the current build. The sections below retain the useful design and interaction checks, reconciled with the current source.
@@ -20,12 +22,14 @@ The old reports document two resolved implementation traps: an all-or-nothing la
 
 **Current implementation:** `frontend/src/components/TranscodingPanel.tsx`, `frontend/src/components/TranscodingSettingsPanel.tsx`, `frontend/src/components/TranscodeProfilesRulesPanel.tsx`, their related tests and styles, and the Transcoding examples in `/ui-elements`.
 
-- The automation workspace uses compact underline tabs for Profiles, Rules, Accelerators, and Members. Its heading help is contextual to the selected tab. The capability matrix owns accelerator details rather than duplicating them in the Members view.
+- The workspace uses compact underline tabs for Presets and Accelerators. Rules and Members remain implemented but hidden by the current release switches; internal implementation terminology may still use Profiles. Its heading help is contextual to the selected tab. The capability matrix owns accelerator details rather than duplicating them in the Members view.
 - The transcoding job view keeps status, progress, source-to-target details, and speed history readable at desktop and narrow widths. Table cells retain table layout semantics; content inside cells handles long hardware labels and filenames. Column resizing and links to file details remain available where applicable.
 - Job detail disclosures start in the state defined by the current component, not by the early September screenshots. Verify collapsed and expanded content, status changes, sparse speed samples, and long values against current fixtures before changing those views.
 - Shared controls, spacing, typography, and focus treatment come from `frontend/globals.css`, `frontend/src/medialyze.css`, neighboring pages, and `/ui-elements`. Avoid reviving the former sliding-pill treatment for the automation tabs; it remains intentional for other toggle groups.
 
 ## Federation members and pairing
+
+**Release visibility:** retained implementation, hidden in the shipped frontend. Refer to [unreleased implementation notes](internal/unreleased-transcoding.md) before testing or enabling it.
 
 **Current implementation:** `frontend/src/components/TranscodeFederationPanel.tsx`, `frontend/src/components/TranscodingSettingsPanel.tsx`, the relevant styles and tests, the `Federation members tab` example in `/ui-elements`, and the Federation design decision in `AGENTS.md`.
 
@@ -42,6 +46,10 @@ The old reports document two resolved implementation traps: an all-or-nothing la
 - Hardware, software, and combination profiles use the same compact underline navigation and one searchable, expandable list surface. Their existing profile actions and editors remain available.
 - Development guidance for compatibility profiles is available from the heading's shared tooltip instead of occupying permanent page space. Check the tooltip through keyboard focus as well as pointer hover.
 - Keep profile rows compact, preserve readable names and metadata when they wrap, and compare expanded/collapsed, empty, disabled, hover, focus, light/dark, and narrow states in `/ui-elements` when editing these patterns.
+
+## Table scores and grouped media
+
+`TableQualityScore.tsx` renders a colored numerator with neutral `/10` in library and metadata-comparison tables. Score meters and their UI toggle have been retired; the stored flag remains for configuration compatibility. Series and season buttons align left, use file-name font size, and center their text beside the chevron. The ordinary/grouped table examples in `/ui-elements` are the reference.
 
 ## Verification for future visual changes
 

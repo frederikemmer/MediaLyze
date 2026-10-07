@@ -1,6 +1,7 @@
 from pathlib import Path
+import pytest
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from backend.app.db.base import Base
@@ -17,6 +18,67 @@ from backend.app.services.duplicates import (
     suppress_duplicate_group,
     unsuppress_duplicate_group,
 )
+from backend.app.services import duplicates as duplicate_service
+
+
+def test_signature_backfill_does_not_decode_raw_probe_and_resumes_committed_batches(monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr(duplicate_service, "SIGNATURE_BACKFILL_BATCH_SIZE", 2)
+    with factory() as db:
+        library = Library(name="Movies", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        for filename in ("---.mkv", "Two.mkv", "Three.mkv", "Four.mkv", "Done.mkv"):
+            db.add(MediaFile(library_id=library.id, filename=filename, relative_path=filename,
+                             extension="mkv", size_bytes=1, mtime=1,
+                             filename_pattern_signature="already done" if filename == "Done.mkv" else None))
+        db.commit()
+        # Signature migration must work even when unrelated old raw JSON is
+        # malformed; loading full ORM records would raise JSONDecodeError.
+        db.execute(text("UPDATE media_files SET raw_ffprobe_json = 'invalid JSON'"))
+        db.commit()
+    normalize = duplicate_service.normalize_filename_pattern_signature
+
+    def interrupted(path, settings):
+        if path.name == "Three.mkv":
+            raise RuntimeError("interrupted startup")
+        return normalize(path, settings)
+
+    monkeypatch.setattr(duplicate_service, "normalize_filename_pattern_signature", interrupted)
+    with factory() as db:
+        with pytest.raises(RuntimeError, match="interrupted startup"):
+            backfill_filename_pattern_signatures(db, commit_batches=True)
+        db.rollback()
+    with factory() as db:
+        assert db.scalars(select(MediaFile.filename_pattern_signature).order_by(MediaFile.id)).all() == [
+            "", "two", None, None, "already done",
+        ]
+    monkeypatch.setattr(duplicate_service, "normalize_filename_pattern_signature", normalize)
+    with factory() as db:
+        # Empty normalization remains compatible and cannot stall keyset paging.
+        assert backfill_filename_pattern_signatures(db, commit_batches=True) == 3
+        assert db.scalars(select(MediaFile.filename_pattern_signature).order_by(MediaFile.id)).all() == [
+            "", "two", "three", "four", "already done",
+        ]
+    engine.dispose()
+
+
+def test_signature_backfill_preserves_callers_transaction() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine, autoflush=False)() as db:
+        library = Library(name="Movies", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        db.add(MediaFile(library_id=library.id, filename="Movie.mkv", relative_path="Movie.mkv",
+                         extension="mkv", size_bytes=1, mtime=1))
+        db.commit()
+        assert backfill_filename_pattern_signatures(db) == 1
+        db.rollback()
+        assert db.scalar(select(MediaFile.filename_pattern_signature)) is None
+    engine.dispose()
 
 
 def test_duplicate_strategy_factory_returns_expected_strategy() -> None:
@@ -508,3 +570,16 @@ def test_duplicate_suppression_is_mode_specific_for_combined_detection(tmp_path:
     assert with_suppressed.suppressed_group_count == 1
     assert [group.suppressed for group in with_suppressed.items] == [True, False]
     assert idempotent.suppressed_group_count == 1
+
+
+def test_file_hash_honors_worker_cancellation(tmp_path):
+    from threading import Event
+    from backend.app.utils.cancellation import WorkCanceled, cancellation_scope
+    from backend.app.services.duplicates import FileHashDuplicateDetectionStrategy
+    path = tmp_path / 'file.mkv'
+    path.write_bytes(b'x' * 1024)
+    event = Event()
+    with cancellation_scope(event):
+        event.set()
+        with pytest.raises(WorkCanceled):
+            FileHashDuplicateDetectionStrategy().build_payload(path)

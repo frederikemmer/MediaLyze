@@ -1,5 +1,9 @@
 # Unreleased transcoding implementation notes
 
+[Documentation home](../README.md)
+
+Status: Federation and automatic rules are currently hidden in the shipped frontend; saved presets and local transcoding remain available. Hiding these controls does not disable their backend routes or runtime. Federation additionally requires persisted opt-in and the process-level gate below.
+
 To expose these features in a later release, set the corresponding switches in
 `frontend/src/lib/release-visibility.ts` to `true`, restore the relevant public
 documentation and Docker port examples from this file, and run the existing

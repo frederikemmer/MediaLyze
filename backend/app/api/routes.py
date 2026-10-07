@@ -39,6 +39,8 @@ from backend.app.schemas.connectors import (
     ConnectorPlaybackUserDataRead,
     ConnectorSyncCancelRead,
     ConnectorSyncJobRead,
+    ConnectorActiveJobRead,
+    ConnectorJobConnectionRead,
     ConnectorSyncStartRead,
     ConnectorTestRead,
     ConnectorTestRequest,
@@ -218,7 +220,7 @@ from backend.app.services.duplicates import (
 )
 from backend.app.services.history_storage import get_cached_history_storage
 from backend.app.services.history_retention import has_active_scan_jobs
-from backend.app.services.library_history_service import get_dashboard_history, get_library_history
+from backend.app.services.library_history_service import HISTORY_METRICS, get_dashboard_history, get_library_history
 from backend.app.services.library_service import (
     create_library,
     delete_library,
@@ -511,9 +513,26 @@ def dashboard(
     return build_dashboard(db, requested_panels=_normalize_panel_query(panels))
 
 
+def _history_query(metric, start, end, days):
+    from datetime import date
+    if metric is not None and metric not in HISTORY_METRICS:
+        raise HTTPException(status_code=422, detail="Unknown history metric")
+    try:
+        for value in (start, end):
+            if value is not None and date.fromisoformat(value).isoformat() != value:
+                raise ValueError()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="History dates must use YYYY-MM-DD")
+    if (start and end and start > end) or (days is not None and (start or end)):
+        raise HTTPException(status_code=422, detail="Invalid history range")
+    return dict(metric=metric, start=start, end=end, days=days)
+
+
 @router.get("/dashboard/history", response_model=DashboardHistoryResponse)
-def dashboard_history(db: Session = Depends(get_db_session)) -> DashboardHistoryResponse:
-    return get_dashboard_history(db)
+def dashboard_history(db: Session = Depends(get_db_session), metric: str | None = None,
+                      start: str | None = None, end: str | None = None,
+                      days: int | None = Query(default=None, ge=1, le=36500)) -> DashboardHistoryResponse:
+    return get_dashboard_history(db, **_history_query(metric, start, end, days))
 
 
 @router.get("/dashboard/comparison", response_model=ComparisonResponse)
@@ -1004,6 +1023,27 @@ def connector_sync_cancel(
     )
 
 
+def _legacy_connector_sync_job(legacy_job: JellyfinSyncJob, connection_id: int) -> ConnectorSyncJobRead:
+    return ConnectorSyncJobRead(
+        id=legacy_job.id,
+        connection_id=connection_id,
+        job_type="sync",
+        sync_run_id=None,
+        status=legacy_job.status.value,
+        trigger_source=legacy_job.trigger_source.value,
+        cancellation_requested=legacy_job.cancellation_requested,
+        progress_phase=legacy_job.progress_phase,
+        progress_detail=legacy_job.progress_detail,
+        progress_current=legacy_job.progress_current,
+        progress_total=legacy_job.progress_total,
+        queued_at=legacy_job.queued_at,
+        started_at=legacy_job.started_at,
+        finished_at=legacy_job.finished_at,
+        error=legacy_job.error,
+        sync_summary=dict(legacy_job.sync_summary or {}),
+    )
+
+
 @router.get("/connectors/{connection_id}/sync/status", response_model=ConnectorSyncJobRead | None)
 def connector_sync_status(
     connection_id: int,
@@ -1029,29 +1069,39 @@ def connector_sync_status(
             return generic_job
         if legacy_job is None:
             return None
-        return ConnectorSyncJobRead(
-            id=legacy_job.id,
-            connection_id=connection_id,
-            job_type="sync",
-            sync_run_id=None,
-            status=legacy_job.status.value,
-            trigger_source=legacy_job.trigger_source.value,
-            cancellation_requested=legacy_job.cancellation_requested,
-            progress_phase=legacy_job.progress_phase,
-            progress_detail=legacy_job.progress_detail,
-            progress_current=legacy_job.progress_current,
-            progress_total=legacy_job.progress_total,
-            queued_at=legacy_job.queued_at,
-            started_at=legacy_job.started_at,
-            finished_at=legacy_job.finished_at,
-            error=legacy_job.error,
-            sync_summary=dict(legacy_job.sync_summary or {}),
-        )
+        return _legacy_connector_sync_job(legacy_job, connection_id)
     return db.scalar(
         select(ConnectorSyncJob)
         .where(ConnectorSyncJob.connection_id == connection_id)
         .order_by(ConnectorSyncJob.id.desc())
     )
+
+
+@router.get("/connector-jobs/active", response_model=list[ConnectorActiveJobRead])
+def connector_active_jobs(db: Session = Depends(get_db_session)) -> list[ConnectorActiveJobRead]:
+    latest_ids = select(func.max(ConnectorSyncJob.id)).group_by(ConnectorSyncJob.connection_id)
+    jobs = {
+        job.connection_id: job
+        for job in db.scalars(
+            select(ConnectorSyncJob).where(
+                ConnectorSyncJob.id.in_(latest_ids),
+            )
+        )
+    }
+    legacy = db.scalar(select(JellyfinSyncJob).order_by(JellyfinSyncJob.id.desc()).limit(1))
+    result = []
+    for connection in db.scalars(select(ConnectorConnection).order_by(ConnectorConnection.id)):
+        job = jobs.get(connection.id)
+        if is_legacy_default_connection(connection) and legacy is not None:
+            if (job is None or (job.status not in {JobStatus.queued, JobStatus.running}
+                                and job.queued_at < legacy.queued_at)):
+                job = _legacy_connector_sync_job(legacy, connection.id)
+        if job is not None and job.status in {JobStatus.queued, JobStatus.running}:
+            result.append(ConnectorActiveJobRead(
+                connection=ConnectorJobConnectionRead.model_validate(connection),
+                job=ConnectorSyncJobRead.model_validate(job),
+            ))
+    return result
 
 
 def _connector_with_capability(
@@ -1126,7 +1176,7 @@ def connector_users_update(
                 )
             )
     db.commit()
-    stats_cache.invalidate(str(id(db.get_bind())))
+    stats_cache.invalidate_connectors(str(id(db.get_bind())))
     return users
 
 
@@ -1646,7 +1696,7 @@ def jellyfin_users_update(
                 )
             )
     db.commit()
-    stats_cache.invalidate(str(id(db.get_bind())))
+    stats_cache.invalidate_connectors(str(id(db.get_bind())))
     return users
 
 
@@ -1835,7 +1885,7 @@ def jellyfin_library_link_update(
     else:
         source.mapped_status = "updating"
     db.commit()
-    stats_cache.invalidate(str(id(db.get_bind())))
+    stats_cache.invalidate_connectors(str(id(db.get_bind())))
     runtime.request_jellyfin_match_recompute()
     db.refresh(source)
     return get_jellyfin_library_read(db, source)
@@ -2111,8 +2161,10 @@ def library_duplicate_suppression_delete(
 
 
 @router.get("/libraries/{library_id}/history", response_model=LibraryHistoryResponse)
-def library_history(library_id: int, db: Session = Depends(get_db_session)) -> LibraryHistoryResponse:
-    payload = get_library_history(db, library_id)
+def library_history(library_id: int, db: Session = Depends(get_db_session), metric: str | None = None,
+                    start: str | None = None, end: str | None = None,
+                    days: int | None = Query(default=None, ge=1, le=36500)) -> LibraryHistoryResponse:
+    payload = get_library_history(db, library_id, **_history_query(metric, start, end, days))
     if payload is None:
         raise HTTPException(status_code=404, detail="Library not found")
     return payload

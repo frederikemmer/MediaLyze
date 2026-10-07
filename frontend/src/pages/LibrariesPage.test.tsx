@@ -1108,52 +1108,10 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
-  it("persists the hide quality score meter feature flag", async () => {
-    const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
-      createAppSettings({
-        feature_flags: {
-          show_analyzed_files_csv_export: false,
-          show_full_width_app_shell: false,
-          hide_quality_score_meter: true,
-          show_music_quality_score: false,
-          unlimited_panel_size: false,
-          in_depth_dolby_vision_profiles: false,
-          show_all_playbacks_when_unstacked: false,
-        },
-      }),
-    );
-
+  it("omits the retired quality-score meter control", async () => {
     renderPage({ activePanel: "appSettings" });
-
-    const checkbox = await screen.findByLabelText("Hide quality score meter");
-    await waitFor(() => expect(checkbox).toBeEnabled());
-    fireEvent.click(checkbox);
-
-    await waitFor(() =>
-      expect(updateSpy).toHaveBeenCalledWith({
-        user_ignore_patterns: ["movie.tmp"],
-        default_ignore_patterns: ["*/@eaDir/*"],
-        scan_performance: {
-          scan_worker_count: 4,
-          parallel_scan_jobs: 2,
-          comparison_scatter_point_limit: 5000,
-        },
-        history_retention: {
-          file_history: { days: 30, storage_limit_gb: 0 },
-          library_history: { days: 365, storage_limit_gb: 0 },
-          scan_history: { days: 30, storage_limit_gb: 0 },
-        },
-        feature_flags: {
-          show_analyzed_files_csv_export: false,
-          show_full_width_app_shell: false,
-          hide_quality_score_meter: true,
-          show_music_quality_score: false,
-          unlimited_panel_size: false,
-          in_depth_dolby_vision_profiles: false,
-          show_all_playbacks_when_unstacked: false,
-        },
-      }),
-    );
+    expect(await screen.findByLabelText("Use full-width app shell")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Hide quality score meter")).not.toBeInTheDocument();
   });
 
   it("persists the unlimited panel size feature flag", async () => {

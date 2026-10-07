@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import create_engine, select
+import pytest
+
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -73,6 +75,30 @@ def _build_media_file(library_id: int) -> MediaFile:
         AudioStream(stream_index=1, codec="truehd", channels=8, channel_layout="7.1", language="en")
     ]
     return media_file
+
+
+def test_unchanged_history_does_not_reload_raw_probe_data() -> None:
+    factory = _session_factory()
+    with factory() as db:
+        library = Library(name="Movies", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        media_file = _build_media_file(library.id)
+        media_file.raw_ffprobe_json = {"padding": "x" * 100000}
+        db.add(media_file)
+        db.commit()
+        categories = default_resolution_categories()
+        assert create_media_file_history_entry_if_changed(
+            db, media_file, MediaFileHistoryCaptureReason.scan_analysis, categories,
+        ) is True
+        db.commit()
+        first_snapshot = db.scalar(select(MediaFileHistory.snapshot))
+        assert first_snapshot["raw_ffprobe_json"] == media_file.raw_ffprobe_json
+        db.expire(media_file, ["raw_ffprobe_json"])
+        assert create_media_file_history_entry_if_changed(
+            db, media_file, MediaFileHistoryCaptureReason.scan_analysis, categories,
+        ) is False
+        assert "raw_ffprobe_json" in inspect(media_file).unloaded
 
 
 def test_create_media_file_history_entry_if_changed_avoids_duplicate_snapshot() -> None:
@@ -1106,3 +1132,92 @@ def test_reconstruct_history_from_media_files_is_idempotent(monkeypatch) -> None
     assert first.created_file_history_entries == 1
     assert second.created_library_history_entries == 0
     assert second.created_file_history_entries == 0
+
+
+@pytest.mark.parametrize("kind", ["file", "library", "scan", "automation"])
+def test_storage_retention_preserves_byte_estimates_order_and_active_jobs(monkeypatch, kind):
+    from backend.app.models.entities import TranscodeAutomationRun
+    from backend.app.services import history_retention as retention
+    from backend.app.services.history_storage import _json_length, _text_length
+
+    monkeypatch.setattr(retention, "HISTORY_RETENTION_BATCH_SIZE", 2)
+    factory = _session_factory()
+    payload = {"unicode": "Grüße 中文", "nested": {"value": [1, True, None]}}
+    timestamp = datetime.now(UTC)
+    with factory() as db:
+        library = Library(name="Movies", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        for i in range(6):
+            if kind == "file":
+                row = MediaFileHistory(library_id=library.id, media_file_id=i + 1, filename="Ä.mkv",
+                    relative_path="Ä.mkv", snapshot_hash="hash", snapshot=payload, captured_at=timestamp,
+                    capture_reason=MediaFileHistoryCaptureReason.scan_analysis)
+                size = 2 * _text_length("Ä.mkv") + _text_length("hash") + _json_length(payload)
+                model = MediaFileHistory
+                prune = retention._prune_media_file_history
+            elif kind == "library":
+                row = LibraryHistory(library_id=library.id, snapshot_day=f"2026-09-{i + 1:02}",
+                    snapshot=payload, captured_at=timestamp)
+                size = _json_length(payload)
+                model = LibraryHistory
+                prune = retention._prune_library_history
+            elif kind == "scan":
+                row = ScanJob(library_id=library.id, status=JobStatus.completed, job_type="incremental",
+                    trigger_details=payload, scan_summary=payload, finished_at=None if i < 3 else timestamp)
+                size = _text_length("incremental") + _text_length("completed") + _text_length("manual") + 2 * _json_length(payload)
+                model = ScanJob
+                prune = retention._prune_scan_history
+            else:
+                row = TranscodeAutomationRun(status="completed", summary=payload,
+                    finished_at=None if i < 3 else timestamp)
+                size = _text_length("manual") + 3 * _json_length([]) + _json_length(payload)
+                model = TranscodeAutomationRun
+                prune = retention._prune_transcode_automation_runs
+            db.add(row)
+        db.commit()
+        if kind in {"scan", "automation"}:
+            active = model(library_id=library.id, status=JobStatus.running, job_type="incremental") if kind == "scan" else model(status="running")
+            db.add(active)
+            db.commit()
+            active_id = active.id
+        else:
+            active_id = None
+        assert prune(db, days=0, storage_limit_bytes=size * 2) == 4
+        remaining = db.scalars(select(model.id).order_by(model.id)).all()
+        assert remaining == [5, 6] + ([active_id] if active_id else [])
+        assert prune(db, days=0, storage_limit_bytes=size * 2) == 0
+
+
+
+def test_history_reconstruction_releases_raw_data_between_files(monkeypatch):
+    from backend.app.services import history_reconstruction as reconstruction
+
+    factory = _session_factory()
+    now = datetime.now(UTC)
+    with factory() as db:
+        library = Library(name="Reconstruction", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        for i in range(8):
+            media = _build_media_file(library.id)
+            media.filename = media.relative_path = f"Movie-{i}.mkv"
+            media.mtime = (now - timedelta(days=2)).timestamp()
+            media.raw_ffprobe_json = {"padding": "x" * 10000}
+            db.add(media)
+        db.commit()
+    build_snapshot = reconstruction.build_media_file_history_snapshot
+    retained = []
+    with factory() as db:
+        def checked_snapshot(media, categories):
+            files = [item for item in db.identity_map.values() if isinstance(item, MediaFile)]
+            retained.append(sum("raw_ffprobe_json" not in inspect(item).unloaded for item in files))
+            return build_snapshot(media, categories)
+
+        monkeypatch.setattr(reconstruction, "build_media_file_history_snapshot", checked_snapshot)
+        result = reconstruct_history_from_media_files(db)
+        assert result.created_file_history_entries == 8
+        snapshots = db.scalars(select(MediaFileHistory.snapshot)).all()
+        assert all(snapshot["raw_ffprobe_json"] == {"padding": "x" * 10000} for snapshot in snapshots)
+        assert retained == [0] * 8
+        assert reconstruct_history_from_media_files(db).created_file_history_entries == 0

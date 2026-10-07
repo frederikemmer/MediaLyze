@@ -5,10 +5,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
+
+from backend.app.utils.cancellation import check_canceled
 import re
 from typing import Protocol
 
-from sqlalchemy import Select, and_, case, delete, exists, func, or_, select, union
+from sqlalchemy import Select, and_, bindparam, case, delete, exists, func, or_, select, union
 from sqlalchemy.orm import Session
 
 from backend.app.models.entities import DuplicateDetectionMode, DuplicateGroupSuppression, Library, LibraryRoot, MediaFile
@@ -24,6 +26,7 @@ from backend.app.services.pattern_recognition import default_duplicate_matching_
 FILE_HASH_ALGORITHM = "sha256"
 FILE_HASH_CHUNK_SIZE = 1024 * 1024
 FILENAME_SIGNATURE_PATTERN = re.compile(r"[\s._-]+")
+SIGNATURE_BACKFILL_BATCH_SIZE = 500
 
 
 def _effective_duplicate_filename_suffix_regexes(settings: DuplicateMatchingSettings) -> list[str]:
@@ -99,6 +102,7 @@ class FileHashDuplicateDetectionStrategy:
         digest = hashlib.new(FILE_HASH_ALGORITHM)
         with file_path.open("rb") as handle:
             while chunk := handle.read(FILE_HASH_CHUNK_SIZE):
+                check_canceled()
                 digest.update(chunk)
         return {
             "content_hash": digest.hexdigest(),
@@ -172,24 +176,40 @@ def get_duplicate_detection_strategy(
 def backfill_filename_pattern_signatures(
     db: Session,
     duplicate_matching_settings: DuplicateMatchingSettings | None = None,
+    *,
+    commit_batches: bool = False,
 ) -> int:
     updated = 0
-    media_files = db.scalars(
-        select(MediaFile).where(
-            or_(
-                MediaFile.filename_pattern_signature.is_(None),
-                func.length(func.trim(MediaFile.filename_pattern_signature)) == 0,
-            )
+    last_id = 0
+    # Core projections avoid loading/decoding every raw ffprobe payload. Keyset
+    # paging also advances past filenames whose normalized signature is empty.
+    table = MediaFile.__table__
+    statement = table.update().where(table.c.id == bindparam("file_id")).values(
+        filename_pattern_signature=bindparam("signature")
+    )
+    db.flush()
+    while rows := db.execute(
+        select(MediaFile.id, MediaFile.filename)
+        .where(
+            MediaFile.id > last_id,
+            or_(MediaFile.filename_pattern_signature.is_(None),
+                func.length(func.trim(MediaFile.filename_pattern_signature)) == 0),
         )
-    ).all()
-    for media_file in media_files:
-        media_file.filename_pattern_signature = normalize_filename_pattern_signature(
-            Path(media_file.filename),
-            duplicate_matching_settings,
-        )
-        updated += 1
-    if updated:
-        db.flush()
+        .order_by(MediaFile.id)
+        .limit(SIGNATURE_BACKFILL_BATCH_SIZE)
+    ).all():
+        db.execute(statement, [{
+            "file_id": row.id,
+            "signature": normalize_filename_pattern_signature(Path(row.filename), duplicate_matching_settings),
+        } for row in rows])
+        last_id = rows[-1].id
+        updated += len(rows)
+        if commit_batches:
+            db.commit()
+    # Keep already loaded ORM records consistent with the bulk update.
+    for instance in list(db.identity_map.values()):
+        if isinstance(instance, MediaFile):
+            db.expire(instance, ["filename_pattern_signature"])
     return updated
 
 

@@ -1,5 +1,7 @@
 # Performance benchmarks
 
+[Documentation home](README.md)
+
 The scripts in `docs/benchmarks/` measure selected database and filesystem workloads with synthetic data. They are developer tools; the application does not run them during normal startup or library scans. Each script creates its own temporary SQLite database, and the scan and duplicate benchmarks create temporary media-like files. The temporary data is removed when the script exits.
 
 Run commands from the repository root with the project virtual environment. On Windows:
@@ -27,8 +29,12 @@ On Linux or macOS, use `.venv/bin/python` and forward slashes in the paths. Star
 | `benchmark_library_statistics.py` | Selected library distributions and numeric charts with the application statistics cache missed and hit. | “Cache miss” clears MediaLyze's in-process cache; SQLite and operating-system page caches may still be warm. |
 | `benchmark_scan_pipeline.py` | Initial indexing, unchanged incremental scans, an incremental scan with additions/changes/deletions, and full reanalysis. | Uses small synthetic files and a fixed `ffprobe` response. It measures scanning, normalization, and persistence, not real media probing or decoding. |
 | `benchmark_duplicate_detection.py` | Filename signatures, SHA-256 hashing, and filename/hash duplicate-group queries. | Uses synthetic files (4 KiB each by default); hashing results depend on storage and worker count. Repeated passes may benefit from the operating-system file cache. |
+| `benchmark_startup_memory.py` | Signature backfill, upgrade/repeated database startup, file-history storage pruning, and initial/repeated quality recomputation with large stored JSON; `--reconstruct-only` measures manual history reconstruction. | Temporary synthetic catalog; measures Python allocations with `tracemalloc`, not container RSS or real ffprobe memory. |
+| `benchmark_application_performance.py` | Transcode history, comparisons, Storage Map, cache behavior and Python allocation peaks. | Synthetic 100k catalog; service/serialization timings, not end-to-end UI latency. |
+| `benchmark_mixed_performance.py` | Concurrent scans, FFmpeg and API response latency in an isolated workload. | Requires FFmpeg and runtime dependencies; CPU/RAM limits and priority affect results. |
+| `benchmark_frontend_cache.mjs` | Result-cache retention under a deterministic query workload. | Reports cached row counts, not browser heap memory; run with Node.js. |
 
-The new query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
+The query, statistics, and duplicate scripts report individual samples and their median, minimum, and maximum. Their `--repeats` option defaults to 3. The three connector benchmarks report one pass per invocation; run each command several times when comparing revisions. All benchmark results include Python, SQLite, and platform versions where applicable.
 
 ## Options and interpretation
 
@@ -40,4 +46,14 @@ The new query, statistics, and duplicate scripts report individual samples and t
 
 Benchmark setup and measured work are reported separately when useful. Compare runs on the same machine, with the same SQLite/Python versions, item count, batch size, worker count, and search-index mode. A single runtime is not a portable performance guarantee; use the samples to compare changes under a controlled setup. These scripts are not absolute-time CI gates.
 
+The scan and startup-memory scripts report peak Python allocations as well as elapsed time. Allocation tracing adds runtime overhead. Benchmark databases use WAL and NORMAL synchronization, matching the production SQLite configuration; default import-time runtime paths are temporary so the scripts also run outside Docker. Run, for example:
+
+```bash
+.venv/bin/python docs/benchmarks/benchmark_startup_memory.py --items 1000 --payload-bytes 65536
+.venv/bin/python docs/benchmarks/benchmark_scan_pipeline.py --items 1000
+.venv/bin/python docs/benchmarks/benchmark_startup_memory.py --items 1000 --payload-bytes 65536 --reconstruct-only
+```
+
 The transcoding capability matrix measures tested hardware paths and practical parallel capacity separately. These database and filesystem scripts do not estimate real CPU/GPU transcoding speed.
+
+The six backend/asset follow-up optimizations have raw comparison results in [the results directory](benchmarks/results/). Reproduce with `.venv/bin/python docs/benchmarks/benchmark_nas_followup.py --output /tmp/followup.json` and, after `cd frontend && npm run build`, run `node docs/benchmarks/verify_static_assets.mjs` from the repository root. These workloads use temporary synthetic databases and do not open NAS data.

@@ -32,6 +32,7 @@ import {
 } from "../lib/release-notes";
 import { getDesktopBridge, isDesktopApp } from "../lib/desktop";
 import { useScanJobs } from "../lib/scan-jobs";
+import { getIdlePollInterval, usePageVisibility } from "../lib/page-visibility";
 
 const GITHUB_REPOSITORY_URL = "https://github.com/frederikemmer/MediaLyze/";
 const GITHUB_ISSUE_URL = "https://github.com/frederikemmer/MediaLyze/issues/new/choose";
@@ -234,7 +235,7 @@ function ScanJobCard({
 }
 
 type ActiveConnectorJob = {
-  connection: ConnectorConnection;
+  connection: Pick<ConnectorConnection, "id" | "name" | "provider">;
   job: ConnectorSyncJob;
 };
 
@@ -389,6 +390,7 @@ export function AppShell() {
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
   const [scanCancelError, setScanCancelError] = useState<string | null>(null);
+  const isPageVisible = usePageVisibility();
   const [activeConnectorJobs, setActiveConnectorJobs] = useState<ActiveConnectorJob[]>([]);
   const [stoppingConnectorJobs, setStoppingConnectorJobs] = useState<Set<number>>(() => new Set());
   const [connectorCancelError, setConnectorCancelError] = useState<string | null>(null);
@@ -638,16 +640,8 @@ export function AppShell() {
       if (refreshRunning) return;
       refreshRunning = true;
       try {
-        const connections = await api.connectors();
-        const jobs = await Promise.all(connections.map(async (connection) => ({
-          connection,
-          job: await api.connectorSyncStatus(connection.id),
-        })));
-        if (!disposed) {
-          setActiveConnectorJobs(jobs.filter((entry): entry is ActiveConnectorJob => (
-            entry.job?.status === "queued" || entry.job?.status === "running"
-          )));
-        }
+        const jobs = await api.activeConnectorJobs();
+        if (!disposed) setActiveConnectorJobs(jobs);
       } catch {
         // Preserve the last known active jobs while connector polling recovers.
       } finally {
@@ -655,8 +649,11 @@ export function AppShell() {
       }
     }
 
+    if (!isPageVisible) return;
     void refreshConnectorJobs();
-    const timer = window.setInterval(() => void refreshConnectorJobs(), 5000);
+    const timer = window.setInterval(
+      () => void refreshConnectorJobs(), activeConnectorJobs.length > 0 ? 5000 : getIdlePollInterval(),
+    );
     const handleFocus = () => void refreshConnectorJobs();
     window.addEventListener("focus", handleFocus);
     return () => {
@@ -664,7 +661,7 @@ export function AppShell() {
       window.clearInterval(timer);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [isPageVisible, activeConnectorJobs.length > 0]);
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {

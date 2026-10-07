@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import mimetypes
+import stat as file_stat
+from starlette.concurrency import run_in_threadpool
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +20,7 @@ from backend.app.services.runtime import ScanRuntimeManager
 
 HTML_CACHE_CONTROL = "no-cache"
 ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+logger = logging.getLogger("uvicorn.error")
 
 
 class JsonGZipResponder(GZipResponder):
@@ -62,7 +67,28 @@ class JsonGZipMiddleware:
 
 class ImmutableAssetStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
+        # Resolve through StaticFiles first, retaining its traversal/symlink checks.
         response = await super().get_response(path, scope)
+        if response.status_code in (200, 304) and path.endswith((".js", ".css")) and not Headers(scope=scope).get("range"):
+            qualities = {}
+            for token in Headers(scope=scope).get("accept-encoding", "").lower().split(","):
+                parts = token.strip().split(";")
+                try:
+                    qualities[parts[0]] = float(next((p.strip()[2:] for p in parts[1:] if p.strip().startswith("q=")), "1"))
+                except ValueError:
+                    qualities[parts[0]] = 0
+            for encoding, suffix in sorted((("br", ".br"), ("gzip", ".gz")),
+                                            key=lambda item: qualities.get(item[0], qualities.get("*", 0)), reverse=True):
+                if qualities.get(encoding, qualities.get("*", 0)) <= 0:
+                    continue
+                full_path, stat = await run_in_threadpool(self.lookup_path, path + suffix)
+                if stat is not None and file_stat.S_ISREG(stat.st_mode):
+                    response = self.file_response(full_path, stat, scope)
+                    response.headers["Content-Encoding"] = encoding
+                    response.headers["Content-Type"] = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                    break
+        if path.endswith((".js", ".css")):
+            response.headers["Vary"] = "Accept-Encoding"
         response.headers["Cache-Control"] = ASSET_CACHE_CONTROL
         return response
 
@@ -80,7 +106,9 @@ def create_app(settings=None) -> FastAPI:
         init_db()
         runtime = ScanRuntimeManager(active_settings)
         _app.state.scan_runtime = runtime
+        logger.info("Application startup: starting runtime and history maintenance")
         runtime.start()
+        logger.info("Application startup: runtime ready")
         yield
         runtime.stop()
 
@@ -89,6 +117,15 @@ def create_app(settings=None) -> FastAPI:
         version=active_settings.app_version,
         lifespan=lifespan,
     )
+    if active_settings.performance_metrics:
+        from backend.app.services.performance import PerformanceMiddleware, performance_metrics
+        performance_metrics.enabled = True
+        app.add_middleware(PerformanceMiddleware)
+
+        @app.get(f"{active_settings.api_prefix}/performance", include_in_schema=False)
+        def performance_snapshot():
+            return performance_metrics.snapshot()
+
     app.add_middleware(JsonGZipMiddleware, minimum_size=1024, compresslevel=5)
     if not active_settings.is_desktop:
         app.add_middleware(

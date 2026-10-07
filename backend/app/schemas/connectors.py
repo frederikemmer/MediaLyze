@@ -296,6 +296,19 @@ class ConnectorSyncJobRead(BaseModel):
     sync_summary: dict
 
 
+class ConnectorJobConnectionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    provider: str
+
+
+class ConnectorActiveJobRead(BaseModel):
+    connection: ConnectorJobConnectionRead
+    job: ConnectorSyncJobRead
+
+
 class FileConnectorSourceRead(BaseModel):
     connection_id: int
     connection_name: str

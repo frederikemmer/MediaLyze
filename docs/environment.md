@@ -1,5 +1,7 @@
 # Environment variables
 
+[Documentation home](README.md)
+
 MediaLyze reads application settings from environment variables through
 `pydantic-settings`. Names are case-insensitive, but the uppercase names below
 are the portable form to use in Docker Compose and `.env` files.
@@ -17,7 +19,7 @@ provide the corresponding device.
 ```yaml
 services:
   medialyze:
-    image: ghcr.io/frederikemmer/medialyze:dev
+    image: ghcr.io/frederikemmer/medialyze:latest
     container_name: medialyze
     hostname: medialyze
     restart: unless-stopped
@@ -67,7 +69,8 @@ services:
 | `SCAN_RUNTIME_WORKER_COUNT` | `2` | Default scan runtime worker count before the persisted App Settings value is applied. |
 | `DISABLE_DEFAULT_IGNORE_PATTERNS` | `false` | When `true`, do not seed the built-in ignore patterns on a new installation. |
 | `TELEMETRY_TIMEOUT_SECONDS` | `2` | Timeout for the optional telemetry request. |
-| `ALLOWED_MEDIA_EXTENSIONS` | built-in video extensions | Advanced JSON array override for accepted media extensions, for example `[".mkv", ".mp4"]`. |
+| `ALLOWED_MEDIA_EXTENSIONS` | built-in video extensions | Legacy/general settings allow-list. Current type-aware scans use the `VIDEO_EXTENSIONS` and `AUDIO_EXTENSIONS` constants via `get_allowed_media_extensions`; this variable does not override those per-type sets. See [discovery rules](patterns.md). |
+| `MEDIALYZE_PERFORMANCE_METRICS` | `false` | Enables bounded, in-process API/SQL/cache/queue measurements and `/api/performance`. This is local diagnostic data, separate from opt-in telemetry. |
 | `SUBTITLE_EXTENSIONS` | `.srt`, `.ass`, `.ssa`, `.sub`, `.idx` | Advanced JSON array override for recognized sidecar subtitle extensions. |
 | `TZ` | image/host timezone | Process and scheduler timezone, for example `Europe/Berlin`. |
 
@@ -102,6 +105,8 @@ are not all application settings:
 device access are prepared for that user/group. When `/dev/dri` is mounted,
 the entrypoint preserves the supplementary device groups supplied by
 `group_add` while dropping to the configured user.
+
+Federation process settings are documented in the [internal unreleased-feature reference](internal/unreleased-transcoding.md#federation-settings). Federation and automation rules are currently hidden by the frontend release switches; that visibility does not disable retained backend APIs.
 
 ## Desktop-specific process variables
 

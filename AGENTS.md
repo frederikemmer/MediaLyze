@@ -17,17 +17,18 @@ Current baseline:
 * primary development branch: `dev`
 * stack: **Python 3.12**, **FastAPI**, **SQLAlchemy**, **SQLite**, **React 19**, **Vite**, **TypeScript**, **i18next**, **APScheduler**, **watchdog**, **Electron**, **Docker**, **GHCR**
 
-Current `dev` already includes unreleased additions beyond `v0.2.0`, including:
+Current `dev` includes the shipped feature set plus ongoing work beyond the latest stable release. The latest release verified on 2026-10-02 is `v0.19.0`; check GitHub release metadata rather than assuming this dated snapshot remains latest. Implemented areas include:
 
 * a provider-neutral multi-connection catalog layer with Jellyfin migration, deterministic location-to-root bindings, generic staged synchronization, Shadow Mode comparison, and legacy Jellyfin compatibility
-* basic audio-file support with Music library type, type-aware file discovery, and music metadata extraction (title, artist, album, etc.)
+* music and audiobook library types with type-aware audio discovery, music/book tags, chapters, and embedded-cover metadata
 * path-browser filtering for placeholder directories such as `cdrom`, `floppy`, and `usb` when they are only container-exposed shadow directories
 * broader HDR10+ detection from additional ffprobe side-data metadata variants
 
 Important documentation rule:
 
 * prefer the actual repository code and GitHub release metadata over `CHANGELOG.md` when they disagree
-* `CHANGELOG.md` is currently incomplete on `dev` and does **not** fully reflect the already published `v0.2.0` release
+* `CHANGELOG.md` records release notes and `vUnreleased` work; GitHub release metadata is authoritative for publication dates and latest-release status
+* [docs/README.md](docs/README.md) is the main documentation entry point for users and agents; follow its topic/source map before consulting individual references
 * `main` is the primary stable / release branch, while `dev` is the primary ongoing development branch
 * when changing user-visible behavior, fixes, migrations, or release-relevant internals, add a concise entry under `CHANGELOG.md` `vUnreleased` before finishing the task
 
@@ -42,11 +43,11 @@ It focuses on file analysis, scan orchestration, metadata normalization, and lib
 
 MediaLyze currently implements:
 
-* library creation, update, rename, and deletion with library types (movies, series, music, mixed, other) and type-aware media discovery
+* library creation, update, rename, and deletion with library types (movies, series, music, audiobooks, mixed, other) and type-aware media discovery
 * basic audio-file support including extraction of music metadata (title, artist, album, etc.) from audio streams
 * per-library dashboard visibility toggles that can exclude selected libraries from dashboard statistics and comparison panels
 * stable multi-root library identity through `library_root_id + relative_path`, editable root aliases, and root-aware file history
-* multiple read-only external connector connections, with Jellyfin as the first adapter, many-to-many library links, root bindings, manual matches, and preferred metadata connections
+* multiple read-only external connector connections, with Jellyfin as the first adapter, many-to-many library links, automatic/manual root bindings, exact-path matching, and preferred metadata connections; individual-file manual matching has been removed
 * safe directory browsing restricted to paths under `MEDIA_ROOT`
 * manual, scheduled, and watchdog-based scanning
 * full and incremental scans
@@ -62,7 +63,7 @@ MediaLyze currently implements:
 * dashboard and per-library statistics
 * dashboard and per-library metric-comparison panels with selectable X/Y dimensions and heatmap, scatter, or bar renderers where supported
 * theme selection and feature flags
-* English, German, Spanish, and Ukrainian UI translations
+* English, German, Spanish, and Ukrainian UI translations; English fallback is bundled, other languages load on demand before initial rendering
 * Docker-first deployment and GHCR image publishing
 * native desktop packaging for Windows, macOS, and Linux with a local backend sidecar
 * safe FFmpeg transcoding for regular video files with editable structured plans, real hardware capability probes, explicit hardware-required/CPU-only execution, separate output policy, linked analyzed variants, Wipe comparison, job history, cancellation, and independent retention
@@ -71,7 +72,7 @@ MediaLyze currently implements:
 
 MediaLyze does **not** currently:
 
-* play media
+* act as a full media player; experimental in-browser previews and direct downloads are available for inspection
 * scrape movie or TV metadata
 * connect to external metadata APIs
 * modify or rename media files implicitly; explicit transcoding may write to `Transcode_Output`, create a same-directory linked variant, or replace the original only after server-side confirmation and without a byte-for-byte backup
@@ -81,7 +82,7 @@ MediaLyze does **not** currently:
 
 Open or clearly future-facing work includes:
 
-* improved broken-file reporting and diagnostics
+* further broken-file diagnostics beyond the implemented classified scan/file reasons and copyable technical details
 * additional future analysis and recommendation workflows
 * a Plex adapter; the connector core and shared accordion UI are implemented and Plex appears as a disabled `Soon™` option, but Plex transport, DTO normalization, descriptor registration, and provider-specific tests are not
 * generalization of provider image behavior beyond the preferred/standard Jellyfin connection
@@ -119,13 +120,14 @@ Supported library types:
 movies
 series
 music
+audiobooks
 mixed
 other
 ```
 
 Important correction:
 
-* the current code preserves the library type enum but does **not** implement special series-specific parsing that should be documented as an active feature
+* series/mixed video paths support folder-depth or regex show/season recognition and episode-number extraction; see `docs/patterns.md` for the implemented rules
 
 ## 3.2 Path Browsing Safety
 
@@ -141,11 +143,12 @@ Current behavior includes:
 
 ## 3.3 Scan Modes
 
-Libraries support three active scan modes:
+Libraries support four active scan modes:
 
 ```text
 manual
 scheduled
+scheduled_daily
 watch
 ```
 
@@ -153,6 +156,7 @@ Behavior:
 
 * `manual`: scans run only when requested
 * `scheduled`: APScheduler creates interval-based scan jobs
+* `scheduled_daily`: APScheduler creates daily jobs at `scheduled_time` in the configured scheduler timezone
 * `watch`: watchdog observers debounce filesystem events and queue scans
 * desktop network paths fall back to `scheduled`; watch observers are only created for local desktop paths
 
@@ -193,18 +197,24 @@ Actual implementation:
 * jobs are queued and deduplicated per library
 * execution is backed by a `ThreadPoolExecutor`
 * file discovery stays single-threaded, while worker threads are used for per-file analysis and duplicate processing only
+* scan workers share a process-wide RAM admission gate (host availability and Linux cgroup v1/v2 limits); configured parallelism remains an upper bound, with at least one worker admitted for progress. Cancellation interrupts active ffprobe processes, reaps them, and stops hashing between chunks without recording cancellation as a file failure
 * scans defer stored raw ffprobe payloads and release persisted per-file analysis data during processing; ffprobe has a 120-second timeout and bounded output (16 MiB metadata, 1 MiB diagnostics), with limit failures recorded per file
+* scans retain a compact identity/change/rename index and load full file records in bounded batches; inaccessible roots, directories, and files are reported in existing failure samples while their stored records are protected from stale-file deletion
+* startup signature backfill reads only IDs and filenames in committed, resumable batches; history storage pruning streams one JSON record at a time with unchanged canonical byte estimates and oldest-first rules, and quality recomputation loads at most 200 file records at a time while releasing each persisted raw payload
+* unchanged history fingerprints avoid loading raw probe data; database initialization and startup history maintenance emit phase logs through Uvicorn's logger, and orphaned scan recovery updates statuses without decoding stored summaries
+* manual history reconstruction defers raw probe data and releases each persisted raw payload and stream graph instead of retaining them for the entire reconstructed library; snapshots are inserted directly without per-file ORM flushes, and quality jobs reuse their effective profile per media type
 * APScheduler manages scheduled work
 * watchdog observers feed filesystem-triggered scans
 * active jobs can be canceled globally or per library
 * quality recomputation runs as a distinct runtime-managed job type
 * startup no longer auto-queues quality-recompute backfill jobs; recomputation is queued only from explicit follow-up actions such as library profile updates
 * old `queued` and `running` jobs from previous processes are canceled during startup instead of being resumed
-* startup also runs one history-retention maintenance pass, APScheduler registers a daily history-retention maintenance job, and deferred SQLite compaction is retried automatically once scans are idle
+* startup queues one history-retention maintenance pass on the dedicated maintenance executor so readiness does not wait for pruning; APScheduler registers a daily history-retention maintenance job, and deferred SQLite compaction is retried automatically once scans are idle
 * transcoding jobs use a dedicated executor with separate CPU-budget and per-device GPU slots; scan discovery and analysis workers remain independent
 * hardware-required transcoding never silently falls back to CPU; encoders and devices are exposed only after a real FFmpeg one-frame probe
 * same-directory transcoding variants are flagged as non-primary and excluded from library lists, statistics, duplicates, exports, telemetry/storage aggregates, and later scans; separate `Transcode_Output` variants remain external to primary library counts
-* connector sync and binding-recompute jobs are persisted and single-flight per connection; different connections run concurrently on a dedicated connector executor without occupying scan or maintenance workers
+* connector sync and binding-recompute jobs are persisted and single-flight per connection; different connections run on a dedicated two-worker connector executor, independent of scan concurrency and without occupying scan or maintenance workers
+* executing FFmpeg processes request background priority on POSIX and Windows, preserving an already lower priority; unsupported priority changes are best effort and do not fail jobs
 * connector sync uses connection/run-scoped staging and an atomic successful promote, while cancellation or failure preserves the last live snapshot; queued jobs are claimed atomically
 * startup cancels orphaned connector jobs and removes abandoned connector staging rows; scan changes compare pre/post root locators so additions, modifications, deletions, ignores, and renames trigger targeted connector rematching across connections
 * the migrated standard Jellyfin connection keeps the legacy users/playback/image sync active and mirrors its catalog into the provider-neutral tables with Shadow Mode counters
@@ -213,7 +223,7 @@ Actual implementation:
 
 Scan-job tracking now includes:
 
-* active-job polling
+* active-job polling; connector banners use one batched endpoint, visible idle tabs poll at 30–60 seconds and hidden tabs pause; active-job intervals remain unchanged
 * recent completed/failed/canceled scan history
 * trigger source tracking
 * trigger details
@@ -223,6 +233,7 @@ Scan-job tracking now includes:
 * discovery summaries
 * change summaries
 * analysis failure summaries with sampled short reasons plus copyable detailed diagnostics per failed file
+* analysis failure reasons distinguish empty files, missing MP4 metadata, invalid containers/media, access and I/O problems, probe limits, unidentified streams, and internal processing/history errors; scan samples and file details share the classification and retain technical diagnostics
 * duplicate-processing summaries including mode, failure samples, and grouped duplicate counts
 * retention cleanup for terminal scan-job history based on the app-level `history_retention.scan_history` settings, while queued or running jobs are never pruned
 
@@ -294,6 +305,7 @@ Current normalized audio stream fields include:
 **Music-specific metadata fields** (extracted from audio file tags):
 
 * title
+* track number
 * artist
 * album
 * album_artist
@@ -302,7 +314,7 @@ Current normalized audio stream fields include:
 * disc
 * composer
 
-All music-specific fields are optional and extracted from ffprobe tag metadata.
+All music-specific fields are optional and extracted from ffprobe tag metadata. Audiobook analysis also extracts narrator, author, publisher, series/part, description, copyright, language, abridged status, ASIN and ISBN; `MediaChapter` persists chapter timing and titles. Embedded covers are recorded separately from regular video streams. The current extension and UI support matrix is `docs/supported_metadata.md`.
 
 ## 4.4 Subtitle Streams
 
@@ -353,7 +365,7 @@ both
 Current behavior:
 
 * `off` disables duplicate detection for the library and duplicate-group queries return an empty result
-* `filename` stores a normalized filename signature based on the lowercase stem with whitespace, dot, dash, and underscore runs collapsed to a single space
+* `filename` stores normalized filename/title-core signatures, applies configured suffix cleanup, and groups only known runtimes within the configured tolerance; see `docs/patterns.md`
 * `filehash` stores a full-file `sha256` content hash plus its algorithm label
 * `both` stores both the normalized filename signature and the `sha256` content hash, and duplicate-group responses expose which method each returned group came from
 * new libraries default to `off`
@@ -381,6 +393,7 @@ Built-in default patterns currently target common temporary, system, and NAS-gen
 * `*.part`
 * `*.tmp`
 * `*.temp`
+* `*_temp.mp4`
 * `*thumbs.db`
 
 Ignore rules are applied during discovery against normalized library-relative paths.
@@ -392,6 +405,8 @@ Ignore rules are applied during discovery against normalized library-relative pa
 The original static example score table is outdated and should not be used as the current description.
 
 MediaLyze now implements a **configurable quality-profile system** per library.
+
+Libraries may reference shared named quality profiles (`quality_profile_id`) for `video`, `music`, or `audiobook`, with existing per-library profile payloads retained. Music/audiobook profiles add tag and chapter categories; see `backend/app/schemas/quality.py`.
 
 ## 6.1 Quality Profile Categories
 
@@ -463,7 +478,15 @@ The project currently uses in-process stats caching via `backend/app/services/st
 * library statistics
 * library comparison payloads keyed by library id plus selected X/Y fields
 
-Cache invalidation is tied to library changes and scan activity.
+Cache invalidation is tied to library changes and scan activity. Connector/playback mutations use a separate invalidation domain, retaining technical panel and comparison caches while expiring connector-dependent history, labels, summaries and playback statistics. Numeric comparisons aggregate exact heatmap bins in SQLite and rank only the deterministic scatter sample; other comparison rows and Storage Map source rows stream in 500-row batches.
+
+Additional performance contracts:
+
+* Dashboard/library history accepts optional `metric`, `days` (relative to the newest usable snapshot), or ISO `start`/`end`; no parameters retain the complete timeline contract. Query keys include every selection and range, and range-picker bounds describe the complete usable timeline. SQLite projects unrequested histogram/category keys and snapshots stream in bounded batches; request-local bounded pools share identical numeric distributions.
+* Overlapping dashboard/library panel selections reuse singleton panel caches; connector-dependent panels retain their separate invalidation domain. Cache namespaces have an estimated 8 MiB model-graph weight budget in addition to entry/TTL bounds; oversized values are returned but not retained.
+* Collapsed grouped series use normalized SQL aggregates and a matched-file playback sum; only loose files and explicitly expanded children load table rows.
+* `media_file_history.snapshot` retains its dict/API contract through `CompressedHistoryJSON`, with versioned, integrity-checked Zlib/base64 envelopes for compressible snapshots. Library history stays ordinary JSON for SQLite projection. Minute maintenance admits at most 200 records per pass with a time budget checked between records, pauses during scan/transcode work, and commits a resumable ID cursor in `app_settings`; hashes, timestamps, IDs and logical retention estimates remain unchanged. Old binaries need the documented offline JSON restore helper before downgrade. Conversion frees reusable SQLite pages without forcing a database-wide VACUUM.
+* Vite compresses final written JS/CSS assets with Brotli/Gzip after chunk rewriting. The backend negotiates encodings, retains MIME types and immutable caching, varies by `Accept-Encoding`, and preserves original range responses. Build verification decompresses every sidecar and compares exact source bytes.
 
 ## 7.3 File Table Search And Filtering
 
@@ -516,6 +539,11 @@ Current route model:
 * `/settings` libraries page plus app settings
 * `/libraries/:libraryId` library detail
 * `/files/:fileId` file detail
+* `/files/:fileId/preview` preview and linked variant comparison
+* `/files/compare` metadata comparison
+* `/storage-map` storage explorer
+* `/transcoding` active jobs and history
+* `/ui-elements` development-only visual catalog
 
 ## 8.2 Current UX Features
 
@@ -528,7 +556,7 @@ Implemented UI behavior includes:
 * collapsible settings panels
 * recent scan-log browsing and detailed scan summaries
 * duplicate-group browsing per library
-* virtualized library file table for larger datasets
+* virtualized library file table for larger datasets; ordinary and grouped result caches each retain at most 5,000 rows, without truncating the currently displayed table
 * infinite paging / paginated loading behavior
 * CSV export of the full analyzed-files result set using the current file filters and sort order
 * table-column visibility and per-column tooltip customization in the settings page's `Table View` section
@@ -537,6 +565,7 @@ Implemented UI behavior includes:
 * reusable histogram-style numeric statistic panels powered by Apache ECharts for quality score, duration, file size, bitrate, and audio bitrate
 * reusable comparison statistic panels with persisted per-view X/Y selections and renderer choices, plus heatmap, scatter, and bar visualizations where the selected field pair supports them
 * local count / percent toggles on numeric statistic charts
+* audiobook chapter/book-tag filters, statistics, chapter search/CSV export, and embedded-cover inspection
 * clickable numeric histogram bins in the library detail view that apply matching analyzed-files range filters
 * curated default statistic-panel layouts for first-time dashboard and library views plus inline reset-to-default controls on both statistic-layout pages
 * user-resizable analyzed-files table columns with persisted widths in browser storage
@@ -546,7 +575,7 @@ Implemented UI behavior includes:
 * a file-detail `Preview` panel that can attempt in-browser playback for video and audio files, plus a direct file download action with explicit warnings that playback and download performance are not optimized yet
 * persistent app theme preference
 * persistent local UI state for selected statistics, per-dashboard and per-library statistic-panel layouts, analyzed-files column widths, file-detail panel layout, and some panel/section visibility
-* shared Connector Settings accordions for multiple Jellyfin connections, with lazy connection details, a collapsed searchable `Analyzed users` selector, generic lifecycle controls, capability-gated playback-user selection, active-job polling, and a disabled Plex `Soon™` add option; central bindings and item diagnostics remain deferred
+* shared Connector Settings accordions for multiple Jellyfin connections, with lazy connection details, a collapsed searchable `Analyzed users` selector, generic lifecycle controls, capability-gated playback-user selection, active-job polling, and a disabled Plex `Soon™` add option; central library/path-binding UI is implemented; focused item diagnostics remain deferred
 * file-detail External sources that return all matched provider items while retaining Jellyfin compatibility fields
 * a file-detail playback timeline that combines all matched capable connections without cross-server deduplication and labels events by connection when multiple sources contribute
 
@@ -577,6 +606,11 @@ Frontend design decision history:
 * Record a decision when a design becomes canonical, replaces or rejects a product-wide pattern, or leaves intentional exceptions after a migration. Keep entries dated and concise; do not record every local spacing tweak.
 * Each entry should include the decision, rationale, canonical implementation and catalog references, deprecated selectors or patterns, migration scope, status, and remaining intentional exceptions.
 * Update the entry when the canonical pattern or migration status changes. The history must not keep legacy CSS alive; after migration, retain only identifiers needed to explain intentional exceptions.
+
+### 2026-10-02 — Compact table scores and left-aligned media groups
+
+* Decision: table quality scores show a colored numerator with a neutral `/10`, without a meter or a user-facing meter toggle. Series and season buttons align left, inherit file-name font size, and center labels vertically beside the chevron.
+* Canonical references: `TableQualityScore.tsx`, `.media-tree-cell-button`, and the analyzed-files/grouped-series catalog entries in `UiElementsPage.tsx`. Migration: ordinary and grouped library rows, file-comparison scores, and catalog fixtures; meter selectors retired. The stored `hide_quality_score_meter` flag remains for configuration compatibility. Status: active.
 
 ### 2026-09-30 — Overlay transcoding metrics on the speed graph
 
@@ -787,18 +821,23 @@ Theme behavior:
 
 Current app feature flags include:
 
+* `hide_automatic_update_reminders`
 * `show_analyzed_files_csv_export`
 * `show_full_width_app_shell`
 * `hide_quality_score_meter`
 * `show_music_quality_score`
 * `unlimited_panel_size`
 * `in_depth_dolby_vision_profiles`
+* `show_all_playbacks_when_unstacked`
 
 These flags currently control:
 
+* whether automatic update reminders are hidden
+* whether unstacked playback timelines include all playback events
+
 * whether the analyzed-files CSV export button is shown in the library detail view
 * whether the main `.media-app-shell` container expands to the full available page width
-* whether the analyzed-files quality-score bar meter is hidden while keeping the numeric score visible
+* `hide_quality_score_meter` is retained only for stored/API configuration compatibility; tables always use a colored numerator and neutral `/10`, with no meter or UI toggle
 * whether music-only library contexts show quality-score metrics and columns
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 * whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
@@ -856,11 +895,12 @@ Important current payload concepts:
 * `feature_flags.unlimited_panel_size`
 * `feature_flags.in_depth_dolby_vision_profiles`
 
-`history_retention` currently applies to three buckets:
+`history_retention` currently applies to four buckets:
 
 * `file_history`: persisted per-file analyzed snapshots, default `90` days and `0` GB unlimited
 * `library_history`: one compact per-library UTC-day snapshot, default `365` days and `0` GB unlimited
 * `scan_history`: terminal `scan_jobs` records, default `30` days and `0` GB unlimited
+* `transcode_history`: terminal transcode jobs, default `90` days and `0` GB unlimited; media and variant groups are retained
 
 `0` means unlimited for both days and storage.
 Age and storage limits are both active at the same time, with oldest-first pruning until both limits are satisfied.
@@ -971,6 +1011,7 @@ Supported trigger sources currently include:
 ```text
 manual
 scheduled
+scheduled_daily
 watchdog
 ```
 
@@ -1170,6 +1211,7 @@ Current documented runtime configuration includes:
 * `HOST_PORT`
 * `TZ`
 * `FFPROBE_PATH`
+* `MEDIALYZE_PERFORMANCE_METRICS` (default `false`)
 * `DISABLE_DEFAULT_IGNORE_PATTERNS`
 * `PUID`
 * `PGID`
@@ -1179,6 +1221,7 @@ Additional behavior:
 * the backend defaults to serving on port `8080`
 * `PUID` and `PGID` support shared-folder or NAS permission setups
 * `FFPROBE_PATH` can override the ffprobe binary
+* `MEDIALYZE_PERFORMANCE_METRICS=true` enables bounded in-process route/SQL/cache/queue observations at `/api/performance`; route templates are recorded without SQL text, media paths or request parameters. Each route/queue retains at most 256 samples and each metric family at most 64 labels. Response bytes represent application payloads before compression; cache counters count internal lookups, not whole-request hit rates.
 * scan concurrency is configured through the UI under App Settings and persisted in `app_settings`, including both per-scan analysis workers and parallel-library job limits
 * history retention and storage budgets are configured through the UI under App Settings and persisted in `app_settings.history_retention`
 * `MEDIALYZE_RUNTIME=desktop` switches the backend to local desktop defaults such as `127.0.0.1` binding and OS-specific config storage
@@ -1251,7 +1294,7 @@ Do not treat lockfiles as incidental churn during a version bump:
 Important current nuance:
 
 * version files on `dev` are **not** the authoritative source for the latest public release history
-* GitHub release data currently shows `v0.2.0` as latest public release even though the local `CHANGELOG.md` on `dev` is incomplete
+* `v0.19.0` was the latest GitHub release verified on 2026-10-02; resolve current publication status from GitHub before release work
 
 ---
 

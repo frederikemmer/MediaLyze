@@ -54,6 +54,7 @@ BUILT_IN_DEFAULT_IGNORE_PATTERNS: tuple[str, ...] = (
     "*.part",
     "*.tmp",
     "*.temp",
+    "*_temp.mp4",
     "*thumbs.db",
 )
 

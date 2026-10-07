@@ -11,7 +11,7 @@ from threading import BoundedSemaphore, Lock, Timer
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from tzlocal import get_localzone
 from watchdog.events import FileMovedEvent, FileSystemEvent, FileSystemEventHandler
@@ -61,6 +61,7 @@ from backend.app.services.history_reconstruction import reconstruct_history_from
 from backend.app.services.history_retention import (
     HistoryRetentionResult,
     apply_history_retention,
+    has_active_scan_jobs,
     run_pending_history_compaction,
 )
 from backend.app.services.history_storage import get_history_storage
@@ -94,6 +95,7 @@ from backend.app.services.scanner import (
     queue_scan_job,
 )
 from backend.app.services.stats_cache import stats_cache
+from backend.app.services.performance import observe_executor
 from backend.app.services.telemetry import (
     send_current_telemetry_snapshot,
     send_initial_telemetry_snapshot,
@@ -187,7 +189,7 @@ class ScanRuntimeManager:
         self.scheduler = BackgroundScheduler(timezone=resolve_scheduler_timezone())
         self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
         self.executor = self._build_executor(self.executor_max_workers)
-        self.connector_executor_max_workers = self.executor_max_workers
+        self.connector_executor_max_workers = 2
         self.connector_executor = self._build_connector_executor(
             self.connector_executor_max_workers
         )
@@ -236,6 +238,7 @@ class ScanRuntimeManager:
         self.jellyfin_match_recompute_rerun = False
         self.jellyfin_match_recompute_status = "idle"
         self.jellyfin_match_recompute_last_error: str | None = None
+        self.history_compression_submitted = False
         self.started = False
 
     def start(self) -> None:
@@ -259,7 +262,7 @@ class ScanRuntimeManager:
         self._recover_orphaned_transcode_automation_runs()
         self.request_update_check()
         self.sync_all_libraries()
-        self.run_history_retention()
+        self.maintenance_executor.submit(self.run_history_retention)
         self.request_initial_telemetry_send()
         self.request_telemetry_send()
         self.request_update_telemetry_send()
@@ -332,10 +335,7 @@ class ScanRuntimeManager:
         previous_executor: ThreadPoolExecutor | None = None
         previous_transcode_executor: ThreadPoolExecutor | None = None
         with self.lock:
-            scan_workers_changed = (
-                next_workers != self.executor_max_workers
-                or next_workers != self.connector_executor_max_workers
-            )
+            scan_workers_changed = next_workers != self.executor_max_workers
             transcode_workers_changed = next_transcode_workers != self.transcode_executor_max_workers
             transcode_capacity_changed = next_transcode_capacity_signature != self.transcode_capacity_signature
             if not scan_workers_changed and not transcode_workers_changed and not transcode_capacity_changed:
@@ -344,11 +344,6 @@ class ScanRuntimeManager:
                 previous_executor = self.executor
                 self.executor = self._build_executor(next_workers)
                 self.executor_max_workers = next_workers
-                previous_connector_executor = self.connector_executor
-                self.connector_executor = self._build_connector_executor(next_workers)
-                self.connector_executor_max_workers = next_workers
-            else:
-                previous_connector_executor = None
             self.transcode_executor_max_workers = next_transcode_workers
             self.transcode_cpu_parallel_jobs = int(capacity["cpu_parallel_jobs"])
             self.transcode_gpu_parallel_jobs_per_device = persisted.transcoding.gpu_parallel_jobs_per_device
@@ -361,8 +356,6 @@ class ScanRuntimeManager:
 
         if previous_executor is not None:
             self._shutdown_executor(previous_executor, cancel_futures=False)
-        if previous_connector_executor is not None:
-            self._shutdown_executor(previous_connector_executor, cancel_futures=False)
         if previous_transcode_executor is not None:
             self._shutdown_executor(previous_transcode_executor, cancel_futures=False)
         return True
@@ -1429,7 +1422,7 @@ class ScanRuntimeManager:
             try:
                 refresh_jellyfin_mapping_state(db)
                 recompute_jellyfin_matches(db, commit_batch_size=250)
-                stats_cache.invalidate(str(id(db.get_bind())))
+                stats_cache.invalidate_connectors(str(id(db.get_bind())))
             except Exception as exc:
                 db.rollback()
                 error = str(exc)[:2048]
@@ -2038,6 +2031,12 @@ class ScanRuntimeManager:
             max_instances=1,
             coalesce=True,
         )
+        self.scheduler.add_job(
+            self.request_history_compression,
+            trigger="interval", minutes=1,
+            id="history-compression-maintenance", replace_existing=True,
+            max_instances=1, coalesce=True,
+        )
 
     def _ensure_telemetry_job(self) -> None:
         self.scheduler.add_job(
@@ -2097,20 +2096,13 @@ class ScanRuntimeManager:
     def _recover_orphaned_jobs(self) -> None:
         db = SessionLocal()
         try:
-            orphaned_jobs = db.scalars(
-                select(ScanJob)
+            # Recovery only needs status/timestamps, not potentially large
+            # summaries left by interrupted scans.
+            db.execute(
+                update(ScanJob)
                 .where(ScanJob.status.in_([JobStatus.queued, JobStatus.running]))
-                .order_by(ScanJob.id.asc())
-            ).all()
-
-            if not orphaned_jobs:
-                return
-
-            finished_at = utc_now()
-            for job in orphaned_jobs:
-                job.status = JobStatus.canceled
-                job.finished_at = finished_at
-
+                .values(status=JobStatus.canceled, finished_at=utc_now())
+            )
             db.commit()
         finally:
             db.close()
@@ -2204,7 +2196,12 @@ class ScanRuntimeManager:
     def run_history_retention(self) -> HistoryRetentionResult:
         db = SessionLocal()
         try:
+            logging.getLogger("uvicorn.error").info("History retention: checking age and storage budgets")
             result = apply_history_retention(db, self.settings)
+            logging.getLogger("uvicorn.error").info("History retention complete: %s entries removed", result.deleted_entries)
+        except Exception:
+            logging.getLogger("uvicorn.error").exception("History retention failed")
+            raise
         finally:
             db.close()
 
@@ -2212,6 +2209,35 @@ class ScanRuntimeManager:
             self.history_compaction_pending = result.compaction_deferred
         self.request_history_storage_refresh()
         return result
+
+    def request_history_compression(self) -> bool:
+        with self.lock:
+            if not self.started or self.history_compression_submitted:
+                return False
+            self.history_compression_submitted = True
+        try:
+            self.maintenance_executor.submit(self._run_history_compression)
+        except RuntimeError:
+            with self.lock:
+                self.history_compression_submitted = False
+            return False
+        return True
+
+    def _run_history_compression(self) -> None:
+        from backend.app.services.history_compression import compress_file_history_batch
+        db = SessionLocal()
+        try:
+            def idle():
+                return self.started and not has_active_scan_jobs(db)
+            if idle():
+                compress_file_history_batch(db, should_continue=idle)
+        except Exception:
+            db.rollback()
+            logging.getLogger("uvicorn.error").exception("File-history compression failed")
+        finally:
+            db.close()
+            with self.lock:
+                self.history_compression_submitted = False
 
     def request_history_storage_refresh(self) -> bool:
         with self.lock:
@@ -2390,35 +2416,35 @@ class ScanRuntimeManager:
 
     @staticmethod
     def _build_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-runtime",
-        )
+        ), "scan")
 
     @staticmethod
     def _build_maintenance_executor() -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="medialyze-maintenance",
-        )
+        ), "maintenance")
 
     @staticmethod
     def _build_automation_executor() -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="medialyze-transcode-automation",
-        )
+        ), "automation")
 
     @staticmethod
     def _build_connector_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-connector",
-        )
+        ), "connector")
 
     @staticmethod
     def _build_transcode_executor(max_workers: int) -> ThreadPoolExecutor:
-        return ThreadPoolExecutor(
+        return observe_executor(ThreadPoolExecutor(
             max_workers=max(1, max_workers),
             thread_name_prefix="medialyze-transcode",
-        )
+        ), "transcode")

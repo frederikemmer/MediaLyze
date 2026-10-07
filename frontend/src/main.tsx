@@ -1,16 +1,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router";
-import "./i18n";
+import { i18nReady } from "./i18n";
 import "../globals.css";
 import "./medialyze.css";
 import { App } from "./App";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+void i18nReady.then(() => ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <App />
     </BrowserRouter>
   </React.StrictMode>,
-);
+));
 

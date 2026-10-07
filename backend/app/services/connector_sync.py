@@ -969,7 +969,7 @@ def run_connector_sync(db: Session, job_id: int) -> dict:
         connection.last_sync_finished_at = finished
         connection.last_successful_sync_at = finished
         db.commit()
-        stats_cache.invalidate(str(id(db.get_bind())))
+        stats_cache.invalidate_connectors(str(id(db.get_bind())))
         return summary
     except Exception as exc:
         db.rollback()
@@ -1036,7 +1036,7 @@ def run_connector_recompute(db: Session, job_id: int) -> dict[str, int]:
         job.progress_current = sum(matching.values())
         job.sync_summary = {"mapping": mapping, "matching": matching}
         db.commit()
-        stats_cache.invalidate(str(id(db.get_bind())))
+        stats_cache.invalidate_connectors(str(id(db.get_bind())))
         return matching
     except Exception as exc:
         db.rollback()

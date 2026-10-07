@@ -1,6 +1,8 @@
 # Telemetry
 
-MediaLyze telemetry is coarse installation reporting for understanding active installations, versions, operating systems, deployment channels, and broad usage scale. It is not intended to track people or media collections, but mainly to show of the userbase and more importantly help me with development.
+[Documentation home](README.md)
+
+MediaLyze telemetry is coarse installation reporting for understanding active installations, versions, operating systems, deployment channels, and broad usage scale. It supports aggregate usage statistics and development decisions without transmitting collection details.
 
 Telemetry never sends:
 
@@ -17,7 +19,7 @@ Telemetry never sends:
 - broad browser `localStorage` contents
 
 Network and hosting layers can still see transport metadata such as source IP addresses transiently. MediaLyze therefore describes this telemetry as privacy-preserving anonymous installation telemetry, not as a legal guarantee that every transport-layer data point is anonymous.
-IP addresses are never stored, only the information contained in the payload is.
+The application payload does not contain IP addresses. Ingest-service retention and transport logging are operated separately from this repository; the local sender cannot guarantee their behavior.
 
 ---
 
@@ -29,7 +31,7 @@ You can always take a look at your contributed payloads and delete them at any t
 
 Telemetry has five stored modes:
 
-- `none`: state after updated from pre-telemtry version or new install.
+- `none`: initial state for a new installation or upgrade from a pre-telemetry version.
 - `initialized`: the first-run telemetry choice has been shown, but no user decision exists yet.
 - `off`: telemetry is disabled. No telemetry payloads are sent.
 - `minimal`: send install/runtime/system fields only.
@@ -63,7 +65,7 @@ Other telemetry configuration:
 - `MEDIALYZE_TELEMETRY_DISABLED=true`: force telemetry off.
 - `telemetry_timeout_seconds`: backend setting, currently `2.0` seconds.
 
-Regular app sends use `is_test: false` in both development and release builds. `is_test: true` is reserved for explicit development connectivity checks outside the normal app sender.
+Regular app sends use `is_test: true` when the resolved app version has a development suffix (for example `0.19.0-dev003`), and `false` for stable versions. Explicit test payloads also set it to `true`; the sender never clears an explicit test flag.
 
 ## Installation Id
 
@@ -193,7 +195,7 @@ All telemetry payloads share these root fields:
 - `app`: app metadata
 - `system`: OS metadata
 
-`minimal` and `none` payloads do not include `usage`, `app_settings`, or `media_kind_counts`.
+Minimal previews, including the internal `none` preview, do not include `usage`, `app_settings`, or `media_kind_counts`.
 
 ---
 
@@ -285,6 +287,7 @@ Fields are derived from Python platform data and normalized to lowercase. Exampl
       "movies": 1,
       "series": 1,
       "music": 1,
+      "audiobooks": 0,
       "mixed": 0,
       "other": 0
     },
@@ -298,6 +301,7 @@ Fields are derived from Python platform data and normalized to lowercase. Exampl
     "scan_mode_counts": {
       "manual": 1,
       "scheduled": 1,
+      "scheduled_daily": 0,
       "watch": 1
     },
     "duplicate_detection_mode_counts": {
@@ -325,19 +329,19 @@ Enabled usage counts cover the whole configured MediaLyze installation.
 Usage fields:
 
 - `library_count`: total configured library count.
-- `library_type_counts`: count by library type: `movies`, `series`, `music`, `mixed`, `other`.
+- `library_type_counts`: count by library type: `movies`, `series`, `music`, `audiobooks`, `mixed`, `other`.
 - `media_kind_counts`: rounded analyzed media count by coarse media kind.
 - `analyzed_file_count_rounded`: rounded count of current analyzed files.
 - `storage_size_gb_rounded`: rounded total size of current analyzed files in decimal GB.
-- `scan_mode_counts`: count by library scan mode: `manual`, `scheduled`, `watch`.
+- `scan_mode_counts`: count by library scan mode: `manual`, `scheduled`, `scheduled_daily`, `watch`.
 - `duplicate_detection_mode_counts`: count by duplicate detection mode: `off`, `filename`, `filehash`, `both`.
 - `enabled_feature_flags`: enabled app feature flag keys.
 
-Current analyzed file scope is `MediaFile.scan_status == ready`.
+Current analyzed file scope is `MediaFile.scan_status == ready` and `is_transcode_variant == false`. Linked transcode variants do not inflate usage totals, regardless of dashboard visibility settings.
 
 ## Media Kind Counts
 
-`usage.media_kind_counts` is a string-keyed object so future kinds such as `audiobook`, `image`, `subtitle`, or `document` can be added without changing the payload shape.
+`usage.media_kind_counts` is a string-keyed object so future coarse kinds such as `image`, `subtitle`, or `document` can be added without changing the payload shape.
 
 Current classification is extension-based:
 
@@ -345,11 +349,11 @@ Current classification is extension-based:
 - `video`: extension is in MediaLyze video extensions.
 - `other`: extension is neither audio nor video.
 
-Extensions are normalized to lowercase and counted from current analyzed files. Mixed libraries are counted by each file extension, not by library type.
+Extensions are normalized to lowercase and counted from current analyzed files. Mixed libraries are counted by each file extension, not by library type. Audiobook-library files contribute to `audio`; `audiobooks` is a library type rather than a separate telemetry media kind.
 
 ## Enabled App Settings
 
-- `interface_language`: `en` or `de`
+- `interface_language`: `en`, `de`, `es`, or `uk`
 - `color_theme`: `system`, `light`, or `dark`
 - `scan_worker_count`: per-scan analysis workers
 - `parallel_scan_jobs`: parallel library scan limit
@@ -424,7 +428,7 @@ In Electron builds, the stats link should open externally in the system browser 
 
 ## Ingest Service
 
-The public telemetry backend accepts:
+The following describes the external service contract and intended retention policy, not an implementation audited in this repository. The sender posts to:
 
 ```text
 POST /api/telemetry/ingest

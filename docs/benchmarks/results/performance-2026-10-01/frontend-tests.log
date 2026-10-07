@@ -1,0 +1,12 @@
+
+> medialyze-frontend@0.19.0 test
+> vitest run
+
+
+ RUN  v4.1.8 /Users/frederikemmer/CODE/MediaLyze/frontend
+
+
+ Test Files  49 passed (49)
+      Tests  520 passed (520)
+   Start at  22:33:54
+   Duration  43.63s (transform 3.92s, setup 2.36s, import 10.63s, tests 140.52s, environment 15.65s)

@@ -1,0 +1,220 @@
+{
+  "head": "e5e7661e1104a53f901fcdf15532921edc19e207",
+  "files": {
+    "AGENTS.md": {
+      "after": "5267102028b179a513bdadd9494c6901536e5e124c9000a0b073aaf4204911b5"
+    },
+    "CHANGELOG.md": {
+      "before": "800cb8af43548a92b3f19a859a22a3e6ef4ff994d1f5ec41789c1094b797502d",
+      "after": "d09413bbf6ef8e4b9252427c4b357881bf65a7338ea425d549d2a3774a803bdd"
+    },
+    "backend/app/api/routes.py": {
+      "before": "352402bd2fad93f086d65ea12f424716eeccc0e81dd98549fc7952e7634d9023",
+      "after": "e98ee8a0953d885041df003aff8eeab67b52344cc18e3ed0c34ed384e38bdd58"
+    },
+    "backend/app/core/config.py": {
+      "before": "9895f32503b95c0bf847a569ddcba299a931ba9e5d821ebe31c33d5f8de8175b",
+      "after": "a03e1170bce9afca3c7d2c28527eabbcd96bd6be793bfaf1044057c9f8e4f859"
+    },
+    "backend/app/db/session.py": {
+      "before": "54913ed671b6c49fb1b6d41bc4bd91bf078e6b4ea6e9f003f096db690170f490",
+      "after": "c64c45750e1961b21dba8ddacefdcbf87df2243a9bbba7c77297c48362104525"
+    },
+    "backend/app/main.py": {
+      "before": "c1c87febcc57f9348fd1efed8e1cefe557d866ef76841758560df4ea8bbb1023",
+      "after": "741b9a9b77b04388ba4ebd96acaed094d5940fa203efbdb4e7d2679bdc11d98f"
+    },
+    "backend/app/schemas/connectors.py": {
+      "before": "4a4eccc2b55b0a683f83e83b04307bde86efa619eda53b95b4eee0033b227dbb",
+      "after": "924647dafb6d8aea0ee564f0706c8988aedbf1616b832322a20a188579cc8539"
+    },
+    "backend/app/schemas/scan.py": {
+      "before": "982eec2b39098bffe82c2c4f17662009a2646485d469b610dc4cdae2e917878c",
+      "after": "982eec2b39098bffe82c2c4f17662009a2646485d469b610dc4cdae2e917878c"
+    },
+    "backend/app/services/app_settings.py": {
+      "before": "f2a8637e9ea8011dffa5f661dc2ee912a7f07bc993712a298523a1434f16bf63",
+      "after": "f2a8637e9ea8011dffa5f661dc2ee912a7f07bc993712a298523a1434f16bf63"
+    },
+    "backend/app/services/connector_matching.py": {
+      "before": "631ac00c2e4482dc1da81a9f6880030cf46bce8e6641acba5568194692f89212",
+      "after": "c5b0b0cffe75275713c841dce510a616b27f6e9b5816f1b33d832a9231ec3efc"
+    },
+    "backend/app/services/connector_service.py": {
+      "before": "bd579a5ad85aca238647880fe82b3e0f296a8e129b195a98b98817c7f9d31807",
+      "after": "b0e40712f735f2d34ca8c6838ea8f87b64944b79bac4ecd1851abf0200d119d9"
+    },
+    "backend/app/services/connector_sync.py": {
+      "before": "0d4ff15549dbcef8f4e54f0e577220bdee3547065da3f3ae7b4828232cad9ee3",
+      "after": "b8323c9ce37b942a6a751ff1528d7851c654d7a0c6aabd629d181287157e3276"
+    },
+    "backend/app/services/jellyfin_sync.py": {
+      "before": "1e4ad239ea1fa9ee75c335c2d5740e8edf8927e024a4ece6fa33a1d35ebc9c7f",
+      "after": "670efe7e2708963dcaff582b7dcd505578f35b09f8c8408a0895448c7d74e651"
+    },
+    "backend/app/services/runtime.py": {
+      "before": "625de059b83cb5335b6e6dc2392a8e562238500545dbcdbdad40f2a1ae323bb4",
+      "after": "03adb7f408e8b10ad7ea82ee5712fd09b1e02546eb4bade974e977928cd518a1"
+    },
+    "backend/app/services/scanner.py": {
+      "before": "1f8c2e0b688367633045516a65e07133d38fc5aa971e781512ad5fa17a76a174",
+      "after": "1f8c2e0b688367633045516a65e07133d38fc5aa971e781512ad5fa17a76a174"
+    },
+    "backend/app/services/stat_comparisons.py": {
+      "before": "dd0501751e4bc6b6483a94716935e8d03761c011f6bd4bd9830fe5c5527c75db",
+      "after": "53f7d82af66edff3f36fcb6f26a53082a4fb546bf4f76453c0de14a7afeb25dc"
+    },
+    "backend/app/services/stats_cache.py": {
+      "before": "2424b2d2f3a3b562d310e8491f5e1b92a0bae0121e77d3f12a3bceca91a7ef70",
+      "after": "ea07e69111f3f8a8fe027a31c0960c62bc62a47f0aea145a3fe5e304791077de"
+    },
+    "backend/app/services/storage_map.py": {
+      "before": "df4476f7fda8185c8596c50acf2c052ca2fbf71173ef2959904b75a9cc610a85",
+      "after": "0d3b2589a99db2e6b9bb3f646db42977f9af0cbbfe315d9d790a0633a267addf"
+    },
+    "backend/app/services/transcoding.py": {
+      "before": "6cfbffa6dc6ee097acbdfe8df9f821008f3d104baa9da9a200aec99f04b23753",
+      "after": "13baa95b5a48c433489b711e85647f73b62e45c80175f8918d77ea0e6ed65b2f"
+    },
+    "backend/app/utils/processes.py": {
+      "before": "45282a32e9478f412299117bc19e397e4a2a958ae776d7f9b157611e0c30d9f0",
+      "after": "e621fd540b24b2477edbe33e31ee88e9fb49e5cbb0471c24d9b01d2bef66509e"
+    },
+    "docs/patterns.md": {
+      "after": "45a69822afa902ffc8619adc272fe27f9e5d7eb4c146a8e7610acdede7abbc6c"
+    },
+    "docs/supported_metadata.md": {
+      "after": "d2ba432a4b41173c2b3f3c66713ab300ca057894b6d97355b264b041c6cfc055"
+    },
+    "frontend/src/components/AppShell.test.tsx": {
+      "before": "20cca2ceec92f3147a65fe180f9862635d6305a6939812459630a1047c13f1e5",
+      "after": "97319302a98cb01346f5d4861a38e81bacde4ae9d4a83db008f7e0b314de087f"
+    },
+    "frontend/src/components/AppShell.tsx": {
+      "before": "efcc0d64620fca1626e08b2803f784896b4127aa4525e4bbe10208547caa92b0",
+      "after": "4ee46b5d42e3b1fafa26237c968867822a1ee86490be3b930620d6146fe2f4cd"
+    },
+    "frontend/src/components/ComparisonChartPanel.tsx": {
+      "before": "1acba9f5cab23de936e419861945c8fd4fb7a99b2bfa1f2e5d545179960a17e0",
+      "after": "d932b9f4423d421ace51cee6693062adbcd47562b865f77dcd825c418e03987b"
+    },
+    "frontend/src/components/DistributionChart.tsx": {
+      "before": "bb01ee97939ed3ef6712fa85869b4ca9b4e6b175562ce863a20224bf7c3df6e1",
+      "after": "c1d81c9bc63050262952c6fb9e3258112e292e9552780c8d3b7452d370540da5"
+    },
+    "frontend/src/components/DistributionChartPanel.tsx": {
+      "before": "4519707e82f84c88983d89eccab5ba1c1b8417c587314e3aa0f665e3c88c0cee",
+      "after": "d1a2f747e7a5d2007f26040b86c01c6f75f4948442639ddb358d187d96d7388e"
+    },
+    "frontend/src/components/HistoryTrendChart.tsx": {
+      "before": "47e3d8fd3a54ac05a724a514cf5811e9ffbe87b1320769a5f2e819a166ed57b5",
+      "after": "06773763914e0e67ace9fed9e12c3ea210b01eca3ae44803cd3c2336e573e246"
+    },
+    "frontend/src/components/TranscodeProgressSummary.tsx": {
+      "before": "1cc12992c89a9524b87b46e0efee40789c11c52d99b1a850e5b9854def7fd01c",
+      "after": "ff0155b5e8307a688054ae8d419af48c040c61363eca3d48722cf2c115cf5a6b"
+    },
+    "frontend/src/global-styles.test.ts": {
+      "before": "c6b9a8b239ccd24c0b9f0f67f281dbb9de32fe25bc9e1690ec270801f176713b",
+      "after": "c6b9a8b239ccd24c0b9f0f67f281dbb9de32fe25bc9e1690ec270801f176713b"
+    },
+    "frontend/src/i18n.ts": {
+      "before": "3a29f83efaf9b75173f5a3ade9126d371ded9cd11d8cf1bc312ae3228978850b",
+      "after": "b233af62beadd6d6fab83a082359385042bad9864d302a749bf3cfa8b55baae0"
+    },
+    "frontend/src/lib/api.ts": {
+      "before": "59f5b8f27dccf40cfa7be4b0a076fb41ce95f17b9c508a39c140e4122fe8ad25",
+      "after": "3472a633ee8d6814b95571c818076a8c3323c97af5554c90ec252bd2c4bcfadc"
+    },
+    "frontend/src/lib/lru-cache.test.ts": {
+      "before": "dc18916115c8635e1ea3fae6fc4f397d883097ac2ea1955c460b82a31a121c3f",
+      "after": "fd3351c5bfa6635741af9522ad5f93424828aaef66068f99d43337430a1987d3"
+    },
+    "frontend/src/lib/lru-cache.ts": {
+      "before": "39c985207529b2145938519d173ba9c1f11dffd195956e42ca914b83cdfcaa04",
+      "after": "9dbd7d0f1eba53187d69e741526a846d80d5ba20d2fb590ee160ac08a891dbc6"
+    },
+    "frontend/src/main.tsx": {
+      "before": "5b63eda3641a019226edbdb227cf199a5f52c0b60d30547268a1399bc6b15ef2",
+      "after": "6626c5f43f8a4ca4de60f71c71707ea2cb94fac49e10ef67ab6e00ae0edd0a5d"
+    },
+    "frontend/src/medialyze.css": {
+      "before": "da3c64f8f0e2b7e9f58aa5c9a866a47fc51eb5eff6bc0a85a65ecacafa3854f5",
+      "after": "bb4437b1c69320f39d3141fe06675e1b3ee978b50ea6442df28c267b49d9b185"
+    },
+    "frontend/src/pages/LibrariesPage.tsx": {
+      "before": "6641ca27cb0214ecaf3b53cde5785a3f7599ab4cdeff8ad51ad09568e822bf3b",
+      "after": "6641ca27cb0214ecaf3b53cde5785a3f7599ab4cdeff8ad51ad09568e822bf3b"
+    },
+    "frontend/src/pages/LibraryDetailPage.tsx": {
+      "before": "c65151ee4add9465a00ca1c8b8f63c2139cad6284210e60c8c2a040116c777d2",
+      "after": "1e11d6b6b5712089dfbfcbb7ee2d6f177aa146e4e8cab24ea7d9a7bf3fbcfd74"
+    },
+    "frontend/src/pages/TranscodingPage.test.tsx": {
+      "before": "c1ae6e1198cf124028bcf850a51c81fab53b32672d59698b0cfa7a5f5b9823a9",
+      "after": "06564d7f03ab28a9d278dcbacd3e9fbdb073745500ded72f6025aad45a208d16"
+    },
+    "frontend/src/pages/TranscodingPage.tsx": {
+      "before": "daf04b9f94872d9f516e0923e4d63166bada34cb2659d0e05de313950c27295d",
+      "after": "dfed01d4321aa590fb1835fb5a54028c7fcc9810a21d3a906b572513ad871e41"
+    },
+    "frontend/src/pages/UiElementsPage.tsx": {
+      "before": "cf53d2ed9fc28eeacd13bf93927a39f531832c899cef0b41916111d608752b09",
+      "after": "9126c45065c3720c3521e0667d57b1a4f61d3240ea0bf1fd8c954bae4937010c"
+    },
+    "frontend/src/test/setup.ts": {
+      "before": "cbb0a76b3ea5521a9be3aaf070f65e28e631c376b2948c86f62edb6457fcd173",
+      "after": "9c8a951245faec78477d73a607086fb68fb3091b198ecd8f97655ca5dff01aa0"
+    },
+    "frontend/tsconfig.tsbuildinfo": {
+      "before": "e0ebc9cb5339cc22710fdcbb1a58715e17da93af6b456e31a3ebd2fa4eb408c2",
+      "after": "d16bb92e8bac7532a83b203c403e2660186ca289a99c34136d18f1366ab17194"
+    },
+    "tests/test_api_routes.py": {
+      "before": "d0018351589c29e63d86e2a32e83aaaab656cf06157a5c61e72d67765eadf3e5",
+      "after": "0da960060f4dd467876d1da99bf46245ef485291961950b5cfff108fe55d507f"
+    },
+    "tests/test_app_settings.py": {
+      "before": "92f55df3abe68dfcdf64dae767b511922b6a76bc8c62458d4794cc62aa700440",
+      "after": "92f55df3abe68dfcdf64dae767b511922b6a76bc8c62458d4794cc62aa700440"
+    },
+    "tests/test_runtime.py": {
+      "before": "e6fb4ea9ee71d8f5516d6722253af9a83fea0fd1fa8d30dfac1624dbd0a940d9",
+      "after": "8196d0cbd0c0c93f8cfea4ab4f6ff6e5b410d084d0d129e53230f6c85796f65e"
+    },
+    "tests/test_scanner.py": {
+      "before": "37daa72d9ee6244e749e6ef585645f2f8457c55804ec14ca8989225bed77fd36",
+      "after": "37daa72d9ee6244e749e6ef585645f2f8457c55804ec14ca8989225bed77fd36"
+    },
+    "tests/test_stat_comparisons.py": {
+      "before": "6516b2adf5b0fe29316ff3f146daeb8c210ce7309dedcd3fd2b94dd34a50c814",
+      "after": "f13a10b88976852e2b73ff3f93f4b6eb14b624a81426daf5b12ad0288ee0cc70"
+    },
+    "tests/test_stats_cache.py": {
+      "before": "718f0718dcf22e40a4254054d056766211ffa48290161074e1052b4f823a7301",
+      "after": "596e6235f64218ca12935f3d60950505c33d9abd49a07065d582e0aa162d3419"
+    },
+    "tests/test_transcoding.py": {
+      "before": "02ff281c44a22faf54298c09bc3da1ae0cda31f0fce5d7b0e178fe9f19188267",
+      "after": "1f745f0d455128a5504ad3e13a6f4b0afd91349203501e394be98ba161c53e2f"
+    },
+    "backend/app/services/performance.py": {
+      "after": "45877b78eb986f7e9b4dda19e80d380336e2e09c167e0b91f8c23d5723f7a5a4"
+    },
+    "frontend/src/lib/chart-visibility.ts": {
+      "after": "2da353c03997932d2f469f85634f0b969d83176f0a86981f605409704d7a589d"
+    },
+    "docs/benchmarks/benchmark_application_performance.py": {
+      "before": "4a7635e67bf71af6fa9e50455a9502899f5dec1549d6ce6e68bc684da6398f9e",
+      "after": "4a7635e67bf71af6fa9e50455a9502899f5dec1549d6ce6e68bc684da6398f9e"
+    },
+    "docs/benchmarks/benchmark_mixed_performance.py": {
+      "before": "7a6ea2afe9a5792a56059373563a9dc7a3a8bde5654dff78767f8cca951ebb34",
+      "after": "7a6ea2afe9a5792a56059373563a9dc7a3a8bde5654dff78767f8cca951ebb34"
+    },
+    "docs/benchmarks/benchmark_frontend_cache.mjs": {
+      "before": "be811892536cdd0950125a2284ae9245ba97f0f5ba433f9ccbfe2d27533db3d1",
+      "after": "be811892536cdd0950125a2284ae9245ba97f0f5ba433f9ccbfe2d27533db3d1"
+    }
+  }
+}

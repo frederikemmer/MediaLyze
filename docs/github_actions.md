@@ -1,5 +1,7 @@
 # GitHub Actions
 
+[Documentation home](README.md)
+
 This document describes the MediaLyze GitHub Actions workflows, their automatic triggers, manual controls, published artifacts, and recovery procedures.
 
 ## Workflow overview
@@ -68,7 +70,7 @@ Before building, release mode validates:
 - the presence of `vUnreleased` in `CHANGELOG.md`;
 - a non-empty changelog section for the release version.
 
-All four version values must be identical valid `x.y.z` SemVer values.
+All four version values must be identical valid `x.y.z` SemVer values. When bumping them, also update the local MediaLyze version in `uv.lock` and the root version entries in both npm lockfiles; the workflow validator checks the four primary files, so lockfile consistency remains a contributor responsibility.
 
 If the version did not change compared with the previous `main` commit, the workflow stops without publishing. If the GitHub release already exists, the workflow also skips rebuilding it. A pre-existing Git tag is accepted only when it points to the current release commit; a conflicting tag fails the workflow.
 

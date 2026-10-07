@@ -1,0 +1,784 @@
+{
+  "baseline_commit": "66101d702b76dbe6e8042950d3d9fb4c8cce3bfd",
+  "memory_samples": {
+    "before": [
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.4067,
+          "peak_python_mib": 127.626,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.4861,
+          "peak_python_mib": 129.821
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.0644,
+          "peak_python_mib": 0.16
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.3211,
+          "peak_python_mib": 125.774,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 5.6815,
+          "peak_python_mib": 127.881,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 4.6355,
+          "peak_python_mib": 139.127
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.3743,
+          "peak_python_mib": 127.625,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.4878,
+          "peak_python_mib": 129.822
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.065,
+          "peak_python_mib": 0.16
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.3245,
+          "peak_python_mib": 125.774,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 6.3049,
+          "peak_python_mib": 127.879,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 5.084,
+          "peak_python_mib": 139.128
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.395,
+          "peak_python_mib": 127.628,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.5296,
+          "peak_python_mib": 129.821
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.0633,
+          "peak_python_mib": 0.16
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.3251,
+          "peak_python_mib": 125.774,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 5.9843,
+          "peak_python_mib": 127.882,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 4.8211,
+          "peak_python_mib": 139.128
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ],
+    "after": [
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.1587,
+          "peak_python_mib": 0.457,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.263,
+          "peak_python_mib": 2.7
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.0636,
+          "peak_python_mib": 0.153
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.5464,
+          "peak_python_mib": 0.507,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 8.6121,
+          "peak_python_mib": 4.466,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 5.8686,
+          "peak_python_mib": 4.426
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.1635,
+          "peak_python_mib": 0.457,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.2694,
+          "peak_python_mib": 2.699
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.0614,
+          "peak_python_mib": 0.153
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.5436,
+          "peak_python_mib": 0.507,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 9.0838,
+          "peak_python_mib": 4.464,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 5.5484,
+          "peak_python_mib": 4.426
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "startup_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "signature_backfill": {
+          "elapsed_seconds": 0.1546,
+          "peak_python_mib": 0.456,
+          "updated": 1000
+        },
+        "startup": {
+          "elapsed_seconds": 1.2482,
+          "peak_python_mib": 2.699
+        },
+        "repeated_startup": {
+          "elapsed_seconds": 0.0662,
+          "peak_python_mib": 0.153
+        },
+        "file_history_retention": {
+          "elapsed_seconds": 0.5863,
+          "peak_python_mib": 0.507,
+          "deleted": 501
+        },
+        "quality_recompute": {
+          "elapsed_seconds": 9.1499,
+          "peak_python_mib": 4.467,
+          "files_scanned": 1000,
+          "errors": 0
+        },
+        "repeated_quality_recompute": {
+          "elapsed_seconds": 6.0352,
+          "peak_python_mib": 4.425
+        },
+        "final_signatures": 1000,
+        "remaining_original_history": 499,
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ]
+  },
+  "scan_samples": {
+    "before": [
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.1028,
+        "change_fixture_seconds": 0.0028,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 22.6365,
+          "peak_python_mib": 5.455,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.6807,
+          "peak_python_mib": 5.294,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 3.9719,
+          "peak_python_mib": 5.603,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 21.2861,
+          "peak_python_mib": 8.327,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.1054,
+        "change_fixture_seconds": 0.0035,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 23.2336,
+          "peak_python_mib": 5.467,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.6837,
+          "peak_python_mib": 5.293,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 4.0129,
+          "peak_python_mib": 5.6,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 21.7855,
+          "peak_python_mib": 8.338,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.1047,
+        "change_fixture_seconds": 0.0029,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 21.9683,
+          "peak_python_mib": 5.46,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.5987,
+          "peak_python_mib": 5.288,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 3.9109,
+          "peak_python_mib": 5.594,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 20.5945,
+          "peak_python_mib": 8.358,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ],
+    "after": [
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.105,
+        "change_fixture_seconds": 0.003,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 18.1126,
+          "peak_python_mib": 4.956,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.6812,
+          "peak_python_mib": 2.66,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 3.9658,
+          "peak_python_mib": 2.432,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 16.5167,
+          "peak_python_mib": 4.224,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.1026,
+        "change_fixture_seconds": 0.0027,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 18.6727,
+          "peak_python_mib": 4.959,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.7757,
+          "peak_python_mib": 2.662,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 4.0003,
+          "peak_python_mib": 2.421,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 17.1009,
+          "peak_python_mib": 4.183,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "scan_pipeline",
+        "synthetic_items": 1000,
+        "changed_items_per_kind": 10,
+        "fixture_creation_seconds": 0.0968,
+        "change_fixture_seconds": 0.0029,
+        "initial_incremental_scan": {
+          "elapsed_seconds": 15.8184,
+          "peak_python_mib": 4.972,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 1000,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "unchanged_incremental_scan": {
+          "elapsed_seconds": 3.5017,
+          "peak_python_mib": 2.66,
+          "discovered_files": 1000,
+          "files_scanned": 0,
+          "unchanged_files": 1000,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "mixed_incremental_scan": {
+          "elapsed_seconds": 3.6704,
+          "peak_python_mib": 2.427,
+          "discovered_files": 1000,
+          "files_scanned": 20,
+          "unchanged_files": 980,
+          "new_files": 10,
+          "modified_files": 10,
+          "deleted_files": 10,
+          "status": "completed"
+        },
+        "full_reanalysis_scan": {
+          "elapsed_seconds": 15.3638,
+          "peak_python_mib": 4.219,
+          "discovered_files": 1000,
+          "files_scanned": 1000,
+          "unchanged_files": 0,
+          "new_files": 0,
+          "modified_files": 0,
+          "deleted_files": 0,
+          "status": "completed"
+        },
+        "final_media_files": 1000,
+        "ffprobe": "stubbed with a fixed synthetic payload",
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ]
+  },
+  "memory_scaling": {
+    "before": {
+      "benchmark": "startup_memory",
+      "items": 2000,
+      "payload_bytes_per_row": 65536,
+      "signature_backfill": {
+        "elapsed_seconds": 0.8755,
+        "peak_python_mib": 254.949,
+        "updated": 2000
+      },
+      "startup": {
+        "elapsed_seconds": 2.9101,
+        "peak_python_mib": 257.304
+      },
+      "repeated_startup": {
+        "elapsed_seconds": 0.095,
+        "peak_python_mib": 0.164
+      },
+      "file_history_retention": {
+        "elapsed_seconds": 0.6646,
+        "peak_python_mib": 251.498,
+        "deleted": 1001
+      },
+      "quality_recompute": {
+        "elapsed_seconds": 11.7411,
+        "peak_python_mib": 255.41,
+        "files_scanned": 2000,
+        "errors": 0
+      },
+      "repeated_quality_recompute": {
+        "elapsed_seconds": 8.973,
+        "peak_python_mib": 278.194
+      },
+      "final_signatures": 2000,
+      "remaining_original_history": 999,
+      "environment": {
+        "python": "3.12.13",
+        "sqlite": "3.51.2",
+        "platform": "macOS-27.0-arm64-arm-64bit"
+      }
+    },
+    "after": {
+      "benchmark": "startup_memory",
+      "items": 2000,
+      "payload_bytes_per_row": 65536,
+      "signature_backfill": {
+        "elapsed_seconds": 0.3118,
+        "peak_python_mib": 0.458,
+        "updated": 2000
+      },
+      "startup": {
+        "elapsed_seconds": 2.1504,
+        "peak_python_mib": 2.705
+      },
+      "repeated_startup": {
+        "elapsed_seconds": 0.0915,
+        "peak_python_mib": 0.157
+      },
+      "file_history_retention": {
+        "elapsed_seconds": 0.9518,
+        "peak_python_mib": 0.537,
+        "deleted": 1001
+      },
+      "quality_recompute": {
+        "elapsed_seconds": 17.5044,
+        "peak_python_mib": 4.457,
+        "files_scanned": 2000,
+        "errors": 0
+      },
+      "repeated_quality_recompute": {
+        "elapsed_seconds": 11.4274,
+        "peak_python_mib": 4.426
+      },
+      "final_signatures": 2000,
+      "remaining_original_history": 999,
+      "environment": {
+        "python": "3.12.13",
+        "sqlite": "3.51.2",
+        "platform": "macOS-27.0-arm64-arm-64bit"
+      }
+    }
+  },
+  "reconstruction_samples": {
+    "before": [
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 3.0503,
+          "peak_python_mib": 148.432,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 2.7628,
+          "peak_python_mib": 148.427,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 2.7304,
+          "peak_python_mib": 148.428,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ],
+    "after": [
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 5.7565,
+          "peak_python_mib": 12.946,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 5.6192,
+          "peak_python_mib": 12.945,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      },
+      {
+        "benchmark": "history_reconstruction_memory",
+        "items": 1000,
+        "payload_bytes_per_row": 65536,
+        "history_reconstruction": {
+          "elapsed_seconds": 5.5859,
+          "peak_python_mib": 12.945,
+          "created_file_history_entries": 1000
+        },
+        "environment": {
+          "python": "3.12.13",
+          "sqlite": "3.51.2",
+          "platform": "macOS-27.0-arm64-arm-64bit"
+        }
+      }
+    ]
+  },
+  "date": "2026-10-01",
+  "final_backend_tests": "699 passed, 3 warnings in 130.67s (0:02:10)",
+  "measurement": "Native Python allocation peaks with tracemalloc; temporary SQLite WAL databases, synthetic data, no Docker memory-limit validation"
+}

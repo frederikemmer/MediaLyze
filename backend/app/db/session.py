@@ -1,4 +1,6 @@
 import json
+import logging
+from time import perf_counter
 from collections.abc import Generator
 from pathlib import Path
 
@@ -9,6 +11,8 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.services.quality import default_quality_profile
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def _sqlite_url(database_path: Path) -> str:
@@ -34,6 +38,9 @@ def create_engine_for_settings(settings: Settings) -> Engine:
         cursor.execute(f"PRAGMA busy_timeout = {busy_timeout_ms};")
         cursor.close()
 
+    if settings.performance_metrics:
+        from backend.app.services.performance import install_sql_observations
+        install_sql_observations(engine)
     return engine
 
 
@@ -1645,17 +1652,24 @@ def init_db(engine: Engine | None = None) -> None:
     from backend.app.services.transcode_automation import remove_unreferenced_builtin_transcode_presets
 
     active_engine = engine or ENGINE
+    started = perf_counter()
+    logger.info("Database startup: checking schema and migrations")
     Base.metadata.create_all(active_engine)
     _apply_sqlite_additive_migrations(active_engine)
+    logger.info("Database startup: schema ready in %.2fs; backfilling filename signatures", perf_counter() - started)
     session_factory = sessionmaker(bind=active_engine, autoflush=False, autocommit=False, expire_on_commit=False)
     with session_factory() as db:
         app_settings = get_app_settings(db)
-        backfill_filename_pattern_signatures(db, app_settings.pattern_recognition.duplicate_matching)
+        updated = backfill_filename_pattern_signatures(
+            db, app_settings.pattern_recognition.duplicate_matching, commit_batches=True,
+        )
+        logger.info("Database startup: %s filename signatures updated; checking profiles", updated)
         migrate_legacy_library_quality_profiles(db, app_settings.resolution_categories)
         remove_unreferenced_builtin_transcode_presets(db)
         db.commit()
     with active_engine.begin() as connection:
         connection.execute(text("PRAGMA optimize;"))
+    logger.info("Database startup complete in %.2fs", perf_counter() - started)
 
 
 def get_db() -> Generator[Session, None, None]:

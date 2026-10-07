@@ -39,7 +39,8 @@ import { EyeOffIcon } from "../components/EyeOffIcon";
 import { FolderInputIcon } from "../components/FolderInputIcon";
 import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
-import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
+import { historyQuery } from "../lib/history-query";
+import { LibraryHistoryPanel, readHistoryRangeSelection } from "../components/LibraryHistoryPanel";
 import { JellyfinIcon } from "../components/JellyfinIcon";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -49,6 +50,7 @@ import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPane
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
 import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
+import { TableQualityScore } from "../components/TableQualityScore";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { useAppData } from "../lib/app-data";
 import { shouldShowField } from "../lib/media-fields-catalog";
@@ -328,8 +330,8 @@ const libraryStatisticsCache = new LruCache<string, LibraryStatistics>(16, { ttl
 const libraryHistoryCache = new LruCache<string, LibraryHistoryResponse>(16, { ttlMs: 5 * 60 * 1000 });
 const libraryComparisonCache = new LruCache<string, ComparisonResponse>(48, { ttlMs: 5 * 60 * 1000 });
 const libraryDuplicateGroupsCache = new LruCache<string, DuplicateGroupPage>(16, { ttlMs: 2 * 60 * 1000 });
-const libraryFileListCache = new LruCache<string, CachedFileList>(12, { ttlMs: 2 * 60 * 1000 });
-const libraryGroupedFileListCache = new LruCache<string, CachedGroupedFileList>(12, { ttlMs: 2 * 60 * 1000 });
+const libraryFileListCache = new LruCache<string, CachedFileList>(12, { ttlMs: 2 * 60 * 1000, maxWeight: 5000, weigh: (value) => value.items.length });
+const libraryGroupedFileListCache = new LruCache<string, CachedGroupedFileList>(12, { ttlMs: 2 * 60 * 1000, maxWeight: 5000, weigh: (value) => value.items.length });
 const librarySeriesGroupedDetailCache = new LruCache<string, MediaSeriesGroupedDetail>(32, { ttlMs: 2 * 60 * 1000 });
 const libraryLayoutPanelDefinitionMap = new Map<StatisticPanelLayoutId, LibraryLayoutPanelDefinition>([
   ...LIBRARY_STATISTIC_DEFINITIONS.map(
@@ -670,16 +672,6 @@ function formatGroupedQualityScore(score: number | null, t: (key: string, option
   return Number.isInteger(rounded) ? `${rounded.toFixed(0)}/10` : `${rounded.toFixed(1)}/10`;
 }
 
-function scoreMeterLabel(score: number): string {
-  if (score <= 3) {
-    return "low";
-  }
-  if (score <= 6) {
-    return "medium";
-  }
-  return "high";
-}
-
 function sortIndicator(direction: SortDirection): string {
   return direction === "asc" ? "↑" : "↓";
 }
@@ -816,7 +808,7 @@ export function buildFileColumns(
   loadQualityDetail: (fileId: number) => void,
   loadStreamDetail: (fileId: number) => void,
   tooltipEnabledColumns: Set<FileColumnKey>,
-  hideQualityScoreMeter: boolean,
+  _hideQualityScoreMeter: boolean,
   libraryType?: string | null,
   inDepthDolbyVisionProfiles = false,
   fileNameSource: AnalyzedFileNameSource = "file",
@@ -1313,32 +1305,12 @@ export function buildFileColumns(
             content={buildQualityTooltipContent(qualityDetailCache[row.id], Boolean(qualityDetailLoading[row.id]), t)}
             onOpen={() => loadQualityDetail(row.id)}
           >
-            <div className="score-cell">
-              <strong>{row.quality_score}/10</strong>
-              {hideQualityScoreMeter ? null : (
-                <div className="score-meter" aria-hidden="true">
-                  <span
-                    className={`score-meter-fill score-meter-fill-${scoreMeterLabel(row.quality_score)}`}
-                    style={{ width: `${Math.max(0, Math.min(10, row.quality_score)) * 10}%` }}
-                  />
-                </div>
-              )}
-            </div>
+            <TableQualityScore score={row.quality_score} />
           </TooltipTrigger>
         ) : isGroupedAnalyzedFilesRow(row) ? (
-          <strong>{formatGroupedQualityScore(row.metrics.quality_score, t)}</strong>
+          <TableQualityScore score={row.metrics.quality_score} emptyLabel={t("fileTable.na")} />
         ) : (
-          <div className="score-cell">
-            <strong>{row.quality_score}/10</strong>
-            {hideQualityScoreMeter ? null : (
-              <div className="score-meter" aria-hidden="true">
-                <span
-                  className={`score-meter-fill score-meter-fill-${scoreMeterLabel(row.quality_score)}`}
-                  style={{ width: `${Math.max(0, Math.min(10, row.quality_score)) * 10}%` }}
-                />
-              </div>
-            )}
-          </div>
+          <TableQualityScore score={row.quality_score} />
         )
       ),
     },
@@ -1692,6 +1664,7 @@ export function LibraryDetailPage() {
   const [isHistoryPanelCollapsed, setIsHistoryPanelCollapsed] = useState(() =>
     readHistoryPanelCollapsedPreference(libraryId),
   );
+  const [historyRange, setHistoryRange] = useState(() => readHistoryRangeSelection(HISTORY_RANGE_STORAGE_KEY));
   const [selectedHistoryMetric, setSelectedHistoryMetric] = useState<LibraryHistoryMetricId>(() =>
     readHistoryMetricPreference(),
   );
@@ -2130,6 +2103,7 @@ export function LibraryDetailPage() {
   const previousLibraryIdRef = useRef(libraryId);
   const summaryAbortRef = useRef<AbortController | null>(null);
   const statisticsAbortRef = useRef<AbortController | null>(null);
+  const historyQueryRef = useRef<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
   const comparisonAbortRef = useRef<Map<string, AbortController>>(new Map());
   const duplicateGroupsAbortRef = useRef<AbortController | null>(null);
@@ -2363,10 +2337,17 @@ export function LibraryDetailPage() {
     } else {
       setIsHistoryRefreshing(true);
     }
+    const queryKey = JSON.stringify([libraryId, historyQuery(selectedHistoryMetric, historyRange)]);
+    if (historyQueryRef.current !== queryKey) {
+      setLibraryHistory(null);
+      setIsHistoryLoading(true);
+    }
+    historyQueryRef.current = queryKey;
     setHistoryError(null);
 
     try {
-      const payload = await api.libraryHistory(libraryId, controller.signal);
+      const payload = await api.libraryHistory(libraryId, controller.signal, historyQuery(selectedHistoryMetric, historyRange));
+      if (controller.signal.aborted) return;
       libraryHistoryCache.set(libraryId, payload);
       writeLibrarySessionCache("history", libraryId, payload);
       setLibraryHistory(payload);
@@ -2379,11 +2360,8 @@ export function LibraryDetailPage() {
     } finally {
       if (historyAbortRef.current === controller) {
         historyAbortRef.current = null;
-        if (showLoading) {
-          setIsHistoryLoading(false);
-        } else {
-          setIsHistoryRefreshing(false);
-        }
+        setIsHistoryLoading(false);
+        setIsHistoryRefreshing(false);
       }
     }
   });
@@ -2987,8 +2965,11 @@ export function LibraryDetailPage() {
     setIsHistoryRefreshing(false);
 
     void loadLibrarySummary(cachedSummary === null);
-    void loadLibraryHistory(cachedHistory === null);
   }, [libraryId]);
+
+  useEffect(() => {
+    void loadLibraryHistory(true);
+  }, [libraryId, selectedHistoryMetric, historyRange]);
 
   useEffect(() => {
     const duplicateGroupsCacheKey = buildDuplicateGroupsCacheKey(libraryId, includeSuppressedDuplicateGroups);
@@ -3828,6 +3809,7 @@ export function LibraryDetailPage() {
                   collapsed={isHistoryPanelCollapsed}
                   onToggleCollapsed={() => setIsHistoryPanelCollapsed((current) => !current)}
                   currentResolutionCategoryIds={appSettings.resolution_categories?.map((category) => category.id) ?? []}
+                  onRangeChange={setHistoryRange}
                   rangeStorageKey={HISTORY_RANGE_STORAGE_KEY}
                   bodyId={`library-history-panel-body-${panel.item.instanceId}`}
                   inDepthDolbyVisionProfiles={inDepthDolbyVisionProfiles}

@@ -1,0 +1,162 @@
+{
+  "measured_on": "2026-10-01",
+  "baseline_commit": "66101d702b76dbe6e8042950d3d9fb4c8cce3bfd",
+  "image": "medialyze-validation:macos-m1-max-20260903",
+  "items": 2000,
+  "payload_bytes_per_row": 65536,
+  "notes": [
+    "Same Linux image and current benchmark instrumentation, read-only source mounts, isolated temporary SQLite fixtures, no production config/media.",
+    "Swap disabled by setting memory-swap equal to memory.",
+    "Container limit/OOM outcome is measured separately from traced Python allocations.",
+    "Full benchmark includes fixture construction, backfill, upgrade/repeated startup, retention and quality/repeated quality."
+  ],
+  "baseline_256m": {
+    "state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": true,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 137,
+      "Error": "",
+      "StartedAt": "2026-10-01T14:28:11.202209805Z",
+      "FinishedAt": "2026-10-01T14:28:14.354615751Z"
+    },
+    "memory_limit_bytes": 268435456,
+    "memory_and_swap_limit_bytes": 268435456,
+    "image_id": "sha256:36ba475e909b0d79621d13a73f97c88a4e177febe435d5445fbb1edde095dc90",
+    "benchmark": null
+  },
+  "after_256m": {
+    "state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-01T14:28:25.382548923Z",
+      "FinishedAt": "2026-10-01T14:29:18.489246336Z"
+    },
+    "memory_limit_bytes": 268435456,
+    "memory_and_swap_limit_bytes": 268435456,
+    "image_id": "sha256:36ba475e909b0d79621d13a73f97c88a4e177febe435d5445fbb1edde095dc90",
+    "benchmark": {
+      "benchmark": "startup_memory",
+      "items": 2000,
+      "payload_bytes_per_row": 65536,
+      "signature_backfill": {
+        "elapsed_seconds": 0.4479,
+        "peak_python_mib": 0.458,
+        "updated": 2000
+      },
+      "startup": {
+        "elapsed_seconds": 5.7864,
+        "peak_python_mib": 2.678
+      },
+      "repeated_startup": {
+        "elapsed_seconds": 0.2005,
+        "peak_python_mib": 0.157
+      },
+      "file_history_retention": {
+        "elapsed_seconds": 1.4725,
+        "peak_python_mib": 0.537,
+        "deleted": 1001
+      },
+      "quality_recompute": {
+        "elapsed_seconds": 23.871,
+        "peak_python_mib": 4.467,
+        "files_scanned": 2000,
+        "errors": 0
+      },
+      "repeated_quality_recompute": {
+        "elapsed_seconds": 16.3427,
+        "peak_python_mib": 4.433
+      },
+      "final_signatures": 2000,
+      "remaining_original_history": 999,
+      "environment": {
+        "python": "3.12.14",
+        "sqlite": "3.40.1",
+        "platform": "Linux-7.0.12-linuxkit-aarch64-with-glibc2.36"
+      }
+    }
+  },
+  "baseline_control_1g": {
+    "state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-01T14:28:51.991744296Z",
+      "FinishedAt": "2026-10-01T14:29:26.465033798Z"
+    },
+    "memory_limit_bytes": 1073741824,
+    "memory_and_swap_limit_bytes": 1073741824,
+    "image_id": "sha256:36ba475e909b0d79621d13a73f97c88a4e177febe435d5445fbb1edde095dc90",
+    "benchmark": {
+      "benchmark": "startup_memory",
+      "items": 2000,
+      "payload_bytes_per_row": 65536,
+      "signature_backfill": {
+        "elapsed_seconds": 1.0432,
+        "peak_python_mib": 254.947,
+        "updated": 2000
+      },
+      "startup": {
+        "elapsed_seconds": 2.7711,
+        "peak_python_mib": 257.276
+      },
+      "repeated_startup": {
+        "elapsed_seconds": 0.0875,
+        "peak_python_mib": 0.164
+      },
+      "file_history_retention": {
+        "elapsed_seconds": 0.8997,
+        "peak_python_mib": 251.498,
+        "deleted": 1001
+      },
+      "quality_recompute": {
+        "elapsed_seconds": 14.2072,
+        "peak_python_mib": 255.41,
+        "files_scanned": 2000,
+        "errors": 0
+      },
+      "repeated_quality_recompute": {
+        "elapsed_seconds": 11.8895,
+        "peak_python_mib": 278.194
+      },
+      "final_signatures": 2000,
+      "remaining_original_history": 999,
+      "environment": {
+        "python": "3.12.14",
+        "sqlite": "3.40.1",
+        "platform": "Linux-7.0.12-linuxkit-aarch64-with-glibc2.36"
+      }
+    }
+  },
+  "linux_regression_tests": {
+    "result": "225 passed in 18.97s",
+    "memory_limit_bytes": 536870912,
+    "files": [
+      "test_ffprobe_parser.py",
+      "test_scanner.py",
+      "test_duplicates.py",
+      "test_history_services.py",
+      "test_runtime.py",
+      "test_subtitles.py",
+      "test_transcoding.py"
+    ],
+    "pytest": "9.0.3"
+  }
+}

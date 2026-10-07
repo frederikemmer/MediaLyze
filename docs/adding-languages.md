@@ -1,5 +1,7 @@
 # Adding a new interface language
 
+[Documentation home](README.md)
+
 MediaLyze ships the web interface in multiple languages through i18next. This
 guide describes the required steps for adding another UI language without
 breaking fallback behavior, settings persistence, or existing translation keys.
@@ -75,11 +77,10 @@ Use the translated display name in each language where possible.
 
 Update `frontend/src/i18n.ts`:
 
-- import the new `common.json`
-- add the language to the `resources` object
-- include the language code in the `getInitialLanguage()` return type
-- include the language code in the local-storage whitelist in
-  `languageChanged`
+- extend `SUPPORTED_INTERFACE_LANGUAGES`; its derived `SupportedInterfaceLanguage` type also governs initial language selection and local-storage validation
+- add a dynamic import to `languageLoaders` for the new `common.json`
+- keep English in the bundled `resources` object as the fallback; other languages load through the i18next backend only when selected
+- preserve `i18nReady` and the initial-render wait in `frontend/src/main.tsx` so a saved language is loaded before the first render
 
 Update the settings language selector in `frontend/src/pages/LibrariesPage.tsx`:
 
@@ -168,8 +169,8 @@ Before merging a new language, check:
 At minimum, run:
 
 ```bash
-cd frontend && npm run build
-cd frontend && npm test
+npm --prefix frontend run build
+npm --prefix frontend test -- --run
 ```
 
 If backend language persistence changed, also run the backend test suite:

@@ -3133,34 +3133,6 @@ export function LibrariesPage() {
     }
   }
 
-  async function toggleHideQualityScoreMeter(enabled: boolean) {
-    const previousValue = hideQualityScoreMeter;
-    setHideQualityScoreMeter(enabled);
-    setFeatureFlagsStatus(null);
-    setIsSavingFeatureFlags(true);
-    try {
-      const updated = await persistAppSettingsSnapshot(
-        userIgnorePatternInputs,
-        defaultIgnorePatternInputs,
-        showAnalyzedFilesCsvExport,
-        showFullWidthAppShell,
-        enabled,
-        unlimitedPanelSize,
-      );
-      applyUpdatedAppSettingsState(updated);
-      setFeatureFlagsStatus(null);
-      setIgnorePatternsStatus(null);
-      setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
-      void refreshHistoryStorage().catch(() => undefined);
-    } catch (reason) {
-      setHideQualityScoreMeter(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
-    } finally {
-      setIsSavingFeatureFlags(false);
-    }
-  }
-
   async function toggleShowMusicQualityScore(enabled: boolean) {
     const previousValue = showMusicQualityScore;
     setShowMusicQualityScore(enabled);
@@ -7493,8 +7465,8 @@ export function LibrariesPage() {
                           >
                             <div className="scan-log-summary-head">
                               <div className="scan-log-summary-copy">
-                                <strong>{scanLogTitle(job)}</strong>
-                                <span>{job.library_name ?? t("scanLogs.unknownLibrary")}</span>
+                                <strong>{job.library_name ?? t("scanLogs.unknownLibrary")}</strong>
+                                <span>{scanLogTitle(job)}</span>
                               </div>
                               <div className="meta-tags">
                                 <span className={`badge scan-log-outcome badge-${job.outcome}`}>
@@ -7841,25 +7813,6 @@ export function LibrariesPage() {
                     <TooltipTrigger
                       ariaLabel={t("libraries.featureFlags.showFullWidthAppShellTooltipAria")}
                       content={t("libraries.featureFlags.showFullWidthAppShellTooltip")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                  <div className="app-settings-flag-row">
-                    <label className="app-settings-flag-toggle" htmlFor="hide-quality-score-meter">
-                      <input
-                        id="hide-quality-score-meter"
-                        type="checkbox"
-                        checked={hideQualityScoreMeter}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
-                        onChange={(event) => void toggleHideQualityScoreMeter(event.target.checked)}
-                      />
-                      <span>{t("libraries.featureFlags.hideQualityScoreMeter")}</span>
-                    </label>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.featureFlags.hideQualityScoreMeterTooltipAria")}
-                      content={t("libraries.featureFlags.hideQualityScoreMeterTooltip")}
                       preserveLineBreaks
                     >
                       ?

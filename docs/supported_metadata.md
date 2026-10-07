@@ -1,5 +1,7 @@
 # Supported Metadata Reference
 
+[Documentation home](README.md)
+
 This document is the current support matrix for media analysis capabilities in MediaLyze.
 
 Use it when deciding:
@@ -13,12 +15,13 @@ Folder discovery, show/season recognition, bonus-content classification, and ign
 
 ## 1) Media Kinds And Library Types
 
-MediaLyze currently analyzes two media kinds:
+MediaLyze analyzes video and audio files, with dedicated music and audiobook library workflows. These are library/quality-profile distinctions; coarse telemetry still groups audiobook files under `audio`.
 
 | Media Kind | Current Status | Typical Library Types |
 |---|---|---|
 | video | implemented | `movies`, `series`, `mixed`, `other` |
 | audio / music | implemented | `music`, `mixed`, `other` |
+| audiobooks (audio with book tags and chapters) | implemented | `audiobooks`; audio files can also occur in `mixed`/`other` |
 
 Library types control discovery and some UI behavior:
 
@@ -26,7 +29,8 @@ Library types control discovery and some UI behavior:
 |---|---|---|
 | `movies` | video extensions only | video-focused defaults |
 | `series` | video extensions only | show / season / episode recognition can be applied |
-| `music` | audio extensions only | video-only table fields, statistics, and comparison axes are hidden |
+| `music` | audio extensions only | video-only fields hidden; music tags, cover metadata, and audio statistics |
+| `audiobooks` | audio extensions only | chapter and book-tag fields, filters, statistics, and audiobook quality profiles |
 | `mixed` | video + audio extensions | can contain both video and audio files; show recognition can be applied to video paths |
 | `other` | video + audio extensions | generic mixed-media behavior |
 
@@ -35,8 +39,10 @@ Library types control discovery and some UI behavior:
 | Kind | Extensions |
 |---|---|
 | video | `.mkv`, `.mp4`, `.avi`, `.mov`, `.m4v`, `.ts`, `.m2ts`, `.wmv` |
-| audio | `.mp3`, `.flac`, `.m4a`, `.aac`, `.opus`, `.wav`, `.wma` |
+| audio | `.mp3`, `.flac`, `.m4b`, `.m4a`, `.aac`, `.aa`, `.aax`, `.ogg`, `.oga`, `.opus`, `.wav`, `.wma`, `.aiff`, `.aif`, `.alac`, `.mka`, `.ape` |
 | external subtitles | `.srt`, `.ass`, `.ssa`, `.sub`, `.idx` |
+
+These sets are defined in `backend/app/core/config.py`. Accepting an extension does not guarantee decodable media; `.aa`/`.aax` may be DRM-protected and MediaLyze does not decrypt Audible DRM.
 
 ## 2) Capability Matrix By Media Kind
 
@@ -51,20 +57,28 @@ Library types control discovery and some UI behavior:
 | Container / format metadata | yes | yes | duration, bitrate, probe score |
 | Video stream metadata | yes | n/a | codec, profile, resolution, color, frame rate, HDR, bit depth |
 | Audio stream metadata | yes | yes | codec, channels, language, bit depth, replay gain, immersive profile, etc. |
-| Music tag metadata | no | yes | title, artist, album, album artist, genre, date, disc, composer |
+| Music tag metadata | when present | yes | title, artist, album, album artist, genre, date, disc, composer, track; audio-oriented UI exposure |
 | Internal subtitle streams | yes | yes | Technically persisted when present; mainly relevant for video |
 | External subtitle sidecars | yes | yes | Sidecars are associated by file stem / prefix |
-| Quality scoring | yes | optional | Music-only views hide scores unless `show_music_quality_score` is enabled |
+| Quality scoring | yes | optional | Music/audiobook views hide scores unless `show_music_quality_score` is enabled |
 | Duplicate detection | yes | yes | filename, hash, both, or off |
 | File history snapshots | yes | yes | shared normalized storage model |
 | Library history snapshots | yes | yes | shared library-level history model |
 | Search / filtering | yes | yes | audio-only contexts hide fields that do not apply |
 | Statistics / panels | yes | yes | music-only contexts expose a reduced set |
 | Show / season / episode grouping | yes | no | only applies to video paths in `series` or `mixed` libraries |
-| Broken-file diagnostics | partial | partial | scan failure summaries exist; richer diagnostics remain backlog |
+| Broken-file diagnostics | yes | yes | classified reasons, short remedies, and copyable technical diagnostics in scan logs and File Detail; see section 6 |
+| Chapters and embedded-cover metadata | yes when present | yes when present | chapter timing/title rows and cover presence/codec/dimensions; attached pictures do not become video-analysis streams |
+| Explicit transcoding | yes | no | regular video stream required; no audio-only transcoding workflow |
 | Media-type-specific recommendation workflows | planned gap | planned gap | not implemented today |
 
 ffprobe failures are recorded per file and the scan continues with the remaining files. Each probe has a 120-second execution limit, a 16 MiB JSON output limit, and a 1 MiB diagnostic output limit. Exceeding a limit terminates and reaps the probe and records an analysis failure; partial metadata is not accepted. Stored raw payloads are loaded lazily during scans, and persisted analysis payloads and stream data are released as files finish processing.
+
+Scans retain a compact identity/change/rename index and load full stored file records in batches. Filesystem inspection errors are recorded in the existing failure samples without aborting unrelated file analysis. Unavailable roots and unreadable directories are not evidence of deletion: existing records in those locations are preserved. Matching subtitle sidecars are inspected independently of unrelated neighboring media files.
+
+Startup signature migration reads only file IDs and filenames and commits completed batches so an interrupted upgrade can resume. History storage pruning decodes one record at a time, preserves the existing canonical byte estimates and oldest-first rules, and never prunes active jobs. Quality recomputation uses bounded file batches and releases raw metadata after history persistence; unchanged history fingerprints do not reload raw metadata. These measures remove catalog-wide raw-JSON retention, but do not impose an absolute process memory cap.
+
+Manual history reconstruction also loads raw metadata only when creating a file snapshot and releases it after persistence. Its prepared aggregate values still scale with the number of files needed to reconstruct daily library statistics.
 
 If the backend/container restarts during a scan, startup marks the interrupted job as canceled. This does not imply a user cancellation. For Docker, inspect `docker inspect medialyze --format '{{json .State}}'` and `docker inspect medialyze --format '{{.RestartCount}}'`, plus host kernel logs such as `journalctl -k --since '1 hour ago'`, to check for OOM kills or other restart causes. An ffprobe error immediately before startup messages alone does not establish why the backend exited. Output/time limits do not cap ffprobe's internal memory use or total container memory.
 
@@ -112,9 +126,15 @@ Attached-picture streams such as embedded cover art are ignored as video-analysi
 | replay gain, replay gain peak | yes | yes |
 | writing library, MD5 unencoded payload | yes | yes |
 | language, default, forced flags | yes | yes |
-| title, artist, album, album artist, genre, date, disc, composer | no | yes |
+| title, artist, album, album artist, genre, date, disc, composer, track | when tags exist | yes |
 
-### 3.4 Subtitle metadata
+### 3.4 Chapters, covers, and audiobook metadata
+
+`MediaChapter` stores chapter index, start/end times, duration, and title. File Detail offers chapter search and CSV export, plus embedded-cover inspection/download when available. Cover metadata records presence, codec, width, and height.
+
+Audiobook fields include narrator, author, publisher, series, series part, description, copyright, ASIN, ISBN, language, and abridged status. The parser reads recognized container tags and fills missing values from stream tags; absent tags remain empty/unknown rather than being scraped. Music metadata additionally includes track number. Search supports chapter count/title, cover presence, music tags, and book fields. Quality profiles have separate `video`, `music`, and `audiobook` types, with tag/chapter categories for audio libraries.
+
+### 3.5 Subtitle metadata
 
 Transcoding stream language codes are configured together for video, audio, and subtitles under Metadata settings. Container default uses ISO 639-2/B for MKV/WebM and ISO 639-2/T for MP4. Presets using the source container can request any supported stream convention; applying a preset falls back to the actual target container's default if that convention is unsupported. Filename and folder-name language formatting remains independent.
 
@@ -132,28 +152,21 @@ Supported sidecar extensions are `.srt`, `.ass`, `.ssa`, `.sub`, and `.idx`.
 
 ### 4.1 Library and dashboard statistic support
 
-| Statistic / panel | Video contexts | Music-only contexts | Default visibility |
-|---|---:|---:|---|
-| file size distribution | yes | yes | on |
-| quality-score distribution | yes | optional | on for video; hidden for music unless feature flag is enabled |
-| comparison panel | yes | yes | on |
-| video codec distribution | yes | no | on |
-| resolution distribution | yes | no | on |
-| video bit-depth distribution | yes | no | on when video metadata exists |
-| HDR profile distribution | yes | no | on |
-| duration distribution | yes | yes | on |
-| bitrate distribution | yes | yes | panel on, table off by default |
-| audio bitrate distribution | yes | no | panel on, hidden in music-only contexts |
-| audio bit-depth distribution | yes | yes | panel on, off by default in dashboard |
-| container distribution | yes | yes | on |
-| audio codec distribution | yes | yes | on |
-| audio spatial profile distribution | yes | yes | available, off by default |
-| audio language distribution | yes | no | on for video / mixed contexts |
-| subtitle language distribution | yes | no | on for video / mixed contexts |
-| subtitle codec distribution | yes | no | on for video / mixed contexts |
-| subtitle source distribution | yes | no | available; dashboard on, library panel off by default |
+| Statistic / panel | Video contexts | Music/audiobook contexts |
+| --- | --- | --- |
+| File size, duration, container, audio codec, audio bit depth, audio spatial profile | available | available |
+| Quality score | available | available when `show_music_quality_score` is enabled |
+| Comparison panel | available | available with type-aware axes |
+| Video codec, resolution, video bit depth, HDR | available when applicable | hidden |
+| Overall/audio bitrate distributions | available | hidden in the statistic-panel selector |
+| Audio language, subtitle language/codec/source | available | hidden |
+| Music tags, track number, channel count, sample rate, bitrate mode, cover presence | available according to field/context | available |
+| Audiobook narrator/author/publisher/series/part, chapter count/title | hidden outside audiobook libraries | audiobook-library views |
+| Connector user plays | available with a playback-capable provider | available with a playback-capable provider |
 
-Music-only views intentionally hide:
+Panel visibility and order are edited directly on Dashboard and Library Detail and persisted per page. First-time layouts are curated in `frontend/src/lib/statistic-panel-layout.ts`; available definitions and table-column defaults are in `library-statistics-settings.ts`. A saved layout can differ from defaults. Table visibility/tooltips remain configurable in Settings.
+
+Music and audiobook statistic views intentionally hide:
 
 - video codec
 - resolution
@@ -164,7 +177,7 @@ Music-only views intentionally hide:
 - subtitle language / codec / source
 - audio language
 
-`bitrate` still remains usable in pure music contexts because the backend falls back to summed audio-stream bitrate when container bitrate is missing.
+The backend still computes overall `bitrate`, falling back to summed audio-stream bitrate when container bitrate is missing. This persisted value is distinct from visibility: the current audio-only UI hides its table column, statistic panel, and comparison axis; the audio-bitrate comparison axis remains available.
 
 ### 4.2 Comparison axes
 
@@ -180,6 +193,10 @@ Music-only views intentionally hide:
 | video codec | yes | no |
 | resolution category | yes | no |
 | HDR profile | yes | no |
+| audio channels, sample rate | yes | yes |
+| artist, album, genre, year, track number, bitrate mode, embedded cover | yes | yes |
+| chapter count, narrator, author, publisher, series, series part | audiobook context only | audiobook libraries only |
+| play count, users played | when playback data exists | when playback data exists |
 
 Available renderers:
 
@@ -208,6 +225,10 @@ Available renderers:
 | subtitle codecs | yes | no |
 | subtitle sources | yes | no |
 | audio bit depth | yes | yes |
+| music tags, track number, channels, sample rate, bitrate mode, embedded cover | type-aware | yes |
+| chapter count/titles and audiobook tags | audiobook-library context | audiobook-library context |
+
+Quality-score table cells color only the numerator in `X/10`; no score meter is shown. Series/season names are left-aligned at file-name size.
 
 Hover-detail support currently exists for:
 
@@ -233,6 +254,12 @@ The file detail page currently has a shared panel set for all analyzed files:
 | audio streams | yes | yes |
 | subtitles | yes | yes |
 | raw JSON | yes | yes |
+| embedded cover | when present | when present |
+| chapters with search and CSV export | when present | when present |
+| preview/download | experimental, browser codecs permitting | experimental, browser codecs permitting |
+| transcoding | regular video only | unavailable for audio-only files |
+
+External-source and playback sections depend on matched capable connectors. Synchronized variant comparison includes separate transcoded output; see [Transcoding](transcoding.md#job-center-and-comparison).
 
 ## 5) Special Handling
 
@@ -268,7 +295,9 @@ The file detail page currently has a shared panel set for all analyzed files:
 |---|---|
 | File extension is not allowed for the library type | skipped during discovery |
 | File is ignored by an ignore pattern | skipped and included in scan ignore summaries |
+| Filename ends in `_temp.mp4` | skipped when the built-in default ignore rules are active |
 | ffprobe fails | file is marked failed and appears in scan failure samples |
+| Analysis failure diagnostics | classified as empty file, missing MP4 metadata, invalid container/media, unavailable file, permission/I/O error, probe timeout/output limit, unrecognized stream, probable Audible DRM, internal processing error, or other ffprobe error; technical details are retained |
 | Numeric metadata cannot be parsed | stored as `null` where parsing fails |
 | `bits_per_sample=0` for lossy audio | treated as unknown bit depth |
 | Unsupported sidecar subtitle extension | ignored |
@@ -284,7 +313,7 @@ These behaviors are shared across currently supported media kinds.
 |---|---|---|
 | `manual` | scan only when user / API triggers it | optional `selected_paths` |
 | `scheduled` | interval schedule | `interval_minutes` (min 5), optional `selected_paths` |
-| `scheduled_daily` | daily schedule | `scheduled_time` (`HH:MM`), optional `selected_paths` |
+| `scheduled_daily` | daily schedule in the configured scheduler timezone | `scheduled_time` (`HH:MM`), optional `selected_paths` |
 | `watch` | filesystem watcher with debounce | `debounce_seconds` (min 3), optional `selected_paths` |
 
 Watch fallback behavior:
@@ -316,7 +345,7 @@ Known container keys are mapped to user-facing labels for both media kinds:
 
 ```text
 mkv, mp4, avi, mov, webm, ts, m2ts, wmv, flv, mpeg, mpg, ogm, asf,
-mp3, flac, m4a, aac, opus, wav, wma
+mp3, flac, m4b, m4a, aac, aa, aax, ogg, oga, opus, wav, wma, aiff, aif, alac, mka, ape
 ```
 
 The label map can contain keys that are not currently part of type-aware discovery.
@@ -337,3 +366,11 @@ When adding a new media type, check whether it needs:
 10. translations and mixed-library visibility rules
 
 The tables above should be extended whenever a new media kind becomes first-class.
+
+## 9) Resource-aware scan execution
+
+The configured scan-worker count remains the maximum. A process-wide admission gate also checks available host RAM and, on Linux, standard cgroup v1/v2 memory limits and usage. It reserves 64 MiB for backend work and budgets 128 MiB per admitted analysis worker; at least one worker can proceed. Queued work remains bounded, and waiting workers recheck memory and cancellation. Under memory pressure scans may run more slowly. These budgets are conservative scheduling estimates, not hard limits on ffprobe allocations or a guarantee against OOM. Transcoding and connector execution keep their independent scheduling.
+
+Canceling a scan signals active analysis workers. Running ffprobe processes are killed and reaped, output pipes are closed, and file hashing checks cancellation between chunks. Cancellation is not reported as a broken file. OS filesystem calls can still take time on an unresponsive mount.
+
+Database initialization and orphaned-job recovery still finish before startup readiness. History pruning is queued on the existing single-worker maintenance executor; the API can become available before pruning finishes, so expired history may briefly remain visible. Background retention failures are logged. Quality recomputation reuses the effective profile for each media type for the job, while reconstructed full history snapshots are inserted directly in the existing transaction and their source payloads are released per file.

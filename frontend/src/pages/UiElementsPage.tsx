@@ -1,3 +1,4 @@
+import { TableQualityScore } from "../components/TableQualityScore";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { releaseVisibility } from "../lib/release-visibility";
@@ -88,7 +89,9 @@ import {
 
 import { AnimatedConnectIcon } from "../components/AnimatedConnectIcon";
 import { AnimatedSearchIcon } from "../components/AnimatedSearchIcon";
+import { StreamLanguageField } from "../components/TranscodingPanel";
 import { TranscodeProgressSummary } from "../components/TranscodeProgressSummary";
+import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { AsyncPanel } from "../components/AsyncPanel";
 import { ComparisonChartPanel } from "../components/ComparisonChartPanel";
 import { DistributionChartPanel } from "../components/DistributionChartPanel";
@@ -406,20 +409,6 @@ function Badge({ children, className = "badge" }: { children: ReactNode; classNa
   return <span className={className}>{children}</span>;
 }
 
-function ScoreMeter({ value }: { value: number }) {
-  return (
-    <div className="score-cell">
-      <strong>{value}</strong>
-      <span className="score-meter">
-        <span
-          className={`score-meter-fill ${value >= 85 ? "score-meter-fill-high" : value >= 65 ? "score-meter-fill-medium" : "score-meter-fill-low"}`}
-          style={{ width: `${value}%` }}
-        />
-      </span>
-    </div>
-  );
-}
-
 function AnalyzedFilesTable() {
   const rows = [
     { file: "Movies/Arrival.2016.mkv", container: "mkv", codec: "HEVC", quality: 91, size: "18.4 GB" },
@@ -451,7 +440,7 @@ function AnalyzedFilesTable() {
               <div className="media-data-cell">{row.container}</div>
               <div className="media-data-cell">{row.codec}</div>
               <div className="media-data-cell">
-                <ScoreMeter value={row.quality} />
+                <TableQualityScore score={row.quality / 10} />
               </div>
               <div className="media-data-cell">{row.size}</div>
             </div>
@@ -923,11 +912,12 @@ function ScanLogFixture() {
         <div className="scan-log-summary-head">
           <div className="scan-log-summary-copy">
             <strong>Movies archive</strong>
-            <span>Incremental scan - manual trigger</span>
+            <span>Oct 1, 2026, 2:02 AM</span>
           </div>
           <div className="meta-tags">
             <span className="badge scan-log-outcome badge-completed_with_issues">Completed with issues</span>
-            <span className="scan-badge badge">incremental</span>
+            <span className="scan-badge badge">Scheduled</span>
+            <ChevronRight aria-hidden="true" className="nav-icon" />
           </div>
         </div>
         <div className="scan-log-summary-meta">
@@ -1272,7 +1262,8 @@ function ReleaseDialogFixture({ telemetryOff = false }: { telemetryOff?: boolean
 }
 
 export function UiElementsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [copyStreamLanguage, setCopyStreamLanguage] = useState("und");
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [audioPrimaryMode, setAudioPrimaryMode] = useState<AudioStreamPrimaryMode>("quality");
@@ -1966,7 +1957,7 @@ export function UiElementsPage() {
                           <button type="button" data-toggle-key="file" className="distribution-chart-mode-button analyzed-file-name-source-button active" aria-label="Show file names" aria-pressed="true"><span className="distribution-chart-mode-button-content"><FileText aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
                           <button type="button" data-toggle-key="jellyfin" className="distribution-chart-mode-button analyzed-file-name-source-button" aria-label="Show Jellyfin names" aria-pressed="false"><span className="distribution-chart-mode-button-content"><JellyfinIcon aria-hidden="true" className="distribution-chart-mode-icon" /></span></button>
                         </div>
-                        <button type="button" className="secondary icon-only-button statistic-layout-action-button" aria-label="Edit table view"><Settings aria-hidden="true" /></button>
+                        <button type="button" className="statistic-layout-action-button" aria-label="Edit table view"><Settings aria-hidden="true" /></button>
                         <span className="analyzed-files-count" aria-label="4 indexed entries">4</span>
                       </div>
                     </div>
@@ -2072,6 +2063,15 @@ export function UiElementsPage() {
                 <div className="page-heading-row"><House aria-hidden="true" className="page-heading-icon" /><h2>Dashboard</h2></div>
                 <StatisticPanelLayoutControls
                   availableDefinitions={availablePanelDefinitions}
+                  isEditing={false}
+                  onStartEditing={() => undefined}
+                  onCancelEditing={() => undefined}
+                  onRestoreDefault={() => undefined}
+                  onSaveEditing={() => undefined}
+                  onAddPanel={() => undefined}
+                />
+                <StatisticPanelLayoutControls
+                  availableDefinitions={availablePanelDefinitions}
                   isEditing
                   onStartEditing={() => undefined}
                   onCancelEditing={() => undefined}
@@ -2143,6 +2143,9 @@ export function UiElementsPage() {
               <VariantCard title="Statistic layout edit overlay" source={`${dashboard} > Layout editor`} classes={["statistic-layout-grid", "statistic-layout-overlay", "statistic-layout-size-button"]} wide>
                 <StatisticLayoutFixture />
               </VariantCard>
+              <VariantCard title="History metric and range loading" source="components/LibraryHistoryPanel.tsx / lib/history-query.ts" status="Changing metric or range fetches only that history slice; background refresh retains the chart." classes={["library-history-panel", "panel-loader"]} wide>
+                <LibraryHistoryPanel history={null} loading selectedMetric="resolution_mix" onChangeMetric={() => {}} collapsed={false} onToggleCollapsed={() => {}} currentResolutionCategoryIds={["1080p"]} rangeStorageKey="medialyze-catalog-history-range" />
+              </VariantCard>
               <VariantCard title="Migration notice" source={`${dashboard} / ${libraryDetail} > Saved layouts`} classes={["statistic-layout-migration-notice", "notice"]}>
                 <StatisticPanelLayoutMigrationNotice
                   scope="dashboard"
@@ -2160,7 +2163,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[6]}>
             <VariantGroup title="Table surfaces">
-              <VariantCard title="Analyzed files virtual table" source={`${libraryDetail} > Analyzed files`} classes={["data-table-shell", "media-data-table", "score-meter"]} wide>
+              <VariantCard title="Analyzed files virtual table" source={`${libraryDetail} > Analyzed files`} classes={["data-table-shell", "media-data-table", "score-cell", "table-quality-score-value"]} wide>
                 <div className="data-table-tools">
                   <div className="column-picker">
                     <button type="button" className="column-toggle is-active"><Columns3 className="nav-icon" /> Container</button>
@@ -2170,6 +2173,18 @@ export function UiElementsPage() {
                   </div>
                 </div>
                 <AnalyzedFilesTable />
+              </VariantCard>
+              <VariantCard title="Grouped series and season labels" source={`${libraryDetail} > grouped analyzed files`} classes={["media-tree-cell-button", "media-tree-title", "table-quality-score-value"]} wide>
+                <div className="data-table-shell"><div className="media-data-table" role="table" aria-label="Grouped series example">
+                  {[{ title: "Example series with a long name", level: 0 }, { title: "Season 01", level: 1 }, { title: "Episode 01.mkv", level: 2 }].map(({ title, level }) => (
+                    <div key={title} className={`media-data-row media-data-body-row is-static-row${level < 2 ? " is-group-row" : ""}`} role="row" style={{ gridTemplateColumns: "minmax(0, 1fr) 120px" }}>
+                      <div className={`media-data-cell is-sticky${level < 2 ? " is-group-cell" : ""}`} role="cell">
+                        {level < 2 ? <button type="button" className="media-tree-cell-button" aria-expanded="true"><span className={`media-tree-indent media-tree-indent-${level}`} /><ChevronDown className="nav-icon" /><span className="media-tree-copy"><strong className="media-tree-title">{title}</strong></span></button> : <span className="file-link">{title}</span>}
+                      </div>
+                      <div className="media-data-cell" role="cell"><TableQualityScore score={level === 0 ? 3 : level === 1 ? 6 : 8} /></div>
+                    </div>
+                  ))}
+                </div></div>
               </VariantCard>
               <VariantCard
                 title="Resolution category title actions"
@@ -2288,7 +2303,7 @@ export function UiElementsPage() {
                   />
                 </AsyncPanel>
               </VariantCard>
-              <VariantCard title="Distribution chart panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
+              <VariantCard title="Distribution chart panel" status="The shared modular chart mounts within 300px of the viewport; its existing panel and controls remain visible while deferred; min-width: 0 allows the mounted canvas to shrink with the panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
                 <DistributionChartPanel title="Quality score" distribution={numericDistribution} metricId="quality_score" />
               </VariantCard>
               <VariantCard title="Connected library history controls · separate groups" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "distribution-chart-mode-pill", "library-history-toolbar", "library-history-picker-button"]} wide>
@@ -2321,7 +2336,7 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Comparison chart panel with connected rectangular controls" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
+              <VariantCard title="Comparison chart panel with connected rectangular controls" status="Heatmap, scatter and bar use modular ECharts and mount within 300px of the viewport; existing controls remain available; min-width: 0 keeps canvas resizing responsive" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
                 <ComparisonChartFixture />
               </VariantCard>
             </VariantGroup>
@@ -2351,7 +2366,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
                 <div className="transcoding-center-panel">
                   <div className="transcoding-center-header">
                     <div className="transcoding-center-heading">
@@ -2941,7 +2956,7 @@ export function UiElementsPage() {
                       <article className="transcode-stream-list-item is-expanded">
                         <div className="transcode-stream-list-row">
                           <button type="button" className="transcode-stream-row-trigger" aria-expanded="true" aria-controls="catalog-transcode-stream-details-video-0"><span className="transcode-stream-row-copy"><strong>#0</strong><span>HEVC</span><span className="transcode-language-badge">Undetermined</span></span><ChevronDown aria-hidden="true" /></button>
-                          <div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button is-favorite" aria-label="Default stream" aria-pressed="true" title="Default stream"><AnimatedSparklesIcon size={18} active aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-expanded" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 0" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div>
+                          <div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button is-favorite" aria-label="Default stream" aria-pressed="true" title="Default stream"><AnimatedSparklesIcon size={18} active aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-expanded" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 0" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div>
                         </div>
                         <div id="catalog-transcode-stream-details-video-0" className="transcode-stream-details">
                           <div className="transcode-stream-encode-fields transcode-video-encode-fields">
@@ -2953,11 +2968,11 @@ export function UiElementsPage() {
                           </div>
                         </div>
                       </article>
-                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#1</strong><span>H.264 / AVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 1" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
-                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#2</strong><span>AV1</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 2" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
-                      <article className="transcode-stream-list-item is-dropped"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#3</strong><span>HEVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="drop"><Trash2 aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 3" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="drop"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
-                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#4</strong><span>MPEG-2</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 4" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
-                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#5</strong><span>MJPEG</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 5" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#1</strong><span>H.264 / AVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 1" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#2</strong><span>AV1</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="encode"><RefreshCw aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 2" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="encode"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
+                      <article className="transcode-stream-list-item is-dropped"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#3</strong><span>HEVC</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="drop"><Trash2 aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 3" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="drop"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#4</strong><span>MPEG-2</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 4" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
+                      <article className="transcode-stream-list-item"><div className="transcode-stream-list-row"><button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy"><strong>#5</strong><span>MJPEG</span></span><ChevronDown aria-hidden="true" /></button><div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="copy"><Copy aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 5" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="copy"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div></div></article>
                     </div>
                   </div>
                   </div>
@@ -3033,13 +3048,32 @@ export function UiElementsPage() {
               <VariantCard title="Existing mixed stream language formats" source="LanguageCodeFormatField" status="Preserves previously saved per-stream formats until a shared choice is made" classes={["transcode-metadata-option-list", "transcode-metadata-language-option"]}>
                 <div className="transcode-global-options transcode-metadata-option-list"><LanguageCodeFormatField className="transcode-global-option transcode-metadata-language-option" container="source" value="mixed" onChange={() => {}} /></div>
               </VariantCard>
+              <VariantCard title="Copy stream with editable language" source="TranscodingPanel / StreamLanguageField" status="Language metadata can be changed without re-encoding; codec and quality are preserved" classes={["transcode-stream-details", "transcode-stream-copy-details", "transcode-stream-copy-note", "transcode-language-field"]}>
+                <section className="transcoding-panel">
+                  <div className="transcode-stream-details">
+                    <div className="transcode-stream-copy-details">
+                      <p className="field-hint transcode-stream-copy-note">{t("transcoding.copyNote")}</p>
+                      <StreamLanguageField
+                        kind="audio_streams"
+                        stream={{ stream_index: 1, action: "copy", language: copyStreamLanguage }}
+                        source={{ language: "und" }}
+                        languageTags={["und", "en", "de"]}
+                        languageLocale={i18n.language}
+                        controlClass="settings-choice-input transcode-control"
+                        t={t}
+                        onPatch={(patch) => setCopyStreamLanguage(String(patch.language))}
+                      />
+                    </div>
+                  </div>
+                </section>
+              </VariantCard>
               <VariantCard title="Collapsed stream action: Remove" source="TranscodingPanel" status="Balanced stream-action inset" classes={["transcode-stream-list", "transcode-stream-list-item", "transcode-stream-list-row", "transcode-stream-row-actions", "transcode-stream-row-trigger", "transcode-stream-row-copy", "transcode-stream-default-button", "compatibility-profile-quick-action", "transcode-stream-action-icon", "transcode-action-field", "transcode-action-select"]} wide>
                 <section className="transcoding-panel">
                   <div className="transcode-stream-list">
                     <article className="transcode-stream-list-item is-dropped">
                       <div className="transcode-stream-list-row">
                         <button type="button" className="transcode-stream-row-trigger" aria-expanded="false"><span className="transcode-stream-row-copy is-language-first"><strong>#1</strong><span className="transcode-language-badge">German (de)</span><span className="transcode-stream-format">AAC</span></span><ChevronDown aria-hidden="true" /></button>
-                        <div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="drop"><Trash2 aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 1" title="Copy keeps the source stream unchanged. Encode converts it with the selected controls. Remove excludes it from the output." defaultValue="drop"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div>
+                        <div className="transcode-stream-row-actions"><button type="button" className="secondary icon-only-button compatibility-profile-quick-action transcode-stream-default-button" aria-label="Set as default stream" aria-pressed="false" title="Set as default stream"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button><div className="transcode-action-field is-collapsed" data-action="drop"><Trash2 aria-hidden="true" className="transcode-stream-action-icon" /><select className="settings-choice-input transcode-control transcode-action-select" aria-label="Action for stream 1" title="Copy preserves codec and quality without re-encoding; language metadata can be changed. Encode converts the stream with the selected controls. Remove excludes it from the output." defaultValue="drop"><option value="copy">Copy</option><option value="encode">Encode</option><option value="drop">Remove</option></select></div></div>
                       </div>
                     </article>
                   </div>

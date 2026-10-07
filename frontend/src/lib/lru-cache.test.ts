@@ -30,3 +30,23 @@ describe("LruCache", () => {
     expect(cache.get("a")).toBeUndefined();
   });
 });
+
+describe("weighted LRU budgets", () => {
+  it("bounds cached rows, preserves recent entries, and does not cache an oversized active list", () => {
+    const cache = new LruCache<string, number[]>(12, { maxWeight: 5, weigh: (rows) => rows.length });
+    cache.set("a", [1, 2, 3]);
+    cache.set("b", [4, 5, 6]);
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("b")).toEqual([4, 5, 6]);
+    const active = [1, 2, 3, 4, 5, 6];
+    cache.set("large", active);
+    expect(cache.get("large")).toBeUndefined();
+    expect(active).toHaveLength(6);
+    cache.delete("b");
+    cache.set("c", [1, 2, 3, 4, 5]);
+    expect(cache.get("c")).toHaveLength(5);
+    cache.clear();
+    cache.set("d", [1, 2, 3, 4, 5]);
+    expect(cache.get("d")).toHaveLength(5);
+  });
+});

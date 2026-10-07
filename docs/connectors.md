@@ -1,5 +1,7 @@
 # Connector architecture
 
+[Documentation home](README.md)
+
 MediaLyze imports external media-server catalogs through a provider-neutral connector layer. Jellyfin is the first adapter. Plex and other providers must integrate through the same adapter contract; provider code must not read, rewrite, or derive `MediaFile` paths directly.
 
 Connector Settings uses a shared accordion for every connection. Multiple Jellyfin servers have the same lifecycle and capability-gated user controls; Plex is visible only as a disabled `Soon™` option. Library assignments and path mappings live in two independently collapsible automatic/manual sections. Read-only catalog diagnostics remain staged on the [Connector UI roadmap](connector-ui-deferred.md).
@@ -87,7 +89,7 @@ To keep the boundary real, normalize provider-specific media types, identifiers,
 
 ## Credentials
 
-Jellyfin requests send the API key using `Authorization: MediaBrowser Token="..."`. This works with Jellyfin 12's legacy authentication disabled; existing server URLs and API keys do not need to change.
+Jellyfin requests send the API key using `Authorization: MediaBrowser Token="..."`. The client does not rely on legacy API-key headers. Existing server URLs and API keys do not need to change; verify the deployed server version with Test connection and a complete sync.
 
 Each connection may own exactly one opaque secret payload in `connector_credentials`. API serializers expose only `has_secret`; they never return the payload. Secret-like configuration keys are rejected in favor of the dedicated credential field. Adapter payloads are scrubbed before persistence, normal catalog/file responses omit raw item payloads, and the explicit provider-payload diagnostic route recursively removes secret-like fields. Exceptions are sanitized before persistence, API responses, or logging.
 

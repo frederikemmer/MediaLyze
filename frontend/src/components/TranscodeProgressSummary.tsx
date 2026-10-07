@@ -1,4 +1,10 @@
-import ReactECharts from "echarts-for-react";
+import ReactECharts from "echarts-for-react/lib/core";
+import * as echarts from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { GridComponent, TooltipComponent } from "echarts/components";
+import { SVGRenderer } from "echarts/renderers";
+
+echarts.use([LineChart, GridComponent, TooltipComponent, SVGRenderer]);
 
 import type { TranscodeJob } from "../lib/api";
 import { formatBytes, formatDuration } from "../lib/format";
@@ -107,7 +113,7 @@ function SpeedChart({ job, sampledSpeeds, t }: { job: ProgressJob; sampledSpeeds
     ],
   };
 
-  return <ReactECharts option={option} style={{ width: "100%", height: 30 }} opts={{ renderer: "svg" }} />;
+  return <ReactECharts echarts={echarts} option={option} style={{ width: "100%", height: 30 }} opts={{ renderer: "svg" }} />;
 }
 
 export function TranscodeProgressSummary({

@@ -1011,7 +1011,7 @@ describe("LibraryDetailPage", () => {
       </table>,
     );
 
-    expect(screen.getByText("7.5/10")).toBeInTheDocument();
+    expect(screen.getByText("7.5").closest("strong")).toHaveTextContent("7.5/10");
     expect(screen.getByText("4.5 Mb/s")).toBeInTheDocument();
     expect(screen.getByText("224 kb/s")).toBeInTheDocument();
   });
@@ -1321,7 +1321,7 @@ describe("LibraryDetailPage", () => {
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
     vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
-    vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
+    const historySpy = vi.spyOn(api, "libraryHistory").mockResolvedValue(createLibraryHistoryResponse());
     vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
 
     renderPage(libraryId);
@@ -1329,7 +1329,11 @@ describe("LibraryDetailPage", () => {
     fireEvent.click(await screen.findByLabelText("Select history metric"));
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Average bitrate" }));
 
-    const chart = (await screen.findAllByTestId("echarts-react")).find(
+    await waitFor(() => expect(historySpy).toHaveBeenLastCalledWith(String(libraryId), expect.any(AbortSignal), { metric: "average_bitrate", days: 30 }));
+    await waitFor(() => expect(screen.getAllByTestId("echarts-react").some(
+      (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
+    )).toBe(true));
+    const chart = screen.getAllByTestId("echarts-react").find(
       (candidate) => candidate.getAttribute("data-points") === "[8000000,9000000]",
     );
     expect(chart).toBeDefined();
@@ -2061,12 +2065,12 @@ describe("LibraryDetailPage", () => {
     );
   });
 
-  it("hides the score meter when the feature flag is enabled", async () => {
+  it.each([false, true])("uses compact score numbers with legacy meter flag %s", async (hideMeter) => {
     const libraryId = 123;
     mockAppSettings({
       feature_flags: {
         show_analyzed_files_csv_export: true,
-        hide_quality_score_meter: true,
+        hide_quality_score_meter: hideMeter,
       },
     });
     vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
@@ -2077,6 +2081,7 @@ describe("LibraryDetailPage", () => {
 
     expect(await screen.findByText("2 of 2 entries rendered")).toBeInTheDocument();
     expect(container.querySelector(".score-meter")).toBeNull();
+    expect(container.querySelector(".table-quality-score-value")).toBeInTheDocument();
   });
 
   it("loads and shows detailed audio stream info from the codec tooltip", async () => {

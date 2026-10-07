@@ -4314,6 +4314,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -4324,6 +4325,7 @@
 
 .distribution-chart-canvas {
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -4436,6 +4438,7 @@
 
 .comparison-chart-content {
   min-height: 0;
+  min-width: 0;
   height: 100%;
   gap: 0;
 }
@@ -6315,6 +6318,32 @@ select.settings-choice-input[multiple] {
   flex: 0 1 auto;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+.scan-log-card .scan-log-summary-head {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.scan-log-card .scan-log-summary {
+  justify-content: stretch;
+}
+
+.scan-log-card .scan-log-summary-copy {
+  display: flex;
+  align-items: baseline;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.scan-log-card .scan-log-summary-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.scan-log-card .scan-log-summary-head .meta-tags {
+  justify-content: flex-start;
 }
 
 .scan-log-outcome.badge-successful {
@@ -10721,7 +10750,10 @@ body.is-column-resizing {
 
 .media-tree-cell-button {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: inherit;
+  line-height: inherit;
   gap: 8px;
   width: 100%;
   padding: 0;
@@ -10798,8 +10830,7 @@ body.is-column-resizing {
 }
 
 .score-cell {
-  display: grid;
-  gap: 8px;
+  display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -10807,34 +10838,13 @@ body.is-column-resizing {
   overflow: hidden;
 }
 
-.score-meter {
-  overflow: hidden;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  height: 9px;
-  border-radius: 999px;
-  background: rgba(31, 28, 22, 0.08);
-}
+.table-quality-score-low { color: #b63f32; }
+.table-quality-score-medium { color: #956514; }
+.table-quality-score-high { color: #16735a; }
 
-.score-meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #cf5345 0%, #d8a442 52%, #27946b 100%);
-}
-
-.score-meter-fill-low {
-  background: linear-gradient(90deg, #cf5345 0%, #d97358 100%);
-}
-
-.score-meter-fill-medium {
-  background: linear-gradient(90deg, #d07a4a 0%, #d8b24f 100%);
-}
-
-.score-meter-fill-high {
-  background: linear-gradient(90deg, #89af4b 0%, #27946b 100%);
-}
+:root[data-theme="dark"] .table-quality-score-low { color: #f28a7d; }
+:root[data-theme="dark"] .table-quality-score-medium { color: #e4bc65; }
+:root[data-theme="dark"] .table-quality-score-high { color: #68c6a4; }
 
 .json-preview {
   margin: 0;
@@ -12560,7 +12570,6 @@ html[data-theme="dark"] {
     color: #3ec5b8;
   }
 
-  .statistic-layout-action-button,
   .statistic-layout-size-button {
     background: linear-gradient(180deg, rgba(58, 54, 50, 0.98), rgba(44, 41, 37, 0.96));
     border-color: rgba(240, 236, 228, 0.1);
@@ -12570,8 +12579,6 @@ html[data-theme="dark"] {
       0 12px 24px rgba(0, 0, 0, 0.24);
   }
 
-  .statistic-layout-action-button:hover:not(:disabled),
-  .statistic-layout-action-button:focus-visible:not(:disabled),
   .statistic-layout-size-button:hover,
   .statistic-layout-size-button:focus-visible {
     color: rgba(255, 250, 243, 0.98);
@@ -12581,16 +12588,14 @@ html[data-theme="dark"] {
       0 16px 28px rgba(0, 0, 0, 0.28);
   }
 
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless),
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless):hover:not(:disabled),
-  .library-statistic-title-row .statistic-layout-action-button:not(.icon-button-bordered):not(.icon-button-borderless):focus-visible:not(:disabled),
-  .analyzed-files-title-addon .statistic-layout-action-button,
-  .analyzed-files-title-addon .statistic-layout-action-button:hover:not(:disabled),
-  .analyzed-files-title-addon .statistic-layout-action-button:focus-visible:not(:disabled) {
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    transform: none;
+  /* Layout actions are bare icons; only the resize overlay has a surface. */
+  .statistic-layout-action-button {
+    color: rgba(240, 236, 228, 0.78);
+  }
+
+  .statistic-layout-action-button:hover:not(:disabled),
+  .statistic-layout-action-button:focus-visible:not(:disabled) {
+    color: rgba(255, 250, 243, 0.98);
   }
 
   .settings-navigation-panel {
@@ -13478,10 +13483,6 @@ html[data-theme="dark"] {
   .stream-details-tooltip-trigger,
   .stream-details-tooltip-trigger.tooltip-trigger {
     background: transparent;
-  }
-
-  .score-meter {
-    background: rgba(31, 28, 22, 0.8);
   }
 
   .app-settings-flag-row {

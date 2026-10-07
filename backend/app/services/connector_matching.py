@@ -205,7 +205,7 @@ def recompute_connector_matches(
 
     if commit:
         db.commit()
-        stats_cache.invalidate(str(id(db.get_bind())))
+        stats_cache.invalidate_connectors(str(id(db.get_bind())))
     else:
         db.flush()
     return dict(result)

@@ -2251,6 +2251,7 @@ export type ScanFileIssue = {
   path: string;
   reason: string;
   detail?: string | null;
+  kind?: string | null;
 };
 
 export type ScanPatternHit = {
@@ -2534,6 +2535,16 @@ function buildRepeatedQuery(key: string, values: readonly string[]): string {
   return `?${params.toString()}`;
 }
 
+export type HistoryQuery = { metric?: string; days?: number; start?: string; end?: string };
+
+export function buildHistoryQuery(query?: HistoryQuery): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  return params.size ? `?${params}` : "";
+}
+
 export const api = {
   appSettings: () => request<AppSettings>("/app-settings"),
   qualityProfiles: () => request<QualityProfileDefinition[]>("/quality-profiles"),
@@ -2622,8 +2633,8 @@ export const api = {
       body: JSON.stringify({ version }),
     }),
   dashboard: (panels?: readonly string[] | null) => request<DashboardResponse>(`/dashboard${buildPanelQuery(panels)}`),
-  dashboardHistory: (signal?: AbortSignal) =>
-    request<DashboardHistoryResponse>("/dashboard/history", { signal }),
+  dashboardHistory: (signal?: AbortSignal, query?: HistoryQuery) =>
+    request<DashboardHistoryResponse>(`/dashboard/history${buildHistoryQuery(query)}`, { signal }),
   dashboardComparison: (
     params: {
       xField: ComparisonFieldId;
@@ -2685,8 +2696,8 @@ export const api = {
       { signal: params?.signal },
     );
   },
-  libraryHistory: (id: string | number, signal?: AbortSignal) =>
-    request<LibraryHistoryResponse>(`/libraries/${id}/history`, { signal }),
+  libraryHistory: (id: string | number, signal?: AbortSignal, query?: HistoryQuery) =>
+    request<LibraryHistoryResponse>(`/libraries/${id}/history${buildHistoryQuery(query)}`, { signal }),
   librarySeries: (id: string | number, signal?: AbortSignal) =>
     request<MediaSeriesSummary[]>(`/libraries/${id}/series`, { signal }),
   librarySeriesDetail: (libraryId: string | number, seriesId: string | number, signal?: AbortSignal) =>
@@ -3077,6 +3088,7 @@ export const api = {
       `/connectors/${id}/sync/cancel${jobId ? `?job_id=${jobId}` : ""}`,
       { method: "POST" },
     ),
+  activeConnectorJobs: () => request<Array<{ connection: Pick<ConnectorConnection, "id" | "name" | "provider">; job: ConnectorSyncJob }>>("/connector-jobs/active"),
   connectorSyncStatus: (id: number) =>
     request<ConnectorSyncJob | null>(`/connectors/${id}/sync/status`),
   connectorUsers: (id: number) => request<ConnectorUser[]>(`/connectors/${id}/users`),

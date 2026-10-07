@@ -6,8 +6,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from math import isfinite
 from typing import Callable
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import func, insert, select
+from sqlalchemy.orm import Session, defer, selectinload
 
 from backend.app.models.entities import (
     ConnectorItem,
@@ -492,6 +492,9 @@ def reconstruct_history_from_media_files(
             .where(MediaFile.library_id == library.id, MediaFile.is_transcode_variant.is_(False))
             .order_by(MediaFile.id.asc())
             .options(
+                defer(MediaFile.raw_ffprobe_json),
+                defer(MediaFile.quality_score_breakdown),
+                defer(MediaFile.analysis_failure_detail),
                 selectinload(MediaFile.media_format),
                 selectinload(MediaFile.video_streams),
                 selectinload(MediaFile.audio_streams),
@@ -622,26 +625,29 @@ def reconstruct_history_from_media_files(
                 pass
             else:
                 snapshot, snapshot_hash = build_media_file_history_snapshot(prepared.media_file, resolution_categories)
-                db.add(
-                    MediaFileHistory(
-                        library_id=library.id,
-                        library_root_id=prepared.media_file.library_root_id,
-                        root_alias=(
-                            prepared.media_file.library_root.display_name
-                            if prepared.media_file.library_root
-                            else None
-                        ),
-                        media_file_id=prepared.media_file.id,
-                        relative_path=prepared.media_file.relative_path,
-                        filename=prepared.media_file.filename,
-                        captured_at=prepared.inferred_added_at,
-                        capture_reason=MediaFileHistoryCaptureReason.history_reconstruction,
-                        snapshot_hash=snapshot_hash,
-                        snapshot=snapshot,
-                    )
-                )
+                db.execute(insert(MediaFileHistory.__table__), {
+                    "library_id": library.id,
+                    "library_root_id": prepared.media_file.library_root_id,
+                    "root_alias": prepared.media_file.library_root.display_name if prepared.media_file.library_root else None,
+                    "media_file_id": prepared.media_file.id,
+                    "relative_path": prepared.media_file.relative_path,
+                    "filename": prepared.media_file.filename,
+                    "captured_at": prepared.inferred_added_at,
+                    "capture_reason": MediaFileHistoryCaptureReason.history_reconstruction,
+                    "snapshot_hash": snapshot_hash,
+                    "snapshot": snapshot,
+                })
                 earliest_file_history_by_path[history_key] = prepared.inferred_added_at
                 created_file_history_entries += 1
+
+            # Prepared records are retained for daily aggregate reconstruction,
+            # but their large raw data and newly built snapshots are not needed
+            # after this file's historical entry has been persisted.
+            db.expire(prepared.media_file, [
+                "raw_ffprobe_json", "quality_score_breakdown", "analysis_failure_detail",
+                "media_format", "video_streams", "audio_streams", "subtitle_streams",
+                "external_subtitles", "chapters",
+            ])
 
             if prepared_index % file_history_emit_step == 0 or prepared_index == len(prepared_files):
                 _emit_progress(

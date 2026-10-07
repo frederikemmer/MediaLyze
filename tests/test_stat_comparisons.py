@@ -676,3 +676,70 @@ def test_stats_cache_invalidation_clears_dashboard_comparison_payloads() -> None
         refreshed_payload = get_dashboard_comparison(db, x_field="duration", y_field="size")
 
     assert refreshed_payload.included_files == 2
+
+
+def test_large_scatter_sampling_does_not_exceed_sqlite_parameter_limit():
+    import sqlite3
+    from sqlalchemy import insert
+    factory = _session_factory()
+    with factory() as db:
+        update_app_settings(db, AppSettingsUpdate(scan_performance={"comparison_scatter_point_limit": 300}))
+        library = Library(name="Large sampling", path="/tmp/large-sampling", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        db.execute(insert(MediaFile), [dict(library_id=library.id, relative_path=f"{index}.mkv", filename=f"{index}.mkv", extension="mkv", size_bytes=1000 + index, duration_seconds=10 + index, mtime=1) for index in range(401)])
+        db.commit()
+        connection = db.connection().connection.driver_connection
+        old_limit = connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 250)
+        try:
+            payload = get_library_comparison(db, library_id=library.id, x_field="size", y_field="duration", renderer="scatter")
+        finally:
+            connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, old_limit)
+        assert payload.total_files == payload.included_files == 401
+        assert payload.sampled_points
+        assert len(payload.scatter_points) == 300
+        assert [point.media_file_id for point in payload.scatter_points] == [min(400, round(index * 400 / 299)) + 1 for index in range(300)]
+
+
+def test_sql_numeric_renderers_match_python_semantics_at_invalid_values_and_bin_edges():
+    from collections import Counter, defaultdict
+    from itertools import product
+    from backend.app.services import stat_comparisons as service
+    fields = ["size", "duration", "quality_score", "bitrate", "audio_bitrate", "resolution_mp", "chapter_count"]
+    factory = _session_factory()
+    with factory() as db:
+        library = Library(name="Edges", path="/tmp/comparison-edges", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        # Includes missing/invalid values and values exactly on bucket boundaries.
+        values = [None, -1, 0, 1, 2, 5, 10, 20, 60, 120, 1000, 1000000, 1000000000]
+        for index, value in enumerate(values):
+            db.add(MediaFile(library_id=library.id, relative_path=f"{index}.mkv", filename=f"{index}.mkv", extension="mkv", size_bytes=value or 0, mtime=1, duration_seconds=value, quality_score=value, bitrate=value, audio_bitrate=value, chapter_count=value, primary_video_width=value, primary_video_height=1000))
+        db.commit()
+        for x_field, y_field in product(fields, repeat=2):
+            rows = list(service._comparison_source_rows(db, x_field=x_field, y_field=y_field, library_id=library.id))
+            counts, bars, points = Counter(), defaultdict(list), []
+            included = 0
+            for row in rows:
+                x, y = service._numeric_value(row, x_field), service._numeric_value(row, y_field)
+                if x is None or y is None:
+                    continue
+                included += 1
+                xb, yb = service._numeric_bucket(x_field, x), service._numeric_bucket(y_field, y)
+                if xb is None or yb is None:
+                    continue
+                counts[(xb.key, yb.key)] += 1
+                bars[xb.key].append(y)
+                points.append((row.media_file_id, x, y))
+            payload = service._sql_numeric_comparison(db, x_field=x_field, y_field=y_field, library_id=library.id, renderer=None, sample_limit=3)
+            assert payload.total_files == len(rows)
+            assert payload.included_files == included
+            assert payload.excluded_files == len(rows) - included
+            assert {(cell.x_key, cell.y_key): cell.count for cell in payload.heatmap_cells} == dict(counts)
+            indices = sorted({round(index * (len(points) - 1) / 2) for index in range(3)}) if len(points) > 3 else range(len(points))
+            assert [(point.media_file_id, point.x_value, point.y_value) for point in payload.scatter_points] == [points[index] for index in indices]
+            assert payload.sampled_points == (len(points) > 3)
+            assert {bar.x_key for bar in payload.bar_entries} == set(bars)
+            for bar in payload.bar_entries:
+                assert bar.count == len(bars[bar.x_key])
+                assert bar.value == pytest.approx(sum(bars[bar.x_key]) / bar.count)

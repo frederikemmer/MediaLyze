@@ -34,6 +34,27 @@ def _session_factory():
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def test_orphan_recovery_does_not_decode_unrelated_job_summary(monkeypatch):
+    factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", factory)
+    with factory() as db:
+        library = Library(name="Recovery", path="/synthetic", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        for status in (JobStatus.running, JobStatus.queued, JobStatus.completed):
+            db.add(ScanJob(library_id=library.id, status=status, job_type="incremental"))
+        db.commit()
+        db.execute(text("UPDATE scan_jobs SET scan_summary = 'invalid JSON'"))
+        db.commit()
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    runtime._recover_orphaned_jobs()
+    with factory() as db:
+        rows = db.execute(select(ScanJob.status, ScanJob.finished_at).order_by(ScanJob.id)).all()
+        assert [row.status for row in rows] == [JobStatus.canceled, JobStatus.canceled, JobStatus.completed]
+        assert all(row.finished_at is not None for row in rows[:2])
+        assert rows[2].finished_at is None
+
+
 def test_runtime_scheduler_uses_configured_tz_environment(monkeypatch) -> None:
     monkeypatch.setenv("TZ", "Europe/Berlin")
 
@@ -348,6 +369,9 @@ def test_start_registers_history_maintenance_and_runs_retention(monkeypatch) -> 
 
     runtime.start()
 
+    assert retention_calls == []
+    assert (runtime.run_history_retention, ()) in submitted
+    runtime.run_history_retention()
     assert retention_calls == ["called"]
     assert added_jobs[0]["func"] == runtime.run_history_retention
     assert added_jobs[0]["kwargs"]["id"] == "history-retention-maintenance"
@@ -518,8 +542,9 @@ def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch,
 
     assert refreshed is True
     assert runtime.executor_max_workers == 6
-    assert created_worker_counts == [2, 2, 1, 6, 6]
-    assert shutdown_calls == [(2, False, False), (2, False, False)]
+    assert created_worker_counts == [2, 2, 1, 6]
+    assert runtime.connector_executor_max_workers == 2
+    assert shutdown_calls == [(2, False, False)]
 
 
 def test_request_scan_returns_existing_active_job_without_duplicate_submit(monkeypatch) -> None:

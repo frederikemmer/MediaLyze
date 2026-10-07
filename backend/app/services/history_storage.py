@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
-from sqlalchemy import String, cast, func, select, text
+from sqlalchemy import String, cast, func, select, text, case
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -78,6 +78,11 @@ def _text_length(value: str | None) -> int:
 
 
 def _stored_length_expression(value) -> object:
+    if getattr(value, "key", None) == "snapshot" and getattr(getattr(value, "class_", None), "__tablename__", None) == "media_file_history":
+        from backend.app.services.history_compression import MARKER
+        return case((func.json_extract(value, "$._encoding") == MARKER,
+                     func.json_extract(value, "$.logical_chars")),
+                    else_=func.length(cast(func.coalesce(value, ""), String)))
     return func.length(cast(func.coalesce(value, ""), String))
 
 

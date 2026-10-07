@@ -348,6 +348,18 @@ def test_command_translates_source_profile_for_encoder(encoder, profile, expecte
     assert decision.profile == profile
 
 
+@pytest.mark.parametrize("kind,source_type", [("v", VideoStream), ("a", AudioStream), ("s", SubtitleStream)])
+@pytest.mark.parametrize("container", ["mp4", "mkv"])
+def test_copy_stream_can_override_unknown_language(kind, source_type, container) -> None:
+    arguments = []
+    source = source_type(language="und")
+    decision = TranscodeStreamPlan(stream_index=0, action="copy", language="en")
+    transcoding._append_stream_options(arguments, kind, 0, decision, source, "preserve", container=container)
+    assert arguments[arguments.index(f"-c:{kind}:0") + 1] == "copy"
+    assert arguments[arguments.index(f"-metadata:s:{kind}:0") + 1] == "language=eng"
+    assert source.language == "und"
+
+
 def test_copy_stream_does_not_emit_encoder_profile() -> None:
     arguments = []
     decision = TranscodeStreamPlan(stream_index=0, action="copy", profile="Main")
@@ -1888,7 +1900,8 @@ def test_transcode_trigger_queues_follow_up_when_scan_is_already_running(tmp_pat
         assert follow_up.trigger_source == ScanTriggerSource.transcode
 
 
-def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("retention_mode", ["age", "storage"])
+def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(monkeypatch, tmp_path, retention_mode) -> None:
     factory = _session_factory()
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
     with factory() as db:
@@ -1913,7 +1926,10 @@ def test_retention_removes_only_terminal_job_and_preserves_variant_and_media(mon
         variant_id = variant.id
         media_file_id = media_file.id
 
-        assert _prune_transcode_history(db, days=90, storage_limit_bytes=0) == 1
+        assert _prune_transcode_history(
+            db, days=90 if retention_mode == "age" else 0,
+            storage_limit_bytes=0 if retention_mode == "age" else 1,
+        ) == 1
         assert db.get(TranscodeJob, job.id) is None
         retained_variant = db.get(TranscodeVariant, variant_id)
         assert retained_variant is not None
@@ -1935,6 +1951,26 @@ def test_transcode_job_listing_includes_source_video_metadata(monkeypatch, tmp_p
     assert len(page.items) == 1
     assert page.items[0].source_video_codec == "hevc"
     assert page.items[0].source_dynamic_range == "HDR10"
+
+
+def test_transcode_listing_does_not_decode_unrelated_source_probe_json(monkeypatch, tmp_path) -> None:
+    from sqlalchemy import text
+
+    factory = _session_factory()
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media_file = _media_file(db, tmp_path)
+        transcoding.queue_transcode_job(db, _settings(tmp_path), media_file, _compatibility_plan())
+        # A list needs codec/HDR only. Even unrelated malformed stored probe data
+        # must not be decoded, retained, or prevent a status response.
+        db.execute(text("UPDATE media_files SET raw_ffprobe_json = 'invalid-json'"))
+        db.commit()
+        db.expunge_all()
+        page = transcoding.list_transcode_jobs(db, active_only=True)
+        assert page.total == 1
+        assert page.items[0].source_video_codec == "hevc"
+        assert page.items[0].source_dynamic_range == "HDR10"
+        assert not any(isinstance(item, MediaFile) for item in db.identity_map.values())
 
 
 def _selection_capabilities():

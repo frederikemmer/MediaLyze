@@ -96,8 +96,12 @@ def _media_file_history_fingerprint(snapshot: dict) -> str:
     return hashlib.sha256(fingerprint_payload.encode("utf-8")).hexdigest()
 
 
-def build_media_file_history_snapshot(media_file: MediaFile, resolution_categories) -> tuple[dict, str]:
-    snapshot = serialize_media_file_detail(media_file, resolution_categories).model_dump(mode="json")
+def build_media_file_history_snapshot(
+    media_file: MediaFile, resolution_categories, *, include_raw_ffprobe: bool = True,
+) -> tuple[dict, str]:
+    snapshot = serialize_media_file_detail(
+        media_file, resolution_categories, include_raw_ffprobe=include_raw_ffprobe,
+    ).model_dump(mode="json")
     snapshot["library_root_id"] = media_file.library_root_id
     snapshot["root_alias"] = media_file.library_root.display_name if media_file.library_root else None
     return _canonicalize_snapshot(snapshot)
@@ -111,7 +115,11 @@ def create_media_file_history_entry_if_changed(
     *,
     captured_at: datetime | None = None,
 ) -> bool:
-    snapshot, snapshot_hash = build_media_file_history_snapshot(media_file, resolution_categories)
+    # Raw probe data is deliberately excluded from the change fingerprint.
+    # Avoid loading and hashing it when no new history entry is needed.
+    snapshot, _ = build_media_file_history_snapshot(
+        media_file, resolution_categories, include_raw_ffprobe=False,
+    )
     current_fingerprint = _media_file_history_fingerprint(snapshot)
     latest_snapshot = db.scalar(
         select(MediaFileHistory.snapshot)
@@ -128,6 +136,9 @@ def create_media_file_history_entry_if_changed(
         and _media_file_history_fingerprint(latest_snapshot) == current_fingerprint
     ):
         return False
+
+    snapshot["raw_ffprobe_json"] = media_file.raw_ffprobe_json
+    snapshot, snapshot_hash = _canonicalize_snapshot(snapshot)
 
     db.add(
         MediaFileHistory(

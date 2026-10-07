@@ -26,7 +26,7 @@ vi.mock("motion/react", () => {
   };
 });
 
-vi.mock("echarts-for-react", () => ({
+vi.mock("echarts-for-react/lib/core", () => ({
   default: ({
     option,
     onEvents,

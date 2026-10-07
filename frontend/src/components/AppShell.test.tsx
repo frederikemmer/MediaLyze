@@ -1,6 +1,6 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
@@ -89,6 +89,7 @@ beforeEach(() => {
   vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
   vi.spyOn(api, "connectors").mockResolvedValue([]);
   vi.spyOn(api, "connectorSyncStatus").mockResolvedValue(null);
+  vi.spyOn(api, "activeConnectorJobs").mockResolvedValue([]);
   vi.spyOn(api, "updateStatus").mockResolvedValue({
     current_version: "0.8.3",
     latest_version: "0.8.3",
@@ -447,6 +448,9 @@ describe("AppShell", () => {
         },
       },
     });
+    vi.mocked(api.activeConnectorJobs).mockResolvedValue([{
+      connection: (await api.connectors())[0], job: (await api.connectorSyncStatus(7))!,
+    }]);
     const cancel = vi.spyOn(api, "cancelConnectorSync").mockResolvedValue({ job_id: 12, status: "running", cancellation_requested: true });
 
     renderShell();
@@ -763,4 +767,31 @@ describe("AppShell", () => {
     expect(link).toHaveClass("is-first-library-attention");
   });
 
+});
+
+
+it("uses one idle connector request, pauses while hidden, and refreshes on returning", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  try {
+    renderShell();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    const initial = vi.mocked(api.activeConnectorJobs).mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(vi.mocked(api.activeConnectorJobs).mock.calls.length - initial).toBeGreaterThanOrEqual(1);
+    expect(vi.mocked(api.activeConnectorJobs).mock.calls.length - initial).toBeLessThanOrEqual(2);
+    expect(api.connectors).not.toHaveBeenCalled();
+    expect(api.connectorSyncStatus).not.toHaveBeenCalled();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    const hidden = vi.mocked(api.activeConnectorJobs).mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(120000); });
+    expect(api.activeConnectorJobs).toHaveBeenCalledTimes(hidden);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    expect(api.activeConnectorJobs).toHaveBeenCalledTimes(hidden + 1);
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
 });

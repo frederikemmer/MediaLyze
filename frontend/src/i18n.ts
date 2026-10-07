@@ -1,9 +1,6 @@
-import i18n from "i18next";
+import i18n, { type BackendModule } from "i18next";
 import { initReactI18next } from "react-i18next";
 import commonEn from "../locales/en/common.json";
-import commonDe from "../locales/de/common.json";
-import commonEs from "../locales/es/common.json";
-import commonUk from "../locales/uk/common.json";
 
 export const LANGUAGE_STORAGE_KEY = "medialyze-language";
 export const SUPPORTED_INTERFACE_LANGUAGES = ["en", "de", "es", "uk"] as const;
@@ -31,30 +28,38 @@ function getInitialLanguage(): SupportedInterfaceLanguage {
   return "en";
 }
 
-const resources = {
-  en: {
-    common: commonEn,
-  },
-  de: {
-    common: commonDe,
-  },
-  es: {
-    common: commonEs,
-  },
-  uk: {
-    common: commonUk,
+const languageLoaders = {
+  de: () => import("../locales/de/common.json"),
+  es: () => import("../locales/es/common.json"),
+  uk: () => import("../locales/uk/common.json"),
+};
+
+const languageBackend: BackendModule = {
+  type: "backend",
+  init() {},
+  read(language, _namespace, callback) {
+    if (language === "en") {
+      callback(null, commonEn);
+      return;
+    }
+    const loader = languageLoaders[language as keyof typeof languageLoaders];
+    if (!loader) {
+      callback(new Error("Unsupported interface language"), false);
+      return;
+    }
+    void loader().then((module) => callback(null, module.default), (error) => callback(error, false));
   },
 };
 
-void i18n.use(initReactI18next).init({
-  resources,
+export const i18nReady = i18n.use(languageBackend).use(initReactI18next).init({
+  resources: { en: { common: commonEn } },
+  partialBundledLanguages: true,
+  supportedLngs: [...SUPPORTED_INTERFACE_LANGUAGES],
   ns: ["common"],
   defaultNS: "common",
   fallbackLng: "en",
   lng: getInitialLanguage(),
-  interpolation: {
-    escapeValue: false,
-  },
+  interpolation: { escapeValue: false },
 });
 
 if (typeof document !== "undefined") {

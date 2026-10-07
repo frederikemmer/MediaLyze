@@ -34,6 +34,7 @@ import { ChevronsRightLeftIcon } from "../components/ChevronsRightLeftIcon";
 import { DeleteIcon } from "../components/DeleteIcon";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
 import { SlidingTogglePill } from "../components/SlidingTogglePill";
+import { TableQualityScore } from "../components/TableQualityScore";
 import { VideoWipeCompare } from "../components/VideoWipeCompare";
 import {
   api,
@@ -231,7 +232,7 @@ function buildOverviewRows(
     row("container", t("fileDetail.containerLabel"), columns.map(({ key, detail }) => compareCell(key, formatContainerLabel(detail?.container ?? detail?.extension), detail?.container ?? detail?.extension, !detail))),
     row("size", t("fileDetail.size"), columns.map(({ key, detail }) => compareCell(key, detail ? formatBytes(detail.size_bytes) : "n/a", detail?.size_bytes, !detail))),
     row("duration", t("fileDetail.duration"), columns.map(({ key, detail }) => compareCell(key, formatDuration(detail?.duration ?? null), detail?.duration, !detail))),
-    row("quality", t("fileDetail.quality"), columns.map(({ key, detail }) => compareCell(key, detail ? `${detail.quality_score}/10` : "n/a", detail?.quality_score, !detail))),
+    row("quality", t("fileDetail.quality"), columns.map(({ key, detail }) => compareCell(key, <TableQualityScore score={detail?.quality_score ?? null} />, detail?.quality_score, !detail))),
     row("videoCodec", t("fileTable.codec"), columns.map(({ key, detail }) => compareCell(key, detail?.video_codec ? formatCodecLabel(detail.video_codec, "video") : "n/a", detail?.video_codec, !detail))),
     row("resolution", t("fileTable.resolution"), columns.map(({ key, detail }) => compareCell(key, detail?.resolution_category_label ?? detail?.resolution ?? "n/a", detail?.resolution, !detail))),
     row(
@@ -270,7 +271,7 @@ function buildQualityRows(
     ]),
   ];
   return [
-    row("score", t("fileDetail.quality"), columns.map(({ key, detail, quality }) => compareCell(key, quality ? `${quality.score}/10` : "n/a", quality?.score, !detail))),
+    row("score", t("fileDetail.quality"), columns.map(({ key, detail, quality }) => compareCell(key, <TableQualityScore score={quality?.score ?? null} />, quality?.score, !detail))),
     row("raw", t("fileCompare.rows.rawQuality"), columns.map(({ key, detail, quality }) => compareCell(key, quality ? quality.score_raw.toFixed(2) : "n/a", quality?.score_raw, !detail))),
     ...categoryKeys.map((key) => {
       return row(

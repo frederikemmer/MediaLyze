@@ -1,0 +1,54 @@
+
+> medialyze-frontend@0.19.0 build
+> tsc -b && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 2964 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/build-version.json                                        0.02 kB │ gzip:   0.04 kB
+dist/index.html                                                1.25 kB │ gzip:   0.55 kB
+dist/assets/index-BuYtvSWM.css                               340.10 kB │ gzip:  53.24 kB
+dist/assets/StatCard-BaQ5FGJp.js                               0.28 kB │ gzip:   0.22 kB
+dist/assets/hdr-DqHcUEwU.js                                    0.47 kB │ gzip:   0.30 kB
+dist/assets/LoaderPinwheelIcon-CV0d3sqw.js                     0.76 kB │ gzip:   0.47 kB
+dist/assets/clipboard-bXEM2vKF.js                              1.02 kB │ gzip:   0.53 kB
+dist/assets/ChevronsRightLeftIcon-D8rMziAq.js                  1.16 kB │ gzip:   0.62 kB
+dist/assets/lru-cache-Bj8lNtVF.js                              1.20 kB │ gzip:   0.57 kB
+dist/assets/DeleteIcon-DPE5Exnf.js                             1.50 kB │ gzip:   0.73 kB
+dist/assets/PanelEmptyState-COxl-7T3.js                        1.74 kB │ gzip:   0.90 kB
+dist/assets/format-DPEfOQha.js                                 2.53 kB │ gzip:   1.21 kB
+dist/assets/AsyncPanel-CCaMhqIj.js                             3.04 kB │ gzip:   1.10 kB
+dist/assets/DistributionChart-BnlN6yP6.js                      3.32 kB │ gzip:   1.65 kB
+dist/assets/SeriesDetailPage-DxvVhTqv.js                       3.33 kB │ gzip:   1.30 kB
+dist/assets/TranscodeProgressSummary-CJ9ZvH8O.js               4.11 kB │ gzip:   1.65 kB
+dist/assets/TableViewSettingsEditor-BSM-CWpg.js                4.13 kB │ gzip:   1.49 kB
+dist/assets/TooltipTrigger-D7lU_fgD.js                         4.69 kB │ gzip:   1.87 kB
+dist/assets/VideoWipeCompare-Cu0T8k6h.js                       5.69 kB │ gzip:   2.00 kB
+dist/assets/settings-panel-state-BQtp3QnM.js                   6.87 kB │ gzip:   2.58 kB
+dist/assets/AnimatedConnectIcon-CSYjmJOB.js                    8.11 kB │ gzip:   2.39 kB
+dist/assets/StreamDetailsList-YngzANyg.js                     10.84 kB │ gzip:   3.20 kB
+dist/assets/DashboardPage-BoBxYl37.js                         13.33 kB │ gzip:   4.51 kB
+dist/assets/StorageMapPage-CoikkqoO.js                        15.77 kB │ gzip:   5.02 kB
+dist/assets/LanguageCodeFormatField-C2N-3vAB.js               18.62 kB │ gzip:   6.31 kB
+dist/assets/FileComparePage-DZva4bna.js                       23.47 kB │ gzip:   6.96 kB
+dist/assets/JellyfinMetadataDetails-Ls4CBqlX.js               27.92 kB │ gzip:   7.52 kB
+dist/assets/TranscodingPage-COIraY24.js                       27.93 kB │ gzip:   7.84 kB
+dist/assets/LibraryHistoryPanel-CgoWjLxj.js                   28.19 kB │ gzip:   7.72 kB
+dist/assets/i18n-iIwRtLRZ.js                                  44.93 kB │ gzip:  14.25 kB
+dist/assets/StatisticPanelLayoutMigrationNotice-BnGUzrpp.js   50.31 kB │ gzip:  12.11 kB
+dist/assets/icons-DfZlPtXl.js                                 62.46 kB │ gzip:  13.06 kB
+dist/assets/LibraryDetailPage-4Q6G8GDK.js                     99.50 kB │ gzip:  27.30 kB
+dist/assets/FileDetailPage-jgg3MdGe.js                       122.93 kB │ gzip:  31.46 kB
+dist/assets/motion-CpgAaVBd.js                               126.55 kB │ gzip:  41.68 kB
+dist/assets/common-BIkQSeqp.js                               128.41 kB │ gzip:  39.86 kB
+dist/assets/common-DY1CbdZ5.js                               129.31 kB │ gzip:  38.89 kB
+dist/assets/common-B3Idn5ka.js                               178.42 kB │ gzip:  45.03 kB
+dist/assets/zrender-D7wOWofz.js                              201.90 kB │ gzip:  68.47 kB
+dist/assets/react-vendor-BcnPwY3k.js                         239.07 kB │ gzip:  75.88 kB
+dist/assets/index-CTm0C9w5.js                                245.88 kB │ gzip:  74.51 kB
+dist/assets/UiElementsPage-C6WOMBqD.js                       288.09 kB │ gzip:  43.82 kB
+dist/assets/LibrariesPage-Fy6DLOuy.js                        320.91 kB │ gzip:  69.94 kB
+dist/assets/echarts-C6zpxGke.js                              443.50 kB │ gzip: 150.46 kB
+✓ built in 3.44s

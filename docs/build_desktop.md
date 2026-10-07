@@ -1,6 +1,8 @@
 # Build Desktop
 
-This guide covers local desktop packaging on the target OS.
+[Documentation home](README.md)
+
+This guide covers local desktop packaging on the target OS. For ordinary development startup, see the [repository development instructions](../README.md#local-development); for release automation, see [GitHub Actions](github_actions.md).
 
 Important:
 
@@ -24,7 +26,7 @@ Build an unpacked `.app` bundle:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev] pyinstaller
+pip install -e ".[dev]" pyinstaller
 
 cd frontend
 npm ci
@@ -73,7 +75,7 @@ Build a release `.exe` installer in PowerShell:
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e .[dev] pyinstaller
+pip install -e ".[dev]" pyinstaller
 
 cd frontend
 npm ci
@@ -129,7 +131,7 @@ Build a release AppImage:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev] pyinstaller
+pip install -e ".[dev]" pyinstaller
 
 cd frontend
 npm ci

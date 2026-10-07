@@ -11,13 +11,10 @@
 </p>
 
 <p align="center">
-  Self-hosted media library analysis for large video collections.
+  Self-hosted analysis for video, music, and audiobook collections.
   Scans your libraries and run analyses using <code>ffprobe</code>.
   Explore technical metadata through a FastAPI + React web UI.
-</p>
-
-<p align="center">
-  MediaLyze focuses (for now) on just analysis, not playback, scraping, or file modification, READ ONLY on your files!
+  Options for transcoding are in Beta now!
 </p>
 
 ## Desktop Downloads
@@ -29,7 +26,7 @@
 | Windows | [Download](https://github.com/frederikemmer/MediaLyze/releases/latest/download/MediaLyze.Setup.exe) |
 | All release assets | [Open latest release](https://github.com/frederikemmer/MediaLyze/releases/latest) |
 
-![MediaLyze dashboard](docs/images/Dashboard.png)
+![MediaLyze dashboard](docs/images/2026-10-02/Dashboard.png)
 
 ## Why MediaLyze
 
@@ -55,12 +52,14 @@ Bring your own auth (for now).
 
 <table>
   <tr>
-    <td><img alt="Dashboard view" src="docs/images/Dashboard_historic.png"></td>
-    <td><img alt="Comparison Page" src="docs/images/Comparison_Page.png"></td>
-    <td><img alt="Library edit" src="docs/images/Library_edit.png"></td>
+    <td><img alt="Dashboard view" src="docs/images/2026-10-02/Dashboard.png"></td>
+    <td><img alt="Comparison Page" src="docs/images/2026-10-02/Comparison_Page.png"></td>
+    <td><img alt="Library edit" src="docs/images/2026-10-02/Library_edit.png"></td>
   </tr>
   <tr>
-    <td><img alt="Library Tableview" src="docs/images/Library_Tableview.png"></td>
+    <td><img alt="Library Tableview" src="docs/images/2026-10-02/Library_Tableview.png"></td>
+    <td><img alt="Transcode plan" src="docs/images/2026-10-02/Transcode_Plan.png"></td>
+    <td><img alt="Running transcode" src="docs/images/2026-10-02/Transcoding_Page.png"></td>
   </tr>
 </table>
 
@@ -79,7 +78,7 @@ If you find MediaLyze useful and would like to support ongoing development, you 
 use the production ready docker compose file:
 [docker-compose.yaml](docker/docker-compose.yaml)
 
-```docker
+```yaml
 services:
   medialyze:
     image: ghcr.io/frederikemmer/medialyze:latest
@@ -89,10 +88,12 @@ services:
     environment:
       # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
       TZ: UTC
+      MEDIALYZE_TRANSCODE_OUTPUT_ROOT: /transcode-output
     volumes:
       - ./config:/config
       # use .env or change "./media" to the path of your media directory
       - ./media:/media:ro
+      - ./Transcode_Output:/transcode-output:rw
 
       # additional media mounts by extending this pattern if needed:
       # /PATH/TO/MEDIA0:/media/MEDIA0:ro
@@ -157,8 +158,11 @@ docker compose -f docker-compose-dev.yaml up --build
 
 The default container setup mounts:
 
-- `./config` to `/config`
-- `./media` to `/media` as read-only
+- `config` to `/config`
+- `${MEDIA_ROOT:-./media}` to `/media` as read-only
+- `${TRANSCODE_OUTPUT_HOST_DIR:-./Transcode_Output}` to `/transcode-output` as writable output
+
+These are the local-build Compose defaults; the production Compose file uses `CONFIG_HOST_DIR` and `MEDIA_HOST_DIR` bind mounts instead.
 
 If you want a different media-path, or external port change `env.example` or `.env`.
 
@@ -171,8 +175,8 @@ For a single-command local dev setup, use `scripts/dev-local.sh` on macOS/Linux 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
-uvicorn backend.app.main:app --reload --port 8080
+pip install -e ".[dev]"
+CONFIG_PATH="$PWD/.local/config" MEDIA_ROOT="$PWD/media" uvicorn backend.app.main:app --reload --port 8080
 ```
 
 ### Frontend
@@ -201,7 +205,7 @@ Windows PowerShell:
 
 Both scripts expect:
 
-- `.venv` with `pip install -e .[dev]`
+- `.venv` with `pip install -e ".[dev]"`
 - `frontend/node_modules` from `npm --prefix frontend install`
 - a valid `MEDIA_ROOT` directory, defaulting to your Desktop if not overridden
 
@@ -214,7 +218,7 @@ The launchers track both service processes, stop their child processes when the 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+pip install -e ".[dev]"
 
 cd frontend
 npm install
@@ -256,7 +260,7 @@ The most commonly used variables are:
 
 `MEDIA_ROOT` should be mounted read-only in production.
 
-If you need a specific runtime uid/gid, set `PUID` and `PGID` in `.env`. The compose files already load `.env`, so no compose changes are required.
+If you need a specific runtime uid/gid, set `PUID` and `PGID` for the production Compose file. For automatic interpolation from a repository-root `.env`, use `docker compose --env-file .env -f docker/docker-compose.yaml up -d`. Compose interpolation and passing variables into the container are separate; the local-build Compose file loads `.env` via `env_file`.
 
 For SMB / NAS setups, the recommended approach is to mount the share on the Docker host first and then point `MEDIA_HOST_DIR` at that host mount path.
 In the desktop app, mounted network shares and UNC paths can be selected directly.
@@ -293,7 +297,7 @@ Repository automation, Docker and desktop publishing, manual workflow controls, 
 
 ## Project Status
 
-MediaLyze is an open-source project under active development. The current focus is technical media analysis for large self-hosted libraries, with the v1 scope centered on scanning, normalization, statistics, and file inspection.
+MediaLyze is an open-source project under active development. The current scope includes video, music, and audiobook analysis, scan management, statistics, file inspection, read-only connectors, and explicit transcoding. `main` tracks stable releases; `dev` may include changes beyond the latest release.
 
 ### mentioned on
 
