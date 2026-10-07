@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+### 🔒 Security
+
+- Update frontend `source-map-js` and desktop `sharp` to patched versions for Dependabot alerts.
+
 ## v0.19.1
 
 This patch release fixes the Windows desktop startup failure and improves reliability when scanning large libraries and transcoding. It also adds history filters, reduces history storage, and updates vulnerable dependencies.
