@@ -42,7 +42,6 @@ permissions:
 
 jobs:
   build_desktop:
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || matrix.artifact_suffix == inputs.platform
     env:
       IS_RELEASE_BUILD: ${{ github.event_name == 'release' || inputs.build_type == 'release' }}
       RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag_name }}
@@ -51,16 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - artifact_suffix: linux
-            asset: dist/desktop-app/MediaLyze.AppImage
-            os: ubuntu-latest
-          - artifact_suffix: macos
-            asset: dist/desktop-app/MediaLyze-arm64.dmg
-            os: macos-latest
-          - artifact_suffix: windows
-            asset: dist/desktop-app/MediaLyze.Setup.exe
-            os: windows-latest
+        include: ${{ fromJSON(inputs.platform == 'windows' && '[{"artifact_suffix":"windows","asset":"dist/desktop-app/MediaLyze.Setup.exe","os":"windows-latest"}]' || inputs.platform == 'macos' && '[{"artifact_suffix":"macos","asset":"dist/desktop-app/MediaLyze-arm64.dmg","os":"macos-latest"}]' || inputs.platform == 'linux' && '[{"artifact_suffix":"linux","asset":"dist/desktop-app/MediaLyze.AppImage","os":"ubuntu-latest"}]' || '[{"artifact_suffix":"linux","asset":"dist/desktop-app/MediaLyze.AppImage","os":"ubuntu-latest"},{"artifact_suffix":"macos","asset":"dist/desktop-app/MediaLyze-arm64.dmg","os":"macos-latest"},{"artifact_suffix":"windows","asset":"dist/desktop-app/MediaLyze.Setup.exe","os":"windows-latest"}]') }}
 
     steps:
       - name: Validate build request
