@@ -98,7 +98,7 @@ Be careful when manually selecting `main`: if its configured version has not bee
 
 ### Automatic release builds
 
-Desktop release builds start automatically after the main release workflow creates a GitHub release. The workflow also listens for manually published GitHub releases.
+Desktop release builds start automatically after the main release workflow creates a GitHub release. The workflow also listens for manually published GitHub releases. The main release workflow tracks its dispatched desktop build and fails with a direct run link if any platform build or asset upload fails. Manual runs can select `all`, `linux`, `macos`, or `windows`; `all` is the default, and a single-platform run is useful for adding or repairing one asset on an existing release.
 
 Three jobs run in parallel:
 
@@ -223,7 +223,10 @@ First try **Re-run failed jobs** on the original desktop workflow. Alternatively
 
 - `build_type`: `release`;
 - `tag_name`: the existing release tag;
-- `code_ref`: empty unless a packaging fix from another ref is intentionally required.
+- `code_ref`: empty unless a packaging fix from another ref is intentionally required;
+- `platform`: choose the missing platform to avoid rebuilding or replacing the other release assets.
+
+For desktop builds dispatched by the main release workflow, the main run now waits for the desktop result and reports a failure with a link to the desktop run. The GitHub release is created before desktop packaging starts, so a failed build can still leave that release published without every platform asset; use the linked run to diagnose and rebuild the missing assets.
 
 ### Existing release needs a new Docker image
 

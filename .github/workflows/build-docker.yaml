@@ -331,10 +331,49 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          DISPATCH_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         shell: bash
         run: |
+          set -euo pipefail
+
           gh workflow run build-desktop.yaml \
             --repo "${GITHUB_REPOSITORY}" \
             --ref main \
             -f build_type=release \
-            -f tag_name="v${VERSION}"
+            -f tag_name="v${VERSION}" \
+            -f dispatch_id="${DISPATCH_ID}"
+
+          desktop_run_id=""
+          for attempt in $(seq 1 30); do
+            desktop_run_id="$(
+              gh run list \
+                --repo "${GITHUB_REPOSITORY}" \
+                --workflow build-desktop.yaml \
+                --event workflow_dispatch \
+                --branch main \
+                --limit 20 \
+                --json databaseId,displayTitle \
+                --jq "first(.[] | select(.displayTitle | endswith(\"${DISPATCH_ID}\")) | .databaseId) // empty"
+            )"
+            if [[ -n "${desktop_run_id}" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "${desktop_run_id}" ]]; then
+            echo "::error title=Desktop release build was not created::Could not find the dispatched build for v${VERSION}."
+            exit 1
+          fi
+
+          desktop_run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${desktop_run_id}"
+          {
+            echo "### Desktop release build"
+            echo "- Release: v${VERSION}"
+            echo "- Workflow run: [${desktop_run_id}](${desktop_run_url})"
+            echo "- The release workflow waits for the desktop artifact build to finish."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          gh run watch "${desktop_run_id}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --exit-status
