@@ -1,4 +1,5 @@
 name: build desktop artifacts
+run-name: desktop ${{ inputs.build_type || 'release' }} ${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }} ${{ inputs.platform || 'all' }} ${{ inputs.dispatch_id }}
 
 on:
   release:
@@ -21,12 +22,27 @@ on:
         description: Optional Git ref to build. Dev builds default to the selected workflow branch; release builds default to the tag.
         required: false
         type: string
+      dispatch_id:
+        description: Internal identifier used by the main release workflow to track this build.
+        required: false
+        type: string
+      platform:
+        description: Build all desktop platforms or only one platform (useful for release recovery).
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - linux
+          - macos
+          - windows
 
 permissions:
   contents: write
 
 jobs:
   build_desktop:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || matrix.artifact_suffix == inputs.platform
     env:
       IS_RELEASE_BUILD: ${{ github.event_name == 'release' || inputs.build_type == 'release' }}
       RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag_name }}

@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Update frontend `source-map-js` and desktop `sharp` to patched versions for Dependabot alerts.
 
+### 🐛 Bug fixes
+
+- fix Windows desktop release packaging by resolving the backend smoke-test path correctly, propagating desktop build failures to the main release workflow, and allowing single-platform recovery builds ([#188](https://github.com/frederikemmer/MediaLyze/issues/188))
+
 ## v0.19.1
 
 This patch release fixes the Windows desktop startup failure and improves reliability when scanning large libraries and transcoding. It also adds history filters, reduces history storage, and updates vulnerable dependencies.

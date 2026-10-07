@@ -5,18 +5,23 @@ import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const desktopDir = path.resolve(scriptDir, "..", "..");
-const repoRoot = path.resolve(desktopDir, "..");
-const backendPath = path.join(
-  repoRoot,
-  "dist",
-  "desktop-backend",
-  "medialyze-backend",
-  "medialyze-backend.exe"
-);
+export function resolveBackendPaths(scriptPath = fileURLToPath(import.meta.url)) {
+  const repoRoot = path.resolve(path.dirname(scriptPath), "..", "..");
+  return {
+    repoRoot,
+    backendPath: path.join(
+      repoRoot,
+      "dist",
+      "desktop-backend",
+      "medialyze-backend",
+      "medialyze-backend.exe"
+    ),
+  };
+}
+
+const { repoRoot, backendPath } = resolveBackendPaths();
 const healthTimeoutMs = 30_000;
 const requestTimeoutMs = 1_000;
 const maxCapturedOutputCharacters = 12_000;
@@ -124,7 +129,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error.stack ?? error);
-  process.exitCode = 1;
-});
+const isMainModule =
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error(error.stack ?? error);
+    process.exitCode = 1;
+  });
+}

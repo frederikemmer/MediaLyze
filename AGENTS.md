@@ -1261,6 +1261,8 @@ Current release behavior:
 * official images are published to GHCR
 * the official release workflow creates the matching `vX.Y.Z` tag and GitHub release from that `main` commit
 * the desktop-release workflow can also be dispatched manually for an existing release tag, optionally building from a different git ref while still uploading assets to the original release tag
+* manually dispatched desktop builds can target all platforms or one platform, allowing a missing release asset to be added without rebuilding the other platform assets
+* the main release workflow waits for its dispatched desktop build and fails visibly with a link to the child run if any platform build or release upload fails; because the GitHub release is created first, a failed desktop build can leave a published release missing assets until recovery
 * desktop release assets now use stable versionless filenames per platform so documentation can link through `releases/latest/download/...` to the newest published desktop installers
 * GitHub releases use extracted release notes based on repository metadata
 * upcoming release notes should be accumulated under `CHANGELOG.md` in `vUnreleased`
