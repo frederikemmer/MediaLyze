@@ -1,6 +1,6 @@
 from enum import Enum
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -81,7 +81,7 @@ class TranscodingSettingsRead(BaseModel):
 class TranscodingSettingsUpdate(BaseModel):
     execution_mode: Literal["hardware_required", "cpu_only"] | None = None
     cpu_budget_percent: int | None = Field(default=None, ge=1, le=100)
-    cpu_parallel_jobs: Literal["auto"] | int | None = Field(default=None, ge=1, le=64)
+    cpu_parallel_jobs: Literal["auto"] | Annotated[int, Field(ge=1, le=64)] | None = None
     gpu_parallel_jobs_per_device: int | None = Field(default=None, ge=1, le=8)
     default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     on_error: Literal["continue", "stop_queue"] | None = None

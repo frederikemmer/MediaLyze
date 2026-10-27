@@ -897,6 +897,25 @@ def test_app_settings_telemetry_off_cancels_pending_send() -> None:
     assert runtime.canceled_telemetry_sends == 1
 
 
+def test_app_settings_transcoding_update_accepts_auto_cpu_parallel_jobs() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.patch(
+            "/api/app-settings",
+            json={"transcoding": {"execution_mode": "cpu_only", "cpu_parallel_jobs": "auto"}},
+        )
+        out_of_range_response = client.patch("/api/app-settings", json={"transcoding": {"cpu_parallel_jobs": 65}})
+
+    assert response.status_code == 200
+    assert response.json()["transcoding"]["execution_mode"] == "cpu_only"
+    assert response.json()["transcoding"]["cpu_parallel_jobs"] == "auto"
+    assert out_of_range_response.status_code == 422
+
+
 def test_telemetry_send_now_posts_normal_payload_and_returns_updated_settings(monkeypatch) -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

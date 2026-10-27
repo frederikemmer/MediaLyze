@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug fixes
 
 - Fix the server error when a library gets a second folder with the same name as an existing one; the new folder's alias gets a numbered suffix ([#197](https://github.com/frederikemmer/MediaLyze/issues/197)).
+- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199)).
 
 - Apply a saved notification duration change to visible cards by restarting their timers with the new duration.
 
