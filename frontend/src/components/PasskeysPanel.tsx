@@ -90,9 +90,9 @@ export function PasskeysPanel({ fixture }: { fixture?: PasskeyList }) {
             <button type="button" className="secondary" disabled={busy} onClick={() => { setAdding(false); setPassword(""); }}>{t("common.cancel")}</button>
           </div>
         </form>}
-        <div className="passkey-list">
-          {!data.items.length && <p className="field-hint">{t("passkeys.empty")}</p>}
-          {data.items.map((item) => <article key={item.id} className="media-card passkey-row">
+        <div className="compatibility-profile-list passkey-list">
+          {!data.items.length && <p className="field-hint compatibility-profile-catalog-message">{t("passkeys.empty")}</p>}
+          {data.items.map((item) => <article key={item.id} className="compatibility-profile-list-item compatibility-profile-list-trigger is-static passkey-row">
             <KeyRound aria-hidden="true" size={18} />
             {editing === item.id ? <form className="passkey-rename" onSubmit={(event) => { event.preventDefault(); void rename(item); }}>
               <input autoFocus aria-label={t("passkeys.name")} required maxLength={64} value={editName} disabled={busy} onChange={(event) => setEditName(event.target.value)} />

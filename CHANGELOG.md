@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Use compact Accelerator-style rows without raised card shadows for personal passkeys, retaining inline rename and delete actions.
+
 - Show live password requirement checks below managed-account password fields and report invalid passwords only through the field's native validation bubble.
 
 - Add named personal passkeys with registration, inline renaming, deletion and passkey login; enable them through PUBLIC_URL, with a disabled own-account panel and configuration tooltip when unset.

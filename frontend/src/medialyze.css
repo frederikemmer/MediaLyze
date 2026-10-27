@@ -18164,8 +18164,8 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 
 /* Passkeys share account card surfaces and the settings sub-panel shell. */
 .passkeys-panel.is-disabled > .app-settings-section { opacity: .6; }
-.passkey-list { display: grid; gap: 8px; }
-.passkey-row { display: flex; align-items: center; gap: 8px; }
+.passkey-list { box-shadow: none; }
+.passkey-row { gap: 8px; padding: 6px 12px; font-weight: 400; }
 .passkey-identity { display: grid; flex: 1; min-width: 0; gap: 3px; overflow-wrap: anywhere; }
 .passkey-identity small { color: var(--text-muted); font-size: .73rem; }
 .passkey-rename { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
