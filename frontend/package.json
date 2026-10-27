@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
     "@tanstack/react-virtual": "^3.13.21",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.2",

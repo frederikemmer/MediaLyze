@@ -13,7 +13,8 @@ These references describe the current repository implementation on `dev`, review
 | Set up and scan a library | [Discovery and pattern rules](patterns.md) | [Supported metadata and scan behavior](supported_metadata.md) |
 | Understand statistics, quality, filters, and audio/book support | [Metadata support matrix](supported_metadata.md) | [Discovery rules](patterns.md), [architecture](architecture.md) |
 | Create a transcoded video variant | [Transcoding](transcoding.md) | [Environment/output mounts](environment.md), [hardware evidence](transcoding-hardware-matrix.md) |
-| Set up local accounts and access | [Users and access](user-access.md) | [Environment](environment.md), [remaining access decisions](user-access.md#still-restricted-and-awaiting-decisions) |
+| Set up local accounts and access | [Users and access](user-access.md) | [Passkeys](passkeys.md) | Own-account passkey registration, names, login, PUBLIC_URL setup and revocation. |
+| [Environment](environment.md), [remaining access decisions](user-access.md#still-restricted-and-awaiting-decisions) |
 | Connect Jellyfin | [Jellyfin setup and permissions](jellyfin.md) | [Connector mappings and troubleshooting](connectors.md) |
 | Assess playback compatibility | [Compatibility profiles](compatibility-profiles.md) | [JSON Schemas](#machine-readable-contracts-and-assets) |
 | Understand optional telemetry | [Telemetry](telemetry.md) | [Environment overrides](environment.md#telemetry) |

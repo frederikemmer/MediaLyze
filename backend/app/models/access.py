@@ -1,6 +1,6 @@
 """Additive local identity storage. No foreign keys from durable job provenance to accounts."""
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, JSON, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.app.db.base import Base
 
@@ -39,6 +39,9 @@ class LoginSession(Base):
         ForeignKey("local_accounts.id", ondelete="CASCADE"), index=True
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    passkey_id: Mapped[str | None] = mapped_column(
+        ForeignKey("account_passkeys.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[int] = mapped_column(Integer, nullable=False)
     last_seen_at: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -57,3 +60,33 @@ class JobAuthority(Base):
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     actor_name: Mapped[str] = mapped_column(String(64), nullable=False)
     requirements: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+
+class AccountPasskey(Base):
+    __tablename__ = "account_passkeys"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("local_accounts.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    rp_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    credential_id: Mapped[str] = mapped_column(String(2048), unique=True, nullable=False)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    sign_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    transports: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    backed_up: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_used_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class PasskeyChallenge(Base):
+    __tablename__ = "passkey_challenges"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    challenge: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    ceremony: Mapped[str] = mapped_column(String(16), nullable=False)
+    binding: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[str | None] = mapped_column(ForeignKey("local_accounts.id", ondelete="CASCADE"), nullable=True)
+    account_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    session_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rp_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    origin: Mapped[str] = mapped_column(String(512), nullable=False)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

@@ -59,6 +59,7 @@ LIBRARY_RIGHTS = frozenset(
 )
 CREATE_REQUIRES = frozenset(("library.read", "library.edit", "library.paths"))
 EMPTY_POLICY = {"global": [], "mode": "per_library", "libraries": {}, "shared": [], "create": False}
+GUEST_DEFAULT_POLICY = {"global": ["overview.dashboard", "overview.compare", "overview.storage"], "mode": "future", "libraries": {}, "shared": ["library.read"], "create": False}
 
 
 def fail(code=403, detail="Forbidden"):
@@ -104,6 +105,8 @@ def initialize_owner(factory, settings):
         if not settings.desktop_token or len(settings.desktop_token.get_secret_value()) < 32:
             raise RuntimeError("Desktop requires a process credential from Electron")
         return
+    if settings.no_users:
+        return
     name = settings.owner_username
     secret = (
         settings.owner_password.get_secret_value() if settings.owner_password is not None else None
@@ -117,7 +120,7 @@ def initialize_owner(factory, settings):
                     return
                 if name is None or secret is None:
                     raise ValueError()
-                create_owner(db, name, secret)
+                create_owner(db, name, secret, guest_enabled=settings.guest_enabled or False)
             else:
                 owner = db.get(LocalAccount, state.owner_id)
                 changed = False
@@ -140,12 +143,19 @@ def initialize_owner(factory, settings):
                 if changed:
                     owner.revision += 1
                     revoke(db, owner.id)
+                if settings.guest_enabled is not None and state.guest_enabled != settings.guest_enabled:
+                    state.guest_enabled = settings.guest_enabled
+                    state.revision += 1
+                    if not state.guest_enabled:
+                        from backend.app.models.entities import NotificationHistoryEntry
+                        db.execute(delete(LoginSession).where(LoginSession.kind == "guest"))
+                        db.execute(delete(NotificationHistoryEntry).where(NotificationHistoryEntry.owner_key.like("guest:%")))
             db.commit()
         except (HTTPException, ValueError, IntegrityError):
             raise RuntimeError("Invalid or conflicting owner environment configuration") from None
 
 
-def create_owner(db, name: str, secret: str):
+def create_owner(db, name: str, secret: str, *, guest_enabled: bool = False):
     if db.get(AccessState, 1) is not None:
         fail(409, "Setup already completed")
     username(name)
@@ -167,7 +177,7 @@ def create_owner(db, name: str, secret: str):
     db.add(account)
     db.flush()
     db.add(
-        AccessState(id=1, owner_id=account.id, guest_enabled=False, guest_policy=dict(EMPTY_POLICY))
+        AccessState(id=1, owner_id=account.id, guest_enabled=guest_enabled, guest_policy=dict(GUEST_DEFAULT_POLICY))
     )
     db.flush()
     return account
@@ -245,7 +255,7 @@ def authenticate(db, raw: str | None):
     return result
 
 
-def new_session(db, account=None):
+def new_session(db, account=None, *, passkey_id=None):
     token = secrets.token_urlsafe(48)
     now = int(time.time())
     # Expired sessions never accumulate indefinitely.
@@ -260,6 +270,7 @@ def new_session(db, account=None):
             token_hash=digest(token),
             account_id=account.id if account else None,
             kind="account" if account else "guest",
+            passkey_id=passkey_id,
             created_at=now,
             last_seen_at=now,
         )

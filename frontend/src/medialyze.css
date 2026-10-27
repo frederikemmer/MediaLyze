@@ -9289,7 +9289,8 @@ select.settings-choice-input[multiple] {
   content: attr(data-tooltip-title) "\A" attr(data-tooltip-body);
   position: absolute;
   top: calc(100% + 10px);
-  left: 0;
+  right: 0;
+  left: auto;
   z-index: 1000;
   width: min(340px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
@@ -17922,18 +17923,17 @@ html[data-theme="dark"] .transcoding-table-scroll::-webkit-scrollbar-thumb:hover
 }
 
 /* Account surfaces reuse existing panels, profile rows, icon buttons and switches. */
-.access-login { max-width: 420px; margin: 48px auto; }
+.access-login { width: 100%; max-width: 460px; min-width: 0; margin: 24px auto; }
 .access-login h1 { font-size: 1.3rem; }
 .access-login .form-grid { grid-template-columns: minmax(0, 1fr); }
+.access-login .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .access-accounts-panel { min-width: 0; }
 .access-accounts-panel .panel-header { margin-bottom: 8px; }
 .access-accounts-panel .access-search-field { width: 100%; margin-bottom: 8px; }
-/* The prototype uses open account rows rather than a nested profile table. */
-.access-account-list { display: grid; gap: 3px; min-width: 0; margin: 0 0 -4px -4px; }
-.access-account-row { position: relative; min-width: 0; border-radius: 10px; }
-.access-account-row:hover,
-.access-account-row:focus-within { background: var(--surface-subtle); }
-.access-account-row-content { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 7px; }
+/* Account overview cards reuse the shared media-card surface. */
+.access-account-list { display: grid; gap: 8px; min-width: 0; }
+.access-account-card { position: relative; }
+.access-account-card-content { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .access-account-trigger {
   position: static;
   display: flex;
@@ -17949,7 +17949,7 @@ html[data-theme="dark"] .transcoding-table-scroll::-webkit-scrollbar-thumb:hover
   text-align: start;
 }
 /* Stretch the open action across the row; the chevron is decorative. */
-.access-account-trigger::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+.access-account-trigger::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
 .access-account-trigger:hover,
 .access-account-trigger:focus-visible { background: transparent; transform: none; box-shadow: none; outline: none; }
 .access-account-trigger:focus-visible::after { outline: 2px solid var(--accent-2); outline-offset: 1px; }
@@ -17962,11 +17962,16 @@ html[data-theme="dark"] .transcoding-table-scroll::-webkit-scrollbar-thumb:hover
 .access-accounts-panel .panel-title-row h2 { overflow-wrap: anywhere; }
 .access-editor-tabs { width: fit-content; flex: 0 0 auto; margin-bottom: 0; }
 .access-owner-hint { margin: 0 0 6px; }
-.personal-account-password-control { position: relative; display: block; }
-.personal-account-password-control > input { width: 100%; padding-right: 44px; }
-button.personal-account-password-toggle,
-button.personal-account-password-toggle:hover:not(:disabled),
-button.personal-account-password-toggle:focus-visible:not(:disabled) {
+.password-field-control { position: relative; display: block; }
+.password-requirements-field { display: grid; gap: 6px; min-width: 0; }
+.password-requirements { display: grid; gap: 4px; padding: 0; list-style: none; }
+.password-requirements li { display: flex; align-items: center; gap: 6px; }
+.password-requirements li > svg { flex: 0 0 14px; width: 14px; height: 14px; }
+.password-requirements li[data-satisfied="true"] > svg { color: var(--accent-2); }
+.password-field-control > input { width: 100%; padding-right: 44px; }
+button.password-visibility-toggle,
+button.password-visibility-toggle:hover:not(:disabled),
+button.password-visibility-toggle:focus-visible:not(:disabled) {
   position: absolute;
   top: 50%;
   right: 3px;
@@ -18002,9 +18007,13 @@ html .access-permission-disabled.tooltip-trigger {
   font: inherit;
   text-align: start;
 }
-.access-editor-footer { margin-top: 12px; flex-wrap: wrap; }
 @media (max-width: 600px) {
-  .access-login { margin: 24px 10px; }
+  .access-accounts-panel .panel-title-row { flex-wrap: wrap; }
+  .access-accounts-panel .panel-title-row > h2 { flex: 1 1 calc(100% - 120px); }
+  .access-accounts-panel .async-panel-toggle-actions { order: 1; }
+  .access-accounts-panel .access-editor-tabs { order: 2; }
+  .access-accounts-panel .panel-title-row > .toggle-switch { order: 3; }
+  .access-login { margin: 12px auto; }
   .access-tree-body { padding-left: 12px; }
   .access-tree-header { gap: 4px; }
   .access-tree-header select { max-width: 49%; }
@@ -18152,3 +18161,12 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 .notification-history-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .notification-history-toolbar .settings-navigation-search { flex: 1 1 200px; }
 .notification-history-message { margin: 8px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* Passkeys share account card surfaces and the settings sub-panel shell. */
+.passkeys-panel.is-disabled > .app-settings-section { opacity: .6; }
+.passkey-list { display: grid; gap: 8px; }
+.passkey-row { display: flex; align-items: center; gap: 8px; }
+.passkey-identity { display: grid; flex: 1; min-width: 0; gap: 3px; overflow-wrap: anywhere; }
+.passkey-identity small { color: var(--text-muted); font-size: .73rem; }
+.passkey-rename { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
+.passkey-rename input { min-width: 0; flex: 1; }

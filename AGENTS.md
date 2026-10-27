@@ -625,6 +625,18 @@ Frontend design decision history:
 * Each entry should include the decision, rationale, canonical implementation and catalog references, deprecated selectors or patterns, migration scope, status, and remaining intentional exceptions.
 * Update the entry when the canonical pattern or migration status changes. The history must not keep legacy CSS alive; after migration, retain only identifiers needed to explain intentional exceptions.
 
+### 2026-10-27 — Keep managed account editor actions in the header
+
+* Decision: managed user/Guest editors use the shared borderless Delete, Save and Close icons, with Save immediately left of Close. Saving retains the current editor/tab and resets its saved baseline; Close asks to discard a changed draft. Narrow headers wrap the title/actions above the tabs/status control.
+* Account overview: every user and Guest uses its own compact shared `media-card` surface with an 8px list gap. The borderless `.access-account-row*` presentation and negative list margins are retired; the whole card remains keyboard-accessible through its account button.
+* Canonical references: `AccountsPanel.tsx`, the account header rules in `medialyze.css`, and the live account editor in `/ui-elements`. The `.access-editor-footer` button row and its CSS are retired. Personal credential forms retain their dedicated Save/Sign out controls. Status: active.
+
+### 2026-10-27 — Reuse the app header for authentication
+
+* Decision: login, first-owner setup and required password changes use the normal shell/header with the shared `HeaderBrand` and compact `AccessScreen` panel. Only first-owner setup explains accounts since 0.20, optional Guest access and automatic installation carry-over; the subsequent Login panel starts directly with the form, without a visible heading or introduction.
+* Canonical references: `HeaderBrand.tsx`, `AccessScreen.tsx`, `auth.tsx`, `.access-login` and the authentication/Guest menu examples in `/ui-elements`. The standalone headerless login panel is retired; unauthenticated screens omit protected navigation.
+* Enabled Guest access starts automatically on ordinary visits, sign-out and expiry with the configured Guest rights. Explicit `/login` remains available through the header account menu; Guest has Login instead of Sign out. Status polling never dismisses this explicit login page. Status: active.
+
 ### 2026-10-14 — Share compact summary metric pills across page headers
 
 * Decision: Dashboard and Library Detail place icon-and-value metric pills beside their headings, with localized hover explanations. The library path appears in the storage metric tooltip. Collapsed Duplications panels keep the same grid gap before Analyzed files as expanded panels.
@@ -876,7 +888,8 @@ These flags currently control:
 * Restricted media/aggregate queries attach request-local SQL scope through `api/deps.py` and `services/access_context.py`; they do not consume shared stats caches/in-flight results. Playback requires its separate right. Global configuration writes and their authorized system follow-ups remain installation-wide, without returning hidden media details.
 * Preserve job provenance without account-delete cascades and recheck queued work at execution. Scheduler/watch/maintenance are independent system work. Owner-only unresolved projections must stay restricted until their policy/data projection is explicitly implemented.
 * `frontend/src/lib/auth.tsx` gates data providers; `access-session.ts` invalidates old identity requests; `preference-storage.ts` wraps existing personal layout serializers with account namespaces and server synchronization. Do not write new personal preferences directly to raw localStorage.
-* The real `AccountsPanel.tsx` is reused in `/ui-elements`; its fixtures must never write live access state. The compact account list, inline expansion, shared switches/tabs, borderless 32px icon buttons and 26px chevrons are current patterns.
+* The real `AccountsPanel.tsx` is reused in `/ui-elements`; its fixtures must never write live access state. Separate compact `media-card` panels for each account and Guest, the selected-account editor, shared switches/tabs, borderless 32px icon buttons and 26px chevrons are current patterns.
+* `PUBLIC_URL` enables own-account WebAuthn passkeys only at the configured HTTPS origin (HTTP localhost is a development exception). `passkey_routes.py` endpoints are explicitly listed in `AUTH_PATHS` and disabled for Desktop/`NO_USERS`; registration requires the current password. `PasskeysPanel` reuses the shared collapsible settings panel and remains visible/disabled with setup guidance when unconfigured. See `docs/passkeys.md`.
 * Electron's per-start proof is confined to its own window/backend origin/port. Loopback and runtime flags do not authenticate a browser. Proxy trust defaults to none; `MEDIALYZE_TRUSTED_PROXY_IPS` explicitly configures the supported launcher.
 
 ---

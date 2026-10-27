@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
@@ -123,7 +123,7 @@ describe("App routing", () => {
     expect(screen.getByText("Duplicate group cards")).toBeInTheDocument();
     expect(screen.getByText("File detail navigation and badges")).toBeInTheDocument();
     expect(screen.getByText("Release notes dialog")).toBeInTheDocument();
-    const navigationButtons = container.querySelectorAll("button.icon-nav-button, button.library-nav-link");
+    const navigationButtons = container.querySelectorAll("button.icon-nav-button:not(.media-header-account-trigger), button.library-nav-link");
     expect(navigationButtons.length).toBeGreaterThan(0);
     navigationButtons.forEach((button) => {
       expect(button.closest(".media-nav-library-menu")).not.toBeNull();
@@ -141,6 +141,28 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByText("Dashboard route")).toBeInTheDocument());
     expect(screen.queryByRole("heading", { name: "UI elements" })).not.toBeInTheDocument();
+  });
+
+  it("opens the dashboard after login without reloading the application", async () => {
+    let signedIn = false;
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith("/auth/login")) signedIn = true;
+      const payload = path.endsWith("/auth/status")
+        ? { setup_required: false, guest_enabled: false, csrf: "test", identity: signedIn ? { id: "owner", kind: "account", username: "Alex", owner: true, revision: 1, must_change_password: false, policy: { global: [], mode: "per_library", libraries: {}, shared: [], create: false } } : null }
+        : { storage: {} };
+      return new Response(JSON.stringify(payload), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    });
+    renderApp("/");
+    await screen.findByRole("main", { name: "Login" });
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "Alex" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+    expect(await screen.findByText("Dashboard route")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Account menu for Alex" })).toBeInTheDocument();
+    expect(screen.queryByRole("main", { name: "Login" })).not.toBeInTheDocument();
   });
 
   it("uses the persisted interface language when no local language is stored", async () => {

@@ -35,6 +35,13 @@ from backend.app.services.access_context import principal_context
 # accounts. Keep account setup, login, preferences, and rights APIs unavailable
 # on this runtime even if a stale browser session or direct client calls them.
 DESKTOP_DISABLED_ACCESS_PATHS = {
+    "/me/passkeys",
+    "/me/passkeys/options",
+    "/me/passkeys/verify",
+    "/me/passkeys/{passkey_id}",
+    "/auth/passkeys/options",
+    "/auth/passkeys/verify",
+
     "/auth/setup",
     "/auth/login",
     "/auth/guest",
@@ -155,6 +162,7 @@ class AccessMiddleware:
                 or path.startswith(("/assets/", "/libraries/", "/files/"))
                 or path
                 in {
+                    "/login",
                     "/settings",
                     "/accounts",
                     "/storage-map",
@@ -179,12 +187,14 @@ class AccessMiddleware:
 
         # Desktop has a single local application identity. User management,
         # rights, and browser account flows do not apply to this runtime.
-        if settings.is_desktop and local_template in DESKTOP_DISABLED_ACCESS_PATHS:
+        if (settings.is_desktop or settings.no_users) and local_template in DESKTOP_DISABLED_ACCESS_PATHS:
             fail(404, "Not found")
 
         def identity():
             with factory() as db:
                 configured = db.get(AccessState, 1) is not None
+                if settings.no_users and not settings.is_desktop:
+                    return True, Principal("desktop", "desktop", "", True, {})
                 token = request.headers.get("x-medialyze-desktop")
                 if settings.is_desktop:
                     if (
@@ -225,7 +235,7 @@ class AccessMiddleware:
         ):
             fail(403, "Password change required")
         if method not in {"GET", "HEAD", "OPTIONS"} and not (
-            principal and principal.kind == "desktop"
+            principal and principal.kind == "desktop" and settings.is_desktop
         ):
             # Forwarded headers are deliberately not trusted here. The deployment
             # proxy must preserve Host and establish the request's HTTPS scheme.

@@ -2229,14 +2229,14 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Transcoding Presets" }));
 
     expect(await screen.findByRole("heading", { name: "Transcoding Presets" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Transcoding Presets" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Filename Presets" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("tab", { name: "Foldername Presets" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Transcoding" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Filename" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Foldername" })).toHaveAttribute("aria-selected", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Filename Presets" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Filename" }));
     expect(await screen.findByText("No filename presets are configured yet.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New preset" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Foldername Presets" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Foldername" }));
     expect(await screen.findByText("No foldername presets are configured yet.")).toBeInTheDocument();
   });
 

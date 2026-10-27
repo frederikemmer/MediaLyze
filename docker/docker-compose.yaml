@@ -24,8 +24,12 @@ services:
       # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
       TZ: ${TZ:-UTC}
       # Unset owner variables stay absent; no empty default credentials.
-      MEDIALYZE_OWNER_USERNAME:
-      MEDIALYZE_OWNER_PASSWORD:
+      OWNER_USERNAME:
+      OWNER_PASSWORD:
+      GUEST_ENABLED:
+      NO_USERS:
+      # Canonical HTTPS address; required to enable passkeys.
+      PUBLIC_URL: ${PUBLIC_URL:-}
       MEDIALYZE_TRUSTED_PROXY_IPS: ${MEDIALYZE_TRUSTED_PROXY_IPS:-}
       CONFIG_PATH: /config
       MEDIA_ROOT: /media

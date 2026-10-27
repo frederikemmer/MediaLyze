@@ -2,15 +2,31 @@
 
 This describes the implementation on the current development branch. The endpoint proposal and audit snapshots in `docs/prototyping/nutzerverwaltung/` remain historical inventories. The consolidated concept records subsequent explicit product confirmations. These documents are not evidence that every proposed permission mapping has shipped.
 
+## Entering the application
+
+When guest access is enabled, unauthenticated visitors enter the application automatically with the configured Guest permissions, including after sign-out or session expiry. The header account menu offers **Login**, which opens `/login`; this explicit login page stays open while browsing as Guest. **Continue as guest** returns to the originating page. With Guest disabled, the authentication gate shows login (or first-owner setup) before mounting application data providers. Successful authentication always starts a fresh status request and invalidates older polls, so the application opens immediately after account preferences are loaded. Login and setup share the application header. Only first-owner setup explains accounts introduced in 0.20 and automatic carry-over of existing installations; subsequent Login panels start directly with the form without a visible heading or introductory text. Release notes do not require a telemetry choice from identities without global app-settings edit permission, so they cannot block Guest entry.
+
+On a new server installation, Guest is disabled. Its default policy grants dashboard, comparison and Storage Map access plus metadata read access to all existing and future libraries. This includes library statistics, file details, covers and scan progress/diagnostics; it does not permit starting scans, media preview or download, exports, transcoding or administration. An owner can enable Guest and change its permissions under **Settings → Users & access**. Existing installations retain their saved Guest policy.
+
+Set `GUEST_ENABLED=true` or `false` in the process/Compose environment to set Guest's enabled state at startup, including interactive owner setup. This preserves the saved Guest policy; changes in the UI can be made during runtime but the environment value is applied again on restart. Remove the variable to leave the saved state under UI control. Disabling Guest revokes Guest sessions and removes Guest notification histories. Guest access makes the granted metadata available without a login.
+
+For an explicitly account-free server, set `NO_USERS=true` and restart. Every visitor has full Owner-equivalent access, including changes to media and settings; restrict network access accordingly. User-management and login endpoints are unavailable, while existing accounts and Guest settings remain stored. Remove the variable or set it to `false` and restart to restore normal account access; an installation without an existing owner then requires setup. Owner and Guest environment settings are not applied while this mode is active. Browser writes still require same-origin and CSRF checks.
+
+The desktop application also requires no user accounts, but uses a private Electron process credential; setting desktop runtime mode alone does not provide anonymous browser access to a server.
+
 ## Setup and upgrade
 
 Server startup adds identity tables without replacing media, library or job tables. Until a single owner exists, interactive APIs require setup. `/api/health` returns only `{"status":"ok"}`. The anonymous HTML/compiled assets contain the login/setup application, not media data. The first visitor can create the owner without an installation code; expose an unconfigured installation only where that first-visitor setup is intended.
 
-Alternatively set both `MEDIALYZE_OWNER_USERNAME` and `MEDIALYZE_OWNER_PASSWORD` in the process/Compose environment for the first startup. Usernames contain 1–64 ASCII letters/digits and `_.@-`, starting with a letter/digit. Passwords contain at least 5 characters and at least one number or special character. Whitespace alone does not satisfy the latter requirement. There is no registration, e-mail reset or external login. The standard Compose file passes explicitly configured owner fields through without inventing empty defaults; the ENV variant reads them from its existing `env_file`.
+Alternatively set both `OWNER_USERNAME` and `OWNER_PASSWORD` in the process/Compose environment for the first startup. Usernames contain 1–64 ASCII letters/digits and `_.@-`, starting with a letter/digit. Passwords contain at least 5 characters and at least one number or special character. Whitespace alone does not satisfy the latter requirement. There is no registration, e-mail reset or external login. The standard Compose file passes explicitly configured owner fields through without inventing empty defaults; the ENV variant reads them from its existing `env_file`.
 
 For an existing owner, each supplied variable is reconciled separately on every startup. Invalid values or a username collision stop startup. Identical credentials retain sessions; a changed username/password revokes them. Remove a variable and restart to unlock that field in the UI; its last value remains stored. No default password is generated or logged. The owner cannot be deleted, disabled, reset or assigned a restricted policy through account administration. Its own credentials can be changed under **Settings → Users & access → your account → Account**, subject to environment locks.
 
 No application data directory was used for the implementation tests: all test databases/media paths and the browser QA server used temporary directories.
+
+## Passkeys
+
+Local accounts can add named passkeys, rename them and delete them under their own Account tab. The collapsible panel stays visible but disabled until `PUBLIC_URL` supplies the exact external HTTPS origin; its tooltip explains configuration. Adding requires the current password. Passkey login supplements passwords; removing a credential revokes its linked sessions. See [Passkeys](passkeys.md) for the security boundary and Docker setup.
 
 ## Sessions and browser boundary
 
@@ -53,7 +69,11 @@ The Federation protocol keeps its existing member-envelope/pairing authenticatio
 
 Personal settings live under Settings → Users & access → the signed-in account → Account. They remain available without account-management rights; the former My account section links resolve to Users & access. Other accounts retain their management controls, and Owner rights remain read-only while the signed-in Owner can edit their own unlocked credentials in Account.
 
-The Settings panel uses shared profile rows, `toggle-switch`, `SlidingTogglePill`, `TooltipTrigger`, 32px borderless icon primitives and 26px chevrons. Account selection disappears while editing inline; Guest is last without a subtitle. Rights search retains library hierarchy, opens matches temporarily and disables bulk changes while searching. Scope changes use intersection; returning to individual scope removes future/create permission. EN/DE/ES/UK copy is maintained. `/ui-elements` embeds the real account component with disposable fixtures; its controls never write real access state.
+Managed account and Guest editors use borderless Delete, Save and Close header icons instead of a footer action row. Save stays in the current editor/tab and updates its saved baseline, including the returned ID for newly created accounts. Close asks for confirmation only when the managed draft has unsaved changes. Save failures retain the draft and allow retry; temporary passwords are cleared after successful saves. Personal credential forms retain their own Save/Sign out controls.
+
+The account overview gives each user and Guest a separate compact panel using the shared `media-card` surface. Each entire card opens the selected account editor and retains keyboard focus feedback.
+
+The Settings panel uses shared profile rows, `toggle-switch`, `SlidingTogglePill`, `TooltipTrigger`, 32px borderless icon primitives and 26px chevrons. Account selection disappears while editing inline; Guest is last without a subtitle. Rights search retains library hierarchy, opens matches temporarily and disables bulk changes while searching. The Libraries & files header switch selects or clears all delegable library rights in the current scope; future scope also includes library creation when the actor can delegate it. Its checked/partial state reflects the editable rights, and search, read-only views and empty/nondelegable scopes disable bulk changes. Scope changes use intersection; returning to individual scope removes future/create permission. EN/DE/ES/UK copy is maintained. `/ui-elements` embeds the real account component with disposable fixtures; its controls never write real access state.
 
 History-retention forecasts remain visible with `settings.app.view`, while the editable retention table is rendered only with `settings.app.edit`. The bulk reconstruction action is rendered only when the account can both read and scan at least one library; the API resolves the authorized library set again at request time.
 

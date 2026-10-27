@@ -27,6 +27,7 @@ dependencies = [
   "watchdog>=6.0.0,<7",
   "websockets>=14,<17",
   "argon2-cffi>=25.1.0,<26",
+  "webauthn>=2.7,<3",
 ]
 
 [project.optional-dependencies]

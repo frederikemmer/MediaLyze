@@ -25,6 +25,17 @@ SECRET = "test-password-with-entropy"
 NEW_SECRET = "changed-password-with-entropy"
 
 
+def test_access_environment_names(monkeypatch):
+    for name in ("OWNER_USERNAME", "OWNER_PASSWORD", "GUEST_ENABLED", "NO_USERS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OWNER_USERNAME", "current")
+    monkeypatch.setenv("OWNER_PASSWORD", NEW_SECRET)
+    monkeypatch.setenv("GUEST_ENABLED", "false")
+    monkeypatch.setenv("NO_USERS", "false")
+    current = Settings(_env_file=None)
+    assert (current.owner_username, current.owner_password.get_secret_value(), current.guest_enabled, current.no_users) == ("current", NEW_SECRET, False, False)
+
+
 @pytest.fixture
 def env(tmp_path):
     config = tmp_path / "config"
@@ -794,6 +805,11 @@ def test_distribution_assets_do_not_serve_private_files_or_symlink_escapes(env):
     application.state.auth_session_factory = factory
     client = TestClient(application)
     assert client.get("/").status_code == 200
+    login_page = client.get("/login")
+    assert login_page.status_code == 200
+    assert login_page.content == (dist / "index.html").read_bytes()
+    assert client.post("/login").status_code == 404
+    assert client.get("/api/libraries").status_code == 401
     assert client.get("/assets/index-test.js").status_code == 200
     assert client.get("/assets/private.db").status_code == 404
     assert client.get("/assets/escape.js").status_code == 404
@@ -1052,12 +1068,69 @@ def test_guest_defaults_exclude_shared_configuration_but_explicit_grants_work(en
     for route in routes:
         assert guest.get(route).status_code == 403, route
     assert post(guest, "/api/app-settings", {}, "patch").status_code == 403
-    assert guest.get("/api/auth/status").json()["identity"]["policy"]["global"] == []
+    assert set(guest.get("/api/auth/status").json()["identity"]["policy"]["global"]) == {"overview.dashboard", "overview.compare", "overview.storage"}
     permitted = {**policy, "global": ["settings.quality.view"]}
     assert post(owner, "/api/access/guest", {"enabled": True, "policy": permitted}, "put").status_code == 200
     assert guest.get("/api/quality-profiles").status_code == 200
     for route in routes[1:]:
         assert guest.get(route).status_code == 403, route
+
+
+def test_guest_default_and_environment_activation(env):
+    app, factory, settings = env
+    owner = setup(app)
+    first = library(factory, "first")
+    initial = owner.get("/api/access/guest").json()
+    assert not initial["enabled"]
+    assert initial["policy"]["mode"] == "future"
+    assert initial["policy"]["shared"] == ["library.read"]
+    initialize_owner(factory, settings.model_copy(update={"guest_enabled": True}))
+    guest = TestClient(app)
+    assert post(guest, "/api/auth/guest").status_code == 200
+    assert first in [item["id"] for item in guest.get("/api/libraries").json()]
+    second = library(factory, "second")
+    assert second in [item["id"] for item in guest.get("/api/libraries").json()]
+    assert post(guest, f"/api/libraries/{first}/scan", {}).status_code in (403, 404)
+    initialize_owner(factory, settings.model_copy(update={"guest_enabled": False}))
+    assert guest.get("/api/auth/status").json()["identity"] is None
+    with factory() as db:
+        assert db.get(AccessState, 1).guest_policy == initial["policy"]
+
+
+def test_no_users_server_has_owner_access_and_csrf(env):
+    app, factory, settings = env
+    settings = settings.model_copy(update={"no_users": True})
+    initialize_owner(factory, settings)
+    app = create_app(settings)
+    app.state.auth_session_factory = factory
+    def database():
+        with factory() as db:
+            yield db
+    app.dependency_overrides[get_db] = database
+    app.dependency_overrides[get_app_settings] = lambda: settings
+    from backend.app.api.deps import get_scan_runtime
+    app.dependency_overrides[get_scan_runtime] = lambda: None
+    client = TestClient(app)
+    status = client.get("/api/auth/status").json()
+    assert not status["setup_required"]
+    assert status["identity"]["owner"] is True
+    assert client.get("/api/libraries").status_code == 200
+    assert client.get("/api/users").status_code == 404
+    assert client.post("/api/libraries", json={}).status_code == 403
+    assert client.post("/api/libraries", json={}, headers={"Origin": "http://testserver", "X-CSRF-Token": status["csrf"]}).status_code == 422
+    with factory() as db:
+        assert db.get(AccessState, 1) is None
+    normal = create_app(settings.model_copy(update={"no_users": False}))
+    normal.state.auth_session_factory = factory
+    assert TestClient(normal).get("/api/auth/status").json()["setup_required"] is True
+
+
+def test_guest_environment_applies_during_interactive_setup(env):
+    app, factory, settings = env
+    app.state.access_settings = settings.model_copy(update={"guest_enabled": True})
+    owner = setup(app)
+    assert owner.get("/api/access/guest").json()["enabled"] is True
+    assert post(TestClient(app), "/api/auth/guest").status_code == 200
 
 
 @pytest.mark.parametrize("origin", ["guest", "account", "system", "legacy"])
@@ -1169,7 +1242,7 @@ def test_guest_transcode_visibility_requires_explicit_per_library_grant(env):
     initial = owner.get("/api/access/guest").json()["policy"]
     assert not any(right.startswith("transcode.") for right in initial.get("shared", []))
     assert initial.get("libraries", {}) == {}
-    policy = {**initial, "libraries": {str(allowed): ["library.read"], str(hidden): ["library.read"]}}
+    policy = {**initial, "mode": "per_library", "shared": [], "libraries": {str(allowed): ["library.read"], str(hidden): ["library.read"]}}
     assert post(owner, "/api/access/guest", {"enabled": True, "policy": policy}, "put").status_code == 200
     guest = TestClient(app)
     assert post(guest, "/api/auth/guest").status_code == 200

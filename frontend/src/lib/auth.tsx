@@ -1,3 +1,7 @@
+import { authenticatePasskey, passkeyCanceled, supportsPasskeys } from "./passkeys";
+import { Navigate, useLocation, useNavigate } from "react-router";
+import { AccessScreen } from "../components/AccessScreen";
+import { PasswordField } from "../components/PasswordField";
 import { validNewPassword } from "./password-policy";
 import { ThemeProvider } from "./theme";
 import {
@@ -49,6 +53,7 @@ export type Identity = {
   all_scope_available?: boolean;
 };
 type AuthStatus = {
+  passkeys?: { enabled: boolean; reason: string };
   setup_required: boolean;
   guest_enabled: boolean;
   csrf: string;
@@ -74,10 +79,25 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLoginPage = location.pathname === "/login";
+  const loginPageRef = useRef(isLoginPage);
+  loginPageRef.current = isLoginPage;
+  const requestedReturn = (location.state as { from?: unknown } | null)?.from;
+  const returnTo =
+    typeof requestedReturn === "string" &&
+    requestedReturn.startsWith("/") &&
+    !requestedReturn.startsWith("//") &&
+    requestedReturn.split(/[?#]/)[0] !== "/login"
+      ? requestedReturn
+      : "/";
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   const identityRef = useRef<Identity | null>(null);
   const epoch = useRef(0);
   const prefsRef = useRef<Record<string, unknown>>({});
@@ -93,63 +113,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await work;
     } finally {
-      refreshing.current = null;
+      if (refreshing.current === work) refreshing.current = null;
     }
   }
+  async function refreshSession() {
+    // A login/logout must never reuse a poll started with the previous session.
+    epoch.current += 1;
+    clearIdentityRequests();
+    refreshing.current = null;
+    await refresh();
+  }
   async function loadStatus() {
-    const result = await accessRequest<AuthStatus>("/auth/status");
-    setCsrf(result.csrf);
-    const previous = identityRef.current;
-    const next = result.identity;
-    setExpectedIdentity(next ? `${next.kind}:${next.id}:${next.revision}` : "");
     let ticket = epoch.current;
-    if (
-      previous?.id !== next?.id ||
-      previous?.kind !== next?.kind ||
-      previous?.revision !== next?.revision
-    ) {
-      clearIdentityRequests();
-      setReady(false);
-      ticket = ++epoch.current;
-      if (next?.kind === "account" && !next.must_change_password) {
-        const prefs =
-          await accessRequest<Record<string, unknown>>("/me/preferences");
+    try {
+      let result = await accessRequest<AuthStatus>("/auth/status");
+      if (ticket !== epoch.current || !mounted.current) return;
+      setCsrf(result.csrf);
+      // Explicit sign-in stays open; ordinary visits enter only the server-enabled Guest profile.
+      if (
+        !result.identity &&
+        result.guest_enabled &&
+        !result.setup_required &&
+        !loginPageRef.current
+      ) {
+        await accessRequest("/auth/guest", { method: "POST" });
         if (ticket !== epoch.current || !mounted.current) return;
-        prefsRef.current = prefs;
-        const ui = prefs.ui_preferences as
-          { interface_language?: string; color_theme?: string } | undefined;
-        selectPreferenceIdentity(`account:${next.id}`, {
-          ...((prefs.storage ?? {}) as Record<string, string>),
-          ...(ui?.color_theme ? { "medialyze-theme": ui.color_theme } : {}),
-        });
-        await i18n.changeLanguage(
-          ui?.interface_language ??
-            (prefs.storage as Record<string, string> | undefined)?.[
-              "medialyze-language"
-            ] ??
-            "en",
-        );
-      } else {
-        selectPreferenceIdentity(next?.kind === "guest" ? "guest" : null);
-        if (next?.kind === "guest") {
+        result = await accessRequest<AuthStatus>("/auth/status");
+        if (ticket !== epoch.current || !mounted.current) return;
+        setCsrf(result.csrf);
+      }
+      const previous = identityRef.current;
+      const next = result.identity;
+      setExpectedIdentity(next ? `${next.kind}:${next.id}:${next.revision}` : "");
+      if (
+        previous?.id !== next?.id ||
+        previous?.kind !== next?.kind ||
+        previous?.revision !== next?.revision
+      ) {
+        clearIdentityRequests();
+        setReady(false);
+        ticket = ++epoch.current;
+        if (next?.kind === "account" && !next.must_change_password) {
+          const prefs =
+            await accessRequest<Record<string, unknown>>("/me/preferences");
+          if (ticket !== epoch.current || !mounted.current) return;
+          prefsRef.current = prefs;
+          const ui = prefs.ui_preferences as
+            { interface_language?: string; color_theme?: string } | undefined;
+          selectPreferenceIdentity(`account:${next.id}`, {
+            ...((prefs.storage ?? {}) as Record<string, string>),
+            ...(ui?.color_theme ? { "medialyze-theme": ui.color_theme } : {}),
+          });
           await i18n.changeLanguage(
-            preferenceStorage.getItem(LANGUAGE_STORAGE_KEY) ?? "en",
+            ui?.interface_language ??
+              (prefs.storage as Record<string, string> | undefined)?.[
+                "medialyze-language"
+              ] ??
+              "en",
           );
+        } else {
+          selectPreferenceIdentity(next?.kind === "guest" ? "guest" : null);
+          if (next?.kind === "guest") {
+            await i18n.changeLanguage(
+              preferenceStorage.getItem(LANGUAGE_STORAGE_KEY) ?? "en",
+            );
+          }
         }
       }
-    }
-    if (ticket !== epoch.current) return;
-    if (mounted.current) {
-      identityRef.current = next;
-      setStatus(result);
-      setReady(true);
+      if (ticket !== epoch.current) return;
+      if (mounted.current) {
+        identityRef.current = next;
+        setStatus(result);
+        setReady(true);
+      }
+    } catch (reason) {
+      // Aborted requests from a superseded session are expected, not login errors.
+      if (ticket !== epoch.current || !mounted.current) return;
+      throw reason;
     }
   }
   async function logout() {
     await accessRequest("/auth/logout", { method: "POST" });
-    clearIdentityRequests();
-    await refreshing.current?.catch(() => {});
-    await refresh();
+    await refreshSession();
   }
   useEffect(() => {
     mounted.current = true;
@@ -157,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const expired = () => {
       epoch.current += 1;
       clearIdentityRequests();
+      refreshing.current = null;
       identityRef.current = null;
       setExpectedIdentity("");
       selectPreferenceIdentity(null);
@@ -166,9 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("medialyze-session-expired", expired);
     const timer = window.setInterval(() => {
-      if (!document.hidden) void refresh().catch(() => {});
+      if (!document.hidden && !pendingRef.current) void refresh().catch(() => {});
     }, 15000);
     const focus = () => {
+      if (pendingRef.current) return;
       void refresh().catch(() => {});
     };
     window.addEventListener("focus", focus);
@@ -211,6 +258,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("medialyze-preferences-changed", save);
     };
   }, []);
+  useEffect(() => {
+    if (!isLoginPage && ready && !identityRef.current && status?.guest_enabled) {
+      void refresh().catch(() => setError(t("access.connectionError")));
+    }
+  }, [isLoginPage]);
   const identity = status?.identity ?? null;
   const has = (right: string, libraryId?: number) =>
     Boolean(
@@ -241,31 +293,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )}
       </div>
     );
-  if (!identity || identity.must_change_password) {
+  if (!identity || identity.must_change_password || (identity.kind === "guest" && isLoginPage)) {
     const change = Boolean(identity?.must_change_password);
     const setup = status?.setup_required;
     return (
       <AuthContext.Provider value={value}>
         <ThemeProvider>
-          <main className="access-login panel">
-            <h1>
-              {t(
-                change
-                  ? "access.changePassword"
-                  : setup
-                    ? "access.setup"
-                    : "access.login",
-              )}
-            </h1>
-            <p className="muted">
-              {t(
-                change
-                  ? "access.changeRequired"
-                  : setup
-                    ? "access.setupHint"
-                    : "access.loginHint",
-              )}
-            </p>
+          <AccessScreen mode={change ? "password" : setup ? "setup" : "login"}>
             <form
               className="form-grid"
               onSubmit={(event) => {
@@ -284,14 +318,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const payload = change
                   ? { current_password: currentPassword, password }
                   : { username, password };
-                void accessRequest(path, {
-                  method: "POST",
-                  body: JSON.stringify(payload),
-                })
+                // Refresh pre-auth CSRF too: a concurrent status poll may have
+                // replaced its cookie before this form was submitted.
+                void refreshSession()
+                  .then(() => accessRequest(path, {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                  }))
                   .then(async () => {
                     setPassword("");
                     setCurrentPassword("");
-                    await refresh();
+                    await refreshSession();
+                    if (isLoginPage) navigate(returnTo, { replace: true });
                   })
                   .catch(() => setError(t("access.loginError")))
                   .finally(() => setPending(false));
@@ -312,8 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               {change && (
                 <label>
                   {t("access.currentPassword")}
-                  <input
-                    type="password"
+                  <PasswordField
                     autoComplete="current-password"
                     required
                     value={currentPassword}
@@ -323,8 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               )}
               <label>
                 {t(change ? "access.newPassword" : "access.password")}
-                <input
-                  type="password"
+                <PasswordField
                   autoComplete={
                     change || setup ? "new-password" : "current-password"
                   }
@@ -350,15 +386,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         : "access.login",
                   )}
                 </button>
+                {!change && !setup && status?.passkeys?.enabled && (
+                  <button type="button" className="secondary" disabled={pending || !supportsPasskeys()}
+                    onClick={() => {
+                      setPending(true); setError("");
+                      void refreshSession()
+                        .then(authenticatePasskey)
+                        .then(async () => { await refreshSession(); if (isLoginPage) navigate(returnTo, { replace: true }); })
+                        .catch((reason) => { if (!passkeyCanceled(reason)) setError(t("passkeys.loginError")); })
+                        .finally(() => setPending(false));
+                    }}>
+                    {t("passkeys.login")}
+                  </button>
+                )}
                 {!change && !setup && status?.guest_enabled && (
                   <button
                     type="button"
                     className="secondary"
                     disabled={pending}
                     onClick={() => {
-                      void accessRequest("/auth/guest", { method: "POST" })
-                        .then(refresh)
-                        .catch(() => setError(t("access.loginError")));
+                      setPending(true);
+                      setError("");
+                      const enter = identity?.kind === "guest"
+                        ? Promise.resolve()
+                        : refreshSession()
+                          .then(() => accessRequest("/auth/guest", { method: "POST" }))
+                          .then(refreshSession);
+                      void enter
+                        .then(() => navigate(returnTo, { replace: true }))
+                        .catch(() => setError(t("access.loginError")))
+                        .finally(() => setPending(false));
                     }}
                   >
                     {t("access.continueGuest")}
@@ -375,11 +432,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 )}
               </div>
             </form>
-          </main>
+          </AccessScreen>
         </ThemeProvider>
       </AuthContext.Provider>
     );
   }
+  if (isLoginPage) return <Navigate to={returnTo} replace />;
   return (
     <AuthContext.Provider value={value}>
       <div key={`${identity.kind}:${identity.id}:${identity.revision}`}>

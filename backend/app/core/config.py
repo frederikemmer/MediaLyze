@@ -4,9 +4,11 @@ import os
 from pathlib import Path
 import re
 import tomllib
+import ipaddress
+from urllib.parse import urlsplit
 from enum import Enum
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Media extension groups by type
@@ -135,8 +137,11 @@ class Settings(BaseSettings):
     app_host: str | None = None
     app_port: int = 8080
     performance_metrics: bool = Field(default=False, validation_alias="MEDIALYZE_PERFORMANCE_METRICS")
-    owner_username: str | None = Field(default=None, validation_alias="MEDIALYZE_OWNER_USERNAME")
-    owner_password: SecretStr | None = Field(default=None, validation_alias="MEDIALYZE_OWNER_PASSWORD")
+    owner_username: str | None = Field(default=None, validation_alias="OWNER_USERNAME")
+    owner_password: SecretStr | None = Field(default=None, validation_alias="OWNER_PASSWORD")
+    guest_enabled: bool | None = Field(default=None, validation_alias="GUEST_ENABLED")
+    no_users: bool = Field(default=False, validation_alias="NO_USERS")
+    public_url: str | None = Field(default=None, validation_alias="PUBLIC_URL")
     desktop_token: SecretStr | None = Field(default=None, validation_alias="MEDIALYZE_DESKTOP_TOKEN")
     trusted_proxy_ips: str = Field(default="", validation_alias="MEDIALYZE_TRUSTED_PROXY_IPS")
     api_prefix: str = "/api"
@@ -224,6 +229,29 @@ class Settings(BaseSettings):
     )
     allowed_media_extensions: tuple[str, ...] = VIDEO_EXTENSIONS
     subtitle_extensions: tuple[str, ...] = (".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt")
+
+    @field_validator("public_url", mode="before")
+    @classmethod
+    def validate_public_url(cls, value):
+        if value is None or not str(value).strip():
+            return None
+        parsed = urlsplit(str(value).strip())
+        host = (parsed.hostname or "").encode("idna").decode("ascii").lower()
+        if not host or parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            raise ValueError("PUBLIC_URL must be an HTTPS origin without a path, credentials, query or fragment")
+        if parsed.scheme != "https" and not (parsed.scheme == "http" and host == "localhost"):
+            raise ValueError("PUBLIC_URL requires HTTPS (HTTP localhost is allowed for local development)")
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("PUBLIC_URL requires a hostname, not an IP address")
+        if not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in host.split(".")):
+            raise ValueError("PUBLIC_URL requires a valid hostname")
+        port = parsed.port
+        suffix = f":{port}" if port and port != (443 if parsed.scheme == "https" else 80) else ""
+        return f"{parsed.scheme}://{host}{suffix}"
 
     @model_validator(mode="after")
     def apply_runtime_defaults(self) -> "Settings":

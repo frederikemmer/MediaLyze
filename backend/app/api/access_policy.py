@@ -13,6 +13,14 @@ from pydantic import TypeAdapter
 
 INVENTORY = json.loads(Path(__file__).with_name("access_inventory.json").read_text())
 AUTH_PATHS = {
+    ("GET", "/me/passkeys"),
+    ("POST", "/me/passkeys/options"),
+    ("POST", "/me/passkeys/verify"),
+    ("PATCH", "/me/passkeys/{passkey_id}"),
+    ("DELETE", "/me/passkeys/{passkey_id}"),
+    ("POST", "/auth/passkeys/options"),
+    ("POST", "/auth/passkeys/verify"),
+
     ("GET", "/auth/status"),
     ("POST", "/auth/setup"),
     ("POST", "/auth/login"),
@@ -30,7 +38,7 @@ AUTH_PATHS = {
     ("PUT", "/me/preferences"),
     ("PATCH", "/me/account"),
 }
-PUBLIC_AUTH = {"/auth/status", "/auth/setup", "/auth/login", "/auth/guest", "/auth/logout"}
+PUBLIC_AUTH = {"/auth/passkeys/options", "/auth/passkeys/verify", "/auth/status", "/auth/setup", "/auth/login", "/auth/guest", "/auth/logout"}
 TECHNICAL_LIBRARY_READ = {
     "library_summary",
     "library_statistics",

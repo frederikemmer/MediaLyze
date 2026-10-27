@@ -1,8 +1,8 @@
 import { validNewPassword } from "../lib/password-policy";
 import { useTheme, type ThemePreference } from "../lib/theme";
 import i18n, { SUPPORTED_INTERFACE_LANGUAGES } from "../i18n";
-import { Fragment, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Search, X } from "lucide-react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { accessRequest } from "../lib/access-session";
 import {
@@ -11,9 +11,12 @@ import {
   type AccessPolicy,
   type Identity,
 } from "../lib/auth";
+import { PasskeysPanel } from "./PasskeysPanel";
 import { AsyncPanel } from "./AsyncPanel";
 import { SlidingTogglePill } from "./SlidingTogglePill";
 import { TooltipTrigger } from "./TooltipTrigger";
+import { PasswordField } from "./PasswordField";
+import { PasswordRequirements } from "./PasswordRequirements";
 
 export type ManagedAccount = {
   id: string;
@@ -25,6 +28,11 @@ export type ManagedAccount = {
   must_change_password: boolean;
 };
 export type AccessLibrary = { id: number; name: string; actions: string[] };
+type GuestAccessProfile = {
+  enabled: boolean;
+  policy: AccessPolicy;
+  editable: boolean;
+};
 export const globalPermissions = [
   "overview.dashboard",
   "overview.compare",
@@ -362,6 +370,41 @@ export function RightsTree({
       </section>
     );
   }
+  const libraryBulkTargets = (value.mode === "per_library"
+    ? libraries.map((library) => ({ id: library.id, selected: value.libraries[String(library.id)] ?? [] }))
+    : [{ id: -1, selected: value.shared }]
+  ).map((target) => ({
+    ...target,
+    rights: libraryPermissions.filter((right) => locked || allowed(right, target.id)),
+  }));
+  const canBulkCreate = !locked && value.mode === "future" &&
+    (actor.owner || actor.policy.create) &&
+    ["library.read", "library.edit", "library.paths"].every((right) => allowed(right, -1));
+  const libraryBulkStates = libraryBulkTargets.flatMap((target) =>
+    target.rights.map((right) => target.selected.includes(right)),
+  );
+  if (canBulkCreate || (locked && value.mode === "future")) libraryBulkStates.push(value.create);
+  const allLibraryRightsSelected = libraryBulkStates.length > 0 && libraryBulkStates.every(Boolean);
+  function updateLibraryGroup(enabled: boolean) {
+    const next = structuredClone(value);
+    const updateRights = (selected: string[], rights: string[]) => enabled
+      ? [...new Set([...selected, ...rights])]
+      : selected.filter((right) => !rights.includes(right));
+    for (const target of libraryBulkTargets) {
+      if (next.mode === "per_library") {
+        if (target.rights.length) next.libraries[String(target.id)] = updateRights(target.selected, target.rights);
+      } else {
+        next.shared = updateRights(target.selected, target.rights);
+        if (next.mode === "all") next.libraries = Object.fromEntries(
+          libraries.map((library) => [String(library.id), [...next.shared]]),
+        );
+      }
+    }
+    const creationRequirementsMet = ["library.read", "library.edit", "library.paths"].every((right) => next.shared.includes(right));
+    if (canBulkCreate) next.create = enabled && creationRequirementsMet;
+    if (!creationRequirementsMet) next.create = false;
+    onChange(next);
+  }
   const libMatch = matches(t("access.groups.libraries"));
   const libraryHits =
     !query ||
@@ -454,6 +497,13 @@ export function RightsTree({
                 {t("access.futureLibraries")}
               </option>
             </select>
+            <AccessSwitch
+              checked={allLibraryRightsSelected}
+              mixed={!allLibraryRightsSelected && libraryBulkStates.some(Boolean)}
+              disabled={locked || Boolean(query) || !libraryBulkStates.length}
+              label={t("access.selectGroup", { group: t("access.groups.libraries") })}
+              onChange={updateLibraryGroup}
+            />
           </div>
           {(query || opened.libraries) && (
             <div className="access-tree-body" id="access-library-tree">
@@ -548,7 +598,6 @@ export function PersonalAccountPanel() {
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
   const [current, setCurrent] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [next, setNext] = useState("");
   const [username, setUsername] = useState(identity?.username ?? "");
   const [message, setMessage] = useState("");
@@ -615,32 +664,12 @@ export function PersonalAccountPanel() {
             </label>
             <label>
               {t("access.currentPassword")}
-              <span className="personal-account-password-control">
-                <input
-                  value={current}
-                  type={showCurrentPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  onChange={(e) => setCurrent(e.target.value)}
-                  required
-                />
-                <button
-                  type="button"
-                  className="icon-button icon-button-bordered personal-account-password-toggle"
-                  aria-label={t(
-                    showCurrentPassword
-                      ? "access.hidePassword"
-                      : "access.showPassword",
-                  )}
-                  aria-pressed={showCurrentPassword}
-                  onClick={() => setShowCurrentPassword((visible) => !visible)}
-                >
-                  {showCurrentPassword ? (
-                    <EyeOff aria-hidden="true" className="nav-icon" />
-                  ) : (
-                    <Eye aria-hidden="true" className="nav-icon" />
-                  )}
-                </button>
-              </span>
+              <PasswordField
+                value={current}
+                autoComplete="current-password"
+                onChange={(e) => setCurrent(e.target.value)}
+                required
+              />
             </label>
           </div>
           <div className="button-row personal-account-actions">
@@ -726,8 +755,21 @@ export function PersonalAccountPanel() {
           {message && <p role="alert">{message}</p>}
         </form>
       )}
+      {identity.kind === "account" && <PasskeysPanel />}
     </div>
   );
+}
+
+function policyFingerprint(policy: AccessPolicy) {
+  return JSON.stringify({
+    ...policy,
+    global: [...policy.global].sort(),
+    shared: [...policy.shared].sort(),
+    libraries: Object.fromEntries(Object.entries(policy.libraries)
+      .filter(([, rights]) => policy.mode !== "per_library" || rights.length > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([id, rights]) => [id, [...rights].sort()])),
+  });
 }
 
 export function AccountsPanel({
@@ -743,6 +785,7 @@ export function AccountsPanel({
     accounts: ManagedAccount[];
     libraries: AccessLibrary[];
     actor: Identity;
+    guest?: GuestAccessProfile;
   };
 }) {
   const auth = useAuth();
@@ -754,11 +797,12 @@ export function AccountsPanel({
   const [libraries, setLibraries] = useState<AccessLibrary[]>(
     fixture?.libraries ?? [],
   );
-  const [guest, setGuest] = useState({
+  const [guest, setGuest] = useState<GuestAccessProfile>(fixture?.guest ?? {
     enabled: false,
     policy: emptyPolicy(),
     editable: true,
   });
+  const [accessLoaded, setAccessLoaded] = useState(Boolean(fixture));
   const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState("rights");
   const [query, setQuery] = useState("");
@@ -768,11 +812,22 @@ export function AccountsPanel({
   const [active, setActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const editorFormId = useId();
+  const passwordRequirementsId = useId();
+  const passwordInput = useRef<HTMLInputElement | null>(null);
+  const [passwordValidationAttempt, setPasswordValidationAttempt] = useState(0);
+  useEffect(() => {
+    if (passwordValidationAttempt > 0) passwordInput.current?.reportValidity();
+  }, [passwordValidationAttempt]);
+  const [savedDraft, setSavedDraft] = useState({ name: "", active: true, policy: emptyPolicy() });
   const previousOverviewResetKey = useRef(overviewResetKey);
   const canUsers = Boolean(fixture || (actor?.kind !== "desktop" && auth.has("access.users")));
   const canGuest = Boolean(fixture || (actor?.kind !== "desktop" && auth.has("access.guest")));
   async function load() {
-    if (fixture || actor?.kind === "desktop") return;
+    if (fixture || actor?.kind === "desktop") {
+      setAccessLoaded(true);
+      return;
+    }
     try {
       const [items, libs, guestProfile] = await Promise.all([
         canUsers ? accessRequest<ManagedAccount[]>("/users") : [],
@@ -788,6 +843,7 @@ export function AccountsPanel({
       );
       setLibraries(libs);
       setGuest(guestProfile);
+      setAccessLoaded(true);
     } catch {
       setError(t("access.loadError"));
     }
@@ -830,15 +886,23 @@ export function AccountsPanel({
   }
   function open(id: string) {
     const account = accounts.find((a) => a.id === id);
-    setSelected(id);
-    setName(account?.username ?? "");
-    setSecret("");
-    setActive(id === "guest" ? guest.enabled : (account?.active ?? true));
-    setDraft(
-      structuredClone(
-        id === "guest" ? guest.policy : (account?.policy ?? emptyPolicy()),
+    const initial = {
+      name: account?.username ?? "",
+      active: id === "guest" ? guest.enabled : (account?.active ?? true),
+      policy: structuredClone(
+        id === "guest"
+          ? guest.policy
+          : id === "new" && canGuest
+            ? guest.policy
+            : account?.policy ?? emptyPolicy(),
       ),
-    );
+    };
+    setSelected(id);
+    setName(initial.name);
+    setSecret("");
+    setActive(initial.active);
+    setDraft(initial.policy);
+    setSavedDraft(initial);
     setTab(id === "new" ? "account" : "rights");
     setError(null);
   }
@@ -849,6 +913,17 @@ export function AccountsPanel({
     (target && !target.editable) ||
     (selected === "guest" && !guest.editable),
   );
+  const dirty = Boolean(selected && !locked && (
+    name !== savedDraft.name || active !== savedDraft.active || secret ||
+    policyFingerprint(draft) !== policyFingerprint(savedDraft.policy)
+  ));
+  function closeEditor() {
+    if (pending || (dirty && !window.confirm(t("access.confirmDiscard")))) return;
+    setSecret("");
+    setSelected(null);
+    setError(null);
+    onCloseAccount?.();
+  }
   const shownPolicy = target?.owner
     ? {
         ...emptyPolicy(),
@@ -859,44 +934,61 @@ export function AccountsPanel({
       }
     : draft;
   async function save() {
-    if (target?.owner) return;
-    if (
-      selected !== "guest" &&
-      (selected === "new" || secret) &&
-      !validNewPassword(secret)
-    ) {
-      setError(t("access.passwordRequirements"));
+    if (locked || pending || !selected || !dirty) return;
+    if (selected !== "guest" && (selected === "new" || secret) && !validNewPassword(secret)) {
+      setError(null);
+      setTab("account");
+      setPasswordValidationAttempt((attempt) => attempt + 1);
       return;
     }
     setPending(true);
     setError(null);
     try {
-      if (!fixture) {
-        if (selected === "guest")
-          await accessRequest("/access/guest", {
-            method: "PUT",
-            body: JSON.stringify({ enabled: active, policy: draft }),
+      if (selected === "guest") {
+        const saved = fixture
+          ? { ...guest, enabled: active, policy: structuredClone(draft) }
+          : await accessRequest<typeof guest>("/access/guest", {
+            method: "PUT", body: JSON.stringify({ enabled: active, policy: draft }),
           });
-        else
-          await accessRequest(
-            selected === "new" ? "/users" : `/users/${selected}`,
-            {
-              method: selected === "new" ? "POST" : "PATCH",
-              body: JSON.stringify(
-                selected === "new"
-                  ? { username: name, password: secret, policy: draft }
-                  : {
-                      username: name,
-                      active,
-                      policy: draft,
-                      ...(secret ? { password: secret } : {}),
-                    },
-              ),
-            },
-          );
-        await load();
+        setGuest(saved);
+        setActive(saved.enabled);
+        setDraft(structuredClone(saved.policy));
+        setSavedDraft({ name, active: saved.enabled, policy: structuredClone(saved.policy) });
+      } else {
+        const saved = fixture
+          ? { ...target, id: selected === "new" ? crypto.randomUUID() : selected,
+            username: name, active, policy: structuredClone(draft), owner: false,
+            editable: true, must_change_password: Boolean(secret) || Boolean(target?.must_change_password) }
+          : await accessRequest<ManagedAccount>(selected === "new" ? "/users" : `/users/${selected}`, {
+            method: selected === "new" ? "POST" : "PATCH",
+            body: JSON.stringify(selected === "new"
+              ? { username: name, password: secret, policy: draft }
+              : { username: name, active, policy: draft, ...(secret ? { password: secret } : {}) }),
+          });
+        setAccounts((current) => current.some((account) => account.id === saved.id)
+          ? current.map((account) => account.id === saved.id ? saved : account)
+          : [...current, saved]);
+        setName(saved.username);
+        setActive(saved.active);
+        setDraft(structuredClone(saved.policy));
+        setSavedDraft({ name: saved.username, active: saved.active, policy: structuredClone(saved.policy) });
+        setSelected(saved.id);
       }
       setSecret("");
+    } catch {
+      setError(t("access.saveError"));
+    } finally {
+      setPending(false);
+    }
+  }
+  async function removeAccount() {
+    if (!target || target.owner || locked || pending) return;
+    if (!fixture && !window.confirm(t("access.confirmDelete", { name }))) return;
+    setPending(true);
+    setError(null);
+    try {
+      if (!fixture) await accessRequest(`/users/${target.id}`, { method: "DELETE" });
+      setAccounts((current) => current.filter((account) => account.id !== target.id));
       setSelected(null);
     } catch {
       setError(t("access.saveError"));
@@ -948,7 +1040,7 @@ export function AccountsPanel({
             {!isSelf && !target?.owner ? (
               <AccessSwitch
                 checked={active}
-                disabled={locked || selected === "new"}
+                disabled={locked || pending || selected === "new"}
                 label={t("access.activeAccount", {
                   name:
                     selected === "guest"
@@ -961,27 +1053,39 @@ export function AccountsPanel({
           </>
         ) : undefined
       }
-      error={error}
+      error={selected ? undefined : error}
       className="access-accounts-panel"
       collapseActions={
         selected ? (
-          <button
-            type="button"
-            className="icon-button icon-button-borderless icon-button-static"
-            aria-label={t("access.close")}
-            onClick={() => {
-              setSecret("");
-              setSelected(null);
-              onCloseAccount?.();
-            }}
-          >
-            <X className="nav-icon" />
-          </button>
+          <>
+            {target && !target.owner && !(isSelf && tab === "account") && (
+              <button type="button" className="icon-button icon-button-borderless icon-button-static"
+                aria-label={t("access.delete")} data-tooltip={t("access.delete")}
+                disabled={locked || pending} onClick={() => void removeAccount()}>
+                <Trash2 className="nav-icon" aria-hidden="true" />
+              </button>
+            )}
+            {!target?.owner && !(isSelf && tab === "account") && (
+              <button type="submit" form={editorFormId}
+                className="icon-button icon-button-borderless icon-button-static"
+                aria-label={t("access.save")} data-tooltip={t("access.save")}
+                aria-busy={pending}
+                disabled={locked || pending || !dirty || (selected === "new" && !name.trim())}>
+                <Save className="nav-icon" aria-hidden="true" />
+              </button>
+            )}
+            <button type="button" className="icon-button icon-button-borderless icon-button-static"
+              aria-label={t("access.close")} data-tooltip={t("access.close")}
+              disabled={pending} onClick={closeEditor}>
+              <X className="nav-icon" aria-hidden="true" />
+            </button>
+          </>
         ) : canUsers ? (
           <button
             type="button"
             className="icon-button icon-button-borderless icon-button-static"
             aria-label={t("access.addAccount")}
+            disabled={!accessLoaded}
             onClick={() => open("new")}
           >
             <Plus className="nav-icon" />
@@ -1010,8 +1114,8 @@ export function AccountsPanel({
                   .includes(query.toLocaleLowerCase()),
               )
               .map((account) => (
-                <article className="access-account-row" key={account.id}>
-                  <div className="access-account-row-content">
+                <article className="media-card access-account-card" key={account.id}>
+                  <div className="access-account-card-content">
                     <button
                       type="button"
                       className="access-account-trigger"
@@ -1047,8 +1151,8 @@ export function AccountsPanel({
               t("access.guest")
                 .toLocaleLowerCase()
                 .includes(query.toLocaleLowerCase()) && (
-                <article className="access-account-row">
-                  <div className="access-account-row-content">
+                <article className="media-card access-account-card">
+                  <div className="access-account-card-content">
                     <button
                       type="button"
                       className="access-account-trigger"
@@ -1079,11 +1183,13 @@ export function AccountsPanel({
       ) : (
         <>
           <form
+            id={editorFormId}
             onSubmit={(e) => {
               e.preventDefault();
-              if (!target?.owner) void save();
+              if (!locked && !pending) void save();
             }}
           >
+            {error && <p role="alert" className="alert">{error}</p>}
             {target?.owner && !isSelf ? (
               <p className="muted access-owner-hint">{t("access.ownerHint")}</p>
             ) : null}
@@ -1097,7 +1203,7 @@ export function AccountsPanel({
                   onChange={setDraft}
                   libraries={libraries}
                   actor={actor}
-                  locked={locked}
+                  locked={locked || pending}
                   guest={selected === "guest"}
                 />
               </>
@@ -1110,76 +1216,48 @@ export function AccountsPanel({
                       required
                       maxLength={64}
                       value={name}
-                      disabled={locked}
+                      disabled={locked || pending}
                       autoComplete="off"
                       onChange={(e) => setName(e.target.value)}
                     />
                   </label>
                 )}
                 {selected !== "guest" && !target?.owner && (
-                  <label>
-                    {t(
-                      selected === "new"
-                        ? "access.temporaryPassword"
-                        : "access.resetPassword",
-                    )}
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      required={selected === "new"}
-                      minLength={5}
-                      disabled={locked}
-                      value={secret}
-                      onChange={(e) => setSecret(e.target.value)}
-                    />
-                  </label>
+                  <div className="password-requirements-field">
+                    <label>
+                      {t(
+                        selected === "new"
+                          ? "access.temporaryPassword"
+                          : "access.resetPassword",
+                      )}
+                      <input
+                        ref={(input) => {
+                          passwordInput.current = input;
+                          input?.setCustomValidity(secret && !validNewPassword(secret)
+                            ? t("access.passwordRequirements") : "");
+                        }}
+                        type="password"
+                        autoComplete="new-password"
+                        required={selected === "new"}
+                        minLength={5}
+                        disabled={locked || pending}
+                        value={secret}
+                        aria-describedby={passwordRequirementsId}
+                        onChange={(e) => {
+                          const value = e.currentTarget.value;
+                          e.currentTarget.setCustomValidity(value && !validNewPassword(value)
+                            ? t("access.passwordRequirements") : "");
+                          setSecret(value);
+                        }}
+                      />
+                    </label>
+                    <PasswordRequirements id={passwordRequirementsId} value={secret} />
+                  </div>
                 )}
-                <p className="muted">
-                  {t(
-                    target?.owner ? "access.ownerHint" : "access.temporaryHint",
-                  )}
-                </p>
-              </div>
-            )}
-            {!target?.owner && !(isSelf && tab === "account") && (
-              <div className="access-editor-footer button-row">
-                <button
-                  type="submit"
-                  disabled={locked || pending || (selected === "new" && !name)}
-                >
-                  {t("access.save")}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setSelected(null)}
-                >
-                  {t("access.cancel")}
-                </button>
-                {target && !target.owner && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={locked || pending}
-                    onClick={() => {
-                      if (fixture) {
-                        setAccounts(accounts.filter((a) => a.id !== target.id));
-                        setSelected(null);
-                        return;
-                      }
-                      if (window.confirm(t("access.confirmDelete", { name })))
-                        void accessRequest(`/users/${target.id}`, {
-                          method: "DELETE",
-                        })
-                          .then(async () => {
-                            await load();
-                            setSelected(null);
-                          })
-                          .catch(() => setError(t("access.saveError")));
-                    }}
-                  >
-                    {t("access.delete")}
-                  </button>
+                {selected === "guest" ? null : (
+                  <p className="muted">
+                    {t(target?.owner ? "access.ownerHint" : "access.temporaryHint")}
+                  </p>
                 )}
               </div>
             )}

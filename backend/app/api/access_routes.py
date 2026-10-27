@@ -136,7 +136,9 @@ def auth_status(request: Request, response: Response, db=Depends(db_session)):
     state = db.get(AccessState, 1)
     raw = request.cookies.get(COOKIE)
     csrf = csrf_token(raw) if principal and raw else secrets.token_urlsafe(32)
-    if not principal:
+    if settings.no_users and not settings.is_desktop and not raw:
+        csrf = request.cookies.get(CSRF_COOKIE) or csrf
+    if not principal or (settings.no_users and not settings.is_desktop):
         response.set_cookie(
             CSRF_COOKIE,
             csrf,
@@ -145,9 +147,11 @@ def auth_status(request: Request, response: Response, db=Depends(db_session)):
             samesite="strict",
             path="/",
         )
+    from backend.app.services.passkeys import availability
     result = {
-        "setup_required": state is None and not settings.is_desktop,
-        "guest_enabled": False if settings.is_desktop else bool(state and state.guest_enabled),
+        "passkeys": availability(settings, request),
+        "setup_required": state is None and not settings.is_desktop and not settings.no_users,
+        "guest_enabled": False if settings.is_desktop or settings.no_users else bool(state and state.guest_enabled),
         "csrf": csrf,
         "identity": None,
         # The desktop bridge is not a local account or rights-bearing identity.
@@ -182,7 +186,7 @@ def setup(payload: Credentials, request: Request, response: Response, db=Depends
         or settings.owner_password is not None
     ):
         fail(403)
-    account = create_owner(db, payload.username, payload.password.get_secret_value())
+    account = create_owner(db, payload.username, payload.password.get_secret_value(), guest_enabled=settings.guest_enabled or False)
     token = new_session(db, account)
     db.commit()
     cookie(response, request, token)

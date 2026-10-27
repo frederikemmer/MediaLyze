@@ -8,7 +8,10 @@ import { DEFAULT_NOTIFICATION_SETTINGS } from "../lib/notification-settings";
 import type { NotificationEntry, NotificationType } from "../lib/notifications";
 import { HistoryReconstructionControl, emptyHistoryStatus } from "../components/HistoryReconstructionControl";
 import { ScanJobCard } from "../components/AppShell";
+import { AccessScreen } from "../components/AccessScreen";
 import { HeaderAccountMenu } from "../components/HeaderAccountMenu";
+import { PasskeysPanel } from "../components/PasskeysPanel";
+import { PasswordRequirements } from "../components/PasswordRequirements";
 import { AccountsPanel } from "../components/AccountsPanel";
 import { emptyPolicy } from "../lib/auth";
 import { TableQualityScore } from "../components/TableQualityScore";
@@ -138,6 +141,7 @@ import { StatisticPanelLayoutMigrationNotice } from "../components/StatisticPane
 import { StreamDetailsList } from "../components/StreamDetailsList";
 import { TableViewSettingsEditor } from "../components/TableViewSettingsEditor";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
+import { PasswordField } from "../components/PasswordField";
 import { TooltipTrigger } from "../components/TooltipTrigger";
 import { LanguageCodeFormatField } from "../components/LanguageCodeFormatField";
 import { VideoWipeCompare } from "../components/VideoWipeCompare";
@@ -1441,6 +1445,31 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
+              <VariantCard title="Guest account menu" source="components/HeaderAccountMenu.tsx" status="Guests keep their personal preferences and open the dedicated login page through Login. Release notes remain dismissible without a global telemetry choice." classes={["media-header-account-menu"]} wide>
+                <div style={{ minHeight: 160 }}>
+                  <div className="media-nav-panel" style={{ width: "max-content", maxWidth: "100%", margin: 0 }}>
+                    <div className="media-nav-icons"><HeaderAccountMenu username="" owner={false} kind="guest" onSignOut={() => undefined} onAccountClick={preventCatalogNavigation} initiallyOpen /></div>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Login" source="components/AccessScreen.tsx, lib/auth.tsx, PasswordField.tsx" status="After owner setup, Login starts directly with the form, without a visible heading or introductory copy. The password field has a borderless show/hide control; the Login and Continue as guest actions have an 8px gap." classes={["access-login", "form-grid", "button-row", "password-field-control", "password-visibility-toggle", "icon-button-borderless"]} wide>
+                <AccessScreen mode="login">
+                  <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+                    <label>{t("access.username")}<input autoComplete="off" readOnly value="" /></label>
+                    <label>{t("access.password")}<PasswordField autoComplete="off" readOnly value="" /></label>
+                    <div className="button-row"><button type="button">{t("access.login")}</button><button type="button" className="secondary">{t("access.continueGuest")}</button></div>
+                  </form>
+                </AccessScreen>
+              </VariantCard>
+              <VariantCard title="Owner setup" source="components/AccessScreen.tsx, components/HeaderBrand.tsx, lib/auth.tsx" status="The real access screen reuses the app header and compact form. Only owner setup explains accounts, optional Guest access and automatic installation carry-over before the fields." classes={["access-login", "hero-panel", "media-header"]} wide>
+                <AccessScreen mode="setup">
+                  <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+                    <label>{t("access.username")}<input autoComplete="off" /></label>
+                    <label>{t("access.password")}<PasswordField autoComplete="off" /></label>
+                    <div className="button-row"><button type="button">{t("access.setup")}</button></div>
+                  </form>
+                </AccessScreen>
+              </VariantCard>
               <VariantCard title="Brand, version, and update labels" source={header} classes={["app-title-link", "app-title-icon", "app-version", "app-version-update"]} status="On phones, the 42px logo uses balanced header spacing; the version pill stays compact on wider screens.">
                 <div className="app-title-block">
                   <a href="/" className="app-title-link" aria-label="Dashboard" onClick={preventCatalogNavigation}>
@@ -1460,7 +1489,7 @@ export function UiElementsPage() {
               </VariantCard>
             </VariantGroup>
             <VariantGroup title="Logs">
-              <VariantCard title="Unified Logs settings" source="LibrariesPage.tsx / LogsSection.tsx / NotificationHistoryPanel.tsx" status="Standard settings AsyncPanel frame and padding; each permitted history or retention section expands independently. Notification retention reuses the compact table row. Retention comes first and owns the settings reconstruction action; scan logs have no reconstruction button or accuracy tooltip. Reconstruction keeps live progress inline, while start failures and terminal outcomes use notifications. Retention-value save failures also use notifications. Scan/notification helper copy is omitted and both empty states use notice. Preview messages stay out of history. Notification history is personal, searched on the server and paginated; the examples below do not call APIs." classes={["settings-sidebar-stack", "transcode-federation-panel", "notification-history-toolbar", "file-history-entry", "notification-history-message"]} wide>
+              <VariantCard title="Unified Logs settings" source="LibrariesPage.tsx / LogsSection.tsx / NotificationHistoryPanel.tsx" status="Standard settings AsyncPanel frame and padding; each permitted history or retention section expands independently. Notification retention reuses the compact table row. Retention comes first and owns the settings reconstruction action; scan logs have no reconstruction button or accuracy tooltip. Reconstruction keeps live progress inline, while start failures and terminal outcomes use notifications. Retention-value save failures also use notifications. Scan/notification helper copy is omitted, and the global transcoding history helper is omitted; scan and notification empty states use notice. Preview messages stay out of history. Notification history is personal, searched on the server and paginated; the examples below do not call APIs." classes={["settings-sidebar-stack", "transcode-federation-panel", "notification-history-toolbar", "file-history-entry", "notification-history-message"]} wide>
                 <div className="settings-main-column">
                 <AsyncPanel title={t("logs.title")}>
                 <div className="settings-sidebar-stack">
@@ -1486,38 +1515,53 @@ export function UiElementsPage() {
               </VariantCard>
             </VariantGroup>
             <VariantGroup title="Notifications">
-              <VariantCard title="Notification settings and cards" source="NotificationSettingsPanel.tsx / NotificationHost.tsx / lib/notifications.tsx" status="Shared controls, one/ten random transient previews, clear-visible action, all four statuses and source icons, neutral reference pill, palette/style choices, read-only controls and an eight-card keyboard/hover scroll stack. Saving a duration change restarts timers for visible cards; ordinary pauses preserve the remaining time. Preview actions do not write history; catalog values are local and example cards have no expiry timers." classes={["notification-card", "notification-deck", "notification-reference", "notification-preview-controls"]} wide>
+              <VariantCard title="Notification settings and cards" source="NotificationSettingsPanel.tsx / NotificationHost.tsx / lib/notifications.tsx" status="Shared controls for one or ten test notifications plus clear, flask icons for both test actions and a trash icon for clear, all four statuses and source icons, neutral reference pill, palette/style choices, read-only controls and an eight-card keyboard/hover scroll stack. App preferences autosave after changes settle; a duration change restarts timers for visible cards. Preview actions do not write history; catalog values are local and example cards have no expiry timers." classes={["notification-card", "notification-deck", "notification-reference", "notification-preview-controls"]} wide>
                 <NotificationCatalogFixture />
               </VariantCard>
             </VariantGroup>
             <VariantGroup title="Local accounts and authentication">
-              <VariantCard title="Local accounts and rights A3.4" status="The overview uses compact prototype-style rows with initials and a final Guest row without a subtitle; account status is managed on the selected account page. Selecting the active Users & access navigation item returns from an account to the overview. Rights groups start collapsed and search opens matching groups. Account-list and rights-tree searches reuse the settings sidebar search style with its leading search icon. The selected username, Permissions/Account tabs, status control when editable, and Close action share the panel header. Open Owner for the read-only rights view without status editing or save actions. Personal settings live under the signed-in account’s Account tab, with no separate settings navigation item; Guest also has the language and theme controls there, saved in that browser’s local Guest namespace. Owner account settings pair the username with a masked current-password field and show only Save and Sign out actions. Owner group toggles stay checked and disabled. The global Presets & Profiles group sits between Connectors and Users & access and contains quality, compatibility and transcoding-preset permissions; its preset rights are labeled View/Edit Transcoding presets. Global app-settings permissions are in Settings. Per-library job rights remain in each library’s Transcoding subsection, whose tooltip points to Presets & Profiles. Library creation, global app settings, connector catalog scope and Library access guidance use compact tooltip markers beside their labels. Locked rows retain full width and keyboard/touch tooltips; Alex and Guest show editable rows. The Guest Library access tooltip explains shared job provenance and the required other/system-job cancellation permission. The account tab selector and list surface use the approved midpoint shadow." source="AccountsPanel.tsx · Settings > Users & access" classes={["access-accounts-panel", "access-account-row", "access-account-avatar", "access-owner-hint", "access-permission-label", "access-permission-section-heading", "access-permission-tooltip", "toggle-switch", "access-tree-header", "library-history-range-toggle", "settings-navigation-search", "access-search-field", "nav-icon"]} wide>
+              <VariantCard title="Local accounts and rights A3.4" status="The overview gives each user and the final Guest entry its own compact media-card panel, with initials and no Guest subtitle; account status is managed on the selected account page. Selecting the active Users & access navigation item returns from an account to the overview. Rights groups start collapsed and search opens matching groups. Libraries & files has a bulk toggle after its scope selector: it changes only delegable rights across the selected scope, including creation when allowed for future libraries, and is disabled during search or in read-only views. Account-list and rights-tree searches reuse the settings sidebar search style with its leading search icon. The selected username, Permissions/Account tabs, status control when editable, and Close action share the panel header. Open Owner for the read-only rights view without status editing or save actions. Personal settings live under the signed-in account’s Account tab, with no separate settings navigation item; Guest also has the language and theme controls there, saved in that browser’s local Guest namespace. Owner account settings pair the username with a masked current-password field and show only Save and Sign out actions. Owner group toggles stay checked and disabled. The global Presets & Profiles group sits between Connectors and Users & access and contains quality, compatibility and transcoding-preset permissions; its preset rights are labeled View/Edit Transcoding presets. Global app-settings permissions are in Settings. Per-library job rights remain in each library’s Transcoding subsection, whose tooltip points to Presets & Profiles. Library creation, global app settings, connector catalog scope and Library access guidance use compact tooltip markers beside their labels. Locked rows retain full width and keyboard/touch tooltips; Alex and Guest show editable rows. The Guest Library access tooltip explains shared job provenance and the required other/system-job cancellation permission. Managed account and Guest editors use borderless Delete/Save/Close icons in the header, with Save immediately before Close; the footer button row is retired. Saving keeps the current editor and tab open, updates the saved baseline and clears temporary password fields. Closing an edited draft asks whether to discard changes; read-only views close directly. Personal credential controls retain their dedicated form; selecting Guest omits password-change helper copy. New account drafts copy the current Guest permissions when the editor can read Guest access. The account tab selector and list surface use the approved midpoint shadow." source="AccountsPanel.tsx · Settings > Users & access" classes={["access-accounts-panel", "media-card", "access-account-card", "access-account-card-content", "access-account-avatar", "access-owner-hint", "access-permission-label", "access-permission-section-heading", "access-permission-tooltip", "toggle-switch", "access-tree-header", "library-history-range-toggle", "settings-navigation-search", "access-search-field", "nav-icon"]} wide>
         <div id="accounts-catalog">
         <p className="muted">AccountsPanel.tsx · access-* layout · shared toggle-switch, profile-list, SlidingTogglePill · login and forced password form: lib/auth.tsx</p>
         <AccountsPanel fixture={{ actor: { id: "catalog-owner", username: "Owner", kind: "account", owner: true, revision: 1, must_change_password: false, policy: emptyPolicy() }, accounts: [
           { id: "catalog-owner", username: "Owner", owner: true, active: true, editable: false, must_change_password: false, policy: emptyPolicy() },
           { id: "catalog-user", username: "Alex", owner: false, active: true, editable: true, must_change_password: false, policy: { ...emptyPolicy(), libraries: { "1": ["library.read"] } } },
           { id: "catalog-inactive", username: "Inactive account with a longer name", owner: false, active: false, editable: true, must_change_password: true, policy: emptyPolicy() }
-        ], libraries: [{ id: 1, name: "Movies", actions: ["library.read", "library.preview"] }, { id: 2, name: "Music", actions: ["library.read"] }] }} />
+        ], libraries: [{ id: 1, name: "Movies", actions: ["library.read", "library.preview"] }, { id: 2, name: "Music", actions: ["library.read"] }], guest: { enabled: false, editable: true, policy: { global: ["overview.dashboard", "overview.compare", "overview.storage"], mode: "future", libraries: {}, shared: ["library.read"], create: false } } }} />
         </div>
       </VariantCard>
-      <VariantCard title="Account and Guest notifications in App settings" source="LibrariesPage.tsx > App settings / NotificationSettingsPanel.tsx; AccountsPanel.tsx > access rights" status="The editor lives only in App settings. Every signed-in account can save its own preferences without a notification permission. Guest can open this panel and save preferences to the browser-local Guest namespace; global settings stay hidden, while Guest language and theme remain in the personal settings panel. This live example edits the current identity only." classes={["notification-settings-panel", "transcode-federation-heading", "settings-choice-input", "notification-preview-controls"]} wide>
-        <NotificationSettingsPanel sectionId="catalog-app-notification-settings" />
+      <VariantCard title="Managed-account password requirements" source="AccountsPanel.tsx / PasswordRequirements.tsx / lib/password-policy.ts" status="Two live checks share the password validator: five characters, and a number or special character. Managed-account validation uses the field's native bubble without a duplicate alert panel. The account editor above demonstrates typing and submission; these examples show empty, partly fulfilled and fulfilled states." classes={["password-requirements-field", "password-requirements", "field-hint"]} wide>
+        <div className="ui-elements-form-grid">
+          {["", "testtest", "testtest1"].map((value, index) => (
+            <div className="password-requirements-field" key={index}>
+              <label>{t("access.temporaryPassword")}
+                <input type="password" value={value} readOnly aria-describedby={`catalog-password-checks-${index}`} />
+              </label>
+              <PasswordRequirements id={`catalog-password-checks-${index}`} value={value} />
+            </div>
+          ))}
+        </div>
       </VariantCard>
-      <VariantCard title="Owner account settings" source="AccountsPanel.tsx · PersonalAccountPanel" status="The owner confirms username changes with a masked current password; reveal is explicit. Save and Sign out use equal-width standard buttons. The owner account view has no separate password-change form." classes={["personal-account-credentials-grid", "personal-account-password-control", "personal-account-password-toggle", "personal-account-actions"]} wide>
+      <VariantCard title="Account and Guest notifications in App settings" source="LibrariesPage.tsx > App settings / NotificationSettingsPanel.tsx; AccountsPanel.tsx > access rights" status="The editor lives only in App settings. Each signed-in account autosaves its own preferences without a notification permission; Guest preferences stay in the browser-local namespace. This catalog specimen is read-only and cannot change live settings." classes={["notification-settings-panel", "transcode-federation-heading", "settings-choice-input", "notification-preview-controls"]} wide>
+        <NotificationSettingsPanel sectionId="catalog-app-notification-settings" readOnly />
+      </VariantCard>
+      <VariantCard title="Personal passkeys" source="PasskeysPanel.tsx · own Account tab" status="The collapsible settings panel is always visible for the account holder. PUBLIC_URL enables ceremonies at the exact configured HTTPS origin; disabled controls have setup guidance in the header tooltip. Each named passkey has rename/delete actions. This fixture is read-only and never accesses real credentials." classes={["passkeys-panel", "passkey-list", "passkey-row", "passkey-identity"]} wide>
+        <PasskeysPanel fixture={{ enabled: true, reason: "ready", items: [{ id: "example", name: "MacBook", created_at: 1793095200, last_used_at: null, rp_id: "medialyze.example.com" }] }} />
+        <PasskeysPanel fixture={{ enabled: false, reason: "not_configured", items: [] }} />
+      </VariantCard>
+      <VariantCard title="Owner account settings" source="AccountsPanel.tsx · PersonalAccountPanel / PasswordField.tsx" status="The owner confirms username changes with a masked current password and a borderless show/hide control. Save and Sign out use equal-width standard buttons. The owner account view has no separate password-change form." classes={["personal-account-credentials-grid", "password-field-control", "password-visibility-toggle", "personal-account-actions", "icon-button-borderless"]} wide>
         <form className="form-grid">
           <div className="app-settings-performance-grid personal-account-credentials-grid">
             <label>{t("access.username")}<input readOnly value="Frederik" autoComplete="username" /></label>
-            <label>{t("access.currentPassword")}<span className="personal-account-password-control"><input readOnly value="" type="password" autoComplete="current-password" /><button type="button" className="icon-button icon-button-bordered personal-account-password-toggle" aria-label={t("access.showPassword")} aria-pressed="false"><Eye aria-hidden="true" className="nav-icon" /></button></span></label>
+            <label>{t("access.currentPassword")}<PasswordField readOnly value="" autoComplete="current-password" /></label>
           </div>
           <div className="button-row personal-account-actions"><button type="button">{t("access.save")}</button><button type="button" className="secondary">{t("access.logout")}</button></div>
         </form>
       </VariantCard>
-      <VariantCard title="Login and forced password states" source="lib/auth.tsx" classes={["access-login", "form-grid", "alert"]}>
-      <section className="access-login panel" aria-label="Login and forced password states">
-        <h2>{t("access.changePassword")}</h2><p className="muted">{t("access.changeRequired")}</p>
-        <div className="form-grid"><label>{t("access.currentPassword")}<input type="password" autoComplete="off" readOnly value="" /></label><label>{t("access.newPassword")}<input type="password" autoComplete="off" readOnly value="" /></label><p role="alert" className="alert">{t("access.passwordRequirements")}</p><div className="button-row"><button type="button" disabled>{t("access.save")}</button><button type="button" className="secondary">{t("access.logout")}</button></div></div>
-      </section>
+      <VariantCard title="Forced password change" source="components/AccessScreen.tsx, lib/auth.tsx, PasswordField.tsx" status="Both password fields use the shared borderless show/hide control." classes={["access-login", "form-grid", "alert", "password-field-control", "password-visibility-toggle", "icon-button-borderless"]} wide>
+      <AccessScreen mode="password">
+        <div className="form-grid"><label>{t("access.currentPassword")}<PasswordField autoComplete="off" readOnly value="" /></label><label>{t("access.newPassword")}<PasswordField autoComplete="off" readOnly value="" /></label><p role="alert" className="alert">{t("access.passwordRequirements")}</p><div className="button-row"><button type="button" disabled>{t("access.save")}</button><button type="button" className="secondary">{t("access.logout")}</button></div></div>
+      </AccessScreen>
       </VariantCard>
             </VariantGroup>
             <VariantGroup title="Navigation and settings controls">
@@ -3565,7 +3609,7 @@ export function UiElementsPage() {
                     <div className="compatibility-profile-panel transcode-automation-content">
                       <div className="compatibility-profile-list compatibility-profile-catalog-list">
                         <div className="settings-profile-toggle-row transcode-automation-toggle-row">
-                          <div className="transcode-automation-tab-controls"><div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories" aria-orientation="horizontal"><button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Transcoding Presets</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Filename Presets</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername Presets</span></button></div></div>
+                          <div className="transcode-automation-tab-controls"><div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories" aria-orientation="horizontal"><button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Transcoding</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Filename</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername</span></button></div></div>
                           <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus aria-hidden="true" size={16} />New preset</button></div>
                         </div>
                         <div className="compatibility-profile-search"><Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" /><input type="search" placeholder="Search presets" aria-label="Search presets" /></div>
@@ -3585,9 +3629,9 @@ export function UiElementsPage() {
                         <div className="settings-profile-toggle-row transcode-automation-toggle-row">
                           <div className="transcode-automation-tab-controls">
                             <div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories" aria-orientation="horizontal">
-                              <button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Transcoding Presets</span></button>
-                              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Filename Presets</span></button>
-                              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername Presets</span></button>
+                              <button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Transcoding</span></button>
+                              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Filename</span></button>
+                              <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername</span></button>
                             </div>
                           </div>
                           <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus aria-hidden="true" size={16} />New preset</button></div>
@@ -3606,7 +3650,7 @@ export function UiElementsPage() {
                     <div className="compatibility-profile-panel transcode-automation-content">
                       <div className="compatibility-profile-list compatibility-profile-catalog-list">
                         <div className="settings-profile-toggle-row transcode-automation-toggle-row">
-                          <div className="transcode-automation-tab-controls"><div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories" aria-orientation="horizontal"><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Transcoding Presets</span></button><button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Filename Presets</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername Presets</span></button></div></div>
+                          <div className="transcode-automation-tab-controls"><div className="transcode-automation-tab-list" role="tablist" aria-label="Transcoding preset categories" aria-orientation="horizontal"><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Transcoding</span></button><button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true"><span className="transcode-automation-tab-label">Filename</span></button><button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false"><span className="transcode-automation-tab-label">Foldername</span></button></div></div>
                           <div className="settings-profile-toggle-actions"><button type="button" className="secondary small settings-panel-header-action"><Plus aria-hidden="true" size={16} />New preset</button></div>
                         </div>
                         <div className="compatibility-profile-search"><Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" /><input type="search" placeholder="Search presets" aria-label="Search presets" /></div>
@@ -3783,7 +3827,7 @@ export function UiElementsPage() {
               <VariantCard title="Path browser missing folder recovery" source={`${settings} > Libraries > Change path`} classes={["path-browser", "alert", "path-browser-selected-item"]}>
                 <MissingPathBrowserFixture />
               </VariantCard>
-              <VariantCard title="Telemetry controls" source={`${settings} > Telemetry / Release notes`} status="Preview view selector reuses the compact history-range style; toggle groups and selected pills use the approved midpoint shadow; telemetry consent remains pill-shaped." classes={["telemetry-mode-toggle", "telemetry-mode-card", "telemetry-preview-actions", "telemetry-preview-view-button", "library-history-range-toggle", "library-history-range-button", "library-history-range-button-content", "library-history-range-pill", "nav-active-pill"]}>
+              <VariantCard title="Telemetry controls" source={`${settings} > Telemetry / Release notes`} status="Preview view selector reuses the compact history-range style; toggle groups and selected pills use the approved midpoint shadow; telemetry mode tooltips align to the trigger’s right edge so their copy stays in the viewport; telemetry consent remains pill-shaped." classes={["telemetry-mode-toggle", "telemetry-mode-button", "telemetry-mode-card", "telemetry-preview-actions", "telemetry-preview-view-button", "library-history-range-toggle", "library-history-range-button", "library-history-range-button-content", "library-history-range-pill", "nav-active-pill"]}>
                 <div className="stack">
                   <div className="telemetry-preview-actions">
                     <SlidingTogglePill activeKey="minimal" className="nav-active-pill library-history-range-pill" />

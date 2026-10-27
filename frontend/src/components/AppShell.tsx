@@ -9,6 +9,7 @@ import { AnimatePresence, motion, useAnimation, type Transition } from "motion/r
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { BanIcon } from "./BanIcon";
 import { ConnectorProviderIcon } from "./ConnectorProviderIcon";
+import { HeaderBrand } from "./HeaderBrand";
 import { HeaderAccountMenu } from "./HeaderAccountMenu";
 import { FolderInputIcon } from "./FolderInputIcon";
 import { FolderOutputIcon } from "./FolderOutputIcon";
@@ -445,9 +446,10 @@ export function AppShell() {
     last_user_visible_payload: null,
   };
   const telemetryUndecided = telemetry.mode === "none" || telemetry.mode === "initialized";
-  const showReleaseTelemetryChoice = telemetryUndecided || telemetry.mode === "off";
+  const canEditTelemetry = !auth.identity || auth.has("settings.app.edit");
+  const showReleaseTelemetryChoice = canEditTelemetry && (telemetryUndecided || telemetry.mode === "off");
   const showTelemetryAttention =
-    showReleaseNotes &&
+    canEditTelemetry && showReleaseNotes &&
     (showUpdateTelemetryAttention || (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled));
   const [transcodeAttention, setTranscodeAttention] = useState(false);
   useEffect(() => {
@@ -477,7 +479,7 @@ export function AppShell() {
   }, [librariesMenuOpen]);
 
   function dismissReleaseNotes() {
-    if (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
+    if (canEditTelemetry && appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
       setTelemetryError(t("telemetry.releaseNotesChooseFirst"));
       return;
     }
@@ -489,6 +491,7 @@ export function AppShell() {
   }
 
   async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    if (!canEditTelemetry) return;
     setPendingTelemetryMode(mode);
     setTelemetryError(null);
     try {
@@ -689,10 +692,7 @@ export function AppShell() {
       <div className="bg-shapes" />
       <header className="panel hero-panel">
         <div className="app-header media-header">
-          <div className="app-title-block">
-            <NavLink to="/" end className="app-title-link" aria-label={`${t("app.title")} ${t("nav.homeAria")}`}>
-              <h1><span className="app-title-text">{t("app.title")}</span><img className="app-title-icon" src="/favicon.svg" alt="" /></h1>
-            </NavLink>
+          <HeaderBrand>
             <button
               type="button"
               className="app-version"
@@ -705,7 +705,7 @@ export function AppShell() {
             {updateAvailable && latestAvailableVersion ? (
               <span className="app-version-update">{t("releaseNotes.updateAvailable", { version: latestAvailableVersion })}</span>
             ) : null}
-          </div>
+          </HeaderBrand>
           <nav className="media-nav-panel" aria-label="Primary">
             <div className="media-nav-icons">
               {(!auth.identity || auth.has("overview.dashboard")) && <NavLink

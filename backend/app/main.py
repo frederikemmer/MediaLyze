@@ -145,6 +145,8 @@ def create_app(settings=None) -> FastAPI:
         return JSONResponse({"detail": "Invalid request"}, status_code=422)
 
     app.include_router(access_router, prefix=active_settings.api_prefix)
+    from backend.app.api.passkey_routes import router as passkey_router
+    app.include_router(passkey_router, prefix=active_settings.api_prefix)
     app.add_middleware(JsonGZipMiddleware, minimum_size=1024, compresslevel=5)
     app.include_router(router, prefix=active_settings.api_prefix)
 

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LogOut, User } from "lucide-react";
+import { LogIn, LogOut, User } from "lucide-react";
 
 type HeaderAccountMenuProps = {
   username: string;
@@ -14,6 +14,7 @@ type HeaderAccountMenuProps = {
 
 export function HeaderAccountMenu({ username, owner, kind, onSignOut, onAccountClick, initiallyOpen = false }: HeaderAccountMenuProps) {
   const { t } = useTranslation();
+  const location = useLocation();
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -110,7 +111,18 @@ export function HeaderAccountMenu({ username, owner, kind, onSignOut, onAccountC
               <User aria-hidden="true" />
               <span>{t("access.myAccount")}</span>
             </NavLink>
-            <button
+            {kind === "guest" ? (
+              <NavLink
+                to="/login"
+                state={{ from: location.pathname + location.search + location.hash }}
+                className="media-header-account-menu-item"
+                role="menuitem"
+                onClick={() => setIsOpen(false)}
+              >
+                <LogIn aria-hidden="true" />
+                <span>{t("access.login")}</span>
+              </NavLink>
+            ) : <button
               type="button"
               className="media-header-account-menu-item signout"
               role="menuitem"
@@ -121,7 +133,7 @@ export function HeaderAccountMenu({ username, owner, kind, onSignOut, onAccountC
             >
               <LogOut aria-hidden="true" />
               <span>{t("access.logout")}</span>
-            </button>
+            </button>}
           </div>
         ) : null}
       </div>

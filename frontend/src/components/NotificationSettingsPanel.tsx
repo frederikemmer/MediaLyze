@@ -1,6 +1,6 @@
 import { useLocation } from "react-router";
-import { BellPlus, ChevronDown, ChevronRight, FlaskConical, Save, Trash2 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { ChevronDown, ChevronRight, FlaskConical, Trash2 } from "lucide-react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { useAppData } from "../lib/app-data";
@@ -12,6 +12,8 @@ import {
   type NotificationSettings,
 } from "../lib/notification-settings";
 import { useNotifications, type NotificationInput, type NotificationType } from "../lib/notifications";
+
+const NOTIFICATION_SETTINGS_AUTOSAVE_DELAY_MS = 350;
 
 export function NotificationSettingsFields({ value, onChange, disabled = false }: {
   value: NotificationSettings; onChange: (value: NotificationSettings) => void; disabled?: boolean;
@@ -54,8 +56,8 @@ export function NotificationSettingsFields({ value, onChange, disabled = false }
   );
 }
 
-export function NotificationPreviewControls({ disabled = false, settingsHref = "/settings?section=application#notification-settings" }: {
-  disabled?: boolean; settingsHref?: string;
+export function NotificationPreviewControls({ disabled = false, clearDisabled = false, settingsHref = "/settings?section=application#notification-settings" }: {
+  disabled?: boolean; clearDisabled?: boolean; settingsHref?: string;
 }) {
   const { t } = useTranslation();
   const { notify, clearAll } = useNotifications();
@@ -86,16 +88,16 @@ export function NotificationPreviewControls({ disabled = false, settingsHref = "
         <FlaskConical aria-hidden="true" className="nav-icon" />{t("notifications.sendRandomOne")}
       </button>
       <button className="secondary small settings-panel-header-action" type="button" disabled={disabled} onClick={() => sendRandom(10)}>
-        <BellPlus aria-hidden="true" className="nav-icon" />{t("notifications.sendRandomTen")}
+        <FlaskConical aria-hidden="true" className="nav-icon" />{t("notifications.sendRandomTen")}
       </button>
-      <button className="secondary small settings-panel-header-action" type="button" onClick={clearAll}>
+      <button className="secondary small settings-panel-header-action" type="button" disabled={clearDisabled} onClick={clearAll}>
         <Trash2 aria-hidden="true" className="nav-icon" />{t("notifications.clearVisible")}
       </button>
     </div>
   );
 }
 
-export function NotificationSettingsPanel({ sectionId = "notification-settings" }: { sectionId?: string } = {}) {
+export function NotificationSettingsPanel({ sectionId = "notification-settings", readOnly = false }: { sectionId?: string; readOnly?: boolean } = {}) {
   const { t } = useTranslation();
   const { identity, has } = useAuth();
   const { notify } = useNotifications();
@@ -110,10 +112,15 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings" 
   const [draft, setDraft] = useState(stored);
   const [expanded, setExpanded] = useState(true);
   const [saving, setSaving] = useState(false);
+  const lastAutosaveAttemptRef = useRef<string | null>(null);
   // Personal Notification preferences never grant or require instance-settings rights.
-  const editable = identity?.kind === "guest" || identity?.kind === "account" || !identity || has("settings.app.edit");
-  const dirty = JSON.stringify(draft) !== storedKey;
-  useEffect(() => { setDraft(JSON.parse(storedKey) as NotificationSettings); }, [storedKey]);
+  const editable = !readOnly && (identity?.kind === "guest" || identity?.kind === "account" || !identity || has("settings.app.edit"));
+  const draftKey = JSON.stringify(draft);
+  const dirty = draftKey !== storedKey;
+  useEffect(() => {
+    lastAutosaveAttemptRef.current = null;
+    setDraft(JSON.parse(storedKey) as NotificationSettings);
+  }, [storedKey]);
   useEffect(() => {
     if (location.hash !== `#${sectionId}`) return;
     setExpanded(true);
@@ -121,8 +128,8 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings" 
     return () => window.cancelAnimationFrame(frame);
   }, [location.hash, location.key, sectionId]);
 
-  async function save() {
-    if (!editable || saving || !appSettingsLoaded) return;
+  const save = useEffectEvent(async (attemptedDraftKey: string) => {
+    if (!editable || saving || !appSettingsLoaded || JSON.stringify(draft) !== attemptedDraftKey) return;
     setSaving(true);
     try {
       if (identity?.kind === "guest") {
@@ -147,6 +154,21 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings" 
       });
     }
     finally { setSaving(false); }
+  });
+
+  useEffect(() => {
+    if (!editable || !appSettingsLoaded || !dirty || saving || lastAutosaveAttemptRef.current === draftKey) return;
+    const attemptedDraftKey = draftKey;
+    const timeout = window.setTimeout(() => {
+      lastAutosaveAttemptRef.current = attemptedDraftKey;
+      void save(attemptedDraftKey);
+    }, NOTIFICATION_SETTINGS_AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [appSettingsLoaded, dirty, draftKey, editable, saving]);
+
+  function updateDraft(value: NotificationSettings) {
+    lastAutosaveAttemptRef.current = null;
+    setDraft(value);
   }
 
   return (
@@ -160,17 +182,12 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings" 
             </button>
             <h3>{t("notifications.title")}</h3>
           </div>
-          <div className="transcode-federation-heading-actions">
-            <button type="button" className="secondary small settings-panel-header-action" disabled={!editable || !dirty || saving || !appSettingsLoaded} onClick={() => void save()}>
-              <Save aria-hidden="true" className="nav-icon" />{t(saving ? "notifications.saving" : "notifications.save")}
-            </button>
-          </div>
         </div>
         <div id={bodyId} className="transcode-automation-panel-body" hidden={!expanded}>
           {!editable ? <p className="field-hint">{t("access.readOnly")}</p> : null}
           {identity?.kind === "guest" ? <p className="field-hint">{t("notifications.guestLocalHint")}</p> : null}
-          <NotificationSettingsFields value={draft} disabled={!editable || saving || !appSettingsLoaded} onChange={setDraft} />
-          <NotificationPreviewControls disabled={dirty || saving || !appSettingsLoaded} settingsHref={settingsHref} />
+          <NotificationSettingsFields value={draft} disabled={!editable || saving || !appSettingsLoaded} onChange={updateDraft} />
+          <NotificationPreviewControls disabled={!editable || dirty || saving || !appSettingsLoaded} clearDisabled={readOnly} settingsHref={settingsHref} />
         </div>
       </div>
     </section>

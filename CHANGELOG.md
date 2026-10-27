@@ -4,10 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Show live password requirement checks below managed-account password fields and report invalid passwords only through the field's native validation bubble.
+
+- Add named personal passkeys with registration, inline renaming, deletion and passkey login; enable them through PUBLIC_URL, with a disabled own-account panel and configuration tooltip when unset.
+
+- Automatically save Notification preferences after a brief idle delay, remove the manual Save button, and keep the `/ui-elements` specimen read-only.
+- Shorten the notification test controls to “1 test notification”, “10 test notifications” and “clear”, using the flask icon for both test actions.
+- Shorten the Transcoding Presets category tab names to “Transcoding”, “Filename” and “Foldername”.
+- Remove the explanatory helper text above the global transcoding history filters.
+- Keep telemetry mode tooltips within the viewport by aligning them to the right edge of their buttons.
+- Reuse a borderless password visibility control in account settings and access screens, including login.
+- Add a small, consistent gap between the Login and Continue as guest buttons.
+- Hide the password-change helper text when editing Guest access.
+- Prefill new account permissions with the current Guest policy when the editor can read Guest access, and remove unrelated global-settings wording from the temporary-password hint.
+- Default new Guest policies to read-only metadata and statistics for all current and future libraries, and allow the Guest enabled state to be configured with `GUEST_ENABLED` at startup.
+- Add an explicit `NO_USERS` server mode for installations that do not use accounts.
+- Use `OWNER_USERNAME` and `OWNER_PASSWORD` for owner environment configuration, replacing the earlier development-only prefixed names.
+
 ### 🐛 Bug fixes
 
-- Fix the server error when a library gets a second folder with the same name as an existing one; the new folder's alias gets a numbered suffix ([#197](https://github.com/frederikemmer/MediaLyze/issues/197)).
-- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199)).
+- Give each user and the Guest entry its own compact panel in the account overview, using the shared MediaLyze card styling.
+
+- Move account/Guest editor actions into borderless header icons, keep the editor open after saving, and confirm discarding unsaved changes on close.
+
+- Add a bulk permission switch beside the Libraries & files scope selector, respecting per-library delegation, shared scope, search and read-only restrictions.
+
+- Refresh authentication status and the pre-login security token instead of reusing an older poll, so login opens the dashboard without a page reload even during background status checks.
+
+- Let Guests dismiss release notes without requiring a telemetry choice reserved for app-settings editors.
+
+- Reuse the MediaLyze header on login and owner setup, explain accounts and installation migration only during owner setup, show a concise Login form without a heading or introductory text afterward, and open enabled guest access automatically with sign-in available from the header account menu.
+
+- Fix the server error when a library gets a second folder with the same name as an existing one; the new folder's alias gets a numbered suffix ([#197](https://github.com/frederikemmer/MediaLyze/issues/197)), fixed in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) by [@Rahul-cs50](https://github.com/Rahul-cs50).
+- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199)), fixed in [#200](https://github.com/frederikemmer/MediaLyze/pull/200) by [@Rahul-cs50](https://github.com/Rahul-cs50).
 
 - Apply a saved notification duration change to visible cards by restarting their timers with the new duration.
 
@@ -147,6 +176,10 @@ All notable changes to this project will be documented in this file.
 
 - Add local owner/account setup, protected sessions, explicit library/action permissions, guest opt-in and personal preferences with a compact account editor in all four interface languages.
 - Gate server/desktop/Federation access paths centrally; scope media/statistics/jobs and keep unresolved permission mappings restricted to Owner until reviewed.
+
+### New Contributors
+
+[@Rahul-cs50](https://github.com/Rahul-cs50) made their first contribution in [#198](https://github.com/frederikemmer/MediaLyze/pull/198).
 
 ## v0.19.2
 
